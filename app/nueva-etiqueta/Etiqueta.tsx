@@ -41,10 +41,10 @@ const Etiqueta = forwardRef<HTMLDivElement, Props>(function Etiqueta(
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ height: '32px', display: 'flex', alignItems: 'center' }}>
+        <div style={{ height: '52px', display: 'flex', alignItems: 'center' }}>
           {logo ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={logo} alt="logo" style={{ height: '32px', maxWidth: '140px', objectFit: 'contain' }} />
+            <img src={logo} alt="logo" style={{ height: '52px', maxWidth: '220px', objectFit: 'contain' }} />
           ) : (
             <span style={{ fontSize: '13px', color: '#8A8780' }}>tu logo</span>
           )}

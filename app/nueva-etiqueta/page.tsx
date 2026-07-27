@@ -56,30 +56,69 @@ export default function NuevaEtiqueta() {
     reader.readAsDataURL(file);
   };
 
+  // En el celular (sobre todo iPhone), la descarga automática de un archivo
+  // recién generado suele fallar en silencio. El menú nativo de "compartir"
+  // (el mismo que se usa para mandar fotos) es mucho más confiable: desde
+  // ahí se puede guardar en Fotos, mandar por WhatsApp o abrir con la app
+  // de la impresora. Si el navegador no soporta compartir archivos (algunas
+  // compus viejas), caemos a la descarga clásica como respaldo.
+  const compartirOdescargar = async (blob: Blob, nombreArchivo: string, tipo: string) => {
+    const file = new File([blob], nombreArchivo, { type: tipo });
+    const puedeCompartir =
+      typeof navigator !== 'undefined' &&
+      'canShare' in navigator &&
+      navigator.canShare({ files: [file] });
+
+    if (puedeCompartir) {
+      try {
+        await navigator.share({ files: [file], title: 'Etiqueta' });
+        return;
+      } catch {
+        // si cancela el share, no hacemos nada más
+        return;
+      }
+    }
+
+    // respaldo: descarga clásica
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.download = nombreArchivo;
+    link.href = url;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   const descargarPNG = async () => {
     if (!etiquetaRef.current) return;
     setDescargando(true);
-    const html2canvas = (await import('html2canvas')).default;
-    const canvas = await html2canvas(etiquetaRef.current, { scale: 2 });
-    const link = document.createElement('a');
-    link.download = `etiqueta-${datos?.imei || 'sin-imei'}.png`;
-    link.href = canvas.toDataURL('image/png');
-    link.click();
-    setDescargando(false);
+    try {
+      const html2canvas = (await import('html2canvas')).default;
+      const canvas = await html2canvas(etiquetaRef.current, { scale: 2 });
+      const blob: Blob | null = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+      if (blob) {
+        await compartirOdescargar(blob, `etiqueta-${datos?.imei || 'sin-imei'}.png`, 'image/png');
+      }
+    } finally {
+      setDescargando(false);
+    }
   };
 
   const descargarPDF = async () => {
     if (!etiquetaRef.current) return;
     setDescargando(true);
-    const html2canvas = (await import('html2canvas')).default;
-    const { jsPDF } = await import('jspdf');
-    const canvas = await html2canvas(etiquetaRef.current, { scale: 2 });
-    const img = canvas.toDataURL('image/png');
-    // 5cm x 3cm en el PDF, tamaño real de impresión
-    const pdf = new jsPDF({ unit: 'cm', format: [5, 3] });
-    pdf.addImage(img, 'PNG', 0, 0, 5, 3);
-    pdf.save(`etiqueta-${datos?.imei || 'sin-imei'}.pdf`);
-    setDescargando(false);
+    try {
+      const html2canvas = (await import('html2canvas')).default;
+      const { jsPDF } = await import('jspdf');
+      const canvas = await html2canvas(etiquetaRef.current, { scale: 2 });
+      const img = canvas.toDataURL('image/png');
+      // 5cm x 3cm en el PDF, tamaño real de impresión
+      const pdf = new jsPDF({ unit: 'cm', format: [5, 3] });
+      pdf.addImage(img, 'PNG', 0, 0, 5, 3);
+      const blob = pdf.output('blob');
+      await compartirOdescargar(blob, `etiqueta-${datos?.imei || 'sin-imei'}.pdf`, 'application/pdf');
+    } finally {
+      setDescargando(false);
+    }
   };
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -200,14 +239,14 @@ export default function NuevaEtiqueta() {
             disabled={descargando}
             className="w-full rounded-2xl bg-ink py-4 text-center text-base font-medium text-base disabled:opacity-40"
           >
-            Descargar PNG
+            Guardar / compartir PNG
           </button>
           <button
             onClick={descargarPDF}
             disabled={descargando}
             className="w-full rounded-2xl border border-black/15 py-4 text-center text-base font-medium"
           >
-            Descargar PDF
+            Guardar / compartir PDF
           </button>
         </div>
       </main>

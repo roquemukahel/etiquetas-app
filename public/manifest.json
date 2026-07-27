@@ -1,7 +1,7 @@
 {
-  "name": "Etiquetas",
-  "short_name": "Etiquetas",
-  "description": "Generador de etiquetas para celulares usados",
+  "name": "Qovento",
+  "short_name": "Qovento",
+  "description": "Etiquetas y stock para tu local de celulares",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#F5F3EF",

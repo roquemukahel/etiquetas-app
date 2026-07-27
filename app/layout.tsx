@@ -2,8 +2,8 @@ import type { Metadata, Viewport } from 'next';
 import '../styles/globals.css';
 
 export const metadata: Metadata = {
-  title: 'Etiquetas',
-  description: 'Generador de etiquetas para celulares usados',
+  title: 'Qovento',
+  description: 'Etiquetas y stock para tu local de celulares',
   manifest: '/manifest.json',
   icons: {
     icon: '/icons/icon-192.png',
