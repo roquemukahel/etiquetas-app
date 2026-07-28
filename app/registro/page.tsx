@@ -31,6 +31,14 @@ export default function Registro() {
       return;
     }
 
+    if (!authData.session) {
+      setError(
+        'La cuenta ya existía o no se generó sesión automáticamente. Probá borrar el usuario en Supabase y registrarte de nuevo, o iniciá sesión si ya tenés cuenta.'
+      );
+      setCargando(false);
+      return;
+    }
+
     // Creamos el negocio y lo vinculamos al usuario recién creado
     const { data: negocio, error: negocioError } = await supabase
       .from('negocios')
@@ -39,7 +47,11 @@ export default function Registro() {
       .single();
 
     if (negocioError || !negocio) {
-      setError('La cuenta se creó, pero hubo un problema configurando el negocio. Escribinos.');
+      setError(
+        `La cuenta se creó, pero hubo un problema configurando el negocio: ${
+          negocioError?.message || 'sin negocio'
+        }`
+      );
       setCargando(false);
       return;
     }
@@ -49,7 +61,7 @@ export default function Registro() {
       .insert({ id: authData.user.id, negocio_id: negocio.id });
 
     if (perfilError) {
-      setError('La cuenta se creó, pero hubo un problema vinculando el negocio. Escribinos.');
+      setError(`La cuenta y el negocio se crearon, pero falló el perfil: ${perfilError.message}`);
       setCargando(false);
       return;
     }
