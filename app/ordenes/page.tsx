@@ -87,7 +87,7 @@ export default function Ordenes() {
                   ? `${o.orden_items[0].descripcion}${o.orden_items.length > 1 ? ` +${o.orden_items.length - 1}` : ''}`
                   : 'Orden vacía'}
                 {o.orden_items.length > 0 && (
-                  <span className="text-xs font-normal text-muted">
+                  <span className="text-xs font-bold text-accent">
                     {' '}
                     — {o.orden_items.every((i) => i.tipo === 'trabajo') ? 'Servicio técnico' : 'Venta'}
                   </span>

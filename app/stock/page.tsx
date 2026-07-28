@@ -149,8 +149,11 @@ export default function Stock() {
                     <p className="text-sm font-medium">
                       {d.capacidad_gb ? `${d.capacidad_gb} GB` : 'Capacidad s/d'}
                       {d.color ? ` · ${d.color}` : ''}
+                      {d.salud_bateria != null ? ` · ${d.salud_bateria}%` : ''}
                     </p>
-                    <p className="text-xs text-muted font-mono">{d.imei || 'sin IMEI'}</p>
+                    <p className="text-xs text-muted">
+                      IMEI: <span className="font-bold font-mono text-ink">{d.imei || 'sin IMEI'}</span>
+                    </p>
                   </div>
                   <div className="text-right">
                     {d.precio != null && (

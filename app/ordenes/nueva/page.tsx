@@ -57,6 +57,8 @@ export default function NuevaOrden() {
   const [nuevoNombre, setNuevoNombre] = useState('');
   const [nuevoApellido, setNuevoApellido] = useState('');
   const [nuevoTelefono, setNuevoTelefono] = useState('');
+  const [nuevoDomicilio, setNuevoDomicilio] = useState('');
+  const [nuevoDni, setNuevoDni] = useState('');
 
   // --- carrito ---
   const [carrito, setCarrito] = useState<ItemCarrito[]>([]);
@@ -274,6 +276,9 @@ export default function NuevaOrden() {
   const actualizarPrecioItem = (tempId: string, precio: string) =>
     setCarrito((c) => c.map((i) => (i.tempId === tempId ? { ...i, precioUnitario: Number(precio) || 0 } : i)));
 
+  const actualizarCantidadItem = (tempId: string, cantidad: string) =>
+    setCarrito((c) => c.map((i) => (i.tempId === tempId ? { ...i, cantidad: Math.max(1, Number(cantidad) || 1) } : i)));
+
   const puedeConfirmar = carrito.length > 0;
 
   const handleConfirmar = async () => {
@@ -290,6 +295,8 @@ export default function NuevaOrden() {
             nombre: nuevoNombre.trim(),
             apellido: nuevoApellido.trim() || null,
             telefono: nuevoTelefono.trim() || null,
+            domicilio: nuevoDomicilio.trim() || null,
+            dni: nuevoDni.trim() || null,
           })
           .select()
           .single();
@@ -417,6 +424,8 @@ export default function NuevaOrden() {
             <Campo label="Nombre" valor={nuevoNombre} onChange={setNuevoNombre} />
             <Campo label="Apellido" valor={nuevoApellido} onChange={setNuevoApellido} />
             <Campo label="Teléfono" valor={nuevoTelefono} onChange={setNuevoTelefono} />
+            <Campo label="Domicilio" valor={nuevoDomicilio} onChange={setNuevoDomicilio} />
+            <Campo label="DNI" valor={nuevoDni} onChange={setNuevoDni} />
             <button
               disabled={!nuevoNombre.trim()}
               onClick={confirmarClienteNuevo}
@@ -715,7 +724,13 @@ export default function NuevaOrden() {
               <div className="flex-1">
                 <p className="text-sm font-medium">{i.descripcion}</p>
                 <div className="flex items-center gap-1 text-xs text-muted mt-0.5">
-                  <span>{i.cantidad} ×</span>
+                  <input
+                    value={i.cantidad}
+                    onChange={(e) => actualizarCantidadItem(i.tempId, e.target.value)}
+                    inputMode="numeric"
+                    className="w-12 bg-white border border-border rounded px-1 py-0.5 text-xs text-center"
+                  />
+                  <span>×</span>
                   <span>$</span>
                   <input
                     value={i.precioUnitario}
