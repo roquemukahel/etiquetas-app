@@ -146,3 +146,12 @@ $$;
 alter table dispositivos alter column negocio_id set default negocio_actual();
 alter table clientes alter column negocio_id set default negocio_actual();
 alter table ordenes alter column negocio_id set default negocio_actual();
+
+-- ============================================================
+-- Ajustes al cargar el módulo de Stock: código interno y n° de
+-- serie no se cargan a mano, y la garantía es un texto por
+-- negocio (negocios.texto_garantia) que va en la boleta, no un
+-- dato por dispositivo.
+-- ============================================================
+alter table dispositivos drop column if exists codigo_interno;
+alter table dispositivos drop column if exists garantia;

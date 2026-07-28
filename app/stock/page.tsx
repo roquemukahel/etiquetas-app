@@ -14,7 +14,6 @@ type Dispositivo = {
   color: string | null;
   precio: number | null;
   estado: string | null;
-  codigo_interno: string | null;
   en_stock: boolean;
   created_at: string;
 };
@@ -43,7 +42,7 @@ export default function Stock() {
     return dispositivos.filter((d) => {
       if (!verTodos && !d.en_stock) return false;
       if (!q) return true;
-      return [d.modelo, d.imei, d.numero_serie, d.codigo_interno, d.color]
+      return [d.modelo, d.imei, d.numero_serie, d.color]
         .filter(Boolean)
         .some((campo) => campo!.toLowerCase().includes(q));
     });

@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
-const ESTADOS = ['usado', 'nuevo'];
+const ESTADOS = ['usado', 'sellado'];
 
 export default function NuevoDispositivo() {
   const router = useRouter();
@@ -15,13 +15,10 @@ export default function NuevoDispositivo() {
   const [modelo, setModelo] = useState('');
   const [capacidad, setCapacidad] = useState<number | null>(null);
   const [imei, setImei] = useState('');
-  const [numeroSerie, setNumeroSerie] = useState('');
   const [bateria, setBateria] = useState('');
   const [color, setColor] = useState('');
   const [precio, setPrecio] = useState('');
   const [estado, setEstado] = useState('usado');
-  const [codigoInterno, setCodigoInterno] = useState('');
-  const [garantia, setGarantia] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
 
@@ -36,13 +33,10 @@ export default function NuevoDispositivo() {
       modelo: modelo.trim(),
       capacidad_gb: capacidad,
       imei: imei.trim() || null,
-      numero_serie: numeroSerie.trim() || null,
       salud_bateria: bateria ? Number(bateria) : null,
       color: color.trim() || null,
       precio: precio ? Number(precio) : null,
       estado,
-      codigo_interno: codigoInterno.trim() || null,
-      garantia: garantia.trim() || null,
       en_stock: true,
     });
 
@@ -89,7 +83,6 @@ export default function NuevoDispositivo() {
         </div>
 
         <Campo label="IMEI" valor={imei} onChange={setImei} mono />
-        <Campo label="N° de serie" valor={numeroSerie} onChange={setNumeroSerie} mono />
         <Campo label="Salud de batería (%)" valor={bateria} onChange={setBateria} numerico />
         <Campo label="Color" valor={color} onChange={setColor} />
         <Campo label="Precio" valor={precio} onChange={setPrecio} numerico />
@@ -111,9 +104,6 @@ export default function NuevoDispositivo() {
             ))}
           </div>
         </div>
-
-        <Campo label="Código interno" valor={codigoInterno} onChange={setCodigoInterno} />
-        <Campo label="Garantía" valor={garantia} onChange={setGarantia} placeholder="3 meses" />
       </div>
 
       <button

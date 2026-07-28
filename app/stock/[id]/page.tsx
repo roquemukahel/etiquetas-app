@@ -6,7 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
-const ESTADOS = ['usado', 'nuevo'];
+const ESTADOS = ['usado', 'sellado'];
 
 type Dispositivo = {
   id: string;
@@ -18,8 +18,6 @@ type Dispositivo = {
   color: string | null;
   precio: number | null;
   estado: string | null;
-  codigo_interno: string | null;
-  garantia: string | null;
   en_stock: boolean;
 };
 
@@ -59,8 +57,6 @@ export default function DetalleDispositivo() {
         color: d.color?.trim() || null,
         precio: d.precio,
         estado: d.estado,
-        codigo_interno: d.codigo_interno?.trim() || null,
-        garantia: d.garantia?.trim() || null,
         en_stock: d.en_stock,
       })
       .eq('id', id);
@@ -149,7 +145,6 @@ export default function DetalleDispositivo() {
         </div>
 
         <Campo label="IMEI" valor={d.imei ?? ''} onChange={(v) => campo('imei', v)} mono />
-        <Campo label="N° de serie" valor={d.numero_serie ?? ''} onChange={(v) => campo('numero_serie', v)} mono />
         <Campo
           label="Salud de batería (%)"
           valor={d.salud_bateria?.toString() ?? ''}
@@ -181,9 +176,6 @@ export default function DetalleDispositivo() {
             ))}
           </div>
         </div>
-
-        <Campo label="Código interno" valor={d.codigo_interno ?? ''} onChange={(v) => campo('codigo_interno', v)} />
-        <Campo label="Garantía" valor={d.garantia ?? ''} onChange={(v) => campo('garantia', v)} />
       </div>
 
       <button
