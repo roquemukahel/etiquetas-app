@@ -294,3 +294,9 @@ alter table negocios add column if not exists tiktok text;
 alter table negocios add column if not exists mostrar_instagram boolean not null default false;
 alter table negocios add column if not exists mostrar_facebook boolean not null default false;
 alter table negocios add column if not exists mostrar_tiktok boolean not null default false;
+
+-- ============================================================
+-- Moneda con la que trabaja el negocio (afecta cómo se muestran
+-- los montos en la boleta).
+-- ============================================================
+alter table negocios add column if not exists moneda text not null default 'ARS';

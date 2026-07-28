@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
+import { MONEDAS } from '../../lib/monedas';
 
 type Negocio = {
   id: string;
@@ -19,6 +20,7 @@ type Negocio = {
   mostrar_instagram: boolean;
   mostrar_facebook: boolean;
   mostrar_tiktok: boolean;
+  moneda: string;
 };
 
 export default function DatosNegocio() {
@@ -39,7 +41,7 @@ export default function DatosNegocio() {
       const { data: perfil } = await supabase
         .from('perfiles')
         .select(
-          'negocio_id, negocios ( id, nombre, telefono, direccion, logo_url, texto_garantia, texto_garantia_servicio, instagram, facebook, tiktok, mostrar_instagram, mostrar_facebook, mostrar_tiktok )'
+          'negocio_id, negocios ( id, nombre, telefono, direccion, logo_url, texto_garantia, texto_garantia_servicio, instagram, facebook, tiktok, mostrar_instagram, mostrar_facebook, mostrar_tiktok, moneda )'
         )
         .eq('id', user.id)
         .single();
@@ -79,6 +81,7 @@ export default function DatosNegocio() {
         mostrar_instagram: negocio.mostrar_instagram,
         mostrar_facebook: negocio.mostrar_facebook,
         mostrar_tiktok: negocio.mostrar_tiktok,
+        moneda: negocio.moneda,
       })
       .eq('id', negocio.id);
 
@@ -140,6 +143,21 @@ export default function DatosNegocio() {
         <Campo label="Nombre del negocio" valor={negocio.nombre} onChange={(v) => campo('nombre', v)} />
         <Campo label="Teléfono" valor={negocio.telefono ?? ''} onChange={(v) => campo('telefono', v)} />
         <Campo label="Dirección" valor={negocio.direccion ?? ''} onChange={(v) => campo('direccion', v)} />
+
+        <div>
+          <label className="text-xs text-muted block mb-1">Moneda (se usa en la boleta)</label>
+          <select
+            value={negocio.moneda}
+            onChange={(e) => campo('moneda', e.target.value)}
+            className="w-full bg-white/60 border border-black/10 rounded-xl px-4 py-3 text-sm"
+          >
+            {MONEDAS.map((m) => (
+              <option key={m.codigo} value={m.codigo}>
+                {m.nombre} ({m.simbolo})
+              </option>
+            ))}
+          </select>
+        </div>
 
         <div>
           <label className="text-xs text-muted block mb-1">Garantía de productos (va en la boleta de venta)</label>

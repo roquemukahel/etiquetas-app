@@ -264,6 +264,9 @@ export default function NuevaOrden() {
 
   const quitarDelCarrito = (tempId: string) => setCarrito((c) => c.filter((i) => i.tempId !== tempId));
 
+  const actualizarPrecioItem = (tempId: string, precio: string) =>
+    setCarrito((c) => c.map((i) => (i.tempId === tempId ? { ...i, precioUnitario: Number(precio) || 0 } : i)));
+
   const puedeConfirmar = carrito.length > 0;
 
   const handleConfirmar = async () => {
@@ -696,11 +699,18 @@ export default function NuevaOrden() {
               key={i.tempId}
               className="rounded-xl border border-black/10 bg-white/60 px-4 py-3 flex items-center justify-between"
             >
-              <div>
+              <div className="flex-1">
                 <p className="text-sm font-medium">{i.descripcion}</p>
-                <p className="text-xs text-muted">
-                  {i.cantidad} × ${i.precioUnitario.toLocaleString('es-AR')}
-                </p>
+                <div className="flex items-center gap-1 text-xs text-muted mt-0.5">
+                  <span>{i.cantidad} ×</span>
+                  <span>$</span>
+                  <input
+                    value={i.precioUnitario}
+                    onChange={(e) => actualizarPrecioItem(i.tempId, e.target.value)}
+                    inputMode="numeric"
+                    className="w-20 bg-white border border-black/10 rounded px-1 py-0.5 text-xs"
+                  />
+                </div>
               </div>
               <div className="flex items-center gap-3">
                 <p className="text-sm font-medium">${(i.cantidad * i.precioUnitario).toLocaleString('es-AR')}</p>

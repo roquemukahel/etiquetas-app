@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { crearClienteNavegador } from '../../../lib/supabase/client';
+import { simboloMoneda } from '../../../lib/monedas';
 
 type Item = { descripcion: string; cantidad: number; precio_unitario: number; tipo: string };
 
@@ -51,6 +52,7 @@ type Negocio = {
   mostrar_instagram: boolean;
   mostrar_facebook: boolean;
   mostrar_tiktok: boolean;
+  moneda: string;
 };
 
 function IconoInstagram() {
@@ -111,7 +113,7 @@ export default function Boleta() {
         const { data: perfil } = await supabase
           .from('perfiles')
           .select(
-            'negocios ( nombre, telefono, direccion, logo_url, texto_garantia, texto_garantia_servicio, instagram, facebook, tiktok, mostrar_instagram, mostrar_facebook, mostrar_tiktok )'
+            'negocios ( nombre, telefono, direccion, logo_url, texto_garantia, texto_garantia_servicio, instagram, facebook, tiktok, mostrar_instagram, mostrar_facebook, mostrar_tiktok, moneda )'
           )
           .eq('id', user.id)
           .single();
@@ -146,11 +148,12 @@ export default function Boleta() {
   const tieneTrabajos = orden.orden_items.some((i) => i.tipo === 'trabajo');
   const tieneProductos = orden.orden_items.some((i) => i.tipo !== 'trabajo');
   const clienteNombre = orden.clientes ? `${orden.clientes.nombre} ${orden.clientes.apellido || ''}`.trim() : '';
+  const moneda = simboloMoneda(negocio?.moneda);
 
   const mensajeWhatsapp = encodeURIComponent(
     `Hola ${orden.clientes?.nombre || ''}! Te paso la boleta de tu compra en ${negocio?.nombre || ''}.\n` +
-      orden.orden_items.map((i) => `- ${i.descripcion} x${i.cantidad}: $${(i.cantidad * i.precio_unitario).toLocaleString('es-AR')}`).join('\n') +
-      `\nTotal: $${(orden.total ?? subtotal).toLocaleString('es-AR')}`
+      orden.orden_items.map((i) => `- ${i.descripcion} x${i.cantidad}: ${moneda}${(i.cantidad * i.precio_unitario).toLocaleString('es-AR')}`).join('\n') +
+      `\nTotal: ${moneda}${(orden.total ?? subtotal).toLocaleString('es-AR')}`
   );
   const telefonoLimpio = orden.clientes?.telefono?.replace(/\D/g, '');
 
@@ -246,7 +249,7 @@ export default function Boleta() {
             {orden.canjes.detalles && <p>Detalles: {orden.canjes.detalles}</p>}
             {orden.canjes.vendedores?.nombre && <p>Recibido por: {orden.canjes.vendedores.nombre}</p>}
             {orden.canjes.monto != null && (
-              <p className="font-medium mt-1">Monto reconocido: ${orden.canjes.monto.toLocaleString('es-AR')}</p>
+              <p className="font-medium mt-1">Monto reconocido: {moneda}{orden.canjes.monto.toLocaleString('es-AR')}</p>
             )}
           </div>
         )}
@@ -265,8 +268,8 @@ export default function Boleta() {
               <tr key={idx} className="border-b border-black/10">
                 <td className="py-2">{i.descripcion}</td>
                 <td className="py-2 text-center">{i.cantidad}</td>
-                <td className="py-2 text-right">${i.precio_unitario.toLocaleString('es-AR')}</td>
-                <td className="py-2 text-right">${(i.cantidad * i.precio_unitario).toLocaleString('es-AR')}</td>
+                <td className="py-2 text-right">{moneda}{i.precio_unitario.toLocaleString('es-AR')}</td>
+                <td className="py-2 text-right">{moneda}{(i.cantidad * i.precio_unitario).toLocaleString('es-AR')}</td>
               </tr>
             ))}
           </tbody>
@@ -276,12 +279,12 @@ export default function Boleta() {
           {orden.anticipo != null && orden.anticipo > 0 && (
             <div className="flex justify-between">
               <span>Anticipo</span>
-              <span>${orden.anticipo.toLocaleString('es-AR')}</span>
+              <span>{moneda}{orden.anticipo.toLocaleString('es-AR')}</span>
             </div>
           )}
           <div className="flex justify-between">
             <span>Subtotal</span>
-            <span>${subtotal.toLocaleString('es-AR')}</span>
+            <span>{moneda}{subtotal.toLocaleString('es-AR')}</span>
           </div>
           {orden.impuesto_porcentaje != null && orden.impuesto_porcentaje > 0 && (
             <div className="flex justify-between">
@@ -292,12 +295,12 @@ export default function Boleta() {
           {orden.monto_canje != null && orden.monto_canje > 0 && (
             <div className="flex justify-between">
               <span>Plan canje</span>
-              <span>-${orden.monto_canje.toLocaleString('es-AR')}</span>
+              <span>-{moneda}{orden.monto_canje.toLocaleString('es-AR')}</span>
             </div>
           )}
           <div className="flex justify-between font-medium text-lg border-t-2 border-black/30 pt-1">
             <span>TOTAL</span>
-            <span>${(orden.total ?? subtotal).toLocaleString('es-AR')}</span>
+            <span>{moneda}{(orden.total ?? subtotal).toLocaleString('es-AR')}</span>
           </div>
         </div>
 
