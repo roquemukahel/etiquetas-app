@@ -174,7 +174,7 @@ export default function ServicioTecnico() {
           &larr;
         </Link>
         <span className="text-lg font-medium mr-auto">Servicio Técnico</span>
-        <Link href="/servicio-tecnico/trabajos" className="text-xs text-accent underline">
+        <Link href="/servicio-tecnico/trabajos" className="text-xs text-accent dark:text-dark-accent underline">
           Trabajos
         </Link>
       </header>
@@ -183,7 +183,7 @@ export default function ServicioTecnico() {
         <button
           onClick={() => setTab('derivados')}
           className={`flex-1 rounded-xl py-2 font-medium ${
-            tab === 'derivados' ? 'bg-accent text-white' : 'bg-white border border-border text-ink'
+            tab === 'derivados' ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
           }`}
         >
           Derivados
@@ -191,7 +191,7 @@ export default function ServicioTecnico() {
         <button
           onClick={() => setTab('reparados')}
           className={`flex-1 rounded-xl py-2 font-medium ${
-            tab === 'reparados' ? 'bg-accent text-white' : 'bg-white border border-border text-ink'
+            tab === 'reparados' ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
           }`}
         >
           Reparados
@@ -202,7 +202,7 @@ export default function ServicioTecnico() {
             setTecnicoSeleccionado(null);
           }}
           className={`flex-1 rounded-xl py-2 font-medium ${
-            tab === 'tecnicos' ? 'bg-accent text-white' : 'bg-white border border-border text-ink'
+            tab === 'tecnicos' ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
           }`}
         >
           Técnicos
@@ -212,30 +212,30 @@ export default function ServicioTecnico() {
       {tab === 'tecnicos' ? (
         tecnicoSeleccionado ? (
           <>
-            <button onClick={() => setTecnicoSeleccionado(null)} className="text-sm text-accent underline self-start">
+            <button onClick={() => setTecnicoSeleccionado(null)} className="text-sm text-accent dark:text-dark-accent underline self-start">
               &larr; Todos los técnicos
             </button>
             <p className="text-sm font-medium">{nombreTecnico(tecnicoSeleccionado)}</p>
             {historialTecnico.length === 0 && (
-              <p className="text-sm text-muted text-center mt-6">Todavía no tiene arreglos registrados.</p>
+              <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Todavía no tiene arreglos registrados.</p>
             )}
             <div className="flex flex-col gap-2">
               {historialTecnico.map((e) => (
-                <div key={e.id} className="rounded-xl border border-border bg-white shadow-card px-4 py-3 flex flex-col gap-1">
+                <div key={e.id} className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex flex-col gap-1">
                   <p className="text-sm font-medium">
                     {e.modelo}
                     {e.capacidad_gb ? ` · ${e.capacidad_gb}GB` : ''}
                   </p>
                   {e.imei && (
-                    <p className="text-xs text-muted">
-                      IMEI: <span className="font-bold font-mono text-ink">{e.imei}</span>
+                    <p className="text-xs text-muted dark:text-dark-text-secondary">
+                      IMEI: <span className="font-bold font-mono text-ink dark:text-dark-text">{e.imei}</span>
                     </p>
                   )}
                   {e.trabajos_realizados && e.trabajos_realizados.length > 0 && (
-                    <p className="text-xs text-muted">Arreglo: {e.trabajos_realizados.join(', ')}</p>
+                    <p className="text-xs text-muted dark:text-dark-text-secondary">Arreglo: {e.trabajos_realizados.join(', ')}</p>
                   )}
                   {e.fecha_reparado && (
-                    <p className="text-xs text-muted">Reparado el {formatearFecha(e.fecha_reparado)}</p>
+                    <p className="text-xs text-muted dark:text-dark-text-secondary">Reparado el {formatearFecha(e.fecha_reparado)}</p>
                   )}
                 </div>
               ))}
@@ -244,9 +244,9 @@ export default function ServicioTecnico() {
         ) : (
           <>
             {tecnicos.length === 0 && (
-              <p className="text-sm text-muted text-center mt-6">
+              <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">
                 Todavía no cargaste técnicos.{' '}
-                <Link href="/configuracion/tecnicos" className="text-accent underline">
+                <Link href="/configuracion/tecnicos" className="text-accent dark:text-dark-accent underline">
                   Cargar acá
                 </Link>
               </p>
@@ -258,10 +258,10 @@ export default function ServicioTecnico() {
                   <button
                     key={t.id}
                     onClick={() => setTecnicoSeleccionado(t.id)}
-                    className="rounded-xl border border-border bg-white shadow-card px-4 py-3 flex items-center justify-between text-left"
+                    className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex items-center justify-between text-left"
                   >
                     <p className="text-sm font-medium">{t.nombre}</p>
-                    <p className="text-xs text-muted">{cantidad} arreglo{cantidad === 1 ? '' : 's'}</p>
+                    <p className="text-xs text-muted dark:text-dark-text-secondary">{cantidad} arreglo{cantidad === 1 ? '' : 's'}</p>
                   </button>
                 );
               })}
@@ -274,19 +274,19 @@ export default function ServicioTecnico() {
             <>
               <button
                 onClick={() => setPanelNuevo((v) => !v)}
-                className="w-full rounded-xl border border-border py-3 text-center text-sm font-medium"
+                className="w-full rounded-xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium"
               >
                 {panelNuevo ? 'Cancelar' : '+ Agregar equipo'}
               </button>
 
               {panelNuevo && (
-                <div className="rounded-xl border border-border bg-white shadow-card p-3 flex flex-col gap-2">
+                <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-3 flex flex-col gap-2">
                   <input
                     value={nuevoModelo}
                     onChange={(e) => setNuevoModelo(e.target.value)}
                     placeholder="Modelo (ej. iPhone 13)"
                     list="carpetas-stock-servicio"
-                    className="w-full bg-canvas border border-border rounded-lg px-3 py-2 text-sm"
+                    className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                   />
                   <datalist id="carpetas-stock-servicio">
                     {carpetasStock.map((c) => (
@@ -299,7 +299,7 @@ export default function ServicioTecnico() {
                         key={gb}
                         onClick={() => setNuevaCapacidad(gb)}
                         className={`flex-1 rounded-lg py-2 text-xs font-medium ${
-                          nuevaCapacidad === gb ? 'bg-accent text-white' : 'border border-border'
+                          nuevaCapacidad === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                         }`}
                       >
                         {gb}GB
@@ -310,25 +310,25 @@ export default function ServicioTecnico() {
                     value={nuevoColor}
                     onChange={(e) => setNuevoColor(e.target.value)}
                     placeholder="Color"
-                    className="w-full bg-canvas border border-border rounded-lg px-3 py-2 text-sm"
+                    className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                   />
                   <input
                     value={nuevoImei}
                     onChange={(e) => setNuevoImei(e.target.value)}
                     placeholder="IMEI"
-                    className="w-full bg-canvas border border-border rounded-lg px-3 py-2 text-sm font-mono"
+                    className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm font-mono"
                   />
                   <textarea
                     value={nuevoDetalles}
                     onChange={(e) => setNuevoDetalles(e.target.value)}
                     placeholder="Detalles (ej. no enciende, pantalla rota)"
                     rows={2}
-                    className="w-full bg-canvas border border-border rounded-lg px-3 py-2 text-sm"
+                    className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                   />
                   <button
                     disabled={!nuevoModelo.trim() || guardandoNuevo}
                     onClick={agregarEquipo}
-                    className="rounded-lg bg-accent hover:bg-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
+                    className="rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
                   >
                     {guardandoNuevo ? 'Agregando...' : 'Agregar a Servicio Técnico'}
                   </button>
@@ -337,9 +337,9 @@ export default function ServicioTecnico() {
             </>
           )}
 
-          {loading && <p className="text-sm text-muted text-center mt-6">Cargando...</p>}
+          {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Cargando...</p>}
           {!loading && filtrados.length === 0 && (
-            <p className="text-sm text-muted text-center mt-6">
+            <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">
               {tab === 'derivados'
                 ? 'No hay equipos derivados a reparación. Se envían desde Plan Canje o se agregan acá directamente.'
                 : 'Todavía no marcaste ningún equipo como reparado.'}
@@ -348,30 +348,30 @@ export default function ServicioTecnico() {
 
           <div className="flex flex-col gap-2">
             {filtrados.map((e) => (
-              <div key={e.id} className="rounded-xl border border-border bg-white shadow-card px-4 py-3 flex flex-col gap-2">
+              <div key={e.id} className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex flex-col gap-2">
                 <p className="text-sm font-medium">
                   {e.modelo}
                   {e.capacidad_gb ? ` · ${e.capacidad_gb}GB` : ''}
                   {e.color ? ` · ${e.color}` : ''}
                 </p>
                 {e.imei && (
-                  <p className="text-xs text-muted -mt-1">
-                    IMEI: <span className="font-bold font-mono text-ink">{e.imei}</span>
+                  <p className="text-xs text-muted dark:text-dark-text-secondary -mt-1">
+                    IMEI: <span className="font-bold font-mono text-ink dark:text-dark-text">{e.imei}</span>
                   </p>
                 )}
-                {e.detalles && <p className="text-xs text-muted">Detalles: {e.detalles}</p>}
+                {e.detalles && <p className="text-xs text-muted dark:text-dark-text-secondary">Detalles: {e.detalles}</p>}
                 {e.fecha_ingreso_servicio && (
-                  <p className="text-xs text-muted">Ingresó: {formatearFecha(e.fecha_ingreso_servicio)}</p>
+                  <p className="text-xs text-muted dark:text-dark-text-secondary">Ingresó: {formatearFecha(e.fecha_ingreso_servicio)}</p>
                 )}
 
                 {tab === 'derivados' && (
                   <div>
-                    <label className="text-xs text-muted block mb-1">Técnico asignado</label>
+                    <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Técnico asignado</label>
                     <select
                       value={e.tecnico_id ?? ''}
                       disabled={guardando === e.id}
                       onChange={(ev) => asignarTecnico(e.id, ev.target.value)}
-                      className="w-full bg-white border border-border rounded-lg px-3 py-2 text-sm disabled:opacity-40"
+                      className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm disabled:opacity-40"
                     >
                       <option value="">Sin asignar</option>
                       {tecnicos.map((t) => (
@@ -386,13 +386,13 @@ export default function ServicioTecnico() {
                 {tab === 'reparados' && (
                   <>
                     {nombreTecnico(e.tecnico_id) && (
-                      <p className="text-xs text-muted">Reparado por: {nombreTecnico(e.tecnico_id)}</p>
+                      <p className="text-xs text-muted dark:text-dark-text-secondary">Reparado por: {nombreTecnico(e.tecnico_id)}</p>
                     )}
                     {e.trabajos_realizados && e.trabajos_realizados.length > 0 && (
-                      <p className="text-xs text-muted">Arreglo realizado: {e.trabajos_realizados.join(', ')}</p>
+                      <p className="text-xs text-muted dark:text-dark-text-secondary">Arreglo realizado: {e.trabajos_realizados.join(', ')}</p>
                     )}
                     {e.fecha_reparado && (
-                      <p className="text-xs text-muted">Reparado: {formatearFecha(e.fecha_reparado)}</p>
+                      <p className="text-xs text-muted dark:text-dark-text-secondary">Reparado: {formatearFecha(e.fecha_reparado)}</p>
                     )}
                   </>
                 )}
@@ -400,7 +400,7 @@ export default function ServicioTecnico() {
                 {tab === 'derivados' && (
                   <button
                     onClick={() => abrirPanelReparar(e.id)}
-                    className="rounded-lg border border-border py-2 text-xs font-medium"
+                    className="rounded-lg border border-border dark:border-dark-border py-2 text-xs font-medium"
                   >
                     {panelReparar === e.id ? 'Cancelar' : 'Marcar como reparado'}
                   </button>
@@ -411,14 +411,14 @@ export default function ServicioTecnico() {
                     <button
                       disabled={guardando === e.id}
                       onClick={() => volverADerivado(e.id)}
-                      className="flex-1 rounded-lg border border-border py-2 text-xs font-medium disabled:opacity-40"
+                      className="flex-1 rounded-lg border border-border dark:border-dark-border py-2 text-xs font-medium disabled:opacity-40"
                     >
                       Volver a Derivados
                     </button>
                     <button
                       disabled={guardando === e.id}
                       onClick={() => agregarAlStock(e)}
-                      className="flex-1 rounded-lg bg-accent hover:bg-accent-hover transition-colors py-2 text-xs font-medium text-white disabled:opacity-40"
+                      className="flex-1 rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-xs font-medium text-white disabled:opacity-40"
                     >
                       Agregar al Stock
                     </button>
@@ -426,12 +426,12 @@ export default function ServicioTecnico() {
                 )}
 
                 {panelReparar === e.id && (
-                  <div className="rounded-lg border border-border bg-white p-3 flex flex-col gap-2">
-                    <p className="text-xs font-medium text-muted">Arreglo realizado</p>
+                  <div className="rounded-lg border border-border dark:border-dark-border bg-white dark:bg-dark-surface p-3 flex flex-col gap-2">
+                    <p className="text-xs font-medium text-muted dark:text-dark-text-secondary">Arreglo realizado</p>
                     {trabajos.length === 0 && (
-                      <p className="text-xs text-muted">
+                      <p className="text-xs text-muted dark:text-dark-text-secondary">
                         Todavía no cargaste trabajos en el catálogo.{' '}
-                        <Link href="/servicio-tecnico/trabajos" className="text-accent underline">
+                        <Link href="/servicio-tecnico/trabajos" className="text-accent dark:text-dark-accent underline">
                           Cargar acá
                         </Link>
                       </p>
@@ -450,7 +450,7 @@ export default function ServicioTecnico() {
                     <button
                       disabled={guardando === e.id}
                       onClick={() => marcarReparado(e.id)}
-                      className="mt-1 rounded-lg bg-accent hover:bg-accent-hover transition-colors py-2 text-xs font-medium text-white disabled:opacity-40"
+                      className="mt-1 rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-xs font-medium text-white disabled:opacity-40"
                     >
                       Confirmar reparado
                     </button>

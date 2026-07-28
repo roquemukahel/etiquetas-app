@@ -14,7 +14,7 @@ export default function BotonSalir() {
   };
 
   return (
-    <button onClick={salir} className="text-xs text-muted underline">
+    <button onClick={salir} className="text-xs text-muted dark:text-dark-text-secondary underline">
       Cerrar sesión
     </button>
   );

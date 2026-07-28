@@ -54,20 +54,20 @@ export default function Clientes() {
         value={busqueda}
         onChange={(e) => setBusqueda(e.target.value)}
         placeholder="Buscar por nombre, email, teléfono, DNI..."
-        className="w-full bg-white border border-border rounded-xl px-4 py-3 text-sm"
+        className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
       />
 
       <Link
         href="/clientes/nuevo"
-        className="w-full rounded-2xl border border-border py-3 text-center text-sm font-medium"
+        className="w-full rounded-2xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium"
       >
         + Cargar cliente
       </Link>
 
-      {loading && <p className="text-sm text-muted text-center mt-6">Cargando...</p>}
+      {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Cargando...</p>}
 
       {!loading && filtrados.length === 0 && (
-        <p className="text-sm text-muted text-center mt-6">
+        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">
           {busqueda ? 'No encontramos nada con esa búsqueda.' : 'Todavía no tenés clientes cargados.'}
         </p>
       )}
@@ -77,15 +77,15 @@ export default function Clientes() {
           <Link
             key={c.id}
             href={`/clientes/${c.id}`}
-            className="rounded-xl border border-border bg-white shadow-card px-4 py-3 flex items-center justify-between"
+            className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex items-center justify-between"
           >
             <div>
               <p className="text-sm font-medium">
                 {c.nombre} {c.apellido || ''}
               </p>
-              <p className="text-xs text-muted">{c.telefono || c.email || 'sin contacto'}</p>
+              <p className="text-xs text-muted dark:text-dark-text-secondary">{c.telefono || c.email || 'sin contacto'}</p>
             </div>
-            {c.dni && <p className="text-xs text-muted font-mono">{c.dni}</p>}
+            {c.dni && <p className="text-xs text-muted dark:text-dark-text-secondary font-mono">{c.dni}</p>}
           </Link>
         ))}
       </div>

@@ -75,7 +75,7 @@ export default function AdminPanel() {
   if (autorizado === null || loading) {
     return (
       <main className="flex min-h-screen items-center justify-center">
-        <p className="text-sm text-muted">Cargando...</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">Cargando...</p>
       </main>
     );
   }
@@ -83,8 +83,8 @@ export default function AdminPanel() {
   if (!autorizado) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
-        <p className="text-sm text-muted">No tenés acceso a esta sección.</p>
-        <Link href="/" className="text-sm text-accent underline">
+        <p className="text-sm text-muted dark:text-dark-text-secondary">No tenés acceso a esta sección.</p>
+        <Link href="/" className="text-sm text-accent dark:text-dark-accent underline">
           Volver al panel
         </Link>
       </main>
@@ -101,21 +101,21 @@ export default function AdminPanel() {
       </header>
 
       <div className="grid grid-cols-3 gap-3">
-        <div className="rounded-2xl bg-white border border-border shadow-card p-3.5">
+        <div className="rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-3.5">
           <p className="text-2xl font-display font-semibold leading-none">{negocios.length}</p>
-          <p className="text-[11px] text-muted leading-tight">Negocios</p>
+          <p className="text-[11px] text-muted dark:text-dark-text-secondary leading-tight">Negocios</p>
         </div>
-        <div className="rounded-2xl bg-white border border-border shadow-card p-3.5">
+        <div className="rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-3.5">
           <p className="text-2xl font-display font-semibold leading-none">
             {negocios.filter((n) => n.activo).length}
           </p>
-          <p className="text-[11px] text-muted leading-tight">Activos</p>
+          <p className="text-[11px] text-muted dark:text-dark-text-secondary leading-tight">Activos</p>
         </div>
-        <div className="rounded-2xl bg-white border border-border shadow-card p-3.5">
+        <div className="rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-3.5">
           <p className="text-2xl font-display font-semibold leading-none">
             {negocios.reduce((acc, n) => acc + Number(n.cantidad_ordenes), 0)}
           </p>
-          <p className="text-[11px] text-muted leading-tight">Órdenes totales</p>
+          <p className="text-[11px] text-muted dark:text-dark-text-secondary leading-tight">Órdenes totales</p>
         </div>
       </div>
 
@@ -123,7 +123,7 @@ export default function AdminPanel() {
         value={busqueda}
         onChange={(e) => setBusqueda(e.target.value)}
         placeholder="Buscar negocio..."
-        className="w-full bg-white border border-border rounded-xl px-4 py-3 text-sm"
+        className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
       />
 
       <div className="flex flex-col gap-2">
@@ -131,7 +131,7 @@ export default function AdminPanel() {
           const inactivoHaceDias = diasInactivo(n.ultima_actividad);
           const pocaActividad = inactivoHaceDias > 30;
           return (
-            <div key={n.id} className="rounded-xl border border-border bg-white shadow-card px-4 py-3 flex flex-col gap-2">
+            <div key={n.id} className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex flex-col gap-2">
               <button onClick={() => toggleExpandir(n.id)} className="flex items-center justify-between text-left">
                 <div>
                   <p className="text-sm font-medium">
@@ -142,26 +142,26 @@ export default function AdminPanel() {
                       </span>
                     )}
                   </p>
-                  <p className="text-xs text-muted">
+                  <p className="text-xs text-muted dark:text-dark-text-secondary">
                     {n.cantidad_usuarios} usuario{n.cantidad_usuarios === 1 ? '' : 's'} · {n.cantidad_dispositivos}{' '}
                     dispositivos · {n.cantidad_ordenes} órdenes
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className={`text-xs ${pocaActividad ? 'text-warn font-medium' : 'text-muted'}`}>
+                  <p className={`text-xs ${pocaActividad ? 'text-warn font-medium' : 'text-muted dark:text-dark-text-secondary'}`}>
                     Última actividad: {formatearFecha(n.ultima_actividad)}
                   </p>
-                  <p className="text-xs text-muted">Alta: {formatearFecha(n.creado)}</p>
+                  <p className="text-xs text-muted dark:text-dark-text-secondary">Alta: {formatearFecha(n.creado)}</p>
                 </div>
               </button>
 
               {expandido === n.id && (
-                <div className="rounded-lg bg-canvas p-3 flex flex-col gap-2">
-                  <p className="text-xs font-medium text-muted">Usuarios</p>
+                <div className="rounded-lg bg-canvas dark:bg-dark-bg p-3 flex flex-col gap-2">
+                  <p className="text-xs font-medium text-muted dark:text-dark-text-secondary">Usuarios</p>
                   {!usuariosPorNegocio[n.id] ? (
-                    <p className="text-xs text-muted">Cargando...</p>
+                    <p className="text-xs text-muted dark:text-dark-text-secondary">Cargando...</p>
                   ) : usuariosPorNegocio[n.id].length === 0 ? (
-                    <p className="text-xs text-muted">Sin usuarios registrados.</p>
+                    <p className="text-xs text-muted dark:text-dark-text-secondary">Sin usuarios registrados.</p>
                   ) : (
                     usuariosPorNegocio[n.id].map((u) => (
                       <p key={u.email} className="text-xs">
@@ -176,7 +176,7 @@ export default function AdminPanel() {
                 disabled={procesando === n.id}
                 onClick={() => toggleActivo(n)}
                 className={`rounded-lg py-2 text-xs font-medium disabled:opacity-40 ${
-                  n.activo ? 'border border-bad/30 text-bad' : 'bg-accent hover:bg-accent-hover transition-colors text-white'
+                  n.activo ? 'border border-bad/30 text-bad' : 'bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors text-white'
                 }`}
               >
                 {n.activo ? 'Desactivar acceso' : 'Reactivar acceso'}

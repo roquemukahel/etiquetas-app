@@ -383,7 +383,7 @@ export default function NuevaOrden() {
           <button
             onClick={() => setModoCliente('existente')}
             className={`flex-1 rounded-xl py-2 font-medium ${
-              modoCliente === 'existente' ? 'bg-accent text-white' : 'bg-white border border-border text-ink'
+              modoCliente === 'existente' ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
             }`}
           >
             Cliente existente
@@ -391,7 +391,7 @@ export default function NuevaOrden() {
           <button
             onClick={() => setModoCliente('nuevo')}
             className={`flex-1 rounded-xl py-2 font-medium ${
-              modoCliente === 'nuevo' ? 'bg-accent text-white' : 'bg-white border border-border text-ink'
+              modoCliente === 'nuevo' ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
             }`}
           >
             Cargar nuevo
@@ -404,22 +404,22 @@ export default function NuevaOrden() {
               value={buscarCliente}
               onChange={(e) => setBuscarCliente(e.target.value)}
               placeholder="Buscar por nombre o teléfono..."
-              className="w-full bg-white border border-border rounded-xl px-4 py-3 text-sm"
+              className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
             />
             <div className="flex flex-col gap-2">
               {clientesFiltrados.length === 0 && (
-                <p className="text-sm text-muted text-center mt-4">No encontramos clientes con esa búsqueda.</p>
+                <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-4">No encontramos clientes con esa búsqueda.</p>
               )}
               {clientesFiltrados.map((c) => (
                 <button
                   key={c.id}
                   onClick={() => elegirCliente(c)}
-                  className="rounded-xl border border-border bg-white shadow-card px-4 py-3 flex items-center justify-between text-left"
+                  className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex items-center justify-between text-left"
                 >
                   <p className="text-sm font-medium">
                     {c.nombre} {c.apellido || ''}
                   </p>
-                  <p className="text-xs text-muted">{c.telefono || ''}</p>
+                  <p className="text-xs text-muted dark:text-dark-text-secondary">{c.telefono || ''}</p>
                 </button>
               ))}
             </div>
@@ -434,7 +434,7 @@ export default function NuevaOrden() {
             <button
               disabled={!nuevoNombre.trim()}
               onClick={confirmarClienteNuevo}
-              className="mt-2 w-full rounded-2xl bg-accent hover:bg-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
+              className="mt-2 w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
             >
               Continuar
             </button>
@@ -459,31 +459,31 @@ export default function NuevaOrden() {
         <div className="flex gap-2">
           <button
             onClick={() => setPanelAbierto(panelAbierto === 'dispositivo' ? null : 'dispositivo')}
-            className="flex-1 rounded-xl border border-border py-3 text-sm font-medium"
+            className="flex-1 rounded-xl border border-border dark:border-dark-border py-3 text-sm font-medium"
           >
             + Dispositivo
           </button>
           <button
             onClick={() => setPanelAbierto(panelAbierto === 'producto' ? null : 'producto')}
-            className="flex-1 rounded-xl border border-border py-3 text-sm font-medium"
+            className="flex-1 rounded-xl border border-border dark:border-dark-border py-3 text-sm font-medium"
           >
             + Accesorio / producto
           </button>
           <button
             onClick={() => setPanelAbierto(panelAbierto === 'trabajo' ? null : 'trabajo')}
-            className="flex-1 rounded-xl border border-border py-3 text-sm font-medium"
+            className="flex-1 rounded-xl border border-border dark:border-dark-border py-3 text-sm font-medium"
           >
             + Servicio técnico
           </button>
         </div>
 
         {panelAbierto === 'dispositivo' && (
-          <div className="rounded-xl border border-border bg-white shadow-card p-3 flex flex-col gap-3">
+          <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-3 flex flex-col gap-3">
             <div className="flex items-center gap-2 text-xs">
               <button
                 onClick={() => setModoDispositivo('stock')}
                 className={`flex-1 rounded-lg py-2 font-medium ${
-                  modoDispositivo === 'stock' ? 'bg-accent text-white' : 'border border-border'
+                  modoDispositivo === 'stock' ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                 }`}
               >
                 Del stock
@@ -491,7 +491,7 @@ export default function NuevaOrden() {
               <button
                 onClick={() => setModoDispositivo('nuevo')}
                 className={`flex-1 rounded-lg py-2 font-medium ${
-                  modoDispositivo === 'nuevo' ? 'bg-accent text-white' : 'border border-border'
+                  modoDispositivo === 'nuevo' ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                 }`}
               >
                 Cargar nuevo
@@ -504,17 +504,17 @@ export default function NuevaOrden() {
                   value={buscarDispositivo}
                   onChange={(e) => setBuscarDispositivo(e.target.value)}
                   placeholder="Buscar por modelo o IMEI..."
-                  className="w-full bg-white border border-border rounded-lg px-3 py-2 text-sm"
+                  className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                 />
                 <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
                   {dispositivosFiltrados.length === 0 && (
-                    <p className="text-xs text-muted text-center py-2">No hay dispositivos disponibles.</p>
+                    <p className="text-xs text-muted dark:text-dark-text-secondary text-center py-2">No hay dispositivos disponibles.</p>
                   )}
                   {dispositivosFiltrados.map((d) => (
                     <button
                       key={d.id}
                       onClick={() => agregarDispositivoDelStock(d)}
-                      className="rounded-lg border border-border bg-white px-3 py-2 flex items-center justify-between text-left text-sm"
+                      className="rounded-lg border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-3 py-2 flex items-center justify-between text-left text-sm"
                     >
                       <span>
                         {d.modelo} {d.capacidad_gb ? `· ${d.capacidad_gb}GB` : ''} {d.color ? `· ${d.color}` : ''}
@@ -531,7 +531,7 @@ export default function NuevaOrden() {
                   onChange={(e) => setNuevoModelo(e.target.value)}
                   placeholder="Modelo (ej. iPhone 13)"
                   list="carpetas-stock"
-                  className="w-full bg-white border border-border rounded-lg px-3 py-2 text-sm"
+                  className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                 />
                 <datalist id="carpetas-stock">
                   {carpetasStock.map((c) => (
@@ -544,7 +544,7 @@ export default function NuevaOrden() {
                       key={gb}
                       onClick={() => setNuevaCapacidad(gb)}
                       className={`flex-1 rounded-lg py-2 text-xs font-medium ${
-                        nuevaCapacidad === gb ? 'bg-accent text-white' : 'border border-border'
+                        nuevaCapacidad === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                       }`}
                     >
                       {gb}GB
@@ -555,25 +555,25 @@ export default function NuevaOrden() {
                   value={nuevoColor}
                   onChange={(e) => setNuevoColor(e.target.value)}
                   placeholder="Color"
-                  className="w-full bg-white border border-border rounded-lg px-3 py-2 text-sm"
+                  className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                 />
                 <input
                   value={nuevoImeiDispositivo}
                   onChange={(e) => setNuevoImeiDispositivo(e.target.value)}
                   placeholder="IMEI"
-                  className="w-full bg-white border border-border rounded-lg px-3 py-2 text-sm font-mono"
+                  className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm font-mono"
                 />
                 <input
                   value={nuevoPrecioDispositivo}
                   onChange={(e) => setNuevoPrecioDispositivo(e.target.value)}
                   placeholder="Precio"
                   inputMode="numeric"
-                  className="w-full bg-white border border-border rounded-lg px-3 py-2 text-sm"
+                  className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                 />
                 <button
                   disabled={!nuevoModelo.trim() || cargandoDispositivo}
                   onClick={agregarDispositivoNuevo}
-                  className="w-full rounded-lg bg-accent hover:bg-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
+                  className="w-full rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
                 >
                   {cargandoDispositivo ? 'Agregando...' : 'Agregar al carrito'}
                 </button>
@@ -583,12 +583,12 @@ export default function NuevaOrden() {
         )}
 
         {panelAbierto === 'producto' && (
-          <div className="rounded-xl border border-border bg-white shadow-card p-3 flex flex-col gap-3">
+          <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-3 flex flex-col gap-3">
             <div className="flex items-center gap-2 text-xs">
               <button
                 onClick={() => setModoProducto('catalogo')}
                 className={`flex-1 rounded-lg py-2 font-medium ${
-                  modoProducto === 'catalogo' ? 'bg-accent text-white' : 'border border-border'
+                  modoProducto === 'catalogo' ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                 }`}
               >
                 Del catálogo
@@ -596,7 +596,7 @@ export default function NuevaOrden() {
               <button
                 onClick={() => setModoProducto('manual')}
                 className={`flex-1 rounded-lg py-2 font-medium ${
-                  modoProducto === 'manual' ? 'bg-accent text-white' : 'border border-border'
+                  modoProducto === 'manual' ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                 }`}
               >
                 Cargar a mano
@@ -606,7 +606,7 @@ export default function NuevaOrden() {
             {modoProducto === 'catalogo' ? (
               <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
                 {productos.length === 0 && (
-                  <p className="text-xs text-muted text-center py-2">
+                  <p className="text-xs text-muted dark:text-dark-text-secondary text-center py-2">
                     Todavía no cargaste productos en Configuración.
                   </p>
                 )}
@@ -614,7 +614,7 @@ export default function NuevaOrden() {
                   <button
                     key={p.id}
                     onClick={() => agregarProductoDelCatalogo(p)}
-                    className="rounded-lg border border-border bg-white px-3 py-2 flex items-center justify-between text-left text-sm"
+                    className="rounded-lg border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-3 py-2 flex items-center justify-between text-left text-sm"
                   >
                     <span>{p.nombre}</span>
                     {p.precio != null && <span className="font-medium">${p.precio.toLocaleString('es-AR')}</span>}
@@ -627,7 +627,7 @@ export default function NuevaOrden() {
                   value={productoManualNombre}
                   onChange={(e) => setProductoManualNombre(e.target.value)}
                   placeholder="Nombre del ítem"
-                  className="w-full bg-white border border-border rounded-lg px-3 py-2 text-sm"
+                  className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                 />
                 <div className="flex gap-2">
                   <input
@@ -635,20 +635,20 @@ export default function NuevaOrden() {
                     onChange={(e) => setProductoManualCantidad(e.target.value)}
                     placeholder="Cantidad"
                     inputMode="numeric"
-                    className="w-1/3 bg-white border border-border rounded-lg px-3 py-2 text-sm"
+                    className="w-1/3 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                   />
                   <input
                     value={productoManualPrecio}
                     onChange={(e) => setProductoManualPrecio(e.target.value)}
                     placeholder="Precio unitario"
                     inputMode="numeric"
-                    className="flex-1 bg-white border border-border rounded-lg px-3 py-2 text-sm"
+                    className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                   />
                 </div>
                 <button
                   disabled={!productoManualNombre.trim()}
                   onClick={agregarProductoManual}
-                  className="w-full rounded-lg bg-accent hover:bg-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
+                  className="w-full rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
                 >
                   Agregar al carrito
                 </button>
@@ -658,12 +658,12 @@ export default function NuevaOrden() {
         )}
 
         {panelAbierto === 'trabajo' && (
-          <div className="rounded-xl border border-border bg-white shadow-card p-3 flex flex-col gap-3">
+          <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-3 flex flex-col gap-3">
             <div className="flex items-center gap-2 text-xs">
               <button
                 onClick={() => setModoTrabajo('catalogo')}
                 className={`flex-1 rounded-lg py-2 font-medium ${
-                  modoTrabajo === 'catalogo' ? 'bg-accent text-white' : 'border border-border'
+                  modoTrabajo === 'catalogo' ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                 }`}
               >
                 Del catálogo
@@ -671,7 +671,7 @@ export default function NuevaOrden() {
               <button
                 onClick={() => setModoTrabajo('manual')}
                 className={`flex-1 rounded-lg py-2 font-medium ${
-                  modoTrabajo === 'manual' ? 'bg-accent text-white' : 'border border-border'
+                  modoTrabajo === 'manual' ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                 }`}
               >
                 Cargar a mano
@@ -681,7 +681,7 @@ export default function NuevaOrden() {
             {modoTrabajo === 'catalogo' ? (
               <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
                 {trabajos.length === 0 && (
-                  <p className="text-xs text-muted text-center py-2">
+                  <p className="text-xs text-muted dark:text-dark-text-secondary text-center py-2">
                     Todavía no cargaste trabajos en Servicio Técnico.
                   </p>
                 )}
@@ -689,7 +689,7 @@ export default function NuevaOrden() {
                   <button
                     key={t.id}
                     onClick={() => agregarTrabajoDelCatalogo(t)}
-                    className="rounded-lg border border-border bg-white px-3 py-2 flex items-center justify-between text-left text-sm"
+                    className="rounded-lg border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-3 py-2 flex items-center justify-between text-left text-sm"
                   >
                     <span>{t.nombre}</span>
                     {t.precio != null && <span className="font-medium">${t.precio.toLocaleString('es-AR')}</span>}
@@ -702,19 +702,19 @@ export default function NuevaOrden() {
                   value={trabajoManualNombre}
                   onChange={(e) => setTrabajoManualNombre(e.target.value)}
                   placeholder="Nombre del arreglo"
-                  className="w-full bg-white border border-border rounded-lg px-3 py-2 text-sm"
+                  className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                 />
                 <input
                   value={trabajoManualPrecio}
                   onChange={(e) => setTrabajoManualPrecio(e.target.value)}
                   placeholder="Precio"
                   inputMode="numeric"
-                  className="w-full bg-white border border-border rounded-lg px-3 py-2 text-sm"
+                  className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                 />
                 <button
                   disabled={!trabajoManualNombre.trim()}
                   onClick={agregarTrabajoManual}
-                  className="w-full rounded-lg bg-accent hover:bg-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
+                  className="w-full rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
                 >
                   Agregar al carrito
                 </button>
@@ -725,21 +725,21 @@ export default function NuevaOrden() {
 
         <div className="flex flex-col gap-2">
           {carrito.length === 0 && (
-            <p className="text-sm text-muted text-center mt-4">El carrito está vacío. Agregá al menos un ítem.</p>
+            <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-4">El carrito está vacío. Agregá al menos un ítem.</p>
           )}
           {carrito.map((i) => (
             <div
               key={i.tempId}
-              className="rounded-xl border border-border bg-white shadow-card px-4 py-3 flex items-center justify-between"
+              className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex items-center justify-between"
             >
               <div className="flex-1">
                 <p className="text-sm font-medium">{i.descripcion}</p>
-                <div className="flex items-center gap-1 text-xs text-muted mt-0.5">
+                <div className="flex items-center gap-1 text-xs text-muted dark:text-dark-text-secondary mt-0.5">
                   <input
                     value={i.cantidad}
                     onChange={(e) => actualizarCantidadItem(i.tempId, e.target.value)}
                     inputMode="numeric"
-                    className="w-12 bg-white border border-border rounded px-1 py-0.5 text-xs text-center"
+                    className="w-12 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded px-1 py-0.5 text-xs text-center"
                   />
                   <span>×</span>
                   <span>$</span>
@@ -747,7 +747,7 @@ export default function NuevaOrden() {
                     value={i.precioUnitario}
                     onChange={(e) => actualizarPrecioItem(i.tempId, e.target.value)}
                     inputMode="numeric"
-                    className="w-20 bg-white border border-border rounded px-1 py-0.5 text-xs"
+                    className="w-20 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded px-1 py-0.5 text-xs"
                   />
                 </div>
               </div>
@@ -762,7 +762,7 @@ export default function NuevaOrden() {
         </div>
 
         {carrito.length > 0 && (
-          <div className="flex items-center justify-between text-sm font-medium border-t border-border pt-3">
+          <div className="flex items-center justify-between text-sm font-medium border-t border-border dark:border-dark-border pt-3">
             <span>Subtotal</span>
             <span>${subtotal.toLocaleString('es-AR')}</span>
           </div>
@@ -775,7 +775,7 @@ export default function NuevaOrden() {
             setImpuesto('');
             setStep('confirmar');
           }}
-          className="mt-auto w-full rounded-2xl bg-accent hover:bg-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
+          className="mt-auto w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
         >
           Continuar
         </button>
@@ -794,22 +794,22 @@ export default function NuevaOrden() {
 
       {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
 
-      <div className="rounded-xl bg-white border border-border px-4 py-3 text-sm flex flex-col gap-1">
+      <div className="rounded-xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border px-4 py-3 text-sm flex flex-col gap-1">
         <p>
-          <span className="text-muted">Cliente:</span>{' '}
+          <span className="text-muted dark:text-dark-text-secondary">Cliente:</span>{' '}
           {modoCliente === 'existente' ? `${clienteElegido?.nombre} ${clienteElegido?.apellido || ''}` : nuevoNombre}
         </p>
         <p>
-          <span className="text-muted">Ítems:</span> {carrito.length}
+          <span className="text-muted dark:text-dark-text-secondary">Ítems:</span> {carrito.length}
         </p>
       </div>
 
       <div>
-        <label className="text-xs text-muted block mb-1">Vendedor</label>
+        <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Vendedor</label>
         <select
           value={vendedorId}
           onChange={(e) => setVendedorId(e.target.value)}
-          className="w-full bg-white border border-border rounded-xl px-4 py-3 text-sm"
+          className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
         >
           <option value="">Sin asignar</option>
           {vendedores.map((v) => (
@@ -821,14 +821,14 @@ export default function NuevaOrden() {
       </div>
 
       <div>
-        <label className="text-xs text-muted block mb-1">Forma de pago</label>
+        <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Forma de pago</label>
         <div className="flex gap-2">
           {FORMAS_PAGO.map((f) => (
             <button
               key={f}
               onClick={() => setFormaPago(f)}
               className={`flex-1 rounded-xl py-2 text-sm font-medium ${
-                formaPago === f ? 'bg-accent text-white' : 'bg-white border border-border text-ink'
+                formaPago === f ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
               }`}
             >
               {f}
@@ -839,28 +839,28 @@ export default function NuevaOrden() {
 
       <div className="flex gap-2">
         <div className="flex-1">
-          <label className="text-xs text-muted block mb-1">Anticipo</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Anticipo</label>
           <input
             value={anticipo}
             onChange={(e) => setAnticipo(e.target.value)}
             inputMode="numeric"
             placeholder="0"
-            className="w-full bg-white border border-border rounded-xl px-4 py-3 text-sm"
+            className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
           />
         </div>
         <div className="flex-1">
-          <label className="text-xs text-muted block mb-1">Impuesto %</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Impuesto %</label>
           <input
             value={impuesto}
             onChange={(e) => setImpuesto(e.target.value)}
             inputMode="numeric"
             placeholder="0"
-            className="w-full bg-white border border-border rounded-xl px-4 py-3 text-sm"
+            className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
           />
         </div>
       </div>
 
-      <div className="rounded-xl border border-border bg-white shadow-card p-3 flex flex-col gap-3">
+      <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-3 flex flex-col gap-3">
         <label className="flex items-center gap-3 cursor-pointer">
           <input
             type="checkbox"
@@ -877,7 +877,7 @@ export default function NuevaOrden() {
               value={canjeModelo}
               onChange={(e) => setCanjeModelo(e.target.value)}
               placeholder="Modelo del dispositivo entregado"
-              className="w-full bg-white border border-border rounded-lg px-3 py-2 text-sm"
+              className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
             />
             <div className="flex gap-2">
               {STORAGE_OPTIONS.map((gb) => (
@@ -885,7 +885,7 @@ export default function NuevaOrden() {
                   key={gb}
                   onClick={() => setCanjeCapacidad(gb)}
                   className={`flex-1 rounded-lg py-2 text-xs font-medium ${
-                    canjeCapacidad === gb ? 'bg-accent text-white' : 'border border-border'
+                    canjeCapacidad === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                   }`}
                 >
                   {gb}GB
@@ -897,37 +897,37 @@ export default function NuevaOrden() {
                 value={canjeColor}
                 onChange={(e) => setCanjeColor(e.target.value)}
                 placeholder="Color"
-                className="flex-1 bg-white border border-border rounded-lg px-3 py-2 text-sm"
+                className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
               />
               <input
                 value={canjeBateria}
                 onChange={(e) => setCanjeBateria(e.target.value)}
                 placeholder="Batería %"
                 inputMode="numeric"
-                className="w-24 bg-white border border-border rounded-lg px-3 py-2 text-sm"
+                className="w-24 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
               />
             </div>
             <input
               value={canjeImei}
               onChange={(e) => setCanjeImei(e.target.value)}
               placeholder="IMEI"
-              className="w-full bg-white border border-border rounded-lg px-3 py-2 text-sm font-mono"
+              className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm font-mono"
             />
             <input
               value={canjeMonto}
               onChange={(e) => setCanjeMonto(e.target.value)}
               placeholder="Monto reconocido"
               inputMode="numeric"
-              className="w-full bg-white border border-border rounded-lg px-3 py-2 text-sm"
+              className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
             />
             <textarea
               value={canjeDetalles}
               onChange={(e) => setCanjeDetalles(e.target.value)}
               placeholder="Detalles del dispositivo (ej. no anda el parlante, módulo con detalle)"
               rows={3}
-              className="w-full bg-white border border-border rounded-lg px-3 py-2 text-sm"
+              className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
             />
-            <p className="text-xs text-muted">
+            <p className="text-xs text-muted dark:text-dark-text-secondary">
               El dispositivo entregado va a la sección Plan Canje (no entra directo al stock).
             </p>
           </div>
@@ -935,14 +935,14 @@ export default function NuevaOrden() {
       </div>
 
       <div>
-        <label className="text-xs text-muted block mb-1">Estado</label>
+        <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Estado</label>
         <div className="flex gap-2">
           {ESTADOS_ORDEN.map((e) => (
             <button
               key={e}
               onClick={() => setEstadoOrden(e)}
               className={`flex-1 rounded-xl py-2 text-sm font-medium capitalize ${
-                estadoOrden === e ? 'bg-accent text-white' : 'bg-white border border-border text-ink'
+                estadoOrden === e ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
               }`}
             >
               {e}
@@ -951,7 +951,7 @@ export default function NuevaOrden() {
         </div>
       </div>
 
-      <div className="flex items-center justify-between text-lg font-medium border-t border-border pt-3">
+      <div className="flex items-center justify-between text-lg font-medium border-t border-border dark:border-dark-border pt-3">
         <span>Total</span>
         <span>${total.toLocaleString('es-AR')}</span>
       </div>
@@ -959,7 +959,7 @@ export default function NuevaOrden() {
       <button
         disabled={!puedeConfirmar || guardando}
         onClick={handleConfirmar}
-        className="mt-auto w-full rounded-2xl bg-accent hover:bg-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
+        className="mt-auto w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
       >
         {guardando ? 'Creando orden...' : 'Confirmar orden'}
       </button>
@@ -978,11 +978,11 @@ function Campo({
 }) {
   return (
     <div>
-      <label className="text-xs text-muted block mb-1">{label}</label>
+      <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{label}</label>
       <input
         value={valor}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full bg-white border border-border rounded-xl px-4 py-3 text-sm"
+        className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
       />
     </div>
   );

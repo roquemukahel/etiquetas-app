@@ -81,7 +81,7 @@ export default function NuevoDispositivo() {
         </datalist>
 
         <div>
-          <label className="text-xs text-muted block mb-1">Almacenamiento</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Almacenamiento</label>
           <div className="flex gap-2">
             {STORAGE_OPTIONS.map((gb) => (
               <button
@@ -89,7 +89,7 @@ export default function NuevoDispositivo() {
                 type="button"
                 onClick={() => setCapacidad(gb)}
                 className={`flex-1 rounded-xl py-2 text-sm font-medium ${
-                  capacidad === gb ? 'bg-accent text-white' : 'bg-white border border-border text-ink'
+                  capacidad === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
                 }`}
               >
                 {gb} GB
@@ -104,7 +104,7 @@ export default function NuevoDispositivo() {
         <Campo label="Precio" valor={precio} onChange={setPrecio} numerico />
 
         <div>
-          <label className="text-xs text-muted block mb-1">Estado</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Estado</label>
           <div className="flex gap-2">
             {ESTADOS.map((e) => (
               <button
@@ -112,7 +112,7 @@ export default function NuevoDispositivo() {
                 type="button"
                 onClick={() => setEstado(e)}
                 className={`flex-1 rounded-xl py-2 text-sm font-medium capitalize ${
-                  estado === e ? 'bg-accent text-white' : 'bg-white border border-border text-ink'
+                  estado === e ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
                 }`}
               >
                 {e}
@@ -125,7 +125,7 @@ export default function NuevoDispositivo() {
       <button
         disabled={!puedeGuardar || guardando}
         onClick={handleGuardar}
-        className="mt-auto w-full rounded-2xl bg-accent hover:bg-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
+        className="mt-auto w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
       >
         {guardando ? 'Guardando...' : 'Agregar al stock'}
       </button>
@@ -152,14 +152,14 @@ function Campo({
 }) {
   return (
     <div>
-      <label className="text-xs text-muted block mb-1">{label}</label>
+      <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{label}</label>
       <input
         value={valor}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         list={listaId}
         inputMode={numerico ? 'numeric' : undefined}
-        className={`w-full bg-white border border-border rounded-xl px-4 py-3 text-sm ${mono ? 'font-mono' : ''}`}
+        className={`w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm ${mono ? 'font-mono' : ''}`}
       />
     </div>
   );

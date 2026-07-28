@@ -233,7 +233,7 @@ export default function NuevaEtiqueta() {
           <Campo label="Salud de batería (%)" valor={bateria} onChange={setBateria} />
         </div>
 
-        <label className="flex items-center gap-3 bg-white border border-border rounded-xl px-4 py-3 cursor-pointer">
+        <label className="flex items-center gap-3 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 cursor-pointer">
           <input
             type="checkbox"
             checked={agregarAlStock}
@@ -253,7 +253,7 @@ export default function NuevaEtiqueta() {
         <button
           disabled={guardandoStock}
           onClick={handleContinuarAEtiqueta}
-          className="mt-auto w-full rounded-2xl bg-accent hover:bg-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
+          className="mt-auto w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
         >
           {guardandoStock ? 'Guardando en stock...' : 'Continuar al diseño de la etiqueta'}
         </button>
@@ -283,7 +283,7 @@ export default function NuevaEtiqueta() {
         </div>
 
         {!logo && (
-          <label className="text-sm text-accent underline cursor-pointer -mt-6">
+          <label className="text-sm text-accent dark:text-dark-accent underline cursor-pointer -mt-6">
             Subir el logo de tu negocio
             <input type="file" accept="image/*" className="hidden" onChange={handleLogoChange} />
           </label>
@@ -293,14 +293,14 @@ export default function NuevaEtiqueta() {
           <button
             onClick={descargarPNG}
             disabled={descargando}
-            className="w-full rounded-2xl bg-accent hover:bg-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
+            className="w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
           >
             Guardar / compartir PNG
           </button>
           <button
             onClick={descargarPDF}
             disabled={descargando}
-            className="w-full rounded-2xl border border-border py-4 text-center text-base font-medium"
+            className="w-full rounded-2xl border border-border dark:border-dark-border py-4 text-center text-base font-medium"
           >
             Guardar / compartir PDF
           </button>
@@ -318,50 +318,50 @@ export default function NuevaEtiqueta() {
         <span className="text-lg font-medium">Nueva etiqueta</span>
       </header>
 
-      <label className="flex items-center gap-3 bg-white border border-border rounded-xl px-4 py-3 cursor-pointer">
+      <label className="flex items-center gap-3 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 cursor-pointer">
         <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhotoChange} />
         <div className={`h-10 w-10 rounded-lg flex items-center justify-center shrink-0 ${photoPreview ? 'bg-good/15' : 'bg-black/5'}`}>
           {photoPreview ? '✓' : '📷'}
         </div>
         <div className="flex-1">
           <p className="text-sm font-medium">Info del dispositivo</p>
-          <p className="text-xs text-muted">{photoPreview ? 'foto cargada' : 'tocá para sacar foto'}</p>
+          <p className="text-xs text-muted dark:text-dark-text-secondary">{photoPreview ? 'foto cargada' : 'tocá para sacar foto'}</p>
         </div>
       </label>
 
       {!photoFile && (
         <div>
-          <label className="text-xs text-muted block mb-1">O escribí el IMEI a mano</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">O escribí el IMEI a mano</label>
           <input
             value={imeiManual}
             onChange={(e) => setImeiManual(e.target.value)}
             placeholder="IMEI"
-            className="w-full bg-white border border-border rounded-xl px-4 py-3 text-sm font-mono"
+            className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm font-mono"
           />
         </div>
       )}
 
       <div>
-        <label className="text-xs text-muted block mb-1">Salud de batería (%)</label>
+        <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Salud de batería (%)</label>
         <input
           type="number"
           inputMode="numeric"
           value={bateria}
           onChange={(e) => setBateria(e.target.value)}
           placeholder="92"
-          className="w-full bg-white border border-border rounded-xl px-4 py-3 text-sm"
+          className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
         />
       </div>
 
       <div>
-        <label className="text-xs text-muted block mb-1">Almacenamiento</label>
+        <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Almacenamiento</label>
         <div className="flex gap-2">
           {STORAGE_OPTIONS.map((gb) => (
             <button
               key={gb}
               onClick={() => setAlmacenamiento(gb)}
               className={`flex-1 rounded-xl py-2 text-sm font-medium ${
-                almacenamiento === gb ? 'bg-accent text-white' : 'bg-white border border-border text-ink'
+                almacenamiento === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
               }`}
             >
               {gb} GB
@@ -373,7 +373,7 @@ export default function NuevaEtiqueta() {
       <button
         disabled={!puedeContinuar || loading}
         onClick={handleContinuar}
-        className="mt-auto w-full rounded-2xl bg-accent hover:bg-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
+        className="mt-auto w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
       >
         {loading ? 'Leyendo la foto...' : 'Continuar'}
       </button>
@@ -394,11 +394,11 @@ function Campo({
 }) {
   return (
     <div>
-      <label className="text-xs text-muted block mb-1">{label}</label>
+      <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{label}</label>
       <input
         value={valor}
         onChange={(e) => onChange(e.target.value)}
-        className={`w-full bg-white border border-border rounded-xl px-4 py-3 text-sm ${mono ? 'font-mono' : ''}`}
+        className={`w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm ${mono ? 'font-mono' : ''}`}
       />
     </div>
   );

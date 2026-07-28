@@ -53,7 +53,7 @@ export default function Ordenes() {
             key={e}
             onClick={() => setFiltroEstado(e)}
             className={`shrink-0 rounded-xl px-3 py-2 font-medium capitalize ${
-              filtroEstado === e ? 'bg-accent text-white' : 'bg-white border border-border text-ink'
+              filtroEstado === e ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
             }`}
           >
             {e}
@@ -63,15 +63,15 @@ export default function Ordenes() {
 
       <Link
         href="/ordenes/nueva"
-        className="w-full rounded-2xl border border-border py-3 text-center text-sm font-medium"
+        className="w-full rounded-2xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium"
       >
         + Nueva orden
       </Link>
 
-      {loading && <p className="text-sm text-muted text-center mt-6">Cargando...</p>}
+      {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Cargando...</p>}
 
       {!loading && filtradas.length === 0 && (
-        <p className="text-sm text-muted text-center mt-6">No hay órdenes para mostrar.</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">No hay órdenes para mostrar.</p>
       )}
 
       <div className="flex flex-col gap-2">
@@ -79,7 +79,7 @@ export default function Ordenes() {
           <Link
             key={o.id}
             href={`/ordenes/${o.id}`}
-            className="rounded-xl border border-border bg-white shadow-card px-4 py-3 flex items-center justify-between"
+            className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex items-center justify-between"
           >
             <div>
               <p className="text-sm font-medium">
@@ -87,19 +87,19 @@ export default function Ordenes() {
                   ? `${o.orden_items[0].descripcion}${o.orden_items.length > 1 ? ` +${o.orden_items.length - 1}` : ''}`
                   : 'Orden vacía'}
                 {o.orden_items.length > 0 && (
-                  <span className="text-xs font-bold text-accent">
+                  <span className="text-xs font-bold text-accent dark:text-dark-accent">
                     {' '}
                     — {o.orden_items.every((i) => i.tipo === 'trabajo') ? 'Servicio técnico' : 'Venta'}
                   </span>
                 )}
               </p>
-              <p className="text-xs text-muted">
+              <p className="text-xs text-muted dark:text-dark-text-secondary">
                 {o.clientes ? `${o.clientes.nombre} ${o.clientes.apellido || ''}` : 'Sin cliente'}
               </p>
             </div>
             <div className="text-right">
               {o.total != null && <p className="text-sm font-medium">${o.total.toLocaleString('es-AR')}</p>}
-              <p className="text-xs text-muted capitalize">{o.estado}</p>
+              <p className="text-xs text-muted dark:text-dark-text-secondary capitalize">{o.estado}</p>
             </div>
           </Link>
         ))}

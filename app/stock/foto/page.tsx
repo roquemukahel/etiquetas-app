@@ -112,14 +112,14 @@ export default function StockPorFoto() {
 
       {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
 
-      <label className="flex items-center gap-3 bg-white border border-border rounded-xl px-4 py-3 cursor-pointer shadow-card">
+      <label className="flex items-center gap-3 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 cursor-pointer shadow-card">
         <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhotoChange} />
-        <div className={`h-10 w-10 rounded-lg flex items-center justify-center shrink-0 ${photoPreview ? 'bg-good/15' : 'bg-canvas'}`}>
+        <div className={`h-10 w-10 rounded-lg flex items-center justify-center shrink-0 ${photoPreview ? 'bg-good/15' : 'bg-canvas dark:bg-dark-bg'}`}>
           {photoPreview ? '✓' : '📷'}
         </div>
         <div className="flex-1">
           <p className="text-sm font-medium">Info del dispositivo (IMEI)</p>
-          <p className="text-xs text-muted">
+          <p className="text-xs text-muted dark:text-dark-text-secondary">
             {leyendoFoto ? 'Leyendo IMEI...' : photoPreview ? 'foto cargada' : 'tocá para sacar foto'}
           </p>
         </div>
@@ -134,7 +134,7 @@ export default function StockPorFoto() {
         </datalist>
 
         <div>
-          <label className="text-xs text-muted block mb-1">Almacenamiento</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Almacenamiento</label>
           <div className="flex gap-2">
             {STORAGE_OPTIONS.map((gb) => (
               <button
@@ -142,7 +142,7 @@ export default function StockPorFoto() {
                 type="button"
                 onClick={() => setCapacidad(gb)}
                 className={`flex-1 rounded-xl py-2 text-sm font-medium ${
-                  capacidad === gb ? 'bg-accent text-white' : 'bg-white border border-border text-ink'
+                  capacidad === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
                 }`}
               >
                 {gb} GB
@@ -157,7 +157,7 @@ export default function StockPorFoto() {
         <Campo label="Precio (opcional)" valor={precio} onChange={setPrecio} numerico />
 
         <div>
-          <label className="text-xs text-muted block mb-1">Estado</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Estado</label>
           <div className="flex gap-2">
             {ESTADOS.map((e) => (
               <button
@@ -165,7 +165,7 @@ export default function StockPorFoto() {
                 type="button"
                 onClick={() => setEstado(e)}
                 className={`flex-1 rounded-xl py-2 text-sm font-medium capitalize ${
-                  estado === e ? 'bg-accent text-white' : 'bg-white border border-border text-ink'
+                  estado === e ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
                 }`}
               >
                 {e}
@@ -178,7 +178,7 @@ export default function StockPorFoto() {
       <button
         disabled={!puedeGuardar || guardando}
         onClick={handleGuardar}
-        className="mt-auto w-full rounded-2xl bg-accent hover:bg-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
+        className="mt-auto w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
       >
         {guardando ? 'Guardando...' : 'Agregar al stock'}
       </button>
@@ -205,14 +205,14 @@ function Campo({
 }) {
   return (
     <div>
-      <label className="text-xs text-muted block mb-1">{label}</label>
+      <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{label}</label>
       <input
         value={valor}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         inputMode={numerico ? 'numeric' : undefined}
         list={listaId}
-        className={`w-full bg-white border border-border rounded-xl px-4 py-3 text-sm ${mono ? 'font-mono' : ''}`}
+        className={`w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm ${mono ? 'font-mono' : ''}`}
       />
     </div>
   );

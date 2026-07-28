@@ -88,34 +88,34 @@ export default function Carpetas() {
           value={nombre}
           onChange={(e) => setNombre(e.target.value)}
           placeholder="Nombre (ej. iPhone 14)"
-          className="flex-1 bg-white border border-border rounded-xl px-4 py-3 text-sm"
+          className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
         />
         <button
           disabled={!nombre.trim() || guardando}
           onClick={agregar}
-          className="rounded-xl bg-accent hover:bg-accent-hover transition-colors px-5 text-sm font-medium text-white disabled:opacity-40"
+          className="rounded-xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors px-5 text-sm font-medium text-white disabled:opacity-40"
         >
           Crear
         </button>
       </div>
 
-      {loading && <p className="text-sm text-muted text-center mt-6">Cargando...</p>}
+      {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Cargando...</p>}
       {!loading && carpetas.length === 0 && (
-        <p className="text-sm text-muted text-center mt-6">Todavía no creaste ninguna carpeta.</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Todavía no creaste ninguna carpeta.</p>
       )}
 
       <div className="flex flex-col gap-2">
         {carpetas.map((c) => (
           <div
             key={c.id}
-            className="rounded-xl border border-border bg-white shadow-card px-4 py-3 flex items-center justify-between gap-2"
+            className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex items-center justify-between gap-2"
           >
             {editandoId === c.id ? (
               <input
                 value={nombreEditado}
                 onChange={(e) => setNombreEditado(e.target.value)}
                 autoFocus
-                className="flex-1 bg-canvas border border-border rounded-lg px-3 py-2 text-sm"
+                className="flex-1 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
               />
             ) : (
               <p className="text-sm font-medium">{c.nombre}</p>
@@ -126,12 +126,12 @@ export default function Carpetas() {
                 <button
                   disabled={guardando}
                   onClick={() => guardarEdicion(c)}
-                  className="text-xs text-accent underline disabled:opacity-40"
+                  className="text-xs text-accent dark:text-dark-accent underline disabled:opacity-40"
                 >
                   Guardar
                 </button>
               ) : (
-                <button onClick={() => empezarEdicion(c)} className="text-xs text-accent underline">
+                <button onClick={() => empezarEdicion(c)} className="text-xs text-accent dark:text-dark-accent underline">
                   Renombrar
                 </button>
               )}

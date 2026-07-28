@@ -66,49 +66,49 @@ export default function Registro() {
         {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
 
         <div>
-          <label className="text-xs text-muted block mb-1">Nombre de tu negocio</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Nombre de tu negocio</label>
           <input
             required
             value={nombreNegocio}
             onChange={(e) => setNombreNegocio(e.target.value)}
-            className="w-full bg-white border border-border rounded-xl px-4 py-3 text-sm"
+            className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
             placeholder="Mi local de celulares"
           />
         </div>
 
         <div>
-          <label className="text-xs text-muted block mb-1">Email</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Email</label>
           <input
             required
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full bg-white border border-border rounded-xl px-4 py-3 text-sm"
+            className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
           />
         </div>
 
         <div>
-          <label className="text-xs text-muted block mb-1">Contraseña</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Contraseña</label>
           <input
             required
             type="password"
             minLength={6}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full bg-white border border-border rounded-xl px-4 py-3 text-sm"
+            className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
           />
         </div>
 
         <button
           disabled={cargando}
-          className="mt-2 w-full rounded-2xl bg-accent hover:bg-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
+          className="mt-2 w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
         >
           {cargando ? 'Creando...' : 'Crear cuenta'}
         </button>
 
-        <p className="text-center text-sm text-muted">
+        <p className="text-center text-sm text-muted dark:text-dark-text-secondary">
           ¿Ya tenés cuenta?{' '}
-          <Link href="/login" className="text-accent underline">
+          <Link href="/login" className="text-accent dark:text-dark-accent underline">
             Iniciar sesión
           </Link>
         </p>

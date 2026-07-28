@@ -59,19 +59,19 @@ export default function Compras() {
         value={busqueda}
         onChange={(e) => setBusqueda(e.target.value)}
         placeholder="Buscar por modelo o cliente..."
-        className="w-full bg-white border border-border rounded-xl px-4 py-3 text-sm"
+        className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
       />
 
       <Link
         href="/compras/nueva"
-        className="w-full rounded-2xl border border-border py-3 text-center text-sm font-medium"
+        className="w-full rounded-2xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium"
       >
         + Nueva compra
       </Link>
 
-      {loading && <p className="text-sm text-muted text-center mt-6">Cargando...</p>}
+      {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Cargando...</p>}
       {!loading && filtradas.length === 0 && (
-        <p className="text-sm text-muted text-center mt-6">No hay compras para mostrar.</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">No hay compras para mostrar.</p>
       )}
 
       <div className="flex flex-col gap-2">
@@ -79,7 +79,7 @@ export default function Compras() {
           <Link
             key={c.id}
             href={`/compras/${c.id}`}
-            className="rounded-xl border border-border bg-white shadow-card px-4 py-3 flex items-center justify-between"
+            className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex items-center justify-between"
           >
             <div>
               <p className="text-sm font-medium">
@@ -87,17 +87,17 @@ export default function Compras() {
                 {c.capacidad_gb ? ` · ${c.capacidad_gb}GB` : ''}
               </p>
               {c.imei && (
-                <p className="text-xs text-muted">
-                  IMEI: <span className="font-bold font-mono text-ink">{c.imei}</span>
+                <p className="text-xs text-muted dark:text-dark-text-secondary">
+                  IMEI: <span className="font-bold font-mono text-ink dark:text-dark-text">{c.imei}</span>
                 </p>
               )}
-              <p className="text-xs text-muted">
+              <p className="text-xs text-muted dark:text-dark-text-secondary">
                 {c.clientes ? `${c.clientes.nombre} ${c.clientes.apellido || ''}` : 'Sin cliente'}
               </p>
             </div>
             <div className="text-right">
               {c.precio != null && <p className="text-sm font-medium">${c.precio.toLocaleString('es-AR')}</p>}
-              <p className="text-xs text-muted">{ETIQUETA_ESTADO[c.estado] || c.estado}</p>
+              <p className="text-xs text-muted dark:text-dark-text-secondary">{ETIQUETA_ESTADO[c.estado] || c.estado}</p>
             </div>
           </Link>
         ))}

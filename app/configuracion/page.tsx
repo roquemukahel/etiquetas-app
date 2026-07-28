@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import ThemeToggle from '../ThemeToggle';
 
 const SECCIONES = [
   { href: '/configuracion/negocio', titulo: 'Datos del negocio', desc: 'Nombre, logo, contacto y garantía' },
@@ -18,14 +19,15 @@ export default function Configuracion() {
       </header>
 
       <div className="flex flex-col gap-3">
+        <ThemeToggle />
         {SECCIONES.map((s) => (
           <Link
             key={s.href}
             href={s.href}
-            className="rounded-2xl bg-white border border-border shadow-card p-5 flex flex-col hover:border-accent/40 hover:shadow-elevated transition-all active:scale-[0.98]"
+            className="rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-5 flex flex-col hover:border-accent/40 dark:hover:border-dark-accent/40 hover:shadow-elevated transition-all active:scale-[0.98]"
           >
             <span className="text-base font-medium">{s.titulo}</span>
-            <span className="text-xs text-muted">{s.desc}</span>
+            <span className="text-xs text-muted dark:text-dark-text-secondary">{s.desc}</span>
           </Link>
         ))}
       </div>

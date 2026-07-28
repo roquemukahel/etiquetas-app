@@ -95,7 +95,7 @@ export default function DetalleCliente() {
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center">
-        <p className="text-sm text-muted">Cargando...</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">Cargando...</p>
       </main>
     );
   }
@@ -103,8 +103,8 @@ export default function DetalleCliente() {
   if (!c) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-3">
-        <p className="text-sm text-muted">No encontramos ese cliente.</p>
-        <Link href="/clientes" className="text-sm text-accent underline">
+        <p className="text-sm text-muted dark:text-dark-text-secondary">No encontramos ese cliente.</p>
+        <Link href="/clientes" className="text-sm text-accent dark:text-dark-accent underline">
           Volver a clientes
         </Link>
       </main>
@@ -134,16 +134,16 @@ export default function DetalleCliente() {
       </div>
 
       <div>
-        <p className="text-xs text-muted font-medium mb-2">Historial de compras</p>
+        <p className="text-xs text-muted dark:text-dark-text-secondary font-medium mb-2">Historial de compras</p>
         {ordenes.length === 0 ? (
-          <p className="text-sm text-muted">Todavía no le hiciste ninguna venta a este cliente.</p>
+          <p className="text-sm text-muted dark:text-dark-text-secondary">Todavía no le hiciste ninguna venta a este cliente.</p>
         ) : (
           <div className="flex flex-col gap-2">
             {ordenes.map((o) => (
               <Link
                 key={o.id}
                 href={`/ordenes/${o.id}`}
-                className="rounded-xl border border-border bg-white shadow-card px-4 py-3 flex items-center justify-between"
+                className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex items-center justify-between"
               >
                 <div>
                   <p className="text-sm font-medium">
@@ -151,11 +151,11 @@ export default function DetalleCliente() {
                       ? `${o.orden_items[0].descripcion}${o.orden_items.length > 1 ? ` +${o.orden_items.length - 1}` : ''}`
                       : 'Orden vacía'}
                   </p>
-                  <p className="text-xs text-muted">{new Date(o.created_at).toLocaleDateString('es-AR')}</p>
+                  <p className="text-xs text-muted dark:text-dark-text-secondary">{new Date(o.created_at).toLocaleDateString('es-AR')}</p>
                 </div>
                 <div className="text-right">
                   {o.total != null && <p className="text-sm font-medium">${o.total.toLocaleString('es-AR')}</p>}
-                  <p className="text-xs text-muted capitalize">{o.estado}</p>
+                  <p className="text-xs text-muted dark:text-dark-text-secondary capitalize">{o.estado}</p>
                 </div>
               </Link>
             ))}
@@ -166,7 +166,7 @@ export default function DetalleCliente() {
       <button
         disabled={guardando}
         onClick={handleGuardar}
-        className="mt-auto w-full rounded-2xl bg-accent hover:bg-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
+        className="mt-auto w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
       >
         {guardando ? 'Guardando...' : 'Guardar cambios'}
       </button>
@@ -192,11 +192,11 @@ function Campo({
 }) {
   return (
     <div>
-      <label className="text-xs text-muted block mb-1">{label}</label>
+      <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{label}</label>
       <input
         value={valor}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full bg-white border border-border rounded-xl px-4 py-3 text-sm"
+        className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
       />
     </div>
   );

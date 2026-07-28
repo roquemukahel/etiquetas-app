@@ -109,7 +109,7 @@ export default function DatosNegocio() {
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center">
-        <p className="text-sm text-muted">Cargando...</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">Cargando...</p>
       </main>
     );
   }
@@ -117,8 +117,8 @@ export default function DatosNegocio() {
   if (!negocio) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-3">
-        <p className="text-sm text-muted">No encontramos tu negocio.</p>
-        <Link href="/configuracion" className="text-sm text-accent underline">
+        <p className="text-sm text-muted dark:text-dark-text-secondary">No encontramos tu negocio.</p>
+        <Link href="/configuracion" className="text-sm text-accent dark:text-dark-accent underline">
           Volver
         </Link>
       </main>
@@ -138,13 +138,13 @@ export default function DatosNegocio() {
 
       <div className="flex flex-col gap-3">
         <div>
-          <label className="text-xs text-muted block mb-1">Logo</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Logo</label>
           <div className="flex items-center gap-3">
             {negocio.logo_url && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={negocio.logo_url} alt="Logo" className="h-14 w-14 rounded-lg object-contain bg-white border border-border" />
+              <img src={negocio.logo_url} alt="Logo" className="h-14 w-14 rounded-lg object-contain bg-white dark:bg-dark-surface border border-border dark:border-dark-border" />
             )}
-            <label className="text-sm text-accent underline cursor-pointer">
+            <label className="text-sm text-accent dark:text-dark-accent underline cursor-pointer">
               {negocio.logo_url ? 'Cambiar logo' : 'Subir logo'}
               <input type="file" accept="image/*" className="hidden" onChange={handleLogo} />
             </label>
@@ -156,11 +156,11 @@ export default function DatosNegocio() {
         <Campo label="Dirección" valor={negocio.direccion ?? ''} onChange={(v) => campo('direccion', v)} />
 
         <div>
-          <label className="text-xs text-muted block mb-1">Moneda (se usa en la boleta)</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Moneda (se usa en la boleta)</label>
           <select
             value={negocio.moneda}
             onChange={(e) => campo('moneda', e.target.value)}
-            className="w-full bg-white border border-border rounded-xl px-4 py-3 text-sm"
+            className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
           >
             {MONEDAS.map((m) => (
               <option key={m.codigo} value={m.codigo}>
@@ -195,7 +195,7 @@ export default function DatosNegocio() {
           placeholder="Declaro que el dispositivo entregado es de mi propiedad, ha sido obtenido de buena fe y que soy responsable de la información brindada."
         />
 
-        <p className="text-xs text-muted font-medium mt-2">Redes sociales (opcional)</p>
+        <p className="text-xs text-muted dark:text-dark-text-secondary font-medium mt-2">Redes sociales (opcional)</p>
         <RedSocial
           label="Instagram"
           valor={negocio.instagram ?? ''}
@@ -222,7 +222,7 @@ export default function DatosNegocio() {
       <button
         disabled={guardando}
         onClick={handleGuardar}
-        className="mt-auto w-full rounded-2xl bg-accent hover:bg-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
+        className="mt-auto w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
       >
         {guardando ? 'Guardando...' : 'Guardar cambios'}
       </button>
@@ -241,11 +241,11 @@ function Campo({
 }) {
   return (
     <div>
-      <label className="text-xs text-muted block mb-1">{label}</label>
+      <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{label}</label>
       <input
         value={valor}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full bg-white border border-border rounded-xl px-4 py-3 text-sm"
+        className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
       />
     </div>
   );
@@ -269,11 +269,11 @@ function TextoConTamano({
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <label className="text-xs text-muted">{label}</label>
+        <label className="text-xs text-muted dark:text-dark-text-secondary">{label}</label>
         <select
           value={tamano}
           onChange={(e) => onChangeTamano(Number(e.target.value))}
-          className="bg-white border border-border rounded-lg px-2 py-1 text-xs shrink-0 ml-2"
+          className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-1 text-xs shrink-0 ml-2"
         >
           {TAMANOS.map((t) => (
             <option key={t} value={t}>
@@ -288,7 +288,7 @@ function TextoConTamano({
         rows={8}
         placeholder={placeholder}
         style={{ fontSize: tamano }}
-        className="w-full bg-white border border-border rounded-xl px-4 py-3"
+        className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3"
       />
     </div>
   );
@@ -310,12 +310,12 @@ function RedSocial({
   return (
     <div className="flex items-center gap-2">
       <div className="flex-1">
-        <label className="text-xs text-muted block mb-1">{label}</label>
+        <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{label}</label>
         <input
           value={valor}
           onChange={(e) => onChange(e.target.value)}
           placeholder="@usuario"
-          className="w-full bg-white border border-border rounded-xl px-4 py-3 text-sm"
+          className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
         />
       </div>
       <label className="flex flex-col items-center gap-1 pt-4">
@@ -325,7 +325,7 @@ function RedSocial({
           onChange={(e) => onToggleMostrar(e.target.checked)}
           className="h-5 w-5 accent-ink"
         />
-        <span className="text-[10px] text-muted">en boleta</span>
+        <span className="text-[10px] text-muted dark:text-dark-text-secondary">en boleta</span>
       </label>
     </div>
   );

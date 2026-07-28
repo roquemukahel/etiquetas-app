@@ -155,9 +155,9 @@ export default async function Home() {
         <div className="flex items-center gap-4">
           {logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={logoUrl} alt="Logo" className="h-20 w-20 rounded-2xl object-contain bg-white border border-border shadow-card" />
+            <img src={logoUrl} alt="Logo" className="h-20 w-20 rounded-2xl object-contain bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card" />
           ) : (
-            <div className="h-20 w-20 rounded-2xl bg-white border border-border shadow-card flex items-center justify-center">
+            <div className="h-20 w-20 rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card flex items-center justify-center">
               <QMark size={48} />
             </div>
           )}
@@ -165,11 +165,11 @@ export default async function Home() {
         </div>
         <div className="flex items-center gap-4">
           {esAdmin && (
-            <Link href="/admin" className="text-xs text-accent font-medium hover:text-accent-hover transition-colors">
+            <Link href="/admin" className="text-xs text-accent dark:text-dark-accent font-medium hover:text-accent-hover dark:hover:text-dark-accent-hover transition-colors">
               Panel Admin
             </Link>
           )}
-          <Link href="/configuracion" className="text-xs text-muted hover:text-ink transition-colors">
+          <Link href="/configuracion" className="text-xs text-muted dark:text-dark-text-secondary hover:text-ink dark:hover:text-dark-text transition-colors">
             Configuración
           </Link>
           <BotonSalir />
@@ -221,44 +221,44 @@ export default async function Home() {
             <Link
               key={s.titulo}
               href={s.href}
-              className="group rounded-2xl bg-white border border-border shadow-card p-4 flex items-center gap-4 hover:border-accent/40 hover:shadow-elevated transition-all active:scale-[0.99]"
+              className="group rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-4 flex items-center gap-4 hover:border-accent/40 dark:hover:border-dark-accent/40 hover:shadow-elevated transition-all active:scale-[0.99]"
             >
-              <div className="h-11 w-11 shrink-0 rounded-xl bg-accent-soft text-accent flex items-center justify-center group-hover:bg-accent group-hover:text-white transition-colors">
+              <div className="h-11 w-11 shrink-0 rounded-xl bg-accent-soft dark:bg-dark-accent-soft text-accent dark:text-dark-accent flex items-center justify-center group-hover:bg-accent dark:group-hover:bg-dark-accent group-hover:text-white transition-colors">
                 {ICONOS[s.icono]}
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold leading-tight">{s.titulo}</p>
-                <p className="text-xs text-muted leading-tight mt-0.5">{s.desc}</p>
+                <p className="text-xs text-muted dark:text-dark-text-secondary leading-tight mt-0.5">{s.desc}</p>
               </div>
-              <span className="text-muted group-hover:text-accent transition-colors">&rarr;</span>
+              <span className="text-muted dark:text-dark-text-secondary group-hover:text-accent dark:group-hover:text-dark-accent transition-colors">&rarr;</span>
             </Link>
           ) : (
             <div
               key={s.titulo}
-              className="rounded-2xl bg-canvas border border-border p-4 flex items-center gap-4 opacity-60"
+              className="rounded-2xl bg-canvas dark:bg-dark-surface-elevated border border-border dark:border-dark-border p-4 flex items-center gap-4 opacity-60"
             >
-              <div className="h-11 w-11 shrink-0 rounded-xl bg-white text-muted flex items-center justify-center">
+              <div className="h-11 w-11 shrink-0 rounded-xl bg-white dark:bg-dark-surface text-muted dark:text-dark-text-secondary flex items-center justify-center">
                 {ICONOS[s.icono]}
               </div>
               <div>
                 <p className="text-sm font-semibold leading-tight">{s.titulo}</p>
-                <p className="text-xs text-muted leading-tight mt-0.5">Próximamente</p>
+                <p className="text-xs text-muted dark:text-dark-text-secondary leading-tight mt-0.5">Próximamente</p>
               </div>
             </div>
           )
         )}
       </div>
 
-      <p className="text-center text-xs text-muted mt-auto pt-4">con Qovento</p>
+      <p className="text-center text-xs text-muted dark:text-dark-text-secondary mt-auto pt-4">con Qovento</p>
     </main>
   );
 }
 
 function StatTile({ valor, etiqueta }: { valor: number; etiqueta: string }) {
   return (
-    <div className="rounded-2xl bg-white border border-border shadow-card p-3.5 flex flex-col gap-0.5">
+    <div className="rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-3.5 flex flex-col gap-0.5">
       <p className="text-2xl font-display font-semibold leading-none">{valor}</p>
-      <p className="text-[11px] text-muted leading-tight">{etiqueta}</p>
+      <p className="text-[11px] text-muted dark:text-dark-text-secondary leading-tight">{etiqueta}</p>
     </div>
   );
 }

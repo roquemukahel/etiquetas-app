@@ -90,7 +90,7 @@ export default function DetalleCompra() {
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center">
-        <p className="text-sm text-muted">Cargando...</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">Cargando...</p>
       </main>
     );
   }
@@ -98,8 +98,8 @@ export default function DetalleCompra() {
   if (!compra) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-3">
-        <p className="text-sm text-muted">No encontramos esa compra.</p>
-        <Link href="/compras" className="text-sm text-accent underline">
+        <p className="text-sm text-muted dark:text-dark-text-secondary">No encontramos esa compra.</p>
+        <Link href="/compras" className="text-sm text-accent dark:text-dark-accent underline">
           Volver a compras
         </Link>
       </main>
@@ -117,55 +117,55 @@ export default function DetalleCompra() {
 
       {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
 
-      <div className="rounded-xl bg-white border border-border shadow-card px-4 py-3 text-sm flex flex-col gap-1">
+      <div className="rounded-xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card px-4 py-3 text-sm flex flex-col gap-1">
         <p>
-          <span className="text-muted">Cliente: </span>
+          <span className="text-muted dark:text-dark-text-secondary">Cliente: </span>
           {compra.clientes ? `${compra.clientes.nombre} ${compra.clientes.apellido || ''}` : 'Sin cliente'}
         </p>
         {compra.clientes?.telefono && (
           <p>
-            <span className="text-muted">Teléfono: </span>
+            <span className="text-muted dark:text-dark-text-secondary">Teléfono: </span>
             {compra.clientes.telefono}
           </p>
         )}
         <p>
-          <span className="text-muted">Dispositivo: </span>
+          <span className="text-muted dark:text-dark-text-secondary">Dispositivo: </span>
           {compra.modelo}
           {compra.capacidad_gb ? ` · ${compra.capacidad_gb}GB` : ''}
         </p>
         {compra.imei && (
           <p>
-            <span className="text-muted">IMEI: </span>
+            <span className="text-muted dark:text-dark-text-secondary">IMEI: </span>
             <span className="font-bold font-mono">{compra.imei}</span>
           </p>
         )}
         {compra.detalles && (
           <p>
-            <span className="text-muted">Detalles: </span>
+            <span className="text-muted dark:text-dark-text-secondary">Detalles: </span>
             {compra.detalles}
           </p>
         )}
         {compra.precio != null && (
           <p>
-            <span className="text-muted">Precio pagado: </span>${compra.precio.toLocaleString('es-AR')}
+            <span className="text-muted dark:text-dark-text-secondary">Precio pagado: </span>${compra.precio.toLocaleString('es-AR')}
           </p>
         )}
       </div>
 
       {compra.estado === 'pendiente' ? (
         <div className="flex flex-col gap-2">
-          <p className="text-xs text-muted font-medium">¿Qué hacemos con este dispositivo?</p>
+          <p className="text-xs text-muted dark:text-dark-text-secondary font-medium">¿Qué hacemos con este dispositivo?</p>
           <button
             disabled={procesando}
             onClick={agregarAlStock}
-            className="w-full rounded-2xl bg-accent hover:bg-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
+            className="w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
           >
             Agregar al Stock
           </button>
           <button
             disabled={procesando}
             onClick={derivarAServicioTecnico}
-            className="w-full rounded-2xl border border-border py-4 text-center text-base font-medium disabled:opacity-40"
+            className="w-full rounded-2xl border border-border dark:border-dark-border py-4 text-center text-base font-medium disabled:opacity-40"
           >
             Derivar a Servicio Técnico
           </button>
@@ -178,7 +178,7 @@ export default function DetalleCompra() {
 
       <Link
         href={`/compras/${compra.id}/boleta`}
-        className="mt-auto w-full rounded-2xl border border-border py-3 text-center text-sm font-medium"
+        className="mt-auto w-full rounded-2xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium"
       >
         Ver boleta
       </Link>

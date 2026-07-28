@@ -89,7 +89,7 @@ export default function DetalleOrden() {
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center">
-        <p className="text-sm text-muted">Cargando...</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">Cargando...</p>
       </main>
     );
   }
@@ -97,8 +97,8 @@ export default function DetalleOrden() {
   if (!orden) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-3">
-        <p className="text-sm text-muted">No encontramos esa orden.</p>
-        <Link href="/ordenes" className="text-sm text-accent underline">
+        <p className="text-sm text-muted dark:text-dark-text-secondary">No encontramos esa orden.</p>
+        <Link href="/ordenes" className="text-sm text-accent dark:text-dark-accent underline">
           Volver a órdenes
         </Link>
       </main>
@@ -116,27 +116,27 @@ export default function DetalleOrden() {
 
       {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
 
-      <div className="rounded-xl bg-white border border-border px-4 py-3 text-sm flex flex-col gap-1">
+      <div className="rounded-xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border px-4 py-3 text-sm flex flex-col gap-1">
         <p>
-          <span className="text-muted">Cliente:</span>{' '}
+          <span className="text-muted dark:text-dark-text-secondary">Cliente:</span>{' '}
           {orden.clientes ? `${orden.clientes.nombre} ${orden.clientes.apellido || ''}` : 'Sin cliente'}
         </p>
         {orden.clientes?.telefono && (
           <p>
-            <span className="text-muted">Teléfono:</span> {orden.clientes.telefono}
+            <span className="text-muted dark:text-dark-text-secondary">Teléfono:</span> {orden.clientes.telefono}
           </p>
         )}
         {orden.vendedores?.nombre && (
           <p>
-            <span className="text-muted">Vendedor:</span> {orden.vendedores.nombre}
+            <span className="text-muted dark:text-dark-text-secondary">Vendedor:</span> {orden.vendedores.nombre}
           </p>
         )}
         <p>
-          <span className="text-muted">Forma de pago:</span> {orden.forma_pago}
+          <span className="text-muted dark:text-dark-text-secondary">Forma de pago:</span> {orden.forma_pago}
         </p>
         {orden.total != null && (
           <p>
-            <span className="text-muted">Total:</span> ${orden.total.toLocaleString('es-AR')}
+            <span className="text-muted dark:text-dark-text-secondary">Total:</span> ${orden.total.toLocaleString('es-AR')}
           </p>
         )}
       </div>
@@ -145,7 +145,7 @@ export default function DetalleOrden() {
         {orden.orden_items.map((i, idx) => (
           <div
             key={idx}
-            className="rounded-xl border border-border bg-white shadow-card px-4 py-3 flex items-center justify-between text-sm"
+            className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex items-center justify-between text-sm"
           >
             <span>
               {i.descripcion} × {i.cantidad}
@@ -157,13 +157,13 @@ export default function DetalleOrden() {
 
       <Link
         href={`/ordenes/${orden.id}/boleta`}
-        className="w-full rounded-2xl border border-border py-3 text-center text-sm font-medium"
+        className="w-full rounded-2xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium"
       >
         Ver boleta
       </Link>
 
       <div>
-        <label className="text-xs text-muted block mb-1">Estado</label>
+        <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Estado</label>
         <div className="flex gap-2">
           {ESTADOS.map((e) => (
             <button
@@ -171,7 +171,7 @@ export default function DetalleOrden() {
               disabled={guardando}
               onClick={() => cambiarEstado(e)}
               className={`flex-1 rounded-xl py-2 text-sm font-medium capitalize disabled:opacity-40 ${
-                orden.estado === e ? 'bg-accent text-white' : 'bg-white border border-border text-ink'
+                orden.estado === e ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
               }`}
             >
               {e}

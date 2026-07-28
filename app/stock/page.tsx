@@ -73,7 +73,7 @@ export default function Stock() {
           &larr;
         </Link>
         <span className="text-lg font-medium mr-auto">Stock</span>
-        <Link href="/stock/carpetas" className="text-xs text-accent underline">
+        <Link href="/stock/carpetas" className="text-xs text-accent dark:text-dark-accent underline">
           Carpetas
         </Link>
       </header>
@@ -82,14 +82,14 @@ export default function Stock() {
         value={busqueda}
         onChange={(e) => setBusqueda(e.target.value)}
         placeholder="Buscar por modelo, IMEI, serie, código..."
-        className="w-full bg-white border border-border rounded-xl px-4 py-3 text-sm"
+        className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
       />
 
       <div className="flex items-center gap-2 text-sm">
         <button
           onClick={() => setVerTodos(false)}
           className={`flex-1 rounded-xl py-2 font-medium ${
-            !verTodos ? 'bg-accent text-white' : 'bg-white border border-border text-ink'
+            !verTodos ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
           }`}
         >
           En stock
@@ -97,7 +97,7 @@ export default function Stock() {
         <button
           onClick={() => setVerTodos(true)}
           className={`flex-1 rounded-xl py-2 font-medium ${
-            verTodos ? 'bg-accent text-white' : 'bg-white border border-border text-ink'
+            verTodos ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
           }`}
         >
           Historial completo
@@ -107,22 +107,22 @@ export default function Stock() {
       <div className="flex gap-2">
         <Link
           href="/stock/nuevo"
-          className="flex-1 rounded-2xl border border-border py-3 text-center text-sm font-medium"
+          className="flex-1 rounded-2xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium"
         >
           + Cargar a mano
         </Link>
         <Link
           href="/stock/foto"
-          className="flex-1 rounded-2xl border border-border py-3 text-center text-sm font-medium"
+          className="flex-1 rounded-2xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium"
         >
           + Cargar con foto
         </Link>
       </div>
 
-      {loading && <p className="text-sm text-muted text-center mt-6">Cargando...</p>}
+      {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Cargando...</p>}
 
       {!loading && grupos.length === 0 && (
-        <p className="text-sm text-muted text-center mt-6">
+        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">
           {busqueda ? 'No encontramos nada con esa búsqueda.' : 'Todavía no tenés dispositivos cargados.'}
         </p>
       )}
@@ -130,19 +130,19 @@ export default function Stock() {
       <div className="flex flex-col gap-5">
         {grupos.map(([modelo, items]) => (
           <div key={modelo} className="flex flex-col gap-2">
-            <p className="text-xs text-muted font-medium">
+            <p className="text-xs text-muted dark:text-dark-text-secondary font-medium">
               {modelo} · {items.length}
             </p>
             {items.length === 0 && (
-              <p className="text-xs text-muted italic">Carpeta vacía, todavía sin dispositivos.</p>
+              <p className="text-xs text-muted dark:text-dark-text-secondary italic">Carpeta vacía, todavía sin dispositivos.</p>
             )}
             <div className="flex flex-col gap-2">
               {items.map((d) => (
                 <Link
                   key={d.id}
                   href={`/stock/${d.id}`}
-                  className={`rounded-xl border border-border px-4 py-3 flex items-center justify-between ${
-                    d.en_stock ? 'bg-white' : 'bg-white/30 opacity-60'
+                  className={`rounded-xl border border-border dark:border-dark-border px-4 py-3 flex items-center justify-between ${
+                    d.en_stock ? 'bg-white dark:bg-dark-surface' : 'bg-white/$1 dark:bg-dark-surface opacity-60'
                   }`}
                 >
                   <div>
@@ -151,15 +151,15 @@ export default function Stock() {
                       {d.color ? ` · ${d.color}` : ''}
                       {d.salud_bateria != null ? ` · ${d.salud_bateria}%` : ''}
                     </p>
-                    <p className="text-xs text-muted">
-                      IMEI: <span className="font-bold font-mono text-ink">{d.imei || 'sin IMEI'}</span>
+                    <p className="text-xs text-muted dark:text-dark-text-secondary">
+                      IMEI: <span className="font-bold font-mono text-ink dark:text-dark-text">{d.imei || 'sin IMEI'}</span>
                     </p>
                   </div>
                   <div className="text-right">
                     {d.precio != null && (
                       <p className="text-sm font-medium">${d.precio.toLocaleString('es-AR')}</p>
                     )}
-                    <p className="text-xs text-muted">{d.en_stock ? 'en stock' : 'fuera de stock'}</p>
+                    <p className="text-xs text-muted dark:text-dark-text-secondary">{d.en_stock ? 'en stock' : 'fuera de stock'}</p>
                   </div>
                 </Link>
               ))}

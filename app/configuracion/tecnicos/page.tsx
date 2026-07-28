@@ -61,27 +61,27 @@ export default function Tecnicos() {
           value={nombre}
           onChange={(e) => setNombre(e.target.value)}
           placeholder="Nombre del técnico"
-          className="flex-1 bg-white border border-border rounded-xl px-4 py-3 text-sm"
+          className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
         />
         <button
           disabled={!nombre.trim() || guardando}
           onClick={agregar}
-          className="rounded-xl bg-accent hover:bg-accent-hover transition-colors px-5 text-sm font-medium text-white disabled:opacity-40"
+          className="rounded-xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors px-5 text-sm font-medium text-white disabled:opacity-40"
         >
           Agregar
         </button>
       </div>
 
-      {loading && <p className="text-sm text-muted text-center mt-6">Cargando...</p>}
+      {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Cargando...</p>}
       {!loading && tecnicos.length === 0 && (
-        <p className="text-sm text-muted text-center mt-6">Todavía no cargaste técnicos.</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Todavía no cargaste técnicos.</p>
       )}
 
       <div className="flex flex-col gap-2">
         {tecnicos.map((t) => (
           <div
             key={t.id}
-            className="rounded-xl border border-border bg-white shadow-card px-4 py-3 flex items-center justify-between"
+            className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex items-center justify-between"
           >
             <p className="text-sm font-medium">{t.nombre}</p>
             <button onClick={() => eliminar(t.id)} className="text-xs text-bad underline">

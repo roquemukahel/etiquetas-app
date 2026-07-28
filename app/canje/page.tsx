@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../lib/supabase/client';
+import { asegurarModelo } from '../lib/modelos';
 
 type Canje = {
   id: string;
@@ -53,6 +54,32 @@ export default function PlanCanje() {
     cargar();
   };
 
+  const volverACanje = async (id: string) => {
+    if (!confirm('¿Volver a mandar este equipo a Plan Canje?')) return;
+    setProcesando(id);
+    await supabase.from('canjes').update({ estado: 'en_canje', fecha_ingreso_servicio: null }).eq('id', id);
+    setProcesando(null);
+    cargar();
+  };
+
+  const agregarAlStock = async (c: Canje) => {
+    if (!confirm('¿Agregar este dispositivo al Stock para venderlo?')) return;
+    setProcesando(c.id);
+    await supabase.from('dispositivos').insert({
+      modelo: c.modelo,
+      capacidad_gb: c.capacidad_gb,
+      color: c.color,
+      imei: c.imei,
+      salud_bateria: c.salud_bateria,
+      estado: 'usado',
+      en_stock: true,
+    });
+    await asegurarModelo(supabase, c.modelo);
+    await supabase.from('canjes').delete().eq('id', c.id);
+    setProcesando(null);
+    cargar();
+  };
+
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
       <header className="flex items-center gap-3">
@@ -66,7 +93,7 @@ export default function PlanCanje() {
         <button
           onClick={() => setVerDerivados(false)}
           className={`flex-1 rounded-xl py-2 font-medium ${
-            !verDerivados ? 'bg-accent text-white' : 'bg-white border border-border text-ink'
+            !verDerivados ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
           }`}
         >
           En canje
@@ -74,21 +101,21 @@ export default function PlanCanje() {
         <button
           onClick={() => setVerDerivados(true)}
           className={`flex-1 rounded-xl py-2 font-medium ${
-            verDerivados ? 'bg-accent text-white' : 'bg-white border border-border text-ink'
+            verDerivados ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
           }`}
         >
           Derivados a Servicio Técnico
         </button>
       </div>
 
-      {loading && <p className="text-sm text-muted text-center mt-6">Cargando...</p>}
+      {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Cargando...</p>}
       {!loading && filtrados.length === 0 && (
-        <p className="text-sm text-muted text-center mt-6">No hay dispositivos para mostrar acá.</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">No hay dispositivos para mostrar acá.</p>
       )}
 
       <div className="flex flex-col gap-2">
         {filtrados.map((c) => (
-          <div key={c.id} className="rounded-xl border border-border bg-white shadow-card px-4 py-3 flex flex-col gap-2">
+          <div key={c.id} className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex flex-col gap-2">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-sm font-medium">
@@ -97,25 +124,42 @@ export default function PlanCanje() {
                   {c.color ? ` · ${c.color}` : ''}
                 </p>
                 {c.imei && (
-                  <p className="text-xs text-muted">
-                    IMEI: <span className="font-bold font-mono text-ink">{c.imei}</span>
+                  <p className="text-xs text-muted dark:text-dark-text-secondary">
+                    IMEI: <span className="font-bold font-mono text-ink dark:text-dark-text">{c.imei}</span>
                   </p>
                 )}
-                {c.salud_bateria != null && <p className="text-xs text-muted">Batería: {c.salud_bateria}%</p>}
+                {c.salud_bateria != null && <p className="text-xs text-muted dark:text-dark-text-secondary">Batería: {c.salud_bateria}%</p>}
               </div>
               {c.monto != null && <p className="text-sm font-medium">${c.monto.toLocaleString('es-AR')}</p>}
             </div>
-            <div className="text-xs text-muted flex flex-col gap-0.5">
+            <div className="text-xs text-muted dark:text-dark-text-secondary flex flex-col gap-0.5">
               {c.detalles && <p>Detalles: {c.detalles}</p>}
               {c.vendedores?.nombre && <p>Recibido por: {c.vendedores.nombre}</p>}
             </div>
-            {!verDerivados && (
+            {!verDerivados ? (
+              <div className="flex gap-2 mt-1">
+                <button
+                  disabled={procesando === c.id}
+                  onClick={() => agregarAlStock(c)}
+                  className="flex-1 rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-xs font-medium text-white disabled:opacity-40"
+                >
+                  Agregar al Stock
+                </button>
+                <button
+                  disabled={procesando === c.id}
+                  onClick={() => derivar(c.id)}
+                  className="flex-1 rounded-lg border border-border dark:border-dark-border py-2 text-xs font-medium disabled:opacity-40"
+                >
+                  Derivar a Servicio Técnico
+                </button>
+              </div>
+            ) : (
               <button
                 disabled={procesando === c.id}
-                onClick={() => derivar(c.id)}
-                className="mt-1 rounded-lg border border-border py-2 text-xs font-medium disabled:opacity-40"
+                onClick={() => volverACanje(c.id)}
+                className="mt-1 rounded-lg border border-border dark:border-dark-border py-2 text-xs font-medium disabled:opacity-40"
               >
-                Derivar a Servicio Técnico
+                Volver a Plan Canje
               </button>
             )}
           </div>

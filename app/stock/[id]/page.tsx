@@ -95,7 +95,7 @@ export default function DetalleDispositivo() {
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center">
-        <p className="text-sm text-muted">Cargando...</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">Cargando...</p>
       </main>
     );
   }
@@ -103,8 +103,8 @@ export default function DetalleDispositivo() {
   if (!d) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-3">
-        <p className="text-sm text-muted">No encontramos ese dispositivo.</p>
-        <Link href="/stock" className="text-sm text-accent underline">
+        <p className="text-sm text-muted dark:text-dark-text-secondary">No encontramos ese dispositivo.</p>
+        <Link href="/stock" className="text-sm text-accent dark:text-dark-accent underline">
           Volver al stock
         </Link>
       </main>
@@ -125,7 +125,7 @@ export default function DetalleDispositivo() {
       <button
         onClick={() => campo('en_stock', !d.en_stock)}
         className={`w-full rounded-xl py-3 text-sm font-medium ${
-          d.en_stock ? 'bg-good/15 text-good' : 'bg-black/5 text-muted'
+          d.en_stock ? 'bg-good/15 text-good' : 'bg-black/5 text-muted dark:text-dark-text-secondary'
         }`}
       >
         {d.en_stock ? '✓ En stock — tocá para marcar fuera de stock' : 'Fuera de stock — tocá para volver a stock'}
@@ -140,7 +140,7 @@ export default function DetalleDispositivo() {
         </datalist>
 
         <div>
-          <label className="text-xs text-muted block mb-1">Almacenamiento</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Almacenamiento</label>
           <div className="flex gap-2">
             {STORAGE_OPTIONS.map((gb) => (
               <button
@@ -148,7 +148,7 @@ export default function DetalleDispositivo() {
                 type="button"
                 onClick={() => campo('capacidad_gb', gb)}
                 className={`flex-1 rounded-xl py-2 text-sm font-medium ${
-                  d.capacidad_gb === gb ? 'bg-accent text-white' : 'bg-white border border-border text-ink'
+                  d.capacidad_gb === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
                 }`}
               >
                 {gb} GB
@@ -173,7 +173,7 @@ export default function DetalleDispositivo() {
         />
 
         <div>
-          <label className="text-xs text-muted block mb-1">Estado</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Estado</label>
           <div className="flex gap-2">
             {ESTADOS.map((e) => (
               <button
@@ -181,7 +181,7 @@ export default function DetalleDispositivo() {
                 type="button"
                 onClick={() => campo('estado', e)}
                 className={`flex-1 rounded-xl py-2 text-sm font-medium capitalize ${
-                  d.estado === e ? 'bg-accent text-white' : 'bg-white border border-border text-ink'
+                  d.estado === e ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
                 }`}
               >
                 {e}
@@ -194,7 +194,7 @@ export default function DetalleDispositivo() {
       <button
         disabled={guardando}
         onClick={handleGuardar}
-        className="mt-auto w-full rounded-2xl bg-accent hover:bg-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
+        className="mt-auto w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
       >
         {guardando ? 'Guardando...' : 'Guardar cambios'}
       </button>
@@ -226,13 +226,13 @@ function Campo({
 }) {
   return (
     <div>
-      <label className="text-xs text-muted block mb-1">{label}</label>
+      <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{label}</label>
       <input
         value={valor}
         onChange={(e) => onChange(e.target.value)}
         inputMode={numerico ? 'numeric' : undefined}
         list={listaId}
-        className={`w-full bg-white border border-border rounded-xl px-4 py-3 text-sm ${mono ? 'font-mono' : ''}`}
+        className={`w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm ${mono ? 'font-mono' : ''}`}
       />
     </div>
   );

@@ -134,7 +134,7 @@ export default function NuevaCompra() {
           <button
             onClick={() => setModoCliente('existente')}
             className={`flex-1 rounded-xl py-2 font-medium ${
-              modoCliente === 'existente' ? 'bg-accent text-white' : 'bg-white border border-border text-ink'
+              modoCliente === 'existente' ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
             }`}
           >
             Cliente existente
@@ -142,7 +142,7 @@ export default function NuevaCompra() {
           <button
             onClick={() => setModoCliente('nuevo')}
             className={`flex-1 rounded-xl py-2 font-medium ${
-              modoCliente === 'nuevo' ? 'bg-accent text-white' : 'bg-white border border-border text-ink'
+              modoCliente === 'nuevo' ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
             }`}
           >
             Cargar nuevo
@@ -155,22 +155,22 @@ export default function NuevaCompra() {
               value={buscarCliente}
               onChange={(e) => setBuscarCliente(e.target.value)}
               placeholder="Buscar por nombre o teléfono..."
-              className="w-full bg-white border border-border rounded-xl px-4 py-3 text-sm"
+              className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
             />
             <div className="flex flex-col gap-2">
               {clientesFiltrados.length === 0 && (
-                <p className="text-sm text-muted text-center mt-4">No encontramos clientes con esa búsqueda.</p>
+                <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-4">No encontramos clientes con esa búsqueda.</p>
               )}
               {clientesFiltrados.map((c) => (
                 <button
                   key={c.id}
                   onClick={() => elegirCliente(c)}
-                  className="rounded-xl border border-border bg-white shadow-card px-4 py-3 flex items-center justify-between text-left"
+                  className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex items-center justify-between text-left"
                 >
                   <p className="text-sm font-medium">
                     {c.nombre} {c.apellido || ''}
                   </p>
-                  <p className="text-xs text-muted">{c.telefono || ''}</p>
+                  <p className="text-xs text-muted dark:text-dark-text-secondary">{c.telefono || ''}</p>
                 </button>
               ))}
             </div>
@@ -186,7 +186,7 @@ export default function NuevaCompra() {
             <button
               disabled={!nuevoNombre.trim()}
               onClick={confirmarClienteNuevo}
-              className="mt-2 w-full rounded-2xl bg-accent hover:bg-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
+              className="mt-2 w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
             >
               Continuar
             </button>
@@ -207,8 +207,8 @@ export default function NuevaCompra() {
 
       {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
 
-      <div className="rounded-xl bg-white border border-border shadow-card px-4 py-3 text-sm">
-        <span className="text-muted">Cliente: </span>
+      <div className="rounded-xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card px-4 py-3 text-sm">
+        <span className="text-muted dark:text-dark-text-secondary">Cliente: </span>
         {modoCliente === 'existente' ? `${clienteElegido?.nombre} ${clienteElegido?.apellido || ''}` : nuevoNombre}
       </div>
 
@@ -221,14 +221,14 @@ export default function NuevaCompra() {
         </datalist>
 
         <div>
-          <label className="text-xs text-muted block mb-1">Almacenamiento</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Almacenamiento</label>
           <div className="flex gap-2">
             {STORAGE_OPTIONS.map((gb) => (
               <button
                 key={gb}
                 onClick={() => setCapacidad(gb)}
                 className={`flex-1 rounded-xl py-2 text-sm font-medium ${
-                  capacidad === gb ? 'bg-accent text-white' : 'bg-white border border-border text-ink'
+                  capacidad === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
                 }`}
               >
                 {gb} GB
@@ -240,13 +240,13 @@ export default function NuevaCompra() {
         <Campo label="IMEI" valor={imei} onChange={setImei} placeholder="IMEI" />
 
         <div>
-          <label className="text-xs text-muted block mb-1">Detalles (opcional)</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Detalles (opcional)</label>
           <textarea
             value={detalles}
             onChange={(e) => setDetalles(e.target.value)}
             placeholder="¿Presenta algún detalle? Ej. pantalla con manchas, batería al 70%..."
             rows={3}
-            className="w-full bg-white border border-border rounded-xl px-4 py-3 text-sm"
+            className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
           />
         </div>
 
@@ -256,7 +256,7 @@ export default function NuevaCompra() {
       <button
         disabled={!puedeConfirmar || guardando}
         onClick={handleConfirmar}
-        className="mt-auto w-full rounded-2xl bg-accent hover:bg-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
+        className="mt-auto w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
       >
         {guardando ? 'Guardando...' : 'Confirmar compra'}
       </button>
@@ -281,14 +281,14 @@ function Campo({
 }) {
   return (
     <div>
-      <label className="text-xs text-muted block mb-1">{label}</label>
+      <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{label}</label>
       <input
         value={valor}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         inputMode={numerico ? 'numeric' : undefined}
         list={listaId}
-        className="w-full bg-white border border-border rounded-xl px-4 py-3 text-sm"
+        className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
       />
     </div>
   );
