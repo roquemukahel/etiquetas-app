@@ -214,9 +214,46 @@ create policy "items de ordenes de mi negocio" on orden_items
 
 -- ============================================================
 -- Plan canje: el dispositivo que el cliente entrega como parte
--- de pago entra al stock como cualquier otro (para poder
--- revenderlo), y la orden guarda cuánto se le reconoció.
+-- de pago NO entra directo al stock (puede tener detalles/fallas
+-- que haya que revisar primero). Tiene su propia sección, y desde
+-- ahí se puede derivar a Servicio Técnico.
 -- ============================================================
-alter table ordenes add column if not exists dispositivo_canje_id uuid references dispositivos(id);
 alter table ordenes add column if not exists monto_canje numeric default 0;
 alter table ordenes drop column if exists canje;
+alter table ordenes drop column if exists dispositivo_canje_id;
+
+create table if not exists tecnicos (
+  id uuid primary key default gen_random_uuid(),
+  negocio_id uuid not null references negocios(id) on delete cascade default negocio_actual(),
+  nombre text not null,
+  created_at timestamptz default now()
+);
+
+create table if not exists canjes (
+  id uuid primary key default gen_random_uuid(),
+  negocio_id uuid not null references negocios(id) on delete cascade default negocio_actual(),
+  orden_id uuid references ordenes(id) on delete set null,
+  modelo text,
+  capacidad_gb int,
+  color text,
+  salud_bateria int,
+  detalles text,
+  monto numeric,
+  vendedor_id uuid references vendedores(id),
+  tecnico_id uuid references tecnicos(id),
+  estado text not null default 'en_canje', -- en_canje | servicio_tecnico
+  created_at timestamptz default now()
+);
+
+alter table ordenes add column if not exists canje_id uuid references canjes(id);
+
+alter table tecnicos enable row level security;
+alter table canjes enable row level security;
+
+create policy "tecnicos de mi negocio" on tecnicos
+  for all using (negocio_id = negocio_actual())
+  with check (negocio_id = negocio_actual());
+
+create policy "canjes de mi negocio" on canjes
+  for all using (negocio_id = negocio_actual())
+  with check (negocio_id = negocio_actual());

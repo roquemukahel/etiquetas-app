@@ -4,6 +4,7 @@ const SECCIONES = [
   { href: '/configuracion/negocio', titulo: 'Datos del negocio', desc: 'Nombre, logo, contacto y garantía' },
   { href: '/configuracion/vendedores', titulo: 'Vendedores', desc: 'Quién atiende cada venta' },
   { href: '/configuracion/productos', titulo: 'Productos y accesorios', desc: 'Fundas, AirPods, y lo que vendas' },
+  { href: '/configuracion/tecnicos', titulo: 'Técnicos', desc: 'Quién repara los equipos de Servicio Técnico' },
 ];
 
 export default function Configuracion() {

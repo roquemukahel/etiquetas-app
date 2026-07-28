@@ -17,7 +17,15 @@ type Orden = {
   estado: string;
   created_at: string;
   fecha_entrega: string | null;
-  dispositivos: { modelo: string | null; capacidad_gb: number | null; color: string | null } | null;
+  canjes: {
+    modelo: string | null;
+    capacidad_gb: number | null;
+    color: string | null;
+    salud_bateria: number | null;
+    detalles: string | null;
+    monto: number | null;
+    vendedores: { nombre: string } | null;
+  } | null;
   clientes: {
     nombre: string;
     apellido: string | null;
@@ -55,7 +63,7 @@ export default function Boleta() {
       const { data: ordenData } = await supabase
         .from('ordenes')
         .select(
-          '*, clientes ( nombre, apellido, telefono, email, dni, domicilio ), vendedores ( nombre ), dispositivos!dispositivo_canje_id ( modelo, capacidad_gb, color ), orden_items ( descripcion, cantidad, precio_unitario )'
+          '*, clientes ( nombre, apellido, telefono, email, dni, domicilio ), vendedores ( nombre ), canjes ( modelo, capacidad_gb, color, salud_bateria, detalles, monto, vendedores ( nombre ) ), orden_items ( descripcion, cantidad, precio_unitario )'
         )
         .eq('id', id)
         .single();
@@ -134,16 +142,16 @@ export default function Boleta() {
         </Link>
       </header>
 
-      <div id="boleta" className="flex flex-col gap-4 text-sm bg-white rounded-xl border border-black/10 p-5">
+      <div id="boleta" className="flex flex-col gap-5 text-base bg-white rounded-xl border border-black/10 p-5">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">
             {negocio?.logo_url && (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={negocio.logo_url} alt="Logo" className="h-14 w-14 object-contain" />
             )}
-            <p className="text-lg font-medium">{negocio?.nombre}</p>
+            <p className="text-xl font-medium">{negocio?.nombre}</p>
           </div>
-          <div className="text-right text-xs text-muted">
+          <div className="text-right text-sm text-muted">
             <p>Orden #{orden.id.slice(0, 8)}</p>
             <p>{formatearFecha(orden.created_at)}</p>
             {orden.fecha_entrega && <p>Entregado: {formatearFecha(orden.fecha_entrega)}</p>}
@@ -152,13 +160,13 @@ export default function Boleta() {
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <p className="font-medium border-b border-black/10 pb-1 mb-1">Negocio</p>
+            <p className="font-medium border-b-2 border-black/20 pb-1 mb-1">Negocio</p>
             <p>{negocio?.nombre}</p>
             {negocio?.telefono && <p>{negocio.telefono}</p>}
             {negocio?.direccion && <p>{negocio.direccion}</p>}
           </div>
           <div>
-            <p className="font-medium border-b border-black/10 pb-1 mb-1">Cliente</p>
+            <p className="font-medium border-b-2 border-black/20 pb-1 mb-1">Cliente</p>
             <p>{clienteNombre}</p>
             {orden.clientes?.telefono && <p>{orden.clientes.telefono}</p>}
             {orden.clientes?.email && <p>{orden.clientes.email}</p>}
@@ -167,28 +175,45 @@ export default function Boleta() {
           </div>
         </div>
 
-        <table className="w-full text-xs">
+        {orden.canjes && (
+          <div className="rounded-lg border-2 border-black/20 p-3">
+            <p className="font-medium border-b-2 border-black/20 pb-1 mb-2">Plan canje — dispositivo entregado</p>
+            <p>
+              {orden.canjes.modelo}
+              {orden.canjes.capacidad_gb ? ` · ${orden.canjes.capacidad_gb}GB` : ''}
+              {orden.canjes.color ? ` · ${orden.canjes.color}` : ''}
+            </p>
+            {orden.canjes.salud_bateria != null && <p>Batería: {orden.canjes.salud_bateria}%</p>}
+            {orden.canjes.detalles && <p>Detalles: {orden.canjes.detalles}</p>}
+            {orden.canjes.vendedores?.nombre && <p>Recibido por: {orden.canjes.vendedores.nombre}</p>}
+            {orden.canjes.monto != null && (
+              <p className="font-medium mt-1">Monto reconocido: ${orden.canjes.monto.toLocaleString('es-AR')}</p>
+            )}
+          </div>
+        )}
+
+        <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-black/10 text-left">
-              <th className="py-1">Producto</th>
-              <th className="py-1 text-center">Cant.</th>
-              <th className="py-1 text-right">Precio unit.</th>
-              <th className="py-1 text-right">Precio</th>
+            <tr className="border-b-2 border-black/20 text-left">
+              <th className="py-2">Producto</th>
+              <th className="py-2 text-center">Cant.</th>
+              <th className="py-2 text-right">Precio unit.</th>
+              <th className="py-2 text-right">Precio</th>
             </tr>
           </thead>
           <tbody>
             {orden.orden_items.map((i, idx) => (
-              <tr key={idx} className="border-b border-black/5">
-                <td className="py-1">{i.descripcion}</td>
-                <td className="py-1 text-center">{i.cantidad}</td>
-                <td className="py-1 text-right">${i.precio_unitario.toLocaleString('es-AR')}</td>
-                <td className="py-1 text-right">${(i.cantidad * i.precio_unitario).toLocaleString('es-AR')}</td>
+              <tr key={idx} className="border-b border-black/10">
+                <td className="py-2">{i.descripcion}</td>
+                <td className="py-2 text-center">{i.cantidad}</td>
+                <td className="py-2 text-right">${i.precio_unitario.toLocaleString('es-AR')}</td>
+                <td className="py-2 text-right">${(i.cantidad * i.precio_unitario).toLocaleString('es-AR')}</td>
               </tr>
             ))}
           </tbody>
         </table>
 
-        <div className="self-end w-full max-w-[220px] flex flex-col gap-1 text-xs">
+        <div className="self-end w-full max-w-[260px] flex flex-col gap-1 text-sm">
           {orden.anticipo != null && orden.anticipo > 0 && (
             <div className="flex justify-between">
               <span>Anticipo</span>
@@ -211,7 +236,7 @@ export default function Boleta() {
               <span>-${orden.monto_canje.toLocaleString('es-AR')}</span>
             </div>
           )}
-          <div className="flex justify-between font-medium text-sm border-t border-black/10 pt-1">
+          <div className="flex justify-between font-medium text-base border-t-2 border-black/30 pt-1">
             <span>TOTAL</span>
             <span>${(orden.total ?? subtotal).toLocaleString('es-AR')}</span>
           </div>
@@ -225,24 +250,17 @@ export default function Boleta() {
             <span className="font-medium">Vendedor:</span> {orden.vendedores.nombre}
           </p>
         )}
-        {orden.dispositivos && orden.monto_canje != null && orden.monto_canje > 0 && (
-          <p>
-            <span className="font-medium">Entrega en canje:</span> {orden.dispositivos.modelo}
-            {orden.dispositivos.capacidad_gb ? ` ${orden.dispositivos.capacidad_gb}GB` : ''}
-            {orden.dispositivos.color ? ` ${orden.dispositivos.color}` : ''} — ${orden.monto_canje.toLocaleString('es-AR')}
-          </p>
-        )}
 
         {negocio?.texto_garantia && (
           <div>
-            <p className="font-medium border-b border-black/10 pb-1 mb-2">Garantía</p>
-            <p className="whitespace-pre-wrap text-xs">{negocio.texto_garantia}</p>
+            <p className="font-medium border-b-2 border-black/20 pb-1 mb-2">Garantía</p>
+            <p className="whitespace-pre-wrap text-sm">{negocio.texto_garantia}</p>
           </div>
         )}
 
         <div className="mt-6 flex flex-col items-center gap-1 self-center">
-          <div className="w-56 border-t border-black/40" />
-          <p className="text-xs text-muted">Nombre y firma del cliente</p>
+          <div className="w-56 border-t-2 border-black/40" />
+          <p className="text-sm text-muted">Nombre y firma del cliente</p>
         </div>
       </div>
 

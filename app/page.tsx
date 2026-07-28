@@ -16,6 +16,8 @@ const SECCIONES = [
   { href: '/stock', titulo: 'Stock', desc: 'Dispositivos disponibles en tu local', activo: true },
   { href: '/clientes', titulo: 'Clientes', desc: 'Tu base de clientes', activo: true },
   { href: '/ordenes', titulo: 'Órdenes', desc: 'Ventas, boletas y canjes', activo: true },
+  { href: '/canje', titulo: 'Plan Canje', desc: 'Dispositivos recibidos como parte de pago', activo: true },
+  { href: '/servicio-tecnico', titulo: 'Servicio Técnico', desc: 'Equipos derivados a reparación', activo: true },
 ];
 
 export default async function Home() {

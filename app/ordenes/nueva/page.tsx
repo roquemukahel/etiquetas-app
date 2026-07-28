@@ -89,6 +89,7 @@ export default function NuevaOrden() {
   const [canjeColor, setCanjeColor] = useState('');
   const [canjeBateria, setCanjeBateria] = useState('');
   const [canjeMonto, setCanjeMonto] = useState('');
+  const [canjeDetalles, setCanjeDetalles] = useState('');
 
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
@@ -248,24 +249,6 @@ export default function NuevaOrden() {
         clienteId = data.id;
       }
 
-      let dispositivoCanjeId: string | null = null;
-      if (canjeActivo && canjeModelo.trim()) {
-        const { data: canjeData, error: canjeErr } = await supabase
-          .from('dispositivos')
-          .insert({
-            modelo: canjeModelo.trim(),
-            capacidad_gb: canjeCapacidad,
-            color: canjeColor.trim() || null,
-            salud_bateria: canjeBateria ? Number(canjeBateria) : null,
-            estado: 'usado',
-            en_stock: true,
-          })
-          .select()
-          .single();
-        if (canjeErr || !canjeData) throw new Error(canjeErr?.message || 'no se pudo cargar el dispositivo de canje');
-        dispositivoCanjeId = canjeData.id;
-      }
-
       const { data: orden, error: oErr } = await supabase
         .from('ordenes')
         .insert({
@@ -274,7 +257,6 @@ export default function NuevaOrden() {
           forma_pago: formaPago,
           anticipo: Number(anticipo) || 0,
           impuesto_porcentaje: Number(impuesto) || 0,
-          dispositivo_canje_id: dispositivoCanjeId,
           monto_canje: canjeActivo ? Number(canjeMonto) || 0 : 0,
           total,
           estado: estadoOrden,
@@ -283,6 +265,25 @@ export default function NuevaOrden() {
         .select()
         .single();
       if (oErr || !orden) throw new Error(oErr?.message || 'no se pudo crear la orden');
+
+      if (canjeActivo && canjeModelo.trim()) {
+        const { data: canjeData, error: canjeErr } = await supabase
+          .from('canjes')
+          .insert({
+            orden_id: orden.id,
+            modelo: canjeModelo.trim(),
+            capacidad_gb: canjeCapacidad,
+            color: canjeColor.trim() || null,
+            salud_bateria: canjeBateria ? Number(canjeBateria) : null,
+            detalles: canjeDetalles.trim() || null,
+            monto: canjeMonto ? Number(canjeMonto) : null,
+            vendedor_id: vendedorId || null,
+          })
+          .select()
+          .single();
+        if (canjeErr || !canjeData) throw new Error(canjeErr?.message || 'no se pudo cargar el dispositivo de canje');
+        await supabase.from('ordenes').update({ canje_id: canjeData.id }).eq('id', orden.id);
+      }
 
       const { error: itemsErr } = await supabase.from('orden_items').insert(
         carrito.map((i) => ({
@@ -753,8 +754,15 @@ export default function NuevaOrden() {
               inputMode="numeric"
               className="w-full bg-white border border-black/10 rounded-lg px-3 py-2 text-sm"
             />
+            <textarea
+              value={canjeDetalles}
+              onChange={(e) => setCanjeDetalles(e.target.value)}
+              placeholder="Detalles del dispositivo (ej. no anda el parlante, módulo con detalle)"
+              rows={3}
+              className="w-full bg-white border border-black/10 rounded-lg px-3 py-2 text-sm"
+            />
             <p className="text-xs text-muted">
-              El dispositivo entregado entra a tu Stock automáticamente al confirmar la orden.
+              El dispositivo entregado va a la sección Plan Canje (no entra directo al stock).
             </p>
           </div>
         )}

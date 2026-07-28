@@ -14,7 +14,7 @@ type Orden = {
   forma_pago: string | null;
   total: number | null;
   monto_canje: number | null;
-  dispositivo_canje_id: string | null;
+  canje_id: string | null;
   estado: string;
   created_at: string;
   clientes: { nombre: string; apellido: string | null; telefono: string | null } | null;
@@ -73,10 +73,10 @@ export default function DetalleOrden() {
     if (dispositivoIds.length > 0) {
       await supabase.from('dispositivos').update({ en_stock: true }).in('id', dispositivoIds);
     }
-    if (orden.dispositivo_canje_id) {
-      await supabase.from('dispositivos').update({ en_stock: false }).eq('id', orden.dispositivo_canje_id);
-    }
     const { error: deleteError } = await supabase.from('ordenes').delete().eq('id', id);
+    if (orden.canje_id) {
+      await supabase.from('canjes').delete().eq('id', orden.canje_id);
+    }
     if (deleteError) {
       setError('No pudimos cancelar la orden: ' + deleteError.message);
       setGuardando(false);
