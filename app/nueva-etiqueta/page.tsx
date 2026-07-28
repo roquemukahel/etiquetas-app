@@ -35,6 +35,7 @@ export default function NuevaEtiqueta() {
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [bateria, setBateria] = useState('');
+  const [imeiManual, setImeiManual] = useState('');
   const [almacenamiento, setAlmacenamiento] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -135,7 +136,7 @@ export default function NuevaEtiqueta() {
     setPhotoPreview(URL.createObjectURL(file));
   };
 
-  const puedeContinuar = photoFile && bateria && almacenamiento;
+  const puedeContinuar = (photoFile || imeiManual.trim()) && bateria && almacenamiento;
 
   const handleContinuarAEtiqueta = async () => {
     if (agregarAlStock && datos) {
@@ -158,7 +159,17 @@ export default function NuevaEtiqueta() {
   };
 
   const handleContinuar = async () => {
-    if (!photoFile) return;
+    if (!photoFile) {
+      setDatos({
+        modelo: null,
+        capacidad_gb: almacenamiento,
+        imei: imeiManual.trim() || null,
+        numero_serie: null,
+        version_ios: null,
+      });
+      setStep('revision');
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -317,6 +328,18 @@ export default function NuevaEtiqueta() {
           <p className="text-xs text-muted">{photoPreview ? 'foto cargada' : 'tocá para sacar foto'}</p>
         </div>
       </label>
+
+      {!photoFile && (
+        <div>
+          <label className="text-xs text-muted block mb-1">O escribí el IMEI a mano</label>
+          <input
+            value={imeiManual}
+            onChange={(e) => setImeiManual(e.target.value)}
+            placeholder="IMEI"
+            className="w-full bg-white border border-border rounded-xl px-4 py-3 text-sm font-mono"
+          />
+        </div>
+      )}
 
       <div>
         <label className="text-xs text-muted block mb-1">Salud de batería (%)</label>

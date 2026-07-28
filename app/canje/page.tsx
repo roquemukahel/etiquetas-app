@@ -9,6 +9,7 @@ type Canje = {
   modelo: string | null;
   capacidad_gb: number | null;
   color: string | null;
+  imei: string | null;
   salud_bateria: number | null;
   detalles: string | null;
   monto: number | null;
@@ -44,7 +45,10 @@ export default function PlanCanje() {
   const derivar = async (id: string) => {
     if (!confirm('¿Derivar este dispositivo a Servicio Técnico?')) return;
     setProcesando(id);
-    await supabase.from('canjes').update({ estado: 'servicio_tecnico' }).eq('id', id);
+    await supabase
+      .from('canjes')
+      .update({ estado: 'servicio_tecnico', fecha_ingreso_servicio: new Date().toISOString() })
+      .eq('id', id);
     setProcesando(null);
     cargar();
   };
@@ -92,6 +96,11 @@ export default function PlanCanje() {
                   {c.capacidad_gb ? ` · ${c.capacidad_gb}GB` : ''}
                   {c.color ? ` · ${c.color}` : ''}
                 </p>
+                {c.imei && (
+                  <p className="text-xs text-muted">
+                    IMEI: <span className="font-bold font-mono text-ink">{c.imei}</span>
+                  </p>
+                )}
                 {c.salud_bateria != null && <p className="text-xs text-muted">Batería: {c.salud_bateria}%</p>}
               </div>
               {c.monto != null && <p className="text-sm font-medium">${c.monto.toLocaleString('es-AR')}</p>}

@@ -10,6 +10,7 @@ type Compra = {
   id: string;
   modelo: string | null;
   capacidad_gb: number | null;
+  imei: string | null;
   detalles: string | null;
   precio: number | null;
   created_at: string;
@@ -155,6 +156,11 @@ export default function BoletaCompra() {
             {compra.modelo}
             {compra.capacidad_gb ? ` · ${compra.capacidad_gb}GB` : ''}
           </p>
+          {compra.imei && (
+            <p className="text-muted">
+              IMEI: <span className="font-bold text-ink">{compra.imei}</span>
+            </p>
+          )}
           {compra.detalles && <p className="text-muted">Detalles: {compra.detalles}</p>}
           {compra.precio != null && (
             <p className="font-display font-semibold text-lg mt-2">

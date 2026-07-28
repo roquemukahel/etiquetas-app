@@ -8,6 +8,7 @@ type Compra = {
   id: string;
   modelo: string | null;
   capacidad_gb: number | null;
+  imei: string | null;
   precio: number | null;
   estado: string;
   created_at: string;
@@ -85,6 +86,11 @@ export default function Compras() {
                 {c.modelo}
                 {c.capacidad_gb ? ` · ${c.capacidad_gb}GB` : ''}
               </p>
+              {c.imei && (
+                <p className="text-xs text-muted">
+                  IMEI: <span className="font-bold font-mono text-ink">{c.imei}</span>
+                </p>
+              )}
               <p className="text-xs text-muted">
                 {c.clientes ? `${c.clientes.nombre} ${c.clientes.apellido || ''}` : 'Sin cliente'}
               </p>

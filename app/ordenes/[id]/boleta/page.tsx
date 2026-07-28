@@ -22,6 +22,7 @@ type Orden = {
     modelo: string | null;
     capacidad_gb: number | null;
     color: string | null;
+    imei: string | null;
     salud_bateria: number | null;
     detalles: string | null;
     monto: number | null;
@@ -99,7 +100,7 @@ export default function Boleta() {
       const { data: ordenData, error: ordenError } = await supabase
         .from('ordenes')
         .select(
-          '*, clientes ( nombre, apellido, telefono, email, dni, domicilio ), vendedores ( nombre ), canjes!canje_id ( modelo, capacidad_gb, color, salud_bateria, detalles, monto, vendedores ( nombre ) ), orden_items ( descripcion, cantidad, precio_unitario, tipo )'
+          '*, clientes ( nombre, apellido, telefono, email, dni, domicilio ), vendedores ( nombre ), canjes!canje_id ( modelo, capacidad_gb, color, imei, salud_bateria, detalles, monto, vendedores ( nombre ) ), orden_items ( descripcion, cantidad, precio_unitario, tipo )'
         )
         .eq('id', id)
         .single();
@@ -253,6 +254,11 @@ export default function Boleta() {
               {orden.canjes.capacidad_gb ? ` · ${orden.canjes.capacidad_gb}GB` : ''}
               {orden.canjes.color ? ` · ${orden.canjes.color}` : ''}
             </p>
+            {orden.canjes.imei && (
+              <p className="text-muted">
+                IMEI: <span className="font-bold text-ink">{orden.canjes.imei}</span>
+              </p>
+            )}
             {orden.canjes.salud_bateria != null && <p className="text-muted">Batería: {orden.canjes.salud_bateria}%</p>}
             {orden.canjes.detalles && <p className="text-muted">Detalles: {orden.canjes.detalles}</p>}
             {orden.canjes.vendedores?.nombre && (

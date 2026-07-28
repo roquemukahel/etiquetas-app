@@ -348,3 +348,13 @@ alter table negocios add column if not exists texto_declaracion_compra text;
 -- detalle que arreglar antes).
 -- ============================================================
 alter table compras add column if not exists estado text not null default 'pendiente';
+
+-- ============================================================
+-- IMEI en canjes/compras (el "DNI" del celular, debe verse en
+-- todos lados) y fechas de ingreso/reparado en Servicio Técnico.
+-- ============================================================
+alter table canjes add column if not exists imei text;
+alter table canjes add column if not exists fecha_ingreso_servicio timestamptz;
+alter table canjes add column if not exists fecha_reparado timestamptz;
+
+alter table compras add column if not exists imei text;

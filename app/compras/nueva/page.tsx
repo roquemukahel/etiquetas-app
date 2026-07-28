@@ -35,6 +35,7 @@ export default function NuevaCompra() {
   const [carpetas, setCarpetas] = useState<string[]>([]);
   const [modelo, setModelo] = useState('');
   const [capacidad, setCapacidad] = useState<number | null>(null);
+  const [imei, setImei] = useState('');
   const [detalles, setDetalles] = useState('');
   const [precio, setPrecio] = useState('');
 
@@ -102,6 +103,7 @@ export default function NuevaCompra() {
           cliente_id: clienteId,
           modelo: modelo.trim(),
           capacidad_gb: capacidad,
+          imei: imei.trim() || null,
           detalles: detalles.trim() || null,
           precio: precio ? Number(precio) : null,
         })
@@ -234,6 +236,8 @@ export default function NuevaCompra() {
             ))}
           </div>
         </div>
+
+        <Campo label="IMEI" valor={imei} onChange={setImei} placeholder="IMEI" />
 
         <div>
           <label className="text-xs text-muted block mb-1">Detalles (opcional)</label>

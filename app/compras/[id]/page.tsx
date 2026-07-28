@@ -10,6 +10,7 @@ type Compra = {
   id: string;
   modelo: string | null;
   capacidad_gb: number | null;
+  imei: string | null;
   detalles: string | null;
   precio: number | null;
   estado: string;
@@ -47,6 +48,7 @@ export default function DetalleCompra() {
     const { error: insertError } = await supabase.from('dispositivos').insert({
       modelo: compra.modelo,
       capacidad_gb: compra.capacidad_gb,
+      imei: compra.imei,
       estado: 'usado',
       en_stock: true,
     });
@@ -70,8 +72,10 @@ export default function DetalleCompra() {
     const { error: insertError } = await supabase.from('canjes').insert({
       modelo: compra.modelo,
       capacidad_gb: compra.capacidad_gb,
+      imei: compra.imei,
       detalles: compra.detalles,
       estado: 'servicio_tecnico',
+      fecha_ingreso_servicio: new Date().toISOString(),
     });
     if (insertError) {
       setError('No pudimos derivar: ' + insertError.message);
@@ -129,6 +133,12 @@ export default function DetalleCompra() {
           {compra.modelo}
           {compra.capacidad_gb ? ` · ${compra.capacidad_gb}GB` : ''}
         </p>
+        {compra.imei && (
+          <p>
+            <span className="text-muted">IMEI: </span>
+            <span className="font-bold font-mono">{compra.imei}</span>
+          </p>
+        )}
         {compra.detalles && (
           <p>
             <span className="text-muted">Detalles: </span>

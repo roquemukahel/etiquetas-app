@@ -72,6 +72,7 @@ export default function NuevaOrden() {
   const [nuevaCapacidad, setNuevaCapacidad] = useState<number | null>(null);
   const [nuevoColor, setNuevoColor] = useState('');
   const [nuevoPrecioDispositivo, setNuevoPrecioDispositivo] = useState('');
+  const [nuevoImeiDispositivo, setNuevoImeiDispositivo] = useState('');
   const [cargandoDispositivo, setCargandoDispositivo] = useState(false);
 
   const [productos, setProductos] = useState<Producto[]>([]);
@@ -98,6 +99,7 @@ export default function NuevaOrden() {
   const [canjeModelo, setCanjeModelo] = useState('');
   const [canjeCapacidad, setCanjeCapacidad] = useState<number | null>(null);
   const [canjeColor, setCanjeColor] = useState('');
+  const [canjeImei, setCanjeImei] = useState('');
   const [canjeBateria, setCanjeBateria] = useState('');
   const [canjeMonto, setCanjeMonto] = useState('');
   const [canjeDetalles, setCanjeDetalles] = useState('');
@@ -179,7 +181,7 @@ export default function NuevaOrden() {
         tempId: idTemporal(),
         descripcion: `${d.modelo || 'Dispositivo'}${d.capacidad_gb ? ` ${d.capacidad_gb}GB` : ''}${
           d.color ? ` ${d.color}` : ''
-        }`,
+        }${d.imei ? ` · IMEI ${d.imei}` : ''}`,
         cantidad: 1,
         precioUnitario: d.precio ?? 0,
         dispositivoId: d.id,
@@ -200,6 +202,7 @@ export default function NuevaOrden() {
         modelo: nuevoModelo.trim(),
         capacidad_gb: nuevaCapacidad,
         color: nuevoColor.trim() || null,
+        imei: nuevoImeiDispositivo.trim() || null,
         precio: nuevoPrecioDispositivo ? Number(nuevoPrecioDispositivo) : null,
         estado: 'usado',
         en_stock: true,
@@ -217,6 +220,7 @@ export default function NuevaOrden() {
     setNuevoModelo('');
     setNuevaCapacidad(null);
     setNuevoColor('');
+    setNuevoImeiDispositivo('');
     setNuevoPrecioDispositivo('');
   };
 
@@ -329,6 +333,7 @@ export default function NuevaOrden() {
             modelo: canjeModelo.trim(),
             capacidad_gb: canjeCapacidad,
             color: canjeColor.trim() || null,
+            imei: canjeImei.trim() || null,
             salud_bateria: canjeBateria ? Number(canjeBateria) : null,
             detalles: canjeDetalles.trim() || null,
             monto: canjeMonto ? Number(canjeMonto) : null,
@@ -551,6 +556,12 @@ export default function NuevaOrden() {
                   onChange={(e) => setNuevoColor(e.target.value)}
                   placeholder="Color"
                   className="w-full bg-white border border-border rounded-lg px-3 py-2 text-sm"
+                />
+                <input
+                  value={nuevoImeiDispositivo}
+                  onChange={(e) => setNuevoImeiDispositivo(e.target.value)}
+                  placeholder="IMEI"
+                  className="w-full bg-white border border-border rounded-lg px-3 py-2 text-sm font-mono"
                 />
                 <input
                   value={nuevoPrecioDispositivo}
@@ -896,6 +907,12 @@ export default function NuevaOrden() {
                 className="w-24 bg-white border border-border rounded-lg px-3 py-2 text-sm"
               />
             </div>
+            <input
+              value={canjeImei}
+              onChange={(e) => setCanjeImei(e.target.value)}
+              placeholder="IMEI"
+              className="w-full bg-white border border-border rounded-lg px-3 py-2 text-sm font-mono"
+            />
             <input
               value={canjeMonto}
               onChange={(e) => setCanjeMonto(e.target.value)}
