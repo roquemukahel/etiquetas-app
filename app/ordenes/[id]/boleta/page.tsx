@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { crearClienteNavegador } from '../../../lib/supabase/client';
 
-type Item = { descripcion: string; cantidad: number; precio_unitario: number };
+type Item = { descripcion: string; cantidad: number; precio_unitario: number; tipo: string };
 
 type Orden = {
   id: string;
@@ -44,6 +44,7 @@ type Negocio = {
   direccion: string | null;
   logo_url: string | null;
   texto_garantia: string | null;
+  texto_garantia_servicio: string | null;
 };
 
 function formatearFecha(iso: string) {
@@ -57,16 +58,18 @@ export default function Boleta() {
   const [orden, setOrden] = useState<Orden | null>(null);
   const [negocio, setNegocio] = useState<Negocio | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
-      const { data: ordenData } = await supabase
+      const { data: ordenData, error: ordenError } = await supabase
         .from('ordenes')
         .select(
-          '*, clientes ( nombre, apellido, telefono, email, dni, domicilio ), vendedores ( nombre ), canjes ( modelo, capacidad_gb, color, salud_bateria, detalles, monto, vendedores ( nombre ) ), orden_items ( descripcion, cantidad, precio_unitario )'
+          '*, clientes ( nombre, apellido, telefono, email, dni, domicilio ), vendedores ( nombre ), canjes ( modelo, capacidad_gb, color, salud_bateria, detalles, monto, vendedores ( nombre ) ), orden_items ( descripcion, cantidad, precio_unitario, tipo )'
         )
         .eq('id', id)
         .single();
+      if (ordenError) setError(ordenError.message);
       setOrden(ordenData as any);
 
       const {
@@ -75,7 +78,7 @@ export default function Boleta() {
       if (user) {
         const { data: perfil } = await supabase
           .from('perfiles')
-          .select('negocios ( nombre, telefono, direccion, logo_url, texto_garantia )')
+          .select('negocios ( nombre, telefono, direccion, logo_url, texto_garantia, texto_garantia_servicio )')
           .eq('id', user.id)
           .single();
         setNegocio((perfil as any)?.negocios ?? null);
@@ -95,8 +98,9 @@ export default function Boleta() {
 
   if (!orden) {
     return (
-      <main className="flex min-h-screen flex-col items-center justify-center gap-3">
+      <main className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
         <p className="text-sm text-muted">No encontramos esa orden.</p>
+        {error && <p className="text-xs text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
         <Link href="/ordenes" className="text-sm text-accent underline">
           Volver a órdenes
         </Link>
@@ -105,6 +109,8 @@ export default function Boleta() {
   }
 
   const subtotal = orden.orden_items.reduce((acc, i) => acc + i.cantidad * i.precio_unitario, 0);
+  const tieneTrabajos = orden.orden_items.some((i) => i.tipo === 'trabajo');
+  const tieneProductos = orden.orden_items.some((i) => i.tipo !== 'trabajo');
   const clienteNombre = orden.clientes ? `${orden.clientes.nombre} ${orden.clientes.apellido || ''}`.trim() : '';
 
   const mensajeWhatsapp = encodeURIComponent(
@@ -251,10 +257,17 @@ export default function Boleta() {
           </p>
         )}
 
-        {negocio?.texto_garantia && (
+        {tieneProductos && negocio?.texto_garantia && (
           <div>
-            <p className="font-medium border-b-2 border-black/20 pb-1 mb-2">Garantía</p>
+            <p className="font-medium border-b-2 border-black/20 pb-1 mb-2">Garantía de productos</p>
             <p className="whitespace-pre-wrap text-sm">{negocio.texto_garantia}</p>
+          </div>
+        )}
+
+        {tieneTrabajos && negocio?.texto_garantia_servicio && (
+          <div>
+            <p className="font-medium border-b-2 border-black/20 pb-1 mb-2">Garantía de servicio técnico</p>
+            <p className="whitespace-pre-wrap text-sm">{negocio.texto_garantia_servicio}</p>
           </div>
         )}
 

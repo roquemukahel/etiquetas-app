@@ -12,6 +12,7 @@ type Negocio = {
   direccion: string | null;
   logo_url: string | null;
   texto_garantia: string | null;
+  texto_garantia_servicio: string | null;
 };
 
 export default function DatosNegocio() {
@@ -31,7 +32,7 @@ export default function DatosNegocio() {
       if (!user) return;
       const { data: perfil } = await supabase
         .from('perfiles')
-        .select('negocio_id, negocios ( id, nombre, telefono, direccion, logo_url, texto_garantia )')
+        .select('negocio_id, negocios ( id, nombre, telefono, direccion, logo_url, texto_garantia, texto_garantia_servicio )')
         .eq('id', user.id)
         .single();
       setNegocio((perfil as any)?.negocios ?? null);
@@ -62,6 +63,7 @@ export default function DatosNegocio() {
         direccion: negocio.direccion?.trim() || null,
         logo_url: negocio.logo_url || null,
         texto_garantia: negocio.texto_garantia?.trim() || null,
+        texto_garantia_servicio: negocio.texto_garantia_servicio?.trim() || null,
       })
       .eq('id', negocio.id);
 
@@ -125,10 +127,22 @@ export default function DatosNegocio() {
         <Campo label="Dirección" valor={negocio.direccion ?? ''} onChange={(v) => campo('direccion', v)} />
 
         <div>
-          <label className="text-xs text-muted block mb-1">Texto de garantía (va en la boleta)</label>
+          <label className="text-xs text-muted block mb-1">Garantía de productos (va en la boleta de venta)</label>
           <textarea
             value={negocio.texto_garantia ?? ''}
             onChange={(e) => campo('texto_garantia', e.target.value)}
+            rows={8}
+            className="w-full bg-white/60 border border-black/10 rounded-xl px-4 py-3 text-sm"
+          />
+        </div>
+
+        <div>
+          <label className="text-xs text-muted block mb-1">
+            Garantía de servicio técnico (va en la boleta cuando incluye un arreglo)
+          </label>
+          <textarea
+            value={negocio.texto_garantia_servicio ?? ''}
+            onChange={(e) => campo('texto_garantia_servicio', e.target.value)}
             rows={8}
             className="w-full bg-white/60 border border-black/10 rounded-xl px-4 py-3 text-sm"
           />

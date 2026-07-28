@@ -257,3 +257,29 @@ create policy "tecnicos de mi negocio" on tecnicos
 create policy "canjes de mi negocio" on canjes
   for all using (negocio_id = negocio_actual())
   with check (negocio_id = negocio_actual());
+
+-- ============================================================
+-- Servicio Técnico: catálogo de arreglos (mismo concepto que
+-- productos, pero para trabajos de reparación), marcar equipos de
+-- Plan Canje como reparados, y poder facturar un arreglo a un
+-- cliente como ítem de una orden común (con su propia garantía,
+-- distinta a la de los productos).
+-- ============================================================
+create table if not exists trabajos (
+  id uuid primary key default gen_random_uuid(),
+  negocio_id uuid not null references negocios(id) on delete cascade default negocio_actual(),
+  nombre text not null,
+  precio numeric,
+  created_at timestamptz default now()
+);
+
+alter table trabajos enable row level security;
+create policy "trabajos de mi negocio" on trabajos
+  for all using (negocio_id = negocio_actual())
+  with check (negocio_id = negocio_actual());
+
+alter table canjes add column if not exists trabajos_realizados text[];
+
+alter table orden_items add column if not exists tipo text not null default 'producto';
+
+alter table negocios add column if not exists texto_garantia_servicio text;

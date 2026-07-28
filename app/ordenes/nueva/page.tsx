@@ -23,6 +23,7 @@ type Cliente = {
 
 type Vendedor = { id: string; nombre: string };
 type Producto = { id: string; nombre: string; precio: number | null };
+type Trabajo = { id: string; nombre: string; precio: number | null };
 
 type ItemCarrito = {
   tempId: string;
@@ -30,6 +31,7 @@ type ItemCarrito = {
   cantidad: number;
   precioUnitario: number;
   dispositivoId?: string;
+  tipo: 'dispositivo' | 'producto' | 'trabajo';
 };
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
@@ -57,7 +59,7 @@ export default function NuevaOrden() {
 
   // --- carrito ---
   const [carrito, setCarrito] = useState<ItemCarrito[]>([]);
-  const [panelAbierto, setPanelAbierto] = useState<'dispositivo' | 'producto' | null>(null);
+  const [panelAbierto, setPanelAbierto] = useState<'dispositivo' | 'producto' | 'trabajo' | null>(null);
 
   const [dispositivosStock, setDispositivosStock] = useState<Dispositivo[]>([]);
   const [buscarDispositivo, setBuscarDispositivo] = useState('');
@@ -73,6 +75,11 @@ export default function NuevaOrden() {
   const [productoManualNombre, setProductoManualNombre] = useState('');
   const [productoManualPrecio, setProductoManualPrecio] = useState('');
   const [productoManualCantidad, setProductoManualCantidad] = useState('1');
+
+  const [trabajos, setTrabajos] = useState<Trabajo[]>([]);
+  const [modoTrabajo, setModoTrabajo] = useState<'catalogo' | 'manual'>('catalogo');
+  const [trabajoManualNombre, setTrabajoManualNombre] = useState('');
+  const [trabajoManualPrecio, setTrabajoManualPrecio] = useState('');
 
   // --- confirmar ---
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
@@ -110,6 +117,10 @@ export default function NuevaOrden() {
     (async () => {
       const { data } = await supabase.from('vendedores').select('*').order('nombre');
       setVendedores((data as Vendedor[]) ?? []);
+    })();
+    (async () => {
+      const { data } = await supabase.from('trabajos').select('*').order('nombre');
+      setTrabajos((data as Trabajo[]) ?? []);
     })();
   }, []);
 
@@ -164,6 +175,7 @@ export default function NuevaOrden() {
         cantidad: 1,
         precioUnitario: d.precio ?? 0,
         dispositivoId: d.id,
+        tipo: 'dispositivo',
       },
     ]);
     setPanelAbierto(null);
@@ -202,7 +214,7 @@ export default function NuevaOrden() {
   const agregarProductoDelCatalogo = (p: Producto) => {
     setCarrito((c) => [
       ...c,
-      { tempId: idTemporal(), descripcion: p.nombre, cantidad: 1, precioUnitario: p.precio ?? 0 },
+      { tempId: idTemporal(), descripcion: p.nombre, cantidad: 1, precioUnitario: p.precio ?? 0, tipo: 'producto' },
     ]);
     setPanelAbierto(null);
   };
@@ -216,11 +228,37 @@ export default function NuevaOrden() {
         descripcion: productoManualNombre.trim(),
         cantidad: Number(productoManualCantidad) || 1,
         precioUnitario: productoManualPrecio ? Number(productoManualPrecio) : 0,
+        tipo: 'producto',
       },
     ]);
     setProductoManualNombre('');
     setProductoManualPrecio('');
     setProductoManualCantidad('1');
+    setPanelAbierto(null);
+  };
+
+  const agregarTrabajoDelCatalogo = (t: Trabajo) => {
+    setCarrito((c) => [
+      ...c,
+      { tempId: idTemporal(), descripcion: t.nombre, cantidad: 1, precioUnitario: t.precio ?? 0, tipo: 'trabajo' },
+    ]);
+    setPanelAbierto(null);
+  };
+
+  const agregarTrabajoManual = () => {
+    if (!trabajoManualNombre.trim()) return;
+    setCarrito((c) => [
+      ...c,
+      {
+        tempId: idTemporal(),
+        descripcion: trabajoManualNombre.trim(),
+        cantidad: 1,
+        precioUnitario: trabajoManualPrecio ? Number(trabajoManualPrecio) : 0,
+        tipo: 'trabajo',
+      },
+    ]);
+    setTrabajoManualNombre('');
+    setTrabajoManualPrecio('');
     setPanelAbierto(null);
   };
 
@@ -292,6 +330,7 @@ export default function NuevaOrden() {
           descripcion: i.descripcion,
           cantidad: i.cantidad,
           precio_unitario: i.precioUnitario,
+          tipo: i.tipo,
         }))
       );
       if (itemsErr) throw new Error(itemsErr.message);
@@ -405,6 +444,12 @@ export default function NuevaOrden() {
             className="flex-1 rounded-xl border border-black/15 py-3 text-sm font-medium"
           >
             + Accesorio / producto
+          </button>
+          <button
+            onClick={() => setPanelAbierto(panelAbierto === 'trabajo' ? null : 'trabajo')}
+            className="flex-1 rounded-xl border border-black/15 py-3 text-sm font-medium"
+          >
+            + Servicio técnico
           </button>
         </div>
 
@@ -567,6 +612,72 @@ export default function NuevaOrden() {
                 <button
                   disabled={!productoManualNombre.trim()}
                   onClick={agregarProductoManual}
+                  className="w-full rounded-lg bg-ink py-2 text-sm font-medium text-base disabled:opacity-40"
+                >
+                  Agregar al carrito
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {panelAbierto === 'trabajo' && (
+          <div className="rounded-xl border border-black/10 bg-white/60 p-3 flex flex-col gap-3">
+            <div className="flex items-center gap-2 text-xs">
+              <button
+                onClick={() => setModoTrabajo('catalogo')}
+                className={`flex-1 rounded-lg py-2 font-medium ${
+                  modoTrabajo === 'catalogo' ? 'bg-ink text-base' : 'border border-black/10'
+                }`}
+              >
+                Del catálogo
+              </button>
+              <button
+                onClick={() => setModoTrabajo('manual')}
+                className={`flex-1 rounded-lg py-2 font-medium ${
+                  modoTrabajo === 'manual' ? 'bg-ink text-base' : 'border border-black/10'
+                }`}
+              >
+                Cargar a mano
+              </button>
+            </div>
+
+            {modoTrabajo === 'catalogo' ? (
+              <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
+                {trabajos.length === 0 && (
+                  <p className="text-xs text-muted text-center py-2">
+                    Todavía no cargaste trabajos en Servicio Técnico.
+                  </p>
+                )}
+                {trabajos.map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => agregarTrabajoDelCatalogo(t)}
+                    className="rounded-lg border border-black/10 bg-white px-3 py-2 flex items-center justify-between text-left text-sm"
+                  >
+                    <span>{t.nombre}</span>
+                    {t.precio != null && <span className="font-medium">${t.precio.toLocaleString('es-AR')}</span>}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                <input
+                  value={trabajoManualNombre}
+                  onChange={(e) => setTrabajoManualNombre(e.target.value)}
+                  placeholder="Nombre del arreglo"
+                  className="w-full bg-white border border-black/10 rounded-lg px-3 py-2 text-sm"
+                />
+                <input
+                  value={trabajoManualPrecio}
+                  onChange={(e) => setTrabajoManualPrecio(e.target.value)}
+                  placeholder="Precio"
+                  inputMode="numeric"
+                  className="w-full bg-white border border-black/10 rounded-lg px-3 py-2 text-sm"
+                />
+                <button
+                  disabled={!trabajoManualNombre.trim()}
+                  onClick={agregarTrabajoManual}
                   className="w-full rounded-lg bg-ink py-2 text-sm font-medium text-base disabled:opacity-40"
                 >
                   Agregar al carrito

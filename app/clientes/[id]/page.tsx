@@ -15,12 +15,21 @@ type Cliente = {
   dni: string | null;
 };
 
+type Orden = {
+  id: string;
+  total: number | null;
+  estado: string;
+  created_at: string;
+  orden_items: { descripcion: string }[];
+};
+
 export default function DetalleCliente() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const supabase = crearClienteNavegador();
 
   const [c, setC] = useState<Cliente | null>(null);
+  const [ordenes, setOrdenes] = useState<Orden[]>([]);
   const [loading, setLoading] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -30,6 +39,14 @@ export default function DetalleCliente() {
       const { data } = await supabase.from('clientes').select('*').eq('id', id).single();
       setC(data as Cliente);
       setLoading(false);
+    })();
+    (async () => {
+      const { data } = await supabase
+        .from('ordenes')
+        .select('id, total, estado, created_at, orden_items ( descripcion )')
+        .eq('cliente_id', id)
+        .order('created_at', { ascending: false });
+      setOrdenes((data as any) ?? []);
     })();
   }, [id]);
 
@@ -114,6 +131,36 @@ export default function DetalleCliente() {
         <Campo label="Email" valor={c.email ?? ''} onChange={(v) => campo('email', v)} />
         <Campo label="Teléfono" valor={c.telefono ?? ''} onChange={(v) => campo('telefono', v)} />
         <Campo label="DNI" valor={c.dni ?? ''} onChange={(v) => campo('dni', v)} />
+      </div>
+
+      <div>
+        <p className="text-xs text-muted font-medium mb-2">Historial de compras</p>
+        {ordenes.length === 0 ? (
+          <p className="text-sm text-muted">Todavía no le hiciste ninguna venta a este cliente.</p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {ordenes.map((o) => (
+              <Link
+                key={o.id}
+                href={`/ordenes/${o.id}`}
+                className="rounded-xl border border-black/10 bg-white/60 px-4 py-3 flex items-center justify-between"
+              >
+                <div>
+                  <p className="text-sm font-medium">
+                    {o.orden_items.length > 0
+                      ? `${o.orden_items[0].descripcion}${o.orden_items.length > 1 ? ` +${o.orden_items.length - 1}` : ''}`
+                      : 'Orden vacía'}
+                  </p>
+                  <p className="text-xs text-muted">{new Date(o.created_at).toLocaleDateString('es-AR')}</p>
+                </div>
+                <div className="text-right">
+                  {o.total != null && <p className="text-sm font-medium">${o.total.toLocaleString('es-AR')}</p>}
+                  <p className="text-xs text-muted capitalize">{o.estado}</p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
       </div>
 
       <button
