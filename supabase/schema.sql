@@ -155,3 +155,59 @@ alter table ordenes alter column negocio_id set default negocio_actual();
 -- ============================================================
 alter table dispositivos drop column if exists codigo_interno;
 alter table dispositivos drop column if exists garantia;
+
+-- ============================================================
+-- Órdenes con carrito: vendedores, catálogo de productos/
+-- accesorios (cada negocio arma el suyo), e ítems de la orden
+-- (antes una orden apuntaba a un solo dispositivo; ahora puede
+-- tener varias líneas, sean dispositivos, productos del catálogo
+-- o ítems cargados a mano).
+-- ============================================================
+alter table negocios add column if not exists telefono text;
+alter table negocios add column if not exists direccion text;
+
+create table if not exists vendedores (
+  id uuid primary key default gen_random_uuid(),
+  negocio_id uuid not null references negocios(id) on delete cascade default negocio_actual(),
+  nombre text not null,
+  created_at timestamptz default now()
+);
+
+create table if not exists productos (
+  id uuid primary key default gen_random_uuid(),
+  negocio_id uuid not null references negocios(id) on delete cascade default negocio_actual(),
+  nombre text not null,
+  precio numeric,
+  created_at timestamptz default now()
+);
+
+alter table ordenes add column if not exists vendedor_id uuid references vendedores(id);
+alter table ordenes add column if not exists anticipo numeric default 0;
+alter table ordenes add column if not exists impuesto_porcentaje numeric default 0;
+alter table ordenes add column if not exists fecha_entrega timestamptz;
+
+create table if not exists orden_items (
+  id uuid primary key default gen_random_uuid(),
+  orden_id uuid not null references ordenes(id) on delete cascade,
+  dispositivo_id uuid references dispositivos(id),
+  descripcion text not null,
+  cantidad int not null default 1,
+  precio_unitario numeric not null default 0,
+  created_at timestamptz default now()
+);
+
+alter table vendedores enable row level security;
+alter table productos enable row level security;
+alter table orden_items enable row level security;
+
+create policy "vendedores de mi negocio" on vendedores
+  for all using (negocio_id = negocio_actual())
+  with check (negocio_id = negocio_actual());
+
+create policy "productos de mi negocio" on productos
+  for all using (negocio_id = negocio_actual())
+  with check (negocio_id = negocio_actual());
+
+create policy "items de ordenes de mi negocio" on orden_items
+  for all using (orden_id in (select id from ordenes where negocio_id = negocio_actual()))
+  with check (orden_id in (select id from ordenes where negocio_id = negocio_actual()));

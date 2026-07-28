@@ -45,7 +45,12 @@ export default async function Home() {
             <p className="text-xs text-muted leading-tight">con Qovento</p>
           </div>
         </div>
-        <BotonSalir />
+        <div className="flex items-center gap-4">
+          <Link href="/configuracion" className="text-xs text-muted underline">
+            Configuración
+          </Link>
+          <BotonSalir />
+        </div>
       </header>
 
       <div className="grid grid-cols-2 gap-3">
