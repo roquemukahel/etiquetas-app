@@ -80,6 +80,16 @@ export default function ServicioTecnico() {
     cargar();
   };
 
+  const volverADerivado = async (id: string) => {
+    if (!confirm('¿Volver a mandar este equipo a "Derivados a reparación"?')) return;
+    setGuardando(id);
+    await supabase.from('canjes').update({ estado: 'servicio_tecnico' }).eq('id', id);
+    setGuardando(null);
+    cargar();
+  };
+
+  const nombreTecnico = (tecnicoId: string | null) => tecnicos.find((t) => t.id === tecnicoId)?.nombre;
+
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
       <header className="flex items-center gap-3">
@@ -149,8 +159,15 @@ export default function ServicioTecnico() {
               </div>
             )}
 
-            {tab === 'reparados' && e.trabajos_realizados && e.trabajos_realizados.length > 0 && (
-              <p className="text-xs text-muted">Arreglo realizado: {e.trabajos_realizados.join(', ')}</p>
+            {tab === 'reparados' && (
+              <>
+                {nombreTecnico(e.tecnico_id) && (
+                  <p className="text-xs text-muted">Reparado por: {nombreTecnico(e.tecnico_id)}</p>
+                )}
+                {e.trabajos_realizados && e.trabajos_realizados.length > 0 && (
+                  <p className="text-xs text-muted">Arreglo realizado: {e.trabajos_realizados.join(', ')}</p>
+                )}
+              </>
             )}
 
             {tab === 'derivados' && (
@@ -159,6 +176,16 @@ export default function ServicioTecnico() {
                 className="rounded-lg border border-black/15 py-2 text-xs font-medium"
               >
                 {panelReparar === e.id ? 'Cancelar' : 'Marcar como reparado'}
+              </button>
+            )}
+
+            {tab === 'reparados' && (
+              <button
+                disabled={guardando === e.id}
+                onClick={() => volverADerivado(e.id)}
+                className="rounded-lg border border-black/15 py-2 text-xs font-medium disabled:opacity-40"
+              >
+                Volver a Derivados a reparación
               </button>
             )}
 
