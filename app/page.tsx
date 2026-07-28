@@ -14,7 +14,7 @@ function QMark({ size = 40 }: { size?: number }) {
 const SECCIONES = [
   { href: '/nueva-etiqueta', titulo: 'Nueva etiqueta', desc: 'Fotografiá el IMEI y generá la etiqueta', activo: true },
   { href: '/stock', titulo: 'Stock', desc: 'Dispositivos disponibles en tu local', activo: true },
-  { href: '#', titulo: 'Clientes', desc: 'Tu base de clientes', activo: false },
+  { href: '/clientes', titulo: 'Clientes', desc: 'Tu base de clientes', activo: true },
   { href: '#', titulo: 'Órdenes', desc: 'Ventas, boletas y canjes', activo: false },
 ];
 
