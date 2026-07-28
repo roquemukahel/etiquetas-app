@@ -39,29 +39,13 @@ export default function Registro() {
       return;
     }
 
-    // Creamos el negocio y lo vinculamos al usuario recién creado
-    const { data: negocio, error: negocioError } = await supabase
-      .from('negocios')
-      .insert({ nombre: nombreNegocio })
-      .select()
-      .single();
+    // Creamos el negocio y el perfil juntos, en un solo paso seguro
+    const { data: negocioId, error: rpcError } = await supabase.rpc('crear_negocio_y_perfil', {
+      nombre_negocio: nombreNegocio,
+    });
 
-    if (negocioError || !negocio) {
-      setError(
-        `La cuenta se creó, pero hubo un problema configurando el negocio: ${
-          negocioError?.message || 'sin negocio'
-        }`
-      );
-      setCargando(false);
-      return;
-    }
-
-    const { error: perfilError } = await supabase
-      .from('perfiles')
-      .insert({ id: authData.user.id, negocio_id: negocio.id });
-
-    if (perfilError) {
-      setError(`La cuenta y el negocio se crearon, pero falló el perfil: ${perfilError.message}`);
+    if (rpcError || !negocioId) {
+      setError(`La cuenta se creó, pero hubo un problema configurando el negocio: ${rpcError?.message || 'sin datos'}`);
       setCargando(false);
       return;
     }

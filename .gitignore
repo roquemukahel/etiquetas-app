@@ -4,3 +4,5 @@ out/
 public/sw.js
 public/workbox-*.js
 .DS_Store
+CONTEXTO-QOVENTO.md
+.claude/

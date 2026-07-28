@@ -106,3 +106,33 @@ create policy "clientes de mi negocio" on clientes
 create policy "ordenes de mi negocio" on ordenes
   for all using (negocio_id = negocio_actual())
   with check (negocio_id = negocio_actual());
+
+-- ============================================================
+-- Función para crear el negocio + perfil juntos al registrarse.
+-- Evita el problema de "orden": la política para VER un negocio
+-- necesita que el perfil ya exista, pero el perfil se crea recién
+-- después de crear el negocio. Esta función hace las dos cosas
+-- en un solo paso interno, sin pasar por esa restricción.
+-- ============================================================
+create or replace function crear_negocio_y_perfil(nombre_negocio text)
+returns uuid
+language plpgsql
+security definer
+as $$
+declare
+  nuevo_negocio_id uuid;
+begin
+  if auth.uid() is null then
+    raise exception 'No autenticado';
+  end if;
+
+  if exists (select 1 from perfiles where id = auth.uid()) then
+    raise exception 'Ya tenés un negocio configurado';
+  end if;
+
+  insert into negocios (nombre) values (nombre_negocio) returning id into nuevo_negocio_id;
+  insert into perfiles (id, negocio_id) values (auth.uid(), nuevo_negocio_id);
+
+  return nuevo_negocio_id;
+end;
+$$;
