@@ -4,6 +4,9 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../lib/supabase/client';
+import Turnstile from '../Turnstile';
+
+const REQUIERE_CAPTCHA = !!process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
 export default function Registro() {
   const router = useRouter();
@@ -12,6 +15,7 @@ export default function Registro() {
   const [nombreNegocio, setNombreNegocio] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [captchaToken, setCaptchaToken] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [cargando, setCargando] = useState(false);
 
@@ -23,6 +27,7 @@ export default function Registro() {
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
       password,
+      options: captchaToken ? { captchaToken } : undefined,
     });
 
     if (authError || !authData.user) {
@@ -99,8 +104,10 @@ export default function Registro() {
           />
         </div>
 
+        <Turnstile onVerify={setCaptchaToken} />
+
         <button
-          disabled={cargando}
+          disabled={cargando || (REQUIERE_CAPTCHA && !captchaToken)}
           className="mt-2 w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
         >
           {cargando ? 'Creando...' : 'Crear cuenta'}
