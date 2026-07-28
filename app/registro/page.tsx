@@ -4,7 +4,6 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../lib/supabase/client';
-import QMark from '../QMark';
 
 export default function Registro() {
   const router = useRouter();
@@ -58,9 +57,8 @@ export default function Registro() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center px-6 py-10">
       <div className="flex flex-col items-center gap-3 mb-6">
-        <div className="h-20 w-20 rounded-2xl bg-accent-soft flex items-center justify-center">
-          <QMark size={48} />
-        </div>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/qovento-logo.png" alt="Qovento" className="h-11 w-auto object-contain" />
         <h1 className="text-2xl font-display font-semibold">Creá tu cuenta</h1>
       </div>
 

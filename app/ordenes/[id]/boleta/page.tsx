@@ -366,6 +366,12 @@ export default function Boleta() {
           <div className="w-56 border-t border-border" />
           <p className="text-sm text-muted">Nombre y firma del cliente</p>
         </div>
+
+        <div className="flex items-center justify-center gap-1.5 pt-2 opacity-60">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/qovento-icon.png" alt="" className="h-3.5 w-3.5 object-contain" />
+          <span className="text-[11px] text-muted">Hecho con Qovento</span>
+        </div>
       </div>
 
       <style jsx global>{`

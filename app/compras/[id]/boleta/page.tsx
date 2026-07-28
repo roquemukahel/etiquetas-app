@@ -179,6 +179,12 @@ export default function BoletaCompra() {
           <div className="w-64 border-t border-border mt-4" />
           <p className="text-sm text-muted">DNI</p>
         </div>
+
+        <div className="flex items-center justify-center gap-1.5 pt-2 opacity-60">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/qovento-icon.png" alt="" className="h-3.5 w-3.5 object-contain" />
+          <span className="text-[11px] text-muted">Hecho con Qovento</span>
+        </div>
       </div>
 
       <style jsx global>{`
