@@ -7,15 +7,17 @@ import { crearClienteNavegador } from '../../lib/supabase/client';
 
 const ESTADOS = ['pendiente', 'pagado', 'entregado'];
 
+type Item = { descripcion: string; cantidad: number; precio_unitario: number; dispositivo_id: string | null };
+
 type Orden = {
   id: string;
   forma_pago: string | null;
   total: number | null;
   estado: string;
   created_at: string;
-  dispositivo_id: string | null;
   clientes: { nombre: string; apellido: string | null; telefono: string | null } | null;
-  dispositivos: { modelo: string | null; capacidad_gb: number | null; imei: string | null } | null;
+  vendedores: { nombre: string } | null;
+  orden_items: Item[];
 };
 
 export default function DetalleOrden() {
@@ -32,7 +34,9 @@ export default function DetalleOrden() {
     (async () => {
       const { data } = await supabase
         .from('ordenes')
-        .select('*, clientes ( nombre, apellido, telefono ), dispositivos ( modelo, capacidad_gb, imei )')
+        .select(
+          '*, clientes ( nombre, apellido, telefono ), vendedores ( nombre ), orden_items ( descripcion, cantidad, precio_unitario, dispositivo_id )'
+        )
         .eq('id', id)
         .single();
       setOrden(data as any);
@@ -44,7 +48,10 @@ export default function DetalleOrden() {
     if (!orden) return;
     setGuardando(true);
     setError(null);
-    const { error: updateError } = await supabase.from('ordenes').update({ estado: nuevoEstado }).eq('id', id);
+    const { error: updateError } = await supabase
+      .from('ordenes')
+      .update({ estado: nuevoEstado, fecha_entrega: nuevoEstado === 'entregado' ? new Date().toISOString() : null })
+      .eq('id', id);
     if (updateError) {
       setError('No pudimos actualizar el estado: ' + updateError.message);
       setGuardando(false);
@@ -56,12 +63,13 @@ export default function DetalleOrden() {
 
   const handleCancelar = async () => {
     if (!orden) return;
-    if (!confirm('¿Cancelar esta orden? El dispositivo vuelve a aparecer en stock.')) return;
+    if (!confirm('¿Cancelar esta orden? Los dispositivos vuelven a aparecer en stock.')) return;
     setGuardando(true);
     setError(null);
 
-    if (orden.dispositivo_id) {
-      await supabase.from('dispositivos').update({ en_stock: true }).eq('id', orden.dispositivo_id);
+    const dispositivoIds = orden.orden_items.map((i) => i.dispositivo_id).filter(Boolean) as string[];
+    if (dispositivoIds.length > 0) {
+      await supabase.from('dispositivos').update({ en_stock: true }).in('id', dispositivoIds);
     }
     const { error: deleteError } = await supabase.from('ordenes').delete().eq('id', id);
     if (deleteError) {
@@ -98,7 +106,7 @@ export default function DetalleOrden() {
         <Link href="/ordenes" className="text-2xl leading-none">
           &larr;
         </Link>
-        <span className="text-lg font-medium">{orden.dispositivos?.modelo || 'Orden'}</span>
+        <span className="text-lg font-medium">Orden</span>
       </header>
 
       {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
@@ -113,13 +121,9 @@ export default function DetalleOrden() {
             <span className="text-muted">Teléfono:</span> {orden.clientes.telefono}
           </p>
         )}
-        <p>
-          <span className="text-muted">Dispositivo:</span> {orden.dispositivos?.modelo}
-          {orden.dispositivos?.capacidad_gb ? ` · ${orden.dispositivos.capacidad_gb}GB` : ''}
-        </p>
-        {orden.dispositivos?.imei && (
+        {orden.vendedores?.nombre && (
           <p>
-            <span className="text-muted">IMEI:</span> <span className="font-mono">{orden.dispositivos.imei}</span>
+            <span className="text-muted">Vendedor:</span> {orden.vendedores.nombre}
           </p>
         )}
         <p>
@@ -131,6 +135,27 @@ export default function DetalleOrden() {
           </p>
         )}
       </div>
+
+      <div className="flex flex-col gap-2">
+        {orden.orden_items.map((i, idx) => (
+          <div
+            key={idx}
+            className="rounded-xl border border-black/10 bg-white/60 px-4 py-3 flex items-center justify-between text-sm"
+          >
+            <span>
+              {i.descripcion} × {i.cantidad}
+            </span>
+            <span className="font-medium">${(i.cantidad * i.precio_unitario).toLocaleString('es-AR')}</span>
+          </div>
+        ))}
+      </div>
+
+      <Link
+        href={`/ordenes/${orden.id}/boleta`}
+        className="w-full rounded-2xl border border-black/15 py-3 text-center text-sm font-medium"
+      >
+        Ver boleta
+      </Link>
 
       <div>
         <label className="text-xs text-muted block mb-1">Estado</label>

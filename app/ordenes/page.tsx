@@ -11,7 +11,7 @@ type Orden = {
   estado: string;
   created_at: string;
   clientes: { nombre: string; apellido: string | null } | null;
-  dispositivos: { modelo: string | null } | null;
+  orden_items: { descripcion: string }[];
 };
 
 const ESTADOS = ['todas', 'pendiente', 'pagado', 'entregado'];
@@ -26,7 +26,7 @@ export default function Ordenes() {
     (async () => {
       const { data } = await supabase
         .from('ordenes')
-        .select('*, clientes ( nombre, apellido ), dispositivos ( modelo )')
+        .select('*, clientes ( nombre, apellido ), orden_items ( descripcion )')
         .order('created_at', { ascending: false });
       setOrdenes((data as any) ?? []);
       setLoading(false);
@@ -82,7 +82,11 @@ export default function Ordenes() {
             className="rounded-xl border border-black/10 bg-white/60 px-4 py-3 flex items-center justify-between"
           >
             <div>
-              <p className="text-sm font-medium">{o.dispositivos?.modelo || 'Dispositivo'}</p>
+              <p className="text-sm font-medium">
+                {o.orden_items.length > 0
+                  ? `${o.orden_items[0].descripcion}${o.orden_items.length > 1 ? ` +${o.orden_items.length - 1}` : ''}`
+                  : 'Orden vacía'}
+              </p>
               <p className="text-xs text-muted">
                 {o.clientes ? `${o.clientes.nombre} ${o.clientes.apellido || ''}` : 'Sin cliente'}
               </p>
