@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
+import { asegurarModelo } from '../../lib/modelos';
 
 type Dispositivo = {
   id: string;
@@ -62,6 +63,7 @@ export default function NuevaOrden() {
   const [panelAbierto, setPanelAbierto] = useState<'dispositivo' | 'producto' | 'trabajo' | null>(null);
 
   const [dispositivosStock, setDispositivosStock] = useState<Dispositivo[]>([]);
+  const [carpetasStock, setCarpetasStock] = useState<string[]>([]);
   const [buscarDispositivo, setBuscarDispositivo] = useState('');
   const [modoDispositivo, setModoDispositivo] = useState<'stock' | 'nuevo'>('stock');
   const [nuevoModelo, setNuevoModelo] = useState('');
@@ -121,6 +123,10 @@ export default function NuevaOrden() {
     (async () => {
       const { data } = await supabase.from('trabajos').select('*').order('nombre');
       setTrabajos((data as Trabajo[]) ?? []);
+    })();
+    (async () => {
+      const { data } = await supabase.from('modelos_stock').select('nombre').order('nombre');
+      setCarpetasStock((data ?? []).map((m) => m.nombre));
     })();
   }, []);
 
@@ -203,6 +209,7 @@ export default function NuevaOrden() {
       setError('No pudimos cargar el dispositivo: ' + (dErr?.message || ''));
       return;
     }
+    await asegurarModelo(supabase, nuevoModelo);
     setDispositivosStock((s) => [...s, data as Dispositivo]);
     agregarDispositivoDelStock(data as Dispositivo);
     setNuevoModelo('');
@@ -509,8 +516,14 @@ export default function NuevaOrden() {
                   value={nuevoModelo}
                   onChange={(e) => setNuevoModelo(e.target.value)}
                   placeholder="Modelo (ej. iPhone 13)"
+                  list="carpetas-stock"
                   className="w-full bg-white border border-border rounded-lg px-3 py-2 text-sm"
                 />
+                <datalist id="carpetas-stock">
+                  {carpetasStock.map((c) => (
+                    <option key={c} value={c} />
+                  ))}
+                </datalist>
                 <div className="flex gap-2">
                   {STORAGE_OPTIONS.map((gb) => (
                     <button

@@ -1,15 +1,7 @@
 import Link from 'next/link';
 import { crearClienteServidor } from './lib/supabase/server';
 import BotonSalir from './BotonSalir';
-
-function QMark({ size = 40 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 100 100" fill="none" aria-hidden="true">
-      <circle cx="50" cy="50" r="34" stroke="#0F172A" strokeWidth="9" />
-      <line x1="67" y1="67" x2="86" y2="86" stroke="#0F172A" strokeWidth="9" strokeLinecap="round" />
-    </svg>
-  );
-}
+import QMark from './QMark';
 
 function IconoBase({ children }: { children: React.ReactNode }) {
   return (
@@ -63,12 +55,12 @@ const ICONOS: Record<string, React.ReactNode> = {
 };
 
 const SECCIONES = [
-  { href: '/nueva-etiqueta', titulo: 'Nueva etiqueta', desc: 'Fotografiá el IMEI y generá la etiqueta', icono: 'etiqueta', activo: true },
+  { href: '/ordenes', titulo: 'Órdenes', desc: 'Ventas, boletas y canjes', icono: 'ordenes', activo: true },
   { href: '/stock', titulo: 'Stock', desc: 'Dispositivos disponibles en tu local', icono: 'stock', activo: true },
   { href: '/clientes', titulo: 'Clientes', desc: 'Tu base de clientes', icono: 'clientes', activo: true },
-  { href: '/ordenes', titulo: 'Órdenes', desc: 'Ventas, boletas y canjes', icono: 'ordenes', activo: true },
   { href: '/canje', titulo: 'Plan Canje', desc: 'Dispositivos recibidos como parte de pago', icono: 'canje', activo: true },
   { href: '/servicio-tecnico', titulo: 'Servicio Técnico', desc: 'Equipos derivados a reparación', icono: 'servicio', activo: true },
+  { href: '/nueva-etiqueta', titulo: 'Nueva etiqueta', desc: 'Fotografiá el IMEI y generá la etiqueta', icono: 'etiqueta', activo: true },
 ];
 
 export default async function Home() {

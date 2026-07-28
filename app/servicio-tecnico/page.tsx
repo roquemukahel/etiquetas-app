@@ -3,6 +3,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../lib/supabase/client';
+import { asegurarModelo } from '../lib/modelos';
+
+const STORAGE_OPTIONS = [64, 128, 256, 512];
 
 type Tecnico = { id: string; nombre: string };
 type Trabajo = { id: string; nombre: string };
@@ -29,6 +32,14 @@ export default function ServicioTecnico() {
   const [panelReparar, setPanelReparar] = useState<string | null>(null);
   const [seleccionTrabajos, setSeleccionTrabajos] = useState<string[]>([]);
 
+  const [carpetasStock, setCarpetasStock] = useState<string[]>([]);
+  const [panelNuevo, setPanelNuevo] = useState(false);
+  const [nuevoModelo, setNuevoModelo] = useState('');
+  const [nuevaCapacidad, setNuevaCapacidad] = useState<number | null>(null);
+  const [nuevoColor, setNuevoColor] = useState('');
+  const [nuevoDetalles, setNuevoDetalles] = useState('');
+  const [guardandoNuevo, setGuardandoNuevo] = useState(false);
+
   const cargar = async () => {
     const { data } = await supabase
       .from('canjes')
@@ -49,12 +60,35 @@ export default function ServicioTecnico() {
       const { data } = await supabase.from('trabajos').select('id, nombre').order('nombre');
       setTrabajos((data as Trabajo[]) ?? []);
     })();
+    (async () => {
+      const { data } = await supabase.from('modelos_stock').select('nombre').order('nombre');
+      setCarpetasStock((data ?? []).map((m) => m.nombre));
+    })();
   }, []);
 
   const filtrados = useMemo(
     () => equipos.filter((e) => (tab === 'derivados' ? e.estado === 'servicio_tecnico' : e.estado === 'reparado')),
     [equipos, tab]
   );
+
+  const agregarEquipo = async () => {
+    if (!nuevoModelo.trim()) return;
+    setGuardandoNuevo(true);
+    await supabase.from('canjes').insert({
+      modelo: nuevoModelo.trim(),
+      capacidad_gb: nuevaCapacidad,
+      color: nuevoColor.trim() || null,
+      detalles: nuevoDetalles.trim() || null,
+      estado: 'servicio_tecnico',
+    });
+    setNuevoModelo('');
+    setNuevaCapacidad(null);
+    setNuevoColor('');
+    setNuevoDetalles('');
+    setPanelNuevo(false);
+    setGuardandoNuevo(false);
+    cargar();
+  };
 
   const asignarTecnico = async (id: string, tecnicoId: string) => {
     setGuardando(id);
@@ -84,6 +118,22 @@ export default function ServicioTecnico() {
     if (!confirm('¿Volver a mandar este equipo a "Derivados a reparación"?')) return;
     setGuardando(id);
     await supabase.from('canjes').update({ estado: 'servicio_tecnico' }).eq('id', id);
+    setGuardando(null);
+    cargar();
+  };
+
+  const agregarAlStock = async (e: Equipo) => {
+    if (!confirm('¿Pasar este equipo al Stock como dispositivo disponible para vender?')) return;
+    setGuardando(e.id);
+    await supabase.from('dispositivos').insert({
+      modelo: e.modelo,
+      capacidad_gb: e.capacidad_gb,
+      color: e.color,
+      estado: 'usado',
+      en_stock: true,
+    });
+    await asegurarModelo(supabase, e.modelo);
+    await supabase.from('canjes').delete().eq('id', e.id);
     setGuardando(null);
     cargar();
   };
@@ -121,11 +171,72 @@ export default function ServicioTecnico() {
         </button>
       </div>
 
+      {tab === 'derivados' && (
+        <>
+          <button
+            onClick={() => setPanelNuevo((v) => !v)}
+            className="w-full rounded-xl border border-border py-3 text-center text-sm font-medium"
+          >
+            {panelNuevo ? 'Cancelar' : '+ Agregar equipo'}
+          </button>
+
+          {panelNuevo && (
+            <div className="rounded-xl border border-border bg-white shadow-card p-3 flex flex-col gap-2">
+              <input
+                value={nuevoModelo}
+                onChange={(e) => setNuevoModelo(e.target.value)}
+                placeholder="Modelo (ej. iPhone 13)"
+                list="carpetas-stock-servicio"
+                className="w-full bg-canvas border border-border rounded-lg px-3 py-2 text-sm"
+              />
+              <datalist id="carpetas-stock-servicio">
+                {carpetasStock.map((c) => (
+                  <option key={c} value={c} />
+                ))}
+              </datalist>
+              <div className="flex gap-2">
+                {STORAGE_OPTIONS.map((gb) => (
+                  <button
+                    key={gb}
+                    onClick={() => setNuevaCapacidad(gb)}
+                    className={`flex-1 rounded-lg py-2 text-xs font-medium ${
+                      nuevaCapacidad === gb ? 'bg-accent text-white' : 'border border-border'
+                    }`}
+                  >
+                    {gb}GB
+                  </button>
+                ))}
+              </div>
+              <input
+                value={nuevoColor}
+                onChange={(e) => setNuevoColor(e.target.value)}
+                placeholder="Color"
+                className="w-full bg-canvas border border-border rounded-lg px-3 py-2 text-sm"
+              />
+              <textarea
+                value={nuevoDetalles}
+                onChange={(e) => setNuevoDetalles(e.target.value)}
+                placeholder="Detalles (ej. no enciende, pantalla rota)"
+                rows={2}
+                className="w-full bg-canvas border border-border rounded-lg px-3 py-2 text-sm"
+              />
+              <button
+                disabled={!nuevoModelo.trim() || guardandoNuevo}
+                onClick={agregarEquipo}
+                className="rounded-lg bg-accent hover:bg-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
+              >
+                {guardandoNuevo ? 'Agregando...' : 'Agregar a Servicio Técnico'}
+              </button>
+            </div>
+          )}
+        </>
+      )}
+
       {loading && <p className="text-sm text-muted text-center mt-6">Cargando...</p>}
       {!loading && filtrados.length === 0 && (
         <p className="text-sm text-muted text-center mt-6">
           {tab === 'derivados'
-            ? 'No hay equipos derivados a reparación. Se envían desde Plan Canje.'
+            ? 'No hay equipos derivados a reparación. Se envían desde Plan Canje o se agregan acá directamente.'
             : 'Todavía no marcaste ningún equipo como reparado.'}
         </p>
       )}
@@ -180,13 +291,22 @@ export default function ServicioTecnico() {
             )}
 
             {tab === 'reparados' && (
-              <button
-                disabled={guardando === e.id}
-                onClick={() => volverADerivado(e.id)}
-                className="rounded-lg border border-border py-2 text-xs font-medium disabled:opacity-40"
-              >
-                Volver a Derivados a reparación
-              </button>
+              <div className="flex gap-2">
+                <button
+                  disabled={guardando === e.id}
+                  onClick={() => volverADerivado(e.id)}
+                  className="flex-1 rounded-lg border border-border py-2 text-xs font-medium disabled:opacity-40"
+                >
+                  Volver a Derivados
+                </button>
+                <button
+                  disabled={guardando === e.id}
+                  onClick={() => agregarAlStock(e)}
+                  className="flex-1 rounded-lg bg-accent hover:bg-accent-hover transition-colors py-2 text-xs font-medium text-white disabled:opacity-40"
+                >
+                  Agregar al Stock
+                </button>
+              </div>
             )}
 
             {panelReparar === e.id && (

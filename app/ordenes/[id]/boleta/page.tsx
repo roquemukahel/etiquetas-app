@@ -214,7 +214,7 @@ export default function Boleta() {
             {negocio?.telefono && <p className="text-muted">{negocio.telefono}</p>}
             {negocio?.direccion && <p className="text-muted">{negocio.direccion}</p>}
             {(negocio?.mostrar_instagram || negocio?.mostrar_facebook || negocio?.mostrar_tiktok) && (
-              <div className="flex flex-col gap-0.5 mt-1 text-muted">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-muted">
                 {negocio.mostrar_instagram && negocio.instagram && (
                   <span className="flex items-center gap-1.5">
                     <IconoInstagram /> {negocio.instagram}

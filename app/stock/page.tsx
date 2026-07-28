@@ -21,6 +21,7 @@ type Dispositivo = {
 export default function Stock() {
   const supabase = crearClienteNavegador();
   const [dispositivos, setDispositivos] = useState<Dispositivo[]>([]);
+  const [carpetas, setCarpetas] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState('');
   const [verTodos, setVerTodos] = useState(false);
@@ -34,6 +35,10 @@ export default function Stock() {
         .order('created_at', { ascending: false });
       setDispositivos((data as Dispositivo[]) ?? []);
       setLoading(false);
+    })();
+    (async () => {
+      const { data } = await supabase.from('modelos_stock').select('nombre').order('nombre');
+      setCarpetas((data ?? []).map((m) => m.nombre));
     })();
   }, []);
 
@@ -50,13 +55,16 @@ export default function Stock() {
 
   const grupos = useMemo(() => {
     const mapa = new Map<string, Dispositivo[]>();
+    if (!busqueda.trim()) {
+      for (const nombre of carpetas) mapa.set(nombre, []);
+    }
     for (const d of filtrados) {
       const clave = d.modelo || 'Sin modelo';
       if (!mapa.has(clave)) mapa.set(clave, []);
       mapa.get(clave)!.push(d);
     }
-    return Array.from(mapa.entries());
-  }, [filtrados]);
+    return Array.from(mapa.entries()).sort(([a], [b]) => a.localeCompare(b));
+  }, [filtrados, carpetas, busqueda]);
 
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
@@ -64,7 +72,10 @@ export default function Stock() {
         <Link href="/" className="text-2xl leading-none">
           &larr;
         </Link>
-        <span className="text-lg font-medium">Stock</span>
+        <span className="text-lg font-medium mr-auto">Stock</span>
+        <Link href="/stock/carpetas" className="text-xs text-accent underline">
+          Carpetas
+        </Link>
       </header>
 
       <input
@@ -114,6 +125,9 @@ export default function Stock() {
             <p className="text-xs text-muted font-medium">
               {modelo} · {items.length}
             </p>
+            {items.length === 0 && (
+              <p className="text-xs text-muted italic">Carpeta vacía, todavía sin dispositivos.</p>
+            )}
             <div className="flex flex-col gap-2">
               {items.map((d) => (
                 <Link

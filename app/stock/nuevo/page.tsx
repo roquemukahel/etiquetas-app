@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
+import { asegurarModelo } from '../../lib/modelos';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 const ESTADOS = ['usado', 'sellado'];
@@ -11,6 +12,14 @@ const ESTADOS = ['usado', 'sellado'];
 export default function NuevoDispositivo() {
   const router = useRouter();
   const supabase = crearClienteNavegador();
+
+  const [carpetas, setCarpetas] = useState<string[]>([]);
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.from('modelos_stock').select('nombre').order('nombre');
+      setCarpetas((data ?? []).map((m) => m.nombre));
+    })();
+  }, []);
 
   const [modelo, setModelo] = useState('');
   const [capacidad, setCapacidad] = useState<number | null>(null);
@@ -46,6 +55,8 @@ export default function NuevoDispositivo() {
       return;
     }
 
+    await asegurarModelo(supabase, modelo);
+
     router.push('/stock');
     router.refresh();
   };
@@ -62,7 +73,12 @@ export default function NuevoDispositivo() {
       {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
 
       <div className="flex flex-col gap-3">
-        <Campo label="Modelo" valor={modelo} onChange={setModelo} placeholder="iPhone 13" />
+        <Campo label="Modelo (carpeta)" valor={modelo} onChange={setModelo} placeholder="iPhone 13" listaId="carpetas-stock" />
+        <datalist id="carpetas-stock">
+          {carpetas.map((c) => (
+            <option key={c} value={c} />
+          ))}
+        </datalist>
 
         <div>
           <label className="text-xs text-muted block mb-1">Almacenamiento</label>
@@ -124,6 +140,7 @@ function Campo({
   mono,
   numerico,
   placeholder,
+  listaId,
 }: {
   label: string;
   valor: string;
@@ -131,6 +148,7 @@ function Campo({
   mono?: boolean;
   numerico?: boolean;
   placeholder?: string;
+  listaId?: string;
 }) {
   return (
     <div>
@@ -139,6 +157,7 @@ function Campo({
         value={valor}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
+        list={listaId}
         inputMode={numerico ? 'numeric' : undefined}
         className={`w-full bg-white border border-border rounded-xl px-4 py-3 text-sm ${mono ? 'font-mono' : ''}`}
       />

@@ -300,3 +300,20 @@ alter table negocios add column if not exists mostrar_tiktok boolean not null de
 -- los montos en la boleta).
 -- ============================================================
 alter table negocios add column if not exists moneda text not null default 'ARS';
+
+-- ============================================================
+-- Carpetas de Stock (por modelo): existen independientemente de
+-- que tengan dispositivos cargados o no, para poder crearlas,
+-- renombrarlas o eliminarlas sin depender del stock actual.
+-- ============================================================
+create table if not exists modelos_stock (
+  id uuid primary key default gen_random_uuid(),
+  negocio_id uuid not null references negocios(id) on delete cascade default negocio_actual(),
+  nombre text not null,
+  created_at timestamptz default now()
+);
+
+alter table modelos_stock enable row level security;
+create policy "modelos de mi negocio" on modelos_stock
+  for all using (negocio_id = negocio_actual())
+  with check (negocio_id = negocio_actual());

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
+import { asegurarModelo } from '../../lib/modelos';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 const ESTADOS = ['usado', 'sellado'];
@@ -27,6 +28,7 @@ export default function DetalleDispositivo() {
   const supabase = crearClienteNavegador();
 
   const [d, setD] = useState<Dispositivo | null>(null);
+  const [carpetas, setCarpetas] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,6 +38,10 @@ export default function DetalleDispositivo() {
       const { data } = await supabase.from('dispositivos').select('*').eq('id', id).single();
       setD(data as Dispositivo);
       setLoading(false);
+    })();
+    (async () => {
+      const { data } = await supabase.from('modelos_stock').select('nombre').order('nombre');
+      setCarpetas((data ?? []).map((m) => m.nombre));
     })();
   }, [id]);
 
@@ -66,6 +72,8 @@ export default function DetalleDispositivo() {
       setGuardando(false);
       return;
     }
+
+    await asegurarModelo(supabase, d.modelo);
 
     router.push('/stock');
     router.refresh();
@@ -124,7 +132,12 @@ export default function DetalleDispositivo() {
       </button>
 
       <div className="flex flex-col gap-3">
-        <Campo label="Modelo" valor={d.modelo ?? ''} onChange={(v) => campo('modelo', v)} />
+        <Campo label="Modelo (carpeta)" valor={d.modelo ?? ''} onChange={(v) => campo('modelo', v)} listaId="carpetas-stock" />
+        <datalist id="carpetas-stock">
+          {carpetas.map((c) => (
+            <option key={c} value={c} />
+          ))}
+        </datalist>
 
         <div>
           <label className="text-xs text-muted block mb-1">Almacenamiento</label>
@@ -202,12 +215,14 @@ function Campo({
   onChange,
   mono,
   numerico,
+  listaId,
 }: {
   label: string;
   valor: string;
   onChange: (v: string) => void;
   mono?: boolean;
   numerico?: boolean;
+  listaId?: string;
 }) {
   return (
     <div>
@@ -216,6 +231,7 @@ function Campo({
         value={valor}
         onChange={(e) => onChange(e.target.value)}
         inputMode={numerico ? 'numeric' : undefined}
+        list={listaId}
         className={`w-full bg-white border border-border rounded-xl px-4 py-3 text-sm ${mono ? 'font-mono' : ''}`}
       />
     </div>

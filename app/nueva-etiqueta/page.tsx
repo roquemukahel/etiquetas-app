@@ -5,6 +5,7 @@ import Link from 'next/link';
 import Etiqueta from './Etiqueta';
 import { getLogo, setLogo as guardarLogo } from '../lib/logo';
 import { crearClienteNavegador } from '../lib/supabase/client';
+import { asegurarModelo } from '../lib/modelos';
 
 type ExtractedData = {
   modelo: string | null;
@@ -150,6 +151,7 @@ export default function NuevaEtiqueta() {
         estado: 'usado',
         en_stock: true,
       });
+      await asegurarModelo(supabase, datos.modelo);
       setGuardandoStock(false);
     }
     setStep('etiqueta');
