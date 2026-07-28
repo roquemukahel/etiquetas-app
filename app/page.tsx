@@ -52,10 +52,19 @@ const ICONOS: Record<string, React.ReactNode> = {
       <path d="M14.7 6.3a4 4 0 0 1-5.4 5.4L4 17l3 3 5.3-5.3a4 4 0 0 1 5.4-5.4L14.7 6.3Z" />
     </IconoBase>
   ),
+  compra: (
+    <IconoBase>
+      <path d="M3 6h18" />
+      <path d="M8 6V4h8v2" />
+      <path d="M5 6l1 14h12l1-14" />
+      <path d="M12 10v6M9.5 12.5h5" />
+    </IconoBase>
+  ),
 };
 
 const SECCIONES = [
   { href: '/ordenes', titulo: 'Órdenes', desc: 'Ventas, boletas y canjes', icono: 'ordenes', activo: true },
+  { href: '/compras', titulo: 'Compra de dispositivos', desc: 'Cuando le comprás un celular a alguien', icono: 'compra', activo: true },
   { href: '/stock', titulo: 'Stock', desc: 'Dispositivos disponibles en tu local', icono: 'stock', activo: true },
   { href: '/clientes', titulo: 'Clientes', desc: 'Tu base de clientes', icono: 'clientes', activo: true },
   { href: '/canje', titulo: 'Plan Canje', desc: 'Dispositivos recibidos como parte de pago', icono: 'canje', activo: true },

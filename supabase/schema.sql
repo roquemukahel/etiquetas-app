@@ -317,3 +317,27 @@ alter table modelos_stock enable row level security;
 create policy "modelos de mi negocio" on modelos_stock
   for all using (negocio_id = negocio_actual())
   with check (negocio_id = negocio_actual());
+
+-- ============================================================
+-- Compra de dispositivos: cuando el local le compra un celular a
+-- una persona (no una venta). Genera su propia boleta, sin opción
+-- de WhatsApp, con un texto de declaración configurable y espacio
+-- para firma/aclaración/DNI de quien vende.
+-- ============================================================
+create table if not exists compras (
+  id uuid primary key default gen_random_uuid(),
+  negocio_id uuid not null references negocios(id) on delete cascade default negocio_actual(),
+  cliente_id uuid references clientes(id),
+  modelo text,
+  capacidad_gb int,
+  detalles text,
+  precio numeric,
+  created_at timestamptz default now()
+);
+
+alter table compras enable row level security;
+create policy "compras de mi negocio" on compras
+  for all using (negocio_id = negocio_actual())
+  with check (negocio_id = negocio_actual());
+
+alter table negocios add column if not exists texto_declaracion_compra text;

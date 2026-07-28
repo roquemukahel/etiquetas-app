@@ -104,12 +104,20 @@ export default function Stock() {
         </button>
       </div>
 
-      <Link
-        href="/stock/nuevo"
-        className="w-full rounded-2xl border border-border py-3 text-center text-sm font-medium"
-      >
-        + Cargar dispositivo a mano
-      </Link>
+      <div className="flex gap-2">
+        <Link
+          href="/stock/nuevo"
+          className="flex-1 rounded-2xl border border-border py-3 text-center text-sm font-medium"
+        >
+          + Cargar a mano
+        </Link>
+        <Link
+          href="/stock/foto"
+          className="flex-1 rounded-2xl border border-border py-3 text-center text-sm font-medium"
+        >
+          + Cargar con foto
+        </Link>
+      </div>
 
       {loading && <p className="text-sm text-muted text-center mt-6">Cargando...</p>}
 

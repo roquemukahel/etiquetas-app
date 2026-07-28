@@ -21,6 +21,7 @@ type Negocio = {
   mostrar_facebook: boolean;
   mostrar_tiktok: boolean;
   moneda: string;
+  texto_declaracion_compra: string | null;
 };
 
 export default function DatosNegocio() {
@@ -41,7 +42,7 @@ export default function DatosNegocio() {
       const { data: perfil } = await supabase
         .from('perfiles')
         .select(
-          'negocio_id, negocios ( id, nombre, telefono, direccion, logo_url, texto_garantia, texto_garantia_servicio, instagram, facebook, tiktok, mostrar_instagram, mostrar_facebook, mostrar_tiktok, moneda )'
+          'negocio_id, negocios ( id, nombre, telefono, direccion, logo_url, texto_garantia, texto_garantia_servicio, instagram, facebook, tiktok, mostrar_instagram, mostrar_facebook, mostrar_tiktok, moneda, texto_declaracion_compra )'
         )
         .eq('id', user.id)
         .single();
@@ -82,6 +83,7 @@ export default function DatosNegocio() {
         mostrar_facebook: negocio.mostrar_facebook,
         mostrar_tiktok: negocio.mostrar_tiktok,
         moneda: negocio.moneda,
+        texto_declaracion_compra: negocio.texto_declaracion_compra?.trim() || null,
       })
       .eq('id', negocio.id);
 
@@ -177,6 +179,19 @@ export default function DatosNegocio() {
             value={negocio.texto_garantia_servicio ?? ''}
             onChange={(e) => campo('texto_garantia_servicio', e.target.value)}
             rows={8}
+            className="w-full bg-white border border-border rounded-xl px-4 py-3 text-sm"
+          />
+        </div>
+
+        <div>
+          <label className="text-xs text-muted block mb-1">
+            Declaración de compra (va en la boleta al comprarle un dispositivo a alguien)
+          </label>
+          <textarea
+            value={negocio.texto_declaracion_compra ?? ''}
+            onChange={(e) => campo('texto_declaracion_compra', e.target.value)}
+            rows={6}
+            placeholder="Declaro que el dispositivo entregado es de mi propiedad, ha sido obtenido de buena fe y que soy responsable de la información brindada."
             className="w-full bg-white border border-border rounded-xl px-4 py-3 text-sm"
           />
         </div>
