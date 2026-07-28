@@ -83,6 +83,7 @@ export default async function Home() {
   let enStock = 0;
   let pendientes = 0;
   let totalClientes = 0;
+  let esAdmin = false;
 
   if (user) {
     const { data: perfil } = await supabase
@@ -94,14 +95,17 @@ export default async function Home() {
     if (negocio?.nombre) nombreNegocio = negocio.nombre;
     if (negocio?.logo_url) logoUrl = negocio.logo_url;
 
-    const [{ count: countStock }, { count: countPendientes }, { count: countClientes }] = await Promise.all([
-      supabase.from('dispositivos').select('id', { count: 'exact', head: true }).eq('en_stock', true),
-      supabase.from('ordenes').select('id', { count: 'exact', head: true }).eq('estado', 'pendiente'),
-      supabase.from('clientes').select('id', { count: 'exact', head: true }),
-    ]);
+    const [{ count: countStock }, { count: countPendientes }, { count: countClientes }, { data: esAdminData }] =
+      await Promise.all([
+        supabase.from('dispositivos').select('id', { count: 'exact', head: true }).eq('en_stock', true),
+        supabase.from('ordenes').select('id', { count: 'exact', head: true }).eq('estado', 'pendiente'),
+        supabase.from('clientes').select('id', { count: 'exact', head: true }),
+        supabase.rpc('es_admin'),
+      ]);
     enStock = countStock ?? 0;
     pendientes = countPendientes ?? 0;
     totalClientes = countClientes ?? 0;
+    esAdmin = !!esAdminData;
   }
 
   return (
@@ -117,6 +121,11 @@ export default async function Home() {
           <p className="text-base font-display font-semibold leading-tight">{nombreNegocio}</p>
         </div>
         <div className="flex items-center gap-4">
+          {esAdmin && (
+            <Link href="/admin" className="text-xs text-accent font-medium hover:text-accent-hover transition-colors">
+              Panel Admin
+            </Link>
+          )}
           <Link href="/configuracion" className="text-xs text-muted hover:text-ink transition-colors">
             Configuración
           </Link>

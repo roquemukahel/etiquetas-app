@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextRequest, NextResponse } from 'next/server';
 
-const RUTAS_PUBLICAS = ['/login', '/registro'];
+const RUTAS_PUBLICAS = ['/login', '/registro', '/cuenta-desactivada'];
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request: { headers: request.headers } });
@@ -37,10 +37,19 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (user && esPublica) {
+  if (user && esPublica && request.nextUrl.pathname !== '/cuenta-desactivada') {
     const url = request.nextUrl.clone();
     url.pathname = '/';
     return NextResponse.redirect(url);
+  }
+
+  if (user && !esPublica) {
+    const { data: activo } = await supabase.rpc('negocio_activo');
+    if (activo === false) {
+      const url = request.nextUrl.clone();
+      url.pathname = '/cuenta-desactivada';
+      return NextResponse.redirect(url);
+    }
   }
 
   return response;

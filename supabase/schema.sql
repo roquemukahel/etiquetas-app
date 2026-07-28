@@ -358,3 +358,111 @@ alter table canjes add column if not exists fecha_ingreso_servicio timestamptz;
 alter table canjes add column if not exists fecha_reparado timestamptz;
 
 alter table compras add column if not exists imei text;
+
+-- ============================================================
+-- Panel de super admin (dueño del software), separado de los
+-- negocios que usan la app. Nadie se puede agregar a sí mismo acá:
+-- se hace a mano, directo en SQL, pegando el propio user id.
+--
+-- Para encontrar tu user id: Authentication > Users en el panel de
+-- Supabase, copiá el "UID" de tu usuario, y corré:
+--   insert into super_admins (id) values ('TU-UID-ACA');
+-- ============================================================
+create table if not exists super_admins (
+  id uuid primary key references auth.users(id) on delete cascade,
+  created_at timestamptz default now()
+);
+
+alter table super_admins enable row level security;
+-- A propósito no hay ninguna policy: nadie puede leer ni escribir
+-- esta tabla desde la app (ni con la anon key ni logueado). Solo
+-- las funciones de abajo (security definer) pueden consultarla.
+
+alter table negocios add column if not exists activo boolean not null default true;
+
+create or replace function es_admin()
+returns boolean
+language sql
+security definer
+stable
+as $$
+  select exists(select 1 from super_admins where id = auth.uid())
+$$;
+
+-- Para que cada negocio pueda chequear si sigue activo (usado por
+-- el middleware para bloquear el acceso si lo desactivás).
+create or replace function negocio_activo()
+returns boolean
+language sql
+security definer
+stable
+as $$
+  select coalesce((select activo from negocios where id = negocio_actual()), true)
+$$;
+
+create or replace function admin_listar_negocios()
+returns table (
+  id uuid,
+  nombre text,
+  activo boolean,
+  creado timestamptz,
+  cantidad_usuarios bigint,
+  cantidad_dispositivos bigint,
+  cantidad_ordenes bigint,
+  ultima_actividad timestamptz
+)
+language plpgsql
+security definer
+as $$
+begin
+  if not es_admin() then
+    raise exception 'No autorizado';
+  end if;
+  return query
+    select
+      n.id,
+      n.nombre,
+      n.activo,
+      n.created_at,
+      (select count(*) from perfiles p where p.negocio_id = n.id),
+      (select count(*) from dispositivos d where d.negocio_id = n.id),
+      (select count(*) from ordenes o where o.negocio_id = n.id),
+      greatest(
+        n.created_at,
+        coalesce((select max(created_at) from ordenes o where o.negocio_id = n.id), n.created_at),
+        coalesce((select max(created_at) from dispositivos d where d.negocio_id = n.id), n.created_at)
+      )
+    from negocios n
+    order by n.created_at desc;
+end;
+$$;
+
+create or replace function admin_set_negocio_activo(negocio_id_param uuid, nuevo_estado boolean)
+returns void
+language plpgsql
+security definer
+as $$
+begin
+  if not es_admin() then
+    raise exception 'No autorizado';
+  end if;
+  update negocios set activo = nuevo_estado where id = negocio_id_param;
+end;
+$$;
+
+create or replace function admin_usuarios_de_negocio(negocio_id_param uuid)
+returns table (email text, creado timestamptz)
+language plpgsql
+security definer
+as $$
+begin
+  if not es_admin() then
+    raise exception 'No autorizado';
+  end if;
+  return query
+    select u.email, p.created_at
+    from perfiles p
+    join auth.users u on u.id = p.id
+    where p.negocio_id = negocio_id_param;
+end;
+$$;
