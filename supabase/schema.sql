@@ -87,13 +87,21 @@ create policy "ver mi negocio" on negocios
   for select using (id = negocio_actual());
 create policy "actualizar mi negocio" on negocios
   for update using (id = negocio_actual());
-create policy "crear negocio al registrarse" on negocios
-  for insert with check (auth.uid() is not null);
+-- Nota: a propósito NO hay policy de insert acá. Crear un negocio y
+-- vincularlo a un perfil pasa únicamente por la función
+-- crear_negocio_y_perfil() (más abajo), que es security definer y
+-- bypassea RLS. Si hubiera una policy de insert con un check débil
+-- (ej. "auth.uid() is not null"), cualquier usuario logueado podría
+-- insertar filas directo por la API de Supabase sin pasar por esa
+-- función.
 
 create policy "ver mi perfil" on perfiles
   for select using (id = auth.uid());
-create policy "crear mi perfil al registrarse" on perfiles
-  for insert with check (id = auth.uid());
+-- Ídem: sin policy de insert. Si la hubiera con un check que solo
+-- valide "id = auth.uid()" (sin validar negocio_id), cualquier
+-- usuario logueado podría insertarse un perfil apuntando al
+-- negocio_id de otro negocio ya existente y ganar acceso completo
+-- a sus datos (clientes, stock, órdenes) vía negocio_actual().
 
 create policy "dispositivos de mi negocio" on dispositivos
   for all using (negocio_id = negocio_actual())
@@ -474,3 +482,19 @@ $$;
 alter table negocios add column if not exists texto_garantia_tamano int not null default 11;
 alter table negocios add column if not exists texto_garantia_servicio_tamano int not null default 11;
 alter table negocios add column if not exists texto_declaracion_compra_tamano int not null default 11;
+
+-- ============================================================
+-- CORRECCIÓN DE SEGURIDAD: las policies de insert en "negocios" y
+-- "perfiles" no validaban lo suficiente. La de "perfiles" en
+-- particular dejaba que cualquier usuario logueado se insertara un
+-- perfil apuntando al negocio_id de OTRO negocio ya existente
+-- (sin pasar por crear_negocio_y_perfil()), ganando acceso total a
+-- los clientes, stock y órdenes de ese negocio ajeno.
+--
+-- El registro siempre pasó por la función crear_negocio_y_perfil()
+-- (que sigue funcionando igual, porque es security definer y no
+-- depende de estas policies), así que borrar estas dos policies no
+-- rompe nada de la app.
+-- ============================================================
+drop policy if exists "crear negocio al registrarse" on negocios;
+drop policy if exists "crear mi perfil al registrarse" on perfiles;
