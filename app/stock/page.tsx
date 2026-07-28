@@ -71,14 +71,14 @@ export default function Stock() {
         value={busqueda}
         onChange={(e) => setBusqueda(e.target.value)}
         placeholder="Buscar por modelo, IMEI, serie, código..."
-        className="w-full bg-white/60 border border-black/10 rounded-xl px-4 py-3 text-sm"
+        className="w-full bg-white border border-border rounded-xl px-4 py-3 text-sm"
       />
 
       <div className="flex items-center gap-2 text-sm">
         <button
           onClick={() => setVerTodos(false)}
           className={`flex-1 rounded-xl py-2 font-medium ${
-            !verTodos ? 'bg-ink text-base' : 'bg-white/60 border border-black/10 text-ink'
+            !verTodos ? 'bg-accent text-white' : 'bg-white border border-border text-ink'
           }`}
         >
           En stock
@@ -86,7 +86,7 @@ export default function Stock() {
         <button
           onClick={() => setVerTodos(true)}
           className={`flex-1 rounded-xl py-2 font-medium ${
-            verTodos ? 'bg-ink text-base' : 'bg-white/60 border border-black/10 text-ink'
+            verTodos ? 'bg-accent text-white' : 'bg-white border border-border text-ink'
           }`}
         >
           Historial completo
@@ -95,7 +95,7 @@ export default function Stock() {
 
       <Link
         href="/stock/nuevo"
-        className="w-full rounded-2xl border border-black/15 py-3 text-center text-sm font-medium"
+        className="w-full rounded-2xl border border-border py-3 text-center text-sm font-medium"
       >
         + Cargar dispositivo a mano
       </Link>
@@ -119,8 +119,8 @@ export default function Stock() {
                 <Link
                   key={d.id}
                   href={`/stock/${d.id}`}
-                  className={`rounded-xl border border-black/10 px-4 py-3 flex items-center justify-between ${
-                    d.en_stock ? 'bg-white/60' : 'bg-white/30 opacity-60'
+                  className={`rounded-xl border border-border px-4 py-3 flex items-center justify-between ${
+                    d.en_stock ? 'bg-white' : 'bg-white/30 opacity-60'
                   }`}
                 >
                   <div>

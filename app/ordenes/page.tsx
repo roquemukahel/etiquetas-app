@@ -53,7 +53,7 @@ export default function Ordenes() {
             key={e}
             onClick={() => setFiltroEstado(e)}
             className={`shrink-0 rounded-xl px-3 py-2 font-medium capitalize ${
-              filtroEstado === e ? 'bg-ink text-base' : 'bg-white/60 border border-black/10 text-ink'
+              filtroEstado === e ? 'bg-accent text-white' : 'bg-white border border-border text-ink'
             }`}
           >
             {e}
@@ -63,7 +63,7 @@ export default function Ordenes() {
 
       <Link
         href="/ordenes/nueva"
-        className="w-full rounded-2xl border border-black/15 py-3 text-center text-sm font-medium"
+        className="w-full rounded-2xl border border-border py-3 text-center text-sm font-medium"
       >
         + Nueva orden
       </Link>
@@ -79,7 +79,7 @@ export default function Ordenes() {
           <Link
             key={o.id}
             href={`/ordenes/${o.id}`}
-            className="rounded-xl border border-black/10 bg-white/60 px-4 py-3 flex items-center justify-between"
+            className="rounded-xl border border-border bg-white shadow-card px-4 py-3 flex items-center justify-between"
           >
             <div>
               <p className="text-sm font-medium">

@@ -66,20 +66,20 @@ export default function Productos() {
             value={nombre}
             onChange={(e) => setNombre(e.target.value)}
             placeholder="Nombre (ej. Funda, AirPods)"
-            className="flex-1 bg-white/60 border border-black/10 rounded-xl px-4 py-3 text-sm"
+            className="flex-1 bg-white border border-border rounded-xl px-4 py-3 text-sm"
           />
           <input
             value={precio}
             onChange={(e) => setPrecio(e.target.value)}
             placeholder="Precio"
             inputMode="numeric"
-            className="w-24 bg-white/60 border border-black/10 rounded-xl px-4 py-3 text-sm"
+            className="w-24 bg-white border border-border rounded-xl px-4 py-3 text-sm"
           />
         </div>
         <button
           disabled={!nombre.trim() || guardando}
           onClick={agregar}
-          className="w-full rounded-xl bg-ink py-3 text-sm font-medium text-base disabled:opacity-40"
+          className="w-full rounded-xl bg-accent hover:bg-accent-hover transition-colors py-3 text-sm font-medium text-white disabled:opacity-40"
         >
           Agregar al catálogo
         </button>
@@ -94,7 +94,7 @@ export default function Productos() {
         {productos.map((p) => (
           <div
             key={p.id}
-            className="rounded-xl border border-black/10 bg-white/60 px-4 py-3 flex items-center justify-between"
+            className="rounded-xl border border-border bg-white shadow-card px-4 py-3 flex items-center justify-between"
           >
             <p className="text-sm font-medium">{p.nombre}</p>
             <div className="flex items-center gap-3">

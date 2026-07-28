@@ -106,7 +106,7 @@ export default function ServicioTecnico() {
         <button
           onClick={() => setTab('derivados')}
           className={`flex-1 rounded-xl py-2 font-medium ${
-            tab === 'derivados' ? 'bg-ink text-base' : 'bg-white/60 border border-black/10 text-ink'
+            tab === 'derivados' ? 'bg-accent text-white' : 'bg-white border border-border text-ink'
           }`}
         >
           Derivados a reparación
@@ -114,7 +114,7 @@ export default function ServicioTecnico() {
         <button
           onClick={() => setTab('reparados')}
           className={`flex-1 rounded-xl py-2 font-medium ${
-            tab === 'reparados' ? 'bg-ink text-base' : 'bg-white/60 border border-black/10 text-ink'
+            tab === 'reparados' ? 'bg-accent text-white' : 'bg-white border border-border text-ink'
           }`}
         >
           Reparados
@@ -132,7 +132,7 @@ export default function ServicioTecnico() {
 
       <div className="flex flex-col gap-2">
         {filtrados.map((e) => (
-          <div key={e.id} className="rounded-xl border border-black/10 bg-white/60 px-4 py-3 flex flex-col gap-2">
+          <div key={e.id} className="rounded-xl border border-border bg-white shadow-card px-4 py-3 flex flex-col gap-2">
             <p className="text-sm font-medium">
               {e.modelo}
               {e.capacidad_gb ? ` · ${e.capacidad_gb}GB` : ''}
@@ -147,7 +147,7 @@ export default function ServicioTecnico() {
                   value={e.tecnico_id ?? ''}
                   disabled={guardando === e.id}
                   onChange={(ev) => asignarTecnico(e.id, ev.target.value)}
-                  className="w-full bg-white border border-black/10 rounded-lg px-3 py-2 text-sm disabled:opacity-40"
+                  className="w-full bg-white border border-border rounded-lg px-3 py-2 text-sm disabled:opacity-40"
                 >
                   <option value="">Sin asignar</option>
                   {tecnicos.map((t) => (
@@ -173,7 +173,7 @@ export default function ServicioTecnico() {
             {tab === 'derivados' && (
               <button
                 onClick={() => abrirPanelReparar(e.id)}
-                className="rounded-lg border border-black/15 py-2 text-xs font-medium"
+                className="rounded-lg border border-border py-2 text-xs font-medium"
               >
                 {panelReparar === e.id ? 'Cancelar' : 'Marcar como reparado'}
               </button>
@@ -183,14 +183,14 @@ export default function ServicioTecnico() {
               <button
                 disabled={guardando === e.id}
                 onClick={() => volverADerivado(e.id)}
-                className="rounded-lg border border-black/15 py-2 text-xs font-medium disabled:opacity-40"
+                className="rounded-lg border border-border py-2 text-xs font-medium disabled:opacity-40"
               >
                 Volver a Derivados a reparación
               </button>
             )}
 
             {panelReparar === e.id && (
-              <div className="rounded-lg border border-black/10 bg-white p-3 flex flex-col gap-2">
+              <div className="rounded-lg border border-border bg-white p-3 flex flex-col gap-2">
                 <p className="text-xs font-medium text-muted">Arreglo realizado</p>
                 {trabajos.length === 0 && (
                   <p className="text-xs text-muted">
@@ -214,7 +214,7 @@ export default function ServicioTecnico() {
                 <button
                   disabled={guardando === e.id}
                   onClick={() => marcarReparado(e.id)}
-                  className="mt-1 rounded-lg bg-ink py-2 text-xs font-medium text-base disabled:opacity-40"
+                  className="mt-1 rounded-lg bg-accent hover:bg-accent-hover transition-colors py-2 text-xs font-medium text-white disabled:opacity-40"
                 >
                   Confirmar reparado
                 </button>

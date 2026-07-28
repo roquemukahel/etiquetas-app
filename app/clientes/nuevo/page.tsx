@@ -67,7 +67,7 @@ export default function NuevoCliente() {
       <button
         disabled={!puedeGuardar || guardando}
         onClick={handleGuardar}
-        className="mt-auto w-full rounded-2xl bg-ink py-4 text-center text-base font-medium text-base disabled:opacity-40"
+        className="mt-auto w-full rounded-2xl bg-accent hover:bg-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
       >
         {guardando ? 'Guardando...' : 'Guardar cliente'}
       </button>
@@ -90,7 +90,7 @@ function Campo({
       <input
         value={valor}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full bg-white/60 border border-black/10 rounded-xl px-4 py-3 text-sm"
+        className="w-full bg-white border border-border rounded-xl px-4 py-3 text-sm"
       />
     </div>
   );

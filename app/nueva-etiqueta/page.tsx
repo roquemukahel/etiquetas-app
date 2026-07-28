@@ -220,7 +220,7 @@ export default function NuevaEtiqueta() {
           <Campo label="Salud de batería (%)" valor={bateria} onChange={setBateria} />
         </div>
 
-        <label className="flex items-center gap-3 bg-white/60 border border-black/10 rounded-xl px-4 py-3 cursor-pointer">
+        <label className="flex items-center gap-3 bg-white border border-border rounded-xl px-4 py-3 cursor-pointer">
           <input
             type="checkbox"
             checked={agregarAlStock}
@@ -240,7 +240,7 @@ export default function NuevaEtiqueta() {
         <button
           disabled={guardandoStock}
           onClick={handleContinuarAEtiqueta}
-          className="mt-auto w-full rounded-2xl bg-ink py-4 text-center text-base font-medium text-base disabled:opacity-40"
+          className="mt-auto w-full rounded-2xl bg-accent hover:bg-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
         >
           {guardandoStock ? 'Guardando en stock...' : 'Continuar al diseño de la etiqueta'}
         </button>
@@ -280,14 +280,14 @@ export default function NuevaEtiqueta() {
           <button
             onClick={descargarPNG}
             disabled={descargando}
-            className="w-full rounded-2xl bg-ink py-4 text-center text-base font-medium text-base disabled:opacity-40"
+            className="w-full rounded-2xl bg-accent hover:bg-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
           >
             Guardar / compartir PNG
           </button>
           <button
             onClick={descargarPDF}
             disabled={descargando}
-            className="w-full rounded-2xl border border-black/15 py-4 text-center text-base font-medium"
+            className="w-full rounded-2xl border border-border py-4 text-center text-base font-medium"
           >
             Guardar / compartir PDF
           </button>
@@ -305,7 +305,7 @@ export default function NuevaEtiqueta() {
         <span className="text-lg font-medium">Nueva etiqueta</span>
       </header>
 
-      <label className="flex items-center gap-3 bg-white/60 border border-black/10 rounded-xl px-4 py-3 cursor-pointer">
+      <label className="flex items-center gap-3 bg-white border border-border rounded-xl px-4 py-3 cursor-pointer">
         <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhotoChange} />
         <div className={`h-10 w-10 rounded-lg flex items-center justify-center shrink-0 ${photoPreview ? 'bg-good/15' : 'bg-black/5'}`}>
           {photoPreview ? '✓' : '📷'}
@@ -324,7 +324,7 @@ export default function NuevaEtiqueta() {
           value={bateria}
           onChange={(e) => setBateria(e.target.value)}
           placeholder="92"
-          className="w-full bg-white/60 border border-black/10 rounded-xl px-4 py-3 text-sm"
+          className="w-full bg-white border border-border rounded-xl px-4 py-3 text-sm"
         />
       </div>
 
@@ -336,7 +336,7 @@ export default function NuevaEtiqueta() {
               key={gb}
               onClick={() => setAlmacenamiento(gb)}
               className={`flex-1 rounded-xl py-2 text-sm font-medium ${
-                almacenamiento === gb ? 'bg-ink text-base' : 'bg-white/60 border border-black/10 text-ink'
+                almacenamiento === gb ? 'bg-accent text-white' : 'bg-white border border-border text-ink'
               }`}
             >
               {gb} GB
@@ -348,7 +348,7 @@ export default function NuevaEtiqueta() {
       <button
         disabled={!puedeContinuar || loading}
         onClick={handleContinuar}
-        className="mt-auto w-full rounded-2xl bg-ink py-4 text-center text-base font-medium text-base disabled:opacity-40"
+        className="mt-auto w-full rounded-2xl bg-accent hover:bg-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
       >
         {loading ? 'Leyendo la foto...' : 'Continuar'}
       </button>
@@ -373,7 +373,7 @@ function Campo({
       <input
         value={valor}
         onChange={(e) => onChange(e.target.value)}
-        className={`w-full bg-white/60 border border-black/10 rounded-xl px-4 py-3 text-sm ${mono ? 'font-mono' : ''}`}
+        className={`w-full bg-white border border-border rounded-xl px-4 py-3 text-sm ${mono ? 'font-mono' : ''}`}
       />
     </div>
   );

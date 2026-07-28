@@ -62,7 +62,7 @@ export default function PlanCanje() {
         <button
           onClick={() => setVerDerivados(false)}
           className={`flex-1 rounded-xl py-2 font-medium ${
-            !verDerivados ? 'bg-ink text-base' : 'bg-white/60 border border-black/10 text-ink'
+            !verDerivados ? 'bg-accent text-white' : 'bg-white border border-border text-ink'
           }`}
         >
           En canje
@@ -70,7 +70,7 @@ export default function PlanCanje() {
         <button
           onClick={() => setVerDerivados(true)}
           className={`flex-1 rounded-xl py-2 font-medium ${
-            verDerivados ? 'bg-ink text-base' : 'bg-white/60 border border-black/10 text-ink'
+            verDerivados ? 'bg-accent text-white' : 'bg-white border border-border text-ink'
           }`}
         >
           Derivados a Servicio Técnico
@@ -84,7 +84,7 @@ export default function PlanCanje() {
 
       <div className="flex flex-col gap-2">
         {filtrados.map((c) => (
-          <div key={c.id} className="rounded-xl border border-black/10 bg-white/60 px-4 py-3 flex flex-col gap-2">
+          <div key={c.id} className="rounded-xl border border-border bg-white shadow-card px-4 py-3 flex flex-col gap-2">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-sm font-medium">
@@ -104,7 +104,7 @@ export default function PlanCanje() {
               <button
                 disabled={procesando === c.id}
                 onClick={() => derivar(c.id)}
-                className="mt-1 rounded-lg border border-black/15 py-2 text-xs font-medium disabled:opacity-40"
+                className="mt-1 rounded-lg border border-border py-2 text-xs font-medium disabled:opacity-40"
               >
                 Derivar a Servicio Técnico
               </button>

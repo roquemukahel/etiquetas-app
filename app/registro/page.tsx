@@ -67,7 +67,7 @@ export default function Registro() {
             required
             value={nombreNegocio}
             onChange={(e) => setNombreNegocio(e.target.value)}
-            className="w-full bg-white/60 border border-black/10 rounded-xl px-4 py-3 text-sm"
+            className="w-full bg-white border border-border rounded-xl px-4 py-3 text-sm"
             placeholder="Mi local de celulares"
           />
         </div>
@@ -79,7 +79,7 @@ export default function Registro() {
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full bg-white/60 border border-black/10 rounded-xl px-4 py-3 text-sm"
+            className="w-full bg-white border border-border rounded-xl px-4 py-3 text-sm"
           />
         </div>
 
@@ -91,13 +91,13 @@ export default function Registro() {
             minLength={6}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full bg-white/60 border border-black/10 rounded-xl px-4 py-3 text-sm"
+            className="w-full bg-white border border-border rounded-xl px-4 py-3 text-sm"
           />
         </div>
 
         <button
           disabled={cargando}
-          className="mt-2 w-full rounded-2xl bg-ink py-4 text-center text-base font-medium text-base disabled:opacity-40"
+          className="mt-2 w-full rounded-2xl bg-accent hover:bg-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
         >
           {cargando ? 'Creando...' : 'Crear cuenta'}
         </button>

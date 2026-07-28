@@ -131,7 +131,7 @@ export default function DatosNegocio() {
           <div className="flex items-center gap-3">
             {negocio.logo_url && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={negocio.logo_url} alt="Logo" className="h-14 w-14 rounded-lg object-contain bg-white/60 border border-black/10" />
+              <img src={negocio.logo_url} alt="Logo" className="h-14 w-14 rounded-lg object-contain bg-white border border-border" />
             )}
             <label className="text-sm text-accent underline cursor-pointer">
               {negocio.logo_url ? 'Cambiar logo' : 'Subir logo'}
@@ -149,7 +149,7 @@ export default function DatosNegocio() {
           <select
             value={negocio.moneda}
             onChange={(e) => campo('moneda', e.target.value)}
-            className="w-full bg-white/60 border border-black/10 rounded-xl px-4 py-3 text-sm"
+            className="w-full bg-white border border-border rounded-xl px-4 py-3 text-sm"
           >
             {MONEDAS.map((m) => (
               <option key={m.codigo} value={m.codigo}>
@@ -165,7 +165,7 @@ export default function DatosNegocio() {
             value={negocio.texto_garantia ?? ''}
             onChange={(e) => campo('texto_garantia', e.target.value)}
             rows={8}
-            className="w-full bg-white/60 border border-black/10 rounded-xl px-4 py-3 text-sm"
+            className="w-full bg-white border border-border rounded-xl px-4 py-3 text-sm"
           />
         </div>
 
@@ -177,7 +177,7 @@ export default function DatosNegocio() {
             value={negocio.texto_garantia_servicio ?? ''}
             onChange={(e) => campo('texto_garantia_servicio', e.target.value)}
             rows={8}
-            className="w-full bg-white/60 border border-black/10 rounded-xl px-4 py-3 text-sm"
+            className="w-full bg-white border border-border rounded-xl px-4 py-3 text-sm"
           />
         </div>
 
@@ -208,7 +208,7 @@ export default function DatosNegocio() {
       <button
         disabled={guardando}
         onClick={handleGuardar}
-        className="mt-auto w-full rounded-2xl bg-ink py-4 text-center text-base font-medium text-base disabled:opacity-40"
+        className="mt-auto w-full rounded-2xl bg-accent hover:bg-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
       >
         {guardando ? 'Guardando...' : 'Guardar cambios'}
       </button>
@@ -231,7 +231,7 @@ function Campo({
       <input
         value={valor}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full bg-white/60 border border-black/10 rounded-xl px-4 py-3 text-sm"
+        className="w-full bg-white border border-border rounded-xl px-4 py-3 text-sm"
       />
     </div>
   );
@@ -258,7 +258,7 @@ function RedSocial({
           value={valor}
           onChange={(e) => onChange(e.target.value)}
           placeholder="@usuario"
-          className="w-full bg-white/60 border border-black/10 rounded-xl px-4 py-3 text-sm"
+          className="w-full bg-white border border-border rounded-xl px-4 py-3 text-sm"
         />
       </div>
       <label className="flex flex-col items-center gap-1 pt-4">

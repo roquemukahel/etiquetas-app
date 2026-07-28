@@ -135,7 +135,7 @@ export default function DetalleDispositivo() {
                 type="button"
                 onClick={() => campo('capacidad_gb', gb)}
                 className={`flex-1 rounded-xl py-2 text-sm font-medium ${
-                  d.capacidad_gb === gb ? 'bg-ink text-base' : 'bg-white/60 border border-black/10 text-ink'
+                  d.capacidad_gb === gb ? 'bg-accent text-white' : 'bg-white border border-border text-ink'
                 }`}
               >
                 {gb} GB
@@ -168,7 +168,7 @@ export default function DetalleDispositivo() {
                 type="button"
                 onClick={() => campo('estado', e)}
                 className={`flex-1 rounded-xl py-2 text-sm font-medium capitalize ${
-                  d.estado === e ? 'bg-ink text-base' : 'bg-white/60 border border-black/10 text-ink'
+                  d.estado === e ? 'bg-accent text-white' : 'bg-white border border-border text-ink'
                 }`}
               >
                 {e}
@@ -181,7 +181,7 @@ export default function DetalleDispositivo() {
       <button
         disabled={guardando}
         onClick={handleGuardar}
-        className="mt-auto w-full rounded-2xl bg-ink py-4 text-center text-base font-medium text-base disabled:opacity-40"
+        className="mt-auto w-full rounded-2xl bg-accent hover:bg-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
       >
         {guardando ? 'Guardando...' : 'Guardar cambios'}
       </button>
@@ -216,7 +216,7 @@ function Campo({
         value={valor}
         onChange={(e) => onChange(e.target.value)}
         inputMode={numerico ? 'numeric' : undefined}
-        className={`w-full bg-white/60 border border-black/10 rounded-xl px-4 py-3 text-sm ${mono ? 'font-mono' : ''}`}
+        className={`w-full bg-white border border-border rounded-xl px-4 py-3 text-sm ${mono ? 'font-mono' : ''}`}
       />
     </div>
   );

@@ -116,7 +116,7 @@ export default function DetalleOrden() {
 
       {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
 
-      <div className="rounded-xl bg-white/60 border border-black/10 px-4 py-3 text-sm flex flex-col gap-1">
+      <div className="rounded-xl bg-white border border-border px-4 py-3 text-sm flex flex-col gap-1">
         <p>
           <span className="text-muted">Cliente:</span>{' '}
           {orden.clientes ? `${orden.clientes.nombre} ${orden.clientes.apellido || ''}` : 'Sin cliente'}
@@ -145,7 +145,7 @@ export default function DetalleOrden() {
         {orden.orden_items.map((i, idx) => (
           <div
             key={idx}
-            className="rounded-xl border border-black/10 bg-white/60 px-4 py-3 flex items-center justify-between text-sm"
+            className="rounded-xl border border-border bg-white shadow-card px-4 py-3 flex items-center justify-between text-sm"
           >
             <span>
               {i.descripcion} × {i.cantidad}
@@ -157,7 +157,7 @@ export default function DetalleOrden() {
 
       <Link
         href={`/ordenes/${orden.id}/boleta`}
-        className="w-full rounded-2xl border border-black/15 py-3 text-center text-sm font-medium"
+        className="w-full rounded-2xl border border-border py-3 text-center text-sm font-medium"
       >
         Ver boleta
       </Link>
@@ -171,7 +171,7 @@ export default function DetalleOrden() {
               disabled={guardando}
               onClick={() => cambiarEstado(e)}
               className={`flex-1 rounded-xl py-2 text-sm font-medium capitalize disabled:opacity-40 ${
-                orden.estado === e ? 'bg-ink text-base' : 'bg-white/60 border border-black/10 text-ink'
+                orden.estado === e ? 'bg-accent text-white' : 'bg-white border border-border text-ink'
               }`}
             >
               {e}

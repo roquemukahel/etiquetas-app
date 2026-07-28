@@ -160,13 +160,13 @@ export default function Boleta() {
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
       <header className="no-print flex items-center gap-3 flex-wrap">
-        <Link href="/ordenes" className="text-2xl leading-none">
+        <Link href="/ordenes" className="text-2xl leading-none text-ink">
           &larr;
         </Link>
-        <span className="text-lg font-medium mr-auto">Boleta</span>
+        <span className="text-lg font-display font-semibold mr-auto">Boleta</span>
         <button
           onClick={() => window.print()}
-          className="rounded-lg border border-black/15 px-3 py-2 text-xs font-medium"
+          className="rounded-lg border border-border bg-white px-3 py-2 text-xs font-medium hover:bg-canvas transition-colors"
         >
           Imprimir
         </button>
@@ -175,40 +175,46 @@ export default function Boleta() {
             href={`https://wa.me/${telefonoLimpio}?text=${mensajeWhatsapp}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="rounded-lg bg-good text-base px-3 py-2 text-xs font-medium"
+            className="rounded-lg bg-good text-white px-3 py-2 text-xs font-medium hover:opacity-90 transition-opacity"
           >
             WhatsApp
           </a>
         )}
-        <Link href="/ordenes" className="rounded-lg bg-ink text-base px-3 py-2 text-xs font-medium">
+        <Link
+          href="/ordenes"
+          className="rounded-lg bg-accent hover:bg-accent-hover transition-colors text-white px-3 py-2 text-xs font-medium"
+        >
           Guardar
         </Link>
       </header>
 
-      <div id="boleta" className="flex flex-col gap-5 text-[15px] text-ink bg-white rounded-xl border border-black/10 p-5">
-        <div className="flex items-start justify-between gap-4">
+      <div
+        id="boleta"
+        className="flex flex-col gap-8 text-[15px] text-ink bg-white rounded-2xl border border-border shadow-card p-8"
+      >
+        <div className="flex items-start justify-between gap-4 pb-6 border-b border-border">
           <div className="flex items-center gap-3">
             {negocio?.logo_url && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={negocio.logo_url} alt="Logo" className="h-14 w-14 object-contain" />
+              <img src={negocio.logo_url} alt="Logo" className="h-16 w-16 object-contain rounded-lg" />
             )}
-            <p className="text-xl font-medium">{negocio?.nombre}</p>
+            <p className="text-2xl font-display font-semibold">{negocio?.nombre}</p>
           </div>
-          <div className="text-right text-sm text-muted">
-            <p>Orden #{orden.id.slice(0, 8)}</p>
+          <div className="text-right text-sm text-muted leading-relaxed">
+            <p className="font-medium text-ink">Orden #{orden.id.slice(0, 8)}</p>
             <p>{formatearFecha(orden.created_at)}</p>
             {orden.fecha_entrega && <p>Entregado: {formatearFecha(orden.fecha_entrega)}</p>}
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <p className="font-medium border-b-2 border-black/20 pb-1 mb-1">Negocio</p>
-            <p>{negocio?.nombre}</p>
-            {negocio?.telefono && <p>{negocio.telefono}</p>}
-            {negocio?.direccion && <p>{negocio.direccion}</p>}
+        <div className="grid grid-cols-2 gap-8">
+          <div className="flex flex-col gap-1">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-1">Negocio</p>
+            <p className="font-medium">{negocio?.nombre}</p>
+            {negocio?.telefono && <p className="text-muted">{negocio.telefono}</p>}
+            {negocio?.direccion && <p className="text-muted">{negocio.direccion}</p>}
             {(negocio?.mostrar_instagram || negocio?.mostrar_facebook || negocio?.mostrar_tiktok) && (
-              <div className="flex flex-col gap-0.5 mt-1">
+              <div className="flex flex-col gap-0.5 mt-1 text-muted">
                 {negocio.mostrar_instagram && negocio.instagram && (
                   <span className="flex items-center gap-1.5">
                     <IconoInstagram /> {negocio.instagram}
@@ -227,108 +233,137 @@ export default function Boleta() {
               </div>
             )}
           </div>
-          <div>
-            <p className="font-medium border-b-2 border-black/20 pb-1 mb-1">Cliente</p>
-            <p>{clienteNombre}</p>
-            {orden.clientes?.telefono && <p>{orden.clientes.telefono}</p>}
-            {orden.clientes?.email && <p>{orden.clientes.email}</p>}
-            {orden.clientes?.dni && <p>DNI: {orden.clientes.dni}</p>}
-            {orden.clientes?.domicilio && <p>{orden.clientes.domicilio}</p>}
+          <div className="flex flex-col gap-1">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-1">Cliente</p>
+            <p className="font-medium">{clienteNombre}</p>
+            {orden.clientes?.telefono && <p className="text-muted">{orden.clientes.telefono}</p>}
+            {orden.clientes?.email && <p className="text-muted">{orden.clientes.email}</p>}
+            {orden.clientes?.dni && <p className="text-muted">DNI: {orden.clientes.dni}</p>}
+            {orden.clientes?.domicilio && <p className="text-muted">{orden.clientes.domicilio}</p>}
           </div>
         </div>
 
         {orden.canjes && (
-          <div className="rounded-lg border-2 border-black/20 p-3">
-            <p className="font-medium border-b-2 border-black/20 pb-1 mb-2">Plan canje — dispositivo entregado</p>
-            <p>
+          <div className="rounded-xl bg-accent-soft p-4 flex flex-col gap-1">
+            <p className="text-xs font-semibold uppercase tracking-wide text-accent mb-1">
+              Plan canje — dispositivo entregado
+            </p>
+            <p className="font-medium">
               {orden.canjes.modelo}
               {orden.canjes.capacidad_gb ? ` · ${orden.canjes.capacidad_gb}GB` : ''}
               {orden.canjes.color ? ` · ${orden.canjes.color}` : ''}
             </p>
-            {orden.canjes.salud_bateria != null && <p>Batería: {orden.canjes.salud_bateria}%</p>}
-            {orden.canjes.detalles && <p>Detalles: {orden.canjes.detalles}</p>}
-            {orden.canjes.vendedores?.nombre && <p>Recibido por: {orden.canjes.vendedores.nombre}</p>}
+            {orden.canjes.salud_bateria != null && <p className="text-muted">Batería: {orden.canjes.salud_bateria}%</p>}
+            {orden.canjes.detalles && <p className="text-muted">Detalles: {orden.canjes.detalles}</p>}
+            {orden.canjes.vendedores?.nombre && (
+              <p className="text-muted">Recibido por: {orden.canjes.vendedores.nombre}</p>
+            )}
             {orden.canjes.monto != null && (
-              <p className="font-medium mt-1">Monto reconocido: {moneda}{orden.canjes.monto.toLocaleString('es-AR')}</p>
+              <p className="font-medium mt-1">
+                Monto reconocido: {moneda}
+                {orden.canjes.monto.toLocaleString('es-AR')}
+              </p>
             )}
           </div>
         )}
 
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b-2 border-black/20 text-left">
-              <th className="py-2">Producto</th>
-              <th className="py-2 text-center">Cant.</th>
-              <th className="py-2 text-right">Precio unit.</th>
-              <th className="py-2 text-right">Precio</th>
+            <tr className="border-b border-border text-left text-xs font-semibold uppercase tracking-wide text-muted">
+              <th className="py-2 font-semibold">Producto</th>
+              <th className="py-2 text-center font-semibold">Cant.</th>
+              <th className="py-2 text-right font-semibold">Precio unit.</th>
+              <th className="py-2 text-right font-semibold">Precio</th>
             </tr>
           </thead>
           <tbody>
             {orden.orden_items.map((i, idx) => (
-              <tr key={idx} className="border-b border-black/10">
-                <td className="py-2">{i.descripcion}</td>
-                <td className="py-2 text-center">{i.cantidad}</td>
-                <td className="py-2 text-right">{moneda}{i.precio_unitario.toLocaleString('es-AR')}</td>
-                <td className="py-2 text-right">{moneda}{(i.cantidad * i.precio_unitario).toLocaleString('es-AR')}</td>
+              <tr key={idx} className="border-b border-border">
+                <td className="py-2.5">{i.descripcion}</td>
+                <td className="py-2.5 text-center">{i.cantidad}</td>
+                <td className="py-2.5 text-right">
+                  {moneda}
+                  {i.precio_unitario.toLocaleString('es-AR')}
+                </td>
+                <td className="py-2.5 text-right font-medium">
+                  {moneda}
+                  {(i.cantidad * i.precio_unitario).toLocaleString('es-AR')}
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
 
-        <div className="self-end w-full max-w-[260px] flex flex-col gap-1 text-sm">
+        <div className="self-end w-full max-w-[280px] flex flex-col gap-2 text-sm">
           {orden.anticipo != null && orden.anticipo > 0 && (
-            <div className="flex justify-between">
+            <div className="flex justify-between text-muted">
               <span>Anticipo</span>
-              <span>{moneda}{orden.anticipo.toLocaleString('es-AR')}</span>
+              <span>
+                {moneda}
+                {orden.anticipo.toLocaleString('es-AR')}
+              </span>
             </div>
           )}
-          <div className="flex justify-between">
+          <div className="flex justify-between text-muted">
             <span>Subtotal</span>
-            <span>{moneda}{subtotal.toLocaleString('es-AR')}</span>
+            <span>
+              {moneda}
+              {subtotal.toLocaleString('es-AR')}
+            </span>
           </div>
           {orden.impuesto_porcentaje != null && orden.impuesto_porcentaje > 0 && (
-            <div className="flex justify-between">
-              <span>Impuesto %</span>
+            <div className="flex justify-between text-muted">
+              <span>Impuesto</span>
               <span>{orden.impuesto_porcentaje}%</span>
             </div>
           )}
           {orden.monto_canje != null && orden.monto_canje > 0 && (
-            <div className="flex justify-between">
+            <div className="flex justify-between text-muted">
               <span>Plan canje</span>
-              <span>-{moneda}{orden.monto_canje.toLocaleString('es-AR')}</span>
+              <span>
+                -{moneda}
+                {orden.monto_canje.toLocaleString('es-AR')}
+              </span>
             </div>
           )}
-          <div className="flex justify-between font-medium text-lg border-t-2 border-black/30 pt-1">
-            <span>TOTAL</span>
-            <span>{moneda}{(orden.total ?? subtotal).toLocaleString('es-AR')}</span>
+          <div className="flex justify-between items-baseline font-display font-semibold text-xl rounded-lg bg-canvas px-3 py-2.5 mt-1">
+            <span className="text-sm font-sans font-medium text-muted">TOTAL</span>
+            <span>
+              {moneda}
+              {(orden.total ?? subtotal).toLocaleString('es-AR')}
+            </span>
           </div>
         </div>
 
-        <p>
-          <span className="font-medium">Método de pago:</span> {orden.forma_pago}
-        </p>
-        {orden.vendedores?.nombre && (
+        <div className="flex flex-wrap gap-x-8 gap-y-1 text-sm">
           <p>
-            <span className="font-medium">Vendedor:</span> {orden.vendedores.nombre}
+            <span className="text-muted">Método de pago </span>
+            <span className="font-medium">{orden.forma_pago}</span>
           </p>
-        )}
+          {orden.vendedores?.nombre && (
+            <p>
+              <span className="text-muted">Vendedor </span>
+              <span className="font-medium">{orden.vendedores.nombre}</span>
+            </p>
+          )}
+        </div>
 
         {tieneProductos && negocio?.texto_garantia && (
-          <div>
-            <p className="font-medium border-b-2 border-black/20 pb-1 mb-2">Garantía de productos</p>
-            <p className="whitespace-pre-wrap text-sm">{negocio.texto_garantia}</p>
+          <div className="rounded-xl bg-canvas p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">Garantía de productos</p>
+            <p className="whitespace-pre-wrap text-sm text-muted">{negocio.texto_garantia}</p>
           </div>
         )}
 
         {tieneTrabajos && negocio?.texto_garantia_servicio && (
-          <div>
-            <p className="font-medium border-b-2 border-black/20 pb-1 mb-2">Garantía de servicio técnico</p>
-            <p className="whitespace-pre-wrap text-sm">{negocio.texto_garantia_servicio}</p>
+          <div className="rounded-xl bg-canvas p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">Garantía de servicio técnico</p>
+            <p className="whitespace-pre-wrap text-sm text-muted">{negocio.texto_garantia_servicio}</p>
           </div>
         )}
 
-        <div className="mt-6 flex flex-col items-center gap-1 self-center">
-          <div className="w-56 border-t-2 border-black/40" />
+        <div className="mt-4 flex flex-col items-center gap-1 self-center">
+          <div className="w-56 border-t border-border" />
           <p className="text-sm text-muted">Nombre y firma del cliente</p>
         </div>
       </div>

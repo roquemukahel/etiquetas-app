@@ -22,7 +22,7 @@ export default function Configuracion() {
           <Link
             key={s.href}
             href={s.href}
-            className="rounded-2xl bg-white/60 border border-black/10 p-5 flex flex-col active:scale-[0.98] transition-transform"
+            className="rounded-2xl bg-white border border-border shadow-card p-5 flex flex-col hover:border-accent/40 hover:shadow-elevated transition-all active:scale-[0.98]"
           >
             <span className="text-base font-medium">{s.titulo}</span>
             <span className="text-xs text-muted">{s.desc}</span>

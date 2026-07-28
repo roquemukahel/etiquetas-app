@@ -364,7 +364,7 @@ export default function NuevaOrden() {
           <button
             onClick={() => setModoCliente('existente')}
             className={`flex-1 rounded-xl py-2 font-medium ${
-              modoCliente === 'existente' ? 'bg-ink text-base' : 'bg-white/60 border border-black/10 text-ink'
+              modoCliente === 'existente' ? 'bg-accent text-white' : 'bg-white border border-border text-ink'
             }`}
           >
             Cliente existente
@@ -372,7 +372,7 @@ export default function NuevaOrden() {
           <button
             onClick={() => setModoCliente('nuevo')}
             className={`flex-1 rounded-xl py-2 font-medium ${
-              modoCliente === 'nuevo' ? 'bg-ink text-base' : 'bg-white/60 border border-black/10 text-ink'
+              modoCliente === 'nuevo' ? 'bg-accent text-white' : 'bg-white border border-border text-ink'
             }`}
           >
             Cargar nuevo
@@ -385,7 +385,7 @@ export default function NuevaOrden() {
               value={buscarCliente}
               onChange={(e) => setBuscarCliente(e.target.value)}
               placeholder="Buscar por nombre o teléfono..."
-              className="w-full bg-white/60 border border-black/10 rounded-xl px-4 py-3 text-sm"
+              className="w-full bg-white border border-border rounded-xl px-4 py-3 text-sm"
             />
             <div className="flex flex-col gap-2">
               {clientesFiltrados.length === 0 && (
@@ -395,7 +395,7 @@ export default function NuevaOrden() {
                 <button
                   key={c.id}
                   onClick={() => elegirCliente(c)}
-                  className="rounded-xl border border-black/10 bg-white/60 px-4 py-3 flex items-center justify-between text-left"
+                  className="rounded-xl border border-border bg-white shadow-card px-4 py-3 flex items-center justify-between text-left"
                 >
                   <p className="text-sm font-medium">
                     {c.nombre} {c.apellido || ''}
@@ -413,7 +413,7 @@ export default function NuevaOrden() {
             <button
               disabled={!nuevoNombre.trim()}
               onClick={confirmarClienteNuevo}
-              className="mt-2 w-full rounded-2xl bg-ink py-4 text-center text-base font-medium text-base disabled:opacity-40"
+              className="mt-2 w-full rounded-2xl bg-accent hover:bg-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
             >
               Continuar
             </button>
@@ -438,31 +438,31 @@ export default function NuevaOrden() {
         <div className="flex gap-2">
           <button
             onClick={() => setPanelAbierto(panelAbierto === 'dispositivo' ? null : 'dispositivo')}
-            className="flex-1 rounded-xl border border-black/15 py-3 text-sm font-medium"
+            className="flex-1 rounded-xl border border-border py-3 text-sm font-medium"
           >
             + Dispositivo
           </button>
           <button
             onClick={() => setPanelAbierto(panelAbierto === 'producto' ? null : 'producto')}
-            className="flex-1 rounded-xl border border-black/15 py-3 text-sm font-medium"
+            className="flex-1 rounded-xl border border-border py-3 text-sm font-medium"
           >
             + Accesorio / producto
           </button>
           <button
             onClick={() => setPanelAbierto(panelAbierto === 'trabajo' ? null : 'trabajo')}
-            className="flex-1 rounded-xl border border-black/15 py-3 text-sm font-medium"
+            className="flex-1 rounded-xl border border-border py-3 text-sm font-medium"
           >
             + Servicio técnico
           </button>
         </div>
 
         {panelAbierto === 'dispositivo' && (
-          <div className="rounded-xl border border-black/10 bg-white/60 p-3 flex flex-col gap-3">
+          <div className="rounded-xl border border-border bg-white shadow-card p-3 flex flex-col gap-3">
             <div className="flex items-center gap-2 text-xs">
               <button
                 onClick={() => setModoDispositivo('stock')}
                 className={`flex-1 rounded-lg py-2 font-medium ${
-                  modoDispositivo === 'stock' ? 'bg-ink text-base' : 'border border-black/10'
+                  modoDispositivo === 'stock' ? 'bg-accent text-white' : 'border border-border'
                 }`}
               >
                 Del stock
@@ -470,7 +470,7 @@ export default function NuevaOrden() {
               <button
                 onClick={() => setModoDispositivo('nuevo')}
                 className={`flex-1 rounded-lg py-2 font-medium ${
-                  modoDispositivo === 'nuevo' ? 'bg-ink text-base' : 'border border-black/10'
+                  modoDispositivo === 'nuevo' ? 'bg-accent text-white' : 'border border-border'
                 }`}
               >
                 Cargar nuevo
@@ -483,7 +483,7 @@ export default function NuevaOrden() {
                   value={buscarDispositivo}
                   onChange={(e) => setBuscarDispositivo(e.target.value)}
                   placeholder="Buscar por modelo o IMEI..."
-                  className="w-full bg-white border border-black/10 rounded-lg px-3 py-2 text-sm"
+                  className="w-full bg-white border border-border rounded-lg px-3 py-2 text-sm"
                 />
                 <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
                   {dispositivosFiltrados.length === 0 && (
@@ -493,7 +493,7 @@ export default function NuevaOrden() {
                     <button
                       key={d.id}
                       onClick={() => agregarDispositivoDelStock(d)}
-                      className="rounded-lg border border-black/10 bg-white px-3 py-2 flex items-center justify-between text-left text-sm"
+                      className="rounded-lg border border-border bg-white px-3 py-2 flex items-center justify-between text-left text-sm"
                     >
                       <span>
                         {d.modelo} {d.capacidad_gb ? `· ${d.capacidad_gb}GB` : ''} {d.color ? `· ${d.color}` : ''}
@@ -509,7 +509,7 @@ export default function NuevaOrden() {
                   value={nuevoModelo}
                   onChange={(e) => setNuevoModelo(e.target.value)}
                   placeholder="Modelo (ej. iPhone 13)"
-                  className="w-full bg-white border border-black/10 rounded-lg px-3 py-2 text-sm"
+                  className="w-full bg-white border border-border rounded-lg px-3 py-2 text-sm"
                 />
                 <div className="flex gap-2">
                   {STORAGE_OPTIONS.map((gb) => (
@@ -517,7 +517,7 @@ export default function NuevaOrden() {
                       key={gb}
                       onClick={() => setNuevaCapacidad(gb)}
                       className={`flex-1 rounded-lg py-2 text-xs font-medium ${
-                        nuevaCapacidad === gb ? 'bg-ink text-base' : 'border border-black/10'
+                        nuevaCapacidad === gb ? 'bg-accent text-white' : 'border border-border'
                       }`}
                     >
                       {gb}GB
@@ -528,19 +528,19 @@ export default function NuevaOrden() {
                   value={nuevoColor}
                   onChange={(e) => setNuevoColor(e.target.value)}
                   placeholder="Color"
-                  className="w-full bg-white border border-black/10 rounded-lg px-3 py-2 text-sm"
+                  className="w-full bg-white border border-border rounded-lg px-3 py-2 text-sm"
                 />
                 <input
                   value={nuevoPrecioDispositivo}
                   onChange={(e) => setNuevoPrecioDispositivo(e.target.value)}
                   placeholder="Precio"
                   inputMode="numeric"
-                  className="w-full bg-white border border-black/10 rounded-lg px-3 py-2 text-sm"
+                  className="w-full bg-white border border-border rounded-lg px-3 py-2 text-sm"
                 />
                 <button
                   disabled={!nuevoModelo.trim() || cargandoDispositivo}
                   onClick={agregarDispositivoNuevo}
-                  className="w-full rounded-lg bg-ink py-2 text-sm font-medium text-base disabled:opacity-40"
+                  className="w-full rounded-lg bg-accent hover:bg-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
                 >
                   {cargandoDispositivo ? 'Agregando...' : 'Agregar al carrito'}
                 </button>
@@ -550,12 +550,12 @@ export default function NuevaOrden() {
         )}
 
         {panelAbierto === 'producto' && (
-          <div className="rounded-xl border border-black/10 bg-white/60 p-3 flex flex-col gap-3">
+          <div className="rounded-xl border border-border bg-white shadow-card p-3 flex flex-col gap-3">
             <div className="flex items-center gap-2 text-xs">
               <button
                 onClick={() => setModoProducto('catalogo')}
                 className={`flex-1 rounded-lg py-2 font-medium ${
-                  modoProducto === 'catalogo' ? 'bg-ink text-base' : 'border border-black/10'
+                  modoProducto === 'catalogo' ? 'bg-accent text-white' : 'border border-border'
                 }`}
               >
                 Del catálogo
@@ -563,7 +563,7 @@ export default function NuevaOrden() {
               <button
                 onClick={() => setModoProducto('manual')}
                 className={`flex-1 rounded-lg py-2 font-medium ${
-                  modoProducto === 'manual' ? 'bg-ink text-base' : 'border border-black/10'
+                  modoProducto === 'manual' ? 'bg-accent text-white' : 'border border-border'
                 }`}
               >
                 Cargar a mano
@@ -581,7 +581,7 @@ export default function NuevaOrden() {
                   <button
                     key={p.id}
                     onClick={() => agregarProductoDelCatalogo(p)}
-                    className="rounded-lg border border-black/10 bg-white px-3 py-2 flex items-center justify-between text-left text-sm"
+                    className="rounded-lg border border-border bg-white px-3 py-2 flex items-center justify-between text-left text-sm"
                   >
                     <span>{p.nombre}</span>
                     {p.precio != null && <span className="font-medium">${p.precio.toLocaleString('es-AR')}</span>}
@@ -594,7 +594,7 @@ export default function NuevaOrden() {
                   value={productoManualNombre}
                   onChange={(e) => setProductoManualNombre(e.target.value)}
                   placeholder="Nombre del ítem"
-                  className="w-full bg-white border border-black/10 rounded-lg px-3 py-2 text-sm"
+                  className="w-full bg-white border border-border rounded-lg px-3 py-2 text-sm"
                 />
                 <div className="flex gap-2">
                   <input
@@ -602,20 +602,20 @@ export default function NuevaOrden() {
                     onChange={(e) => setProductoManualCantidad(e.target.value)}
                     placeholder="Cantidad"
                     inputMode="numeric"
-                    className="w-1/3 bg-white border border-black/10 rounded-lg px-3 py-2 text-sm"
+                    className="w-1/3 bg-white border border-border rounded-lg px-3 py-2 text-sm"
                   />
                   <input
                     value={productoManualPrecio}
                     onChange={(e) => setProductoManualPrecio(e.target.value)}
                     placeholder="Precio unitario"
                     inputMode="numeric"
-                    className="flex-1 bg-white border border-black/10 rounded-lg px-3 py-2 text-sm"
+                    className="flex-1 bg-white border border-border rounded-lg px-3 py-2 text-sm"
                   />
                 </div>
                 <button
                   disabled={!productoManualNombre.trim()}
                   onClick={agregarProductoManual}
-                  className="w-full rounded-lg bg-ink py-2 text-sm font-medium text-base disabled:opacity-40"
+                  className="w-full rounded-lg bg-accent hover:bg-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
                 >
                   Agregar al carrito
                 </button>
@@ -625,12 +625,12 @@ export default function NuevaOrden() {
         )}
 
         {panelAbierto === 'trabajo' && (
-          <div className="rounded-xl border border-black/10 bg-white/60 p-3 flex flex-col gap-3">
+          <div className="rounded-xl border border-border bg-white shadow-card p-3 flex flex-col gap-3">
             <div className="flex items-center gap-2 text-xs">
               <button
                 onClick={() => setModoTrabajo('catalogo')}
                 className={`flex-1 rounded-lg py-2 font-medium ${
-                  modoTrabajo === 'catalogo' ? 'bg-ink text-base' : 'border border-black/10'
+                  modoTrabajo === 'catalogo' ? 'bg-accent text-white' : 'border border-border'
                 }`}
               >
                 Del catálogo
@@ -638,7 +638,7 @@ export default function NuevaOrden() {
               <button
                 onClick={() => setModoTrabajo('manual')}
                 className={`flex-1 rounded-lg py-2 font-medium ${
-                  modoTrabajo === 'manual' ? 'bg-ink text-base' : 'border border-black/10'
+                  modoTrabajo === 'manual' ? 'bg-accent text-white' : 'border border-border'
                 }`}
               >
                 Cargar a mano
@@ -656,7 +656,7 @@ export default function NuevaOrden() {
                   <button
                     key={t.id}
                     onClick={() => agregarTrabajoDelCatalogo(t)}
-                    className="rounded-lg border border-black/10 bg-white px-3 py-2 flex items-center justify-between text-left text-sm"
+                    className="rounded-lg border border-border bg-white px-3 py-2 flex items-center justify-between text-left text-sm"
                   >
                     <span>{t.nombre}</span>
                     {t.precio != null && <span className="font-medium">${t.precio.toLocaleString('es-AR')}</span>}
@@ -669,19 +669,19 @@ export default function NuevaOrden() {
                   value={trabajoManualNombre}
                   onChange={(e) => setTrabajoManualNombre(e.target.value)}
                   placeholder="Nombre del arreglo"
-                  className="w-full bg-white border border-black/10 rounded-lg px-3 py-2 text-sm"
+                  className="w-full bg-white border border-border rounded-lg px-3 py-2 text-sm"
                 />
                 <input
                   value={trabajoManualPrecio}
                   onChange={(e) => setTrabajoManualPrecio(e.target.value)}
                   placeholder="Precio"
                   inputMode="numeric"
-                  className="w-full bg-white border border-black/10 rounded-lg px-3 py-2 text-sm"
+                  className="w-full bg-white border border-border rounded-lg px-3 py-2 text-sm"
                 />
                 <button
                   disabled={!trabajoManualNombre.trim()}
                   onClick={agregarTrabajoManual}
-                  className="w-full rounded-lg bg-ink py-2 text-sm font-medium text-base disabled:opacity-40"
+                  className="w-full rounded-lg bg-accent hover:bg-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
                 >
                   Agregar al carrito
                 </button>
@@ -697,7 +697,7 @@ export default function NuevaOrden() {
           {carrito.map((i) => (
             <div
               key={i.tempId}
-              className="rounded-xl border border-black/10 bg-white/60 px-4 py-3 flex items-center justify-between"
+              className="rounded-xl border border-border bg-white shadow-card px-4 py-3 flex items-center justify-between"
             >
               <div className="flex-1">
                 <p className="text-sm font-medium">{i.descripcion}</p>
@@ -708,7 +708,7 @@ export default function NuevaOrden() {
                     value={i.precioUnitario}
                     onChange={(e) => actualizarPrecioItem(i.tempId, e.target.value)}
                     inputMode="numeric"
-                    className="w-20 bg-white border border-black/10 rounded px-1 py-0.5 text-xs"
+                    className="w-20 bg-white border border-border rounded px-1 py-0.5 text-xs"
                   />
                 </div>
               </div>
@@ -723,7 +723,7 @@ export default function NuevaOrden() {
         </div>
 
         {carrito.length > 0 && (
-          <div className="flex items-center justify-between text-sm font-medium border-t border-black/10 pt-3">
+          <div className="flex items-center justify-between text-sm font-medium border-t border-border pt-3">
             <span>Subtotal</span>
             <span>${subtotal.toLocaleString('es-AR')}</span>
           </div>
@@ -736,7 +736,7 @@ export default function NuevaOrden() {
             setImpuesto('');
             setStep('confirmar');
           }}
-          className="mt-auto w-full rounded-2xl bg-ink py-4 text-center text-base font-medium text-base disabled:opacity-40"
+          className="mt-auto w-full rounded-2xl bg-accent hover:bg-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
         >
           Continuar
         </button>
@@ -755,7 +755,7 @@ export default function NuevaOrden() {
 
       {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
 
-      <div className="rounded-xl bg-white/60 border border-black/10 px-4 py-3 text-sm flex flex-col gap-1">
+      <div className="rounded-xl bg-white border border-border px-4 py-3 text-sm flex flex-col gap-1">
         <p>
           <span className="text-muted">Cliente:</span>{' '}
           {modoCliente === 'existente' ? `${clienteElegido?.nombre} ${clienteElegido?.apellido || ''}` : nuevoNombre}
@@ -770,7 +770,7 @@ export default function NuevaOrden() {
         <select
           value={vendedorId}
           onChange={(e) => setVendedorId(e.target.value)}
-          className="w-full bg-white/60 border border-black/10 rounded-xl px-4 py-3 text-sm"
+          className="w-full bg-white border border-border rounded-xl px-4 py-3 text-sm"
         >
           <option value="">Sin asignar</option>
           {vendedores.map((v) => (
@@ -789,7 +789,7 @@ export default function NuevaOrden() {
               key={f}
               onClick={() => setFormaPago(f)}
               className={`flex-1 rounded-xl py-2 text-sm font-medium ${
-                formaPago === f ? 'bg-ink text-base' : 'bg-white/60 border border-black/10 text-ink'
+                formaPago === f ? 'bg-accent text-white' : 'bg-white border border-border text-ink'
               }`}
             >
               {f}
@@ -806,7 +806,7 @@ export default function NuevaOrden() {
             onChange={(e) => setAnticipo(e.target.value)}
             inputMode="numeric"
             placeholder="0"
-            className="w-full bg-white/60 border border-black/10 rounded-xl px-4 py-3 text-sm"
+            className="w-full bg-white border border-border rounded-xl px-4 py-3 text-sm"
           />
         </div>
         <div className="flex-1">
@@ -816,12 +816,12 @@ export default function NuevaOrden() {
             onChange={(e) => setImpuesto(e.target.value)}
             inputMode="numeric"
             placeholder="0"
-            className="w-full bg-white/60 border border-black/10 rounded-xl px-4 py-3 text-sm"
+            className="w-full bg-white border border-border rounded-xl px-4 py-3 text-sm"
           />
         </div>
       </div>
 
-      <div className="rounded-xl border border-black/10 bg-white/60 p-3 flex flex-col gap-3">
+      <div className="rounded-xl border border-border bg-white shadow-card p-3 flex flex-col gap-3">
         <label className="flex items-center gap-3 cursor-pointer">
           <input
             type="checkbox"
@@ -838,7 +838,7 @@ export default function NuevaOrden() {
               value={canjeModelo}
               onChange={(e) => setCanjeModelo(e.target.value)}
               placeholder="Modelo del dispositivo entregado"
-              className="w-full bg-white border border-black/10 rounded-lg px-3 py-2 text-sm"
+              className="w-full bg-white border border-border rounded-lg px-3 py-2 text-sm"
             />
             <div className="flex gap-2">
               {STORAGE_OPTIONS.map((gb) => (
@@ -846,7 +846,7 @@ export default function NuevaOrden() {
                   key={gb}
                   onClick={() => setCanjeCapacidad(gb)}
                   className={`flex-1 rounded-lg py-2 text-xs font-medium ${
-                    canjeCapacidad === gb ? 'bg-ink text-base' : 'border border-black/10'
+                    canjeCapacidad === gb ? 'bg-accent text-white' : 'border border-border'
                   }`}
                 >
                   {gb}GB
@@ -858,14 +858,14 @@ export default function NuevaOrden() {
                 value={canjeColor}
                 onChange={(e) => setCanjeColor(e.target.value)}
                 placeholder="Color"
-                className="flex-1 bg-white border border-black/10 rounded-lg px-3 py-2 text-sm"
+                className="flex-1 bg-white border border-border rounded-lg px-3 py-2 text-sm"
               />
               <input
                 value={canjeBateria}
                 onChange={(e) => setCanjeBateria(e.target.value)}
                 placeholder="Batería %"
                 inputMode="numeric"
-                className="w-24 bg-white border border-black/10 rounded-lg px-3 py-2 text-sm"
+                className="w-24 bg-white border border-border rounded-lg px-3 py-2 text-sm"
               />
             </div>
             <input
@@ -873,14 +873,14 @@ export default function NuevaOrden() {
               onChange={(e) => setCanjeMonto(e.target.value)}
               placeholder="Monto reconocido"
               inputMode="numeric"
-              className="w-full bg-white border border-black/10 rounded-lg px-3 py-2 text-sm"
+              className="w-full bg-white border border-border rounded-lg px-3 py-2 text-sm"
             />
             <textarea
               value={canjeDetalles}
               onChange={(e) => setCanjeDetalles(e.target.value)}
               placeholder="Detalles del dispositivo (ej. no anda el parlante, módulo con detalle)"
               rows={3}
-              className="w-full bg-white border border-black/10 rounded-lg px-3 py-2 text-sm"
+              className="w-full bg-white border border-border rounded-lg px-3 py-2 text-sm"
             />
             <p className="text-xs text-muted">
               El dispositivo entregado va a la sección Plan Canje (no entra directo al stock).
@@ -897,7 +897,7 @@ export default function NuevaOrden() {
               key={e}
               onClick={() => setEstadoOrden(e)}
               className={`flex-1 rounded-xl py-2 text-sm font-medium capitalize ${
-                estadoOrden === e ? 'bg-ink text-base' : 'bg-white/60 border border-black/10 text-ink'
+                estadoOrden === e ? 'bg-accent text-white' : 'bg-white border border-border text-ink'
               }`}
             >
               {e}
@@ -906,7 +906,7 @@ export default function NuevaOrden() {
         </div>
       </div>
 
-      <div className="flex items-center justify-between text-lg font-medium border-t border-black/10 pt-3">
+      <div className="flex items-center justify-between text-lg font-medium border-t border-border pt-3">
         <span>Total</span>
         <span>${total.toLocaleString('es-AR')}</span>
       </div>
@@ -914,7 +914,7 @@ export default function NuevaOrden() {
       <button
         disabled={!puedeConfirmar || guardando}
         onClick={handleConfirmar}
-        className="mt-auto w-full rounded-2xl bg-ink py-4 text-center text-base font-medium text-base disabled:opacity-40"
+        className="mt-auto w-full rounded-2xl bg-accent hover:bg-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
       >
         {guardando ? 'Creando orden...' : 'Confirmar orden'}
       </button>
@@ -937,7 +937,7 @@ function Campo({
       <input
         value={valor}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full bg-white/60 border border-black/10 rounded-xl px-4 py-3 text-sm"
+        className="w-full bg-white border border-border rounded-xl px-4 py-3 text-sm"
       />
     </div>
   );

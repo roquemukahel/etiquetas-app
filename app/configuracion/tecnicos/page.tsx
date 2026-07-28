@@ -61,12 +61,12 @@ export default function Tecnicos() {
           value={nombre}
           onChange={(e) => setNombre(e.target.value)}
           placeholder="Nombre del técnico"
-          className="flex-1 bg-white/60 border border-black/10 rounded-xl px-4 py-3 text-sm"
+          className="flex-1 bg-white border border-border rounded-xl px-4 py-3 text-sm"
         />
         <button
           disabled={!nombre.trim() || guardando}
           onClick={agregar}
-          className="rounded-xl bg-ink px-5 text-sm font-medium text-base disabled:opacity-40"
+          className="rounded-xl bg-accent hover:bg-accent-hover transition-colors px-5 text-sm font-medium text-white disabled:opacity-40"
         >
           Agregar
         </button>
@@ -81,7 +81,7 @@ export default function Tecnicos() {
         {tecnicos.map((t) => (
           <div
             key={t.id}
-            className="rounded-xl border border-black/10 bg-white/60 px-4 py-3 flex items-center justify-between"
+            className="rounded-xl border border-border bg-white shadow-card px-4 py-3 flex items-center justify-between"
           >
             <p className="text-sm font-medium">{t.nombre}</p>
             <button onClick={() => eliminar(t.id)} className="text-xs text-bad underline">
