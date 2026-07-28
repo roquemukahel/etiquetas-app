@@ -211,3 +211,12 @@ create policy "productos de mi negocio" on productos
 create policy "items de ordenes de mi negocio" on orden_items
   for all using (orden_id in (select id from ordenes where negocio_id = negocio_actual()))
   with check (orden_id in (select id from ordenes where negocio_id = negocio_actual()));
+
+-- ============================================================
+-- Plan canje: el dispositivo que el cliente entrega como parte
+-- de pago entra al stock como cualquier otro (para poder
+-- revenderlo), y la orden guarda cuánto se le reconoció.
+-- ============================================================
+alter table ordenes add column if not exists dispositivo_canje_id uuid references dispositivos(id);
+alter table ordenes add column if not exists monto_canje numeric default 0;
+alter table ordenes drop column if exists canje;

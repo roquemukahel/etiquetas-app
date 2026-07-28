@@ -13,9 +13,11 @@ type Orden = {
   total: number | null;
   anticipo: number | null;
   impuesto_porcentaje: number | null;
+  monto_canje: number | null;
   estado: string;
   created_at: string;
   fecha_entrega: string | null;
+  dispositivos: { modelo: string | null; capacidad_gb: number | null; color: string | null } | null;
   clientes: {
     nombre: string;
     apellido: string | null;
@@ -53,7 +55,7 @@ export default function Boleta() {
       const { data: ordenData } = await supabase
         .from('ordenes')
         .select(
-          '*, clientes ( nombre, apellido, telefono, email, dni, domicilio ), vendedores ( nombre ), orden_items ( descripcion, cantidad, precio_unitario )'
+          '*, clientes ( nombre, apellido, telefono, email, dni, domicilio ), vendedores ( nombre ), dispositivos!dispositivo_canje_id ( modelo, capacidad_gb, color ), orden_items ( descripcion, cantidad, precio_unitario )'
         )
         .eq('id', id)
         .single();
@@ -203,6 +205,12 @@ export default function Boleta() {
               <span>{orden.impuesto_porcentaje}%</span>
             </div>
           )}
+          {orden.monto_canje != null && orden.monto_canje > 0 && (
+            <div className="flex justify-between">
+              <span>Plan canje</span>
+              <span>-${orden.monto_canje.toLocaleString('es-AR')}</span>
+            </div>
+          )}
           <div className="flex justify-between font-medium text-sm border-t border-black/10 pt-1">
             <span>TOTAL</span>
             <span>${(orden.total ?? subtotal).toLocaleString('es-AR')}</span>
@@ -215,6 +223,13 @@ export default function Boleta() {
         {orden.vendedores?.nombre && (
           <p>
             <span className="font-medium">Vendedor:</span> {orden.vendedores.nombre}
+          </p>
+        )}
+        {orden.dispositivos && orden.monto_canje != null && orden.monto_canje > 0 && (
+          <p>
+            <span className="font-medium">Entrega en canje:</span> {orden.dispositivos.modelo}
+            {orden.dispositivos.capacidad_gb ? ` ${orden.dispositivos.capacidad_gb}GB` : ''}
+            {orden.dispositivos.color ? ` ${orden.dispositivos.color}` : ''} — ${orden.monto_canje.toLocaleString('es-AR')}
           </p>
         )}
 

@@ -82,6 +82,14 @@ export default function NuevaOrden() {
   const [impuesto, setImpuesto] = useState('');
   const [estadoOrden, setEstadoOrden] = useState('pendiente');
 
+  // --- plan canje ---
+  const [canjeActivo, setCanjeActivo] = useState(false);
+  const [canjeModelo, setCanjeModelo] = useState('');
+  const [canjeCapacidad, setCanjeCapacidad] = useState<number | null>(null);
+  const [canjeColor, setCanjeColor] = useState('');
+  const [canjeBateria, setCanjeBateria] = useState('');
+  const [canjeMonto, setCanjeMonto] = useState('');
+
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
 
@@ -130,8 +138,9 @@ export default function NuevaOrden() {
   );
   const total = useMemo(() => {
     const conImpuesto = subtotal * (1 + (Number(impuesto) || 0) / 100);
-    return Math.max(0, conImpuesto - (Number(anticipo) || 0));
-  }, [subtotal, impuesto, anticipo]);
+    const montoCanje = canjeActivo ? Number(canjeMonto) || 0 : 0;
+    return Math.max(0, conImpuesto - (Number(anticipo) || 0) - montoCanje);
+  }, [subtotal, impuesto, anticipo, canjeActivo, canjeMonto]);
 
   const elegirCliente = (c: Cliente) => {
     setClienteElegido(c);
@@ -239,6 +248,24 @@ export default function NuevaOrden() {
         clienteId = data.id;
       }
 
+      let dispositivoCanjeId: string | null = null;
+      if (canjeActivo && canjeModelo.trim()) {
+        const { data: canjeData, error: canjeErr } = await supabase
+          .from('dispositivos')
+          .insert({
+            modelo: canjeModelo.trim(),
+            capacidad_gb: canjeCapacidad,
+            color: canjeColor.trim() || null,
+            salud_bateria: canjeBateria ? Number(canjeBateria) : null,
+            estado: 'usado',
+            en_stock: true,
+          })
+          .select()
+          .single();
+        if (canjeErr || !canjeData) throw new Error(canjeErr?.message || 'no se pudo cargar el dispositivo de canje');
+        dispositivoCanjeId = canjeData.id;
+      }
+
       const { data: orden, error: oErr } = await supabase
         .from('ordenes')
         .insert({
@@ -247,6 +274,8 @@ export default function NuevaOrden() {
           forma_pago: formaPago,
           anticipo: Number(anticipo) || 0,
           impuesto_porcentaje: Number(impuesto) || 0,
+          dispositivo_canje_id: dispositivoCanjeId,
+          monto_canje: canjeActivo ? Number(canjeMonto) || 0 : 0,
           total,
           estado: estadoOrden,
           fecha_entrega: estadoOrden === 'entregado' ? new Date().toISOString() : null,
@@ -668,6 +697,67 @@ export default function NuevaOrden() {
             className="w-full bg-white/60 border border-black/10 rounded-xl px-4 py-3 text-sm"
           />
         </div>
+      </div>
+
+      <div className="rounded-xl border border-black/10 bg-white/60 p-3 flex flex-col gap-3">
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={canjeActivo}
+            onChange={(e) => setCanjeActivo(e.target.checked)}
+            className="h-5 w-5 accent-ink"
+          />
+          <span className="text-sm font-medium">Plan canje: recibo un dispositivo como parte de pago</span>
+        </label>
+
+        {canjeActivo && (
+          <div className="flex flex-col gap-2">
+            <input
+              value={canjeModelo}
+              onChange={(e) => setCanjeModelo(e.target.value)}
+              placeholder="Modelo del dispositivo entregado"
+              className="w-full bg-white border border-black/10 rounded-lg px-3 py-2 text-sm"
+            />
+            <div className="flex gap-2">
+              {STORAGE_OPTIONS.map((gb) => (
+                <button
+                  key={gb}
+                  onClick={() => setCanjeCapacidad(gb)}
+                  className={`flex-1 rounded-lg py-2 text-xs font-medium ${
+                    canjeCapacidad === gb ? 'bg-ink text-base' : 'border border-black/10'
+                  }`}
+                >
+                  {gb}GB
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <input
+                value={canjeColor}
+                onChange={(e) => setCanjeColor(e.target.value)}
+                placeholder="Color"
+                className="flex-1 bg-white border border-black/10 rounded-lg px-3 py-2 text-sm"
+              />
+              <input
+                value={canjeBateria}
+                onChange={(e) => setCanjeBateria(e.target.value)}
+                placeholder="Batería %"
+                inputMode="numeric"
+                className="w-24 bg-white border border-black/10 rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+            <input
+              value={canjeMonto}
+              onChange={(e) => setCanjeMonto(e.target.value)}
+              placeholder="Monto reconocido"
+              inputMode="numeric"
+              className="w-full bg-white border border-black/10 rounded-lg px-3 py-2 text-sm"
+            />
+            <p className="text-xs text-muted">
+              El dispositivo entregado entra a tu Stock automáticamente al confirmar la orden.
+            </p>
+          </div>
+        )}
       </div>
 
       <div>
