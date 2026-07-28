@@ -107,7 +107,7 @@ export default function BoletaCompra() {
           Imprimir
         </button>
         <Link
-          href="/compras"
+          href={`/compras/${compra.id}`}
           className="rounded-lg bg-accent hover:bg-accent-hover transition-colors text-white px-3 py-2 text-xs font-medium"
         >
           Guardar

@@ -9,8 +9,15 @@ type Compra = {
   modelo: string | null;
   capacidad_gb: number | null;
   precio: number | null;
+  estado: string;
   created_at: string;
   clientes: { nombre: string; apellido: string | null } | null;
+};
+
+const ETIQUETA_ESTADO: Record<string, string> = {
+  pendiente: 'Pendiente',
+  en_stock: 'En stock',
+  servicio_tecnico: 'Servicio técnico',
 };
 
 export default function Compras() {
@@ -70,7 +77,7 @@ export default function Compras() {
         {filtradas.map((c) => (
           <Link
             key={c.id}
-            href={`/compras/${c.id}/boleta`}
+            href={`/compras/${c.id}`}
             className="rounded-xl border border-border bg-white shadow-card px-4 py-3 flex items-center justify-between"
           >
             <div>
@@ -84,7 +91,7 @@ export default function Compras() {
             </div>
             <div className="text-right">
               {c.precio != null && <p className="text-sm font-medium">${c.precio.toLocaleString('es-AR')}</p>}
-              <p className="text-xs text-muted">{new Date(c.created_at).toLocaleDateString('es-AR')}</p>
+              <p className="text-xs text-muted">{ETIQUETA_ESTADO[c.estado] || c.estado}</p>
             </div>
           </Link>
         ))}

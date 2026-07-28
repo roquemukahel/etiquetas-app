@@ -341,3 +341,10 @@ create policy "compras de mi negocio" on compras
   with check (negocio_id = negocio_actual());
 
 alter table negocios add column if not exists texto_declaracion_compra text;
+
+-- ============================================================
+-- Estado de la compra: si el dispositivo comprado ya se derivó al
+-- Stock (para vender directo) o a Servicio Técnico (si tenía un
+-- detalle que arreglar antes).
+-- ============================================================
+alter table compras add column if not exists estado text not null default 'pendiente';
