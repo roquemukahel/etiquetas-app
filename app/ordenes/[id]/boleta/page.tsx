@@ -47,6 +47,8 @@ type Negocio = {
   logo_url: string | null;
   texto_garantia: string | null;
   texto_garantia_servicio: string | null;
+  texto_garantia_tamano: number;
+  texto_garantia_servicio_tamano: number;
   instagram: string | null;
   facebook: string | null;
   tiktok: string | null;
@@ -114,7 +116,7 @@ export default function Boleta() {
         const { data: perfil } = await supabase
           .from('perfiles')
           .select(
-            'negocios ( nombre, telefono, direccion, logo_url, texto_garantia, texto_garantia_servicio, instagram, facebook, tiktok, mostrar_instagram, mostrar_facebook, mostrar_tiktok, moneda )'
+            'negocios ( nombre, telefono, direccion, logo_url, texto_garantia, texto_garantia_servicio, texto_garantia_tamano, texto_garantia_servicio_tamano, instagram, facebook, tiktok, mostrar_instagram, mostrar_facebook, mostrar_tiktok, moneda )'
           )
           .eq('id', user.id)
           .single();
@@ -191,15 +193,15 @@ export default function Boleta() {
 
       <div
         id="boleta"
-        className="flex flex-col gap-8 text-[15px] text-ink bg-white rounded-2xl border border-border shadow-card p-8"
+        className="flex flex-col gap-8 print:gap-3 text-[15px] text-ink bg-white rounded-2xl border border-border shadow-card p-8 print:p-4"
       >
-        <div className="flex items-start justify-between gap-4 pb-6 border-b border-border">
+        <div className="flex items-start justify-between gap-4 pb-6 print:pb-2 border-b border-border">
           <div className="flex items-center gap-3">
             {negocio?.logo_url && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={negocio.logo_url} alt="Logo" className="h-16 w-16 object-contain rounded-lg" />
+              <img src={negocio.logo_url} alt="Logo" className="h-16 w-16 print:h-10 print:w-10 object-contain rounded-lg" />
             )}
-            <p className="text-2xl font-display font-semibold">{negocio?.nombre}</p>
+            <p className="text-2xl print:text-lg font-display font-semibold">{negocio?.nombre}</p>
           </div>
           <div className="text-right text-sm text-muted leading-relaxed">
             <p className="font-medium text-ink">Orden #{orden.id.slice(0, 8)}</p>
@@ -208,7 +210,7 @@ export default function Boleta() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-8">
+        <div className="grid grid-cols-2 gap-8 print:gap-4">
           <div className="flex flex-col gap-1">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-1">Negocio</p>
             <p className="font-medium">{negocio?.nombre}</p>
@@ -285,13 +287,13 @@ export default function Boleta() {
           <tbody>
             {orden.orden_items.map((i, idx) => (
               <tr key={idx} className="border-b border-border">
-                <td className="py-2.5">{i.descripcion}</td>
-                <td className="py-2.5 text-center">{i.cantidad}</td>
-                <td className="py-2.5 text-right">
+                <td className="py-2.5 print:py-1">{i.descripcion}</td>
+                <td className="py-2.5 print:py-1 text-center">{i.cantidad}</td>
+                <td className="py-2.5 print:py-1 text-right">
                   {moneda}
                   {i.precio_unitario.toLocaleString('es-AR')}
                 </td>
-                <td className="py-2.5 text-right font-medium">
+                <td className="py-2.5 print:py-1 text-right font-medium">
                   {moneda}
                   {(i.cantidad * i.precio_unitario).toLocaleString('es-AR')}
                 </td>
@@ -355,20 +357,30 @@ export default function Boleta() {
         </div>
 
         {tieneProductos && negocio?.texto_garantia && (
-          <div className="rounded-xl bg-canvas p-4">
+          <div className="rounded-xl bg-canvas p-4 print:p-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">Garantía de productos</p>
-            <p className="whitespace-pre-wrap text-sm text-muted">{negocio.texto_garantia}</p>
+            <p
+              className="whitespace-pre-wrap text-muted"
+              style={{ fontSize: negocio.texto_garantia_tamano }}
+            >
+              {negocio.texto_garantia}
+            </p>
           </div>
         )}
 
         {tieneTrabajos && negocio?.texto_garantia_servicio && (
-          <div className="rounded-xl bg-canvas p-4">
+          <div className="rounded-xl bg-canvas p-4 print:p-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">Garantía de servicio técnico</p>
-            <p className="whitespace-pre-wrap text-sm text-muted">{negocio.texto_garantia_servicio}</p>
+            <p
+              className="whitespace-pre-wrap text-muted"
+              style={{ fontSize: negocio.texto_garantia_servicio_tamano }}
+            >
+              {negocio.texto_garantia_servicio}
+            </p>
           </div>
         )}
 
-        <div className="mt-4 flex flex-col items-center gap-1 self-center">
+        <div className="mt-4 print:mt-2 flex flex-col items-center gap-1 self-center">
           <div className="w-56 border-t border-border" />
           <p className="text-sm text-muted">Nombre y firma del cliente</p>
         </div>

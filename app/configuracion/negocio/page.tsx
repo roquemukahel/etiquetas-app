@@ -22,7 +22,12 @@ type Negocio = {
   mostrar_tiktok: boolean;
   moneda: string;
   texto_declaracion_compra: string | null;
+  texto_garantia_tamano: number;
+  texto_garantia_servicio_tamano: number;
+  texto_declaracion_compra_tamano: number;
 };
+
+const TAMANOS = [9, 10, 11, 12, 13, 14];
 
 export default function DatosNegocio() {
   const router = useRouter();
@@ -42,7 +47,7 @@ export default function DatosNegocio() {
       const { data: perfil } = await supabase
         .from('perfiles')
         .select(
-          'negocio_id, negocios ( id, nombre, telefono, direccion, logo_url, texto_garantia, texto_garantia_servicio, instagram, facebook, tiktok, mostrar_instagram, mostrar_facebook, mostrar_tiktok, moneda, texto_declaracion_compra )'
+          'negocio_id, negocios ( id, nombre, telefono, direccion, logo_url, texto_garantia, texto_garantia_servicio, instagram, facebook, tiktok, mostrar_instagram, mostrar_facebook, mostrar_tiktok, moneda, texto_declaracion_compra, texto_garantia_tamano, texto_garantia_servicio_tamano, texto_declaracion_compra_tamano )'
         )
         .eq('id', user.id)
         .single();
@@ -53,6 +58,7 @@ export default function DatosNegocio() {
 
   const campo = (k: keyof Negocio, v: string) => setNegocio((prev) => (prev ? { ...prev, [k]: v } : prev));
   const campoBool = (k: keyof Negocio, v: boolean) => setNegocio((prev) => (prev ? { ...prev, [k]: v } : prev));
+  const campoNum = (k: keyof Negocio, v: number) => setNegocio((prev) => (prev ? { ...prev, [k]: v } : prev));
 
   const handleLogo = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -84,6 +90,9 @@ export default function DatosNegocio() {
         mostrar_tiktok: negocio.mostrar_tiktok,
         moneda: negocio.moneda,
         texto_declaracion_compra: negocio.texto_declaracion_compra?.trim() || null,
+        texto_garantia_tamano: negocio.texto_garantia_tamano,
+        texto_garantia_servicio_tamano: negocio.texto_garantia_servicio_tamano,
+        texto_declaracion_compra_tamano: negocio.texto_declaracion_compra_tamano,
       })
       .eq('id', negocio.id);
 
@@ -161,40 +170,30 @@ export default function DatosNegocio() {
           </select>
         </div>
 
-        <div>
-          <label className="text-xs text-muted block mb-1">Garantía de productos (va en la boleta de venta)</label>
-          <textarea
-            value={negocio.texto_garantia ?? ''}
-            onChange={(e) => campo('texto_garantia', e.target.value)}
-            rows={8}
-            className="w-full bg-white border border-border rounded-xl px-4 py-3 text-sm"
-          />
-        </div>
+        <TextoConTamano
+          label="Garantía de productos (va en la boleta de venta)"
+          valor={negocio.texto_garantia ?? ''}
+          onChange={(v) => campo('texto_garantia', v)}
+          tamano={negocio.texto_garantia_tamano}
+          onChangeTamano={(v) => campoNum('texto_garantia_tamano', v)}
+        />
 
-        <div>
-          <label className="text-xs text-muted block mb-1">
-            Garantía de servicio técnico (va en la boleta cuando incluye un arreglo)
-          </label>
-          <textarea
-            value={negocio.texto_garantia_servicio ?? ''}
-            onChange={(e) => campo('texto_garantia_servicio', e.target.value)}
-            rows={8}
-            className="w-full bg-white border border-border rounded-xl px-4 py-3 text-sm"
-          />
-        </div>
+        <TextoConTamano
+          label="Garantía de servicio técnico (va en la boleta cuando incluye un arreglo)"
+          valor={negocio.texto_garantia_servicio ?? ''}
+          onChange={(v) => campo('texto_garantia_servicio', v)}
+          tamano={negocio.texto_garantia_servicio_tamano}
+          onChangeTamano={(v) => campoNum('texto_garantia_servicio_tamano', v)}
+        />
 
-        <div>
-          <label className="text-xs text-muted block mb-1">
-            Declaración de compra (va en la boleta al comprarle un dispositivo a alguien)
-          </label>
-          <textarea
-            value={negocio.texto_declaracion_compra ?? ''}
-            onChange={(e) => campo('texto_declaracion_compra', e.target.value)}
-            rows={6}
-            placeholder="Declaro que el dispositivo entregado es de mi propiedad, ha sido obtenido de buena fe y que soy responsable de la información brindada."
-            className="w-full bg-white border border-border rounded-xl px-4 py-3 text-sm"
-          />
-        </div>
+        <TextoConTamano
+          label="Declaración de compra (va en la boleta al comprarle un dispositivo a alguien)"
+          valor={negocio.texto_declaracion_compra ?? ''}
+          onChange={(v) => campo('texto_declaracion_compra', v)}
+          tamano={negocio.texto_declaracion_compra_tamano}
+          onChangeTamano={(v) => campoNum('texto_declaracion_compra_tamano', v)}
+          placeholder="Declaro que el dispositivo entregado es de mi propiedad, ha sido obtenido de buena fe y que soy responsable de la información brindada."
+        />
 
         <p className="text-xs text-muted font-medium mt-2">Redes sociales (opcional)</p>
         <RedSocial
@@ -247,6 +246,49 @@ function Campo({
         value={valor}
         onChange={(e) => onChange(e.target.value)}
         className="w-full bg-white border border-border rounded-xl px-4 py-3 text-sm"
+      />
+    </div>
+  );
+}
+
+function TextoConTamano({
+  label,
+  valor,
+  onChange,
+  tamano,
+  onChangeTamano,
+  placeholder,
+}: {
+  label: string;
+  valor: string;
+  onChange: (v: string) => void;
+  tamano: number;
+  onChangeTamano: (v: number) => void;
+  placeholder?: string;
+}) {
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <label className="text-xs text-muted">{label}</label>
+        <select
+          value={tamano}
+          onChange={(e) => onChangeTamano(Number(e.target.value))}
+          className="bg-white border border-border rounded-lg px-2 py-1 text-xs shrink-0 ml-2"
+        >
+          {TAMANOS.map((t) => (
+            <option key={t} value={t}>
+              Letra {t}px
+            </option>
+          ))}
+        </select>
+      </div>
+      <textarea
+        value={valor}
+        onChange={(e) => onChange(e.target.value)}
+        rows={8}
+        placeholder={placeholder}
+        style={{ fontSize: tamano }}
+        className="w-full bg-white border border-border rounded-xl px-4 py-3"
       />
     </div>
   );

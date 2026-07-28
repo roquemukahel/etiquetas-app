@@ -30,6 +30,7 @@ type Negocio = {
   direccion: string | null;
   logo_url: string | null;
   texto_declaracion_compra: string | null;
+  texto_declaracion_compra_tamano: number;
   moneda: string;
 };
 
@@ -62,7 +63,7 @@ export default function BoletaCompra() {
       if (user) {
         const { data: perfil } = await supabase
           .from('perfiles')
-          .select('negocios ( nombre, telefono, direccion, logo_url, texto_declaracion_compra, moneda )')
+          .select('negocios ( nombre, telefono, direccion, logo_url, texto_declaracion_compra, texto_declaracion_compra_tamano, moneda )')
           .eq('id', user.id)
           .single();
         setNegocio((perfil as any)?.negocios ?? null);
@@ -117,15 +118,15 @@ export default function BoletaCompra() {
 
       <div
         id="boleta"
-        className="flex flex-col gap-8 text-[15px] text-ink bg-white rounded-2xl border border-border shadow-card p-8"
+        className="flex flex-col gap-8 print:gap-3 text-[15px] text-ink bg-white rounded-2xl border border-border shadow-card p-8 print:p-4"
       >
-        <div className="flex items-start justify-between gap-4 pb-6 border-b border-border">
+        <div className="flex items-start justify-between gap-4 pb-6 print:pb-2 border-b border-border">
           <div className="flex items-center gap-3">
             {negocio?.logo_url && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={negocio.logo_url} alt="Logo" className="h-16 w-16 object-contain rounded-lg" />
+              <img src={negocio.logo_url} alt="Logo" className="h-16 w-16 print:h-10 print:w-10 object-contain rounded-lg" />
             )}
-            <p className="text-2xl font-display font-semibold">{negocio?.nombre}</p>
+            <p className="text-2xl print:text-lg font-display font-semibold">{negocio?.nombre}</p>
           </div>
           <div className="text-right text-sm text-muted leading-relaxed">
             <p className="font-medium text-ink">Compra #{compra.id.slice(0, 8)}</p>
@@ -133,7 +134,7 @@ export default function BoletaCompra() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-8">
+        <div className="grid grid-cols-2 gap-8 print:gap-4">
           <div className="flex flex-col gap-1">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-1">Negocio (comprador)</p>
             <p className="font-medium">{negocio?.nombre}</p>
@@ -171,13 +172,18 @@ export default function BoletaCompra() {
         </div>
 
         {negocio?.texto_declaracion_compra && (
-          <div className="rounded-xl bg-canvas p-4">
+          <div className="rounded-xl bg-canvas p-4 print:p-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">Declaración</p>
-            <p className="whitespace-pre-wrap text-sm text-muted">{negocio.texto_declaracion_compra}</p>
+            <p
+              className="whitespace-pre-wrap text-muted"
+              style={{ fontSize: negocio.texto_declaracion_compra_tamano }}
+            >
+              {negocio.texto_declaracion_compra}
+            </p>
           </div>
         )}
 
-        <div className="mt-4 flex flex-col items-center gap-1 self-center">
+        <div className="mt-4 print:mt-2 flex flex-col items-center gap-1 self-center">
           <div className="w-64 border-t border-border" />
           <p className="text-sm text-muted">Firma</p>
           <div className="w-64 border-t border-border mt-4" />

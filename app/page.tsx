@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { crearClienteServidor } from './lib/supabase/server';
 import BotonSalir from './BotonSalir';
 import QMark from './QMark';
+import { simboloMoneda } from './lib/monedas';
 
 function IconoBase({ children }: { children: React.ReactNode }) {
   return (
@@ -84,41 +85,83 @@ export default async function Home() {
   let pendientes = 0;
   let totalClientes = 0;
   let esAdmin = false;
+  let moneda = '$';
+  let ingresosMes = 0;
+  let ventasMes = 0;
+  let deltaPct: number | null = null;
+  let dias: { label: string; valor: number }[] = [];
 
   if (user) {
     const { data: perfil } = await supabase
       .from('perfiles')
-      .select('negocio_id, negocios ( nombre, logo_url )')
+      .select('negocio_id, negocios ( nombre, logo_url, moneda )')
       .eq('id', user.id)
       .single();
     const negocio = (perfil as any)?.negocios;
     if (negocio?.nombre) nombreNegocio = negocio.nombre;
     if (negocio?.logo_url) logoUrl = negocio.logo_url;
+    if (negocio?.moneda) moneda = simboloMoneda(negocio.moneda);
 
-    const [{ count: countStock }, { count: countPendientes }, { count: countClientes }, { data: esAdminData }] =
+    const inicioMes = new Date();
+    inicioMes.setDate(1);
+    inicioMes.setHours(0, 0, 0, 0);
+    const inicioMesPasado = new Date(inicioMes);
+    inicioMesPasado.setMonth(inicioMesPasado.getMonth() - 1);
+
+    const [{ count: countStock }, { count: countPendientes }, { count: countClientes }, { data: esAdminData }, { data: ordenesRecientes }] =
       await Promise.all([
         supabase.from('dispositivos').select('id', { count: 'exact', head: true }).eq('en_stock', true),
         supabase.from('ordenes').select('id', { count: 'exact', head: true }).eq('estado', 'pendiente'),
         supabase.from('clientes').select('id', { count: 'exact', head: true }),
         supabase.rpc('es_admin'),
+        supabase.from('ordenes').select('total, estado, created_at').gte('created_at', inicioMesPasado.toISOString()),
       ]);
     enStock = countStock ?? 0;
     pendientes = countPendientes ?? 0;
     totalClientes = countClientes ?? 0;
     esAdmin = !!esAdminData;
+
+    const cobradas = (ordenesRecientes ?? []).filter((o) => o.estado === 'pagado' || o.estado === 'entregado');
+    ingresosMes = cobradas
+      .filter((o) => new Date(o.created_at) >= inicioMes)
+      .reduce((acc, o) => acc + (o.total || 0), 0);
+    const ingresosMesPasado = cobradas
+      .filter((o) => new Date(o.created_at) >= inicioMesPasado && new Date(o.created_at) < inicioMes)
+      .reduce((acc, o) => acc + (o.total || 0), 0);
+    ventasMes = (ordenesRecientes ?? []).filter((o) => new Date(o.created_at) >= inicioMes).length;
+    deltaPct = ingresosMesPasado > 0 ? Math.round(((ingresosMes - ingresosMesPasado) / ingresosMesPasado) * 100) : null;
+
+    for (let i = 6; i >= 0; i--) {
+      const dia = new Date();
+      dia.setDate(dia.getDate() - i);
+      dia.setHours(0, 0, 0, 0);
+      const diaFin = new Date(dia);
+      diaFin.setDate(diaFin.getDate() + 1);
+      const valor = cobradas
+        .filter((o) => {
+          const d = new Date(o.created_at);
+          return d >= dia && d < diaFin;
+        })
+        .reduce((acc, o) => acc + (o.total || 0), 0);
+      dias.push({ label: dia.toLocaleDateString('es-AR', { weekday: 'short' }).slice(0, 1).toUpperCase(), valor });
+    }
   }
+
+  const maxDia = Math.max(1, ...dias.map((d) => d.valor));
 
   return (
     <main className="flex min-h-screen flex-col px-6 py-8 gap-6 max-w-2xl mx-auto w-full">
       <header className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
           {logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={logoUrl} alt="Logo" className="h-10 w-10 rounded-lg object-contain bg-white border border-border" />
+            <img src={logoUrl} alt="Logo" className="h-20 w-20 rounded-2xl object-contain bg-white border border-border shadow-card" />
           ) : (
-            <QMark size={32} />
+            <div className="h-20 w-20 rounded-2xl bg-white border border-border shadow-card flex items-center justify-center">
+              <QMark size={48} />
+            </div>
           )}
-          <p className="text-base font-display font-semibold leading-tight">{nombreNegocio}</p>
+          <p className="text-xl font-display font-semibold leading-tight">{nombreNegocio}</p>
         </div>
         <div className="flex items-center gap-4">
           {esAdmin && (
@@ -132,6 +175,39 @@ export default async function Home() {
           <BotonSalir />
         </div>
       </header>
+
+      <div className="rounded-2xl bg-ink text-white p-5 flex flex-col gap-4">
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-xs text-white/60 mb-1">Ingresos este mes</p>
+            <p className="text-3xl font-display font-semibold">
+              {moneda}
+              {ingresosMes.toLocaleString('es-AR')}
+            </p>
+            <p className="text-xs text-white/60 mt-1">
+              {ventasMes} venta{ventasMes === 1 ? '' : 's'} este mes
+              {deltaPct != null && (
+                <span className={deltaPct >= 0 ? 'text-good' : 'text-bad'}>
+                  {' '}
+                  · {deltaPct >= 0 ? '+' : ''}
+                  {deltaPct}% vs. mes anterior
+                </span>
+              )}
+            </p>
+          </div>
+          <div className="flex items-end gap-1 h-12">
+            {dias.map((d, idx) => (
+              <div key={idx} className="flex flex-col items-center gap-1 w-4">
+                <div
+                  className="w-full rounded-sm bg-white/25"
+                  style={{ height: `${Math.max(6, (d.valor / maxDia) * 36)}px` }}
+                />
+                <span className="text-[9px] text-white/40">{d.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
 
       <div className="grid grid-cols-3 gap-3">
         <StatTile valor={enStock} etiqueta="En stock" />

@@ -466,3 +466,11 @@ begin
     where p.negocio_id = negocio_id_param;
 end;
 $$;
+
+-- ============================================================
+-- Tamaño de letra de cada texto largo de la boleta (afecta cuánto
+-- ocupa al imprimir).
+-- ============================================================
+alter table negocios add column if not exists texto_garantia_tamano int not null default 11;
+alter table negocios add column if not exists texto_garantia_servicio_tamano int not null default 11;
+alter table negocios add column if not exists texto_declaracion_compra_tamano int not null default 11;
