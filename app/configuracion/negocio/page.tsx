@@ -13,6 +13,12 @@ type Negocio = {
   logo_url: string | null;
   texto_garantia: string | null;
   texto_garantia_servicio: string | null;
+  instagram: string | null;
+  facebook: string | null;
+  tiktok: string | null;
+  mostrar_instagram: boolean;
+  mostrar_facebook: boolean;
+  mostrar_tiktok: boolean;
 };
 
 export default function DatosNegocio() {
@@ -32,7 +38,9 @@ export default function DatosNegocio() {
       if (!user) return;
       const { data: perfil } = await supabase
         .from('perfiles')
-        .select('negocio_id, negocios ( id, nombre, telefono, direccion, logo_url, texto_garantia, texto_garantia_servicio )')
+        .select(
+          'negocio_id, negocios ( id, nombre, telefono, direccion, logo_url, texto_garantia, texto_garantia_servicio, instagram, facebook, tiktok, mostrar_instagram, mostrar_facebook, mostrar_tiktok )'
+        )
         .eq('id', user.id)
         .single();
       setNegocio((perfil as any)?.negocios ?? null);
@@ -41,6 +49,7 @@ export default function DatosNegocio() {
   }, []);
 
   const campo = (k: keyof Negocio, v: string) => setNegocio((prev) => (prev ? { ...prev, [k]: v } : prev));
+  const campoBool = (k: keyof Negocio, v: boolean) => setNegocio((prev) => (prev ? { ...prev, [k]: v } : prev));
 
   const handleLogo = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -64,6 +73,12 @@ export default function DatosNegocio() {
         logo_url: negocio.logo_url || null,
         texto_garantia: negocio.texto_garantia?.trim() || null,
         texto_garantia_servicio: negocio.texto_garantia_servicio?.trim() || null,
+        instagram: negocio.instagram?.trim() || null,
+        facebook: negocio.facebook?.trim() || null,
+        tiktok: negocio.tiktok?.trim() || null,
+        mostrar_instagram: negocio.mostrar_instagram,
+        mostrar_facebook: negocio.mostrar_facebook,
+        mostrar_tiktok: negocio.mostrar_tiktok,
       })
       .eq('id', negocio.id);
 
@@ -147,6 +162,29 @@ export default function DatosNegocio() {
             className="w-full bg-white/60 border border-black/10 rounded-xl px-4 py-3 text-sm"
           />
         </div>
+
+        <p className="text-xs text-muted font-medium mt-2">Redes sociales (opcional)</p>
+        <RedSocial
+          label="Instagram"
+          valor={negocio.instagram ?? ''}
+          onChange={(v) => campo('instagram', v)}
+          mostrar={negocio.mostrar_instagram}
+          onToggleMostrar={(v) => campoBool('mostrar_instagram', v)}
+        />
+        <RedSocial
+          label="Facebook"
+          valor={negocio.facebook ?? ''}
+          onChange={(v) => campo('facebook', v)}
+          mostrar={negocio.mostrar_facebook}
+          onToggleMostrar={(v) => campoBool('mostrar_facebook', v)}
+        />
+        <RedSocial
+          label="TikTok"
+          valor={negocio.tiktok ?? ''}
+          onChange={(v) => campo('tiktok', v)}
+          mostrar={negocio.mostrar_tiktok}
+          onToggleMostrar={(v) => campoBool('mostrar_tiktok', v)}
+        />
       </div>
 
       <button
@@ -177,6 +215,43 @@ function Campo({
         onChange={(e) => onChange(e.target.value)}
         className="w-full bg-white/60 border border-black/10 rounded-xl px-4 py-3 text-sm"
       />
+    </div>
+  );
+}
+
+function RedSocial({
+  label,
+  valor,
+  onChange,
+  mostrar,
+  onToggleMostrar,
+}: {
+  label: string;
+  valor: string;
+  onChange: (v: string) => void;
+  mostrar: boolean;
+  onToggleMostrar: (v: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <div className="flex-1">
+        <label className="text-xs text-muted block mb-1">{label}</label>
+        <input
+          value={valor}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="@usuario"
+          className="w-full bg-white/60 border border-black/10 rounded-xl px-4 py-3 text-sm"
+        />
+      </div>
+      <label className="flex flex-col items-center gap-1 pt-4">
+        <input
+          type="checkbox"
+          checked={mostrar}
+          onChange={(e) => onToggleMostrar(e.target.checked)}
+          className="h-5 w-5 accent-ink"
+        />
+        <span className="text-[10px] text-muted">en boleta</span>
+      </label>
     </div>
   );
 }

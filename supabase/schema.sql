@@ -283,3 +283,14 @@ alter table canjes add column if not exists trabajos_realizados text[];
 alter table orden_items add column if not exists tipo text not null default 'producto';
 
 alter table negocios add column if not exists texto_garantia_servicio text;
+
+-- ============================================================
+-- Redes sociales del negocio, cada una opcional y con su propio
+-- check para decidir si aparece o no en la boleta.
+-- ============================================================
+alter table negocios add column if not exists instagram text;
+alter table negocios add column if not exists facebook text;
+alter table negocios add column if not exists tiktok text;
+alter table negocios add column if not exists mostrar_instagram boolean not null default false;
+alter table negocios add column if not exists mostrar_facebook boolean not null default false;
+alter table negocios add column if not exists mostrar_tiktok boolean not null default false;

@@ -45,7 +45,39 @@ type Negocio = {
   logo_url: string | null;
   texto_garantia: string | null;
   texto_garantia_servicio: string | null;
+  instagram: string | null;
+  facebook: string | null;
+  tiktok: string | null;
+  mostrar_instagram: boolean;
+  mostrar_facebook: boolean;
+  mostrar_tiktok: boolean;
 };
+
+function IconoInstagram() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <rect x="3" y="3" width="18" height="18" rx="5" />
+      <circle cx="12" cy="12" r="4" />
+      <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+function IconoFacebook() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M14 13.5h2.5l.5-3H14V8.5c0-.9.25-1.5 1.6-1.5H17V4.3c-.28-.04-1.25-.12-2.37-.12-2.35 0-3.96 1.4-3.96 4V10.5H8v3h2.67V21h3.33v-7.5Z" />
+    </svg>
+  );
+}
+
+function IconoTiktok() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M14.5 3h2.2c.2 1.6 1.3 2.9 3.3 3.1v2.4c-1.2 0-2.4-.4-3.3-1.1v6.4a4.6 4.6 0 1 1-4-4.6v2.3a2.3 2.3 0 1 0 1.8 2.3V3Z" />
+    </svg>
+  );
+}
 
 function formatearFecha(iso: string) {
   return new Date(iso).toLocaleString('es-AR');
@@ -78,7 +110,9 @@ export default function Boleta() {
       if (user) {
         const { data: perfil } = await supabase
           .from('perfiles')
-          .select('negocios ( nombre, telefono, direccion, logo_url, texto_garantia, texto_garantia_servicio )')
+          .select(
+            'negocios ( nombre, telefono, direccion, logo_url, texto_garantia, texto_garantia_servicio, instagram, facebook, tiktok, mostrar_instagram, mostrar_facebook, mostrar_tiktok )'
+          )
           .eq('id', user.id)
           .single();
         setNegocio((perfil as any)?.negocios ?? null);
@@ -148,7 +182,7 @@ export default function Boleta() {
         </Link>
       </header>
 
-      <div id="boleta" className="flex flex-col gap-5 text-base bg-white rounded-xl border border-black/10 p-5">
+      <div id="boleta" className="flex flex-col gap-5 text-[15px] text-ink bg-white rounded-xl border border-black/10 p-5">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">
             {negocio?.logo_url && (
@@ -170,6 +204,25 @@ export default function Boleta() {
             <p>{negocio?.nombre}</p>
             {negocio?.telefono && <p>{negocio.telefono}</p>}
             {negocio?.direccion && <p>{negocio.direccion}</p>}
+            {(negocio?.mostrar_instagram || negocio?.mostrar_facebook || negocio?.mostrar_tiktok) && (
+              <div className="flex flex-col gap-0.5 mt-1">
+                {negocio.mostrar_instagram && negocio.instagram && (
+                  <span className="flex items-center gap-1.5">
+                    <IconoInstagram /> {negocio.instagram}
+                  </span>
+                )}
+                {negocio.mostrar_facebook && negocio.facebook && (
+                  <span className="flex items-center gap-1.5">
+                    <IconoFacebook /> {negocio.facebook}
+                  </span>
+                )}
+                {negocio.mostrar_tiktok && negocio.tiktok && (
+                  <span className="flex items-center gap-1.5">
+                    <IconoTiktok /> {negocio.tiktok}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
           <div>
             <p className="font-medium border-b-2 border-black/20 pb-1 mb-1">Cliente</p>
@@ -242,7 +295,7 @@ export default function Boleta() {
               <span>-${orden.monto_canje.toLocaleString('es-AR')}</span>
             </div>
           )}
-          <div className="flex justify-between font-medium text-base border-t-2 border-black/30 pt-1">
+          <div className="flex justify-between font-medium text-lg border-t-2 border-black/30 pt-1">
             <span>TOTAL</span>
             <span>${(orden.total ?? subtotal).toLocaleString('es-AR')}</span>
           </div>

@@ -27,25 +27,29 @@ export default async function Home() {
   } = await supabase.auth.getUser();
 
   let nombreNegocio = 'Qovento';
+  let logoUrl: string | null = null;
   if (user) {
     const { data: perfil } = await supabase
       .from('perfiles')
-      .select('negocio_id, negocios ( nombre )')
+      .select('negocio_id, negocios ( nombre, logo_url )')
       .eq('id', user.id)
       .single();
     const negocio = (perfil as any)?.negocios;
     if (negocio?.nombre) nombreNegocio = negocio.nombre;
+    if (negocio?.logo_url) logoUrl = negocio.logo_url;
   }
 
   return (
     <main className="flex min-h-screen flex-col px-6 py-8 gap-8">
       <header className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <QMark size={32} />
-          <div>
-            <p className="text-base font-medium leading-tight">{nombreNegocio}</p>
-            <p className="text-xs text-muted leading-tight">con Qovento</p>
-          </div>
+          {logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={logoUrl} alt="Logo" className="h-10 w-10 rounded-lg object-contain bg-white/60 border border-black/10" />
+          ) : (
+            <QMark size={32} />
+          )}
+          <p className="text-base font-medium leading-tight">{nombreNegocio}</p>
         </div>
         <div className="flex items-center gap-4">
           <Link href="/configuracion" className="text-xs text-muted underline">
@@ -77,6 +81,8 @@ export default async function Home() {
           )
         )}
       </div>
+
+      <p className="text-center text-xs text-muted mt-auto pt-4">con Qovento</p>
     </main>
   );
 }

@@ -896,7 +896,7 @@ export default function NuevaOrden() {
         </div>
       </div>
 
-      <div className="flex items-center justify-between text-base font-medium border-t border-black/10 pt-3">
+      <div className="flex items-center justify-between text-lg font-medium border-t border-black/10 pt-3">
         <span>Total</span>
         <span>${total.toLocaleString('es-AR')}</span>
       </div>
