@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import Etiqueta from './Etiqueta';
 import { getLogo, setLogo as guardarLogo } from '../lib/logo';
+import { crearClienteNavegador } from '../lib/supabase/client';
 
 type ExtractedData = {
   modelo: string | null;
@@ -28,6 +29,7 @@ function fileToBase64(file: File): Promise<string> {
 }
 
 export default function NuevaEtiqueta() {
+  const supabase = crearClienteNavegador();
   const [step, setStep] = useState<'captura' | 'revision' | 'etiqueta'>('captura');
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
@@ -39,6 +41,10 @@ export default function NuevaEtiqueta() {
   const [logo, setLogoState] = useState<string | null>(null);
   const etiquetaRef = useRef<HTMLDivElement>(null);
   const [descargando, setDescargando] = useState(false);
+  const [agregarAlStock, setAgregarAlStock] = useState(false);
+  const [color, setColor] = useState('');
+  const [precio, setPrecio] = useState('');
+  const [guardandoStock, setGuardandoStock] = useState(false);
 
   useEffect(() => {
     setLogoState(getLogo());
@@ -130,6 +136,25 @@ export default function NuevaEtiqueta() {
 
   const puedeContinuar = photoFile && bateria && almacenamiento;
 
+  const handleContinuarAEtiqueta = async () => {
+    if (agregarAlStock && datos) {
+      setGuardandoStock(true);
+      await supabase.from('dispositivos').insert({
+        modelo: datos.modelo,
+        capacidad_gb: datos.capacidad_gb,
+        imei: datos.imei,
+        numero_serie: datos.numero_serie,
+        salud_bateria: bateria ? Number(bateria) : null,
+        color: color.trim() || null,
+        precio: precio ? Number(precio) : null,
+        estado: 'usado',
+        en_stock: true,
+      });
+      setGuardandoStock(false);
+    }
+    setStep('etiqueta');
+  };
+
   const handleContinuar = async () => {
     if (!photoFile) return;
     setLoading(true);
@@ -195,11 +220,29 @@ export default function NuevaEtiqueta() {
           <Campo label="Salud de batería (%)" valor={bateria} onChange={setBateria} />
         </div>
 
+        <label className="flex items-center gap-3 bg-white/60 border border-black/10 rounded-xl px-4 py-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={agregarAlStock}
+            onChange={(e) => setAgregarAlStock(e.target.checked)}
+            className="h-5 w-5 accent-ink"
+          />
+          <span className="text-sm font-medium">Agregar este dispositivo al stock</span>
+        </label>
+
+        {agregarAlStock && (
+          <div className="flex flex-col gap-3">
+            <Campo label="Color" valor={color} onChange={setColor} />
+            <Campo label="Precio" valor={precio} onChange={setPrecio} />
+          </div>
+        )}
+
         <button
-          onClick={() => setStep('etiqueta')}
-          className="mt-auto w-full rounded-2xl bg-ink py-4 text-center text-base font-medium text-base"
+          disabled={guardandoStock}
+          onClick={handleContinuarAEtiqueta}
+          className="mt-auto w-full rounded-2xl bg-ink py-4 text-center text-base font-medium text-base disabled:opacity-40"
         >
-          Continuar al diseño de la etiqueta
+          {guardandoStock ? 'Guardando en stock...' : 'Continuar al diseño de la etiqueta'}
         </button>
       </main>
     );

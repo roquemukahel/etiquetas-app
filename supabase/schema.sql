@@ -136,3 +136,13 @@ begin
   return nuevo_negocio_id;
 end;
 $$;
+
+-- ============================================================
+-- Los inserts desde el navegador completan negocio_id solos,
+-- tomando el negocio del usuario logueado. Así no hace falta
+-- mandarlo a mano desde el código y no hay forma de mandar
+-- uno equivocado (la política RLS lo sigue verificando igual).
+-- ============================================================
+alter table dispositivos alter column negocio_id set default negocio_actual();
+alter table clientes alter column negocio_id set default negocio_actual();
+alter table ordenes alter column negocio_id set default negocio_actual();

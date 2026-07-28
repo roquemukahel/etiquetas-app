@@ -1,0 +1,157 @@
+'use client';
+
+import { useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { crearClienteNavegador } from '../../lib/supabase/client';
+
+const STORAGE_OPTIONS = [64, 128, 256, 512];
+const ESTADOS = ['usado', 'nuevo'];
+
+export default function NuevoDispositivo() {
+  const router = useRouter();
+  const supabase = crearClienteNavegador();
+
+  const [modelo, setModelo] = useState('');
+  const [capacidad, setCapacidad] = useState<number | null>(null);
+  const [imei, setImei] = useState('');
+  const [numeroSerie, setNumeroSerie] = useState('');
+  const [bateria, setBateria] = useState('');
+  const [color, setColor] = useState('');
+  const [precio, setPrecio] = useState('');
+  const [estado, setEstado] = useState('usado');
+  const [codigoInterno, setCodigoInterno] = useState('');
+  const [garantia, setGarantia] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [guardando, setGuardando] = useState(false);
+
+  const puedeGuardar = modelo.trim().length > 0;
+
+  const handleGuardar = async () => {
+    if (!puedeGuardar) return;
+    setGuardando(true);
+    setError(null);
+
+    const { error: insertError } = await supabase.from('dispositivos').insert({
+      modelo: modelo.trim(),
+      capacidad_gb: capacidad,
+      imei: imei.trim() || null,
+      numero_serie: numeroSerie.trim() || null,
+      salud_bateria: bateria ? Number(bateria) : null,
+      color: color.trim() || null,
+      precio: precio ? Number(precio) : null,
+      estado,
+      codigo_interno: codigoInterno.trim() || null,
+      garantia: garantia.trim() || null,
+      en_stock: true,
+    });
+
+    if (insertError) {
+      setError('No pudimos guardar el dispositivo: ' + insertError.message);
+      setGuardando(false);
+      return;
+    }
+
+    router.push('/stock');
+    router.refresh();
+  };
+
+  return (
+    <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
+      <header className="flex items-center gap-3">
+        <Link href="/stock" className="text-2xl leading-none">
+          &larr;
+        </Link>
+        <span className="text-lg font-medium">Cargar dispositivo</span>
+      </header>
+
+      {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
+
+      <div className="flex flex-col gap-3">
+        <Campo label="Modelo" valor={modelo} onChange={setModelo} placeholder="iPhone 13" />
+
+        <div>
+          <label className="text-xs text-muted block mb-1">Almacenamiento</label>
+          <div className="flex gap-2">
+            {STORAGE_OPTIONS.map((gb) => (
+              <button
+                key={gb}
+                type="button"
+                onClick={() => setCapacidad(gb)}
+                className={`flex-1 rounded-xl py-2 text-sm font-medium ${
+                  capacidad === gb ? 'bg-ink text-base' : 'bg-white/60 border border-black/10 text-ink'
+                }`}
+              >
+                {gb} GB
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <Campo label="IMEI" valor={imei} onChange={setImei} mono />
+        <Campo label="N° de serie" valor={numeroSerie} onChange={setNumeroSerie} mono />
+        <Campo label="Salud de batería (%)" valor={bateria} onChange={setBateria} numerico />
+        <Campo label="Color" valor={color} onChange={setColor} />
+        <Campo label="Precio" valor={precio} onChange={setPrecio} numerico />
+
+        <div>
+          <label className="text-xs text-muted block mb-1">Estado</label>
+          <div className="flex gap-2">
+            {ESTADOS.map((e) => (
+              <button
+                key={e}
+                type="button"
+                onClick={() => setEstado(e)}
+                className={`flex-1 rounded-xl py-2 text-sm font-medium capitalize ${
+                  estado === e ? 'bg-ink text-base' : 'bg-white/60 border border-black/10 text-ink'
+                }`}
+              >
+                {e}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <Campo label="Código interno" valor={codigoInterno} onChange={setCodigoInterno} />
+        <Campo label="Garantía" valor={garantia} onChange={setGarantia} placeholder="3 meses" />
+      </div>
+
+      <button
+        disabled={!puedeGuardar || guardando}
+        onClick={handleGuardar}
+        className="mt-auto w-full rounded-2xl bg-ink py-4 text-center text-base font-medium text-base disabled:opacity-40"
+      >
+        {guardando ? 'Guardando...' : 'Agregar al stock'}
+      </button>
+    </main>
+  );
+}
+
+function Campo({
+  label,
+  valor,
+  onChange,
+  mono,
+  numerico,
+  placeholder,
+}: {
+  label: string;
+  valor: string;
+  onChange: (v: string) => void;
+  mono?: boolean;
+  numerico?: boolean;
+  placeholder?: string;
+}) {
+  return (
+    <div>
+      <label className="text-xs text-muted block mb-1">{label}</label>
+      <input
+        value={valor}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        inputMode={numerico ? 'numeric' : undefined}
+        className={`w-full bg-white/60 border border-black/10 rounded-xl px-4 py-3 text-sm ${mono ? 'font-mono' : ''}`}
+      />
+    </div>
+  );
+}

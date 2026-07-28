@@ -6,3 +6,5 @@ public/workbox-*.js
 .DS_Store
 CONTEXTO-QOVENTO.md
 .claude/
+next-env.d.ts
+*.tsbuildinfo
