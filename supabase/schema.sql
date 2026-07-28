@@ -498,3 +498,79 @@ alter table negocios add column if not exists texto_declaracion_compra_tamano in
 -- ============================================================
 drop policy if exists "crear negocio al registrarse" on negocios;
 drop policy if exists "crear mi perfil al registrarse" on perfiles;
+
+-- ============================================================
+-- Suscripciones (Lemon Squeezy): cada negocio paga mensualmente
+-- para poder seguir usando Qovento. Los negocios que ya existían
+-- antes de esta función quedan en "active" (no se les corta el
+-- acceso retroactivamente); los que se registren de acá en más
+-- arrancan en "trialing" con 14 días de prueba gratis (ver
+-- crear_negocio_y_perfil más abajo).
+-- ============================================================
+alter table negocios add column if not exists lemonsqueezy_customer_id text;
+alter table negocios add column if not exists lemonsqueezy_subscription_id text;
+alter table negocios add column if not exists estado_suscripcion text not null default 'active';
+alter table negocios add column if not exists fecha_fin_prueba timestamptz;
+
+alter table negocios add constraint estado_suscripcion_valido
+  check (estado_suscripcion in ('trialing','active','past_due','unpaid','cancelled','expired','paused'));
+
+-- Importante: estas columnas las actualiza ÚNICAMENTE el webhook de
+-- Lemon Squeezy (con la service role key, que bypassea RLS y estos
+-- grants). Si no hiciéramos este revoke, cualquier usuario logueado
+-- podría, vía la API REST de Supabase, hacer
+-- update negocios set estado_suscripcion = 'active' en su propia
+-- fila y activarse la suscripción gratis sin pagar. Lo mismo aplica
+-- a "activo": sin este revoke, un usuario podría reactivarse su
+-- propia cuenta después de que el panel admin la desactivara.
+revoke update (estado_suscripcion, fecha_fin_prueba, lemonsqueezy_customer_id, lemonsqueezy_subscription_id, activo)
+  on negocios from authenticated;
+
+create or replace function crear_negocio_y_perfil(nombre_negocio text)
+returns uuid
+language plpgsql
+security definer
+as $$
+declare
+  nuevo_negocio_id uuid;
+begin
+  if auth.uid() is null then
+    raise exception 'No autenticado';
+  end if;
+
+  if exists (select 1 from perfiles where id = auth.uid()) then
+    raise exception 'Ya tenés un negocio configurado';
+  end if;
+
+  insert into negocios (nombre, estado_suscripcion, fecha_fin_prueba)
+  values (nombre_negocio, 'trialing', now() + interval '14 days')
+  returning id into nuevo_negocio_id;
+  insert into perfiles (id, negocio_id) values (auth.uid(), nuevo_negocio_id);
+
+  return nuevo_negocio_id;
+end;
+$$;
+
+-- Chequea si el negocio puede seguir usando el sistema según su
+-- suscripción (independiente de negocio_activo(), que es el
+-- interruptor manual del panel admin). "past_due" todavía deja
+-- pasar: le da margen mientras Lemon Squeezy reintenta el cobro.
+create or replace function negocio_suscripcion_activa()
+returns boolean
+language sql
+security definer
+stable
+as $$
+  select coalesce(
+    (
+      select
+        case
+          when estado_suscripcion in ('active', 'past_due') then true
+          when estado_suscripcion = 'trialing' then coalesce(fecha_fin_prueba, now()) > now()
+          else false
+        end
+      from negocios where id = negocio_actual()
+    ),
+    true
+  )
+$$;

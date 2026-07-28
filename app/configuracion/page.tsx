@@ -6,6 +6,7 @@ const SECCIONES = [
   { href: '/configuracion/vendedores', titulo: 'Vendedores', desc: 'Quién atiende cada venta' },
   { href: '/configuracion/productos', titulo: 'Productos y accesorios', desc: 'Fundas, AirPods, y lo que vendas' },
   { href: '/configuracion/tecnicos', titulo: 'Técnicos', desc: 'Quién repara los equipos de Servicio Técnico' },
+  { href: '/configuracion/suscripcion', titulo: 'Suscripción', desc: 'Estado del pago y plan de Qovento' },
 ];
 
 export default function Configuracion() {

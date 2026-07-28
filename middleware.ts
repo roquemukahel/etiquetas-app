@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextRequest, NextResponse } from 'next/server';
 
-const RUTAS_PUBLICAS = ['/login', '/registro', '/cuenta-desactivada'];
+const RUTAS_PUBLICAS = ['/login', '/registro', '/cuenta-desactivada', '/suscripcion-vencida'];
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request: { headers: request.headers } });
@@ -37,7 +37,10 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (user && esPublica && request.nextUrl.pathname !== '/cuenta-desactivada') {
+  const esPantallaDeBloqueo =
+    request.nextUrl.pathname === '/cuenta-desactivada' || request.nextUrl.pathname === '/suscripcion-vencida';
+
+  if (user && esPublica && !esPantallaDeBloqueo) {
     const url = request.nextUrl.clone();
     url.pathname = '/';
     return NextResponse.redirect(url);
@@ -48,6 +51,13 @@ export async function middleware(request: NextRequest) {
     if (activo === false) {
       const url = request.nextUrl.clone();
       url.pathname = '/cuenta-desactivada';
+      return NextResponse.redirect(url);
+    }
+
+    const { data: suscripcionActiva } = await supabase.rpc('negocio_suscripcion_activa');
+    if (suscripcionActiva === false) {
+      const url = request.nextUrl.clone();
+      url.pathname = '/suscripcion-vencida';
       return NextResponse.redirect(url);
     }
   }
