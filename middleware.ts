@@ -4,6 +4,14 @@ import { NextRequest, NextResponse } from 'next/server';
 const RUTAS_PUBLICAS = ['/login', '/registro', '/cuenta-desactivada', '/suscripcion-vencida'];
 
 export async function middleware(request: NextRequest) {
+  // Los webhooks (ej. Lemon Squeezy) son servidor-a-servidor: nunca traen sesión
+  // de usuario, y se autentican solos con su propia firma dentro de la ruta.
+  // Si los dejáramos pasar por la lógica de abajo, este middleware los trataría
+  // como "no logueado" e intentaría redirigirlos a /login, lo que rompe el POST.
+  if (request.nextUrl.pathname.startsWith('/api/webhooks/')) {
+    return NextResponse.next();
+  }
+
   let response = NextResponse.next({ request: { headers: request.headers } });
 
   const supabase = createServerClient(
