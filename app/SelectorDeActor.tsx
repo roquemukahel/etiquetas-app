@@ -16,6 +16,8 @@ const RUTAS_SIN_SELECTOR = [
   '/seguimiento',
 ];
 
+const KEY_POSTERGADO = 'qovento:actor-postergado';
+
 type Persona = { id: string; nombre: string };
 
 export default function SelectorDeActor() {
@@ -23,20 +25,27 @@ export default function SelectorDeActor() {
   const supabase = crearClienteNavegador();
 
   const [actor, setActorState] = useState<Actor | null | undefined>(undefined);
+  const [postergado, setPostergado] = useState(false);
   const [cambiando, setCambiando] = useState(false);
   const [eligiendoTipo, setEligiendoTipo] = useState<'vendedor' | 'tecnico' | null>(null);
   const [vendedores, setVendedores] = useState<Persona[]>([]);
   const [tecnicos, setTecnicos] = useState<Persona[]>([]);
-  const [cargado, setCargado] = useState(false);
+  const [cargando, setCargando] = useState(false);
 
   const esRutaExcluida = RUTAS_SIN_SELECTOR.some((r) => pathname?.startsWith(r));
+  const mostrarOverlay = (!actor && !postergado) || cambiando;
 
   useEffect(() => {
     setActorState(getActor());
+    setPostergado(window.sessionStorage.getItem(KEY_POSTERGADO) === '1');
   }, []);
 
+  // Recargamos las listas cada vez que el cartel se abre (no solo la primera
+  // vez), para que si acabás de cargar un vendedor/técnico en Configuración,
+  // ya aparezca acá sin tener que recargar la página entera.
   useEffect(() => {
-    if (esRutaExcluida || cargado) return;
+    if (esRutaExcluida || !mostrarOverlay || cargando) return;
+    setCargando(true);
     (async () => {
       const [{ data: vend }, { data: tec }] = await Promise.all([
         supabase.from('vendedores').select('id, nombre').order('nombre'),
@@ -44,9 +53,10 @@ export default function SelectorDeActor() {
       ]);
       setVendedores(vend ?? []);
       setTecnicos(tec ?? []);
-      setCargado(true);
+      setCargando(false);
     })();
-  }, [esRutaExcluida, cargado]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [esRutaExcluida, mostrarOverlay]);
 
   if (esRutaExcluida || actor === undefined) return null;
 
@@ -58,8 +68,17 @@ export default function SelectorDeActor() {
     setCambiando(false);
   };
 
-  const sinPersonas = cargado && vendedores.length === 0 && tecnicos.length === 0;
-  const mostrarOverlay = !actor || cambiando;
+  const posponer = () => {
+    window.sessionStorage.setItem(KEY_POSTERGADO, '1');
+    setPostergado(true);
+  };
+
+  const retomarEleccion = () => {
+    window.sessionStorage.removeItem(KEY_POSTERGADO);
+    setPostergado(false);
+  };
+
+  const sinPersonas = !cargando && vendedores.length === 0 && tecnicos.length === 0;
 
   return (
     <>
@@ -71,6 +90,15 @@ export default function SelectorDeActor() {
           </span>
           <button onClick={() => setCambiando(true)} className="underline opacity-80 hover:opacity-100">
             Cambiar
+          </button>
+        </div>
+      )}
+
+      {!actor && postergado && !cambiando && (
+        <div className="sticky top-0 z-40 w-full bg-ink text-white text-xs px-4 py-1.5 flex items-center justify-between">
+          <span>Sin elegir quién trabaja</span>
+          <button onClick={retomarEleccion} className="underline opacity-80 hover:opacity-100">
+            Elegir
           </button>
         </div>
       )}
@@ -94,7 +122,9 @@ export default function SelectorDeActor() {
                   <p className="text-sm text-muted dark:text-dark-text-secondary mt-1">¿Con quién tengo el gusto?</p>
                 </div>
 
-                {sinPersonas ? (
+                {cargando ? (
+                  <p className="text-sm text-muted dark:text-dark-text-secondary text-center">Cargando...</p>
+                ) : sinPersonas ? (
                   <div className="flex flex-col gap-2 text-center">
                     <p className="text-sm text-muted dark:text-dark-text-secondary">
                       Todavía no cargaste vendedores ni técnicos.
@@ -106,7 +136,7 @@ export default function SelectorDeActor() {
                       Cargar técnicos
                     </Link>
                     <button
-                      onClick={() => setCambiando(false)}
+                      onClick={posponer}
                       className="text-xs text-muted dark:text-dark-text-secondary underline mt-2"
                     >
                       Continuar sin elegir por ahora
