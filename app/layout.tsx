@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Inter, Sora } from 'next/font/google';
 import '../styles/globals.css';
 import { SCRIPT_TEMA_INICIAL } from './lib/theme';
+import SelectorDeActor from './SelectorDeActor';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' });
 const sora = Sora({ subsets: ['latin'], variable: '--font-sora', display: 'swap' });
@@ -34,6 +35,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: SCRIPT_TEMA_INICIAL }} />
       </head>
       <body className="min-h-screen bg-canvas dark:bg-dark-bg text-ink dark:text-dark-text font-sans transition-colors">
+        <SelectorDeActor />
         {children}
       </body>
     </html>

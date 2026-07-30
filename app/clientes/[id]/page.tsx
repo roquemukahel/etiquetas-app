@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
+import { registrarAuditoria } from '../../lib/auditoria';
 
 type Cliente = {
   id: string;
@@ -86,6 +87,7 @@ export default function DetalleCliente() {
   };
 
   const handleEliminar = async () => {
+    if (!c) return;
     if (!confirm('¿Eliminar este cliente? No se puede deshacer.')) return;
     setGuardando(true);
     const { error: deleteError } = await supabase.from('clientes').delete().eq('id', id);
@@ -94,6 +96,11 @@ export default function DetalleCliente() {
       setGuardando(false);
       return;
     }
+    await registrarAuditoria(supabase, {
+      accion: `eliminó al cliente ${c.nombre} ${c.apellido || ''}`.trim().replace(/\s+/g, ' '),
+      entidad: 'cliente',
+      entidadId: c.id,
+    });
     router.push('/clientes');
     router.refresh();
   };

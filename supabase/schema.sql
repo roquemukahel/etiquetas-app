@@ -650,3 +650,36 @@ alter table dispositivos add column if not exists garantia_vencimiento date;
 -- ============================================================
 alter table dispositivos add column if not exists en_stock_desde timestamptz default now();
 alter table dispositivos add column if not exists alerta_stock_enviada boolean not null default false;
+
+-- ============================================================
+-- Registro de auditoría: quién hizo qué, cuándo, y con qué valores.
+-- "Quién" es el vendedor/técnico elegido en el selector de "con
+-- quién tengo el gusto" (identificación por nombre, no un login
+-- propio) — no es una cuenta con contraseña, es trazabilidad
+-- operativa, no autenticación.
+--
+-- A propósito NO hay policy de update ni de delete: una vez
+-- insertado un registro, nadie puede modificarlo ni borrarlo (ni
+-- siquiera el dueño del negocio desde la app). Eso es lo que hace
+-- que sirva como auditoría real.
+-- ============================================================
+create table if not exists auditoria (
+  id uuid primary key default gen_random_uuid(),
+  negocio_id uuid not null references negocios(id) on delete cascade default negocio_actual(),
+  actor_nombre text not null,
+  actor_tipo text not null,
+  accion text not null,
+  entidad text not null,
+  entidad_id uuid,
+  valor_anterior jsonb,
+  valor_nuevo jsonb,
+  created_at timestamptz not null default now()
+);
+
+alter table auditoria enable row level security;
+
+create policy "ver auditoria de mi negocio" on auditoria
+  for select using (negocio_id = negocio_actual());
+
+create policy "insertar auditoria de mi negocio" on auditoria
+  for insert with check (negocio_id = negocio_actual());

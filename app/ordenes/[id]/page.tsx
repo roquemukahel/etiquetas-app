@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
+import { registrarAuditoria } from '../../lib/auditoria';
 
 const ESTADOS = ['pendiente', 'pagado', 'entregado'];
 
@@ -86,6 +87,13 @@ export default function DetalleOrden() {
       setGuardando(false);
       return;
     }
+    const nombreCliente = orden.clientes ? `${orden.clientes.nombre} ${orden.clientes.apellido || ''}`.trim() : 'sin cliente';
+    await registrarAuditoria(supabase, {
+      accion: `eliminó/canceló una orden (${nombreCliente}, total $${orden.total?.toLocaleString('es-AR') ?? 0})`,
+      entidad: 'orden',
+      entidadId: orden.id,
+      valorAnterior: { estado: orden.estado, total: orden.total },
+    });
     router.push('/ordenes');
     router.refresh();
   };

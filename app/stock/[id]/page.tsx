@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { asegurarModelo } from '../../lib/modelos';
+import { registrarAuditoria } from '../../lib/auditoria';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 const ESTADOS = ['usado', 'sellado'];
@@ -30,7 +31,7 @@ export default function DetalleDispositivo() {
   const supabase = crearClienteNavegador();
 
   const [d, setD] = useState<Dispositivo | null>(null);
-  const [enStockOriginal, setEnStockOriginal] = useState(true);
+  const [original, setOriginal] = useState<Dispositivo | null>(null);
   const [carpetas, setCarpetas] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [guardando, setGuardando] = useState(false);
@@ -40,7 +41,7 @@ export default function DetalleDispositivo() {
     (async () => {
       const { data } = await supabase.from('dispositivos').select('*').eq('id', id).single();
       setD(data as Dispositivo);
-      setEnStockOriginal((data as Dispositivo)?.en_stock ?? true);
+      setOriginal(data as Dispositivo);
       setLoading(false);
     })();
     (async () => {
@@ -52,11 +53,11 @@ export default function DetalleDispositivo() {
   const campo = (k: keyof Dispositivo, valor: any) => setD((prev) => (prev ? { ...prev, [k]: valor } : prev));
 
   const handleGuardar = async () => {
-    if (!d) return;
+    if (!d || !original) return;
     setGuardando(true);
     setError(null);
 
-    const volvioAStock = !enStockOriginal && d.en_stock;
+    const volvioAStock = !original.en_stock && d.en_stock;
 
     const { error: updateError } = await supabase
       .from('dispositivos')
@@ -81,6 +82,28 @@ export default function DetalleDispositivo() {
       return;
     }
 
+    if (original.precio !== d.precio) {
+      await registrarAuditoria(supabase, {
+        accion: `cambió el precio de ${original.modelo || 'un dispositivo'} de $${original.precio ?? 0} a $${d.precio ?? 0}`,
+        entidad: 'dispositivo',
+        entidadId: d.id,
+        valorAnterior: { precio: original.precio },
+        valorNuevo: { precio: d.precio },
+      });
+    }
+
+    const imeiOriginal = original.imei?.trim() || null;
+    const imeiNuevo = d.imei?.trim() || null;
+    if (imeiOriginal !== imeiNuevo) {
+      await registrarAuditoria(supabase, {
+        accion: `cambió el IMEI de ${original.modelo || 'un dispositivo'} de "${imeiOriginal || 'sin IMEI'}" a "${imeiNuevo || 'sin IMEI'}"`,
+        entidad: 'dispositivo',
+        entidadId: d.id,
+        valorAnterior: { imei: imeiOriginal },
+        valorNuevo: { imei: imeiNuevo },
+      });
+    }
+
     await asegurarModelo(supabase, d.modelo);
 
     router.push('/stock');
@@ -88,6 +111,7 @@ export default function DetalleDispositivo() {
   };
 
   const handleEliminar = async () => {
+    if (!d) return;
     if (!confirm('¿Eliminar este dispositivo del historial? No se puede deshacer.')) return;
     setGuardando(true);
     const { error: deleteError } = await supabase.from('dispositivos').delete().eq('id', id);
@@ -96,6 +120,11 @@ export default function DetalleDispositivo() {
       setGuardando(false);
       return;
     }
+    await registrarAuditoria(supabase, {
+      accion: `eliminó el dispositivo ${d.modelo || 'sin modelo'}${d.imei ? ` (IMEI ${d.imei})` : ''} del historial`,
+      entidad: 'dispositivo',
+      entidadId: d.id,
+    });
     router.push('/stock');
     router.refresh();
   };
