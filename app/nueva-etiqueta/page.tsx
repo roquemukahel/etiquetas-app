@@ -6,6 +6,7 @@ import Etiqueta from './Etiqueta';
 import { getLogo, setLogo as guardarLogo } from '../lib/logo';
 import { crearClienteNavegador } from '../lib/supabase/client';
 import { asegurarModelo } from '../lib/modelos';
+import { limpiarImei } from '../lib/imei';
 
 type ExtractedData = {
   modelo: string | null;
@@ -144,7 +145,7 @@ export default function NuevaEtiqueta() {
       await supabase.from('dispositivos').insert({
         modelo: datos.modelo,
         capacidad_gb: datos.capacidad_gb,
-        imei: datos.imei,
+        imei: limpiarImei(datos.imei),
         numero_serie: datos.numero_serie,
         salud_bateria: bateria ? Number(bateria) : null,
         color: color.trim() || null,
@@ -163,7 +164,7 @@ export default function NuevaEtiqueta() {
       setDatos({
         modelo: null,
         capacidad_gb: almacenamiento,
-        imei: imeiManual.trim() || null,
+        imei: limpiarImei(imeiManual),
         numero_serie: null,
         version_ios: null,
       });

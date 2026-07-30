@@ -61,6 +61,12 @@ const ICONOS: Record<string, React.ReactNode> = {
       <path d="M12 10v6M9.5 12.5h5" />
     </IconoBase>
   ),
+  camara: (
+    <IconoBase>
+      <path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z" />
+      <circle cx="12" cy="13" r="3.5" />
+    </IconoBase>
+  ),
 };
 
 const SECCIONES = [
@@ -71,6 +77,7 @@ const SECCIONES = [
   { href: '/canje', titulo: 'Plan Canje', desc: 'Dispositivos recibidos como parte de pago', icono: 'canje', activo: true },
   { href: '/servicio-tecnico', titulo: 'Servicio Técnico', desc: 'Equipos derivados a reparación', icono: 'servicio', activo: true },
   { href: '/nueva-etiqueta', titulo: 'Nueva etiqueta', desc: 'Fotografiá el IMEI y generá la etiqueta', icono: 'etiqueta', activo: true },
+  { href: '/stock/foto', titulo: 'Agregar al stock', desc: 'Fotografiá el IMEI y cargalo directo, sin etiqueta', icono: 'camara', activo: true },
 ];
 
 export default async function Home() {

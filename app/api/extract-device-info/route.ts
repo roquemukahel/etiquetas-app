@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import * as Sentry from '@sentry/nextjs';
+import { limpiarImei } from '../../lib/imei';
 
 // Esta clave nunca se expone al celular/navegador: vive solo en el servidor.
 // Se configura como variable de entorno ANTHROPIC_API_KEY (lo vemos al desplegar).
@@ -65,6 +66,8 @@ export async function POST(req: NextRequest) {
         version_ios: null,
       };
     }
+
+    if (data.imei) data.imei = limpiarImei(data.imei);
 
     return NextResponse.json({ data });
   } catch (err) {

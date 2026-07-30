@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { asegurarModelo } from '../../lib/modelos';
+import { limpiarImei } from '../../lib/imei';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 const ESTADOS = ['usado', 'sellado'];
@@ -41,7 +42,7 @@ export default function NuevoDispositivo() {
     const { error: insertError } = await supabase.from('dispositivos').insert({
       modelo: modelo.trim(),
       capacidad_gb: capacidad,
-      imei: imei.trim() || null,
+      imei: limpiarImei(imei),
       salud_bateria: bateria ? Number(bateria) : null,
       color: color.trim() || null,
       precio: precio ? Number(precio) : null,

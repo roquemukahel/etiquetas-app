@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { asegurarModelo } from '../../lib/modelos';
+import { limpiarImei } from '../../lib/imei';
+import { useDictado } from '../../lib/dictado';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 const ESTADOS = ['usado', 'sellado'];
@@ -47,6 +49,15 @@ export default function StockPorFoto() {
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
 
+  const { dictar, soportado: dictadoSoportado } = useDictado();
+  const [campoDictando, setCampoDictando] = useState<string | null>(null);
+
+  const dictarCampo = (campo: string, onResultado: (texto: string) => void) => {
+    if (!dictadoSoportado) return;
+    setCampoDictando(campo);
+    dictar(onResultado, () => setCampoDictando(null));
+  };
+
   const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -81,7 +92,7 @@ export default function StockPorFoto() {
     const { error: insertError } = await supabase.from('dispositivos').insert({
       modelo: modelo.trim(),
       capacidad_gb: capacidad,
-      imei: imei.trim() || null,
+      imei: limpiarImei(imei),
       salud_bateria: bateria ? Number(bateria) : null,
       color: color.trim() || null,
       precio: precio ? Number(precio) : null,
@@ -126,7 +137,15 @@ export default function StockPorFoto() {
       </label>
 
       <div className="flex flex-col gap-3">
-        <Campo label="Modelo (carpeta)" valor={modelo} onChange={setModelo} placeholder="iPhone 13" listaId="carpetas-stock-foto" />
+        <Campo
+          label="Modelo (carpeta)"
+          valor={modelo}
+          onChange={setModelo}
+          placeholder="iPhone 13"
+          listaId="carpetas-stock-foto"
+          onDictar={dictadoSoportado ? () => dictarCampo('modelo', setModelo) : undefined}
+          dictando={campoDictando === 'modelo'}
+        />
         <datalist id="carpetas-stock-foto">
           {carpetas.map((c) => (
             <option key={c} value={c} />
@@ -152,8 +171,29 @@ export default function StockPorFoto() {
         </div>
 
         <Campo label="IMEI" valor={imei} onChange={setImei} mono />
-        <Campo label="Salud de batería (%)" valor={bateria} onChange={setBateria} numerico />
-        <Campo label="Color" valor={color} onChange={setColor} />
+        <Campo
+          label="Salud de batería (%)"
+          valor={bateria}
+          onChange={setBateria}
+          numerico
+          onDictar={
+            dictadoSoportado
+              ? () =>
+                  dictarCampo('bateria', (texto) => {
+                    const match = texto.match(/\d+/);
+                    setBateria(match ? match[0] : texto.trim());
+                  })
+              : undefined
+          }
+          dictando={campoDictando === 'bateria'}
+        />
+        <Campo
+          label="Color"
+          valor={color}
+          onChange={setColor}
+          onDictar={dictadoSoportado ? () => dictarCampo('color', setColor) : undefined}
+          dictando={campoDictando === 'color'}
+        />
         <Campo label="Precio (opcional)" valor={precio} onChange={setPrecio} numerico />
 
         <div>
@@ -194,6 +234,8 @@ function Campo({
   numerico,
   placeholder,
   listaId,
+  onDictar,
+  dictando,
 }: {
   label: string;
   valor: string;
@@ -202,18 +244,36 @@ function Campo({
   numerico?: boolean;
   placeholder?: string;
   listaId?: string;
+  onDictar?: () => void;
+  dictando?: boolean;
 }) {
   return (
     <div>
       <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{label}</label>
-      <input
-        value={valor}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        inputMode={numerico ? 'numeric' : undefined}
-        list={listaId}
-        className={`w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm ${mono ? 'font-mono' : ''}`}
-      />
+      <div className="flex items-stretch gap-2">
+        <input
+          value={valor}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          inputMode={numerico ? 'numeric' : undefined}
+          list={listaId}
+          className={`flex-1 min-w-0 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm ${mono ? 'font-mono' : ''}`}
+        />
+        {onDictar && (
+          <button
+            type="button"
+            onClick={onDictar}
+            aria-label={`Dictar ${label} por voz`}
+            className={`shrink-0 w-11 rounded-xl border flex items-center justify-center text-lg transition-colors ${
+              dictando
+                ? 'bg-bad/10 border-bad text-bad animate-pulse'
+                : 'bg-white dark:bg-dark-surface border-border dark:border-dark-border'
+            }`}
+          >
+            🎤
+          </button>
+        )}
+      </div>
     </div>
   );
 }
