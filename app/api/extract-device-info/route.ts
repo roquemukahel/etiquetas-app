@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
+import * as Sentry from '@sentry/nextjs';
 
 // Esta clave nunca se expone al celular/navegador: vive solo en el servidor.
 // Se configura como variable de entorno ANTHROPIC_API_KEY (lo vemos al desplegar).
@@ -68,6 +69,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ data });
   } catch (err) {
     console.error(err);
+    Sentry.captureException(err);
     return NextResponse.json(
       { error: 'No se pudo leer la foto' },
       { status: 500 }

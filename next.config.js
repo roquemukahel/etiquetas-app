@@ -1,3 +1,5 @@
+const { withSentryConfig } = require('@sentry/nextjs');
+
 const withPWA = require('next-pwa')({
   dest: 'public',
   register: true,
@@ -24,4 +26,6 @@ const nextConfig = {
   },
 };
 
-module.exports = withPWA(nextConfig);
+module.exports = withSentryConfig(withPWA(nextConfig), {
+  silent: true,
+});

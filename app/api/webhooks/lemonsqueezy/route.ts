@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
+import * as Sentry from '@sentry/nextjs';
 
 // Traduce el estado que manda Lemon Squeezy al que usamos en negocios.estado_suscripcion
 const MAPA_ESTADO: Record<string, string> = {
@@ -14,12 +15,21 @@ const MAPA_ESTADO: Record<string, string> = {
 };
 
 export async function POST(req: NextRequest) {
+  try {
+    return await procesarWebhook(req);
+  } catch (err) {
+    Sentry.captureException(err);
+    return NextResponse.json({ error: 'Error interno' }, { status: 500 });
+  }
+}
+
+async function procesarWebhook(req: NextRequest) {
   const rawBody = await req.text();
   const firmaRecibida = req.headers.get('x-signature') || '';
 
   const secret = process.env.LEMONSQUEEZY_WEBHOOK_SECRET;
   if (!secret) {
-    console.error('Falta LEMONSQUEEZY_WEBHOOK_SECRET');
+    Sentry.captureMessage('Falta LEMONSQUEEZY_WEBHOOK_SECRET', 'error');
     return NextResponse.json({ error: 'No configurado' }, { status: 500 });
   }
 
@@ -70,7 +80,7 @@ export async function POST(req: NextRequest) {
     .eq('id', negocioId);
 
   if (error) {
-    console.error('Error actualizando suscripción:', error);
+    Sentry.captureException(error, { extra: { negocioId } });
     return NextResponse.json({ error: 'Error interno' }, { status: 500 });
   }
 
