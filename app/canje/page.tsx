@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../lib/supabase/client';
 import { asegurarModelo } from '../lib/modelos';
+import { obtenerImagenesCarpetas, imagenParaModelo } from '../lib/carpetas';
+import MiniaturaDispositivo from '../MiniaturaDispositivo';
 
 type Canje = {
   id: string;
@@ -24,6 +26,7 @@ export default function PlanCanje() {
   const [loading, setLoading] = useState(true);
   const [verDerivados, setVerDerivados] = useState(false);
   const [procesando, setProcesando] = useState<string | null>(null);
+  const [imagenesCarpetas, setImagenesCarpetas] = useState<Map<string, string>>(new Map());
 
   const cargar = async () => {
     const { data } = await supabase
@@ -36,6 +39,7 @@ export default function PlanCanje() {
 
   useEffect(() => {
     cargar();
+    (async () => setImagenesCarpetas(await obtenerImagenesCarpetas(supabase)))();
   }, []);
 
   const filtrados = useMemo(
@@ -117,18 +121,21 @@ export default function PlanCanje() {
         {filtrados.map((c) => (
           <div key={c.id} className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex flex-col gap-2">
             <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-sm font-medium">
-                  {c.modelo}
-                  {c.capacidad_gb ? ` · ${c.capacidad_gb}GB` : ''}
-                  {c.color ? ` · ${c.color}` : ''}
-                </p>
-                {c.imei && (
-                  <p className="text-xs text-muted dark:text-dark-text-secondary">
-                    IMEI: <span className="font-bold font-mono text-ink dark:text-dark-text">{c.imei}</span>
+              <div className="flex items-start gap-3">
+                <MiniaturaDispositivo src={imagenParaModelo(c.modelo, imagenesCarpetas)} />
+                <div>
+                  <p className="text-sm font-medium">
+                    {c.modelo}
+                    {c.capacidad_gb ? ` · ${c.capacidad_gb}GB` : ''}
+                    {c.color ? ` · ${c.color}` : ''}
                   </p>
-                )}
-                {c.salud_bateria != null && <p className="text-xs text-muted dark:text-dark-text-secondary">Batería: {c.salud_bateria}%</p>}
+                  {c.imei && (
+                    <p className="text-xs text-muted dark:text-dark-text-secondary">
+                      IMEI: <span className="font-bold font-mono text-ink dark:text-dark-text">{c.imei}</span>
+                    </p>
+                  )}
+                  {c.salud_bateria != null && <p className="text-xs text-muted dark:text-dark-text-secondary">Batería: {c.salud_bateria}%</p>}
+                </div>
               </div>
               {c.monto != null && <p className="text-sm font-medium">${c.monto.toLocaleString('es-AR')}</p>}
             </div>

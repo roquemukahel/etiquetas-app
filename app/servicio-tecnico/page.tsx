@@ -6,6 +6,8 @@ import { crearClienteNavegador } from '../lib/supabase/client';
 import { asegurarModelo } from '../lib/modelos';
 import { limpiarImei } from '../lib/imei';
 import { armarLinkWhatsApp, mensajeSeguimientoServicio, mensajeListoServicio } from '../lib/whatsapp';
+import { obtenerImagenesCarpetas, imagenParaModelo } from '../lib/carpetas';
+import MiniaturaDispositivo from '../MiniaturaDispositivo';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 
@@ -62,6 +64,7 @@ export default function ServicioTecnico() {
   const [avisoWhatsApp, setAvisoWhatsApp] = useState<{ link: string; nombre: string; tipo: 'agregado' | 'reparado' } | null>(
     null
   );
+  const [imagenesCarpetas, setImagenesCarpetas] = useState<Map<string, string>>(new Map());
 
   const cargar = async () => {
     const { data } = await supabase
@@ -89,6 +92,7 @@ export default function ServicioTecnico() {
       const { data } = await supabase.from('modelos_stock').select('nombre').order('nombre');
       setCarpetasStock((data ?? []).map((m) => m.nombre));
     })();
+    (async () => setImagenesCarpetas(await obtenerImagenesCarpetas(supabase)))();
     (async () => {
       const { data } = await supabase.from('clientes').select('id, nombre, apellido, telefono').order('nombre');
       setClientes((data as Cliente[]) ?? []);
@@ -470,16 +474,21 @@ export default function ServicioTecnico() {
           <div className="flex flex-col gap-2">
             {filtrados.map((e) => (
               <div key={e.id} className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex flex-col gap-2">
-                <p className="text-sm font-medium">
-                  {e.modelo}
-                  {e.capacidad_gb ? ` · ${e.capacidad_gb}GB` : ''}
-                  {e.color ? ` · ${e.color}` : ''}
-                </p>
-                {e.imei && (
-                  <p className="text-xs text-muted dark:text-dark-text-secondary -mt-1">
-                    IMEI: <span className="font-bold font-mono text-ink dark:text-dark-text">{e.imei}</span>
-                  </p>
-                )}
+                <div className="flex items-start gap-3">
+                  <MiniaturaDispositivo src={imagenParaModelo(e.modelo, imagenesCarpetas)} />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">
+                      {e.modelo}
+                      {e.capacidad_gb ? ` · ${e.capacidad_gb}GB` : ''}
+                      {e.color ? ` · ${e.color}` : ''}
+                    </p>
+                    {e.imei && (
+                      <p className="text-xs text-muted dark:text-dark-text-secondary">
+                        IMEI: <span className="font-bold font-mono text-ink dark:text-dark-text">{e.imei}</span>
+                      </p>
+                    )}
+                  </div>
+                </div>
                 {e.detalles && <p className="text-xs text-muted dark:text-dark-text-secondary">Detalles: {e.detalles}</p>}
                 {e.fecha_ingreso_servicio && (
                   <p className="text-xs text-muted dark:text-dark-text-secondary">Ingresó: {formatearFecha(e.fecha_ingreso_servicio)}</p>

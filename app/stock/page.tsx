@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../lib/supabase/client';
+import { obtenerImagenesCarpetas, imagenParaModelo } from '../lib/carpetas';
+import MiniaturaDispositivo from '../MiniaturaDispositivo';
 
 type Dispositivo = {
   id: string;
@@ -22,6 +24,7 @@ export default function Stock() {
   const supabase = crearClienteNavegador();
   const [dispositivos, setDispositivos] = useState<Dispositivo[]>([]);
   const [carpetas, setCarpetas] = useState<string[]>([]);
+  const [imagenesCarpetas, setImagenesCarpetas] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState('');
   const [verTodos, setVerTodos] = useState(false);
@@ -40,6 +43,7 @@ export default function Stock() {
       const { data } = await supabase.from('modelos_stock').select('nombre').order('nombre');
       setCarpetas((data ?? []).map((m) => m.nombre));
     })();
+    (async () => setImagenesCarpetas(await obtenerImagenesCarpetas(supabase)))();
   }, []);
 
   const filtrados = useMemo(() => {
@@ -162,10 +166,12 @@ export default function Stock() {
                 <Link
                   key={d.id}
                   href={`/stock/${d.id}`}
-                  className={`rounded-xl border border-border dark:border-dark-border px-4 py-3 flex items-center justify-between ${
+                  className={`rounded-xl border border-border dark:border-dark-border px-4 py-3 flex items-center gap-3 ${
                     d.en_stock ? 'bg-white dark:bg-dark-surface' : 'bg-white/$1 dark:bg-dark-surface opacity-60'
                   }`}
                 >
+                  <MiniaturaDispositivo src={imagenParaModelo(d.modelo, imagenesCarpetas)} />
+                  <div className="flex-1 flex items-center justify-between gap-2 min-w-0">
                   <div>
                     <p className="text-sm font-medium flex items-center gap-1.5 flex-wrap">
                       <span>
@@ -188,6 +194,7 @@ export default function Stock() {
                       <p className="text-sm font-medium">${d.precio.toLocaleString('es-AR')}</p>
                     )}
                     <p className="text-xs text-muted dark:text-dark-text-secondary">{d.en_stock ? 'en stock' : 'fuera de stock'}</p>
+                  </div>
                   </div>
                 </Link>
               ))}

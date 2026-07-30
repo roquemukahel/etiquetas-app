@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { asegurarModelo } from '../../lib/modelos';
+import { obtenerImagenesCarpetas, imagenParaModelo } from '../../lib/carpetas';
+import MiniaturaDispositivo from '../../MiniaturaDispositivo';
 
 type Dispositivo = {
   id: string;
@@ -108,6 +110,7 @@ export default function NuevaOrden() {
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [garantiaDias, setGarantiaDias] = useState<number | null>(null);
+  const [imagenesCarpetas, setImagenesCarpetas] = useState<Map<string, string>>(new Map());
 
   useEffect(() => {
     (async () => {
@@ -142,6 +145,7 @@ export default function NuevaOrden() {
       const { data } = await supabase.from('modelos_stock').select('nombre').order('nombre');
       setCarpetasStock((data ?? []).map((m) => m.nombre));
     })();
+    (async () => setImagenesCarpetas(await obtenerImagenesCarpetas(supabase)))();
   }, []);
 
   const clientesFiltrados = useMemo(() => {
@@ -533,6 +537,8 @@ export default function NuevaOrden() {
                       onClick={() => agregarDispositivoDelStock(d)}
                       className="rounded-lg border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-3 py-2 flex items-center justify-between text-left text-sm gap-2"
                     >
+                      <span className="flex items-center gap-2 min-w-0">
+                      <MiniaturaDispositivo src={imagenParaModelo(d.modelo, imagenesCarpetas)} size={32} />
                       <span className="min-w-0">
                         <span className="block truncate">
                           {d.modelo} {d.capacidad_gb ? `· ${d.capacidad_gb}GB` : ''} {d.color ? `· ${d.color}` : ''}
@@ -542,6 +548,7 @@ export default function NuevaOrden() {
                             {d.imei}
                           </span>
                         )}
+                      </span>
                       </span>
                       {d.precio != null && (
                         <span className="font-medium shrink-0">${d.precio.toLocaleString('es-AR')}</span>

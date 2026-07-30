@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../lib/supabase/client';
+import { obtenerImagenesCarpetas, imagenParaModelo } from '../lib/carpetas';
+import MiniaturaDispositivo from '../MiniaturaDispositivo';
 
 type Compra = {
   id: string;
@@ -26,6 +28,7 @@ export default function Compras() {
   const [compras, setCompras] = useState<Compra[]>([]);
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState('');
+  const [imagenesCarpetas, setImagenesCarpetas] = useState<Map<string, string>>(new Map());
 
   useEffect(() => {
     (async () => {
@@ -36,6 +39,7 @@ export default function Compras() {
       setCompras((data as any) ?? []);
       setLoading(false);
     })();
+    (async () => setImagenesCarpetas(await obtenerImagenesCarpetas(supabase)))();
   }, []);
 
   const filtradas = useMemo(() => {
@@ -79,8 +83,10 @@ export default function Compras() {
           <Link
             key={c.id}
             href={`/compras/${c.id}`}
-            className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex items-center justify-between"
+            className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex items-center gap-3"
           >
+            <MiniaturaDispositivo src={imagenParaModelo(c.modelo, imagenesCarpetas)} />
+            <div className="flex-1 flex items-center justify-between gap-2 min-w-0">
             <div>
               <p className="text-sm font-medium">
                 {c.modelo}
@@ -98,6 +104,7 @@ export default function Compras() {
             <div className="text-right">
               {c.precio != null && <p className="text-sm font-medium">${c.precio.toLocaleString('es-AR')}</p>}
               <p className="text-xs text-muted dark:text-dark-text-secondary">{ETIQUETA_ESTADO[c.estado] || c.estado}</p>
+            </div>
             </div>
           </Link>
         ))}
