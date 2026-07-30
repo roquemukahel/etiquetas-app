@@ -32,6 +32,16 @@ export default function Configuracion() {
           </Link>
         ))}
       </div>
+
+      <p className="text-xs text-muted dark:text-dark-text-secondary text-center mt-auto pt-4">
+        <Link href="/terminos" className="underline">
+          Términos y Condiciones
+        </Link>
+        {' · '}
+        <Link href="/privacidad" className="underline">
+          Política de Privacidad
+        </Link>
+      </p>
     </main>
   );
 }

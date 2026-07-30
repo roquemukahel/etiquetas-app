@@ -16,6 +16,7 @@ export default function Registro() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [captchaToken, setCaptchaToken] = useState('');
+  const [aceptaTerminos, setAceptaTerminos] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cargando, setCargando] = useState(false);
 
@@ -106,8 +107,28 @@ export default function Registro() {
 
         <Turnstile onVerify={setCaptchaToken} />
 
+        <label className="flex items-start gap-2 text-xs text-muted dark:text-dark-text-secondary">
+          <input
+            type="checkbox"
+            checked={aceptaTerminos}
+            onChange={(e) => setAceptaTerminos(e.target.checked)}
+            className="h-4 w-4 mt-0.5 accent-ink shrink-0"
+          />
+          <span>
+            Acepto los{' '}
+            <Link href="/terminos" target="_blank" className="text-accent dark:text-dark-accent underline">
+              Términos y Condiciones
+            </Link>{' '}
+            y la{' '}
+            <Link href="/privacidad" target="_blank" className="text-accent dark:text-dark-accent underline">
+              Política de Privacidad
+            </Link>
+            .
+          </span>
+        </label>
+
         <button
-          disabled={cargando || (REQUIERE_CAPTCHA && !captchaToken)}
+          disabled={cargando || !aceptaTerminos || (REQUIERE_CAPTCHA && !captchaToken)}
           className="mt-2 w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
         >
           {cargando ? 'Creando...' : 'Crear cuenta'}
