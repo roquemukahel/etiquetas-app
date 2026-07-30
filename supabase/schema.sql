@@ -555,6 +555,53 @@ $$;
 -- suscripción (independiente de negocio_activo(), que es el
 -- interruptor manual del panel admin). "past_due" todavía deja
 -- pasar: le da margen mientras Lemon Squeezy reintenta el cobro.
+-- ============================================================
+-- Portal de seguimiento para el cliente: cuando se carga un equipo
+-- en Servicio Técnico, se puede vincular al cliente y se genera un
+-- link público (con un token al azar, imposible de adivinar) para
+-- que el cliente vea el estado de SU reparación, sin necesitar
+-- cuenta ni ver nada más del negocio.
+-- ============================================================
+alter table canjes add column if not exists cliente_id uuid references clientes(id) on delete set null;
+alter table canjes add column if not exists token_seguimiento uuid not null default gen_random_uuid();
+
+create unique index if not exists canjes_token_seguimiento_idx on canjes(token_seguimiento);
+
+-- Security definer y sin chequear auth.uid() a propósito: la llama
+-- gente sin cuenta (el cliente final). Lo único que protege los datos
+-- es que el token es un uuid al azar imposible de adivinar, y la
+-- función solo devuelve los campos mínimos (nada de teléfono, DNI,
+-- precio ni notas internas del negocio).
+create or replace function seguimiento_publico(token uuid)
+returns table (
+  modelo text,
+  capacidad_gb int,
+  color text,
+  estado text,
+  fecha_ingreso_servicio timestamptz,
+  fecha_reparado timestamptz,
+  trabajos_realizados text[],
+  nombre_cliente text,
+  nombre_negocio text,
+  logo_negocio text
+)
+language sql
+security definer
+stable
+as $$
+  select
+    c.modelo, c.capacidad_gb, c.color, c.estado,
+    c.fecha_ingreso_servicio, c.fecha_reparado, c.trabajos_realizados,
+    cli.nombre,
+    n.nombre, n.logo_url
+  from canjes c
+  join negocios n on n.id = c.negocio_id
+  left join clientes cli on cli.id = c.cliente_id
+  where c.token_seguimiento = token
+$$;
+
+grant execute on function seguimiento_publico(uuid) to anon, authenticated;
+
 create or replace function negocio_suscripcion_activa()
 returns boolean
 language sql

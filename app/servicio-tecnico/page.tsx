@@ -4,11 +4,14 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../lib/supabase/client';
 import { asegurarModelo } from '../lib/modelos';
+import { limpiarImei } from '../lib/imei';
+import { armarLinkWhatsApp, mensajeSeguimientoServicio } from '../lib/whatsapp';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 
 type Tecnico = { id: string; nombre: string };
 type Trabajo = { id: string; nombre: string };
+type Cliente = { id: string; nombre: string; apellido: string | null; telefono: string | null };
 
 type Equipo = {
   id: string;
@@ -50,6 +53,11 @@ export default function ServicioTecnico() {
   const [nuevoDetalles, setNuevoDetalles] = useState('');
   const [guardandoNuevo, setGuardandoNuevo] = useState(false);
 
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [clienteInput, setClienteInput] = useState('');
+  const [clienteTelefono, setClienteTelefono] = useState('');
+  const [avisoWhatsApp, setAvisoWhatsApp] = useState<{ link: string; nombre: string } | null>(null);
+
   const cargar = async () => {
     const { data } = await supabase
       .from('canjes')
@@ -76,7 +84,23 @@ export default function ServicioTecnico() {
       const { data } = await supabase.from('modelos_stock').select('nombre').order('nombre');
       setCarpetasStock((data ?? []).map((m) => m.nombre));
     })();
+    (async () => {
+      const { data } = await supabase.from('clientes').select('id, nombre, apellido, telefono').order('nombre');
+      setClientes((data as Cliente[]) ?? []);
+    })();
   }, []);
+
+  const nombreCompleto = (c: Cliente) => `${c.nombre} ${c.apellido || ''}`.trim();
+  const clienteCoincidente = useMemo(
+    () => clientes.find((c) => nombreCompleto(c).toLowerCase() === clienteInput.trim().toLowerCase()),
+    [clientes, clienteInput]
+  );
+
+  const elegirClienteInput = (valor: string) => {
+    setClienteInput(valor);
+    const encontrado = clientes.find((c) => nombreCompleto(c).toLowerCase() === valor.trim().toLowerCase());
+    if (encontrado) setClienteTelefono(encontrado.telefono ?? '');
+  };
 
   const filtrados = useMemo(
     () => equipos.filter((e) => (tab === 'derivados' ? e.estado === 'servicio_tecnico' : e.estado === 'reparado')),
@@ -91,20 +115,47 @@ export default function ServicioTecnico() {
   const agregarEquipo = async () => {
     if (!nuevoModelo.trim()) return;
     setGuardandoNuevo(true);
-    await supabase.from('canjes').insert({
-      modelo: nuevoModelo.trim(),
-      capacidad_gb: nuevaCapacidad,
-      color: nuevoColor.trim() || null,
-      imei: nuevoImei.trim() || null,
-      detalles: nuevoDetalles.trim() || null,
-      estado: 'servicio_tecnico',
-      fecha_ingreso_servicio: new Date().toISOString(),
-    });
+
+    let clienteId = clienteCoincidente?.id ?? null;
+    let nombreParaMensaje = clienteCoincidente ? nombreCompleto(clienteCoincidente) : clienteInput.trim();
+
+    if (!clienteId && clienteInput.trim()) {
+      const { data: nuevoCliente } = await supabase
+        .from('clientes')
+        .insert({ nombre: clienteInput.trim(), telefono: clienteTelefono.trim() || null })
+        .select('id')
+        .single();
+      clienteId = nuevoCliente?.id ?? null;
+    }
+
+    const { data: nuevoCanje } = await supabase
+      .from('canjes')
+      .insert({
+        modelo: nuevoModelo.trim(),
+        capacidad_gb: nuevaCapacidad,
+        color: nuevoColor.trim() || null,
+        imei: limpiarImei(nuevoImei),
+        detalles: nuevoDetalles.trim() || null,
+        estado: 'servicio_tecnico',
+        fecha_ingreso_servicio: new Date().toISOString(),
+        cliente_id: clienteId,
+      })
+      .select('token_seguimiento')
+      .single();
+
+    if (clienteId && clienteTelefono.trim() && nuevoCanje?.token_seguimiento) {
+      const url = `${window.location.origin}/seguimiento/${nuevoCanje.token_seguimiento}`;
+      const mensaje = mensajeSeguimientoServicio(nombreParaMensaje || 'estimado/a', nuevoModelo.trim(), url);
+      setAvisoWhatsApp({ link: armarLinkWhatsApp(clienteTelefono, mensaje), nombre: nombreParaMensaje });
+    }
+
     setNuevoModelo('');
     setNuevaCapacidad(null);
     setNuevoColor('');
     setNuevoImei('');
     setNuevoDetalles('');
+    setClienteInput('');
+    setClienteTelefono('');
     setPanelNuevo(false);
     setGuardandoNuevo(false);
     cargar();
@@ -325,6 +376,29 @@ export default function ServicioTecnico() {
                     rows={2}
                     className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                   />
+
+                  <p className="text-xs font-medium text-muted dark:text-dark-text-secondary mt-1">
+                    Cliente (opcional — para avisarle por WhatsApp)
+                  </p>
+                  <input
+                    value={clienteInput}
+                    onChange={(e) => elegirClienteInput(e.target.value)}
+                    placeholder="Nombre del cliente"
+                    list="clientes-servicio"
+                    className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                  />
+                  <datalist id="clientes-servicio">
+                    {clientes.map((c) => (
+                      <option key={c.id} value={nombreCompleto(c)} />
+                    ))}
+                  </datalist>
+                  <input
+                    value={clienteTelefono}
+                    onChange={(e) => setClienteTelefono(e.target.value)}
+                    placeholder="Teléfono (con código de área)"
+                    className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                  />
+
                   <button
                     disabled={!nuevoModelo.trim() || guardandoNuevo}
                     onClick={agregarEquipo}
@@ -332,6 +406,31 @@ export default function ServicioTecnico() {
                   >
                     {guardandoNuevo ? 'Agregando...' : 'Agregar a Servicio Técnico'}
                   </button>
+                </div>
+              )}
+
+              {avisoWhatsApp && (
+                <div className="rounded-xl border border-good/30 bg-good/10 p-3 flex flex-col gap-2">
+                  <p className="text-sm">
+                    Equipo agregado. ¿Le avisamos a <strong>{avisoWhatsApp.nombre}</strong> por WhatsApp?
+                  </p>
+                  <div className="flex gap-2">
+                    <a
+                      href={avisoWhatsApp.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => setAvisoWhatsApp(null)}
+                      className="flex-1 rounded-lg bg-good text-white text-center py-2 text-sm font-medium"
+                    >
+                      Enviar WhatsApp
+                    </a>
+                    <button
+                      onClick={() => setAvisoWhatsApp(null)}
+                      className="rounded-lg border border-border dark:border-dark-border px-3 py-2 text-sm font-medium"
+                    >
+                      Ahora no
+                    </button>
+                  </div>
                 </div>
               )}
             </>

@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextRequest, NextResponse } from 'next/server';
 
-const RUTAS_PUBLICAS = ['/login', '/registro', '/cuenta-desactivada', '/suscripcion-vencida', '/terminos', '/privacidad'];
+const RUTAS_PUBLICAS = ['/login', '/registro', '/cuenta-desactivada', '/suscripcion-vencida', '/terminos', '/privacidad', '/seguimiento'];
 
 export async function middleware(request: NextRequest) {
   // Los webhooks (ej. Lemon Squeezy) son servidor-a-servidor: nunca traen sesión
@@ -47,8 +47,8 @@ export async function middleware(request: NextRequest) {
 
   // Estas rutas son públicas pero NO deben redirigir a un usuario ya logueado
   // (a diferencia de /login o /registro, que no tiene sentido ver estando adentro).
-  const RUTAS_SIEMPRE_ACCESIBLES = ['/cuenta-desactivada', '/suscripcion-vencida', '/terminos', '/privacidad'];
-  const esPantallaDeBloqueo = RUTAS_SIEMPRE_ACCESIBLES.includes(request.nextUrl.pathname);
+  const RUTAS_SIEMPRE_ACCESIBLES = ['/cuenta-desactivada', '/suscripcion-vencida', '/terminos', '/privacidad', '/seguimiento'];
+  const esPantallaDeBloqueo = RUTAS_SIEMPRE_ACCESIBLES.some((r) => request.nextUrl.pathname.startsWith(r));
 
   if (user && esPublica && !esPantallaDeBloqueo) {
     const url = request.nextUrl.clone();
