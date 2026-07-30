@@ -683,3 +683,9 @@ create policy "ver auditoria de mi negocio" on auditoria
 
 create policy "insertar auditoria de mi negocio" on auditoria
   for insert with check (negocio_id = negocio_actual());
+
+-- ============================================================
+-- Imagen opcional por carpeta de Stock (se usa en "Productos más
+-- vendidos" del inicio).
+-- ============================================================
+alter table modelos_stock add column if not exists imagen_url text;

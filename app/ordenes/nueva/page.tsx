@@ -531,12 +531,21 @@ export default function NuevaOrden() {
                     <button
                       key={d.id}
                       onClick={() => agregarDispositivoDelStock(d)}
-                      className="rounded-lg border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-3 py-2 flex items-center justify-between text-left text-sm"
+                      className="rounded-lg border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-3 py-2 flex items-center justify-between text-left text-sm gap-2"
                     >
-                      <span>
-                        {d.modelo} {d.capacidad_gb ? `· ${d.capacidad_gb}GB` : ''} {d.color ? `· ${d.color}` : ''}
+                      <span className="min-w-0">
+                        <span className="block truncate">
+                          {d.modelo} {d.capacidad_gb ? `· ${d.capacidad_gb}GB` : ''} {d.color ? `· ${d.color}` : ''}
+                        </span>
+                        {d.imei && (
+                          <span className="block text-xs font-bold font-mono text-ink dark:text-dark-text truncate">
+                            {d.imei}
+                          </span>
+                        )}
                       </span>
-                      {d.precio != null && <span className="font-medium">${d.precio.toLocaleString('es-AR')}</span>}
+                      {d.precio != null && (
+                        <span className="font-medium shrink-0">${d.precio.toLocaleString('es-AR')}</span>
+                      )}
                     </button>
                   ))}
                 </div>

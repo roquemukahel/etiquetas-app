@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 
-type Carpeta = { id: string; nombre: string };
+type Carpeta = { id: string; nombre: string; imagen_url: string | null };
 
 export default function Carpetas() {
   const supabase = crearClienteNavegador();
@@ -72,6 +72,18 @@ export default function Carpetas() {
     cargar();
   };
 
+  const cambiarImagen = (c: Carpeta, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const dataUrl = reader.result as string;
+      setCarpetas((cs) => cs.map((x) => (x.id === c.id ? { ...x, imagen_url: dataUrl } : x)));
+      await supabase.from('modelos_stock').update({ imagen_url: dataUrl }).eq('id', c.id);
+    };
+    reader.readAsDataURL(file);
+  };
+
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
       <header className="flex items-center gap-3">
@@ -108,8 +120,21 @@ export default function Carpetas() {
         {carpetas.map((c) => (
           <div
             key={c.id}
-            className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex items-center justify-between gap-2"
+            className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex items-center gap-3"
           >
+            <label className="shrink-0 cursor-pointer">
+              {c.imagen_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={c.imagen_url} alt={c.nombre} className="h-11 w-11 rounded-lg object-cover border border-border dark:border-dark-border" />
+              ) : (
+                <div className="h-11 w-11 rounded-lg bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border flex items-center justify-center text-lg">
+                  📷
+                </div>
+              )}
+              <input type="file" accept="image/*" className="hidden" onChange={(e) => cambiarImagen(c, e)} />
+            </label>
+
+            <div className="flex-1 flex items-center justify-between gap-2 min-w-0">
             {editandoId === c.id ? (
               <input
                 value={nombreEditado}
@@ -138,6 +163,7 @@ export default function Carpetas() {
               <button onClick={() => eliminar(c.id)} className="text-xs text-bad underline">
                 Eliminar
               </button>
+            </div>
             </div>
           </div>
         ))}
