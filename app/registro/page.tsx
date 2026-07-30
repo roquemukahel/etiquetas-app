@@ -66,6 +66,9 @@ export default function Registro() {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/qovento-logo.png" alt="Qovento" className="h-11 w-auto object-contain" />
         <h1 className="text-2xl font-display font-semibold">Creá tu cuenta</h1>
+        <p className="text-sm text-muted dark:text-dark-text-secondary text-center max-w-xs">
+          El sistema móvil más rápido para recibir, documentar, etiquetar y comercializar celulares.
+        </p>
       </div>
 
       <form onSubmit={handleSubmit} className="w-full max-w-xs flex flex-col gap-4">

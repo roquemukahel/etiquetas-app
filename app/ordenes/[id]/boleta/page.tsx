@@ -18,6 +18,7 @@ type Orden = {
   estado: string;
   created_at: string;
   fecha_entrega: string | null;
+  nota: string | null;
   canjes: {
     modelo: string | null;
     capacidad_gb: number | null;
@@ -355,6 +356,13 @@ export default function Boleta() {
             </p>
           )}
         </div>
+
+        {orden.nota && (
+          <div className="rounded-xl bg-canvas p-4 print:p-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">Nota</p>
+            <p className="whitespace-pre-wrap text-muted">{orden.nota}</p>
+          </div>
+        )}
 
         {tieneProductos && negocio?.texto_garantia && (
           <div className="rounded-xl bg-canvas p-4 print:p-2">

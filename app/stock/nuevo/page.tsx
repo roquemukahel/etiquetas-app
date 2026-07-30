@@ -15,10 +15,15 @@ export default function NuevoDispositivo() {
   const supabase = crearClienteNavegador();
 
   const [carpetas, setCarpetas] = useState<string[]>([]);
+  const [proveedores, setProveedores] = useState<string[]>([]);
   useEffect(() => {
     (async () => {
       const { data } = await supabase.from('modelos_stock').select('nombre').order('nombre');
       setCarpetas((data ?? []).map((m) => m.nombre));
+    })();
+    (async () => {
+      const { data } = await supabase.from('dispositivos').select('proveedor').not('proveedor', 'is', null);
+      setProveedores(Array.from(new Set((data ?? []).map((d) => d.proveedor).filter(Boolean))) as string[]);
     })();
   }, []);
 
@@ -28,6 +33,7 @@ export default function NuevoDispositivo() {
   const [bateria, setBateria] = useState('');
   const [color, setColor] = useState('');
   const [precio, setPrecio] = useState('');
+  const [proveedor, setProveedor] = useState('');
   const [estado, setEstado] = useState('usado');
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
@@ -46,6 +52,7 @@ export default function NuevoDispositivo() {
       salud_bateria: bateria ? Number(bateria) : null,
       color: color.trim() || null,
       precio: precio ? Number(precio) : null,
+      proveedor: proveedor.trim() || null,
       estado,
       en_stock: true,
     });
@@ -103,6 +110,12 @@ export default function NuevoDispositivo() {
         <Campo label="Salud de batería (%)" valor={bateria} onChange={setBateria} numerico />
         <Campo label="Color" valor={color} onChange={setColor} />
         <Campo label="Precio" valor={precio} onChange={setPrecio} numerico />
+        <Campo label="Proveedor (opcional)" valor={proveedor} onChange={setProveedor} listaId="proveedores-stock" />
+        <datalist id="proveedores-stock">
+          {proveedores.map((p) => (
+            <option key={p} value={p} />
+          ))}
+        </datalist>
 
         <div>
           <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Estado</label>

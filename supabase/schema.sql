@@ -602,6 +602,14 @@ $$;
 
 grant execute on function seguimiento_publico(uuid) to anon, authenticated;
 
+-- ============================================================
+-- Proveedor (opcional) al cargar un dispositivo al stock, y nota
+-- opcional por orden (se imprime en la boleta: detalles del equipo,
+-- o cualquier comentario que el vendedor quiera dejar aclarado).
+-- ============================================================
+alter table dispositivos add column if not exists proveedor text;
+alter table ordenes add column if not exists nota text;
+
 create or replace function negocio_suscripcion_activa()
 returns boolean
 language sql

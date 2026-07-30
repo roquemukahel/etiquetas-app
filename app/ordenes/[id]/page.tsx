@@ -17,6 +17,7 @@ type Orden = {
   canje_id: string | null;
   estado: string;
   created_at: string;
+  nota: string | null;
   clientes: { nombre: string; apellido: string | null; telefono: string | null } | null;
   vendedores: { nombre: string } | null;
   orden_items: Item[];
@@ -137,6 +138,11 @@ export default function DetalleOrden() {
         {orden.total != null && (
           <p>
             <span className="text-muted dark:text-dark-text-secondary">Total:</span> ${orden.total.toLocaleString('es-AR')}
+          </p>
+        )}
+        {orden.nota && (
+          <p>
+            <span className="text-muted dark:text-dark-text-secondary">Nota:</span> {orden.nota}
           </p>
         )}
       </div>

@@ -18,6 +18,7 @@ type Dispositivo = {
   salud_bateria: number | null;
   color: string | null;
   precio: number | null;
+  proveedor: string | null;
   estado: string | null;
   en_stock: boolean;
 };
@@ -62,6 +63,7 @@ export default function DetalleDispositivo() {
         salud_bateria: d.salud_bateria,
         color: d.color?.trim() || null,
         precio: d.precio,
+        proveedor: d.proveedor?.trim() || null,
         estado: d.estado,
         en_stock: d.en_stock,
       })
@@ -171,6 +173,7 @@ export default function DetalleDispositivo() {
           onChange={(v) => campo('precio', v ? Number(v) : null)}
           numerico
         />
+        <Campo label="Proveedor (opcional)" valor={d.proveedor ?? ''} onChange={(v) => campo('proveedor', v)} />
 
         <div>
           <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Estado</label>

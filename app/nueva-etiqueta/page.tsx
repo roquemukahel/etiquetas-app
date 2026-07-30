@@ -47,6 +47,7 @@ export default function NuevaEtiqueta() {
   const [agregarAlStock, setAgregarAlStock] = useState(false);
   const [color, setColor] = useState('');
   const [precio, setPrecio] = useState('');
+  const [proveedor, setProveedor] = useState('');
   const [guardandoStock, setGuardandoStock] = useState(false);
 
   useEffect(() => {
@@ -150,6 +151,7 @@ export default function NuevaEtiqueta() {
         salud_bateria: bateria ? Number(bateria) : null,
         color: color.trim() || null,
         precio: precio ? Number(precio) : null,
+        proveedor: proveedor.trim() || null,
         estado: 'usado',
         en_stock: true,
       });
@@ -248,6 +250,7 @@ export default function NuevaEtiqueta() {
           <div className="flex flex-col gap-3">
             <Campo label="Color" valor={color} onChange={setColor} />
             <Campo label="Precio" valor={precio} onChange={setPrecio} />
+            <Campo label="Proveedor (opcional)" valor={proveedor} onChange={setProveedor} />
           </div>
         )}
 

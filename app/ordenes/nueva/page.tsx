@@ -93,6 +93,7 @@ export default function NuevaOrden() {
   const [anticipo, setAnticipo] = useState('');
   const [impuesto, setImpuesto] = useState('');
   const [estadoOrden, setEstadoOrden] = useState('pendiente');
+  const [nota, setNota] = useState('');
 
   // --- plan canje ---
   const [canjeActivo, setCanjeActivo] = useState(false);
@@ -320,6 +321,7 @@ export default function NuevaOrden() {
           total,
           estado: estadoOrden,
           fecha_entrega: estadoOrden === 'entregado' ? new Date().toISOString() : null,
+          nota: nota.trim() || null,
         })
         .select()
         .single();
@@ -858,6 +860,19 @@ export default function NuevaOrden() {
             className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
           />
         </div>
+      </div>
+
+      <div>
+        <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">
+          Nota para la boleta (opcional)
+        </label>
+        <textarea
+          value={nota}
+          onChange={(e) => setNota(e.target.value)}
+          rows={2}
+          placeholder="Ej. el equipo tiene un detalle en la pantalla, se vende igual con este descuento"
+          className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+        />
       </div>
 
       <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-3 flex flex-col gap-3">
