@@ -99,6 +99,11 @@ export default async function Home() {
   let deltaPct: number | null = null;
   let dias: { label: string; valor: number }[] = [];
   let masVendidos: { nombre: string; cantidad: number; imagenUrl: string | null }[] = [];
+  let deltaVentasPct: number | null = null;
+  let ticketPromedio = 0;
+  let deltaTicketPct: number | null = null;
+  let serieVentas: number[] = [];
+  let serieTicket: number[] = [];
 
   if (user) {
     const { data: perfil } = await supabase
@@ -150,6 +155,18 @@ export default async function Home() {
     ventasMes = (ordenesRecientes ?? []).filter((o) => new Date(o.created_at) >= inicioMes).length;
     deltaPct = ingresosMesPasado > 0 ? Math.round(((ingresosMes - ingresosMesPasado) / ingresosMesPasado) * 100) : null;
 
+    const ventasMesPasado = cobradas.filter(
+      (o) => new Date(o.created_at) >= inicioMesPasado && new Date(o.created_at) < inicioMes
+    ).length;
+    deltaVentasPct = ventasMesPasado > 0 ? Math.round(((ventasMes - ventasMesPasado) / ventasMesPasado) * 100) : null;
+
+    ticketPromedio = ventasMes > 0 ? ingresosMes / ventasMes : 0;
+    const ticketPromedioMesPasado = ventasMesPasado > 0 ? ingresosMesPasado / ventasMesPasado : 0;
+    deltaTicketPct =
+      ticketPromedioMesPasado > 0
+        ? Math.round(((ticketPromedio - ticketPromedioMesPasado) / ticketPromedioMesPasado) * 100)
+        : null;
+
     const carpetas = (carpetasStock as { nombre: string; imagen_url: string | null }[]) ?? [];
     const conteoItems = new Map<string, number>();
     for (const o of cobradas.filter((o: any) => new Date(o.created_at) >= inicioMes)) {
@@ -175,13 +192,14 @@ export default async function Home() {
       dia.setHours(0, 0, 0, 0);
       const diaFin = new Date(dia);
       diaFin.setDate(diaFin.getDate() + 1);
-      const valor = cobradas
-        .filter((o) => {
-          const d = new Date(o.created_at);
-          return d >= dia && d < diaFin;
-        })
-        .reduce((acc, o) => acc + (o.total || 0), 0);
+      const ordenesDia = cobradas.filter((o) => {
+        const d = new Date(o.created_at);
+        return d >= dia && d < diaFin;
+      });
+      const valor = ordenesDia.reduce((acc, o) => acc + (o.total || 0), 0);
       dias.push({ label: dia.toLocaleDateString('es-AR', { weekday: 'short' }).slice(0, 1).toUpperCase(), valor });
+      serieVentas.push(ordenesDia.length);
+      serieTicket.push(ordenesDia.length > 0 ? valor / ordenesDia.length : 0);
     }
   }
 
@@ -251,6 +269,17 @@ export default async function Home() {
               ))}
             </div>
           </div>
+
+          <div className="grid grid-cols-2 gap-4 pt-3 border-t border-white/10">
+            <MiniStatTrend etiqueta="Ventas" valor={ventasMes.toString()} deltaPct={deltaVentasPct} serie={serieVentas} />
+            <MiniStatTrend
+              etiqueta="Ticket promedio"
+              valor={`${moneda}${Math.round(ticketPromedio).toLocaleString('es-AR')}`}
+              deltaPct={deltaTicketPct}
+              serie={serieTicket}
+            />
+          </div>
+
           <span className="text-xs text-white/50 group-hover:text-white/70">Ver estadísticas completas &rarr;</span>
         </Link>
 
@@ -342,6 +371,55 @@ function StatTile({ valor, etiqueta }: { valor: number; etiqueta: string }) {
     <div className="rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-3.5 flex flex-col gap-0.5">
       <p className="text-2xl font-display font-semibold leading-none">{valor}</p>
       <p className="text-[11px] text-muted dark:text-dark-text-secondary leading-tight">{etiqueta}</p>
+    </div>
+  );
+}
+
+function Sparkline({ serie }: { serie: number[] }) {
+  const w = 64;
+  const h = 24;
+  const max = Math.max(...serie, 0);
+  const min = Math.min(...serie, 0);
+  const rango = Math.max(1, max - min);
+  const puntos = serie
+    .map((v, i) => {
+      const x = serie.length > 1 ? (i / (serie.length - 1)) * w : w / 2;
+      const y = h - ((v - min) / rango) * h;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(' ');
+
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="shrink-0">
+      <polyline points={puntos} fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.85" />
+    </svg>
+  );
+}
+
+function MiniStatTrend({
+  etiqueta,
+  valor,
+  deltaPct,
+  serie,
+}: {
+  etiqueta: string;
+  valor: string;
+  deltaPct: number | null;
+  serie: number[];
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <div>
+        <p className="text-[11px] text-white/60">{etiqueta}</p>
+        <p className="text-base font-display font-semibold">{valor}</p>
+        {deltaPct != null && (
+          <p className={`text-[11px] ${deltaPct >= 0 ? 'text-good' : 'text-bad'}`}>
+            {deltaPct >= 0 ? '+' : ''}
+            {deltaPct}% vs. mes anterior
+          </p>
+        )}
+      </div>
+      <Sparkline serie={serie} />
     </div>
   );
 }
