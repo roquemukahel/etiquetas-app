@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { crearClienteServidor } from './lib/supabase/server';
 import BotonSalir from './BotonSalir';
 import QMark from './QMark';
+import BuscadorUniversal from './BuscadorUniversal';
 import { simboloMoneda } from './lib/monedas';
 
 function IconoBase({ children }: { children: React.ReactNode }) {
@@ -188,6 +189,8 @@ export default async function Home() {
           <BotonSalir />
         </div>
       </header>
+
+      <BuscadorUniversal />
 
       <div className="rounded-2xl bg-ink text-white p-5 flex flex-col gap-4">
         <div className="flex items-start justify-between">
