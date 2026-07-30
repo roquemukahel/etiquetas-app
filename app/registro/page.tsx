@@ -64,7 +64,7 @@ export default function Registro() {
     <main className="flex min-h-screen flex-col items-center justify-center px-6 py-10">
       <div className="flex flex-col items-center gap-3 mb-6">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/qovento-logo.png" alt="Qovento" className="h-11 w-auto object-contain" />
+        <img src="/qovento-logo.png" alt="Qovento" className="h-32 w-auto object-contain" />
         <h1 className="text-2xl font-display font-semibold">Creá tu cuenta</h1>
         <p className="text-sm text-muted dark:text-dark-text-secondary text-center max-w-xs">
           El sistema móvil más rápido para recibir, documentar, etiquetar y comercializar celulares.
