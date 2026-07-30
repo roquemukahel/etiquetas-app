@@ -10,6 +10,11 @@ const withPWA = require('next-pwa')({
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Next.js 14 necesita este flag para que instrumentation.ts (donde
+  // arrancamos Sentry del lado del servidor) se ejecute de verdad.
+  experimental: {
+    instrumentationHook: true,
+  },
   async headers() {
     return [
       {
