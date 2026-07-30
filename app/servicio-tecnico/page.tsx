@@ -445,6 +445,12 @@ export default function ServicioTecnico() {
             </p>
           )}
 
+          {!loading && filtrados.length > 0 && (
+            <p className="text-xs text-muted dark:text-dark-text-secondary -mb-1">
+              Etiquetá el dispositivo defectuoso para identificarlo fácil en el local.
+            </p>
+          )}
+
           <div className="flex flex-col gap-2">
             {filtrados.map((e) => (
               <div key={e.id} className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex flex-col gap-2">
@@ -462,6 +468,13 @@ export default function ServicioTecnico() {
                 {e.fecha_ingreso_servicio && (
                   <p className="text-xs text-muted dark:text-dark-text-secondary">Ingresó: {formatearFecha(e.fecha_ingreso_servicio)}</p>
                 )}
+
+                <Link
+                  href={`/servicio-tecnico/etiqueta/${e.id}`}
+                  className="rounded-lg border border-border dark:border-dark-border py-2 text-center text-xs font-medium"
+                >
+                  🏷️ Imprimir etiqueta
+                </Link>
 
                 {tab === 'derivados' && (
                   <div>
