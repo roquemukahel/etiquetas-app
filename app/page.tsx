@@ -265,7 +265,12 @@ export default async function Home() {
         )}
       </div>
 
-      <p className="text-center text-xs text-muted dark:text-dark-text-secondary mt-auto pt-4">con Qovento</p>
+      <div className="text-center mt-auto pt-4">
+        <p className="text-xs text-muted dark:text-dark-text-secondary">con Qovento</p>
+        <p className="text-[10px] text-muted dark:text-dark-text-secondary mt-0.5">
+          El sistema móvil más rápido para recibir, documentar, etiquetar y comercializar celulares.
+        </p>
+      </div>
     </main>
   );
 }
