@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import * as Sentry from '@sentry/nextjs';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN ?? '';
   const client = Sentry.getClient();
