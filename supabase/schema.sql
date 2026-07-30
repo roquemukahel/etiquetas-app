@@ -637,3 +637,16 @@ $$;
 -- ============================================================
 alter table negocios add column if not exists garantia_dias int;
 alter table dispositivos add column if not exists garantia_vencimiento date;
+
+-- ============================================================
+-- Alerta de stock quieto: cuando un dispositivo lleva más de 30
+-- días en stock, se le manda un mail de aviso al dueño del negocio
+-- (una sola vez por período quieto, no todos los días). Un cron
+-- diario en Vercel revisa esto (ver app/api/cron/stock-quieto).
+--
+-- en_stock_desde: se resetea a "ahora" cada vez que un dispositivo
+-- vuelve a estar en stock (para no contar como "30 días quieto" un
+-- equipo que en realidad recién volvió, ej. por cancelar una venta).
+-- ============================================================
+alter table dispositivos add column if not exists en_stock_desde timestamptz default now();
+alter table dispositivos add column if not exists alerta_stock_enviada boolean not null default false;

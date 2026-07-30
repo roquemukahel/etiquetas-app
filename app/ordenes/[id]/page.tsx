@@ -72,7 +72,10 @@ export default function DetalleOrden() {
 
     const dispositivoIds = orden.orden_items.map((i) => i.dispositivo_id).filter(Boolean) as string[];
     if (dispositivoIds.length > 0) {
-      await supabase.from('dispositivos').update({ en_stock: true }).in('id', dispositivoIds);
+      await supabase
+        .from('dispositivos')
+        .update({ en_stock: true, en_stock_desde: new Date().toISOString(), alerta_stock_enviada: false })
+        .in('id', dispositivoIds);
     }
     const { error: deleteError } = await supabase.from('ordenes').delete().eq('id', id);
     if (orden.canje_id) {

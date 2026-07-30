@@ -30,6 +30,7 @@ export default function DetalleDispositivo() {
   const supabase = crearClienteNavegador();
 
   const [d, setD] = useState<Dispositivo | null>(null);
+  const [enStockOriginal, setEnStockOriginal] = useState(true);
   const [carpetas, setCarpetas] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [guardando, setGuardando] = useState(false);
@@ -39,6 +40,7 @@ export default function DetalleDispositivo() {
     (async () => {
       const { data } = await supabase.from('dispositivos').select('*').eq('id', id).single();
       setD(data as Dispositivo);
+      setEnStockOriginal((data as Dispositivo)?.en_stock ?? true);
       setLoading(false);
     })();
     (async () => {
@@ -54,6 +56,8 @@ export default function DetalleDispositivo() {
     setGuardando(true);
     setError(null);
 
+    const volvioAStock = !enStockOriginal && d.en_stock;
+
     const { error: updateError } = await supabase
       .from('dispositivos')
       .update({
@@ -67,6 +71,7 @@ export default function DetalleDispositivo() {
         proveedor: d.proveedor?.trim() || null,
         estado: d.estado,
         en_stock: d.en_stock,
+        ...(volvioAStock ? { en_stock_desde: new Date().toISOString(), alerta_stock_enviada: false } : {}),
       })
       .eq('id', id);
 

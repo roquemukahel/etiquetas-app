@@ -4,11 +4,12 @@ import { NextRequest, NextResponse } from 'next/server';
 const RUTAS_PUBLICAS = ['/login', '/registro', '/cuenta-desactivada', '/suscripcion-vencida', '/terminos', '/privacidad', '/seguimiento'];
 
 export async function middleware(request: NextRequest) {
-  // Los webhooks (ej. Lemon Squeezy) son servidor-a-servidor: nunca traen sesión
-  // de usuario, y se autentican solos con su propia firma dentro de la ruta.
-  // Si los dejáramos pasar por la lógica de abajo, este middleware los trataría
-  // como "no logueado" e intentaría redirigirlos a /login, lo que rompe el POST.
-  if (request.nextUrl.pathname.startsWith('/api/webhooks/')) {
+  // Los webhooks (ej. Lemon Squeezy) y los cron jobs (ej. Vercel Cron) son
+  // servidor-a-servidor: nunca traen sesión de usuario, y se autentican
+  // solos (firma propia o el secreto de CRON_SECRET) dentro de la ruta. Si
+  // los dejáramos pasar por la lógica de abajo, este middleware los trataría
+  // como "no logueado" e intentaría redirigirlos a /login, lo que rompe el pedido.
+  if (request.nextUrl.pathname.startsWith('/api/webhooks/') || request.nextUrl.pathname.startsWith('/api/cron/')) {
     return NextResponse.next();
   }
 
