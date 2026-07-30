@@ -67,9 +67,15 @@ const ICONOS: Record<string, React.ReactNode> = {
       <circle cx="12" cy="13" r="3.5" />
     </IconoBase>
   ),
+  estadisticas: (
+    <IconoBase>
+      <path d="M4 20V10M11 20V4M18 20v-7" />
+    </IconoBase>
+  ),
 };
 
 const SECCIONES = [
+  { href: '/estadisticas', titulo: 'Estadísticas', desc: 'Ranking de vendedores, técnicos y más', icono: 'estadisticas', activo: true },
   { href: '/ordenes', titulo: 'Órdenes', desc: 'Ventas, boletas y canjes', icono: 'ordenes', activo: true },
   { href: '/compras', titulo: 'Compra de dispositivos', desc: 'Cuando le comprás un celular a alguien', icono: 'compra', activo: true },
   { href: '/stock', titulo: 'Stock', desc: 'Dispositivos disponibles en tu local', icono: 'stock', activo: true },
