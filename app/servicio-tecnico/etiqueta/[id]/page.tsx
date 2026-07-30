@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { crearClienteNavegador } from '../../../lib/supabase/client';
-import { getLogo, setLogo as guardarLogo } from '../../../lib/logo';
 import EtiquetaServicio from '../../EtiquetaServicio';
 
 type Equipo = {
@@ -25,25 +24,24 @@ export default function EtiquetaServicioTecnico() {
   const etiquetaRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setLogoState(getLogo());
     (async () => {
       const { data } = await supabase.from('canjes').select('id, modelo, imei, detalles').eq('id', id).single();
       setEquipo(data as Equipo);
       setLoading(false);
     })();
+    (async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: perfil } = await supabase
+        .from('perfiles')
+        .select('negocios ( logo_url )')
+        .eq('id', user.id)
+        .single();
+      setLogoState((perfil as any)?.negocios?.logo_url ?? null);
+    })();
   }, [id]);
-
-  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      guardarLogo(dataUrl);
-      setLogoState(dataUrl);
-    };
-    reader.readAsDataURL(file);
-  };
 
   const compartirOdescargar = async (blob: Blob, nombreArchivo: string, tipo: string) => {
     const file = new File([blob], nombreArchivo, { type: tipo });
@@ -132,10 +130,9 @@ export default function EtiquetaServicioTecnico() {
       </div>
 
       {!logo && (
-        <label className="text-sm text-accent dark:text-dark-accent underline cursor-pointer -mt-6">
-          Subir el logo de tu negocio
-          <input type="file" accept="image/*" className="hidden" onChange={handleLogoChange} />
-        </label>
+        <Link href="/configuracion/negocio" className="text-sm text-accent dark:text-dark-accent underline -mt-6">
+          Subir el logo de tu negocio en Configuración
+        </Link>
       )}
 
       <div className="w-full flex flex-col gap-3 mt-auto">

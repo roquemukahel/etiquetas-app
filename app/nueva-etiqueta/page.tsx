@@ -3,7 +3,6 @@
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import Etiqueta from './Etiqueta';
-import { getLogo, setLogo as guardarLogo } from '../lib/logo';
 import { crearClienteNavegador } from '../lib/supabase/client';
 import { asegurarModelo } from '../lib/modelos';
 import { limpiarImei } from '../lib/imei';
@@ -51,20 +50,19 @@ export default function NuevaEtiqueta() {
   const [guardandoStock, setGuardandoStock] = useState(false);
 
   useEffect(() => {
-    setLogoState(getLogo());
+    (async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: perfil } = await supabase
+        .from('perfiles')
+        .select('negocios ( logo_url )')
+        .eq('id', user.id)
+        .single();
+      setLogoState((perfil as any)?.negocios?.logo_url ?? null);
+    })();
   }, []);
-
-  const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      guardarLogo(dataUrl);
-      setLogoState(dataUrl);
-    };
-    reader.readAsDataURL(file);
-  };
 
   // En el celular (sobre todo iPhone), la descarga automática de un archivo
   // recién generado suele fallar en silencio. El menú nativo de "compartir"
@@ -287,10 +285,9 @@ export default function NuevaEtiqueta() {
         </div>
 
         {!logo && (
-          <label className="text-sm text-accent dark:text-dark-accent underline cursor-pointer -mt-6">
-            Subir el logo de tu negocio
-            <input type="file" accept="image/*" className="hidden" onChange={handleLogoChange} />
-          </label>
+          <Link href="/configuracion/negocio" className="text-sm text-accent dark:text-dark-accent underline -mt-6">
+            Subir el logo de tu negocio en Configuración
+          </Link>
         )}
 
         <div className="w-full flex flex-col gap-3 mt-auto">
