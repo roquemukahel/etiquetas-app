@@ -629,3 +629,11 @@ as $$
     true
   )
 $$;
+
+-- ============================================================
+-- Garantía automática: al vender un dispositivo, si el negocio
+-- configuró una cantidad de días de garantía, se calcula y guarda
+-- la fecha de vencimiento en el propio dispositivo.
+-- ============================================================
+alter table negocios add column if not exists garantia_dias int;
+alter table dispositivos add column if not exists garantia_vencimiento date;

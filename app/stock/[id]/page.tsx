@@ -21,6 +21,7 @@ type Dispositivo = {
   proveedor: string | null;
   estado: string | null;
   en_stock: boolean;
+  garantia_vencimiento: string | null;
 };
 
 export default function DetalleDispositivo() {
@@ -132,6 +133,12 @@ export default function DetalleDispositivo() {
       >
         {d.en_stock ? '✓ En stock — tocá para marcar fuera de stock' : 'Fuera de stock — tocá para volver a stock'}
       </button>
+
+      {d.garantia_vencimiento && (
+        <p className="text-xs text-muted dark:text-dark-text-secondary -mt-2">
+          🛡️ Garantía hasta el {new Date(d.garantia_vencimiento + 'T00:00:00').toLocaleDateString('es-AR')}
+        </p>
+      )}
 
       <div className="flex flex-col gap-3">
         <Campo label="Modelo (carpeta)" valor={d.modelo ?? ''} onChange={(v) => campo('modelo', v)} listaId="carpetas-stock" />

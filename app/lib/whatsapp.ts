@@ -14,3 +14,7 @@ export function armarLinkWhatsApp(telefono: string | null | undefined, mensaje: 
 export function mensajeSeguimientoServicio(nombreCliente: string, modelo: string, urlSeguimiento: string) {
   return `Hola ${nombreCliente}! Gracias por elegirnos 🙌 Ya registramos tu ${modelo} para el servicio técnico. Podés seguir el estado de tu reparación en este link: ${urlSeguimiento}`;
 }
+
+export function mensajeListoServicio(nombreCliente: string, modelo: string, urlSeguimiento: string) {
+  return `Hola ${nombreCliente}! Te contamos que tu ${modelo} ya está listo ✅ Podés pasar a retirarlo cuando quieras. Más detalles acá: ${urlSeguimiento}`;
+}

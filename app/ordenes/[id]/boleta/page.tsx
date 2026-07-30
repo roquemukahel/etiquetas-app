@@ -6,7 +6,13 @@ import { useParams } from 'next/navigation';
 import { crearClienteNavegador } from '../../../lib/supabase/client';
 import { simboloMoneda } from '../../../lib/monedas';
 
-type Item = { descripcion: string; cantidad: number; precio_unitario: number; tipo: string };
+type Item = {
+  descripcion: string;
+  cantidad: number;
+  precio_unitario: number;
+  tipo: string;
+  dispositivos: { garantia_vencimiento: string | null } | null;
+};
 
 type Orden = {
   id: string;
@@ -103,7 +109,7 @@ export default function Boleta() {
       const { data: ordenData, error: ordenError } = await supabase
         .from('ordenes')
         .select(
-          '*, clientes ( nombre, apellido, telefono, email, dni, domicilio ), vendedores ( nombre ), canjes!canje_id ( modelo, capacidad_gb, color, imei, salud_bateria, detalles, monto, vendedores ( nombre ) ), orden_items ( descripcion, cantidad, precio_unitario, tipo )'
+          '*, clientes ( nombre, apellido, telefono, email, dni, domicilio ), vendedores ( nombre ), canjes!canje_id ( modelo, capacidad_gb, color, imei, salud_bateria, detalles, monto, vendedores ( nombre ) ), orden_items ( descripcion, cantidad, precio_unitario, tipo, dispositivos ( garantia_vencimiento ) )'
         )
         .eq('id', id)
         .single();
@@ -288,7 +294,14 @@ export default function Boleta() {
           <tbody>
             {orden.orden_items.map((i, idx) => (
               <tr key={idx} className="border-b border-border">
-                <td className="py-2.5 print:py-1">{i.descripcion}</td>
+                <td className="py-2.5 print:py-1">
+                  {i.descripcion}
+                  {i.dispositivos?.garantia_vencimiento && (
+                    <p className="text-xs text-muted mt-0.5">
+                      🛡️ Garantía hasta el {new Date(i.dispositivos.garantia_vencimiento + 'T00:00:00').toLocaleDateString('es-AR')}
+                    </p>
+                  )}
+                </td>
                 <td className="py-2.5 print:py-1 text-center">{i.cantidad}</td>
                 <td className="py-2.5 print:py-1 text-right">
                   {moneda}

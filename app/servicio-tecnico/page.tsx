@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { crearClienteNavegador } from '../lib/supabase/client';
 import { asegurarModelo } from '../lib/modelos';
 import { limpiarImei } from '../lib/imei';
-import { armarLinkWhatsApp, mensajeSeguimientoServicio } from '../lib/whatsapp';
+import { armarLinkWhatsApp, mensajeSeguimientoServicio, mensajeListoServicio } from '../lib/whatsapp';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 
@@ -25,6 +25,9 @@ type Equipo = {
   trabajos_realizados: string[] | null;
   fecha_ingreso_servicio: string | null;
   fecha_reparado: string | null;
+  cliente_id: string | null;
+  token_seguimiento: string | null;
+  clientes: { nombre: string; apellido: string | null; telefono: string | null } | null;
 };
 
 function formatearFecha(iso: string | null) {
@@ -56,17 +59,19 @@ export default function ServicioTecnico() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [clienteInput, setClienteInput] = useState('');
   const [clienteTelefono, setClienteTelefono] = useState('');
-  const [avisoWhatsApp, setAvisoWhatsApp] = useState<{ link: string; nombre: string } | null>(null);
+  const [avisoWhatsApp, setAvisoWhatsApp] = useState<{ link: string; nombre: string; tipo: 'agregado' | 'reparado' } | null>(
+    null
+  );
 
   const cargar = async () => {
     const { data } = await supabase
       .from('canjes')
       .select(
-        'id, modelo, capacidad_gb, color, imei, detalles, tecnico_id, estado, trabajos_realizados, fecha_ingreso_servicio, fecha_reparado'
+        'id, modelo, capacidad_gb, color, imei, detalles, tecnico_id, estado, trabajos_realizados, fecha_ingreso_servicio, fecha_reparado, cliente_id, token_seguimiento, clientes ( nombre, apellido, telefono )'
       )
       .in('estado', ['servicio_tecnico', 'reparado'])
       .order('created_at', { ascending: false });
-    setEquipos((data as Equipo[]) ?? []);
+    setEquipos((data as any) ?? []);
     setLoading(false);
   };
 
@@ -146,7 +151,7 @@ export default function ServicioTecnico() {
     if (clienteId && clienteTelefono.trim() && nuevoCanje?.token_seguimiento) {
       const url = `${window.location.origin}/seguimiento/${nuevoCanje.token_seguimiento}`;
       const mensaje = mensajeSeguimientoServicio(nombreParaMensaje || 'estimado/a', nuevoModelo.trim(), url);
-      setAvisoWhatsApp({ link: armarLinkWhatsApp(clienteTelefono, mensaje), nombre: nombreParaMensaje });
+      setAvisoWhatsApp({ link: armarLinkWhatsApp(clienteTelefono, mensaje), nombre: nombreParaMensaje, tipo: 'agregado' });
     }
 
     setNuevoModelo('');
@@ -185,6 +190,15 @@ export default function ServicioTecnico() {
       .eq('id', id);
     setPanelReparar(null);
     setGuardando(null);
+
+    const equipo = equipos.find((e) => e.id === id);
+    if (equipo?.cliente_id && equipo.clientes?.telefono && equipo.token_seguimiento) {
+      const url = `${window.location.origin}/seguimiento/${equipo.token_seguimiento}`;
+      const nombre = `${equipo.clientes.nombre} ${equipo.clientes.apellido || ''}`.trim();
+      const mensaje = mensajeListoServicio(nombre || 'estimado/a', equipo.modelo || 'equipo', url);
+      setAvisoWhatsApp({ link: armarLinkWhatsApp(equipo.clientes.telefono, mensaje), nombre, tipo: 'reparado' });
+    }
+
     cargar();
   };
 
@@ -409,31 +423,33 @@ export default function ServicioTecnico() {
                 </div>
               )}
 
-              {avisoWhatsApp && (
-                <div className="rounded-xl border border-good/30 bg-good/10 p-3 flex flex-col gap-2">
-                  <p className="text-sm">
-                    Equipo agregado. ¿Le avisamos a <strong>{avisoWhatsApp.nombre}</strong> por WhatsApp?
-                  </p>
-                  <div className="flex gap-2">
-                    <a
-                      href={avisoWhatsApp.link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={() => setAvisoWhatsApp(null)}
-                      className="flex-1 rounded-lg bg-good text-white text-center py-2 text-sm font-medium"
-                    >
-                      Enviar WhatsApp
-                    </a>
-                    <button
-                      onClick={() => setAvisoWhatsApp(null)}
-                      className="rounded-lg border border-border dark:border-dark-border px-3 py-2 text-sm font-medium"
-                    >
-                      Ahora no
-                    </button>
-                  </div>
-                </div>
-              )}
             </>
+          )}
+
+          {avisoWhatsApp && (
+            <div className="rounded-xl border border-good/30 bg-good/10 p-3 flex flex-col gap-2">
+              <p className="text-sm">
+                {avisoWhatsApp.tipo === 'agregado' ? 'Equipo agregado.' : '¡Equipo marcado como reparado!'} ¿Le avisamos a{' '}
+                <strong>{avisoWhatsApp.nombre}</strong> por WhatsApp?
+              </p>
+              <div className="flex gap-2">
+                <a
+                  href={avisoWhatsApp.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setAvisoWhatsApp(null)}
+                  className="flex-1 rounded-lg bg-good text-white text-center py-2 text-sm font-medium"
+                >
+                  Enviar WhatsApp
+                </a>
+                <button
+                  onClick={() => setAvisoWhatsApp(null)}
+                  className="rounded-lg border border-border dark:border-dark-border px-3 py-2 text-sm font-medium"
+                >
+                  Ahora no
+                </button>
+              </div>
+            </div>
           )}
 
           {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Cargando...</p>}

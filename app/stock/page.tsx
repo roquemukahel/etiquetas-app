@@ -66,6 +66,18 @@ export default function Stock() {
     return Array.from(mapa.entries()).sort(([a], [b]) => a.localeCompare(b));
   }, [filtrados, carpetas, busqueda]);
 
+  // Para la alerta de reposición contamos el stock real de cada modelo,
+  // sin importar qué pestaña (En stock / Historial) esté activa.
+  const conteoEnStockPorModelo = useMemo(() => {
+    const mapa = new Map<string, number>();
+    for (const d of dispositivos) {
+      if (!d.en_stock) continue;
+      const clave = d.modelo || 'Sin modelo';
+      mapa.set(clave, (mapa.get(clave) ?? 0) + 1);
+    }
+    return mapa;
+  }, [dispositivos]);
+
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
       <header className="flex items-center gap-3">
@@ -128,10 +140,19 @@ export default function Stock() {
       )}
 
       <div className="flex flex-col gap-5">
-        {grupos.map(([modelo, items]) => (
+        {grupos.map(([modelo, items]) => {
+          const enStock = conteoEnStockPorModelo.get(modelo) ?? 0;
+          return (
           <div key={modelo} className="flex flex-col gap-2">
-            <p className="text-xs text-muted dark:text-dark-text-secondary font-medium">
-              {modelo} · {items.length}
+            <p className="text-xs text-muted dark:text-dark-text-secondary font-medium flex items-center gap-2">
+              <span>
+                {modelo} · {items.length}
+              </span>
+              {enStock > 0 && enStock < 3 && (
+                <span className="text-[10px] font-semibold text-bad bg-bad/10 rounded-full px-2 py-0.5">
+                  ⚠ Quedan {enStock} — reponer
+                </span>
+              )}
             </p>
             {items.length === 0 && (
               <p className="text-xs text-muted dark:text-dark-text-secondary italic">Carpeta vacía, todavía sin dispositivos.</p>
@@ -146,10 +167,17 @@ export default function Stock() {
                   }`}
                 >
                   <div>
-                    <p className="text-sm font-medium">
-                      {d.capacidad_gb ? `${d.capacidad_gb} GB` : 'Capacidad s/d'}
-                      {d.color ? ` · ${d.color}` : ''}
-                      {d.salud_bateria != null ? ` · ${d.salud_bateria}%` : ''}
+                    <p className="text-sm font-medium flex items-center gap-1.5 flex-wrap">
+                      <span>
+                        {d.capacidad_gb ? `${d.capacidad_gb} GB` : 'Capacidad s/d'}
+                        {d.color ? ` · ${d.color}` : ''}
+                        {d.salud_bateria != null ? ` · ${d.salud_bateria}%` : ''}
+                      </span>
+                      {d.salud_bateria != null && d.salud_bateria < 80 && (
+                        <span className="text-[10px] font-semibold text-warn bg-warn/10 rounded-full px-2 py-0.5">
+                          ⚠ Batería baja
+                        </span>
+                      )}
                     </p>
                     <p className="text-xs text-muted dark:text-dark-text-secondary">
                       IMEI: <span className="font-bold font-mono text-ink dark:text-dark-text">{d.imei || 'sin IMEI'}</span>
@@ -165,7 +193,8 @@ export default function Stock() {
               ))}
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
     </main>
   );

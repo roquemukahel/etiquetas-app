@@ -25,6 +25,7 @@ type Negocio = {
   texto_garantia_tamano: number;
   texto_garantia_servicio_tamano: number;
   texto_declaracion_compra_tamano: number;
+  garantia_dias: number | null;
 };
 
 const TAMANOS = [9, 10, 11, 12, 13, 14];
@@ -47,7 +48,7 @@ export default function DatosNegocio() {
       const { data: perfil } = await supabase
         .from('perfiles')
         .select(
-          'negocio_id, negocios ( id, nombre, telefono, direccion, logo_url, texto_garantia, texto_garantia_servicio, instagram, facebook, tiktok, mostrar_instagram, mostrar_facebook, mostrar_tiktok, moneda, texto_declaracion_compra, texto_garantia_tamano, texto_garantia_servicio_tamano, texto_declaracion_compra_tamano )'
+          'negocio_id, negocios ( id, nombre, telefono, direccion, logo_url, texto_garantia, texto_garantia_servicio, instagram, facebook, tiktok, mostrar_instagram, mostrar_facebook, mostrar_tiktok, moneda, texto_declaracion_compra, texto_garantia_tamano, texto_garantia_servicio_tamano, texto_declaracion_compra_tamano, garantia_dias )'
         )
         .eq('id', user.id)
         .single();
@@ -93,6 +94,7 @@ export default function DatosNegocio() {
         texto_garantia_tamano: negocio.texto_garantia_tamano,
         texto_garantia_servicio_tamano: negocio.texto_garantia_servicio_tamano,
         texto_declaracion_compra_tamano: negocio.texto_declaracion_compra_tamano,
+        garantia_dias: negocio.garantia_dias || null,
       })
       .eq('id', negocio.id);
 
@@ -168,6 +170,19 @@ export default function DatosNegocio() {
               </option>
             ))}
           </select>
+        </div>
+
+        <div>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">
+            Días de garantía (opcional — al vender un dispositivo se calcula solo la fecha de vencimiento)
+          </label>
+          <input
+            value={negocio.garantia_dias?.toString() ?? ''}
+            onChange={(e) => campoNum('garantia_dias', e.target.value ? Number(e.target.value) : (null as any))}
+            inputMode="numeric"
+            placeholder="Ej. 90"
+            className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+          />
         </div>
 
         <TextoConTamano

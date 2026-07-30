@@ -107,8 +107,17 @@ export default function NuevaOrden() {
 
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
+  const [garantiaDias, setGarantiaDias] = useState<number | null>(null);
 
   useEffect(() => {
+    (async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: perfil } = await supabase.from('perfiles').select('negocios ( garantia_dias )').eq('id', user.id).single();
+      setGarantiaDias((perfil as any)?.negocios?.garantia_dias ?? null);
+    })();
     (async () => {
       const { data } = await supabase.from('clientes').select('*');
       setClientes((data as Cliente[]) ?? []);
@@ -361,7 +370,13 @@ export default function NuevaOrden() {
 
       const dispositivoIds = carrito.map((i) => i.dispositivoId).filter(Boolean) as string[];
       if (dispositivoIds.length > 0) {
-        await supabase.from('dispositivos').update({ en_stock: false }).in('id', dispositivoIds);
+        const actualizacion: { en_stock: boolean; garantia_vencimiento?: string } = { en_stock: false };
+        if (garantiaDias) {
+          const vencimiento = new Date();
+          vencimiento.setDate(vencimiento.getDate() + garantiaDias);
+          actualizacion.garantia_vencimiento = vencimiento.toISOString().slice(0, 10);
+        }
+        await supabase.from('dispositivos').update(actualizacion).in('id', dispositivoIds);
       }
 
       router.push(`/ordenes/${orden.id}/boleta`);
