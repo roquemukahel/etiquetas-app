@@ -1,11 +1,31 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../lib/supabase/client';
 import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../lib/carpetas';
 import { hexColorDe } from '../lib/coloresIphone';
+import { registrarAuditoria } from '../lib/auditoria';
+import { leerCSV, valorDe, descargarCSV, insertarEnTandas } from '../lib/csv';
 import MiniaturaDispositivo from '../MiniaturaDispositivo';
+
+// Cuando el CSV viene de otro sistema y no separó el IMEI, la batería ni la
+// capacidad en columnas propias, suelen venir mezclados en un texto libre
+// (ej. "iPhone 11 Black 128GB 73% de bateria imei: 353968107575889"). Estas
+// funciones los rescatan con expresiones regulares — no son perfectas, pero
+// cubren el patrón que se ve en la práctica.
+function extraerImei(texto: string): string | null {
+  const m = texto.match(/imei[:\s]*([0-9]{6,17})/i) || texto.match(/\b(\d{15})\b/);
+  return m ? m[1] : null;
+}
+function extraerBateria(texto: string): number | null {
+  const m = texto.match(/(\d{1,3})\s?%/);
+  return m ? Number(m[1]) : null;
+}
+function extraerCapacidad(texto: string): number | null {
+  const m = texto.match(/(\d+)\s?gb/i);
+  return m ? Number(m[1]) : null;
+}
 
 type Dispositivo = {
   id: string;
@@ -21,7 +41,7 @@ type Dispositivo = {
   created_at: string;
 };
 
-type Producto = { id: string; nombre: string; precio: number | null; imagen_url: string | null };
+type Producto = { id: string; nombre: string; precio: number | null; imagen_url: string | null; cantidad: number };
 
 export default function Stock() {
   const supabase = crearClienteNavegador();
@@ -40,6 +60,12 @@ export default function Stock() {
   const [precioProducto, setPrecioProducto] = useState('');
   const [guardandoProducto, setGuardandoProducto] = useState(false);
   const [errorProducto, setErrorProducto] = useState<string | null>(null);
+  const [editandoCantidad, setEditandoCantidad] = useState<string | null>(null);
+  const [valorCantidad, setValorCantidad] = useState('');
+  const [importando, setImportando] = useState(false);
+  const [progresoImport, setProgresoImport] = useState<{ hechas: number; total: number } | null>(null);
+  const [resultadoImport, setResultadoImport] = useState<string | null>(null);
+  const inputImportRef = useRef<HTMLInputElement>(null);
 
   const cargarProductos = async () => {
     const { data } = await supabase.from('productos').select('*').order('nombre');
@@ -47,16 +73,107 @@ export default function Stock() {
     setLoadingProductos(false);
   };
 
+  const cargarDispositivos = async () => {
+    const { data } = await supabase
+      .from('dispositivos')
+      .select('*')
+      .order('modelo', { ascending: true })
+      .order('created_at', { ascending: false });
+    setDispositivos((data as Dispositivo[]) ?? []);
+    setLoading(false);
+  };
+
+  const exportarDispositivos = () => {
+    descargarCSV(
+      'stock-celulares-qovento.csv',
+      ['modelo', 'capacidad_gb', 'color', 'imei', 'numero_serie', 'salud_bateria', 'precio', 'estado', 'en_stock', 'created_at'],
+      dispositivos
+    );
+  };
+
+  const importarDispositivos = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const archivo = e.target.files?.[0];
+    if (!archivo) return;
+    setImportando(true);
+    setResultadoImport(null);
+    setProgresoImport(null);
+
+    try {
+      const filas = await leerCSV(archivo);
+      const imeisExistentes = new Set(dispositivos.map((d) => d.imei).filter(Boolean));
+
+      const nuevos = filas
+        .map((fila) => {
+          const modelo = valorDe(fila, 'modelo', 'category') || null;
+          const textoLibre = [valorDe(fila, 'name'), valorDe(fila, 'description')].filter(Boolean).join(' ');
+
+          const imeiDirecto = valorDe(fila, 'imei');
+          const imei = imeiDirecto || extraerImei(textoLibre);
+
+          const bateriaDirecta = valorDe(fila, 'salud_bateria', 'bateria');
+          const salud_bateria = bateriaDirecta ? Number(bateriaDirecta) : extraerBateria(textoLibre);
+
+          const capacidadDirecta = valorDe(fila, 'capacidad_gb', 'capacidad');
+          const capacidad_gb = capacidadDirecta ? Number(capacidadDirecta) : extraerCapacidad(`${modelo || ''} ${textoLibre}`);
+
+          const precioTexto = valorDe(fila, 'precio', 'price');
+          const precio = precioTexto ? Number(precioTexto) : null;
+
+          const cantidadTexto = valorDe(fila, 'quantity');
+          const enStockTexto = valorDe(fila, 'en_stock');
+          const en_stock = enStockTexto
+            ? ['true', '1', 'si', 'sí'].includes(enStockTexto.toLowerCase())
+            : cantidadTexto
+            ? Number(cantidadTexto) > 0
+            : true;
+
+          const creadoTexto = valorDe(fila, 'created_at', 'createdat');
+          const fechaCreado = creadoTexto ? new Date(creadoTexto) : null;
+
+          if (!modelo) return null;
+
+          return {
+            modelo,
+            capacidad_gb: capacidad_gb || null,
+            color: valorDe(fila, 'color') || null,
+            imei: imei || null,
+            numero_serie: valorDe(fila, 'numero_serie', 'serial') || null,
+            salud_bateria,
+            precio,
+            estado: valorDe(fila, 'estado') || 'usado',
+            en_stock,
+            proveedor: valorDe(fila, 'proveedor') || null,
+            ...(fechaCreado && !isNaN(fechaCreado.getTime()) ? { created_at: fechaCreado.toISOString() } : {}),
+          };
+        })
+        .filter((d): d is NonNullable<typeof d> => d !== null)
+        .filter((d) => !d.imei || !imeisExistentes.has(d.imei));
+
+      const { guardadas, error } = await insertarEnTandas(
+        (tanda) => supabase.from('dispositivos').insert(tanda),
+        nuevos,
+        500,
+        (hechas, total) => setProgresoImport({ hechas, total })
+      );
+
+      const omitidos = filas.length - nuevos.length;
+      setResultadoImport(
+        error
+          ? `Se guardaron ${guardadas} de ${nuevos.length} antes de un error: ${error}`
+          : `Listo: se importaron ${guardadas} dispositivos.${omitidos > 0 ? ` Se omitieron ${omitidos} filas sin modelo o con un IMEI ya cargado.` : ''}`
+      );
+      cargarDispositivos();
+    } catch (err: any) {
+      setResultadoImport('No pudimos leer el archivo: ' + (err?.message ?? 'error desconocido'));
+    }
+
+    setImportando(false);
+    setProgresoImport(null);
+    if (inputImportRef.current) inputImportRef.current.value = '';
+  };
+
   useEffect(() => {
-    (async () => {
-      const { data } = await supabase
-        .from('dispositivos')
-        .select('*')
-        .order('modelo', { ascending: true })
-        .order('created_at', { ascending: false });
-      setDispositivos((data as Dispositivo[]) ?? []);
-      setLoading(false);
-    })();
+    cargarDispositivos();
     (async () => {
       const { data } = await supabase.from('modelos_stock').select('nombre').order('nombre');
       setCarpetas((data ?? []).map((m) => m.nombre));
@@ -122,6 +239,29 @@ export default function Stock() {
   const eliminarProducto = async (id: string) => {
     if (!confirm('¿Eliminar este producto?')) return;
     await supabase.from('productos').delete().eq('id', id);
+    cargarProductos();
+  };
+
+  const abrirEdicionCantidad = (p: Producto) => {
+    setEditandoCantidad(editandoCantidad === p.id ? null : p.id);
+    setValorCantidad(String(p.cantidad));
+  };
+
+  const guardarCantidad = async (p: Producto) => {
+    const nueva = Number(valorCantidad) || 0;
+    if (nueva === p.cantidad) {
+      setEditandoCantidad(null);
+      return;
+    }
+    await supabase.from('productos').update({ cantidad: nueva }).eq('id', p.id);
+    await registrarAuditoria(supabase, {
+      accion: `cambió el stock de "${p.nombre}" de ${p.cantidad} a ${nueva} unidades`,
+      entidad: 'producto',
+      entidadId: p.id,
+      valorAnterior: { cantidad: p.cantidad },
+      valorNuevo: { cantidad: nueva },
+    });
+    setEditandoCantidad(null);
     cargarProductos();
   };
 
@@ -212,6 +352,37 @@ export default function Stock() {
               + Cargar con foto
             </Link>
           </div>
+
+          <div className="flex gap-2">
+            <label className="flex-1 rounded-xl border border-border dark:border-dark-border py-2.5 text-center text-xs font-medium cursor-pointer">
+              {importando
+                ? progresoImport
+                  ? `Importando... ${progresoImport.hechas}/${progresoImport.total}`
+                  : 'Leyendo archivo...'
+                : '⬆ Importar CSV'}
+              <input
+                ref={inputImportRef}
+                type="file"
+                accept=".csv"
+                className="hidden"
+                disabled={importando}
+                onChange={importarDispositivos}
+              />
+            </label>
+            <button
+              onClick={exportarDispositivos}
+              disabled={dispositivos.length === 0}
+              className="flex-1 rounded-xl border border-border dark:border-dark-border py-2.5 text-center text-xs font-medium disabled:opacity-40"
+            >
+              ⬇ Exportar CSV
+            </button>
+          </div>
+
+          {resultadoImport && (
+            <p className="text-xs bg-canvas dark:bg-dark-bg rounded-lg px-3 py-2 text-muted dark:text-dark-text-secondary">
+              {resultadoImport}
+            </p>
+          )}
 
           {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Cargando...</p>}
 
@@ -324,27 +495,53 @@ export default function Stock() {
             {productos.map((p) => (
               <div
                 key={p.id}
-                className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex items-center gap-3"
+                className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex flex-col gap-2"
               >
-                <label className="shrink-0 cursor-pointer">
-                  {p.imagen_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={p.imagen_url} alt={p.nombre} className="h-11 w-11 rounded-lg object-cover border border-border dark:border-dark-border" />
-                  ) : (
-                    <div className="h-11 w-11 rounded-lg bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border flex items-center justify-center text-lg">
-                      📷
+                <div className="flex items-center gap-3">
+                  <label className="shrink-0 cursor-pointer">
+                    {p.imagen_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={p.imagen_url} alt={p.nombre} className="h-11 w-11 rounded-lg object-cover border border-border dark:border-dark-border" />
+                    ) : (
+                      <div className="h-11 w-11 rounded-lg bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border flex items-center justify-center text-lg">
+                        📷
+                      </div>
+                    )}
+                    <input type="file" accept="image/*" className="hidden" onChange={(e) => cambiarImagenProducto(p, e)} />
+                  </label>
+                  <div className="flex-1 flex items-center justify-between gap-2 min-w-0">
+                    <p className="text-sm font-medium">{p.nombre}</p>
+                    <div className="flex items-center gap-3 shrink-0">
+                      {p.precio != null && <p className="text-sm text-muted dark:text-dark-text-secondary">${p.precio.toLocaleString('es-AR')}</p>}
+                      <button onClick={() => eliminarProducto(p.id)} className="text-xs text-bad underline">
+                        Eliminar
+                      </button>
                     </div>
-                  )}
-                  <input type="file" accept="image/*" className="hidden" onChange={(e) => cambiarImagenProducto(p, e)} />
-                </label>
-                <div className="flex-1 flex items-center justify-between gap-2 min-w-0">
-                  <p className="text-sm font-medium">{p.nombre}</p>
-                  <div className="flex items-center gap-3 shrink-0">
-                    {p.precio != null && <p className="text-sm text-muted dark:text-dark-text-secondary">${p.precio.toLocaleString('es-AR')}</p>}
-                    <button onClick={() => eliminarProducto(p.id)} className="text-xs text-bad underline">
-                      Eliminar
-                    </button>
                   </div>
+                </div>
+
+                <div className="flex items-center justify-between gap-2 pl-14">
+                  {editandoCantidad === p.id ? (
+                    <div className="flex items-center gap-2">
+                      <input
+                        value={valorCantidad}
+                        onChange={(e) => setValorCantidad(e.target.value)}
+                        inputMode="numeric"
+                        autoFocus
+                        className="w-16 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-2 py-1 text-sm"
+                      />
+                      <button onClick={() => guardarCantidad(p)} className="text-xs text-accent dark:text-dark-accent underline">
+                        Guardar
+                      </button>
+                    </div>
+                  ) : (
+                    <button onClick={() => abrirEdicionCantidad(p)} className="text-xs text-muted dark:text-dark-text-secondary underline decoration-dotted">
+                      Stock: <span className="font-medium text-ink dark:text-dark-text">{p.cantidad}</span> unidad{p.cantidad === 1 ? '' : 'es'}
+                    </button>
+                  )}
+                  {p.cantidad === 0 && (
+                    <span className="text-[10px] font-semibold text-bad bg-bad/10 rounded-full px-2 py-0.5">Sin stock</span>
+                  )}
                 </div>
               </div>
             ))}

@@ -854,3 +854,10 @@ alter table vendedores add column if not exists foto_url text;
 alter table tecnicos add column if not exists telefono text;
 alter table tecnicos add column if not exists edad int;
 alter table tecnicos add column if not exists foto_url text;
+
+-- ============================================================
+-- Cantidad disponible por accesorio/producto (a diferencia de los
+-- celulares, que se cuentan uno por uno en "dispositivos", los
+-- accesorios se manejan como un número de unidades disponibles).
+-- ============================================================
+alter table productos add column if not exists cantidad int not null default 0;
