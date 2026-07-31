@@ -57,7 +57,7 @@ export default function BotonFlotante() {
     <>
       {abierto && <div className="no-print fixed inset-0 z-30" onClick={() => setAbierto(false)} />}
 
-      <div className="no-print fixed bottom-5 right-5 z-40 flex flex-col items-end gap-2">
+      <div className="no-print fixed bottom-8 right-8 z-40 flex flex-col items-end gap-2">
         {abierto && (
           <div className="flex flex-col items-end gap-2 mb-1">
             {ACCIONES.map((a, i) => (
@@ -77,15 +77,18 @@ export default function BotonFlotante() {
           </div>
         )}
 
-        <button
-          onClick={() => setAbierto((v) => !v)}
-          className={`h-14 w-14 rounded-full bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover text-white shadow-elevated flex items-center justify-center text-2xl font-light leading-none transition-transform duration-200 ${
-            abierto ? 'rotate-45' : ''
-          }`}
-          aria-label={abierto ? 'Cerrar acciones rápidas' : 'Acciones rápidas'}
-        >
-          +
-        </button>
+        <div className="relative h-14 w-14">
+          <span className="animate-pulse-glow absolute inset-0 rounded-full bg-gradient-to-br from-accent to-accent-hover dark:from-dark-accent dark:to-dark-accent-hover" />
+          <button
+            onClick={() => setAbierto((v) => !v)}
+            className={`relative h-14 w-14 rounded-full bg-gradient-to-br from-accent to-accent-hover dark:from-dark-accent dark:to-dark-accent-hover text-white flex items-center justify-center text-2xl font-light leading-none shadow-[0_10px_28px_-4px_rgba(53,92,222,0.55)] dark:shadow-[0_10px_28px_-4px_rgba(108,140,255,0.45)] hover:scale-105 active:scale-95 transition-transform duration-200 ${
+              abierto ? 'rotate-45' : ''
+            }`}
+            aria-label={abierto ? 'Cerrar acciones rápidas' : 'Acciones rápidas'}
+          >
+            +
+          </button>
+        </div>
       </div>
     </>
   );
