@@ -124,6 +124,7 @@ export default async function Home() {
   let diasDePrueba: number | null = null;
   let suscripcionActiva = false;
   let actividad: { tipo: 'venta' | 'reparacion' | 'stock' | 'cliente'; fecha: Date; texto: string }[] = [];
+  let notificaciones: { color: string; texto: string; href: string }[] = [];
 
   if (user) {
     const { data: perfil } = await supabase
@@ -149,6 +150,13 @@ export default async function Home() {
     const inicioMesPasado = new Date(inicioMes);
     inicioMesPasado.setMonth(inicioMesPasado.getMonth() - 1);
 
+    const hace30dias = new Date();
+    hace30dias.setDate(hace30dias.getDate() - 30);
+    const hace60dias = new Date();
+    hace60dias.setDate(hace60dias.getDate() - 60);
+    const en7dias = new Date();
+    en7dias.setDate(en7dias.getDate() + 7);
+
     const [
       { count: countStock },
       { count: countPendientes },
@@ -160,6 +168,11 @@ export default async function Home() {
       { data: reparacionesRecientes },
       { data: stockRecienteData },
       { data: clientesRecientesData },
+      { count: countListosEntregar },
+      { count: countGarantias },
+      { count: countStockQuieto },
+      { count: countServicioLargo },
+      { data: modelosEnStock },
     ] = await Promise.all([
       supabase.from('dispositivos').select('id', { count: 'exact', head: true }).eq('en_stock', true),
       supabase.from('ordenes').select('id', { count: 'exact', head: true }).eq('estado', 'pendiente'),
@@ -182,6 +195,24 @@ export default async function Home() {
         .limit(5),
       supabase.from('dispositivos').select('modelo, created_at').order('created_at', { ascending: false }).limit(5),
       supabase.from('clientes').select('nombre, apellido, created_at').order('created_at', { ascending: false }).limit(5),
+      supabase.from('canjes').select('id', { count: 'exact', head: true }).eq('estado', 'reparado'),
+      supabase
+        .from('dispositivos')
+        .select('id', { count: 'exact', head: true })
+        .not('garantia_vencimiento', 'is', null)
+        .gte('garantia_vencimiento', new Date().toISOString().slice(0, 10))
+        .lte('garantia_vencimiento', en7dias.toISOString().slice(0, 10)),
+      supabase
+        .from('dispositivos')
+        .select('id', { count: 'exact', head: true })
+        .eq('en_stock', true)
+        .lte('en_stock_desde', hace30dias.toISOString()),
+      supabase
+        .from('canjes')
+        .select('id', { count: 'exact', head: true })
+        .eq('estado', 'servicio_tecnico')
+        .lte('fecha_ingreso_servicio', hace60dias.toISOString()),
+      supabase.from('dispositivos').select('modelo').eq('en_stock', true),
     ]);
     enStock = countStock ?? 0;
     pendientes = countPendientes ?? 0;
@@ -279,6 +310,49 @@ export default async function Home() {
 
     actividad = candidatos.sort((a, b) => b.fecha.getTime() - a.fecha.getTime()).slice(0, 8);
 
+    const conteoModelo = new Map<string, number>();
+    for (const d of (modelosEnStock as { modelo: string | null }[]) ?? []) {
+      const clave = d.modelo || 'Sin modelo';
+      conteoModelo.set(clave, (conteoModelo.get(clave) ?? 0) + 1);
+    }
+    const modelosBajos = Array.from(conteoModelo.entries()).filter(([, cant]) => cant > 0 && cant < 3);
+
+    const notifs: { color: string; texto: string; href: string }[] = [];
+    if ((countListosEntregar ?? 0) > 0) {
+      notifs.push({
+        color: 'bad',
+        texto: `${countListosEntregar} equipo${countListosEntregar === 1 ? '' : 's'} listo${countListosEntregar === 1 ? '' : 's'} para entregar`,
+        href: '/servicio-tecnico',
+      });
+    }
+    if ((countGarantias ?? 0) > 0) {
+      notifs.push({
+        color: 'warn',
+        texto: `${countGarantias} garantía${countGarantias === 1 ? '' : 's'} vence${countGarantias === 1 ? '' : 'n'} esta semana`,
+        href: '/stock',
+      });
+    }
+    if ((countStockQuieto ?? 0) > 0) {
+      notifs.push({
+        color: 'accent',
+        texto: `${countStockQuieto} equipo${countStockQuieto === 1 ? '' : 's'} lleva${countStockQuieto === 1 ? '' : 'n'} más de 30 días sin venderse`,
+        href: '/stock',
+      });
+    }
+    if (modelosBajos.length === 1) {
+      notifs.push({ color: 'good', texto: `Queda poco stock de ${modelosBajos[0][0]}`, href: '/stock' });
+    } else if (modelosBajos.length > 1) {
+      notifs.push({ color: 'good', texto: `${modelosBajos.length} modelos están por agotarse`, href: '/stock' });
+    }
+    if ((countServicioLargo ?? 0) > 0) {
+      notifs.push({
+        color: 'violet-500',
+        texto: `${countServicioLargo} equipo${countServicioLargo === 1 ? '' : 's'} lleva${countServicioLargo === 1 ? '' : 'n'} más de 60 días en reparación`,
+        href: '/servicio-tecnico',
+      });
+    }
+    notificaciones = notifs;
+
     for (let i = 6; i >= 0; i--) {
       const dia = new Date();
       dia.setDate(dia.getDate() - i);
@@ -344,6 +418,25 @@ export default async function Home() {
 
       <div className="animate-fade-in-up" style={{ animationDelay: '60ms' }}>
         <BuscadorUniversal />
+      </div>
+
+      <div className="rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-4 flex flex-col gap-2.5 animate-fade-in-up" style={{ animationDelay: '90ms' }}>
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted dark:text-dark-text-secondary">
+          Centro de notificaciones
+        </p>
+        {notificaciones.length === 0 ? (
+          <p className="text-sm text-good flex items-center gap-1.5">✓ Todo en orden, no hay alertas por ahora.</p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {notificaciones.map((n, idx) => (
+              <Link key={idx} href={n.href} className="group flex items-center gap-2.5 hover:opacity-80 transition-opacity">
+                <span className={`h-2 w-2 rounded-full shrink-0 ${DOT_COLOR[n.color]}`} />
+                <p className="flex-1 min-w-0 text-sm truncate">{n.texto}</p>
+                <span className="text-muted dark:text-dark-text-secondary shrink-0 group-hover:translate-x-0.5 transition-transform">&rarr;</span>
+              </Link>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="lg:grid lg:grid-cols-3 lg:gap-6 flex flex-col gap-6 animate-fade-in-up" style={{ animationDelay: '120ms' }}>
@@ -554,6 +647,14 @@ const ICONO_ACTIVIDAD: Record<string, { icono: string; color: string }> = {
   reparacion: { icono: 'servicio', color: 'servicio' },
   stock: { icono: 'stock', color: 'inventario' },
   cliente: { icono: 'clientes', color: 'clientes' },
+};
+
+const DOT_COLOR: Record<string, string> = {
+  bad: 'bg-bad',
+  warn: 'bg-warn',
+  accent: 'bg-accent dark:bg-dark-accent',
+  good: 'bg-good',
+  'violet-500': 'bg-violet-500',
 };
 
 function Sparkline({ serie }: { serie: number[] }) {
