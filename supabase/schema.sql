@@ -774,3 +774,10 @@ alter table negocios add column if not exists pais text not null default 'AR';
 -- equipo se vende explícitamente sin garantía.
 -- ============================================================
 alter table ordenes add column if not exists incluir_garantia boolean not null default true;
+
+-- ============================================================
+-- Imagen opcional por producto/accesorio del catálogo (ej. una foto
+-- de los AirPods que se venden), para mostrar en "Productos más
+-- vendidos" del inicio en vez del ícono genérico.
+-- ============================================================
+alter table productos add column if not exists imagen_url text;

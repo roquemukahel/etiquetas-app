@@ -87,6 +87,7 @@ export default function NuevaOrden() {
   const [modoTrabajo, setModoTrabajo] = useState<'catalogo' | 'manual'>('catalogo');
   const [trabajoManualNombre, setTrabajoManualNombre] = useState('');
   const [trabajoManualPrecio, setTrabajoManualPrecio] = useState('');
+  const [trabajoModelo, setTrabajoModelo] = useState('');
 
   // --- confirmar ---
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
@@ -265,11 +266,14 @@ export default function NuevaOrden() {
     setPanelAbierto(null);
   };
 
+  const descripcionTrabajo = (nombre: string) => (trabajoModelo.trim() ? `${nombre} — ${trabajoModelo.trim()}` : nombre);
+
   const agregarTrabajoDelCatalogo = (t: Trabajo) => {
     setCarrito((c) => [
       ...c,
-      { tempId: idTemporal(), descripcion: t.nombre, cantidad: 1, precioUnitario: t.precio ?? 0, tipo: 'trabajo' },
+      { tempId: idTemporal(), descripcion: descripcionTrabajo(t.nombre), cantidad: 1, precioUnitario: t.precio ?? 0, tipo: 'trabajo' },
     ]);
+    setTrabajoModelo('');
     setPanelAbierto(null);
   };
 
@@ -279,7 +283,7 @@ export default function NuevaOrden() {
       ...c,
       {
         tempId: idTemporal(),
-        descripcion: trabajoManualNombre.trim(),
+        descripcion: descripcionTrabajo(trabajoManualNombre.trim()),
         cantidad: 1,
         precioUnitario: trabajoManualPrecio ? Number(trabajoManualPrecio) : 0,
         tipo: 'trabajo',
@@ -287,6 +291,7 @@ export default function NuevaOrden() {
     ]);
     setTrabajoManualNombre('');
     setTrabajoManualPrecio('');
+    setTrabajoModelo('');
     setPanelAbierto(null);
   };
 
@@ -642,7 +647,7 @@ export default function NuevaOrden() {
               <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
                 {productos.length === 0 && (
                   <p className="text-xs text-muted dark:text-dark-text-secondary text-center py-2">
-                    Todavía no cargaste productos en Configuración.
+                    Todavía no cargaste productos en Stock &gt; Accesorios.
                   </p>
                 )}
                 {productos.map((p) => (
@@ -711,6 +716,24 @@ export default function NuevaOrden() {
               >
                 Cargar a mano
               </button>
+            </div>
+
+            <div>
+              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">
+                Modelo del equipo (opcional, ej. iPhone 13)
+              </label>
+              <input
+                value={trabajoModelo}
+                onChange={(e) => setTrabajoModelo(e.target.value)}
+                placeholder="¿A qué iPhone se le hace el arreglo?"
+                list="carpetas-stock-trabajo"
+                className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+              />
+              <datalist id="carpetas-stock-trabajo">
+                {carpetasStock.map((c) => (
+                  <option key={c} value={c} />
+                ))}
+              </datalist>
             </div>
 
             {modoTrabajo === 'catalogo' ? (

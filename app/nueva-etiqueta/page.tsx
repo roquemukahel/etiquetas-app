@@ -6,6 +6,7 @@ import Etiqueta from './Etiqueta';
 import { crearClienteNavegador } from '../lib/supabase/client';
 import { asegurarModelo } from '../lib/modelos';
 import { limpiarImei } from '../lib/imei';
+import SelectorColor from '../SelectorColor';
 
 type ExtractedData = {
   modelo: string | null;
@@ -246,7 +247,10 @@ export default function NuevaEtiqueta() {
 
         {agregarAlStock && (
           <div className="flex flex-col gap-3">
-            <Campo label="Color" valor={color} onChange={setColor} />
+            <div>
+              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Color</label>
+              <SelectorColor value={color} onChange={setColor} />
+            </div>
             <Campo label="Precio" valor={precio} onChange={setPrecio} />
             <Campo label="Proveedor (opcional)" valor={proveedor} onChange={setProveedor} />
           </div>

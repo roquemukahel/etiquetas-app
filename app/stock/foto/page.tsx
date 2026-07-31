@@ -7,6 +7,7 @@ import { crearClienteNavegador } from '../../lib/supabase/client';
 import { asegurarModelo } from '../../lib/modelos';
 import { limpiarImei } from '../../lib/imei';
 import { useDictado } from '../../lib/dictado';
+import SelectorColor from '../../SelectorColor';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 const ESTADOS = ['usado', 'sellado'];
@@ -194,13 +195,10 @@ export default function StockPorFoto() {
           }
           dictando={campoDictando === 'bateria'}
         />
-        <Campo
-          label="Color"
-          valor={color}
-          onChange={setColor}
-          onDictar={dictadoSoportado ? () => dictarCampo('color', setColor) : undefined}
-          dictando={campoDictando === 'color'}
-        />
+        <div>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Color</label>
+          <SelectorColor value={color} onChange={setColor} />
+        </div>
         <Campo label="Precio (opcional)" valor={precio} onChange={setPrecio} numerico />
         <Campo label="Proveedor (opcional)" valor={proveedor} onChange={setProveedor} listaId="proveedores-stock-foto" />
         <datalist id="proveedores-stock-foto">

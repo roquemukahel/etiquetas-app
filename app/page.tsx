@@ -130,6 +130,7 @@ export default async function Home() {
       { data: esAdminData },
       { data: ordenesRecientes },
       { data: carpetasStock },
+      { data: catalogoProductos },
     ] = await Promise.all([
       supabase.from('dispositivos').select('id', { count: 'exact', head: true }).eq('en_stock', true),
       supabase.from('ordenes').select('id', { count: 'exact', head: true }).eq('estado', 'pendiente'),
@@ -140,6 +141,7 @@ export default async function Home() {
         .select('total, estado, created_at, orden_items ( descripcion, cantidad, tipo )')
         .gte('created_at', inicioMesPasado.toISOString()),
       supabase.from('modelos_stock').select('nombre, imagen_url'),
+      supabase.from('productos').select('nombre, imagen_url'),
     ]);
     enStock = countStock ?? 0;
     pendientes = countPendientes ?? 0;
@@ -172,6 +174,10 @@ export default async function Home() {
     for (const c of (carpetasStock as { nombre: string; imagen_url: string | null }[]) ?? []) {
       if (c.imagen_url) mapaImagenesCarpetas.set(c.nombre, c.imagen_url);
     }
+    const mapaImagenesProductos = new Map<string, string>();
+    for (const p of (catalogoProductos as { nombre: string; imagen_url: string | null }[]) ?? []) {
+      if (p.imagen_url) mapaImagenesProductos.set(p.nombre, p.imagen_url);
+    }
     const conteoItems = new Map<string, number>();
     for (const o of cobradas.filter((o: any) => new Date(o.created_at) >= inicioMes)) {
       for (const item of (o as any).orden_items ?? []) {
@@ -185,7 +191,7 @@ export default async function Home() {
       .map(([nombre, cantidad]) => ({
         nombre,
         cantidad,
-        imagenUrl: imagenParaDescripcion(nombre, mapaImagenesCarpetas),
+        imagenUrl: mapaImagenesProductos.get(nombre) ?? imagenParaDescripcion(nombre, mapaImagenesCarpetas),
       }))
       .sort((a, b) => b.cantidad - a.cantidad)
       .slice(0, 5);

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { asegurarModelo } from '../../lib/modelos';
 import { limpiarImei } from '../../lib/imei';
+import SelectorColor from '../../SelectorColor';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 const ESTADOS = ['usado', 'sellado'];
@@ -108,7 +109,10 @@ export default function NuevoDispositivo() {
 
         <Campo label="IMEI" valor={imei} onChange={setImei} mono />
         <Campo label="Salud de batería (%)" valor={bateria} onChange={setBateria} numerico />
-        <Campo label="Color" valor={color} onChange={setColor} />
+        <div>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Color</label>
+          <SelectorColor value={color} onChange={setColor} />
+        </div>
         <Campo label="Precio" valor={precio} onChange={setPrecio} numerico />
         <Campo label="Proveedor (opcional)" valor={proveedor} onChange={setProveedor} listaId="proveedores-stock" />
         <datalist id="proveedores-stock">
