@@ -62,9 +62,16 @@ export default function Stock() {
   const [errorProducto, setErrorProducto] = useState<string | null>(null);
   const [editandoCantidad, setEditandoCantidad] = useState<string | null>(null);
   const [valorCantidad, setValorCantidad] = useState('');
+  const [preparando, setPreparando] = useState(false);
   const [importando, setImportando] = useState(false);
   const [progresoImport, setProgresoImport] = useState<{ hechas: number; total: number } | null>(null);
   const [resultadoImport, setResultadoImport] = useState<string | null>(null);
+  const [planImport, setPlanImport] = useState<{
+    filas: Record<string, unknown>[];
+    totalCSV: number;
+    omitidosSinModelo: number;
+    omitidosDuplicado: number;
+  } | null>(null);
   const inputImportRef = useRef<HTMLInputElement>(null);
 
   const cargarProductos = async () => {
@@ -91,16 +98,18 @@ export default function Stock() {
     );
   };
 
-  const importarDispositivos = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const prepararImportacion = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const archivo = e.target.files?.[0];
     if (!archivo) return;
-    setImportando(true);
+    setPreparando(true);
     setResultadoImport(null);
-    setProgresoImport(null);
+    setPlanImport(null);
 
     try {
       const filas = await leerCSV(archivo);
       const imeisExistentes = new Set(dispositivos.map((d) => d.imei).filter(Boolean));
+      let omitidosSinModelo = 0;
+      let omitidosDuplicado = 0;
 
       const nuevos = filas
         .map((fila) => {
@@ -130,7 +139,10 @@ export default function Stock() {
           const creadoTexto = valorDe(fila, 'created_at', 'createdat');
           const fechaCreado = creadoTexto ? new Date(creadoTexto) : null;
 
-          if (!modelo) return null;
+          if (!modelo) {
+            omitidosSinModelo++;
+            return null;
+          }
 
           return {
             modelo,
@@ -147,29 +159,47 @@ export default function Stock() {
           };
         })
         .filter((d): d is NonNullable<typeof d> => d !== null)
-        .filter((d) => !d.imei || !imeisExistentes.has(d.imei));
+        .filter((d) => {
+          const esDuplicado = !!d.imei && imeisExistentes.has(d.imei);
+          if (esDuplicado) omitidosDuplicado++;
+          return !esDuplicado;
+        });
 
-      const { guardadas, error } = await insertarEnTandas(
-        (tanda) => supabase.from('dispositivos').insert(tanda),
-        nuevos,
-        500,
-        (hechas, total) => setProgresoImport({ hechas, total })
-      );
-
-      const omitidos = filas.length - nuevos.length;
-      setResultadoImport(
-        error
-          ? `Se guardaron ${guardadas} de ${nuevos.length} antes de un error: ${error}`
-          : `Listo: se importaron ${guardadas} dispositivos.${omitidos > 0 ? ` Se omitieron ${omitidos} filas sin modelo o con un IMEI ya cargado.` : ''}`
-      );
-      cargarDispositivos();
+      setPlanImport({ filas: nuevos, totalCSV: filas.length, omitidosSinModelo, omitidosDuplicado });
     } catch (err: any) {
       setResultadoImport('No pudimos leer el archivo: ' + (err?.message ?? 'error desconocido'));
     }
 
+    setPreparando(false);
+    if (inputImportRef.current) inputImportRef.current.value = '';
+  };
+
+  const confirmarImportacion = async () => {
+    if (!planImport) return;
+    setImportando(true);
+    setProgresoImport(null);
+
+    const { guardadas, error } = await insertarEnTandas(
+      (tanda) => supabase.from('dispositivos').insert(tanda),
+      planImport.filas,
+      500,
+      (hechas, total) => setProgresoImport({ hechas, total })
+    );
+
+    setResultadoImport(
+      error
+        ? `Se guardaron ${guardadas} de ${planImport.filas.length} antes de un error: ${error}`
+        : `Listo: se importaron ${guardadas} dispositivos.`
+    );
+    setPlanImport(null);
     setImportando(false);
     setProgresoImport(null);
-    if (inputImportRef.current) inputImportRef.current.value = '';
+    cargarDispositivos();
+  };
+
+  const cancelarImportacion = () => {
+    setPlanImport(null);
+    setResultadoImport(null);
   };
 
   useEffect(() => {
@@ -364,18 +394,20 @@ export default function Stock() {
 
           <div className="flex gap-2">
             <label className="flex-1 rounded-xl border border-border dark:border-dark-border py-2.5 text-center text-xs font-medium cursor-pointer">
-              {importando
+              {preparando
+                ? 'Leyendo archivo...'
+                : importando
                 ? progresoImport
                   ? `Importando... ${progresoImport.hechas}/${progresoImport.total}`
-                  : 'Leyendo archivo...'
+                  : 'Importando...'
                 : '⬆ Importar CSV'}
               <input
                 ref={inputImportRef}
                 type="file"
                 accept=".csv"
                 className="hidden"
-                disabled={importando}
-                onChange={importarDispositivos}
+                disabled={preparando || importando}
+                onChange={prepararImportacion}
               />
             </label>
             <button
@@ -386,6 +418,48 @@ export default function Stock() {
               ⬇ Exportar CSV
             </button>
           </div>
+
+          {planImport && (
+            <div className="rounded-xl border border-accent/30 dark:border-dark-accent/30 bg-accent-soft dark:bg-dark-accent-soft p-3.5 flex flex-col gap-2.5">
+              <p className="text-sm font-medium">Revisá antes de confirmar</p>
+              <ul className="text-xs text-muted dark:text-dark-text-secondary flex flex-col gap-1">
+                <li>El archivo tiene {planImport.totalCSV} filas.</li>
+                <li>
+                  Se van a importar <strong className="text-ink dark:text-dark-text">{planImport.filas.length}</strong> dispositivos
+                  nuevos.
+                </li>
+                {planImport.omitidosDuplicado > 0 && (
+                  <li>
+                    Se omiten <strong className="text-ink dark:text-dark-text">{planImport.omitidosDuplicado}</strong> por tener el
+                    mismo IMEI que uno que ya tenés cargado (para no duplicar).
+                  </li>
+                )}
+                {planImport.omitidosSinModelo > 0 && (
+                  <li>Se omiten {planImport.omitidosSinModelo} filas sin modelo reconocible.</li>
+                )}
+              </ul>
+              <div className="flex gap-2">
+                <button
+                  onClick={cancelarImportacion}
+                  disabled={importando}
+                  className="flex-1 rounded-lg border border-border dark:border-dark-border py-2 text-xs font-medium disabled:opacity-40"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmarImportacion}
+                  disabled={importando || planImport.filas.length === 0}
+                  className="flex-1 rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-xs font-medium text-white disabled:opacity-40"
+                >
+                  {importando
+                    ? progresoImport
+                      ? `Importando... ${progresoImport.hechas}/${progresoImport.total}`
+                      : 'Importando...'
+                    : `Confirmar e importar ${planImport.filas.length}`}
+                </button>
+              </div>
+            </div>
+          )}
 
           {resultadoImport && (
             <p className="text-xs bg-canvas dark:bg-dark-bg rounded-lg px-3 py-2 text-muted dark:text-dark-text-secondary">
