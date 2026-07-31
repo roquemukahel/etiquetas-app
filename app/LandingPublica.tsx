@@ -152,17 +152,44 @@ export default function LandingPublica() {
       <section id="planes" className="max-w-5xl mx-auto px-6 pb-20 w-full scroll-mt-20">
         <h2 className="font-display font-semibold text-2xl sm:text-3xl text-center mb-3">Planes</h2>
         <p className="text-sm text-muted dark:text-dark-text-secondary text-center mb-10">
-          Por ahora, un solo plan simple. Planes Pro y anual, muy pronto.
+          Empezá con 14 días gratis, sin ingresar tarjeta. Estos son los precios cuando termine la prueba.
         </p>
-        <div className="max-w-sm mx-auto rounded-3xl bg-white dark:bg-dark-surface border-2 border-accent dark:border-dark-accent shadow-elevated p-8 flex flex-col gap-4 items-center text-center">
-          <p className="text-sm font-semibold text-accent dark:text-dark-accent uppercase tracking-wide">Prueba gratuita</p>
-          <p className="text-sm text-muted dark:text-dark-text-secondary">Probá Qovento con tu propio local, sin ingresar tarjeta.</p>
-          <Link
-            href="/registro"
-            className="w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors text-white py-3.5 text-sm font-medium"
-          >
-            Empezá gratis
-          </Link>
+        <div className="grid sm:grid-cols-3 gap-5 items-stretch">
+          <div className="rounded-3xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-7 flex flex-col gap-3 text-center">
+            <p className="text-sm font-semibold text-accent dark:text-dark-accent uppercase tracking-wide">Mensual</p>
+            <p className="font-display font-semibold text-3xl">US$9.99<span className="text-sm font-normal text-muted dark:text-dark-text-secondary">/mes</span></p>
+            <p className="text-xs text-muted dark:text-dark-text-secondary">Precio de lanzamiento, por tiempo limitado.</p>
+            <Link
+              href="/registro"
+              className="mt-auto w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors text-white py-3.5 text-sm font-medium"
+            >
+              Empezá gratis
+            </Link>
+          </div>
+
+          <div className="rounded-3xl bg-white dark:bg-dark-surface border-2 border-accent dark:border-dark-accent shadow-elevated p-7 flex flex-col gap-3 text-center relative">
+            <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-accent dark:bg-dark-accent text-white text-[10px] font-semibold uppercase tracking-wide px-3 py-1">
+              Recomendado
+            </span>
+            <p className="text-sm font-semibold text-accent dark:text-dark-accent uppercase tracking-wide">Anual</p>
+            <p className="font-display font-semibold text-3xl">US$100<span className="text-sm font-normal text-muted dark:text-dark-text-secondary">/año</span></p>
+            <p className="text-xs text-muted dark:text-dark-text-secondary">Casi 2 meses gratis frente al plan mensual.</p>
+            <Link
+              href="/registro"
+              className="mt-auto w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors text-white py-3.5 text-sm font-medium"
+            >
+              Empezá gratis
+            </Link>
+          </div>
+
+          <div className="rounded-3xl bg-white dark:bg-dark-surface border border-dashed border-border dark:border-dark-border p-7 flex flex-col gap-3 text-center opacity-70">
+            <p className="text-sm font-semibold text-muted dark:text-dark-text-secondary uppercase tracking-wide">Pro</p>
+            <p className="font-display font-semibold text-3xl text-muted dark:text-dark-text-secondary">Próximamente</p>
+            <p className="text-xs text-muted dark:text-dark-text-secondary">Funciones avanzadas para negocios en expansión.</p>
+            <span className="mt-auto w-full rounded-2xl border border-border dark:border-dark-border py-3.5 text-sm font-medium text-muted dark:text-dark-text-secondary">
+              En trabajo
+            </span>
+          </div>
         </div>
       </section>
 

@@ -3,11 +3,11 @@
 import { useEffect, useState } from 'react';
 import BotonSalir from '../BotonSalir';
 import { crearClienteNavegador } from '../lib/supabase/client';
-import { armarLinkCheckout } from '../lib/lemonsqueezy';
+import PlanesCheckout from '../PlanesCheckout';
 
 export default function SuscripcionVencida() {
   const supabase = crearClienteNavegador();
-  const [link, setLink] = useState<string | null>(null);
+  const [datos, setDatos] = useState<{ negocioId: string; email: string | null } | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -23,7 +23,7 @@ export default function SuscripcionVencida() {
         .single();
 
       if (perfil?.negocio_id) {
-        setLink(armarLinkCheckout(perfil.negocio_id, user.email));
+        setDatos({ negocioId: perfil.negocio_id, email: user.email ?? null });
       }
     })();
   }, []);
@@ -35,13 +35,10 @@ export default function SuscripcionVencida() {
       <p className="text-sm text-muted dark:text-dark-text-secondary max-w-xs">
         El período de prueba terminó o hubo un problema con el pago. Suscribite para seguir usando Qovento.
       </p>
-      {link && (
-        <a
-          href={link}
-          className="w-full max-w-xs rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white"
-        >
-          Suscribirme ahora
-        </a>
+      {datos && (
+        <div className="w-full max-w-xs">
+          <PlanesCheckout negocioId={datos.negocioId} email={datos.email} />
+        </div>
       )}
       <BotonSalir />
     </main>

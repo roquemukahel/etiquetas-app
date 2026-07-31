@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../../lib/supabase/client';
-import { armarLinkCheckout } from '../../lib/lemonsqueezy';
+import PlanesCheckout from '../../PlanesCheckout';
 
 type EstadoSuscripcion = 'trialing' | 'active' | 'past_due' | 'unpaid' | 'cancelled' | 'expired' | 'paused';
 
@@ -70,7 +70,6 @@ export default function Suscripcion() {
   const info = TEXTOS[negocio.estado_suscripcion] ?? TEXTOS.active;
   const enPrueba = negocio.estado_suscripcion === 'trialing' && negocio.fecha_fin_prueba;
   const necesitaPagar = negocio.estado_suscripcion !== 'active' && negocio.estado_suscripcion !== 'trialing';
-  const link = armarLinkCheckout(negocio.id, email);
 
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
@@ -97,13 +96,13 @@ export default function Suscripcion() {
         )}
       </div>
 
-      {(necesitaPagar || negocio.estado_suscripcion === 'trialing') && link && (
-        <a
-          href={link}
-          className="w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white"
-        >
-          {necesitaPagar ? 'Suscribirme ahora' : 'Suscribirme antes de que termine la prueba'}
-        </a>
+      {(necesitaPagar || negocio.estado_suscripcion === 'trialing') && (
+        <PlanesCheckout
+          negocioId={negocio.id}
+          email={email}
+          textoBotonMensual={necesitaPagar ? 'Suscribirme — Mensual' : 'Antes de que termine la prueba — Mensual'}
+          textoBotonAnual={necesitaPagar ? 'Suscribirme — Anual' : 'Antes de que termine la prueba — Anual'}
+        />
       )}
     </main>
   );
