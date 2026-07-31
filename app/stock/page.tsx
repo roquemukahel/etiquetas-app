@@ -79,6 +79,31 @@ export default function Stock() {
   const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
   const [eliminandoSeleccion, setEliminandoSeleccion] = useState(false);
 
+  // En "Vendidos" las carpetas arrancan cerradas (pueden acumular cientos de
+  // unidades del mismo modelo) y se abren una por una al tocarlas. En "En
+  // stock"/"Historial" arrancan abiertas, como siempre. gruposAlternados
+  // guarda qué carpetas se tocaron manualmente, invirtiendo el default de la
+  // vista actual.
+  const [gruposAlternados, setGruposAlternados] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    setGruposAlternados(new Set());
+  }, [vista]);
+
+  const grupoExpandido = (modelo: string) => {
+    const porDefecto = vista !== 'vendidos';
+    return gruposAlternados.has(modelo) ? !porDefecto : porDefecto;
+  };
+
+  const toggleGrupo = (modelo: string) => {
+    setGruposAlternados((prev) => {
+      const nuevo = new Set(prev);
+      if (nuevo.has(modelo)) nuevo.delete(modelo);
+      else nuevo.add(modelo);
+      return nuevo;
+    });
+  };
+
   const cargarProductos = async () => {
     const data = await obtenerTodasLasFilas<Producto>(supabase, 'productos', '*', [{ columna: 'nombre' }]);
     setProductos(data);
@@ -549,9 +574,14 @@ export default function Stock() {
           <div className="flex flex-col gap-5">
             {grupos.map(([modelo, items]) => {
               const enStock = conteoEnStockPorModelo.get(modelo) ?? 0;
+              const expandido = items.length === 0 || grupoExpandido(modelo);
               return (
               <div key={modelo} className="flex flex-col gap-2">
-                <p className="text-xs text-muted dark:text-dark-text-secondary font-medium flex items-center gap-2">
+                <button
+                  onClick={() => items.length > 0 && toggleGrupo(modelo)}
+                  className="text-xs text-muted dark:text-dark-text-secondary font-medium flex items-center gap-2 text-left"
+                >
+                  {items.length > 0 && <span className="shrink-0">{expandido ? '▾' : '▸'}</span>}
                   <MiniaturaDispositivo src={imagenPorNombreExacto(modelo, imagenesCarpetas)} size={24} />
                   <span>
                     {modelo} · {items.length}
@@ -561,11 +591,11 @@ export default function Stock() {
                       ⚠ Quedan {enStock} — reponer
                     </span>
                   )}
-                </p>
+                </button>
                 {items.length === 0 && (
                   <p className="text-xs text-muted dark:text-dark-text-secondary italic">Carpeta vacía, todavía sin dispositivos.</p>
                 )}
-                <div className="flex flex-col gap-2">
+                {expandido && <div className="flex flex-col gap-2">
                   {items.map((d) => {
                     const colorHex = hexColorDe(d.color);
                     const seleccionado = seleccionados.has(d.id);
@@ -628,7 +658,7 @@ export default function Stock() {
                       </Link>
                     );
                   })}
-                </div>
+                </div>}
               </div>
               );
             })}
