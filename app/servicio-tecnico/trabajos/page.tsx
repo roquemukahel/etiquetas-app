@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 
-type Trabajo = { id: string; nombre: string; precio: number | null };
+type Trabajo = { id: string; nombre: string; precio: number | null; imagen_url: string | null };
 
 export default function Trabajos() {
   const supabase = crearClienteNavegador();
@@ -47,6 +47,18 @@ export default function Trabajos() {
     if (!confirm('¿Eliminar este trabajo del catálogo?')) return;
     await supabase.from('trabajos').delete().eq('id', id);
     cargar();
+  };
+
+  const cambiarImagen = (t: Trabajo, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const dataUrl = reader.result as string;
+      setTrabajos((ts) => ts.map((x) => (x.id === t.id ? { ...x, imagen_url: dataUrl } : x)));
+      await supabase.from('trabajos').update({ imagen_url: dataUrl }).eq('id', t.id);
+    };
+    reader.readAsDataURL(file);
   };
 
   return (
@@ -94,14 +106,27 @@ export default function Trabajos() {
         {trabajos.map((t) => (
           <div
             key={t.id}
-            className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex items-center justify-between"
+            className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex items-center gap-3"
           >
-            <p className="text-sm font-medium">{t.nombre}</p>
-            <div className="flex items-center gap-3">
-              {t.precio != null && <p className="text-sm text-muted dark:text-dark-text-secondary">${t.precio.toLocaleString('es-AR')}</p>}
-              <button onClick={() => eliminar(t.id)} className="text-xs text-bad underline">
-                Eliminar
-              </button>
+            <label className="shrink-0 cursor-pointer">
+              {t.imagen_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={t.imagen_url} alt={t.nombre} className="h-11 w-11 rounded-lg object-cover border border-border dark:border-dark-border" />
+              ) : (
+                <div className="h-11 w-11 rounded-lg bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border flex items-center justify-center text-lg">
+                  📷
+                </div>
+              )}
+              <input type="file" accept="image/*" className="hidden" onChange={(e) => cambiarImagen(t, e)} />
+            </label>
+            <div className="flex-1 flex items-center justify-between gap-2 min-w-0">
+              <p className="text-sm font-medium">{t.nombre}</p>
+              <div className="flex items-center gap-3 shrink-0">
+                {t.precio != null && <p className="text-sm text-muted dark:text-dark-text-secondary">${t.precio.toLocaleString('es-AR')}</p>}
+                <button onClick={() => eliminar(t.id)} className="text-xs text-bad underline">
+                  Eliminar
+                </button>
+              </div>
             </div>
           </div>
         ))}

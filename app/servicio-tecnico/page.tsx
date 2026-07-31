@@ -14,7 +14,7 @@ import MiniaturaDispositivo from '../MiniaturaDispositivo';
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 
 type Tecnico = { id: string; nombre: string };
-type Trabajo = { id: string; nombre: string };
+type Trabajo = { id: string; nombre: string; imagen_url: string | null };
 type Cliente = { id: string; nombre: string; apellido: string | null; telefono: string | null };
 
 type Equipo = {
@@ -88,7 +88,7 @@ export default function ServicioTecnico() {
       setTecnicos((data as Tecnico[]) ?? []);
     })();
     (async () => {
-      const { data } = await supabase.from('trabajos').select('id, nombre').order('nombre');
+      const { data } = await supabase.from('trabajos').select('id, nombre, imagen_url').order('nombre');
       setTrabajos((data as Trabajo[]) ?? []);
     })();
     (async () => {
@@ -622,6 +622,7 @@ export default function ServicioTecnico() {
                           onChange={() => toggleTrabajo(t.nombre)}
                           className="h-4 w-4 accent-ink"
                         />
+                        <MiniaturaDispositivo src={t.imagen_url} size={24} />
                         {t.nombre}
                       </label>
                     ))}

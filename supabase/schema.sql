@@ -781,3 +781,10 @@ alter table ordenes add column if not exists incluir_garantia boolean not null d
 -- vendidos" del inicio en vez del ícono genérico.
 -- ============================================================
 alter table productos add column if not exists imagen_url text;
+
+-- ============================================================
+-- Imagen opcional por trabajo del catálogo de Servicio Técnico (ej.
+-- una foto ilustrando "Cambio de tapa trasera"), mismo patrón que la
+-- imagen de carpetas de Stock y de productos/accesorios.
+-- ============================================================
+alter table trabajos add column if not exists imagen_url text;

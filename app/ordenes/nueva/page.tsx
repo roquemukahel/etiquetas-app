@@ -26,7 +26,7 @@ type Cliente = {
 
 type Vendedor = { id: string; nombre: string };
 type Producto = { id: string; nombre: string; precio: number | null };
-type Trabajo = { id: string; nombre: string; precio: number | null };
+type Trabajo = { id: string; nombre: string; precio: number | null; imagen_url: string | null };
 
 type ItemCarrito = {
   tempId: string;
@@ -747,10 +747,13 @@ export default function NuevaOrden() {
                   <button
                     key={t.id}
                     onClick={() => agregarTrabajoDelCatalogo(t)}
-                    className="rounded-lg border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-3 py-2 flex items-center justify-between text-left text-sm"
+                    className="rounded-lg border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-3 py-2 flex items-center justify-between text-left text-sm gap-2"
                   >
-                    <span>{t.nombre}</span>
-                    {t.precio != null && <span className="font-medium">${t.precio.toLocaleString('es-AR')}</span>}
+                    <span className="flex items-center gap-2 min-w-0">
+                      <MiniaturaDispositivo src={t.imagen_url} size={28} />
+                      <span className="truncate">{t.nombre}</span>
+                    </span>
+                    {t.precio != null && <span className="font-medium shrink-0">${t.precio.toLocaleString('es-AR')}</span>}
                   </button>
                 ))}
               </div>
