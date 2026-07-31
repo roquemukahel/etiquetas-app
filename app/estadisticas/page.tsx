@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../lib/supabase/client';
 import { simboloMoneda } from '../lib/monedas';
+import { obtenerTodasLasFilas } from '../lib/db';
 import { RankingBarras, RankingTorta, EvolucionBarras, Dato } from './graficos';
 
 type Periodo = 'hoy' | 'semana' | 'mes' | 'anio';
@@ -82,11 +83,11 @@ export default function Estadisticas() {
       const desde = new Date();
       desde.setFullYear(desde.getFullYear() - 1);
 
-      const [{ data: perfil }, { data: vend }, { data: tec }, { data: cli }, { data: ord }, { data: rep }, { data: ing }] = await Promise.all([
+      const [{ data: perfil }, { data: vend }, { data: tec }, cli, { data: ord }, { data: rep }, { data: ing }] = await Promise.all([
         supabase.from('perfiles').select('negocios ( moneda )').eq('id', user.id).single(),
         supabase.from('vendedores').select('id, nombre, foto_url').order('nombre'),
         supabase.from('tecnicos').select('id, nombre, foto_url').order('nombre'),
-        supabase.from('clientes').select('id, nombre, apellido').order('nombre'),
+        obtenerTodasLasFilas<Cliente>(supabase, 'clientes', 'id, nombre, apellido', [{ columna: 'nombre' }]),
         supabase
           .from('ordenes')
           .select('vendedor_id, cliente_id, total, estado, forma_pago, created_at')
@@ -109,7 +110,7 @@ export default function Estadisticas() {
       if (negocio?.moneda) setMoneda(simboloMoneda(negocio.moneda));
       setVendedores(vend ?? []);
       setTecnicos(tec ?? []);
-      setClientes((cli as Cliente[]) ?? []);
+      setClientes(cli);
       setOrdenes((ord as Orden[]) ?? []);
       setReparaciones((rep as Reparacion[]) ?? []);
       setIngresosServicio((ing as IngresoServicio[]) ?? []);

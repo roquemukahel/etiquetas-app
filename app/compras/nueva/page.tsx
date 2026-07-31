@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { asegurarModelo } from '../../lib/modelos';
+import { obtenerTodasLasFilas } from '../../lib/db';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 
@@ -44,8 +45,7 @@ export default function NuevaCompra() {
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase.from('clientes').select('*');
-      setClientes((data as Cliente[]) ?? []);
+      setClientes(await obtenerTodasLasFilas<Cliente>(supabase, 'clientes', '*'));
     })();
     (async () => {
       const { data } = await supabase.from('modelos_stock').select('nombre').order('nombre');

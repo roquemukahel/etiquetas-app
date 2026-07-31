@@ -7,6 +7,7 @@ import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../lib/carpetas'
 import { hexColorDe } from '../lib/coloresIphone';
 import { registrarAuditoria } from '../lib/auditoria';
 import { leerCSV, valorDe, descargarCSV, insertarEnTandas } from '../lib/csv';
+import { obtenerTodasLasFilas } from '../lib/db';
 import MiniaturaDispositivo from '../MiniaturaDispositivo';
 
 // Cuando el CSV viene de otro sistema y no separó el IMEI, la batería ni la
@@ -79,18 +80,17 @@ export default function Stock() {
   const [eliminandoSeleccion, setEliminandoSeleccion] = useState(false);
 
   const cargarProductos = async () => {
-    const { data } = await supabase.from('productos').select('*').order('nombre');
-    setProductos((data as Producto[]) ?? []);
+    const data = await obtenerTodasLasFilas<Producto>(supabase, 'productos', '*', [{ columna: 'nombre' }]);
+    setProductos(data);
     setLoadingProductos(false);
   };
 
   const cargarDispositivos = async () => {
-    const { data } = await supabase
-      .from('dispositivos')
-      .select('*')
-      .order('modelo', { ascending: true })
-      .order('created_at', { ascending: false });
-    setDispositivos((data as Dispositivo[]) ?? []);
+    const data = await obtenerTodasLasFilas<Dispositivo>(supabase, 'dispositivos', '*', [
+      { columna: 'modelo' },
+      { columna: 'created_at', ascending: false },
+    ]);
+    setDispositivos(data);
     setLoading(false);
   };
 

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../lib/supabase/client';
 import { leerCSV, valorDe, descargarCSV, insertarEnTandas } from '../lib/csv';
+import { obtenerTodasLasFilas } from '../lib/db';
 
 type Cliente = {
   id: string;
@@ -26,8 +27,8 @@ export default function Clientes() {
   const inputImportRef = useRef<HTMLInputElement>(null);
 
   const cargar = async () => {
-    const { data } = await supabase.from('clientes').select('*').order('nombre', { ascending: true });
-    setClientes((data as Cliente[]) ?? []);
+    const data = await obtenerTodasLasFilas<Cliente>(supabase, 'clientes', '*', [{ columna: 'nombre' }]);
+    setClientes(data);
     setLoading(false);
   };
 

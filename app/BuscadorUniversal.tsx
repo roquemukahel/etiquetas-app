@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from './lib/supabase/client';
+import { obtenerTodasLasFilas } from './lib/db';
 
 type Cliente = { id: string; nombre: string; apellido: string | null; telefono: string | null; dni: string | null };
 type Dispositivo = {
@@ -65,17 +66,17 @@ export default function BuscadorUniversal() {
   const cargarDatos = async () => {
     if (cargado) return;
     setCargado(true);
-    const [{ data: cl }, { data: di }, { data: ca }, { data: co }, { data: or }] = await Promise.all([
-      supabase.from('clientes').select('id, nombre, apellido, telefono, dni'),
-      supabase.from('dispositivos').select('id, modelo, imei, numero_serie, en_stock, capacidad_gb, color'),
+    const [cl, di, { data: ca }, { data: co }, { data: or }] = await Promise.all([
+      obtenerTodasLasFilas<Cliente>(supabase, 'clientes', 'id, nombre, apellido, telefono, dni'),
+      obtenerTodasLasFilas<Dispositivo>(supabase, 'dispositivos', 'id, modelo, imei, numero_serie, en_stock, capacidad_gb, color'),
       supabase.from('canjes').select('id, modelo, imei, detalles, estado, cliente_id, clientes ( nombre, apellido )'),
       supabase.from('compras').select('id, modelo, imei, detalles, cliente_id, clientes ( nombre, apellido )'),
       supabase
         .from('ordenes')
         .select('id, total, estado, cliente_id, clientes ( nombre, apellido, telefono ), orden_items ( descripcion )'),
     ]);
-    setClientes((cl as Cliente[]) ?? []);
-    setDispositivos((di as Dispositivo[]) ?? []);
+    setClientes(cl);
+    setDispositivos(di);
     setCanjes((ca as any) ?? []);
     setCompras((co as any) ?? []);
     setOrdenes((or as any) ?? []);

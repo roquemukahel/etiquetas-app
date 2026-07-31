@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { asegurarModelo } from '../../lib/modelos';
+import { obtenerTodasLasFilas } from '../../lib/db';
 import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../../lib/carpetas';
 import MiniaturaDispositivo from '../../MiniaturaDispositivo';
 
@@ -124,8 +125,7 @@ export default function NuevaOrden() {
       setGarantiaDias((perfil as any)?.negocios?.garantia_dias ?? null);
     })();
     (async () => {
-      const { data } = await supabase.from('clientes').select('*');
-      setClientes((data as Cliente[]) ?? []);
+      setClientes(await obtenerTodasLasFilas<Cliente>(supabase, 'clientes', '*'));
     })();
     (async () => {
       const { data } = await supabase.from('dispositivos').select('*').eq('en_stock', true);

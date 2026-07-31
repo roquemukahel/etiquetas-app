@@ -9,6 +9,7 @@ import { armarLinkWhatsApp, mensajeSeguimientoServicio, mensajeListoServicio } f
 import { codigoLlamada } from '../lib/paises';
 import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../lib/carpetas';
 import { registrarAuditoria } from '../lib/auditoria';
+import { obtenerTodasLasFilas } from '../lib/db';
 import MiniaturaDispositivo from '../MiniaturaDispositivo';
 import Avatar from '../Avatar';
 
@@ -98,8 +99,7 @@ export default function ServicioTecnico() {
     })();
     (async () => setImagenesCarpetas(await obtenerImagenesCarpetas(supabase)))();
     (async () => {
-      const { data } = await supabase.from('clientes').select('id, nombre, apellido, telefono').order('nombre');
-      setClientes((data as Cliente[]) ?? []);
+      setClientes(await obtenerTodasLasFilas<Cliente>(supabase, 'clientes', 'id, nombre, apellido, telefono', [{ columna: 'nombre' }]));
     })();
     (async () => {
       const {
