@@ -367,7 +367,11 @@ export default async function Home() {
       </div>
 
       <div className="text-center mt-auto pt-4">
-        <p className="text-xs text-muted dark:text-dark-text-secondary">con Qovento</p>
+        <p className="flex items-center justify-center gap-1.5 text-xs font-medium text-muted dark:text-dark-text-secondary">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/qovento-icon.png" alt="" className="h-4 w-4 object-contain" />
+          Qovento
+        </p>
         <p className="text-[10px] text-muted dark:text-dark-text-secondary mt-0.5">
           El sistema móvil más rápido para recibir, documentar, etiquetar y comercializar celulares.
         </p>
