@@ -7,6 +7,7 @@ import LandingPublica from './LandingPublica';
 import { simboloMoneda } from './lib/monedas';
 import { imagenParaDescripcion } from './lib/carpetas';
 import { ICONOS, COLOR_ICONO } from './Iconos';
+import NumeroAnimado from './NumeroAnimado';
 
 const SECCIONES = [
   { href: '/ordenes', titulo: 'Órdenes', desc: 'Ventas, boletas y canjes', icono: 'ordenes', color: 'ventas', activo: true },
@@ -50,6 +51,7 @@ export default async function Home() {
   let suscripcionActiva = false;
   let actividad: { tipo: 'venta' | 'reparacion' | 'stock' | 'cliente'; fecha: Date; texto: string }[] = [];
   let notificaciones: { color: string; texto: string; href: string }[] = [];
+  let statsSecciones: Record<string, string[]> = {};
 
   if (user) {
     const { data: perfil } = await supabase
@@ -98,6 +100,9 @@ export default async function Home() {
       { count: countStockQuieto },
       { count: countServicioLargo },
       { data: modelosEnStock },
+      { count: countEnCanje },
+      { count: countComprasPendientes },
+      { count: countSinPrecio },
     ] = await Promise.all([
       supabase.from('dispositivos').select('id', { count: 'exact', head: true }).eq('en_stock', true),
       supabase.from('ordenes').select('id', { count: 'exact', head: true }).eq('estado', 'pendiente'),
@@ -138,6 +143,13 @@ export default async function Home() {
         .eq('estado', 'servicio_tecnico')
         .lte('fecha_ingreso_servicio', hace60dias.toISOString()),
       supabase.from('dispositivos').select('modelo').eq('en_stock', true),
+      supabase.from('canjes').select('id', { count: 'exact', head: true }).eq('estado', 'en_canje'),
+      supabase.from('compras').select('id', { count: 'exact', head: true }).eq('estado', 'pendiente'),
+      supabase
+        .from('dispositivos')
+        .select('id', { count: 'exact', head: true })
+        .eq('en_stock', true)
+        .is('precio', null),
     ]);
     enStock = countStock ?? 0;
     pendientes = countPendientes ?? 0;
@@ -278,6 +290,26 @@ export default async function Home() {
     }
     notificaciones = notifs;
 
+    const ultimaVenta = actividad.find((a) => a.tipo === 'venta');
+    statsSecciones = {
+      '/ordenes': [
+        `${pendientes} pendiente${pendientes === 1 ? '' : 's'}`,
+        ultimaVenta ? `Última venta ${hace(ultimaVenta.fecha).toLowerCase()}` : 'Sin ventas recientes',
+      ],
+      '/stock': [
+        `${enStock} equipo${enStock === 1 ? '' : 's'} en stock`,
+        ...(modelosBajos.length > 0 ? [`${modelosBajos.length} por agotarse`] : []),
+        ...((countSinPrecio ?? 0) > 0 ? [`${countSinPrecio} sin precio`] : []),
+      ],
+      '/clientes': [`${totalClientes} cliente${totalClientes === 1 ? '' : 's'} en tu base`],
+      '/canje': [`${countEnCanje ?? 0} en canje`],
+      '/servicio-tecnico': [
+        `${countListosEntregar ?? 0} listo${countListosEntregar === 1 ? '' : 's'} para entregar`,
+        ...((countServicioLargo ?? 0) > 0 ? [`${countServicioLargo} atrasado${countServicioLargo === 1 ? '' : 's'}`] : []),
+      ],
+      '/compras': [`${countComprasPendientes ?? 0} pendiente${countComprasPendientes === 1 ? '' : 's'}`],
+    };
+
     for (let i = 6; i >= 0; i--) {
       const dia = new Date();
       dia.setDate(dia.getDate() - i);
@@ -364,19 +396,21 @@ export default async function Home() {
         )}
       </div>
 
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted dark:text-dark-text-secondary -mb-1">
+        Resumen financiero
+      </p>
       <div className="lg:grid lg:grid-cols-3 lg:gap-6 flex flex-col gap-6 animate-fade-in-up" style={{ animationDelay: '120ms' }}>
         <Link
           href="/estadisticas"
-          className="group lg:col-span-2 rounded-2xl bg-gradient-to-br from-ink to-[#1B2540] dark:from-dark-surface dark:to-dark-bg text-white p-5 flex flex-col gap-4 shadow-elevated hover:opacity-95 transition-opacity active:scale-[0.99]"
+          className="group lg:col-span-2 rounded-2xl bg-gradient-to-br from-ink to-[#1B2540] dark:from-dark-surface dark:to-dark-bg text-white p-6 flex flex-col gap-4 shadow-elevated hover:opacity-95 transition-opacity active:scale-[0.99]"
         >
           <div className="flex items-start justify-between">
             <div>
               <p className="text-xs text-white/60 mb-1">Ingresos este mes</p>
-              <p className="text-3xl font-display font-semibold">
-                {moneda}
-                {ingresosMes.toLocaleString('es-AR')}
+              <p className="text-4xl sm:text-5xl font-display font-semibold tracking-tight">
+                <NumeroAnimado prefijo={moneda} valor={ingresosMes} />
               </p>
-              <div className="flex items-center gap-2 mt-1.5">
+              <div className="flex items-center gap-2 mt-2">
                 <p className="text-xs text-white/60">
                   {ventasMes} venta{ventasMes === 1 ? '' : 's'} este mes
                 </p>
@@ -395,8 +429,8 @@ export default async function Home() {
               {dias.map((d, idx) => (
                 <div key={idx} className="flex flex-col items-center gap-1 w-5">
                   <div
-                    className="w-full rounded-full bg-white/25"
-                    style={{ height: `${Math.max(6, (d.valor / maxDia) * 40)}px` }}
+                    className="animate-grow-bar w-full rounded-full bg-white/25"
+                    style={{ height: `${Math.max(6, (d.valor / maxDia) * 40)}px`, animationDelay: `${idx * 40}ms` }}
                   />
                   <span className="text-[9px] text-white/40">{d.label}</span>
                 </div>
@@ -405,10 +439,11 @@ export default async function Home() {
           </div>
 
           <div className="grid grid-cols-2 gap-4 pt-3 border-t border-white/10">
-            <MiniStatTrend etiqueta="Ventas" valor={ventasMes.toString()} deltaPct={deltaVentasPct} serie={serieVentas} />
+            <MiniStatTrend etiqueta="Ventas" valorNumerico={ventasMes} deltaPct={deltaVentasPct} serie={serieVentas} />
             <MiniStatTrend
               etiqueta="Ticket promedio"
-              valor={`${moneda}${Math.round(ticketPromedio).toLocaleString('es-AR')}`}
+              valorNumerico={Math.round(ticketPromedio)}
+              prefijo={moneda}
               deltaPct={deltaTicketPct}
               serie={serieTicket}
             />
@@ -464,13 +499,13 @@ export default async function Home() {
           <p className="text-sm font-semibold tracking-tight">Actividad reciente</p>
           <div className="flex flex-col gap-3">
             {actividad.map((ev, idx) => {
-              const { icono, color } = ICONO_ACTIVIDAD[ev.tipo];
+              const { emoji, color } = ICONO_ACTIVIDAD[ev.tipo];
               return (
                 <div key={idx} className="flex items-center gap-3">
                   <div
-                    className={`h-8 w-8 shrink-0 rounded-full bg-gradient-to-br ${COLOR_ICONO[color]} text-white flex items-center justify-center [&_svg]:h-4 [&_svg]:w-4`}
+                    className={`h-8 w-8 shrink-0 rounded-full bg-gradient-to-br ${COLOR_ICONO[color]} flex items-center justify-center text-base`}
                   >
-                    {ICONOS[icono]}
+                    {emoji}
                   </div>
                   <p className="flex-1 min-w-0 text-sm leading-snug truncate">{ev.texto}</p>
                   <p className="shrink-0 text-[11px] text-muted dark:text-dark-text-secondary">{hace(ev.fecha)}</p>
@@ -481,22 +516,35 @@ export default async function Home() {
         </div>
       )}
 
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted dark:text-dark-text-secondary -mb-1">
+        Accesos rápidos
+      </p>
       <div className="flex flex-col gap-2.5 lg:grid lg:grid-cols-2 lg:gap-3 animate-fade-in-up" style={{ animationDelay: '240ms' }}>
         {SECCIONES.map((s) =>
           s.activo ? (
             <Link
               key={s.titulo}
               href={s.href}
-              className="group rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-4 flex items-center gap-4 hover:border-accent/40 dark:hover:border-dark-accent/40 hover:shadow-elevated hover:-translate-y-0.5 transition-all active:scale-[0.99]"
+              className="group rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-4 flex items-center gap-4 hover:border-accent/40 dark:hover:border-dark-accent/40 hover:shadow-elevated hover:-translate-y-1 transition-all active:scale-[0.99]"
             >
               <div
-                className={`h-14 w-14 shrink-0 rounded-2xl bg-gradient-to-br ${COLOR_ICONO[s.color]} text-white flex items-center justify-center shadow-card`}
+                className={`h-14 w-14 shrink-0 rounded-2xl bg-gradient-to-br ${COLOR_ICONO[s.color]} text-white flex items-center justify-center shadow-card group-hover:scale-110 group-hover:rotate-3 transition-transform`}
               >
                 {ICONOS[s.icono]}
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-[15px] font-semibold leading-tight tracking-tight">{s.titulo}</p>
                 <p className="text-xs text-muted dark:text-dark-text-secondary leading-tight mt-1">{s.desc}</p>
+                {statsSecciones[s.href] && statsSecciones[s.href].length > 0 && (
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-1.5">
+                    {statsSecciones[s.href].map((stat, i) => (
+                      <span key={i} className="text-[11px] font-medium text-ink dark:text-dark-text">
+                        {i > 0 && <span className="text-muted dark:text-dark-text-secondary font-normal mr-2">·</span>}
+                        {stat}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
               <span className="text-muted dark:text-dark-text-secondary group-hover:text-accent dark:group-hover:text-dark-accent group-hover:translate-x-0.5 transition-all">&rarr;</span>
             </Link>
@@ -517,14 +565,14 @@ export default async function Home() {
         )}
       </div>
 
-      <div className="text-center mt-auto pt-4">
-        <p className="flex items-center justify-center gap-1.5 text-xs font-medium text-muted dark:text-dark-text-secondary">
+      <div className="text-center mt-auto pt-6 pb-2 flex flex-col items-center gap-1.5">
+        <p className="flex items-center justify-center gap-2 text-sm font-display font-semibold">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/qovento-icon.png" alt="" className="h-4 w-4 object-contain" />
+          <img src="/qovento-icon.png" alt="" className="h-5 w-5 object-contain" />
           Qovento
         </p>
-        <p className="text-[10px] text-muted dark:text-dark-text-secondary mt-0.5">
-          El sistema móvil más rápido para recibir, documentar, etiquetar y comercializar celulares.
+        <p className="text-xs text-muted dark:text-dark-text-secondary max-w-xs leading-snug">
+          El sistema más rápido para vender, reparar y gestionar comercios de tecnología.
         </p>
       </div>
     </main>
@@ -547,16 +595,18 @@ function StatTile({
   return (
     <Link
       href={href}
-      className="group relative overflow-hidden rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-3.5 flex flex-col gap-2 hover:shadow-elevated hover:-translate-y-0.5 transition-all"
+      className="group relative overflow-hidden rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-3.5 flex flex-col gap-2 hover:shadow-elevated hover:-translate-y-1 transition-all"
     >
       <span className={`absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r ${COLOR_ICONO[color]}`} />
       <div
-        className={`h-8 w-8 rounded-lg bg-gradient-to-br ${COLOR_ICONO[color]} text-white flex items-center justify-center [&_svg]:h-4 [&_svg]:w-4 group-hover:scale-110 transition-transform`}
+        className={`h-8 w-8 rounded-lg bg-gradient-to-br ${COLOR_ICONO[color]} text-white flex items-center justify-center [&_svg]:h-4 [&_svg]:w-4 group-hover:scale-110 group-hover:rotate-3 transition-transform`}
       >
         {ICONOS[icono]}
       </div>
       <div>
-        <p className="text-2xl font-display font-semibold leading-none">{valor}</p>
+        <p className="text-2xl font-display font-semibold leading-none">
+          <NumeroAnimado valor={valor} />
+        </p>
         <p className="text-[11px] text-muted dark:text-dark-text-secondary leading-tight mt-1">{etiqueta}</p>
       </div>
     </Link>
@@ -574,11 +624,11 @@ function hace(fecha: Date): string {
   return `Hace ${dias} día${dias === 1 ? '' : 's'}`;
 }
 
-const ICONO_ACTIVIDAD: Record<string, { icono: string; color: string }> = {
-  venta: { icono: 'ordenes', color: 'ventas' },
-  reparacion: { icono: 'servicio', color: 'servicio' },
-  stock: { icono: 'stock', color: 'inventario' },
-  cliente: { icono: 'clientes', color: 'clientes' },
+const ICONO_ACTIVIDAD: Record<string, { emoji: string; color: string }> = {
+  venta: { emoji: '💰', color: 'ventas' },
+  reparacion: { emoji: '🔧', color: 'servicio' },
+  stock: { emoji: '📦', color: 'inventario' },
+  cliente: { emoji: '👤', color: 'clientes' },
 };
 
 const DOT_COLOR: Record<string, string> = {
@@ -612,12 +662,14 @@ function Sparkline({ serie }: { serie: number[] }) {
 
 function MiniStatTrend({
   etiqueta,
-  valor,
+  valorNumerico,
+  prefijo,
   deltaPct,
   serie,
 }: {
   etiqueta: string;
-  valor: string;
+  valorNumerico: number;
+  prefijo?: string;
   deltaPct: number | null;
   serie: number[];
 }) {
@@ -625,7 +677,9 @@ function MiniStatTrend({
     <div className="flex items-center justify-between gap-2">
       <div>
         <p className="text-[11px] text-white/60">{etiqueta}</p>
-        <p className="text-base font-display font-semibold">{valor}</p>
+        <p className="text-base font-display font-semibold">
+          <NumeroAnimado prefijo={prefijo} valor={valorNumerico} />
+        </p>
         {deltaPct != null && (
           <p className={`text-[11px] ${deltaPct >= 0 ? 'text-good' : 'text-bad'}`}>
             {deltaPct >= 0 ? '+' : ''}
