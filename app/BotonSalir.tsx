@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { crearClienteNavegador } from './lib/supabase/client';
+import { clearActor } from './lib/actor';
 
 export default function BotonSalir() {
   const router = useRouter();
@@ -9,6 +10,7 @@ export default function BotonSalir() {
 
   const salir = async () => {
     await supabase.auth.signOut();
+    clearActor();
     router.push('/login');
     router.refresh();
   };

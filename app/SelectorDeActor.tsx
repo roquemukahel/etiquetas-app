@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { crearClienteNavegador } from './lib/supabase/client';
-import { Actor, getActor, setActor as guardarActor } from './lib/actor';
+import { Actor, getActor, setActor as guardarActor, clearActor } from './lib/actor';
 import Avatar from './Avatar';
 
 const RUTAS_SIN_SELECTOR = [
@@ -51,6 +51,25 @@ export default function SelectorDeActor() {
     setActorState(getActor());
     setPostergado(window.sessionStorage.getItem(KEY_POSTERGADO) === '1');
   }, []);
+
+  // El actor queda guardado en este navegador, no en la cuenta — si en algún
+  // momento se entró con otra cuenta sin que se haya limpiado bien (ej. un
+  // logout viejo, antes de que esto se corrigiera), puede quedar apuntando a
+  // un vendedor/técnico que no es de este negocio. Lo validamos apenas hay
+  // sesión y, si no existe acá, lo borramos solo (no toca ningún dato, solo
+  // esta preferencia local).
+  useEffect(() => {
+    if (!actor) return;
+    (async () => {
+      const tabla = actor.tipo === 'vendedor' ? 'vendedores' : 'tecnicos';
+      const { data, error } = await supabase.from(tabla).select('id').eq('id', actor.id).maybeSingle();
+      if (!error && !data) {
+        clearActor();
+        setActorState(null);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [actor?.id]);
 
   useEffect(() => {
     if (!esRaiz) return;
