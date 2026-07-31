@@ -3,6 +3,7 @@ import { Inter, Sora } from 'next/font/google';
 import '../styles/globals.css';
 import { SCRIPT_TEMA_INICIAL } from './lib/theme';
 import SelectorDeActor from './SelectorDeActor';
+import BotonFlotante from './BotonFlotante';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' });
 const sora = Sora({ subsets: ['latin'], variable: '--font-sora', display: 'swap' });
@@ -37,6 +38,7 @@ export default function RootLayout({
       <body className="min-h-screen bg-canvas dark:bg-dark-bg text-ink dark:text-dark-text font-sans transition-colors">
         <SelectorDeActor />
         {children}
+        <BotonFlotante />
       </body>
     </html>
   );
