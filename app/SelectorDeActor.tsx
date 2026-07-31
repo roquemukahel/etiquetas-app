@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { crearClienteNavegador } from './lib/supabase/client';
 import { Actor, getActor, setActor as guardarActor } from './lib/actor';
+import Avatar from './Avatar';
 
 const RUTAS_SIN_SELECTOR = [
   '/login',
@@ -19,7 +20,7 @@ const RUTAS_SIN_SELECTOR = [
 
 const KEY_POSTERGADO = 'qovento:actor-postergado';
 
-type Persona = { id: string; nombre: string };
+type Persona = { id: string; nombre: string; foto_url: string | null; telefono: string | null; edad: number | null };
 
 export default function SelectorDeActor() {
   const pathname = usePathname();
@@ -32,6 +33,10 @@ export default function SelectorDeActor() {
   const [vendedores, setVendedores] = useState<Persona[]>([]);
   const [tecnicos, setTecnicos] = useState<Persona[]>([]);
   const [cargando, setCargando] = useState(false);
+  const [editandoPerfil, setEditandoPerfil] = useState(false);
+  const [telefonoPerfil, setTelefonoPerfil] = useState('');
+  const [edadPerfil, setEdadPerfil] = useState('');
+  const [guardandoPerfil, setGuardandoPerfil] = useState(false);
   // La raíz ("/") muestra la landing pública a quien no tiene sesión, así
   // que ahí necesitamos saber si hay usuario logueado antes de decidir si
   // corresponde mostrar el cartel (no tiene sentido preguntarle "con quién
@@ -66,8 +71,8 @@ export default function SelectorDeActor() {
     setCargando(true);
     (async () => {
       const [{ data: vend }, { data: tec }] = await Promise.all([
-        supabase.from('vendedores').select('id, nombre').order('nombre'),
-        supabase.from('tecnicos').select('id, nombre').order('nombre'),
+        supabase.from('vendedores').select('id, nombre, foto_url, telefono, edad').order('nombre'),
+        supabase.from('tecnicos').select('id, nombre, foto_url, telefono, edad').order('nombre'),
       ]);
       setVendedores(vend ?? []);
       setTecnicos(tec ?? []);
@@ -79,11 +84,47 @@ export default function SelectorDeActor() {
   if (esRutaExcluida || actor === undefined || (esRaiz && sesion === 'cargando')) return null;
 
   const elegir = (tipo: 'vendedor' | 'tecnico', persona: Persona) => {
-    const nuevo: Actor = { tipo, id: persona.id, nombre: persona.nombre };
+    const nuevo: Actor = { tipo, id: persona.id, nombre: persona.nombre, fotoUrl: persona.foto_url };
     guardarActor(nuevo);
     setActorState(nuevo);
     setEligiendoTipo(null);
     setCambiando(false);
+  };
+
+  const abrirMiPerfil = async () => {
+    if (!actor) return;
+    const tabla = actor.tipo === 'vendedor' ? 'vendedores' : 'tecnicos';
+    const { data: persona } = await supabase.from(tabla).select('telefono, edad').eq('id', actor.id).single();
+    setTelefonoPerfil(persona?.telefono ?? '');
+    setEdadPerfil(persona?.edad != null ? String(persona.edad) : '');
+    setEditandoPerfil(true);
+  };
+
+  const cambiarFotoPerfil = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !actor) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const dataUrl = reader.result as string;
+      const tabla = actor.tipo === 'vendedor' ? 'vendedores' : 'tecnicos';
+      await supabase.from(tabla).update({ foto_url: dataUrl }).eq('id', actor.id);
+      const actualizado = { ...actor, fotoUrl: dataUrl };
+      guardarActor(actualizado);
+      setActorState(actualizado);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const guardarMiPerfil = async () => {
+    if (!actor) return;
+    setGuardandoPerfil(true);
+    const tabla = actor.tipo === 'vendedor' ? 'vendedores' : 'tecnicos';
+    await supabase
+      .from(tabla)
+      .update({ telefono: telefonoPerfil.trim() || null, edad: edadPerfil ? Number(edadPerfil) : null })
+      .eq('id', actor.id);
+    setGuardandoPerfil(false);
+    setEditandoPerfil(false);
   };
 
   const posponer = () => {
@@ -101,14 +142,70 @@ export default function SelectorDeActor() {
   return (
     <>
       {actor && (
-        <div className="no-print sticky top-0 z-40 w-full bg-ink text-white text-xs px-4 py-1.5 flex items-center justify-between">
-          <span className="flex items-center gap-1.5">
+        <div className="no-print sticky top-0 z-40 w-full bg-ink text-white text-xs px-4 py-1.5 flex items-center justify-between gap-2">
+          <span className="flex items-center gap-1.5 min-w-0">
             <span className="h-1.5 w-1.5 rounded-full bg-good shrink-0" />
-            Trabajando como <strong>{actor.nombre}</strong>
+            <Avatar src={actor.fotoUrl} nombre={actor.nombre} size={18} />
+            <span className="truncate">
+              Trabajando como <strong>{actor.nombre}</strong>
+            </span>
           </span>
-          <button onClick={() => setCambiando(true)} className="underline opacity-80 hover:opacity-100">
-            Cambiar
-          </button>
+          <span className="flex items-center gap-3 shrink-0">
+            <button onClick={abrirMiPerfil} className="underline opacity-80 hover:opacity-100">
+              Mi perfil
+            </button>
+            <button onClick={() => setCambiando(true)} className="underline opacity-80 hover:opacity-100">
+              Cambiar
+            </button>
+          </span>
+        </div>
+      )}
+
+      {editandoPerfil && actor && (
+        <div className="no-print fixed inset-0 z-50 bg-ink/60 backdrop-blur-sm flex items-center justify-center px-6">
+          <div className="w-full max-w-xs bg-white dark:bg-dark-surface rounded-2xl shadow-elevated p-6 flex flex-col gap-4">
+            <button
+              onClick={() => setEditandoPerfil(false)}
+              className="self-start text-xs text-muted dark:text-dark-text-secondary underline"
+            >
+              Cerrar
+            </button>
+
+            <div className="flex items-center gap-3">
+              <label className="shrink-0 cursor-pointer">
+                <Avatar src={actor.fotoUrl} nombre={actor.nombre} size={52} />
+                <input type="file" accept="image/*" className="hidden" onChange={cambiarFotoPerfil} />
+              </label>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold truncate">{actor.nombre}</p>
+                <p className="text-xs text-muted dark:text-dark-text-secondary">Tocá la foto para cambiarla</p>
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <input
+                value={telefonoPerfil}
+                onChange={(e) => setTelefonoPerfil(e.target.value)}
+                placeholder="Teléfono"
+                className="flex-1 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+              />
+              <input
+                value={edadPerfil}
+                onChange={(e) => setEdadPerfil(e.target.value)}
+                placeholder="Edad"
+                inputMode="numeric"
+                className="w-20 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+
+            <button
+              disabled={guardandoPerfil}
+              onClick={guardarMiPerfil}
+              className="rounded-xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-3 text-sm font-medium text-white disabled:opacity-40"
+            >
+              Guardar
+            </button>
+          </div>
         </div>
       )}
 
@@ -193,8 +290,9 @@ export default function SelectorDeActor() {
                     <button
                       key={p.id}
                       onClick={() => elegir(eligiendoTipo, p)}
-                      className="rounded-xl border border-border dark:border-dark-border px-4 py-3 text-sm text-left hover:bg-canvas dark:hover:bg-dark-bg"
+                      className="rounded-xl border border-border dark:border-dark-border px-4 py-3 text-sm text-left hover:bg-canvas dark:hover:bg-dark-bg flex items-center gap-2.5"
                     >
+                      <Avatar src={p.foto_url} nombre={p.nombre} size={28} />
                       {p.nombre}
                     </button>
                   ))}

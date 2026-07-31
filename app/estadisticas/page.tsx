@@ -50,7 +50,7 @@ type Orden = {
 };
 type Reparacion = { tecnico_id: string | null; fecha_reparado: string };
 type IngresoServicio = { cliente_id: string | null; fecha_ingreso_servicio: string };
-type Persona = { id: string; nombre: string };
+type Persona = { id: string; nombre: string; foto_url: string | null };
 type Cliente = { id: string; nombre: string; apellido: string | null };
 
 export default function Estadisticas() {
@@ -84,8 +84,8 @@ export default function Estadisticas() {
 
       const [{ data: perfil }, { data: vend }, { data: tec }, { data: cli }, { data: ord }, { data: rep }, { data: ing }] = await Promise.all([
         supabase.from('perfiles').select('negocios ( moneda )').eq('id', user.id).single(),
-        supabase.from('vendedores').select('id, nombre').order('nombre'),
-        supabase.from('tecnicos').select('id, nombre').order('nombre'),
+        supabase.from('vendedores').select('id, nombre, foto_url').order('nombre'),
+        supabase.from('tecnicos').select('id, nombre, foto_url').order('nombre'),
         supabase.from('clientes').select('id, nombre, apellido').order('nombre'),
         supabase
           .from('ordenes')
@@ -133,6 +133,11 @@ export default function Estadisticas() {
     return lista.find((p) => p.id === id)?.nombre ?? `${tipo} eliminado`;
   };
 
+  const fotoDe = (lista: Persona[], id: string | null) => {
+    if (!id) return null;
+    return lista.find((p) => p.id === id)?.foto_url ?? null;
+  };
+
   const rankingVendedores: Dato[] = useMemo(() => {
     const mapa = new Map<string, number>();
     for (const o of ordenesPeriodo) {
@@ -140,7 +145,11 @@ export default function Estadisticas() {
       mapa.set(key, (mapa.get(key) ?? 0) + (o.total || 0));
     }
     return Array.from(mapa.entries())
-      .map(([id, valor]) => ({ nombre: nombreDe(vendedores, id === '-' ? null : id, 'Vendedor'), valor }))
+      .map(([id, valor]) => ({
+        nombre: nombreDe(vendedores, id === '-' ? null : id, 'Vendedor'),
+        fotoUrl: fotoDe(vendedores, id === '-' ? null : id),
+        valor,
+      }))
       .filter((d) => d.valor > 0)
       .sort((a, b) => b.valor - a.valor);
   }, [ordenesPeriodo, vendedores]);
@@ -157,7 +166,11 @@ export default function Estadisticas() {
       mapa.set(key, (mapa.get(key) ?? 0) + 1);
     }
     return Array.from(mapa.entries())
-      .map(([id, valor]) => ({ nombre: nombreDe(tecnicos, id === '-' ? null : id, 'Técnico'), valor }))
+      .map(([id, valor]) => ({
+        nombre: nombreDe(tecnicos, id === '-' ? null : id, 'Técnico'),
+        fotoUrl: fotoDe(tecnicos, id === '-' ? null : id),
+        valor,
+      }))
       .filter((d) => d.valor > 0)
       .sort((a, b) => b.valor - a.valor);
   }, [reparacionesPeriodo, tecnicos]);

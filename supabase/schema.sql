@@ -837,3 +837,20 @@ create policy "repuestos de mi negocio" on repuestos
 create policy "repuestos_precios de mi negocio" on repuestos_precios
   for all using (negocio_id = negocio_actual())
   with check (negocio_id = negocio_actual());
+
+-- ============================================================
+-- Perfil personal de vendedores y técnicos (teléfono, edad y foto),
+-- para que cada uno pueda personalizar cómo aparece en la app. La
+-- foto se guarda igual que el logo del negocio y las imágenes de
+-- productos/trabajos: como data URL directo en la columna, sin bucket
+-- de storage aparte. A propósito, esta foto NUNCA se muestra en la
+-- boleta que ve el cliente (ver app/ordenes/[id]/boleta) — solo en
+-- las pantallas internas de uso diario.
+-- ============================================================
+alter table vendedores add column if not exists telefono text;
+alter table vendedores add column if not exists edad int;
+alter table vendedores add column if not exists foto_url text;
+
+alter table tecnicos add column if not exists telefono text;
+alter table tecnicos add column if not exists edad int;
+alter table tecnicos add column if not exists foto_url text;

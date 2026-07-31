@@ -10,10 +10,11 @@ import { codigoLlamada } from '../lib/paises';
 import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../lib/carpetas';
 import { registrarAuditoria } from '../lib/auditoria';
 import MiniaturaDispositivo from '../MiniaturaDispositivo';
+import Avatar from '../Avatar';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 
-type Tecnico = { id: string; nombre: string };
+type Tecnico = { id: string; nombre: string; foto_url: string | null };
 type Trabajo = { id: string; nombre: string; imagen_url: string | null };
 type Cliente = { id: string; nombre: string; apellido: string | null; telefono: string | null };
 
@@ -84,7 +85,7 @@ export default function ServicioTecnico() {
   useEffect(() => {
     cargar();
     (async () => {
-      const { data } = await supabase.from('tecnicos').select('*').order('nombre');
+      const { data } = await supabase.from('tecnicos').select('id, nombre, foto_url').order('nombre');
       setTecnicos((data as Tecnico[]) ?? []);
     })();
     (async () => {
@@ -260,6 +261,7 @@ export default function ServicioTecnico() {
   };
 
   const nombreTecnico = (tecnicoId: string | null) => tecnicos.find((t) => t.id === tecnicoId)?.nombre;
+  const fotoTecnico = (tecnicoId: string | null) => tecnicos.find((t) => t.id === tecnicoId)?.foto_url ?? null;
 
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
@@ -312,7 +314,10 @@ export default function ServicioTecnico() {
             <button onClick={() => setTecnicoSeleccionado(null)} className="text-sm text-accent dark:text-dark-accent underline self-start">
               &larr; Todos los técnicos
             </button>
-            <p className="text-sm font-medium">{nombreTecnico(tecnicoSeleccionado)}</p>
+            <p className="text-sm font-medium flex items-center gap-2">
+              <Avatar src={fotoTecnico(tecnicoSeleccionado)} nombre={nombreTecnico(tecnicoSeleccionado) ?? '?'} size={22} />
+              {nombreTecnico(tecnicoSeleccionado)}
+            </p>
             {historialTecnico.length === 0 && (
               <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Todavía no tiene arreglos registrados.</p>
             )}
@@ -357,7 +362,10 @@ export default function ServicioTecnico() {
                     onClick={() => setTecnicoSeleccionado(t.id)}
                     className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex items-center justify-between text-left"
                   >
-                    <p className="text-sm font-medium">{t.nombre}</p>
+                    <span className="flex items-center gap-2.5">
+                      <Avatar src={t.foto_url} nombre={t.nombre} size={28} />
+                      <p className="text-sm font-medium">{t.nombre}</p>
+                    </span>
                     <p className="text-xs text-muted dark:text-dark-text-secondary">{cantidad} arreglo{cantidad === 1 ? '' : 's'}</p>
                   </button>
                 );
@@ -551,7 +559,10 @@ export default function ServicioTecnico() {
                 {tab === 'reparados' && (
                   <>
                     {nombreTecnico(e.tecnico_id) && (
-                      <p className="text-xs text-muted dark:text-dark-text-secondary">Reparado por: {nombreTecnico(e.tecnico_id)}</p>
+                      <p className="text-xs text-muted dark:text-dark-text-secondary flex items-center gap-1.5">
+                        Reparado por: <Avatar src={fotoTecnico(e.tecnico_id)} nombre={nombreTecnico(e.tecnico_id) ?? '?'} size={16} />{' '}
+                        {nombreTecnico(e.tecnico_id)}
+                      </p>
                     )}
                     {e.trabajos_realizados && e.trabajos_realizados.length > 0 && (
                       <p className="text-xs text-muted dark:text-dark-text-secondary">Arreglo realizado: {e.trabajos_realizados.join(', ')}</p>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Avatar from '../Avatar';
 
 // Paleta categórica validada (ver skill de dataviz) contra las superficies
 // reales de las cards de Qovento (blanco en claro, #111827 en oscuro):
@@ -12,7 +13,7 @@ const COLOR_DARK = ['#3987e5', '#d95926', '#199e70'];
 const OTROS_LIGHT = '#9CA3AF';
 const OTROS_DARK = '#475569';
 
-export type Dato = { nombre: string; valor: number };
+export type Dato = { nombre: string; valor: number; fotoUrl?: string | null };
 
 function formatearValor(valor: number, moneda?: string, sufijo?: string) {
   if (moneda) return `${moneda}${Math.round(valor).toLocaleString('es-AR')}`;
@@ -28,6 +29,7 @@ export function RankingBarras({ datos, moneda, sufijo }: { datos: Dato[]; moneda
       {datos.map((d, i) => (
         <div key={d.nombre} className="flex items-center gap-3">
           <span className="w-5 text-xs text-muted dark:text-dark-text-secondary text-right shrink-0 tabular-nums">{i + 1}°</span>
+          {d.fotoUrl !== undefined && <Avatar src={d.fotoUrl} nombre={d.nombre} size={20} />}
           <div className="flex-1 min-w-0">
             <div className="flex items-baseline justify-between gap-2 mb-1">
               <span className="text-sm font-medium truncate">{d.nombre}</span>
@@ -73,8 +75,8 @@ export function RankingTorta({ datos, moneda, sufijo }: { datos: Dato[]; moneda?
   const top = datos.slice(0, 3);
   const restoValor = datos.slice(3).reduce((acc, d) => acc + d.valor, 0);
   const slices = [
-    ...top.map((d, i) => ({ nombre: d.nombre, valor: d.valor, light: COLOR_LIGHT[i], dark: COLOR_DARK[i] })),
-    ...(restoValor > 0 ? [{ nombre: 'Otros', valor: restoValor, light: OTROS_LIGHT, dark: OTROS_DARK }] : []),
+    ...top.map((d, i) => ({ nombre: d.nombre, valor: d.valor, fotoUrl: d.fotoUrl, light: COLOR_LIGHT[i], dark: COLOR_DARK[i] })),
+    ...(restoValor > 0 ? [{ nombre: 'Otros', valor: restoValor, fotoUrl: undefined, light: OTROS_LIGHT, dark: OTROS_DARK }] : []),
   ];
 
   const segmentos = (colorKey: 'light' | 'dark') => {
@@ -99,6 +101,7 @@ export function RankingTorta({ datos, moneda, sufijo }: { datos: Dato[]; moneda?
             <span className="flex items-center gap-2 min-w-0">
               <span className="h-2.5 w-2.5 rounded-full shrink-0 dark:hidden" style={{ backgroundColor: s.light }} />
               <span className="h-2.5 w-2.5 rounded-full shrink-0 hidden dark:inline-block" style={{ backgroundColor: s.dark }} />
+              {s.fotoUrl !== undefined && <Avatar src={s.fotoUrl} nombre={s.nombre} size={18} />}
               <span className="truncate">{s.nombre}</span>
             </span>
             <span className="text-muted dark:text-dark-text-secondary shrink-0 tabular-nums">

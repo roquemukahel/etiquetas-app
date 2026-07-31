@@ -4,7 +4,7 @@
 // técnico). Es identificación por nombre para trazabilidad, NO un login con
 // contraseña — cualquiera puede elegir el nombre de otro. Se guarda en este
 // dispositivo/navegador (localStorage), no viaja con la cuenta.
-export type Actor = { tipo: 'vendedor' | 'tecnico'; id: string; nombre: string };
+export type Actor = { tipo: 'vendedor' | 'tecnico'; id: string; nombre: string; fotoUrl?: string | null };
 
 const KEY = 'qovento:actor';
 

@@ -7,6 +7,7 @@ import { asegurarModelo } from '../lib/modelos';
 import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../lib/carpetas';
 import { registrarAuditoria } from '../lib/auditoria';
 import MiniaturaDispositivo from '../MiniaturaDispositivo';
+import Avatar from '../Avatar';
 
 type Canje = {
   id: string;
@@ -18,7 +19,7 @@ type Canje = {
   detalles: string | null;
   monto: number | null;
   estado: string;
-  vendedores: { nombre: string } | null;
+  vendedores: { nombre: string; foto_url: string | null } | null;
 };
 
 export default function PlanCanje() {
@@ -32,7 +33,7 @@ export default function PlanCanje() {
   const cargar = async () => {
     const { data } = await supabase
       .from('canjes')
-      .select('*, vendedores ( nombre )')
+      .select('*, vendedores ( nombre, foto_url )')
       .order('created_at', { ascending: false });
     setCanjes((data as any) ?? []);
     setLoading(false);
@@ -156,7 +157,11 @@ export default function PlanCanje() {
             </div>
             <div className="text-xs text-muted dark:text-dark-text-secondary flex flex-col gap-0.5">
               {c.detalles && <p>Detalles: {c.detalles}</p>}
-              {c.vendedores?.nombre && <p>Recibido por: {c.vendedores.nombre}</p>}
+              {c.vendedores?.nombre && (
+                <p className="flex items-center gap-1.5">
+                  Recibido por: <Avatar src={c.vendedores.foto_url} nombre={c.vendedores.nombre} size={16} /> {c.vendedores.nombre}
+                </p>
+              )}
             </div>
             {!verDerivados ? (
               <div className="flex gap-2 mt-1">

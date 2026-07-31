@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { registrarAuditoria } from '../../lib/auditoria';
+import Avatar from '../../Avatar';
 
 const ESTADOS = ['pendiente', 'pagado', 'entregado'];
 const FORMAS_PAGO = ['Efectivo', 'Transferencia', 'Tarjeta'];
@@ -24,7 +25,7 @@ type Orden = {
   nota: string | null;
   incluir_garantia: boolean;
   clientes: { nombre: string; apellido: string | null; telefono: string | null } | null;
-  vendedores: { nombre: string } | null;
+  vendedores: { nombre: string; foto_url: string | null } | null;
   orden_items: Item[];
 };
 
@@ -52,7 +53,7 @@ export default function DetalleOrden() {
     const { data } = await supabase
       .from('ordenes')
       .select(
-        '*, clientes ( nombre, apellido, telefono ), vendedores ( nombre ), orden_items ( id, descripcion, cantidad, precio_unitario, dispositivo_id )'
+        '*, clientes ( nombre, apellido, telefono ), vendedores ( nombre, foto_url ), orden_items ( id, descripcion, cantidad, precio_unitario, dispositivo_id )'
       )
       .eq('id', id)
       .single();
@@ -384,8 +385,9 @@ export default function DetalleOrden() {
           </p>
         )}
         {orden.vendedores?.nombre && (
-          <p>
-            <span className="text-muted dark:text-dark-text-secondary">Vendedor:</span> {orden.vendedores.nombre}
+          <p className="flex items-center gap-1.5">
+            <span className="text-muted dark:text-dark-text-secondary">Vendedor:</span>
+            <Avatar src={orden.vendedores.foto_url} nombre={orden.vendedores.nombre} size={18} /> {orden.vendedores.nombre}
           </p>
         )}
         <p>
