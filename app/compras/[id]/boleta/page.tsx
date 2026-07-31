@@ -230,6 +230,11 @@ export default function BoletaCompra() {
           #boleta {
             border: none !important;
           }
+          #boleta * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            color-adjust: exact !important;
+          }
           @page {
             size: A4;
             margin: 1.5cm;

@@ -16,6 +16,7 @@ type Dispositivo = {
   color: string | null;
   precio: number | null;
   imei: string | null;
+  salud_bateria: number | null;
 };
 
 type Cliente = {
@@ -197,7 +198,7 @@ export default function NuevaOrden() {
         tempId: idTemporal(),
         descripcion: `${d.modelo || 'Dispositivo'}${d.capacidad_gb ? ` ${d.capacidad_gb}GB` : ''}${
           d.color ? ` ${d.color}` : ''
-        }${d.imei ? ` · IMEI ${d.imei}` : ''}`,
+        }${d.imei ? ` · IMEI ${d.imei}` : ''}${d.salud_bateria != null ? ` · Batería ${d.salud_bateria}%` : ''}`,
         cantidad: 1,
         precioUnitario: d.precio ?? 0,
         dispositivoId: d.id,
