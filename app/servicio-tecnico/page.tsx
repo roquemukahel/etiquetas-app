@@ -269,7 +269,7 @@ export default function ServicioTecnico() {
         </Link>
         <span className="text-lg font-medium mr-auto">Servicio Técnico</span>
         <Link href="/servicio-tecnico/repuestos" className="text-xs text-accent dark:text-dark-accent underline">
-          Repuestos
+          Proveedores
         </Link>
         <Link href="/servicio-tecnico/trabajos" className="text-xs text-accent dark:text-dark-accent underline">
           Trabajos
