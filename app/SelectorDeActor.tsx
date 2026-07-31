@@ -14,6 +14,7 @@ const RUTAS_SIN_SELECTOR = [
   '/terminos',
   '/privacidad',
   '/seguimiento',
+  '/boleta',
 ];
 
 const KEY_POSTERGADO = 'qovento:actor-postergado';
@@ -83,7 +84,7 @@ export default function SelectorDeActor() {
   return (
     <>
       {actor && (
-        <div className="sticky top-0 z-40 w-full bg-ink text-white text-xs px-4 py-1.5 flex items-center justify-between">
+        <div className="no-print sticky top-0 z-40 w-full bg-ink text-white text-xs px-4 py-1.5 flex items-center justify-between">
           <span className="flex items-center gap-1.5">
             <span className="h-1.5 w-1.5 rounded-full bg-good shrink-0" />
             Trabajando como <strong>{actor.nombre}</strong>
@@ -95,7 +96,7 @@ export default function SelectorDeActor() {
       )}
 
       {!actor && postergado && !cambiando && (
-        <div className="sticky top-0 z-40 w-full bg-ink text-white text-xs px-4 py-1.5 flex items-center justify-between">
+        <div className="no-print sticky top-0 z-40 w-full bg-ink text-white text-xs px-4 py-1.5 flex items-center justify-between">
           <span>Sin elegir quién trabaja</span>
           <button onClick={retomarEleccion} className="underline opacity-80 hover:opacity-100">
             Elegir
@@ -104,7 +105,7 @@ export default function SelectorDeActor() {
       )}
 
       {mostrarOverlay && (
-        <div className="fixed inset-0 z-50 bg-ink/60 backdrop-blur-sm flex items-center justify-center px-6">
+        <div className="no-print fixed inset-0 z-50 bg-ink/60 backdrop-blur-sm flex items-center justify-center px-6">
           <div className="w-full max-w-xs bg-white dark:bg-dark-surface rounded-2xl shadow-elevated p-6 flex flex-col gap-4">
             {actor && !eligiendoTipo && (
               <button

@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { crearClienteNavegador } from '../../../lib/supabase/client';
 import { simboloMoneda } from '../../../lib/monedas';
+import { ESLOGAN } from '../../../lib/eslogan';
+import EtiquetaSeccion from '../../../EtiquetaSeccion';
 
 type Compra = {
   id: string;
@@ -36,6 +38,10 @@ type Negocio = {
 
 function formatearFecha(iso: string) {
   return new Date(iso).toLocaleString('es-AR');
+}
+
+function Divisor() {
+  return <div className="h-[3px] bg-ink rounded-full print:h-[2px]" />;
 }
 
 export default function BoletaCompra() {
@@ -118,15 +124,18 @@ export default function BoletaCompra() {
 
       <div
         id="boleta"
-        className="flex flex-col gap-8 print:gap-3 text-[15px] text-ink bg-white rounded-2xl border border-border shadow-card p-8 print:p-4"
+        className="flex flex-col gap-6 print:gap-3 text-[15px] text-ink bg-white rounded-2xl border border-border shadow-card p-8 print:p-4"
       >
-        <div className="flex items-start justify-between gap-4 pb-6 print:pb-2 border-b border-border">
+        <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">
             {negocio?.logo_url && (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={negocio.logo_url} alt="Logo" className="h-16 w-16 print:h-10 print:w-10 object-contain rounded-lg" />
             )}
-            <p className="text-2xl print:text-lg font-display font-semibold">{negocio?.nombre}</p>
+            <div>
+              <p className="text-2xl print:text-lg font-display font-semibold leading-tight">{negocio?.nombre}</p>
+              <p className="text-xs text-muted max-w-[260px] leading-snug mt-0.5">{ESLOGAN}</p>
+            </div>
           </div>
           <div className="text-right text-sm text-muted leading-relaxed">
             <p className="font-medium text-ink">Compra #{compra.id.slice(0, 8)}</p>
@@ -134,15 +143,17 @@ export default function BoletaCompra() {
           </div>
         </div>
 
+        <Divisor />
+
         <div className="grid grid-cols-2 gap-8 print:gap-4">
           <div className="flex flex-col gap-1">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-1">Negocio (comprador)</p>
+            <EtiquetaSeccion>Negocio (comprador)</EtiquetaSeccion>
             <p className="font-medium">{negocio?.nombre}</p>
             {negocio?.telefono && <p className="text-muted">{negocio.telefono}</p>}
             {negocio?.direccion && <p className="text-muted">{negocio.direccion}</p>}
           </div>
           <div className="flex flex-col gap-1">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-1">Cliente (vendedor)</p>
+            <EtiquetaSeccion>Cliente (vendedor)</EtiquetaSeccion>
             <p className="font-medium">{clienteNombre}</p>
             {compra.clientes?.telefono && <p className="text-muted">{compra.clientes.telefono}</p>}
             {compra.clientes?.email && <p className="text-muted">{compra.clientes.email}</p>}
@@ -150,6 +161,8 @@ export default function BoletaCompra() {
             {compra.clientes?.domicilio && <p className="text-muted">{compra.clientes.domicilio}</p>}
           </div>
         </div>
+
+        <Divisor />
 
         <div className="rounded-xl bg-canvas p-4 flex flex-col gap-1">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-1">Dispositivo adquirido</p>
@@ -163,13 +176,17 @@ export default function BoletaCompra() {
             </p>
           )}
           {compra.detalles && <p className="text-muted">Detalles: {compra.detalles}</p>}
-          {compra.precio != null && (
-            <p className="font-display font-semibold text-lg mt-2">
-              Precio pagado: {moneda}
-              {compra.precio.toLocaleString('es-AR')}
-            </p>
-          )}
         </div>
+
+        {compra.precio != null && (
+          <div className="self-end w-full max-w-[280px] flex justify-between items-baseline font-display font-semibold text-xl rounded-lg bg-ink text-white px-3 py-2.5">
+            <span className="text-sm font-sans font-medium opacity-80">PRECIO PAGADO</span>
+            <span>
+              {moneda}
+              {compra.precio.toLocaleString('es-AR')}
+            </span>
+          </div>
+        )}
 
         {negocio?.texto_declaracion_compra && (
           <div className="rounded-xl bg-canvas p-4 print:p-2">
@@ -192,7 +209,9 @@ export default function BoletaCompra() {
           <p className="text-sm text-muted">DNI</p>
         </div>
 
-        <div className="flex items-center justify-center gap-1.5 pt-2 opacity-60">
+        <Divisor />
+
+        <div className="flex items-center justify-center gap-1.5 opacity-70">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/qovento-icon.png" alt="" className="h-3.5 w-3.5 object-contain" />
           <span className="text-[11px] text-muted">Hecho con Qovento</span>
@@ -201,9 +220,6 @@ export default function BoletaCompra() {
 
       <style jsx global>{`
         @media print {
-          .no-print {
-            display: none !important;
-          }
           body {
             background: white;
           }

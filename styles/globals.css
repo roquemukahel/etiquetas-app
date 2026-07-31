@@ -9,3 +9,9 @@ html, body {
 * {
   -webkit-touch-callout: none;
 }
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}

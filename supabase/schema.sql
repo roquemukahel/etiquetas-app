@@ -689,3 +689,72 @@ create policy "insertar auditoria de mi negocio" on auditoria
 -- vendidos" del inicio).
 -- ============================================================
 alter table modelos_stock add column if not exists imagen_url text;
+
+-- ============================================================
+-- Boleta pública (QR): cada orden tiene un token al azar para que
+-- el cliente pueda ver y guardar su comprobante desde el celular
+-- escaneando el QR impreso, sin necesitar cuenta. Mismo patrón que
+-- seguimiento_publico() de más arriba.
+-- ============================================================
+alter table ordenes add column if not exists token_boleta uuid not null default gen_random_uuid();
+
+create unique index if not exists ordenes_token_boleta_idx on ordenes(token_boleta);
+
+create or replace function boleta_publica(token uuid)
+returns jsonb
+language sql
+security definer
+stable
+as $$
+  select jsonb_build_object(
+    'id', o.id,
+    'created_at', o.created_at,
+    'fecha_entrega', o.fecha_entrega,
+    'forma_pago', o.forma_pago,
+    'total', o.total,
+    'anticipo', o.anticipo,
+    'impuesto_porcentaje', o.impuesto_porcentaje,
+    'monto_canje', o.monto_canje,
+    'nota', o.nota,
+    'moneda', n.moneda,
+    'negocio', jsonb_build_object(
+      'nombre', n.nombre,
+      'telefono', n.telefono,
+      'direccion', n.direccion,
+      'logo_url', n.logo_url,
+      'texto_garantia', n.texto_garantia,
+      'texto_garantia_tamano', n.texto_garantia_tamano,
+      'texto_garantia_servicio', n.texto_garantia_servicio,
+      'texto_garantia_servicio_tamano', n.texto_garantia_servicio_tamano
+    ),
+    'cliente_nombre', nullif(trim(concat(cli.nombre, ' ', coalesce(cli.apellido, ''))), ''),
+    'canje', case when c.id is null then null else jsonb_build_object(
+      'modelo', c.modelo,
+      'capacidad_gb', c.capacidad_gb,
+      'color', c.color,
+      'imei', c.imei,
+      'salud_bateria', c.salud_bateria,
+      'detalles', c.detalles,
+      'monto', c.monto
+    ) end,
+    'items', (
+      select coalesce(jsonb_agg(jsonb_build_object(
+        'descripcion', oi.descripcion,
+        'cantidad', oi.cantidad,
+        'precio_unitario', oi.precio_unitario,
+        'tipo', oi.tipo,
+        'garantia_vencimiento', d.garantia_vencimiento
+      )), '[]'::jsonb)
+      from orden_items oi
+      left join dispositivos d on d.id = oi.dispositivo_id
+      where oi.orden_id = o.id
+    )
+  )
+  from ordenes o
+  join negocios n on n.id = o.negocio_id
+  left join clientes cli on cli.id = o.cliente_id
+  left join canjes c on c.id = o.canje_id
+  where o.token_boleta = token
+$$;
+
+grant execute on function boleta_publica(uuid) to anon, authenticated;

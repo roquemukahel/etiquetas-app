@@ -3,8 +3,11 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import QRCode from 'qrcode';
 import { crearClienteNavegador } from '../../../lib/supabase/client';
 import { simboloMoneda } from '../../../lib/monedas';
+import { ESLOGAN } from '../../../lib/eslogan';
+import EtiquetaSeccion from '../../../EtiquetaSeccion';
 
 type Item = {
   descripcion: string;
@@ -25,6 +28,7 @@ type Orden = {
   created_at: string;
   fecha_entrega: string | null;
   nota: string | null;
+  token_boleta: string;
   canjes: {
     modelo: string | null;
     capacidad_gb: number | null;
@@ -95,6 +99,10 @@ function formatearFecha(iso: string) {
   return new Date(iso).toLocaleString('es-AR');
 }
 
+function Divisor() {
+  return <div className="h-[3px] bg-ink rounded-full print:h-[2px]" />;
+}
+
 export default function Boleta() {
   const { id } = useParams<{ id: string }>();
   const supabase = crearClienteNavegador();
@@ -103,6 +111,7 @@ export default function Boleta() {
   const [negocio, setNegocio] = useState<Negocio | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [qr, setQr] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -115,6 +124,11 @@ export default function Boleta() {
         .single();
       if (ordenError) setError(ordenError.message);
       setOrden(ordenData as any);
+
+      if (ordenData) {
+        const url = `${window.location.origin}/boleta/${(ordenData as any).token_boleta}`;
+        QRCode.toDataURL(url, { margin: 0, width: 200 }).then(setQr).catch(() => setQr(null));
+      }
 
       const {
         data: { user },
@@ -200,26 +214,37 @@ export default function Boleta() {
 
       <div
         id="boleta"
-        className="flex flex-col gap-8 print:gap-3 text-[15px] text-ink bg-white rounded-2xl border border-border shadow-card p-8 print:p-4"
+        className="flex flex-col gap-6 print:gap-3 text-[15px] text-ink bg-white rounded-2xl border border-border shadow-card p-8 print:p-4"
       >
-        <div className="flex items-start justify-between gap-4 pb-6 print:pb-2 border-b border-border">
+        <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">
             {negocio?.logo_url && (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={negocio.logo_url} alt="Logo" className="h-16 w-16 print:h-10 print:w-10 object-contain rounded-lg" />
             )}
-            <p className="text-2xl print:text-lg font-display font-semibold">{negocio?.nombre}</p>
+            <div>
+              <p className="text-2xl print:text-lg font-display font-semibold leading-tight">{negocio?.nombre}</p>
+              <p className="text-xs text-muted max-w-[260px] leading-snug mt-0.5">{ESLOGAN}</p>
+            </div>
           </div>
-          <div className="text-right text-sm text-muted leading-relaxed">
-            <p className="font-medium text-ink">Orden #{orden.id.slice(0, 8)}</p>
-            <p>{formatearFecha(orden.created_at)}</p>
-            {orden.fecha_entrega && <p>Entregado: {formatearFecha(orden.fecha_entrega)}</p>}
+          <div className="flex items-start gap-3">
+            <div className="text-right text-sm text-muted leading-relaxed">
+              <p className="font-medium text-ink">Orden #{orden.id.slice(0, 8)}</p>
+              <p>{formatearFecha(orden.created_at)}</p>
+              {orden.fecha_entrega && <p>Entregado: {formatearFecha(orden.fecha_entrega)}</p>}
+            </div>
+            {qr && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={qr} alt="Código QR de la boleta" className="h-16 w-16 print:h-14 print:w-14 shrink-0" />
+            )}
           </div>
         </div>
 
+        <Divisor />
+
         <div className="grid grid-cols-2 gap-8 print:gap-4">
           <div className="flex flex-col gap-1">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-1">Negocio</p>
+            <EtiquetaSeccion>Negocio</EtiquetaSeccion>
             <p className="font-medium">{negocio?.nombre}</p>
             {negocio?.telefono && <p className="text-muted">{negocio.telefono}</p>}
             {negocio?.direccion && <p className="text-muted">{negocio.direccion}</p>}
@@ -244,7 +269,7 @@ export default function Boleta() {
             )}
           </div>
           <div className="flex flex-col gap-1">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-1">Cliente</p>
+            <EtiquetaSeccion>Cliente</EtiquetaSeccion>
             <p className="font-medium">{clienteNombre}</p>
             {orden.clientes?.telefono && <p className="text-muted">{orden.clientes.telefono}</p>}
             {orden.clientes?.email && <p className="text-muted">{orden.clientes.email}</p>}
@@ -282,19 +307,21 @@ export default function Boleta() {
           </div>
         )}
 
-        <table className="w-full text-sm">
+        <Divisor />
+
+        <table className="w-full text-sm border-separate border-spacing-0">
           <thead>
-            <tr className="border-b border-border text-left text-xs font-semibold uppercase tracking-wide text-muted">
-              <th className="py-2 font-semibold">Producto</th>
-              <th className="py-2 text-center font-semibold">Cant.</th>
-              <th className="py-2 text-right font-semibold">Precio unit.</th>
-              <th className="py-2 text-right font-semibold">Precio</th>
+            <tr className="bg-ink text-white text-left text-xs font-semibold uppercase tracking-wide">
+              <th className="py-2 px-3 rounded-l-lg">Producto</th>
+              <th className="py-2 px-3 text-center">Cant.</th>
+              <th className="py-2 px-3 text-right">Precio unit.</th>
+              <th className="py-2 px-3 text-right rounded-r-lg">Precio</th>
             </tr>
           </thead>
           <tbody>
             {orden.orden_items.map((i, idx) => (
-              <tr key={idx} className="border-b border-border">
-                <td className="py-2.5 print:py-1">
+              <tr key={idx} className={idx % 2 === 1 ? 'bg-canvas' : ''}>
+                <td className="py-2.5 print:py-1 px-3">
                   {i.descripcion}
                   {i.dispositivos?.garantia_vencimiento && (
                     <p className="text-xs text-muted mt-0.5">
@@ -302,12 +329,12 @@ export default function Boleta() {
                     </p>
                   )}
                 </td>
-                <td className="py-2.5 print:py-1 text-center">{i.cantidad}</td>
-                <td className="py-2.5 print:py-1 text-right">
+                <td className="py-2.5 print:py-1 px-3 text-center">{i.cantidad}</td>
+                <td className="py-2.5 print:py-1 px-3 text-right">
                   {moneda}
                   {i.precio_unitario.toLocaleString('es-AR')}
                 </td>
-                <td className="py-2.5 print:py-1 text-right font-medium">
+                <td className="py-2.5 print:py-1 px-3 text-right font-medium">
                   {moneda}
                   {(i.cantidad * i.precio_unitario).toLocaleString('es-AR')}
                 </td>
@@ -348,8 +375,8 @@ export default function Boleta() {
               </span>
             </div>
           )}
-          <div className="flex justify-between items-baseline font-display font-semibold text-xl rounded-lg bg-canvas px-3 py-2.5 mt-1">
-            <span className="text-sm font-sans font-medium text-muted">TOTAL</span>
+          <div className="flex justify-between items-baseline font-display font-semibold text-xl rounded-lg bg-ink text-white px-3 py-2.5 mt-1">
+            <span className="text-sm font-sans font-medium opacity-80">TOTAL</span>
             <span>
               {moneda}
               {(orden.total ?? subtotal).toLocaleString('es-AR')}
@@ -406,18 +433,22 @@ export default function Boleta() {
           <p className="text-sm text-muted">Nombre y firma del cliente</p>
         </div>
 
-        <div className="flex items-center justify-center gap-1.5 pt-2 opacity-60">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/qovento-icon.png" alt="" className="h-3.5 w-3.5 object-contain" />
-          <span className="text-[11px] text-muted">Hecho con Qovento</span>
+        <Divisor />
+
+        <div className="flex flex-col items-center gap-1">
+          <div className="flex items-center justify-center gap-1.5 opacity-70">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/qovento-icon.png" alt="" className="h-3.5 w-3.5 object-contain" />
+            <span className="text-[11px] text-muted">Hecho con Qovento</span>
+          </div>
+          <p className="text-[10px] text-muted text-center max-w-xs">
+            Escaneá el código QR para volver a ver esta boleta cuando quieras.
+          </p>
         </div>
       </div>
 
       <style jsx global>{`
         @media print {
-          .no-print {
-            display: none !important;
-          }
           body {
             background: white;
           }
