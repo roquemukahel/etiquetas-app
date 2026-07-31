@@ -9,11 +9,22 @@ import { imagenParaDescripcion } from './lib/carpetas';
 
 function IconoBase({ children }: { children: React.ReactNode }) {
   return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       {children}
     </svg>
   );
 }
+
+// Un acento de color por categoría (ventas, inventario, clientes, servicio,
+// compras) para que los accesos rápidos se distingan de un vistazo, en vez
+// de que los ocho pesen exactamente igual.
+const COLOR_ICONO: Record<string, string> = {
+  ventas: 'from-accent to-accent-hover dark:from-dark-accent dark:to-dark-accent-hover',
+  inventario: 'from-violet-500 to-violet-600',
+  clientes: 'from-emerald-500 to-emerald-600',
+  servicio: 'from-amber-500 to-amber-600',
+  compras: 'from-teal-500 to-teal-600',
+};
 
 const ICONOS: Record<string, React.ReactNode> = {
   etiqueta: (
@@ -73,14 +84,14 @@ const ICONOS: Record<string, React.ReactNode> = {
 };
 
 const SECCIONES = [
-  { href: '/ordenes', titulo: 'Órdenes', desc: 'Ventas, boletas y canjes', icono: 'ordenes', activo: true },
-  { href: '/compras', titulo: 'Compra de dispositivos', desc: 'Cuando le comprás un celular a alguien', icono: 'compra', activo: true },
-  { href: '/stock', titulo: 'Stock', desc: 'Dispositivos disponibles en tu local', icono: 'stock', activo: true },
-  { href: '/clientes', titulo: 'Clientes', desc: 'Tu base de clientes', icono: 'clientes', activo: true },
-  { href: '/canje', titulo: 'Plan Canje', desc: 'Dispositivos recibidos como parte de pago', icono: 'canje', activo: true },
-  { href: '/servicio-tecnico', titulo: 'Servicio Técnico', desc: 'Equipos derivados a reparación', icono: 'servicio', activo: true },
-  { href: '/nueva-etiqueta', titulo: 'Nueva etiqueta', desc: 'Fotografiá el IMEI y generá la etiqueta', icono: 'etiqueta', activo: true },
-  { href: '/stock/foto', titulo: 'Agregar al stock', desc: 'Fotografiá el IMEI y cargalo directo, sin etiqueta', icono: 'camara', activo: true },
+  { href: '/ordenes', titulo: 'Órdenes', desc: 'Ventas, boletas y canjes', icono: 'ordenes', color: 'ventas', activo: true },
+  { href: '/compras', titulo: 'Compra de dispositivos', desc: 'Cuando le comprás un celular a alguien', icono: 'compra', color: 'compras', activo: true },
+  { href: '/stock', titulo: 'Stock', desc: 'Dispositivos disponibles en tu local', icono: 'stock', color: 'inventario', activo: true },
+  { href: '/clientes', titulo: 'Clientes', desc: 'Tu base de clientes', icono: 'clientes', color: 'clientes', activo: true },
+  { href: '/canje', titulo: 'Plan Canje', desc: 'Dispositivos recibidos como parte de pago', icono: 'canje', color: 'inventario', activo: true },
+  { href: '/servicio-tecnico', titulo: 'Servicio Técnico', desc: 'Equipos derivados a reparación', icono: 'servicio', color: 'servicio', activo: true },
+  { href: '/nueva-etiqueta', titulo: 'Nueva etiqueta', desc: 'Fotografiá el IMEI y generá la etiqueta', icono: 'etiqueta', color: 'inventario', activo: true },
+  { href: '/stock/foto', titulo: 'Agregar al stock', desc: 'Fotografiá el IMEI y cargalo directo, sin etiqueta', icono: 'camara', color: 'inventario', activo: true },
 ];
 
 export default async function Home() {
@@ -111,6 +122,7 @@ export default async function Home() {
   let serieVentas: number[] = [];
   let serieTicket: number[] = [];
   let diasDePrueba: number | null = null;
+  let suscripcionActiva = false;
 
   if (user) {
     const { data: perfil } = await supabase
@@ -128,6 +140,7 @@ export default async function Home() {
         Math.ceil((new Date(negocio.fecha_fin_prueba).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
       );
     }
+    suscripcionActiva = negocio?.estado_suscripcion === 'active';
 
     const inicioMes = new Date();
     inicioMes.setDate(1);
@@ -228,7 +241,7 @@ export default async function Home() {
   const maxDia = Math.max(1, ...dias.map((d) => d.valor));
 
   return (
-    <main className="flex min-h-screen flex-col px-6 py-8 gap-6 max-w-2xl lg:max-w-5xl mx-auto w-full">
+    <main className="flex min-h-screen flex-col px-6 py-8 gap-6 max-w-2xl lg:max-w-[1180px] mx-auto w-full">
       {diasDePrueba != null && (
         <Link
           href="/configuracion/suscripcion"
@@ -239,7 +252,7 @@ export default async function Home() {
         </Link>
       )}
 
-      <header className="flex items-center justify-between">
+      <header className="flex items-center justify-between animate-fade-in-up">
         <div className="flex items-center gap-4">
           {logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -249,7 +262,14 @@ export default async function Home() {
               <QMark size={48} />
             </div>
           )}
-          <p className="text-xl font-display font-semibold leading-tight">{nombreNegocio}</p>
+          <div className="flex items-center gap-2">
+            <p className="text-2xl font-display font-semibold leading-tight tracking-tight">{nombreNegocio}</p>
+            {suscripcionActiva && (
+              <span className="text-[10px] font-bold tracking-wide bg-gradient-to-r from-accent to-accent-hover dark:from-dark-accent dark:to-dark-accent-hover text-white rounded-full px-2 py-0.5">
+                PRO
+              </span>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-4">
           {esAdmin && (
@@ -264,12 +284,14 @@ export default async function Home() {
         </div>
       </header>
 
-      <BuscadorUniversal />
+      <div className="animate-fade-in-up" style={{ animationDelay: '60ms' }}>
+        <BuscadorUniversal />
+      </div>
 
-      <div className="lg:grid lg:grid-cols-3 lg:gap-6 flex flex-col gap-6">
+      <div className="lg:grid lg:grid-cols-3 lg:gap-6 flex flex-col gap-6 animate-fade-in-up" style={{ animationDelay: '120ms' }}>
         <Link
           href="/estadisticas"
-          className="group lg:col-span-2 rounded-2xl bg-ink text-white p-5 flex flex-col gap-4 hover:opacity-95 transition-opacity active:scale-[0.99]"
+          className="group lg:col-span-2 rounded-2xl bg-gradient-to-br from-ink to-[#1B2540] dark:from-dark-surface dark:to-dark-bg text-white p-5 flex flex-col gap-4 shadow-elevated hover:opacity-95 transition-opacity active:scale-[0.99]"
         >
           <div className="flex items-start justify-between">
             <div>
@@ -278,16 +300,20 @@ export default async function Home() {
                 {moneda}
                 {ingresosMes.toLocaleString('es-AR')}
               </p>
-              <p className="text-xs text-white/60 mt-1">
-                {ventasMes} venta{ventasMes === 1 ? '' : 's'} este mes
+              <div className="flex items-center gap-2 mt-1.5">
+                <p className="text-xs text-white/60">
+                  {ventasMes} venta{ventasMes === 1 ? '' : 's'} este mes
+                </p>
                 {deltaPct != null && (
-                  <span className={deltaPct >= 0 ? 'text-good' : 'text-bad'}>
-                    {' '}
-                    · {deltaPct >= 0 ? '+' : ''}
-                    {deltaPct}% vs. mes anterior
+                  <span
+                    className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[11px] font-medium ${
+                      deltaPct >= 0 ? 'bg-good/20 text-good' : 'bg-bad/20 text-bad'
+                    }`}
+                  >
+                    {deltaPct >= 0 ? '↑' : '↓'} {Math.abs(deltaPct)}%
                   </span>
                 )}
-              </p>
+              </div>
             </div>
             <div className="flex items-end gap-1.5 h-14">
               {dias.map((d, idx) => (
@@ -315,8 +341,8 @@ export default async function Home() {
           <span className="text-xs text-white/50 group-hover:text-white/70">Ver estadísticas completas &rarr;</span>
         </Link>
 
-        <div className="rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-5 flex flex-col gap-3">
-          <p className="text-sm font-semibold">Productos más vendidos</p>
+        <div className="rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-elevated p-5 flex flex-col gap-3">
+          <p className="text-sm font-semibold tracking-tight">Productos más vendidos</p>
           {masVendidos.length === 0 ? (
             <p className="text-xs text-muted dark:text-dark-text-secondary">Todavía no hay ventas este mes.</p>
           ) : (
@@ -348,40 +374,42 @@ export default async function Home() {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
-        <StatTile valor={enStock} etiqueta="En stock" />
-        <StatTile valor={pendientes} etiqueta="Pendientes" />
-        <StatTile valor={totalClientes} etiqueta="Clientes" />
+      <div className="grid grid-cols-3 gap-3 animate-fade-in-up" style={{ animationDelay: '180ms' }}>
+        <StatTile valor={enStock} etiqueta="En stock" icono="stock" color="inventario" />
+        <StatTile valor={pendientes} etiqueta="Pendientes" icono="ordenes" color="servicio" />
+        <StatTile valor={totalClientes} etiqueta="Clientes" icono="clientes" color="clientes" />
       </div>
 
-      <div className="flex flex-col gap-2.5 lg:grid lg:grid-cols-2 lg:gap-3">
+      <div className="flex flex-col gap-2.5 lg:grid lg:grid-cols-2 lg:gap-3 animate-fade-in-up" style={{ animationDelay: '240ms' }}>
         {SECCIONES.map((s) =>
           s.activo ? (
             <Link
               key={s.titulo}
               href={s.href}
-              className="group rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-4 flex items-center gap-4 hover:border-accent/40 dark:hover:border-dark-accent/40 hover:shadow-elevated transition-all active:scale-[0.99]"
+              className="group rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-4 flex items-center gap-4 hover:border-accent/40 dark:hover:border-dark-accent/40 hover:shadow-elevated hover:-translate-y-0.5 transition-all active:scale-[0.99]"
             >
-              <div className="h-11 w-11 shrink-0 rounded-xl bg-accent-soft dark:bg-dark-accent-soft text-accent dark:text-dark-accent flex items-center justify-center group-hover:bg-accent dark:group-hover:bg-dark-accent group-hover:text-white transition-colors">
+              <div
+                className={`h-14 w-14 shrink-0 rounded-2xl bg-gradient-to-br ${COLOR_ICONO[s.color]} text-white flex items-center justify-center shadow-card`}
+              >
                 {ICONOS[s.icono]}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold leading-tight">{s.titulo}</p>
-                <p className="text-xs text-muted dark:text-dark-text-secondary leading-tight mt-0.5">{s.desc}</p>
+                <p className="text-[15px] font-semibold leading-tight tracking-tight">{s.titulo}</p>
+                <p className="text-xs text-muted dark:text-dark-text-secondary leading-tight mt-1">{s.desc}</p>
               </div>
-              <span className="text-muted dark:text-dark-text-secondary group-hover:text-accent dark:group-hover:text-dark-accent transition-colors">&rarr;</span>
+              <span className="text-muted dark:text-dark-text-secondary group-hover:text-accent dark:group-hover:text-dark-accent group-hover:translate-x-0.5 transition-all">&rarr;</span>
             </Link>
           ) : (
             <div
               key={s.titulo}
               className="rounded-2xl bg-canvas dark:bg-dark-surface-elevated border border-border dark:border-dark-border p-4 flex items-center gap-4 opacity-60"
             >
-              <div className="h-11 w-11 shrink-0 rounded-xl bg-white dark:bg-dark-surface text-muted dark:text-dark-text-secondary flex items-center justify-center">
+              <div className="h-14 w-14 shrink-0 rounded-2xl bg-white dark:bg-dark-surface text-muted dark:text-dark-text-secondary flex items-center justify-center">
                 {ICONOS[s.icono]}
               </div>
               <div>
-                <p className="text-sm font-semibold leading-tight">{s.titulo}</p>
-                <p className="text-xs text-muted dark:text-dark-text-secondary leading-tight mt-0.5">Próximamente</p>
+                <p className="text-[15px] font-semibold leading-tight tracking-tight">{s.titulo}</p>
+                <p className="text-xs text-muted dark:text-dark-text-secondary leading-tight mt-1">Próximamente</p>
               </div>
             </div>
           )
@@ -402,11 +430,27 @@ export default async function Home() {
   );
 }
 
-function StatTile({ valor, etiqueta }: { valor: number; etiqueta: string }) {
+function StatTile({
+  valor,
+  etiqueta,
+  icono,
+  color,
+}: {
+  valor: number;
+  etiqueta: string;
+  icono: string;
+  color: string;
+}) {
   return (
-    <div className="rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-3.5 flex flex-col gap-0.5">
-      <p className="text-2xl font-display font-semibold leading-none">{valor}</p>
-      <p className="text-[11px] text-muted dark:text-dark-text-secondary leading-tight">{etiqueta}</p>
+    <div className="relative overflow-hidden rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-3.5 flex flex-col gap-2">
+      <span className={`absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r ${COLOR_ICONO[color]}`} />
+      <div className={`h-8 w-8 rounded-lg bg-gradient-to-br ${COLOR_ICONO[color]} text-white flex items-center justify-center [&_svg]:h-4 [&_svg]:w-4`}>
+        {ICONOS[icono]}
+      </div>
+      <div>
+        <p className="text-2xl font-display font-semibold leading-none">{valor}</p>
+        <p className="text-[11px] text-muted dark:text-dark-text-secondary leading-tight mt-1">{etiqueta}</p>
+      </div>
     </div>
   );
 }
