@@ -74,6 +74,10 @@ export default function Stock() {
   } | null>(null);
   const inputImportRef = useRef<HTMLInputElement>(null);
 
+  const [modoSeleccion, setModoSeleccion] = useState(false);
+  const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
+  const [eliminandoSeleccion, setEliminandoSeleccion] = useState(false);
+
   const cargarProductos = async () => {
     const { data } = await supabase.from('productos').select('*').order('nombre');
     setProductos((data as Producto[]) ?? []);
@@ -200,6 +204,44 @@ export default function Stock() {
   const cancelarImportacion = () => {
     setPlanImport(null);
     setResultadoImport(null);
+  };
+
+  const toggleSeleccion = (id: string) => {
+    setSeleccionados((prev) => {
+      const nuevo = new Set(prev);
+      if (nuevo.has(id)) nuevo.delete(id);
+      else nuevo.add(id);
+      return nuevo;
+    });
+  };
+
+  const salirDeSeleccion = () => {
+    setModoSeleccion(false);
+    setSeleccionados(new Set());
+  };
+
+  const eliminarSeleccionados = async () => {
+    const ids = Array.from(seleccionados);
+    if (ids.length === 0) return;
+    if (!confirm(`¿Eliminar ${ids.length} dispositivo${ids.length === 1 ? '' : 's'} del historial? No se puede deshacer.`)) return;
+
+    setEliminandoSeleccion(true);
+    const aEliminar = dispositivos.filter((d) => seleccionados.has(d.id));
+
+    const { error } = await supabase.from('dispositivos').delete().in('id', ids);
+    if (!error) {
+      for (const d of aEliminar) {
+        await registrarAuditoria(supabase, {
+          accion: `eliminó el dispositivo ${d.modelo || 'sin modelo'}${d.imei ? ` (IMEI ${d.imei})` : ''} del historial`,
+          entidad: 'dispositivo',
+          entidadId: d.id,
+        });
+      }
+    }
+
+    setEliminandoSeleccion(false);
+    salirDeSeleccion();
+    cargarDispositivos();
   };
 
   useEffect(() => {
@@ -467,6 +509,31 @@ export default function Stock() {
             </p>
           )}
 
+          {modoSeleccion ? (
+            <div className="sticky top-0 z-10 rounded-xl border border-accent/30 dark:border-dark-accent/30 bg-accent-soft dark:bg-dark-accent-soft px-4 py-2.5 flex items-center justify-between gap-2">
+              <p className="text-sm font-medium">{seleccionados.size} seleccionado{seleccionados.size === 1 ? '' : 's'}</p>
+              <div className="flex items-center gap-2">
+                <button onClick={salirDeSeleccion} className="text-xs text-muted dark:text-dark-text-secondary underline">
+                  Cancelar
+                </button>
+                <button
+                  onClick={eliminarSeleccionados}
+                  disabled={seleccionados.size === 0 || eliminandoSeleccion}
+                  className="rounded-lg bg-bad text-white text-xs font-medium px-3 py-1.5 disabled:opacity-40"
+                >
+                  {eliminandoSeleccion ? 'Eliminando...' : 'Eliminar'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setModoSeleccion(true)}
+              className="self-start text-xs text-accent dark:text-dark-accent underline"
+            >
+              Seleccionar varios
+            </button>
+          )}
+
           {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Cargando...</p>}
 
           {!loading && grupos.length === 0 && (
@@ -501,41 +568,64 @@ export default function Stock() {
                 <div className="flex flex-col gap-2">
                   {items.map((d) => {
                     const colorHex = hexColorDe(d.color);
-                    return (
-                    <Link
-                      key={d.id}
-                      href={`/stock/${d.id}`}
-                      style={colorHex ? { borderColor: colorHex } : undefined}
-                      className={`rounded-xl border-[3px] ${colorHex ? '' : 'border-border dark:border-dark-border'} px-4 py-3 flex items-center gap-3 ${
-                        d.en_stock ? 'bg-white dark:bg-dark-surface' : 'bg-white dark:bg-dark-surface opacity-60'
-                      }`}
-                    >
-                      <div className="flex-1 flex items-center justify-between gap-2 min-w-0">
-                      <div>
-                        <p className="text-sm font-medium flex items-center gap-1.5 flex-wrap">
-                          <span>
-                            {d.capacidad_gb ? `${d.capacidad_gb} GB` : 'Capacidad s/d'}
-                            {d.color ? ` · ${d.color}` : ''}
-                            {d.salud_bateria != null ? ` · ${d.salud_bateria}%` : ''}
+                    const seleccionado = seleccionados.has(d.id);
+                    const clases = `rounded-xl border-[3px] ${colorHex ? '' : 'border-border dark:border-dark-border'} px-4 py-3 flex items-center gap-3 w-full text-left ${
+                      d.en_stock ? 'bg-white dark:bg-dark-surface' : 'bg-white dark:bg-dark-surface opacity-60'
+                    } ${seleccionado ? 'ring-2 ring-accent dark:ring-dark-accent' : ''}`;
+                    const contenido = (
+                      <>
+                        {modoSeleccion && (
+                          <span
+                            className={`h-5 w-5 rounded-full border-2 shrink-0 flex items-center justify-center ${
+                              seleccionado
+                                ? 'bg-accent dark:bg-dark-accent border-accent dark:border-dark-accent'
+                                : 'border-border dark:border-dark-border'
+                            }`}
+                          >
+                            {seleccionado && <span className="text-white text-[10px]">✓</span>}
                           </span>
-                          {d.salud_bateria != null && d.salud_bateria < 80 && (
-                            <span className="text-[10px] font-semibold text-warn bg-warn/10 rounded-full px-2 py-0.5">
-                              ⚠ Batería baja
-                            </span>
-                          )}
-                        </p>
-                        <p className="text-xs text-muted dark:text-dark-text-secondary">
-                          IMEI: <span className="font-bold font-mono text-ink dark:text-dark-text">{d.imei || 'sin IMEI'}</span>
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        {d.precio != null && (
-                          <p className="text-sm font-medium">${d.precio.toLocaleString('es-AR')}</p>
                         )}
-                        <p className="text-xs text-muted dark:text-dark-text-secondary">{d.en_stock ? 'en stock' : 'fuera de stock'}</p>
-                      </div>
-                      </div>
-                    </Link>
+                        <div className="flex-1 flex items-center justify-between gap-2 min-w-0">
+                          <div>
+                            <p className="text-sm font-medium flex items-center gap-1.5 flex-wrap">
+                              <span>
+                                {d.capacidad_gb ? `${d.capacidad_gb} GB` : 'Capacidad s/d'}
+                                {d.color ? ` · ${d.color}` : ''}
+                                {d.salud_bateria != null ? ` · ${d.salud_bateria}%` : ''}
+                              </span>
+                              {d.salud_bateria != null && d.salud_bateria < 80 && (
+                                <span className="text-[10px] font-semibold text-warn bg-warn/10 rounded-full px-2 py-0.5">
+                                  ⚠ Batería baja
+                                </span>
+                              )}
+                            </p>
+                            <p className="text-xs text-muted dark:text-dark-text-secondary">
+                              IMEI: <span className="font-bold font-mono text-ink dark:text-dark-text">{d.imei || 'sin IMEI'}</span>
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            {d.precio != null && (
+                              <p className="text-sm font-medium">${d.precio.toLocaleString('es-AR')}</p>
+                            )}
+                            <p className="text-xs text-muted dark:text-dark-text-secondary">{d.en_stock ? 'en stock' : 'fuera de stock'}</p>
+                          </div>
+                        </div>
+                      </>
+                    );
+
+                    return modoSeleccion ? (
+                      <button
+                        key={d.id}
+                        onClick={() => toggleSeleccion(d.id)}
+                        style={colorHex ? { borderColor: colorHex } : undefined}
+                        className={clases}
+                      >
+                        {contenido}
+                      </button>
+                    ) : (
+                      <Link key={d.id} href={`/stock/${d.id}`} style={colorHex ? { borderColor: colorHex } : undefined} className={clases}>
+                        {contenido}
+                      </Link>
                     );
                   })}
                 </div>
