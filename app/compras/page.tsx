@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../lib/supabase/client';
 import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../lib/carpetas';
+import { registrarAuditoria } from '../lib/auditoria';
 import MiniaturaDispositivo from '../MiniaturaDispositivo';
 
 type Compra = {
@@ -30,17 +31,61 @@ export default function Compras() {
   const [busqueda, setBusqueda] = useState('');
   const [imagenesCarpetas, setImagenesCarpetas] = useState<Map<string, string>>(new Map());
 
+  const [modoSeleccion, setModoSeleccion] = useState(false);
+  const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
+  const [eliminandoSeleccion, setEliminandoSeleccion] = useState(false);
+
+  const cargar = async () => {
+    const { data } = await supabase
+      .from('compras')
+      .select('*, clientes ( nombre, apellido )')
+      .order('created_at', { ascending: false });
+    setCompras((data as any) ?? []);
+    setLoading(false);
+  };
+
   useEffect(() => {
-    (async () => {
-      const { data } = await supabase
-        .from('compras')
-        .select('*, clientes ( nombre, apellido )')
-        .order('created_at', { ascending: false });
-      setCompras((data as any) ?? []);
-      setLoading(false);
-    })();
+    cargar();
     (async () => setImagenesCarpetas(await obtenerImagenesCarpetas(supabase)))();
   }, []);
+
+  const toggleSeleccion = (id: string) => {
+    setSeleccionados((prev) => {
+      const nuevo = new Set(prev);
+      if (nuevo.has(id)) nuevo.delete(id);
+      else nuevo.add(id);
+      return nuevo;
+    });
+  };
+
+  const salirDeSeleccion = () => {
+    setModoSeleccion(false);
+    setSeleccionados(new Set());
+  };
+
+  const eliminarSeleccionados = async () => {
+    const ids = Array.from(seleccionados);
+    if (ids.length === 0) return;
+    if (!confirm(`¿Eliminar ${ids.length} compra${ids.length === 1 ? '' : 's'}? No se puede deshacer.`)) return;
+
+    setEliminandoSeleccion(true);
+    const aEliminar = compras.filter((c) => seleccionados.has(c.id));
+
+    const { error } = await supabase.from('compras').delete().in('id', ids);
+    if (!error) {
+      for (const c of aEliminar) {
+        await registrarAuditoria(supabase, {
+          accion: `eliminó la compra de ${c.modelo || 'sin modelo'}${c.imei ? ` (IMEI ${c.imei})` : ''}`,
+          entidad: 'compra',
+          entidadId: c.id,
+        });
+      }
+    }
+
+    setEliminandoSeleccion(false);
+    salirDeSeleccion();
+    cargar();
+  };
 
   const filtradas = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
@@ -73,41 +118,86 @@ export default function Compras() {
         + Nueva compra
       </Link>
 
+      {modoSeleccion ? (
+        <div className="sticky top-0 z-10 rounded-xl border border-accent/30 dark:border-dark-accent/30 bg-accent-soft dark:bg-dark-accent-soft px-4 py-2.5 flex items-center justify-between gap-2">
+          <p className="text-sm font-medium">{seleccionados.size} seleccionado{seleccionados.size === 1 ? '' : 's'}</p>
+          <div className="flex items-center gap-2">
+            <button onClick={salirDeSeleccion} className="text-xs text-muted dark:text-dark-text-secondary underline">
+              Cancelar
+            </button>
+            <button
+              onClick={eliminarSeleccionados}
+              disabled={seleccionados.size === 0 || eliminandoSeleccion}
+              className="rounded-lg bg-bad text-white text-xs font-medium px-3 py-1.5 disabled:opacity-40"
+            >
+              {eliminandoSeleccion ? 'Eliminando...' : 'Eliminar'}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={() => setModoSeleccion(true)} className="self-start text-xs text-accent dark:text-dark-accent underline">
+          Seleccionar varios
+        </button>
+      )}
+
       {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Cargando...</p>}
       {!loading && filtradas.length === 0 && (
         <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">No hay compras para mostrar.</p>
       )}
 
       <div className="flex flex-col gap-2">
-        {filtradas.map((c) => (
-          <Link
-            key={c.id}
-            href={`/compras/${c.id}`}
-            className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex items-center gap-3"
-          >
-            <MiniaturaDispositivo src={imagenPorNombreExacto(c.modelo, imagenesCarpetas)} />
-            <div className="flex-1 flex items-center justify-between gap-2 min-w-0">
-            <div>
-              <p className="text-sm font-medium">
-                {c.modelo}
-                {c.capacidad_gb ? ` · ${c.capacidad_gb}GB` : ''}
-              </p>
-              {c.imei && (
-                <p className="text-xs text-muted dark:text-dark-text-secondary">
-                  IMEI: <span className="font-bold font-mono text-ink dark:text-dark-text">{c.imei}</span>
-                </p>
+        {filtradas.map((c) => {
+          const seleccionado = seleccionados.has(c.id);
+          const clases = `rounded-xl border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex items-center gap-3 w-full text-left ${
+            seleccionado ? 'ring-2 ring-accent dark:ring-dark-accent border-transparent' : 'border-border dark:border-dark-border'
+          }`;
+          const contenido = (
+            <>
+              {modoSeleccion && (
+                <span
+                  className={`h-5 w-5 rounded-full border-2 shrink-0 flex items-center justify-center ${
+                    seleccionado
+                      ? 'bg-accent dark:bg-dark-accent border-accent dark:border-dark-accent'
+                      : 'border-border dark:border-dark-border'
+                  }`}
+                >
+                  {seleccionado && <span className="text-white text-[10px]">✓</span>}
+                </span>
               )}
-              <p className="text-xs text-muted dark:text-dark-text-secondary">
-                {c.clientes ? `${c.clientes.nombre} ${c.clientes.apellido || ''}` : 'Sin cliente'}
-              </p>
-            </div>
-            <div className="text-right">
-              {c.precio != null && <p className="text-sm font-medium">${c.precio.toLocaleString('es-AR')}</p>}
-              <p className="text-xs text-muted dark:text-dark-text-secondary">{ETIQUETA_ESTADO[c.estado] || c.estado}</p>
-            </div>
-            </div>
-          </Link>
-        ))}
+              <MiniaturaDispositivo src={imagenPorNombreExacto(c.modelo, imagenesCarpetas)} />
+              <div className="flex-1 flex items-center justify-between gap-2 min-w-0">
+                <div>
+                  <p className="text-sm font-medium">
+                    {c.modelo}
+                    {c.capacidad_gb ? ` · ${c.capacidad_gb}GB` : ''}
+                  </p>
+                  {c.imei && (
+                    <p className="text-xs text-muted dark:text-dark-text-secondary">
+                      IMEI: <span className="font-bold font-mono text-ink dark:text-dark-text">{c.imei}</span>
+                    </p>
+                  )}
+                  <p className="text-xs text-muted dark:text-dark-text-secondary">
+                    {c.clientes ? `${c.clientes.nombre} ${c.clientes.apellido || ''}` : 'Sin cliente'}
+                  </p>
+                </div>
+                <div className="text-right">
+                  {c.precio != null && <p className="text-sm font-medium">${c.precio.toLocaleString('es-AR')}</p>}
+                  <p className="text-xs text-muted dark:text-dark-text-secondary">{ETIQUETA_ESTADO[c.estado] || c.estado}</p>
+                </div>
+              </div>
+            </>
+          );
+
+          return modoSeleccion ? (
+            <button key={c.id} onClick={() => toggleSeleccion(c.id)} className={clases}>
+              {contenido}
+            </button>
+          ) : (
+            <Link key={c.id} href={`/compras/${c.id}`} className={clases}>
+              {contenido}
+            </Link>
+          );
+        })}
       </div>
     </main>
   );

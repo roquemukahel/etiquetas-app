@@ -111,7 +111,7 @@ export default function BoletaCompra() {
         <span className="text-lg font-display font-semibold mr-auto">Boleta de compra</span>
         <button
           onClick={() => window.print()}
-          className="rounded-lg border border-border bg-white px-3 py-2 text-xs font-medium hover:bg-canvas transition-colors"
+          className="rounded-lg border border-border dark:border-dark-border bg-white dark:bg-dark-surface text-ink dark:text-dark-text px-3 py-2 text-xs font-medium hover:bg-canvas dark:hover:bg-dark-bg transition-colors"
         >
           Imprimir
         </button>
