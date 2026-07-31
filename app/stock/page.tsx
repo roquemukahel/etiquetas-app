@@ -52,7 +52,7 @@ export default function Stock() {
   const [imagenesCarpetas, setImagenesCarpetas] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState('');
-  const [verTodos, setVerTodos] = useState(false);
+  const [vista, setVista] = useState<'stock' | 'vendidos' | 'todos'>('stock');
 
   const [productos, setProductos] = useState<Producto[]>([]);
   const [loadingProductos, setLoadingProductos] = useState(true);
@@ -185,17 +185,18 @@ export default function Stock() {
   const filtrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
     return dispositivos.filter((d) => {
-      if (!verTodos && !d.en_stock) return false;
+      if (vista === 'stock' && !d.en_stock) return false;
+      if (vista === 'vendidos' && d.en_stock) return false;
       if (!q) return true;
       return [d.modelo, d.imei, d.numero_serie, d.color]
         .filter(Boolean)
         .some((campo) => campo!.toLowerCase().includes(q));
     });
-  }, [dispositivos, busqueda, verTodos]);
+  }, [dispositivos, busqueda, vista]);
 
   const grupos = useMemo(() => {
     const mapa = new Map<string, Dispositivo[]>();
-    if (!busqueda.trim()) {
+    if (!busqueda.trim() && vista !== 'vendidos') {
       for (const nombre of carpetas) mapa.set(nombre, []);
     }
     for (const d of filtrados) {
@@ -204,7 +205,7 @@ export default function Stock() {
       mapa.get(clave)!.push(d);
     }
     return Array.from(mapa.entries()).sort(([a], [b]) => a.localeCompare(b));
-  }, [filtrados, carpetas, busqueda]);
+  }, [filtrados, carpetas, busqueda, vista]);
 
   // Para la alerta de reposición contamos el stock real de cada modelo,
   // sin importar qué pestaña (En stock / Historial) esté activa.
@@ -321,17 +322,25 @@ export default function Stock() {
 
           <div className="flex items-center gap-2 text-sm">
             <button
-              onClick={() => setVerTodos(false)}
+              onClick={() => setVista('stock')}
               className={`flex-1 rounded-xl py-2 font-medium ${
-                !verTodos ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
+                vista === 'stock' ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
               }`}
             >
               En stock
             </button>
             <button
-              onClick={() => setVerTodos(true)}
+              onClick={() => setVista('vendidos')}
               className={`flex-1 rounded-xl py-2 font-medium ${
-                verTodos ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
+                vista === 'vendidos' ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
+              }`}
+            >
+              Vendidos
+            </button>
+            <button
+              onClick={() => setVista('todos')}
+              className={`flex-1 rounded-xl py-2 font-medium ${
+                vista === 'todos' ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
               }`}
             >
               Historial completo
@@ -388,7 +397,11 @@ export default function Stock() {
 
           {!loading && grupos.length === 0 && (
             <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">
-              {busqueda ? 'No encontramos nada con esa búsqueda.' : 'Todavía no tenés dispositivos cargados.'}
+              {busqueda
+                ? 'No encontramos nada con esa búsqueda.'
+                : vista === 'vendidos'
+                ? 'Todavía no marcaste ningún dispositivo como vendido.'
+                : 'Todavía no tenés dispositivos cargados.'}
             </p>
           )}
 
