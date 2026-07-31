@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { crearClienteNavegador } from '../lib/supabase/client';
 import { leerCSV, valorDe, descargarCSV, insertarEnTandas } from '../lib/csv';
 import { obtenerTodasLasFilas } from '../lib/db';
+import { registrarAuditoria } from '../lib/auditoria';
 
 type Cliente = {
   id: string;
@@ -25,6 +26,10 @@ export default function Clientes() {
   const [progresoImport, setProgresoImport] = useState<{ hechas: number; total: number } | null>(null);
   const [resultadoImport, setResultadoImport] = useState<string | null>(null);
   const inputImportRef = useRef<HTMLInputElement>(null);
+
+  const [modoSeleccion, setModoSeleccion] = useState(false);
+  const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
+  const [eliminandoSeleccion, setEliminandoSeleccion] = useState(false);
 
   const cargar = async () => {
     const data = await obtenerTodasLasFilas<Cliente>(supabase, 'clientes', '*', [{ columna: 'nombre' }]);
@@ -94,6 +99,44 @@ export default function Clientes() {
     if (inputImportRef.current) inputImportRef.current.value = '';
   };
 
+  const toggleSeleccion = (id: string) => {
+    setSeleccionados((prev) => {
+      const nuevo = new Set(prev);
+      if (nuevo.has(id)) nuevo.delete(id);
+      else nuevo.add(id);
+      return nuevo;
+    });
+  };
+
+  const salirDeSeleccion = () => {
+    setModoSeleccion(false);
+    setSeleccionados(new Set());
+  };
+
+  const eliminarSeleccionados = async () => {
+    const ids = Array.from(seleccionados);
+    if (ids.length === 0) return;
+    if (!confirm(`¿Eliminar ${ids.length} cliente${ids.length === 1 ? '' : 's'}? No se puede deshacer.`)) return;
+
+    setEliminandoSeleccion(true);
+    const aEliminar = clientes.filter((c) => seleccionados.has(c.id));
+
+    const { error } = await supabase.from('clientes').delete().in('id', ids);
+    if (!error) {
+      for (const c of aEliminar) {
+        await registrarAuditoria(supabase, {
+          accion: `eliminó al cliente ${c.nombre} ${c.apellido || ''}`.trim().replace(/\s+/g, ' '),
+          entidad: 'cliente',
+          entidadId: c.id,
+        });
+      }
+    }
+
+    setEliminandoSeleccion(false);
+    salirDeSeleccion();
+    cargar();
+  };
+
   const filtrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
     if (!q) return clientes;
@@ -151,6 +194,28 @@ export default function Clientes() {
         </p>
       )}
 
+      {modoSeleccion ? (
+        <div className="sticky top-0 z-10 rounded-xl border border-accent/30 dark:border-dark-accent/30 bg-accent-soft dark:bg-dark-accent-soft px-4 py-2.5 flex items-center justify-between gap-2">
+          <p className="text-sm font-medium">{seleccionados.size} seleccionado{seleccionados.size === 1 ? '' : 's'}</p>
+          <div className="flex items-center gap-2">
+            <button onClick={salirDeSeleccion} className="text-xs text-muted dark:text-dark-text-secondary underline">
+              Cancelar
+            </button>
+            <button
+              onClick={eliminarSeleccionados}
+              disabled={seleccionados.size === 0 || eliminandoSeleccion}
+              className="rounded-lg bg-bad text-white text-xs font-medium px-3 py-1.5 disabled:opacity-40"
+            >
+              {eliminandoSeleccion ? 'Eliminando...' : 'Eliminar'}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={() => setModoSeleccion(true)} className="self-start text-xs text-accent dark:text-dark-accent underline">
+          Seleccionar varios
+        </button>
+      )}
+
       {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Cargando...</p>}
 
       {!loading && filtrados.length === 0 && (
@@ -160,21 +225,46 @@ export default function Clientes() {
       )}
 
       <div className="flex flex-col gap-2">
-        {filtrados.map((c) => (
-          <Link
-            key={c.id}
-            href={`/clientes/${c.id}`}
-            className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex items-center justify-between"
-          >
-            <div>
-              <p className="text-sm font-medium">
-                {c.nombre} {c.apellido || ''}
-              </p>
-              <p className="text-xs text-muted dark:text-dark-text-secondary">{c.telefono || c.email || 'sin contacto'}</p>
-            </div>
-            {c.dni && <p className="text-xs text-muted dark:text-dark-text-secondary font-mono">{c.dni}</p>}
-          </Link>
-        ))}
+        {filtrados.map((c) => {
+          const seleccionado = seleccionados.has(c.id);
+          const clases = `rounded-xl border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex items-center gap-3 w-full text-left ${
+            seleccionado ? 'ring-2 ring-accent dark:ring-dark-accent border-transparent' : 'border-border dark:border-dark-border'
+          }`;
+          const contenido = (
+            <>
+              {modoSeleccion && (
+                <span
+                  className={`h-5 w-5 rounded-full border-2 shrink-0 flex items-center justify-center ${
+                    seleccionado
+                      ? 'bg-accent dark:bg-dark-accent border-accent dark:border-dark-accent'
+                      : 'border-border dark:border-dark-border'
+                  }`}
+                >
+                  {seleccionado && <span className="text-white text-[10px]">✓</span>}
+                </span>
+              )}
+              <div className="flex-1 flex items-center justify-between gap-2 min-w-0">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">
+                    {c.nombre} {c.apellido || ''}
+                  </p>
+                  <p className="text-xs text-muted dark:text-dark-text-secondary truncate">{c.telefono || c.email || 'sin contacto'}</p>
+                </div>
+                {c.dni && <p className="text-xs text-muted dark:text-dark-text-secondary font-mono shrink-0">{c.dni}</p>}
+              </div>
+            </>
+          );
+
+          return modoSeleccion ? (
+            <button key={c.id} onClick={() => toggleSeleccion(c.id)} className={clases}>
+              {contenido}
+            </button>
+          ) : (
+            <Link key={c.id} href={`/clientes/${c.id}`} className={clases}>
+              {contenido}
+            </Link>
+          );
+        })}
       </div>
     </main>
   );
