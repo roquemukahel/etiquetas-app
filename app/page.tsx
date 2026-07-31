@@ -526,9 +526,9 @@ export default async function Home() {
       </div>
 
       <div className="grid grid-cols-3 gap-3 animate-fade-in-up" style={{ animationDelay: '180ms' }}>
-        <StatTile valor={enStock} etiqueta="En stock" icono="stock" color="inventario" />
-        <StatTile valor={pendientes} etiqueta="Pendientes" icono="ordenes" color="servicio" />
-        <StatTile valor={totalClientes} etiqueta="Clientes" icono="clientes" color="clientes" />
+        <StatTile valor={enStock} etiqueta="En stock" icono="stock" color="inventario" href="/stock" />
+        <StatTile valor={pendientes} etiqueta="Pendientes" icono="ordenes" color="servicio" href="/ordenes" />
+        <StatTile valor={totalClientes} etiqueta="Clientes" icono="clientes" color="clientes" href="/clientes" />
       </div>
 
       {actividad.length > 0 && (
@@ -611,23 +611,30 @@ function StatTile({
   etiqueta,
   icono,
   color,
+  href,
 }: {
   valor: number;
   etiqueta: string;
   icono: string;
   color: string;
+  href: string;
 }) {
   return (
-    <div className="relative overflow-hidden rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-3.5 flex flex-col gap-2">
+    <Link
+      href={href}
+      className="group relative overflow-hidden rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-3.5 flex flex-col gap-2 hover:shadow-elevated hover:-translate-y-0.5 transition-all"
+    >
       <span className={`absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r ${COLOR_ICONO[color]}`} />
-      <div className={`h-8 w-8 rounded-lg bg-gradient-to-br ${COLOR_ICONO[color]} text-white flex items-center justify-center [&_svg]:h-4 [&_svg]:w-4`}>
+      <div
+        className={`h-8 w-8 rounded-lg bg-gradient-to-br ${COLOR_ICONO[color]} text-white flex items-center justify-center [&_svg]:h-4 [&_svg]:w-4 group-hover:scale-110 transition-transform`}
+      >
         {ICONOS[icono]}
       </div>
       <div>
         <p className="text-2xl font-display font-semibold leading-none">{valor}</p>
         <p className="text-[11px] text-muted dark:text-dark-text-secondary leading-tight mt-1">{etiqueta}</p>
       </div>
-    </div>
+    </Link>
   );
 }
 
