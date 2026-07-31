@@ -3,7 +3,25 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const RUTAS_PUBLICAS = ['/login', '/registro', '/cuenta-desactivada', '/suscripcion-vencida', '/terminos', '/privacidad', '/seguimiento', '/boleta'];
 
+// Vercel siempre deja accesible el dominio *.vercel.app de cada proyecto,
+// además del dominio propio — no se puede desactivar. Para que en la
+// práctica quede como si no existiera, cualquier visita por ese dominio
+// (o por cualquier otro que no sea el propio) redirige de una a qovento.app.
+// No aplica a las rutas de API (webhooks, cron), que server-a-server pueden
+// llegar por cualquier host.
+const DOMINIO_CANONICO = 'qovento.app';
+
 export async function middleware(request: NextRequest) {
+  const host = request.headers.get('host') || '';
+  const esRutaApi = request.nextUrl.pathname.startsWith('/api/');
+  // En desarrollo local (npm run dev) el host es localhost — nunca redirigir ahí.
+  const esLocal = host.startsWith('localhost') || host.startsWith('127.0.0.1');
+
+  if (!esRutaApi && !esLocal && host && host !== DOMINIO_CANONICO && host !== `www.${DOMINIO_CANONICO}`) {
+    const destino = new URL(request.nextUrl.pathname + request.nextUrl.search, `https://${DOMINIO_CANONICO}`);
+    return NextResponse.redirect(destino, 308);
+  }
+
   // Los webhooks (ej. Lemon Squeezy) y los cron jobs (ej. Vercel Cron) son
   // servidor-a-servidor: nunca traen sesión de usuario, y se autentican
   // solos (firma propia o el secreto de CRON_SECRET) dentro de la ruta. Si
