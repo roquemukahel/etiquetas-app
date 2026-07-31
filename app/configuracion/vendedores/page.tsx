@@ -117,7 +117,7 @@ export default function Vendedores() {
           <div key={v.id} className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex flex-col gap-3">
             <div className="flex items-center gap-3">
               <label className="shrink-0 cursor-pointer">
-                <Avatar src={v.foto_url} nombre={v.nombre} size={40} />
+                <Avatar src={v.foto_url} nombre={v.nombre} size={52} />
                 <input type="file" accept="image/*" className="hidden" onChange={(e) => cambiarFoto(v, e)} />
               </label>
               <div className="flex-1 min-w-0">
