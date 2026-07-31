@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../lib/supabase/client';
-import { obtenerImagenesCarpetas, imagenParaModelo } from '../lib/carpetas';
+import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../lib/carpetas';
 import MiniaturaDispositivo from '../MiniaturaDispositivo';
 
 type Dispositivo = {
@@ -149,6 +149,7 @@ export default function Stock() {
           return (
           <div key={modelo} className="flex flex-col gap-2">
             <p className="text-xs text-muted dark:text-dark-text-secondary font-medium flex items-center gap-2">
+              <MiniaturaDispositivo src={imagenPorNombreExacto(modelo, imagenesCarpetas)} size={24} />
               <span>
                 {modelo} · {items.length}
               </span>
@@ -170,7 +171,6 @@ export default function Stock() {
                     d.en_stock ? 'bg-white dark:bg-dark-surface' : 'bg-white/$1 dark:bg-dark-surface opacity-60'
                   }`}
                 >
-                  <MiniaturaDispositivo src={imagenParaModelo(d.modelo, imagenesCarpetas)} />
                   <div className="flex-1 flex items-center justify-between gap-2 min-w-0">
                   <div>
                     <p className="text-sm font-medium flex items-center gap-1.5 flex-wrap">

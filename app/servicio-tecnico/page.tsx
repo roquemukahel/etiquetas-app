@@ -6,7 +6,7 @@ import { crearClienteNavegador } from '../lib/supabase/client';
 import { asegurarModelo } from '../lib/modelos';
 import { limpiarImei } from '../lib/imei';
 import { armarLinkWhatsApp, mensajeSeguimientoServicio, mensajeListoServicio } from '../lib/whatsapp';
-import { obtenerImagenesCarpetas, imagenParaModelo } from '../lib/carpetas';
+import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../lib/carpetas';
 import MiniaturaDispositivo from '../MiniaturaDispositivo';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
@@ -475,7 +475,7 @@ export default function ServicioTecnico() {
             {filtrados.map((e) => (
               <div key={e.id} className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex flex-col gap-2">
                 <div className="flex items-start gap-3">
-                  <MiniaturaDispositivo src={imagenParaModelo(e.modelo, imagenesCarpetas)} />
+                  <MiniaturaDispositivo src={imagenPorNombreExacto(e.modelo, imagenesCarpetas)} />
                   <div className="min-w-0">
                     <p className="text-sm font-medium">
                       {e.modelo}

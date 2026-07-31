@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../lib/supabase/client';
 import { asegurarModelo } from '../lib/modelos';
-import { obtenerImagenesCarpetas, imagenParaModelo } from '../lib/carpetas';
+import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../lib/carpetas';
 import MiniaturaDispositivo from '../MiniaturaDispositivo';
 
 type Canje = {
@@ -122,7 +122,7 @@ export default function PlanCanje() {
           <div key={c.id} className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex flex-col gap-2">
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-start gap-3">
-                <MiniaturaDispositivo src={imagenParaModelo(c.modelo, imagenesCarpetas)} />
+                <MiniaturaDispositivo src={imagenPorNombreExacto(c.modelo, imagenesCarpetas)} />
                 <div>
                   <p className="text-sm font-medium">
                     {c.modelo}

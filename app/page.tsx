@@ -4,6 +4,7 @@ import BotonSalir from './BotonSalir';
 import QMark from './QMark';
 import BuscadorUniversal from './BuscadorUniversal';
 import { simboloMoneda } from './lib/monedas';
+import { imagenParaDescripcion } from './lib/carpetas';
 
 function IconoBase({ children }: { children: React.ReactNode }) {
   return (
@@ -167,7 +168,10 @@ export default async function Home() {
         ? Math.round(((ticketPromedio - ticketPromedioMesPasado) / ticketPromedioMesPasado) * 100)
         : null;
 
-    const carpetas = (carpetasStock as { nombre: string; imagen_url: string | null }[]) ?? [];
+    const mapaImagenesCarpetas = new Map<string, string>();
+    for (const c of (carpetasStock as { nombre: string; imagen_url: string | null }[]) ?? []) {
+      if (c.imagen_url) mapaImagenesCarpetas.set(c.nombre, c.imagen_url);
+    }
     const conteoItems = new Map<string, number>();
     for (const o of cobradas.filter((o: any) => new Date(o.created_at) >= inicioMes)) {
       for (const item of (o as any).orden_items ?? []) {
@@ -181,7 +185,7 @@ export default async function Home() {
       .map(([nombre, cantidad]) => ({
         nombre,
         cantidad,
-        imagenUrl: carpetas.find((c) => nombre.startsWith(c.nombre))?.imagen_url ?? null,
+        imagenUrl: imagenParaDescripcion(nombre, mapaImagenesCarpetas),
       }))
       .sort((a, b) => b.cantidad - a.cantidad)
       .slice(0, 5);

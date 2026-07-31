@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { asegurarModelo } from '../../lib/modelos';
-import { obtenerImagenesCarpetas, imagenParaModelo } from '../../lib/carpetas';
+import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../../lib/carpetas';
 import MiniaturaDispositivo from '../../MiniaturaDispositivo';
 
 type Dispositivo = {
@@ -538,7 +538,7 @@ export default function NuevaOrden() {
                       className="rounded-lg border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-3 py-2 flex items-center justify-between text-left text-sm gap-2"
                     >
                       <span className="flex items-center gap-2 min-w-0">
-                      <MiniaturaDispositivo src={imagenParaModelo(d.modelo, imagenesCarpetas)} size={32} />
+                      <MiniaturaDispositivo src={imagenPorNombreExacto(d.modelo, imagenesCarpetas)} size={32} />
                       <span className="min-w-0">
                         <span className="block truncate">
                           {d.modelo} {d.capacidad_gb ? `· ${d.capacidad_gb}GB` : ''} {d.color ? `· ${d.color}` : ''}

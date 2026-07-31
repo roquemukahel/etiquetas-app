@@ -12,14 +12,30 @@ export async function obtenerImagenesCarpetas(supabase: SupabaseClient): Promise
   return mapa;
 }
 
-// El modelo guardado en dispositivos/canjes suele ser texto libre (a veces
-// con capacidad/color agregado, ej. "iPhone 13 128GB Azul"), así que
-// probamos coincidencia exacta primero y si no, "empieza con".
-export function imagenParaModelo(modelo: string | null | undefined, mapa: Map<string, string>): string | null {
+// Para dispositivos/canjes/compras: el campo "modelo" ahí es (o debería ser)
+// exactamente el nombre de una carpeta, sin texto extra — coincidencia
+// exacta únicamente. Nada de "empieza con": "iPhone 14 Pro" empieza con
+// "iPhone 14", y con esa lógica la carpeta corta le robaba la imagen a la
+// más específica.
+export function imagenPorNombreExacto(modelo: string | null | undefined, mapa: Map<string, string>): string | null {
   if (!modelo) return null;
-  if (mapa.has(modelo)) return mapa.get(modelo)!;
+  return mapa.get(modelo) ?? null;
+}
+
+// Para texto compuesto (ej. la descripción de un ítem de orden, que puede
+// ser "iPhone 13 128GB Azul"): buscamos qué carpeta es el inicio de ese
+// texto, exigiendo que corte en un límite de palabra (no a mitad de una),
+// y si varias carpetas matchean nos quedamos con la más específica (nombre
+// más largo) — así "iPhone 14 Pro" le gana a "iPhone 14" cuando ambas
+// carpetas existen.
+export function imagenParaDescripcion(descripcion: string | null | undefined, mapa: Map<string, string>): string | null {
+  if (!descripcion) return null;
+  let mejor: { nombre: string; url: string } | null = null;
   for (const [nombre, url] of mapa) {
-    if (modelo.startsWith(nombre)) return url;
+    const esLimite = descripcion === nombre || descripcion.startsWith(`${nombre} `) || descripcion.startsWith(`${nombre}·`);
+    if (esLimite && (!mejor || nombre.length > mejor.nombre.length)) {
+      mejor = { nombre, url };
+    }
   }
-  return null;
+  return mejor?.url ?? null;
 }

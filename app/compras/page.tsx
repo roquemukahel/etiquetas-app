@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../lib/supabase/client';
-import { obtenerImagenesCarpetas, imagenParaModelo } from '../lib/carpetas';
+import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../lib/carpetas';
 import MiniaturaDispositivo from '../MiniaturaDispositivo';
 
 type Compra = {
@@ -85,7 +85,7 @@ export default function Compras() {
             href={`/compras/${c.id}`}
             className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex items-center gap-3"
           >
-            <MiniaturaDispositivo src={imagenParaModelo(c.modelo, imagenesCarpetas)} />
+            <MiniaturaDispositivo src={imagenPorNombreExacto(c.modelo, imagenesCarpetas)} />
             <div className="flex-1 flex items-center justify-between gap-2 min-w-0">
             <div>
               <p className="text-sm font-medium">
