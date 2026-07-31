@@ -32,14 +32,31 @@ export default function SelectorDeActor() {
   const [vendedores, setVendedores] = useState<Persona[]>([]);
   const [tecnicos, setTecnicos] = useState<Persona[]>([]);
   const [cargando, setCargando] = useState(false);
+  // La raíz ("/") muestra la landing pública a quien no tiene sesión, así
+  // que ahí necesitamos saber si hay usuario logueado antes de decidir si
+  // corresponde mostrar el cartel (no tiene sentido preguntarle "con quién
+  // tengo el gusto" a un visitante anónimo de la landing).
+  const [sesion, setSesion] = useState<'cargando' | 'si' | 'no'>('cargando');
 
-  const esRutaExcluida = RUTAS_SIN_SELECTOR.some((r) => pathname?.startsWith(r));
+  const esRaiz = pathname === '/';
+  const esRutaExcluida = RUTAS_SIN_SELECTOR.some((r) => pathname?.startsWith(r)) || (esRaiz && sesion === 'no');
   const mostrarOverlay = (!actor && !postergado) || cambiando;
 
   useEffect(() => {
     setActorState(getActor());
     setPostergado(window.sessionStorage.getItem(KEY_POSTERGADO) === '1');
   }, []);
+
+  useEffect(() => {
+    if (!esRaiz) return;
+    (async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      setSesion(user ? 'si' : 'no');
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [esRaiz]);
 
   // Recargamos las listas cada vez que el cartel se abre (no solo la primera
   // vez), para que si acabás de cargar un vendedor/técnico en Configuración,
@@ -59,7 +76,7 @@ export default function SelectorDeActor() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [esRutaExcluida, mostrarOverlay]);
 
-  if (esRutaExcluida || actor === undefined) return null;
+  if (esRutaExcluida || actor === undefined || (esRaiz && sesion === 'cargando')) return null;
 
   const elegir = (tipo: 'vendedor' | 'tecnico', persona: Persona) => {
     const nuevo: Actor = { tipo, id: persona.id, nombre: persona.nombre };

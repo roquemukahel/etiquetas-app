@@ -9,7 +9,14 @@ export async function middleware(request: NextRequest) {
   // solos (firma propia o el secreto de CRON_SECRET) dentro de la ruta. Si
   // los dejáramos pasar por la lógica de abajo, este middleware los trataría
   // como "no logueado" e intentaría redirigirlos a /login, lo que rompe el pedido.
-  if (request.nextUrl.pathname.startsWith('/api/webhooks/') || request.nextUrl.pathname.startsWith('/api/cron/')) {
+  // El formulario de contacto de la landing pública (/api/soporte) también
+  // lo puede usar alguien sin cuenta: no toca datos de ningún negocio, solo
+  // reenvía un mail a una dirección fija.
+  if (
+    request.nextUrl.pathname.startsWith('/api/webhooks/') ||
+    request.nextUrl.pathname.startsWith('/api/cron/') ||
+    request.nextUrl.pathname.startsWith('/api/soporte')
+  ) {
     return NextResponse.next();
   }
 
@@ -39,8 +46,11 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const esPublica = RUTAS_PUBLICAS.some((r) => request.nextUrl.pathname.startsWith(r));
+  // La raíz muestra la landing pública si no hay sesión (la decide la propia
+  // página, no el middleware), así que no la redirigimos a /login.
+  const esRaiz = request.nextUrl.pathname === '/';
 
-  if (!user && !esPublica) {
+  if (!user && !esPublica && !esRaiz) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     return NextResponse.redirect(url);

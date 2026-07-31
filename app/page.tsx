@@ -3,6 +3,7 @@ import { crearClienteServidor } from './lib/supabase/server';
 import BotonSalir from './BotonSalir';
 import QMark from './QMark';
 import BuscadorUniversal from './BuscadorUniversal';
+import LandingPublica from './LandingPublica';
 import { simboloMoneda } from './lib/monedas';
 import { imagenParaDescripcion } from './lib/carpetas';
 
@@ -87,6 +88,10 @@ export default async function Home() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
+  if (!user) {
+    return <LandingPublica />;
+  }
 
   let nombreNegocio = 'Qovento';
   let logoUrl: string | null = null;
