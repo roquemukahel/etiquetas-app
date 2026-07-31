@@ -58,6 +58,7 @@ type Negocio = {
   nombre: string;
   telefono: string | null;
   direccion: string | null;
+  eslogan: string | null;
   logo_url: string | null;
   texto_garantia: string | null;
   texto_garantia_servicio: string | null;
@@ -141,7 +142,7 @@ export default function Boleta() {
         const { data: perfil } = await supabase
           .from('perfiles')
           .select(
-            'negocios ( nombre, telefono, direccion, logo_url, texto_garantia, texto_garantia_servicio, texto_garantia_tamano, texto_garantia_servicio_tamano, instagram, facebook, tiktok, mostrar_instagram, mostrar_facebook, mostrar_tiktok, moneda, pais )'
+            'negocios ( nombre, telefono, direccion, eslogan, logo_url, texto_garantia, texto_garantia_servicio, texto_garantia_tamano, texto_garantia_servicio_tamano, instagram, facebook, tiktok, mostrar_instagram, mostrar_facebook, mostrar_tiktok, moneda, pais )'
           )
           .eq('id', user.id)
           .single();
@@ -221,6 +222,15 @@ export default function Boleta() {
         id="boleta"
         className="flex flex-col gap-6 print:gap-3 text-[15px] text-ink bg-white rounded-2xl border border-border shadow-card p-8 print:p-4"
       >
+        <div className="flex flex-col items-center gap-0.5 -mb-2 print:-mb-1">
+          <div className="flex items-center gap-1.5 opacity-80">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/qovento-icon.png" alt="" className="h-4 w-4 object-contain" />
+            <span className="text-[11px] font-semibold text-muted tracking-wide">Qovento</span>
+          </div>
+          <p className="text-[10px] text-muted text-center max-w-xs leading-snug">{ESLOGAN}</p>
+        </div>
+
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">
             {negocio?.logo_url && (
@@ -229,7 +239,9 @@ export default function Boleta() {
             )}
             <div>
               <p className="text-2xl print:text-lg font-display font-semibold leading-tight">{negocio?.nombre}</p>
-              <p className="text-xs text-muted max-w-[260px] leading-snug mt-0.5">{ESLOGAN}</p>
+              {negocio?.eslogan && (
+                <p className="text-xs text-muted max-w-[260px] leading-snug mt-0.5">{negocio.eslogan}</p>
+              )}
             </div>
           </div>
           <div className="flex items-start gap-3">
@@ -441,11 +453,6 @@ export default function Boleta() {
         <Divisor />
 
         <div className="flex flex-col items-center gap-1">
-          <div className="flex items-center justify-center gap-1.5 opacity-70">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/qovento-icon.png" alt="" className="h-3.5 w-3.5 object-contain" />
-            <span className="text-[11px] text-muted">Hecho con Qovento</span>
-          </div>
           <p className="text-[10px] text-muted text-center max-w-xs">
             Escaneá el código QR para volver a ver esta boleta cuando quieras.
           </p>

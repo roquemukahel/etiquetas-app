@@ -32,6 +32,7 @@ type Boleta = {
     nombre: string;
     telefono: string | null;
     direccion: string | null;
+    eslogan: string | null;
     logo_url: string | null;
     texto_garantia: string | null;
     texto_garantia_tamano: number;
@@ -97,6 +98,15 @@ export default function BoletaPublica() {
   return (
     <main className="flex min-h-screen flex-col items-center px-6 py-10">
       <div className="w-full max-w-xl flex flex-col gap-6 text-[15px] text-ink bg-white rounded-2xl border border-border shadow-card p-8">
+        <div className="flex flex-col items-center gap-0.5 -mb-2">
+          <div className="flex items-center gap-1.5 opacity-80">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/qovento-icon.png" alt="" className="h-4 w-4 object-contain" />
+            <span className="text-[11px] font-semibold text-muted tracking-wide">Qovento</span>
+          </div>
+          <p className="text-[10px] text-muted text-center max-w-xs leading-snug">{ESLOGAN}</p>
+        </div>
+
         <div className="flex items-center gap-3">
           {boleta.negocio.logo_url && (
             // eslint-disable-next-line @next/next/no-img-element
@@ -104,7 +114,9 @@ export default function BoletaPublica() {
           )}
           <div>
             <p className="text-2xl font-display font-semibold leading-tight">{boleta.negocio.nombre}</p>
-            <p className="text-xs text-muted max-w-[280px] leading-snug mt-0.5">{ESLOGAN}</p>
+            {boleta.negocio.eslogan && (
+              <p className="text-xs text-muted max-w-[280px] leading-snug mt-0.5">{boleta.negocio.eslogan}</p>
+            )}
           </div>
         </div>
 
@@ -254,14 +266,6 @@ export default function BoletaPublica() {
             </p>
           </div>
         )}
-
-        <Divisor />
-
-        <div className="flex items-center justify-center gap-1.5 opacity-70">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/qovento-icon.png" alt="" className="h-3.5 w-3.5 object-contain" />
-          <span className="text-[11px] text-muted">Hecho con Qovento</span>
-        </div>
       </div>
     </main>
   );

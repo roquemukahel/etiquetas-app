@@ -30,6 +30,7 @@ type Negocio = {
   nombre: string;
   telefono: string | null;
   direccion: string | null;
+  eslogan: string | null;
   logo_url: string | null;
   texto_declaracion_compra: string | null;
   texto_declaracion_compra_tamano: number;
@@ -69,7 +70,7 @@ export default function BoletaCompra() {
       if (user) {
         const { data: perfil } = await supabase
           .from('perfiles')
-          .select('negocios ( nombre, telefono, direccion, logo_url, texto_declaracion_compra, texto_declaracion_compra_tamano, moneda )')
+          .select('negocios ( nombre, telefono, direccion, eslogan, logo_url, texto_declaracion_compra, texto_declaracion_compra_tamano, moneda )')
           .eq('id', user.id)
           .single();
         setNegocio((perfil as any)?.negocios ?? null);
@@ -126,6 +127,15 @@ export default function BoletaCompra() {
         id="boleta"
         className="flex flex-col gap-6 print:gap-3 text-[15px] text-ink bg-white rounded-2xl border border-border shadow-card p-8 print:p-4"
       >
+        <div className="flex flex-col items-center gap-0.5 -mb-2 print:-mb-1">
+          <div className="flex items-center gap-1.5 opacity-80">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/qovento-icon.png" alt="" className="h-4 w-4 object-contain" />
+            <span className="text-[11px] font-semibold text-muted tracking-wide">Qovento</span>
+          </div>
+          <p className="text-[10px] text-muted text-center max-w-xs leading-snug">{ESLOGAN}</p>
+        </div>
+
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">
             {negocio?.logo_url && (
@@ -134,7 +144,9 @@ export default function BoletaCompra() {
             )}
             <div>
               <p className="text-2xl print:text-lg font-display font-semibold leading-tight">{negocio?.nombre}</p>
-              <p className="text-xs text-muted max-w-[260px] leading-snug mt-0.5">{ESLOGAN}</p>
+              {negocio?.eslogan && (
+                <p className="text-xs text-muted max-w-[260px] leading-snug mt-0.5">{negocio.eslogan}</p>
+              )}
             </div>
           </div>
           <div className="text-right text-sm text-muted leading-relaxed">
@@ -207,14 +219,6 @@ export default function BoletaCompra() {
           <p className="text-sm text-muted">Aclaración</p>
           <div className="w-64 border-t border-border mt-4" />
           <p className="text-sm text-muted">DNI</p>
-        </div>
-
-        <Divisor />
-
-        <div className="flex items-center justify-center gap-1.5 opacity-70">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/qovento-icon.png" alt="" className="h-3.5 w-3.5 object-contain" />
-          <span className="text-[11px] text-muted">Hecho con Qovento</span>
         </div>
       </div>
 

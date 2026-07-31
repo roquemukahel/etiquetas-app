@@ -12,6 +12,7 @@ type Negocio = {
   nombre: string;
   telefono: string | null;
   direccion: string | null;
+  eslogan: string | null;
   logo_url: string | null;
   texto_garantia: string | null;
   texto_garantia_servicio: string | null;
@@ -50,7 +51,7 @@ export default function DatosNegocio() {
       const { data: perfil } = await supabase
         .from('perfiles')
         .select(
-          'negocio_id, negocios ( id, nombre, telefono, direccion, logo_url, texto_garantia, texto_garantia_servicio, instagram, facebook, tiktok, mostrar_instagram, mostrar_facebook, mostrar_tiktok, moneda, pais, texto_declaracion_compra, texto_garantia_tamano, texto_garantia_servicio_tamano, texto_declaracion_compra_tamano, garantia_dias )'
+          'negocio_id, negocios ( id, nombre, telefono, direccion, eslogan, logo_url, texto_garantia, texto_garantia_servicio, instagram, facebook, tiktok, mostrar_instagram, mostrar_facebook, mostrar_tiktok, moneda, pais, texto_declaracion_compra, texto_garantia_tamano, texto_garantia_servicio_tamano, texto_declaracion_compra_tamano, garantia_dias )'
         )
         .eq('id', user.id)
         .single();
@@ -82,6 +83,7 @@ export default function DatosNegocio() {
         nombre: negocio.nombre.trim(),
         telefono: negocio.telefono?.trim() || null,
         direccion: negocio.direccion?.trim() || null,
+        eslogan: negocio.eslogan?.trim() || null,
         logo_url: negocio.logo_url || null,
         texto_garantia: negocio.texto_garantia?.trim() || null,
         texto_garantia_servicio: negocio.texto_garantia_servicio?.trim() || null,
@@ -157,6 +159,11 @@ export default function DatosNegocio() {
         </div>
 
         <Campo label="Nombre del negocio" valor={negocio.nombre} onChange={(v) => campo('nombre', v)} />
+        <Campo
+          label="Eslogan del negocio (opcional — aparece en la boleta, junto a tu logo)"
+          valor={negocio.eslogan ?? ''}
+          onChange={(v) => campo('eslogan', v)}
+        />
         <Campo label="Teléfono" valor={negocio.telefono ?? ''} onChange={(v) => campo('telefono', v)} />
         <Campo label="Dirección" valor={negocio.direccion ?? ''} onChange={(v) => campo('direccion', v)} />
 
