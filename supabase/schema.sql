@@ -716,6 +716,7 @@ as $$
     'impuesto_porcentaje', o.impuesto_porcentaje,
     'monto_canje', o.monto_canje,
     'nota', o.nota,
+    'incluir_garantia', o.incluir_garantia,
     'moneda', n.moneda,
     'negocio', jsonb_build_object(
       'nombre', n.nombre,
@@ -758,3 +759,18 @@ as $$
 $$;
 
 grant execute on function boleta_publica(uuid) to anon, authenticated;
+
+-- ============================================================
+-- País del negocio: se usa para anteponer el código de llamada
+-- correcto (ej. 54 para Argentina) a los números de teléfono al
+-- armar links de WhatsApp, ya que la gente no suele escribir su
+-- propio código de país al cargar su número.
+-- ============================================================
+alter table negocios add column if not exists pais text not null default 'AR';
+
+-- ============================================================
+-- Permite decidir, orden por orden, si el texto de garantía va o no
+-- en la boleta (por defecto sí). Sirve para casos puntuales donde el
+-- equipo se vende explícitamente sin garantía.
+-- ============================================================
+alter table ordenes add column if not exists incluir_garantia boolean not null default true;

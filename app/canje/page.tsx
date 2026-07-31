@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { crearClienteNavegador } from '../lib/supabase/client';
 import { asegurarModelo } from '../lib/modelos';
 import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../lib/carpetas';
+import { registrarAuditoria } from '../lib/auditoria';
 import MiniaturaDispositivo from '../MiniaturaDispositivo';
 
 type Canje = {
@@ -80,6 +81,20 @@ export default function PlanCanje() {
     });
     await asegurarModelo(supabase, c.modelo);
     await supabase.from('canjes').delete().eq('id', c.id);
+    setProcesando(null);
+    cargar();
+  };
+
+  const eliminar = async (c: Canje) => {
+    if (!confirm('¿Eliminar este dispositivo de Plan Canje? Esta acción no se puede deshacer.')) return;
+    setProcesando(c.id);
+    await supabase.from('canjes').delete().eq('id', c.id);
+    await registrarAuditoria(supabase, {
+      accion: `eliminó de Plan Canje un dispositivo (${c.modelo || 'sin modelo'}${c.imei ? `, IMEI ${c.imei}` : ''})`,
+      entidad: 'canje',
+      entidadId: c.id,
+      valorAnterior: { modelo: c.modelo, capacidad_gb: c.capacidad_gb, color: c.color, imei: c.imei, monto: c.monto },
+    });
     setProcesando(null);
     cargar();
   };
@@ -169,6 +184,13 @@ export default function PlanCanje() {
                 Volver a Plan Canje
               </button>
             )}
+            <button
+              disabled={procesando === c.id}
+              onClick={() => eliminar(c)}
+              className="rounded-lg border border-bad/30 py-2 text-xs font-medium text-bad disabled:opacity-40"
+            >
+              Eliminar
+            </button>
           </div>
         ))}
       </div>

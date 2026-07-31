@@ -7,6 +7,8 @@ import QRCode from 'qrcode';
 import { crearClienteNavegador } from '../../../lib/supabase/client';
 import { simboloMoneda } from '../../../lib/monedas';
 import { ESLOGAN } from '../../../lib/eslogan';
+import { armarLinkWhatsApp } from '../../../lib/whatsapp';
+import { codigoLlamada } from '../../../lib/paises';
 import EtiquetaSeccion from '../../../EtiquetaSeccion';
 
 type Item = {
@@ -28,6 +30,7 @@ type Orden = {
   created_at: string;
   fecha_entrega: string | null;
   nota: string | null;
+  incluir_garantia: boolean;
   token_boleta: string;
   canjes: {
     modelo: string | null;
@@ -67,6 +70,7 @@ type Negocio = {
   mostrar_facebook: boolean;
   mostrar_tiktok: boolean;
   moneda: string;
+  pais: string;
 };
 
 function IconoInstagram() {
@@ -137,7 +141,7 @@ export default function Boleta() {
         const { data: perfil } = await supabase
           .from('perfiles')
           .select(
-            'negocios ( nombre, telefono, direccion, logo_url, texto_garantia, texto_garantia_servicio, texto_garantia_tamano, texto_garantia_servicio_tamano, instagram, facebook, tiktok, mostrar_instagram, mostrar_facebook, mostrar_tiktok, moneda )'
+            'negocios ( nombre, telefono, direccion, logo_url, texto_garantia, texto_garantia_servicio, texto_garantia_tamano, texto_garantia_servicio_tamano, instagram, facebook, tiktok, mostrar_instagram, mostrar_facebook, mostrar_tiktok, moneda, pais )'
           )
           .eq('id', user.id)
           .single();
@@ -174,12 +178,13 @@ export default function Boleta() {
   const clienteNombre = orden.clientes ? `${orden.clientes.nombre} ${orden.clientes.apellido || ''}`.trim() : '';
   const moneda = simboloMoneda(negocio?.moneda);
 
-  const mensajeWhatsapp = encodeURIComponent(
+  const mensajeWhatsapp =
     `Hola ${orden.clientes?.nombre || ''}! Te paso la boleta de tu compra en ${negocio?.nombre || ''}.\n` +
-      orden.orden_items.map((i) => `- ${i.descripcion} x${i.cantidad}: ${moneda}${(i.cantidad * i.precio_unitario).toLocaleString('es-AR')}`).join('\n') +
-      `\nTotal: ${moneda}${(orden.total ?? subtotal).toLocaleString('es-AR')}`
-  );
-  const telefonoLimpio = orden.clientes?.telefono?.replace(/\D/g, '');
+    orden.orden_items.map((i) => `- ${i.descripcion} x${i.cantidad}: ${moneda}${(i.cantidad * i.precio_unitario).toLocaleString('es-AR')}`).join('\n') +
+    `\nTotal: ${moneda}${(orden.total ?? subtotal).toLocaleString('es-AR')}`;
+  const linkWhatsapp = orden.clientes?.telefono
+    ? armarLinkWhatsApp(orden.clientes.telefono, mensajeWhatsapp, codigoLlamada(negocio?.pais))
+    : null;
 
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
@@ -194,9 +199,9 @@ export default function Boleta() {
         >
           Imprimir
         </button>
-        {telefonoLimpio && (
+        {linkWhatsapp && (
           <a
-            href={`https://wa.me/${telefonoLimpio}?text=${mensajeWhatsapp}`}
+            href={linkWhatsapp}
             target="_blank"
             rel="noopener noreferrer"
             className="rounded-lg bg-good text-white px-3 py-2 text-xs font-medium hover:opacity-90 transition-opacity"
@@ -404,7 +409,7 @@ export default function Boleta() {
           </div>
         )}
 
-        {tieneProductos && negocio?.texto_garantia && (
+        {orden.incluir_garantia && tieneProductos && negocio?.texto_garantia && (
           <div className="rounded-xl bg-canvas p-4 print:p-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">Garantía de productos</p>
             <p
@@ -416,7 +421,7 @@ export default function Boleta() {
           </div>
         )}
 
-        {tieneTrabajos && negocio?.texto_garantia_servicio && (
+        {orden.incluir_garantia && tieneTrabajos && negocio?.texto_garantia_servicio && (
           <div className="rounded-xl bg-canvas p-4 print:p-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">Garantía de servicio técnico</p>
             <p

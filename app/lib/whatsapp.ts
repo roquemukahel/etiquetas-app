@@ -1,9 +1,10 @@
 // Arma un link de WhatsApp con el mensaje ya escrito. El empleado solo
 // tiene que apretar "Enviar" — no hay ninguna cuenta ni API que configurar.
-export function armarLinkWhatsApp(telefono: string | null | undefined, mensaje: string) {
+export function armarLinkWhatsApp(telefono: string | null | undefined, mensaje: string, codigoPais = '54') {
   const digitos = (telefono ?? '').replace(/\D/g, '');
-  // Heurística simple: si no parece tener código de país, asumimos Argentina.
-  const numeroCompleto = digitos && !digitos.startsWith('54') ? `54${digitos}` : digitos;
+  // Heurística simple: si el número no arranca ya con el código de país del
+  // negocio (configurable en Configuración > Negocio), se lo anteponemos.
+  const numeroCompleto = digitos && !digitos.startsWith(codigoPais) ? `${codigoPais}${digitos}` : digitos;
 
   const params = new URLSearchParams({ text: mensaje });
   return numeroCompleto

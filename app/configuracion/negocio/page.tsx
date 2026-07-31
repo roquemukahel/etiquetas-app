@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { MONEDAS } from '../../lib/monedas';
+import { PAISES } from '../../lib/paises';
 
 type Negocio = {
   id: string;
@@ -21,6 +22,7 @@ type Negocio = {
   mostrar_facebook: boolean;
   mostrar_tiktok: boolean;
   moneda: string;
+  pais: string;
   texto_declaracion_compra: string | null;
   texto_garantia_tamano: number;
   texto_garantia_servicio_tamano: number;
@@ -48,7 +50,7 @@ export default function DatosNegocio() {
       const { data: perfil } = await supabase
         .from('perfiles')
         .select(
-          'negocio_id, negocios ( id, nombre, telefono, direccion, logo_url, texto_garantia, texto_garantia_servicio, instagram, facebook, tiktok, mostrar_instagram, mostrar_facebook, mostrar_tiktok, moneda, texto_declaracion_compra, texto_garantia_tamano, texto_garantia_servicio_tamano, texto_declaracion_compra_tamano, garantia_dias )'
+          'negocio_id, negocios ( id, nombre, telefono, direccion, logo_url, texto_garantia, texto_garantia_servicio, instagram, facebook, tiktok, mostrar_instagram, mostrar_facebook, mostrar_tiktok, moneda, pais, texto_declaracion_compra, texto_garantia_tamano, texto_garantia_servicio_tamano, texto_declaracion_compra_tamano, garantia_dias )'
         )
         .eq('id', user.id)
         .single();
@@ -90,6 +92,7 @@ export default function DatosNegocio() {
         mostrar_facebook: negocio.mostrar_facebook,
         mostrar_tiktok: negocio.mostrar_tiktok,
         moneda: negocio.moneda,
+        pais: negocio.pais,
         texto_declaracion_compra: negocio.texto_declaracion_compra?.trim() || null,
         texto_garantia_tamano: negocio.texto_garantia_tamano,
         texto_garantia_servicio_tamano: negocio.texto_garantia_servicio_tamano,
@@ -167,6 +170,23 @@ export default function DatosNegocio() {
             {MONEDAS.map((m) => (
               <option key={m.codigo} value={m.codigo}>
                 {m.nombre} ({m.simbolo})
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">
+            País (se usa para armar bien los links de WhatsApp con el código de área correcto)
+          </label>
+          <select
+            value={negocio.pais}
+            onChange={(e) => campo('pais', e.target.value)}
+            className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+          >
+            {PAISES.map((p) => (
+              <option key={p.codigo} value={p.codigo}>
+                {p.nombre} (+{p.llamada})
               </option>
             ))}
           </select>

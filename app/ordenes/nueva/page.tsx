@@ -96,6 +96,7 @@ export default function NuevaOrden() {
   const [impuesto, setImpuesto] = useState('');
   const [estadoOrden, setEstadoOrden] = useState('pendiente');
   const [nota, setNota] = useState('');
+  const [incluirGarantia, setIncluirGarantia] = useState(true);
 
   // --- plan canje ---
   const [canjeActivo, setCanjeActivo] = useState(false);
@@ -335,6 +336,7 @@ export default function NuevaOrden() {
           estado: estadoOrden,
           fecha_entrega: estadoOrden === 'entregado' ? new Date().toISOString() : null,
           nota: nota.trim() || null,
+          incluir_garantia: incluirGarantia,
         })
         .select()
         .single();
@@ -904,6 +906,25 @@ export default function NuevaOrden() {
           placeholder="Ej. el equipo tiene un detalle en la pantalla, se vende igual con este descuento"
           className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
         />
+      </div>
+
+      <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-3 flex items-center justify-between gap-3">
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={incluirGarantia}
+            onChange={(e) => setIncluirGarantia(e.target.checked)}
+            className="h-5 w-5 accent-ink"
+          />
+          <span className="text-sm font-medium">Incluir el texto de garantía en la boleta</span>
+        </label>
+        <Link
+          href="/configuracion/negocio"
+          target="_blank"
+          className="text-xs text-accent dark:text-dark-accent underline shrink-0"
+        >
+          Editar texto
+        </Link>
       </div>
 
       <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-3 flex flex-col gap-3">

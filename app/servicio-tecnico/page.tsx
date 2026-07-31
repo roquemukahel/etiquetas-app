@@ -6,7 +6,9 @@ import { crearClienteNavegador } from '../lib/supabase/client';
 import { asegurarModelo } from '../lib/modelos';
 import { limpiarImei } from '../lib/imei';
 import { armarLinkWhatsApp, mensajeSeguimientoServicio, mensajeListoServicio } from '../lib/whatsapp';
+import { codigoLlamada } from '../lib/paises';
 import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../lib/carpetas';
+import { registrarAuditoria } from '../lib/auditoria';
 import MiniaturaDispositivo from '../MiniaturaDispositivo';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
@@ -65,6 +67,7 @@ export default function ServicioTecnico() {
     null
   );
   const [imagenesCarpetas, setImagenesCarpetas] = useState<Map<string, string>>(new Map());
+  const [codigoPais, setCodigoPais] = useState('54');
 
   const cargar = async () => {
     const { data } = await supabase
@@ -96,6 +99,14 @@ export default function ServicioTecnico() {
     (async () => {
       const { data } = await supabase.from('clientes').select('id, nombre, apellido, telefono').order('nombre');
       setClientes((data as Cliente[]) ?? []);
+    })();
+    (async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: perfil } = await supabase.from('perfiles').select('negocios ( pais )').eq('id', user.id).single();
+      setCodigoPais(codigoLlamada((perfil as any)?.negocios?.pais));
     })();
   }, []);
 
@@ -155,7 +166,7 @@ export default function ServicioTecnico() {
     if (clienteId && clienteTelefono.trim() && nuevoCanje?.token_seguimiento) {
       const url = `${window.location.origin}/seguimiento/${nuevoCanje.token_seguimiento}`;
       const mensaje = mensajeSeguimientoServicio(nombreParaMensaje || 'estimado/a', nuevoModelo.trim(), url);
-      setAvisoWhatsApp({ link: armarLinkWhatsApp(clienteTelefono, mensaje), nombre: nombreParaMensaje, tipo: 'agregado' });
+      setAvisoWhatsApp({ link: armarLinkWhatsApp(clienteTelefono, mensaje, codigoPais), nombre: nombreParaMensaje, tipo: 'agregado' });
     }
 
     setNuevoModelo('');
@@ -200,7 +211,7 @@ export default function ServicioTecnico() {
       const url = `${window.location.origin}/seguimiento/${equipo.token_seguimiento}`;
       const nombre = `${equipo.clientes.nombre} ${equipo.clientes.apellido || ''}`.trim();
       const mensaje = mensajeListoServicio(nombre || 'estimado/a', equipo.modelo || 'equipo', url);
-      setAvisoWhatsApp({ link: armarLinkWhatsApp(equipo.clientes.telefono, mensaje), nombre, tipo: 'reparado' });
+      setAvisoWhatsApp({ link: armarLinkWhatsApp(equipo.clientes.telefono, mensaje, codigoPais), nombre, tipo: 'reparado' });
     }
 
     cargar();
@@ -230,6 +241,20 @@ export default function ServicioTecnico() {
     });
     await asegurarModelo(supabase, e.modelo);
     await supabase.from('canjes').delete().eq('id', e.id);
+    setGuardando(null);
+    cargar();
+  };
+
+  const eliminarEquipo = async (e: Equipo) => {
+    if (!confirm('¿Eliminar este equipo de Servicio Técnico? Esta acción no se puede deshacer.')) return;
+    setGuardando(e.id);
+    await supabase.from('canjes').delete().eq('id', e.id);
+    await registrarAuditoria(supabase, {
+      accion: `eliminó de Servicio Técnico un equipo (${e.modelo || 'sin modelo'}${e.imei ? `, IMEI ${e.imei}` : ''})`,
+      entidad: 'canje',
+      entidadId: e.id,
+      valorAnterior: { modelo: e.modelo, capacidad_gb: e.capacidad_gb, color: e.color, imei: e.imei, estado: e.estado },
+    });
     setGuardando(null);
     cargar();
   };
@@ -535,12 +560,21 @@ export default function ServicioTecnico() {
                 )}
 
                 {tab === 'derivados' && (
-                  <button
-                    onClick={() => abrirPanelReparar(e.id)}
-                    className="rounded-lg border border-border dark:border-dark-border py-2 text-xs font-medium"
-                  >
-                    {panelReparar === e.id ? 'Cancelar' : 'Marcar como reparado'}
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => abrirPanelReparar(e.id)}
+                      className="flex-1 rounded-lg border border-border dark:border-dark-border py-2 text-xs font-medium"
+                    >
+                      {panelReparar === e.id ? 'Cancelar' : 'Marcar como reparado'}
+                    </button>
+                    <button
+                      disabled={guardando === e.id}
+                      onClick={() => eliminarEquipo(e)}
+                      className="rounded-lg border border-bad/30 py-2 px-3 text-xs font-medium text-bad disabled:opacity-40"
+                    >
+                      Eliminar
+                    </button>
+                  </div>
                 )}
 
                 {tab === 'reparados' && (
@@ -558,6 +592,13 @@ export default function ServicioTecnico() {
                       className="flex-1 rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-xs font-medium text-white disabled:opacity-40"
                     >
                       Agregar al Stock
+                    </button>
+                    <button
+                      disabled={guardando === e.id}
+                      onClick={() => eliminarEquipo(e)}
+                      className="rounded-lg border border-bad/30 py-2 px-3 text-xs font-medium text-bad disabled:opacity-40"
+                    >
+                      Eliminar
                     </button>
                   </div>
                 )}
