@@ -123,6 +123,7 @@ export default async function Home() {
   let serieTicket: number[] = [];
   let diasDePrueba: number | null = null;
   let suscripcionActiva = false;
+  let actividad: { tipo: 'venta' | 'reparacion' | 'stock' | 'cliente'; fecha: Date; texto: string }[] = [];
 
   if (user) {
     const { data: perfil } = await supabase
@@ -156,6 +157,9 @@ export default async function Home() {
       { data: ordenesRecientes },
       { data: carpetasStock },
       { data: catalogoProductos },
+      { data: reparacionesRecientes },
+      { data: stockRecienteData },
+      { data: clientesRecientesData },
     ] = await Promise.all([
       supabase.from('dispositivos').select('id', { count: 'exact', head: true }).eq('en_stock', true),
       supabase.from('ordenes').select('id', { count: 'exact', head: true }).eq('estado', 'pendiente'),
@@ -163,10 +167,21 @@ export default async function Home() {
       supabase.rpc('es_admin'),
       supabase
         .from('ordenes')
-        .select('total, estado, created_at, orden_items ( descripcion, cantidad, tipo )')
+        .select(
+          'total, estado, created_at, vendedores ( nombre ), clientes ( nombre, apellido ), orden_items ( descripcion, cantidad, tipo )'
+        )
         .gte('created_at', inicioMesPasado.toISOString()),
       supabase.from('modelos_stock').select('nombre, imagen_url'),
       supabase.from('productos').select('nombre, imagen_url'),
+      supabase
+        .from('canjes')
+        .select('modelo, fecha_reparado, tecnicos ( nombre )')
+        .eq('estado', 'reparado')
+        .not('fecha_reparado', 'is', null)
+        .order('fecha_reparado', { ascending: false })
+        .limit(5),
+      supabase.from('dispositivos').select('modelo, created_at').order('created_at', { ascending: false }).limit(5),
+      supabase.from('clientes').select('nombre, apellido, created_at').order('created_at', { ascending: false }).limit(5),
     ]);
     enStock = countStock ?? 0;
     pendientes = countPendientes ?? 0;
@@ -220,6 +235,49 @@ export default async function Home() {
       }))
       .sort((a, b) => b.cantidad - a.cantidad)
       .slice(0, 5);
+
+    const candidatos: { tipo: 'venta' | 'reparacion' | 'stock' | 'cliente'; fecha: Date; texto: string }[] = [];
+
+    for (const o of cobradas.slice(0, 8) as any[]) {
+      const primerItem = o.orden_items?.[0]?.descripcion?.split(' · IMEI')[0];
+      const extra = (o.orden_items?.length ?? 0) > 1 ? ` y ${o.orden_items.length - 1} más` : '';
+      const vendedor = o.vendedores?.nombre;
+      const cliente = o.clientes ? `${o.clientes.nombre} ${o.clientes.apellido || ''}`.trim() : null;
+      const que = primerItem ? `${primerItem}${extra}` : 'una venta';
+      candidatos.push({
+        tipo: 'venta',
+        fecha: new Date(o.created_at),
+        texto: `${vendedor ? `${vendedor} vendió` : 'Se vendió'} ${que}${cliente ? ` a ${cliente}` : ''}`,
+      });
+    }
+
+    for (const r of (reparacionesRecientes as any[]) ?? []) {
+      const tecnico = r.tecnicos?.nombre;
+      candidatos.push({
+        tipo: 'reparacion',
+        fecha: new Date(r.fecha_reparado),
+        texto: `${tecnico ? `${tecnico} terminó` : 'Se terminó'} una reparación${r.modelo ? ` de ${r.modelo}` : ''}`,
+      });
+    }
+
+    for (const d of (stockRecienteData as any[]) ?? []) {
+      candidatos.push({
+        tipo: 'stock',
+        fecha: new Date(d.created_at),
+        texto: `Ingresó ${d.modelo || 'un equipo'} al stock`,
+      });
+    }
+
+    for (const c of (clientesRecientesData as any[]) ?? []) {
+      const nombreCompleto = `${c.nombre} ${c.apellido || ''}`.trim();
+      candidatos.push({
+        tipo: 'cliente',
+        fecha: new Date(c.created_at),
+        texto: `Nuevo cliente registrado: ${nombreCompleto}`,
+      });
+    }
+
+    actividad = candidatos.sort((a, b) => b.fecha.getTime() - a.fecha.getTime()).slice(0, 8);
 
     for (let i = 6; i >= 0; i--) {
       const dia = new Date();
@@ -380,6 +438,31 @@ export default async function Home() {
         <StatTile valor={totalClientes} etiqueta="Clientes" icono="clientes" color="clientes" />
       </div>
 
+      {actividad.length > 0 && (
+        <div
+          className="rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-5 flex flex-col gap-3 animate-fade-in-up"
+          style={{ animationDelay: '210ms' }}
+        >
+          <p className="text-sm font-semibold tracking-tight">Actividad reciente</p>
+          <div className="flex flex-col gap-3">
+            {actividad.map((ev, idx) => {
+              const { icono, color } = ICONO_ACTIVIDAD[ev.tipo];
+              return (
+                <div key={idx} className="flex items-center gap-3">
+                  <div
+                    className={`h-8 w-8 shrink-0 rounded-full bg-gradient-to-br ${COLOR_ICONO[color]} text-white flex items-center justify-center [&_svg]:h-4 [&_svg]:w-4`}
+                  >
+                    {ICONOS[icono]}
+                  </div>
+                  <p className="flex-1 min-w-0 text-sm leading-snug truncate">{ev.texto}</p>
+                  <p className="shrink-0 text-[11px] text-muted dark:text-dark-text-secondary">{hace(ev.fecha)}</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col gap-2.5 lg:grid lg:grid-cols-2 lg:gap-3 animate-fade-in-up" style={{ animationDelay: '240ms' }}>
         {SECCIONES.map((s) =>
           s.activo ? (
@@ -454,6 +537,24 @@ function StatTile({
     </div>
   );
 }
+
+function hace(fecha: Date): string {
+  const segundos = Math.max(0, Math.floor((Date.now() - fecha.getTime()) / 1000));
+  if (segundos < 60) return 'Recién';
+  const minutos = Math.floor(segundos / 60);
+  if (minutos < 60) return `Hace ${minutos} minuto${minutos === 1 ? '' : 's'}`;
+  const horas = Math.floor(minutos / 60);
+  if (horas < 24) return `Hace ${horas} hora${horas === 1 ? '' : 's'}`;
+  const dias = Math.floor(horas / 24);
+  return `Hace ${dias} día${dias === 1 ? '' : 's'}`;
+}
+
+const ICONO_ACTIVIDAD: Record<string, { icono: string; color: string }> = {
+  venta: { icono: 'ordenes', color: 'ventas' },
+  reparacion: { icono: 'servicio', color: 'servicio' },
+  stock: { icono: 'stock', color: 'inventario' },
+  cliente: { icono: 'clientes', color: 'clientes' },
+};
 
 function Sparkline({ serie }: { serie: number[] }) {
   const w = 64;
