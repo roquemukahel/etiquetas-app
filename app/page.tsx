@@ -110,17 +110,24 @@ export default async function Home() {
   let deltaTicketPct: number | null = null;
   let serieVentas: number[] = [];
   let serieTicket: number[] = [];
+  let diasDePrueba: number | null = null;
 
   if (user) {
     const { data: perfil } = await supabase
       .from('perfiles')
-      .select('negocio_id, negocios ( nombre, logo_url, moneda )')
+      .select('negocio_id, negocios ( nombre, logo_url, moneda, estado_suscripcion, fecha_fin_prueba )')
       .eq('id', user.id)
       .single();
     const negocio = (perfil as any)?.negocios;
     if (negocio?.nombre) nombreNegocio = negocio.nombre;
     if (negocio?.logo_url) logoUrl = negocio.logo_url;
     if (negocio?.moneda) moneda = simboloMoneda(negocio.moneda);
+    if (negocio?.estado_suscripcion === 'trialing' && negocio?.fecha_fin_prueba) {
+      diasDePrueba = Math.max(
+        0,
+        Math.ceil((new Date(negocio.fecha_fin_prueba).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+      );
+    }
 
     const inicioMes = new Date();
     inicioMes.setDate(1);
@@ -222,6 +229,16 @@ export default async function Home() {
 
   return (
     <main className="flex min-h-screen flex-col px-6 py-8 gap-6 max-w-2xl lg:max-w-5xl mx-auto w-full">
+      {diasDePrueba != null && (
+        <Link
+          href="/configuracion/suscripcion"
+          className="fixed top-3 right-3 z-30 flex items-center gap-1.5 rounded-full bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors text-white text-xs font-medium pl-3 pr-2.5 py-1.5 shadow-elevated"
+        >
+          <span>{diasDePrueba > 0 ? `${diasDePrueba} día${diasDePrueba === 1 ? '' : 's'} de prueba` : 'Prueba vencida'}</span>
+          <span className="text-white/70">&rarr;</span>
+        </Link>
+      )}
+
       <header className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           {logoUrl ? (

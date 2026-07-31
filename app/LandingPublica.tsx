@@ -62,7 +62,7 @@ export default function LandingPublica() {
 
       <section id="inicio" className="max-w-5xl mx-auto px-6 pt-16 pb-20 flex flex-col items-center text-center gap-6">
         <span className="text-xs font-semibold uppercase tracking-wide text-accent dark:text-dark-accent bg-accent-soft dark:bg-dark-accent-soft rounded-full px-3 py-1">
-          Para casas de celulares usados
+          Para casas de celulares
         </span>
         <h1 className="font-display font-semibold text-4xl sm:text-5xl leading-tight max-w-3xl">
           Recibí, documentá, etiquetá y vendé celulares sin perder ni un dato
