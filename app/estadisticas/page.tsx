@@ -40,9 +40,18 @@ function inicioDePeriodo(periodo: Periodo): Date {
   return new Date(ahora.getFullYear(), 0, 1);
 }
 
-type Orden = { vendedor_id: string | null; total: number | null; estado: string; forma_pago: string | null; created_at: string };
+type Orden = {
+  vendedor_id: string | null;
+  cliente_id: string | null;
+  total: number | null;
+  estado: string;
+  forma_pago: string | null;
+  created_at: string;
+};
 type Reparacion = { tecnico_id: string | null; fecha_reparado: string };
+type IngresoServicio = { cliente_id: string | null; fecha_ingreso_servicio: string };
 type Persona = { id: string; nombre: string };
+type Cliente = { id: string; nombre: string; apellido: string | null };
 
 export default function Estadisticas() {
   const supabase = crearClienteNavegador();
@@ -51,11 +60,15 @@ export default function Estadisticas() {
   const [vistaVendedores, setVistaVendedores] = useState<VistaRanking>('barras');
   const [vistaTecnicos, setVistaTecnicos] = useState<VistaRanking>('barras');
   const [vistaFormaPago, setVistaFormaPago] = useState<VistaRanking>('torta');
+  const [vistaCompradores, setVistaCompradores] = useState<VistaRanking>('barras');
+  const [vistaClientesServicio, setVistaClientesServicio] = useState<VistaRanking>('barras');
 
   const [vendedores, setVendedores] = useState<Persona[]>([]);
   const [tecnicos, setTecnicos] = useState<Persona[]>([]);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
   const [ordenes, setOrdenes] = useState<Orden[]>([]);
   const [reparaciones, setReparaciones] = useState<Reparacion[]>([]);
+  const [ingresosServicio, setIngresosServicio] = useState<IngresoServicio[]>([]);
   const [moneda, setMoneda] = useState('$');
   const [loading, setLoading] = useState(true);
 
@@ -69,13 +82,14 @@ export default function Estadisticas() {
       const desde = new Date();
       desde.setFullYear(desde.getFullYear() - 1);
 
-      const [{ data: perfil }, { data: vend }, { data: tec }, { data: ord }, { data: rep }] = await Promise.all([
+      const [{ data: perfil }, { data: vend }, { data: tec }, { data: cli }, { data: ord }, { data: rep }, { data: ing }] = await Promise.all([
         supabase.from('perfiles').select('negocios ( moneda )').eq('id', user.id).single(),
         supabase.from('vendedores').select('id, nombre').order('nombre'),
         supabase.from('tecnicos').select('id, nombre').order('nombre'),
+        supabase.from('clientes').select('id, nombre, apellido').order('nombre'),
         supabase
           .from('ordenes')
-          .select('vendedor_id, total, estado, forma_pago, created_at')
+          .select('vendedor_id, cliente_id, total, estado, forma_pago, created_at')
           .gte('created_at', desde.toISOString()),
         supabase
           .from('canjes')
@@ -83,14 +97,22 @@ export default function Estadisticas() {
           .eq('estado', 'reparado')
           .not('fecha_reparado', 'is', null)
           .gte('fecha_reparado', desde.toISOString()),
+        supabase
+          .from('canjes')
+          .select('cliente_id, fecha_ingreso_servicio')
+          .not('cliente_id', 'is', null)
+          .not('fecha_ingreso_servicio', 'is', null)
+          .gte('fecha_ingreso_servicio', desde.toISOString()),
       ]);
 
       const negocio = (perfil as any)?.negocios;
       if (negocio?.moneda) setMoneda(simboloMoneda(negocio.moneda));
       setVendedores(vend ?? []);
       setTecnicos(tec ?? []);
+      setClientes((cli as Cliente[]) ?? []);
       setOrdenes((ord as Orden[]) ?? []);
       setReparaciones((rep as Reparacion[]) ?? []);
+      setIngresosServicio((ing as IngresoServicio[]) ?? []);
       setLoading(false);
     })();
   }, []);
@@ -139,6 +161,42 @@ export default function Estadisticas() {
       .filter((d) => d.valor > 0)
       .sort((a, b) => b.valor - a.valor);
   }, [reparacionesPeriodo, tecnicos]);
+
+  const nombreClienteDe = (id: string | null) => {
+    if (!id) return 'Sin cliente';
+    const c = clientes.find((c) => c.id === id);
+    return c ? `${c.nombre} ${c.apellido || ''}`.trim() : 'Cliente eliminado';
+  };
+
+  const rankingCompradores: Dato[] = useMemo(() => {
+    const mapa = new Map<string, number>();
+    for (const o of ordenesPeriodo) {
+      if (!o.cliente_id) continue;
+      mapa.set(o.cliente_id, (mapa.get(o.cliente_id) ?? 0) + (o.total || 0));
+    }
+    return Array.from(mapa.entries())
+      .map(([id, valor]) => ({ nombre: nombreClienteDe(id), valor }))
+      .filter((d) => d.valor > 0)
+      .sort((a, b) => b.valor - a.valor)
+      .slice(0, 10);
+  }, [ordenesPeriodo, clientes]);
+
+  const ingresosServicioPeriodo = useMemo(
+    () => ingresosServicio.filter((i) => new Date(i.fecha_ingreso_servicio) >= inicio),
+    [ingresosServicio, inicio]
+  );
+
+  const rankingClientesServicio: Dato[] = useMemo(() => {
+    const mapa = new Map<string, number>();
+    for (const i of ingresosServicioPeriodo) {
+      if (!i.cliente_id) continue;
+      mapa.set(i.cliente_id, (mapa.get(i.cliente_id) ?? 0) + 1);
+    }
+    return Array.from(mapa.entries())
+      .map(([id, valor]) => ({ nombre: nombreClienteDe(id), valor }))
+      .sort((a, b) => b.valor - a.valor)
+      .slice(0, 10);
+  }, [ingresosServicioPeriodo, clientes]);
 
   const rankingFormaPago: Dato[] = useMemo(() => {
     const mapa = new Map<string, number>();
@@ -248,6 +306,22 @@ export default function Estadisticas() {
           <RankingBarras datos={rankingTecnicos} sufijo=" arreglo(s)" />
         ) : (
           <RankingTorta datos={rankingTecnicos} sufijo=" arreglo(s)" />
+        )}
+      </Seccion>
+
+      <Seccion titulo="Ranking de compradores" vista={vistaCompradores} onVista={setVistaCompradores}>
+        {vistaCompradores === 'barras' ? (
+          <RankingBarras datos={rankingCompradores} moneda={moneda} />
+        ) : (
+          <RankingTorta datos={rankingCompradores} moneda={moneda} />
+        )}
+      </Seccion>
+
+      <Seccion titulo="Ranking de clientes de servicio técnico" vista={vistaClientesServicio} onVista={setVistaClientesServicio}>
+        {vistaClientesServicio === 'barras' ? (
+          <RankingBarras datos={rankingClientesServicio} sufijo=" equipo(s)" />
+        ) : (
+          <RankingTorta datos={rankingClientesServicio} sufijo=" equipo(s)" />
         )}
       </Seccion>
 

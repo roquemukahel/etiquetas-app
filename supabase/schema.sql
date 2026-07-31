@@ -788,3 +788,52 @@ alter table productos add column if not exists imagen_url text;
 -- imagen de carpetas de Stock y de productos/accesorios.
 -- ============================================================
 alter table trabajos add column if not exists imagen_url text;
+
+-- ============================================================
+-- Servicio Técnico: proveedores de repuestos y catálogo de repuestos
+-- (baterías, pantallas, módulos, etc.) con el precio que maneja cada
+-- proveedor, para poder comparar y saber a quién conviene comprarle
+-- cada pieza. repuestos_precios guarda un precio por combinación
+-- repuesto+proveedor (unique), que se actualiza en el momento si ya
+-- existía en vez de duplicarse.
+-- ============================================================
+create table if not exists proveedores_repuestos (
+  id uuid primary key default gen_random_uuid(),
+  negocio_id uuid not null references negocios(id) on delete cascade default negocio_actual(),
+  nombre text not null,
+  telefono text,
+  created_at timestamptz default now()
+);
+
+create table if not exists repuestos (
+  id uuid primary key default gen_random_uuid(),
+  negocio_id uuid not null references negocios(id) on delete cascade default negocio_actual(),
+  nombre text not null,
+  created_at timestamptz default now()
+);
+
+create table if not exists repuestos_precios (
+  id uuid primary key default gen_random_uuid(),
+  negocio_id uuid not null references negocios(id) on delete cascade default negocio_actual(),
+  repuesto_id uuid not null references repuestos(id) on delete cascade,
+  proveedor_id uuid not null references proveedores_repuestos(id) on delete cascade,
+  precio numeric not null,
+  actualizado_at timestamptz not null default now(),
+  unique (repuesto_id, proveedor_id)
+);
+
+alter table proveedores_repuestos enable row level security;
+alter table repuestos enable row level security;
+alter table repuestos_precios enable row level security;
+
+create policy "proveedores_repuestos de mi negocio" on proveedores_repuestos
+  for all using (negocio_id = negocio_actual())
+  with check (negocio_id = negocio_actual());
+
+create policy "repuestos de mi negocio" on repuestos
+  for all using (negocio_id = negocio_actual())
+  with check (negocio_id = negocio_actual());
+
+create policy "repuestos_precios de mi negocio" on repuestos_precios
+  for all using (negocio_id = negocio_actual())
+  with check (negocio_id = negocio_actual());
