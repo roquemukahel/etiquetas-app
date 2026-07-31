@@ -53,7 +53,7 @@ export default function Stock() {
   const [imagenesCarpetas, setImagenesCarpetas] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState('');
-  const [vista, setVista] = useState<'stock' | 'vendidos' | 'todos'>('stock');
+  const [vista, setVista] = useState<'stock' | 'vendidos'>('stock');
 
   const [productos, setProductos] = useState<Producto[]>([]);
   const [loadingProductos, setLoadingProductos] = useState(true);
@@ -102,6 +102,29 @@ export default function Stock() {
       else nuevo.add(modelo);
       return nuevo;
     });
+  };
+
+  const [eliminandoCarpeta, setEliminandoCarpeta] = useState<string | null>(null);
+
+  const eliminarCarpeta = async (modelo: string, items: Dispositivo[]) => {
+    if (items.length === 0) return;
+    if (
+      !confirm(
+        `¿Eliminar los ${items.length} dispositivo${items.length === 1 ? '' : 's'} de "${modelo}"? No se puede deshacer.`
+      )
+    )
+      return;
+
+    setEliminandoCarpeta(modelo);
+    const { error } = await supabase.from('dispositivos').delete().in('id', items.map((d) => d.id));
+    if (!error) {
+      await registrarAuditoria(supabase, {
+        accion: `eliminó toda la carpeta "${modelo}" de Stock (${items.length} dispositivo${items.length === 1 ? '' : 's'})`,
+        entidad: 'dispositivo',
+      });
+    }
+    setEliminandoCarpeta(null);
+    cargarDispositivos();
   };
 
   const cargarProductos = async () => {
@@ -434,14 +457,6 @@ export default function Stock() {
             >
               Vendidos
             </button>
-            <button
-              onClick={() => setVista('todos')}
-              className={`flex-1 rounded-xl py-2 font-medium ${
-                vista === 'todos' ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
-              }`}
-            >
-              Historial completo
-            </button>
           </div>
 
           <div className="flex gap-2">
@@ -577,21 +592,32 @@ export default function Stock() {
               const expandido = items.length === 0 || grupoExpandido(modelo);
               return (
               <div key={modelo} className="flex flex-col gap-2">
-                <button
-                  onClick={() => items.length > 0 && toggleGrupo(modelo)}
-                  className="text-xs text-muted dark:text-dark-text-secondary font-medium flex items-center gap-2 text-left"
-                >
-                  {items.length > 0 && <span className="shrink-0">{expandido ? '▾' : '▸'}</span>}
-                  <MiniaturaDispositivo src={imagenPorNombreExacto(modelo, imagenesCarpetas)} size={24} />
-                  <span>
-                    {modelo} · {items.length}
-                  </span>
-                  {enStock > 0 && enStock < 3 && (
-                    <span className="text-[10px] font-semibold text-bad bg-bad/10 rounded-full px-2 py-0.5">
-                      ⚠ Quedan {enStock} — reponer
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => items.length > 0 && toggleGrupo(modelo)}
+                    className="text-xs text-muted dark:text-dark-text-secondary font-medium flex items-center gap-2 text-left flex-1 min-w-0"
+                  >
+                    {items.length > 0 && <span className="shrink-0">{expandido ? '▾' : '▸'}</span>}
+                    <MiniaturaDispositivo src={imagenPorNombreExacto(modelo, imagenesCarpetas)} size={24} />
+                    <span className="truncate">
+                      {modelo} · {items.length}
                     </span>
+                    {enStock > 0 && enStock < 3 && (
+                      <span className="text-[10px] font-semibold text-bad bg-bad/10 rounded-full px-2 py-0.5 shrink-0">
+                        ⚠ Quedan {enStock} — reponer
+                      </span>
+                    )}
+                  </button>
+                  {items.length > 0 && (
+                    <button
+                      onClick={() => eliminarCarpeta(modelo, items)}
+                      disabled={eliminandoCarpeta === modelo}
+                      className="shrink-0 text-xs text-bad underline disabled:opacity-40"
+                    >
+                      {eliminandoCarpeta === modelo ? 'Eliminando...' : 'Eliminar carpeta'}
+                    </button>
                   )}
-                </button>
+                </div>
                 {items.length === 0 && (
                   <p className="text-xs text-muted dark:text-dark-text-secondary italic">Carpeta vacía, todavía sin dispositivos.</p>
                 )}
