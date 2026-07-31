@@ -159,7 +159,7 @@ export default function PlanCanje() {
               {c.detalles && <p>Detalles: {c.detalles}</p>}
               {c.vendedores?.nombre && (
                 <p className="flex items-center gap-1.5">
-                  Recibido por: <Avatar src={c.vendedores.foto_url} nombre={c.vendedores.nombre} size={24} /> {c.vendedores.nombre}
+                  Recibido por: <Avatar src={c.vendedores.foto_url} nombre={c.vendedores.nombre} size={28} /> {c.vendedores.nombre}
                 </p>
               )}
             </div>

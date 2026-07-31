@@ -387,7 +387,7 @@ export default function DetalleOrden() {
         {orden.vendedores?.nombre && (
           <p className="flex items-center gap-1.5">
             <span className="text-muted dark:text-dark-text-secondary">Vendedor:</span>
-            <Avatar src={orden.vendedores.foto_url} nombre={orden.vendedores.nombre} size={24} /> {orden.vendedores.nombre}
+            <Avatar src={orden.vendedores.foto_url} nombre={orden.vendedores.nombre} size={28} /> {orden.vendedores.nombre}
           </p>
         )}
         <p>

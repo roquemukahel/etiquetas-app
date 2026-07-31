@@ -29,7 +29,7 @@ export function RankingBarras({ datos, moneda, sufijo }: { datos: Dato[]; moneda
       {datos.map((d, i) => (
         <div key={d.nombre} className="flex items-center gap-3">
           <span className="w-5 text-xs text-muted dark:text-dark-text-secondary text-right shrink-0 tabular-nums">{i + 1}°</span>
-          {d.fotoUrl !== undefined && <Avatar src={d.fotoUrl} nombre={d.nombre} size={28} />}
+          {d.fotoUrl !== undefined && <Avatar src={d.fotoUrl} nombre={d.nombre} size={32} />}
           <div className="flex-1 min-w-0">
             <div className="flex items-baseline justify-between gap-2 mb-1">
               <span className="text-sm font-medium truncate">{d.nombre}</span>
@@ -101,7 +101,7 @@ export function RankingTorta({ datos, moneda, sufijo }: { datos: Dato[]; moneda?
             <span className="flex items-center gap-2 min-w-0">
               <span className="h-2.5 w-2.5 rounded-full shrink-0 dark:hidden" style={{ backgroundColor: s.light }} />
               <span className="h-2.5 w-2.5 rounded-full shrink-0 hidden dark:inline-block" style={{ backgroundColor: s.dark }} />
-              {s.fotoUrl !== undefined && <Avatar src={s.fotoUrl} nombre={s.nombre} size={26} />}
+              {s.fotoUrl !== undefined && <Avatar src={s.fotoUrl} nombre={s.nombre} size={30} />}
               <span className="truncate">{s.nombre}</span>
             </span>
             <span className="text-muted dark:text-dark-text-secondary shrink-0 tabular-nums">

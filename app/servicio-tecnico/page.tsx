@@ -315,7 +315,7 @@ export default function ServicioTecnico() {
               &larr; Todos los técnicos
             </button>
             <p className="text-sm font-medium flex items-center gap-2">
-              <Avatar src={fotoTecnico(tecnicoSeleccionado)} nombre={nombreTecnico(tecnicoSeleccionado) ?? '?'} size={36} />
+              <Avatar src={fotoTecnico(tecnicoSeleccionado)} nombre={nombreTecnico(tecnicoSeleccionado) ?? '?'} size={42} />
               {nombreTecnico(tecnicoSeleccionado)}
             </p>
             {historialTecnico.length === 0 && (
@@ -363,7 +363,7 @@ export default function ServicioTecnico() {
                     className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex items-center justify-between text-left"
                   >
                     <span className="flex items-center gap-2.5">
-                      <Avatar src={t.foto_url} nombre={t.nombre} size={44} />
+                      <Avatar src={t.foto_url} nombre={t.nombre} size={52} />
                       <p className="text-sm font-medium">{t.nombre}</p>
                     </span>
                     <p className="text-xs text-muted dark:text-dark-text-secondary">{cantidad} arreglo{cantidad === 1 ? '' : 's'}</p>
@@ -560,7 +560,7 @@ export default function ServicioTecnico() {
                   <>
                     {nombreTecnico(e.tecnico_id) && (
                       <p className="text-xs text-muted dark:text-dark-text-secondary flex items-center gap-1.5">
-                        Reparado por: <Avatar src={fotoTecnico(e.tecnico_id)} nombre={nombreTecnico(e.tecnico_id) ?? '?'} size={24} />{' '}
+                        Reparado por: <Avatar src={fotoTecnico(e.tecnico_id)} nombre={nombreTecnico(e.tecnico_id) ?? '?'} size={28} />{' '}
                         {nombreTecnico(e.tecnico_id)}
                       </p>
                     )}
