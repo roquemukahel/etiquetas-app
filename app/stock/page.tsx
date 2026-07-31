@@ -592,13 +592,13 @@ export default function Stock() {
               const expandido = items.length === 0 || grupoExpandido(modelo);
               return (
               <div key={modelo} className="flex flex-col gap-2">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2.5">
                   <button
                     onClick={() => items.length > 0 && toggleGrupo(modelo)}
-                    className="text-xs text-muted dark:text-dark-text-secondary font-medium flex items-center gap-2 text-left flex-1 min-w-0"
+                    className="text-sm text-muted dark:text-dark-text-secondary font-medium flex items-center gap-2.5 text-left flex-1 min-w-0"
                   >
                     {items.length > 0 && <span className="shrink-0">{expandido ? '▾' : '▸'}</span>}
-                    <MiniaturaDispositivo src={imagenPorNombreExacto(modelo, imagenesCarpetas)} size={24} />
+                    <MiniaturaDispositivo src={imagenPorNombreExacto(modelo, imagenesCarpetas)} size={48} />
                     <span className="truncate">
                       {modelo} · {items.length}
                     </span>
