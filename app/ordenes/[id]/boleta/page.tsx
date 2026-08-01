@@ -471,7 +471,7 @@ export default function Boleta() {
           <div className="rounded-xl bg-canvas p-4 print:p-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">Garantía de productos</p>
             <p
-              className="whitespace-pre-wrap text-muted"
+              className="whitespace-pre-wrap text-ink font-medium print:font-semibold"
               style={{ fontSize: negocio.texto_garantia_tamano }}
             >
               {negocio.texto_garantia}
@@ -483,7 +483,7 @@ export default function Boleta() {
           <div className="rounded-xl bg-canvas p-4 print:p-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">Garantía de servicio técnico</p>
             <p
-              className="whitespace-pre-wrap text-muted"
+              className="whitespace-pre-wrap text-ink font-medium print:font-semibold"
               style={{ fontSize: negocio.texto_garantia_servicio_tamano }}
             >
               {negocio.texto_garantia_servicio}

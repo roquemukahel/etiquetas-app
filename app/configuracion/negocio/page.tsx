@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { MONEDAS } from '../../lib/monedas';
 import { PAISES } from '../../lib/paises';
+import { MARCAS_DISPONIBLES, CATALOGO_MODELOS, normalizarNombreModelo } from '../../lib/catalogosMarcas';
 
 type Negocio = {
   id: string;
@@ -25,6 +26,7 @@ type Negocio = {
   moneda: string;
   monedas_habilitadas: string[];
   tipo_cambio: number | null;
+  marcas_stock: string[];
   pais: string;
   texto_declaracion_compra: string | null;
   texto_garantia_tamano: number;
@@ -53,7 +55,7 @@ export default function DatosNegocio() {
       const { data: perfil } = await supabase
         .from('perfiles')
         .select(
-          'negocio_id, negocios ( id, nombre, telefono, direccion, eslogan, logo_url, texto_garantia, texto_garantia_servicio, instagram, facebook, tiktok, mostrar_instagram, mostrar_facebook, mostrar_tiktok, moneda, monedas_habilitadas, tipo_cambio, pais, texto_declaracion_compra, texto_garantia_tamano, texto_garantia_servicio_tamano, texto_declaracion_compra_tamano, garantia_dias )'
+          'negocio_id, negocios ( id, nombre, telefono, direccion, eslogan, logo_url, texto_garantia, texto_garantia_servicio, instagram, facebook, tiktok, mostrar_instagram, mostrar_facebook, mostrar_tiktok, moneda, monedas_habilitadas, tipo_cambio, marcas_stock, pais, texto_declaracion_compra, texto_garantia_tamano, texto_garantia_servicio_tamano, texto_declaracion_compra_tamano, garantia_dias )'
         )
         .eq('id', user.id)
         .single();
@@ -79,6 +81,18 @@ export default function DatosNegocio() {
       return { ...prev, monedas_habilitadas: [...prev.monedas_habilitadas, codigo] };
     });
   };
+
+  const toggleMarca = (id: string) =>
+    setNegocio((prev) =>
+      prev
+        ? {
+            ...prev,
+            marcas_stock: prev.marcas_stock.includes(id)
+              ? prev.marcas_stock.filter((m) => m !== id)
+              : [...prev.marcas_stock, id],
+          }
+        : prev
+    );
 
   const handleLogo = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -112,6 +126,7 @@ export default function DatosNegocio() {
         moneda: negocio.monedas_habilitadas[0] || negocio.moneda,
         monedas_habilitadas: negocio.monedas_habilitadas,
         tipo_cambio: negocio.tipo_cambio,
+        marcas_stock: negocio.marcas_stock,
         pais: negocio.pais,
         texto_declaracion_compra: negocio.texto_declaracion_compra?.trim() || null,
         texto_garantia_tamano: negocio.texto_garantia_tamano,
@@ -125,6 +140,23 @@ export default function DatosNegocio() {
       setError('No pudimos guardar: ' + updateError.message);
       setGuardando(false);
       return;
+    }
+
+    const { data: existentes } = await supabase.from('modelos_stock').select('nombre');
+    const nombresExistentes = new Set((existentes ?? []).map((m) => normalizarNombreModelo(m.nombre)));
+    const nuevasCarpetas: string[] = [];
+    for (const marcaId of negocio.marcas_stock) {
+      const catalogo = CATALOGO_MODELOS[marcaId];
+      if (!catalogo) continue;
+      for (const modelo of catalogo) {
+        if (!nombresExistentes.has(normalizarNombreModelo(modelo))) {
+          nombresExistentes.add(normalizarNombreModelo(modelo));
+          nuevasCarpetas.push(modelo);
+        }
+      }
+    }
+    if (nuevasCarpetas.length > 0) {
+      await supabase.from('modelos_stock').insert(nuevasCarpetas.map((nombre) => ({ nombre })));
     }
 
     router.push('/configuracion');
@@ -271,6 +303,43 @@ export default function DatosNegocio() {
             placeholder="Ej. 90"
             className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
           />
+        </div>
+
+        <div>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">
+            Marcas que vendés (crea carpetas de Stock automáticamente)
+          </label>
+          <p className="text-xs text-muted dark:text-dark-text-secondary mb-2">
+            Al tildar una marca con catálogo (iPhone, Samsung), se crean solas las carpetas de Stock de cada modelo,
+            con el nombre ya escrito bien y parejo — así no tenés que cargarlas una por una a mano ni terminás con
+            carpetas repetidas por una mayúscula o un espacio de más. Si destildás una marca, no se borra ninguna
+            carpeta ya creada. "Otras marcas" es para cuando vendés algo que no está en las listas (por ejemplo,
+            accesorios o consolas): esas seguís creándolas vos desde Stock &gt; Carpetas.
+          </p>
+          <div className="flex flex-col gap-2">
+            {MARCAS_DISPONIBLES.map((m) => {
+              const elegida = negocio.marcas_stock.includes(m.id);
+              return (
+                <label
+                  key={m.id}
+                  className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-sm cursor-pointer ${
+                    elegida ? 'border-accent dark:border-dark-accent bg-accent-soft' : 'border-border dark:border-dark-border'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={elegida}
+                    onChange={() => toggleMarca(m.id)}
+                    className="h-5 w-5 accent-ink shrink-0"
+                  />
+                  <span className="font-medium">{m.nombre}</span>
+                  {!CATALOGO_MODELOS[m.id] && (
+                    <span className="text-xs text-muted dark:text-dark-text-secondary ml-auto">sin catálogo</span>
+                  )}
+                </label>
+              );
+            })}
+          </div>
         </div>
 
         <TextoConTamano

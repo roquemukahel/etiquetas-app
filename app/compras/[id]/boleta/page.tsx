@@ -210,7 +210,7 @@ export default function BoletaCompra() {
           <div className="rounded-xl bg-canvas p-4 print:p-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">Declaración</p>
             <p
-              className="whitespace-pre-wrap text-muted"
+              className="whitespace-pre-wrap text-ink font-medium print:font-semibold"
               style={{ fontSize: negocio.texto_declaracion_compra_tamano }}
             >
               {negocio.texto_declaracion_compra}

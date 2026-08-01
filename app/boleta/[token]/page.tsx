@@ -280,7 +280,7 @@ export default function BoletaPublica() {
         {boleta.incluir_garantia && tieneProductos && boleta.negocio.texto_garantia && (
           <div className="rounded-xl bg-canvas p-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">Garantía de productos</p>
-            <p className="whitespace-pre-wrap text-muted" style={{ fontSize: boleta.negocio.texto_garantia_tamano }}>
+            <p className="whitespace-pre-wrap text-ink font-medium" style={{ fontSize: boleta.negocio.texto_garantia_tamano }}>
               {boleta.negocio.texto_garantia}
             </p>
           </div>
@@ -290,7 +290,7 @@ export default function BoletaPublica() {
           <div className="rounded-xl bg-canvas p-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">Garantía de servicio técnico</p>
             <p
-              className="whitespace-pre-wrap text-muted"
+              className="whitespace-pre-wrap text-ink font-medium"
               style={{ fontSize: boleta.negocio.texto_garantia_servicio_tamano }}
             >
               {boleta.negocio.texto_garantia_servicio}
