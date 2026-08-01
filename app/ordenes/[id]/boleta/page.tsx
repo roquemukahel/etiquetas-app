@@ -222,6 +222,12 @@ export default function Boleta() {
           </a>
         )}
         <Link
+          href={`/ordenes/${orden.id}?editar=1`}
+          className="rounded-lg border border-border dark:border-dark-border bg-white dark:bg-dark-surface text-ink dark:text-dark-text px-3 py-2 text-xs font-medium hover:bg-canvas dark:hover:bg-dark-bg transition-colors"
+        >
+          Editar boleta
+        </Link>
+        <Link
           href="/ordenes"
           className="rounded-lg bg-accent hover:bg-accent-hover transition-colors text-white px-3 py-2 text-xs font-medium"
         >

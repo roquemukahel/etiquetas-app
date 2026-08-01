@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
@@ -142,6 +142,18 @@ export default function DetalleCompra() {
     setError(null);
     setEditando(true);
   };
+
+  // Al llegar desde la boleta con "Editar boleta" (?editar=1), abre
+  // directo el formulario de edición en vez de mostrar primero el
+  // detalle de solo lectura.
+  const abrioEdicionDesdeQuery = useRef(false);
+  useEffect(() => {
+    if (compra && !abrioEdicionDesdeQuery.current && new URLSearchParams(window.location.search).get('editar') === '1') {
+      abrioEdicionDesdeQuery.current = true;
+      abrirEdicion();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [compra]);
 
   const guardarEdicion = async () => {
     if (!compra) return;
