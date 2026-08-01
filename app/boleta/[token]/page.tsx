@@ -21,6 +21,8 @@ type Boleta = {
   fecha_entrega: string | null;
   estado: string;
   forma_pago: string | null;
+  monto_secundario: number | null;
+  moneda_secundaria: string | null;
   total: number | null;
   anticipo: number | null;
   impuesto_porcentaje: number | null;
@@ -249,6 +251,12 @@ export default function BoletaPublica() {
               {Math.abs(boleta.total ?? subtotal).toLocaleString('es-AR')}
             </span>
           </div>
+          {boleta.monto_secundario != null && boleta.moneda_secundaria && (
+            <p className="text-xs text-muted italic text-right">
+              ≈ {simboloMoneda(boleta.moneda_secundaria)}
+              {boleta.monto_secundario.toLocaleString('es-AR')} {boleta.moneda_secundaria} (valor informativo)
+            </p>
+          )}
         </div>
 
         {boleta.forma_pago && (

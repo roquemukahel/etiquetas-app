@@ -24,6 +24,7 @@ type Negocio = {
   mostrar_tiktok: boolean;
   moneda: string;
   monedas_habilitadas: string[];
+  tipo_cambio: number | null;
   pais: string;
   texto_declaracion_compra: string | null;
   texto_garantia_tamano: number;
@@ -52,7 +53,7 @@ export default function DatosNegocio() {
       const { data: perfil } = await supabase
         .from('perfiles')
         .select(
-          'negocio_id, negocios ( id, nombre, telefono, direccion, eslogan, logo_url, texto_garantia, texto_garantia_servicio, instagram, facebook, tiktok, mostrar_instagram, mostrar_facebook, mostrar_tiktok, moneda, monedas_habilitadas, pais, texto_declaracion_compra, texto_garantia_tamano, texto_garantia_servicio_tamano, texto_declaracion_compra_tamano, garantia_dias )'
+          'negocio_id, negocios ( id, nombre, telefono, direccion, eslogan, logo_url, texto_garantia, texto_garantia_servicio, instagram, facebook, tiktok, mostrar_instagram, mostrar_facebook, mostrar_tiktok, moneda, monedas_habilitadas, tipo_cambio, pais, texto_declaracion_compra, texto_garantia_tamano, texto_garantia_servicio_tamano, texto_declaracion_compra_tamano, garantia_dias )'
         )
         .eq('id', user.id)
         .single();
@@ -110,6 +111,7 @@ export default function DatosNegocio() {
         mostrar_tiktok: negocio.mostrar_tiktok,
         moneda: negocio.monedas_habilitadas[0] || negocio.moneda,
         monedas_habilitadas: negocio.monedas_habilitadas,
+        tipo_cambio: negocio.tipo_cambio,
         pais: negocio.pais,
         texto_declaracion_compra: negocio.texto_declaracion_compra?.trim() || null,
         texto_garantia_tamano: negocio.texto_garantia_tamano,
@@ -188,9 +190,10 @@ export default function DatosNegocio() {
             Monedas con las que trabajás (elegí hasta 2)
           </label>
           <p className="text-xs text-muted dark:text-dark-text-secondary mb-2">
+            La primera es tu moneda principal: en ella se hacen todas las boletas y se calculan las Estadísticas.
             {negocio.monedas_habilitadas.length === 2
-              ? 'Al crear una orden vas a poder elegir con cuál de estas dos hacer la boleta.'
-              : 'Si habilitás una segunda moneda, vas a poder elegir con cuál hacer cada boleta al crear una orden.'}
+              ? ' Si habilitás una segunda, vas a poder mostrar también en la boleta un monto aproximado en esa moneda, solo informativo para el cliente (nunca se suma en Estadísticas).'
+              : ' Podés habilitar una segunda moneda para mostrar un monto aproximado informativo en la boleta.'}
           </p>
           <div className="grid grid-cols-2 gap-2">
             {MONEDAS.map((m) => {
@@ -219,6 +222,25 @@ export default function DatosNegocio() {
               );
             })}
           </div>
+
+          {negocio.monedas_habilitadas.length === 2 && (
+            <div className="mt-2">
+              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">
+                Tipo de cambio: 1 {negocio.monedas_habilitadas[0]} ={' '}
+                <input
+                  value={negocio.tipo_cambio?.toString() ?? ''}
+                  onChange={(e) => campoNum('tipo_cambio', e.target.value ? Number(e.target.value) : (null as any))}
+                  inputMode="numeric"
+                  placeholder="ej. 1000"
+                  className="inline-block w-28 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-1 text-sm ml-1"
+                />{' '}
+                {negocio.monedas_habilitadas[1]}
+              </label>
+              <p className="text-xs text-muted dark:text-dark-text-secondary">
+                Se usa para calcular el monto informativo sugerido al crear una orden (siempre editable en el momento).
+              </p>
+            </div>
+          )}
         </div>
 
         <div>

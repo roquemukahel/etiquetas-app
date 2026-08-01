@@ -130,6 +130,10 @@ export default function NuevaOrden() {
   const [imagenesCarpetas, setImagenesCarpetas] = useState<Map<string, string>>(new Map());
   const [monedasDisponibles, setMonedasDisponibles] = useState<string[]>(['ARS']);
   const [monedaOrden, setMonedaOrden] = useState('ARS');
+  const [tipoCambio, setTipoCambio] = useState<number | null>(null);
+  const [mostrarSecundaria, setMostrarSecundaria] = useState(false);
+  const [montoSecundario, setMontoSecundario] = useState('');
+  const [montoSecundarioTocado, setMontoSecundarioTocado] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -139,7 +143,7 @@ export default function NuevaOrden() {
       if (!user) return;
       const { data: perfil } = await supabase
         .from('perfiles')
-        .select('negocios ( garantia_dias, moneda, monedas_habilitadas )')
+        .select('negocios ( garantia_dias, moneda, monedas_habilitadas, tipo_cambio )')
         .eq('id', user.id)
         .single();
       setGarantiaDias((perfil as any)?.negocios?.garantia_dias ?? null);
@@ -147,6 +151,7 @@ export default function NuevaOrden() {
       const monedas: string[] = negocio?.monedas_habilitadas?.length ? negocio.monedas_habilitadas : ['ARS'];
       setMonedasDisponibles(monedas);
       setMonedaOrden(negocio?.moneda || monedas[0]);
+      setTipoCambio(negocio?.tipo_cambio ?? null);
     })();
     (async () => {
       setClientes(await obtenerTodasLasFilas<Cliente>(supabase, 'clientes', '*'));
@@ -212,6 +217,15 @@ export default function NuevaOrden() {
     // el total puede quedar negativo — representa saldo a favor del cliente.
     return conImpuesto - (Number(anticipo) || 0) - montoCanjeTotal;
   }, [subtotal, impuesto, anticipo, montoCanjeTotal]);
+
+  // Monto informativo en la segunda moneda: se recalcula solo mientras
+  // el usuario no lo haya tocado a mano (si lo edita, respetamos su
+  // valor y dejamos de pisarlo con el cálculo automático).
+  useEffect(() => {
+    if (mostrarSecundaria && tipoCambio && !montoSecundarioTocado) {
+      setMontoSecundario(Math.round(total * tipoCambio).toString());
+    }
+  }, [mostrarSecundaria, tipoCambio, montoSecundarioTocado, total]);
 
   const elegirCliente = (c: Cliente) => {
     setClienteElegido(c);
@@ -400,6 +414,8 @@ export default function NuevaOrden() {
           impuesto_porcentaje: Number(impuesto) || 0,
           monto_canje: montoCanjeTotal,
           moneda: monedaOrden,
+          monto_secundario: mostrarSecundaria && montoSecundario ? Number(montoSecundario) : null,
+          moneda_secundaria: mostrarSecundaria ? monedasDisponibles[1] : null,
           total,
           estado: estadoOrden,
           fecha_entrega: estadoOrden === 'entregado' ? new Date().toISOString() : null,
@@ -926,21 +942,40 @@ export default function NuevaOrden() {
       </div>
 
       {monedasDisponibles.length > 1 && (
-        <div>
-          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Moneda de esta orden</label>
-          <div className="flex gap-2">
-            {monedasDisponibles.map((m) => (
-              <button
-                key={m}
-                onClick={() => setMonedaOrden(m)}
-                className={`flex-1 rounded-xl py-2 text-sm font-medium ${
-                  monedaOrden === m ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
-                }`}
-              >
-                {m} ({simboloMoneda(m)})
-              </button>
-            ))}
-          </div>
+        <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-3 flex flex-col gap-2">
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={mostrarSecundaria}
+              onChange={(e) => {
+                setMostrarSecundaria(e.target.checked);
+                setMontoSecundarioTocado(false);
+              }}
+              className="h-5 w-5 accent-ink"
+            />
+            <span className="text-sm font-medium">
+              Mostrar también el precio en {monedasDisponibles[1]} ({simboloMoneda(monedasDisponibles[1])})
+            </span>
+          </label>
+          {mostrarSecundaria && (
+            <>
+              <input
+                value={montoSecundario}
+                onChange={(e) => {
+                  setMontoSecundario(e.target.value);
+                  setMontoSecundarioTocado(true);
+                }}
+                inputMode="numeric"
+                placeholder={`Monto en ${monedasDisponibles[1]}`}
+                className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+              />
+              <p className="text-xs text-muted dark:text-dark-text-secondary">
+                Valor informativo para el cliente, calculado con tu tipo de cambio (lo podés corregir). El total real
+                de la orden sigue siendo en {monedasDisponibles[0]}, y es el único que se tiene en cuenta en
+                Estadísticas.
+              </p>
+            </>
+          )}
         </div>
       )}
 

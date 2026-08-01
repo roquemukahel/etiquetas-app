@@ -33,6 +33,8 @@ type Orden = {
   incluir_garantia: boolean;
   token_boleta: string;
   moneda: string | null;
+  monto_secundario: number | null;
+  moneda_secundaria: string | null;
   clientes: {
     nombre: string;
     apellido: string | null;
@@ -432,6 +434,12 @@ export default function Boleta() {
               {Math.abs(orden.total ?? subtotal).toLocaleString('es-AR')}
             </span>
           </div>
+          {orden.monto_secundario != null && orden.moneda_secundaria && (
+            <p className="text-xs text-muted italic text-right">
+              ≈ {simboloMoneda(orden.moneda_secundaria)}
+              {orden.monto_secundario.toLocaleString('es-AR')} {orden.moneda_secundaria} (valor informativo)
+            </p>
+          )}
         </div>
 
         <div className="flex flex-wrap gap-x-8 gap-y-1 text-sm">

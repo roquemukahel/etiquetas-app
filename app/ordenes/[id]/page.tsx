@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { registrarAuditoria } from '../../lib/auditoria';
 import { limpiarImei } from '../../lib/imei';
+import { simboloMoneda } from '../../lib/monedas';
 import Avatar from '../../Avatar';
 import SelectorColor from '../../SelectorColor';
 
@@ -33,6 +34,9 @@ type Orden = {
   monto_canje: number | null;
   vendedor_id: string | null;
   cliente_id: string | null;
+  moneda: string | null;
+  monto_secundario: number | null;
+  moneda_secundaria: string | null;
   estado: string;
   created_at: string;
   nota: string | null;
@@ -63,6 +67,10 @@ export default function DetalleOrden() {
   const [itemsEdit, setItemsEdit] = useState<ItemEditable[]>([]);
   const [vendedorEdit, setVendedorEdit] = useState('');
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
+  const [monedasDisponibles, setMonedasDisponibles] = useState<string[]>([]);
+  const [tipoCambio, setTipoCambio] = useState<number | null>(null);
+  const [mostrarSecundariaEdit, setMostrarSecundariaEdit] = useState(false);
+  const [montoSecundarioEdit, setMontoSecundarioEdit] = useState('');
 
   const [yaDerivado, setYaDerivado] = useState(false);
   const [derivarAbierto, setDerivarAbierto] = useState(false);
@@ -95,6 +103,20 @@ export default function DetalleOrden() {
     (async () => {
       const { data } = await supabase.from('vendedores').select('id, nombre').order('nombre');
       setVendedores((data as Vendedor[]) ?? []);
+    })();
+    (async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: perfil } = await supabase
+        .from('perfiles')
+        .select('negocios ( monedas_habilitadas, tipo_cambio )')
+        .eq('id', user.id)
+        .single();
+      const negocio = (perfil as any)?.negocios;
+      setMonedasDisponibles(negocio?.monedas_habilitadas?.length ? negocio.monedas_habilitadas : []);
+      setTipoCambio(negocio?.tipo_cambio ?? null);
     })();
   }, []);
 
@@ -149,6 +171,8 @@ export default function DetalleOrden() {
     setAnticipoEdit(orden.anticipo != null ? String(orden.anticipo) : '');
     setImpuestoEdit(orden.impuesto_porcentaje != null ? String(orden.impuesto_porcentaje) : '');
     setVendedorEdit(orden.vendedor_id || '');
+    setMostrarSecundariaEdit(orden.monto_secundario != null);
+    setMontoSecundarioEdit(orden.monto_secundario != null ? String(orden.monto_secundario) : '');
     setItemsEdit(
       orden.orden_items.map((i) => ({
         id: i.id,
@@ -202,6 +226,11 @@ export default function DetalleOrden() {
       const nombreDespues = vendedores.find((v) => v.id === vendedorNuevo)?.nombre || 'Sin asignar';
       cambios.vendedor_id = { antes: nombreAntes, despues: nombreDespues };
     }
+    const montoSecundarioNuevo = mostrarSecundariaEdit && montoSecundarioEdit ? Number(montoSecundarioEdit) : null;
+    const monedaSecundariaNueva = mostrarSecundariaEdit ? monedasDisponibles[1] || orden.moneda_secundaria || null : null;
+    if ((orden.monto_secundario ?? null) !== montoSecundarioNuevo) {
+      cambios.monto_secundario = { antes: orden.monto_secundario, despues: montoSecundarioNuevo };
+    }
 
     const itemsCambiados = itemsEdit
       .map((edit) => {
@@ -237,6 +266,8 @@ export default function DetalleOrden() {
         impuesto_porcentaje: impuestoNuevo,
         total: totalEdit,
         vendedor_id: vendedorNuevo,
+        monto_secundario: montoSecundarioNuevo,
+        moneda_secundaria: monedaSecundariaNueva,
       })
       .eq('id', id);
     if (updateError) {
@@ -387,6 +418,41 @@ export default function DetalleOrden() {
             ))}
           </select>
         </div>
+
+        {monedasDisponibles.length > 1 && (
+          <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-3 flex flex-col gap-2">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={mostrarSecundariaEdit}
+                onChange={(e) => {
+                  setMostrarSecundariaEdit(e.target.checked);
+                  if (e.target.checked && !montoSecundarioEdit && tipoCambio) {
+                    setMontoSecundarioEdit(Math.round(totalEdit * tipoCambio).toString());
+                  }
+                }}
+                className="h-5 w-5 accent-ink"
+              />
+              <span className="text-sm font-medium">
+                Mostrar también el precio en {monedasDisponibles[1]} ({simboloMoneda(monedasDisponibles[1])})
+              </span>
+            </label>
+            {mostrarSecundariaEdit && (
+              <>
+                <input
+                  value={montoSecundarioEdit}
+                  onChange={(e) => setMontoSecundarioEdit(e.target.value)}
+                  inputMode="numeric"
+                  placeholder={`Monto en ${monedasDisponibles[1]}`}
+                  className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+                />
+                <p className="text-xs text-muted dark:text-dark-text-secondary">
+                  Valor informativo, no afecta las Estadísticas.
+                </p>
+              </>
+            )}
+          </div>
+        )}
 
         <div className="flex flex-col gap-2">
           {itemsEdit.map((i) => (
