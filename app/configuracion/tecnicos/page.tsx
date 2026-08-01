@@ -117,7 +117,7 @@ export default function Tecnicos() {
           <div key={t.id} className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex flex-col gap-3">
             <div className="flex items-center gap-3">
               <label className="shrink-0 cursor-pointer">
-                <Avatar src={t.foto_url} nombre={t.nombre} size={60} />
+                <Avatar src={t.foto_url} nombre={t.nombre} size={68} />
                 <input type="file" accept="image/*" className="hidden" onChange={(e) => cambiarFoto(t, e)} />
               </label>
               <div className="flex-1 min-w-0">

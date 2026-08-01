@@ -1,4 +1,4 @@
-export default function Avatar({ src, nombre, size = 28 }: { src?: string | null; nombre: string; size?: number }) {
+export default function Avatar({ src, nombre, size = 34 }: { src?: string | null; nombre: string; size?: number }) {
   const estilo = { height: size, width: size, fontSize: Math.max(10, size * 0.4) };
   const inicial = nombre.trim().charAt(0).toUpperCase() || '?';
 

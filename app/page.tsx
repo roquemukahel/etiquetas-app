@@ -8,6 +8,7 @@ import { simboloMoneda } from './lib/monedas';
 import { imagenParaDescripcion } from './lib/carpetas';
 import { ICONOS, COLOR_ICONO } from './Iconos';
 import NumeroAnimado from './NumeroAnimado';
+import Avatar from './Avatar';
 
 const SECCIONES = [
   { href: '/ordenes', titulo: 'Órdenes', desc: 'Ventas, boletas y canjes', icono: 'ordenes', color: 'ventas', activo: true },
@@ -49,7 +50,13 @@ export default async function Home() {
   let serieTicket: number[] = [];
   let diasDePrueba: number | null = null;
   let suscripcionActiva = false;
-  let actividad: { tipo: 'venta' | 'reparacion' | 'stock' | 'cliente'; fecha: Date; texto: string }[] = [];
+  let actividad: {
+    tipo: 'venta' | 'reparacion' | 'stock' | 'cliente';
+    fecha: Date;
+    texto: string;
+    actorNombre: string | null;
+    actorFoto: string | null;
+  }[] = [];
   let notificaciones: { color: string; texto: string; href: string }[] = [];
   let statsSecciones: Record<string, string[]> = {};
 
@@ -111,14 +118,14 @@ export default async function Home() {
       supabase
         .from('ordenes')
         .select(
-          'total, estado, created_at, vendedores ( nombre ), clientes ( nombre, apellido ), orden_items ( descripcion, cantidad, tipo )'
+          'total, estado, created_at, vendedores ( nombre, foto_url ), clientes ( nombre, apellido ), orden_items ( descripcion, cantidad, tipo )'
         )
         .gte('created_at', inicioMesPasado.toISOString()),
       supabase.from('modelos_stock').select('nombre, imagen_url'),
       supabase.from('productos').select('nombre, imagen_url'),
       supabase
         .from('canjes')
-        .select('modelo, fecha_reparado, tecnicos ( nombre )')
+        .select('modelo, fecha_reparado, tecnicos ( nombre, foto_url )')
         .eq('estado', 'reparado')
         .not('fecha_reparado', 'is', null)
         .order('fecha_reparado', { ascending: false })
@@ -204,7 +211,13 @@ export default async function Home() {
       .sort((a, b) => b.cantidad - a.cantidad)
       .slice(0, 5);
 
-    const candidatos: { tipo: 'venta' | 'reparacion' | 'stock' | 'cliente'; fecha: Date; texto: string }[] = [];
+    const candidatos: {
+      tipo: 'venta' | 'reparacion' | 'stock' | 'cliente';
+      fecha: Date;
+      texto: string;
+      actorNombre: string | null;
+      actorFoto: string | null;
+    }[] = [];
 
     for (const o of cobradas.slice(0, 8) as any[]) {
       const primerItem = o.orden_items?.[0]?.descripcion?.split(' · IMEI')[0];
@@ -216,6 +229,8 @@ export default async function Home() {
         tipo: 'venta',
         fecha: new Date(o.created_at),
         texto: `${vendedor ? `${vendedor} vendió` : 'Se vendió'} ${que}${cliente ? ` a ${cliente}` : ''}`,
+        actorNombre: vendedor ?? null,
+        actorFoto: o.vendedores?.foto_url ?? null,
       });
     }
 
@@ -225,6 +240,8 @@ export default async function Home() {
         tipo: 'reparacion',
         fecha: new Date(r.fecha_reparado),
         texto: `${tecnico ? `${tecnico} terminó` : 'Se terminó'} una reparación${r.modelo ? ` de ${r.modelo}` : ''}`,
+        actorNombre: tecnico ?? null,
+        actorFoto: r.tecnicos?.foto_url ?? null,
       });
     }
 
@@ -233,6 +250,8 @@ export default async function Home() {
         tipo: 'stock',
         fecha: new Date(d.created_at),
         texto: `Ingresó ${d.modelo || 'un equipo'} al stock`,
+        actorNombre: null,
+        actorFoto: null,
       });
     }
 
@@ -242,6 +261,8 @@ export default async function Home() {
         tipo: 'cliente',
         fecha: new Date(c.created_at),
         texto: `Nuevo cliente registrado: ${nombreCompleto}`,
+        actorNombre: null,
+        actorFoto: null,
       });
     }
 
@@ -507,11 +528,22 @@ export default async function Home() {
               const { emoji, color } = ICONO_ACTIVIDAD[ev.tipo];
               return (
                 <div key={idx} className="flex items-center gap-3">
-                  <div
-                    className={`h-8 w-8 shrink-0 rounded-full bg-gradient-to-br ${COLOR_ICONO[color]} flex items-center justify-center text-base`}
-                  >
-                    {emoji}
-                  </div>
+                  {ev.actorNombre ? (
+                    <div className="relative shrink-0">
+                      <Avatar src={ev.actorFoto} nombre={ev.actorNombre} size={38} />
+                      <div
+                        className={`absolute -bottom-1 -right-1 h-5 w-5 rounded-full bg-gradient-to-br ${COLOR_ICONO[color]} flex items-center justify-center text-[10px] border-2 border-white dark:border-dark-surface`}
+                      >
+                        {emoji}
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      className={`h-8 w-8 shrink-0 rounded-full bg-gradient-to-br ${COLOR_ICONO[color]} flex items-center justify-center text-base`}
+                    >
+                      {emoji}
+                    </div>
+                  )}
                   <p className="flex-1 min-w-0 text-sm leading-snug truncate">{ev.texto}</p>
                   <p className="shrink-0 text-[11px] text-muted dark:text-dark-text-secondary">{hace(ev.fecha)}</p>
                 </div>

@@ -164,7 +164,7 @@ export default function SelectorDeActor() {
         <div className="no-print sticky top-0 z-40 w-full bg-ink text-white text-xs px-4 py-2 flex items-center justify-between gap-2">
           <span className="flex items-center gap-2 min-w-0">
             <span className="h-1.5 w-1.5 rounded-full bg-good shrink-0" />
-            <Avatar src={actor.fotoUrl} nombre={actor.nombre} size={34} />
+            <Avatar src={actor.fotoUrl} nombre={actor.nombre} size={40} />
             <span className="truncate">
               Trabajando como <strong>{actor.nombre}</strong>
             </span>
@@ -192,7 +192,7 @@ export default function SelectorDeActor() {
 
             <div className="flex items-center gap-3">
               <label className="shrink-0 cursor-pointer">
-                <Avatar src={actor.fotoUrl} nombre={actor.nombre} size={72} />
+                <Avatar src={actor.fotoUrl} nombre={actor.nombre} size={84} />
                 <input type="file" accept="image/*" className="hidden" onChange={cambiarFotoPerfil} />
               </label>
               <div className="min-w-0">
@@ -311,7 +311,7 @@ export default function SelectorDeActor() {
                       onClick={() => elegir(eligiendoTipo, p)}
                       className="rounded-xl border border-border dark:border-dark-border px-4 py-3 text-sm text-left hover:bg-canvas dark:hover:bg-dark-bg flex items-center gap-2.5"
                     >
-                      <Avatar src={p.foto_url} nombre={p.nombre} size={56} />
+                      <Avatar src={p.foto_url} nombre={p.nombre} size={64} />
                       {p.nombre}
                     </button>
                   ))}
