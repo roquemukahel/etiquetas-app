@@ -97,8 +97,8 @@ export default function BoletaPublica() {
 
   return (
     <main className="flex min-h-screen flex-col items-center px-6 py-10">
-      <div className="w-full max-w-xl flex flex-col gap-6 text-[15px] text-ink bg-white rounded-2xl border border-border shadow-card p-8">
-        <div className="flex flex-col items-center gap-0.5 -mb-2">
+      <div className="w-full max-w-xl flex flex-col gap-6 text-[15px] text-ink bg-white rounded-2xl border border-border shadow-card px-8 pt-3 pb-8">
+        <div className="flex flex-col items-center gap-0.5">
           <div className="flex items-center gap-1.5 opacity-80">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/qovento-icon.png" alt="" className="h-4 w-4 object-contain" />
@@ -110,7 +110,7 @@ export default function BoletaPublica() {
         <div className="flex items-center gap-3">
           {boleta.negocio.logo_url && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={boleta.negocio.logo_url} alt="Logo" className="h-16 w-16 object-contain rounded-lg" />
+            <img src={boleta.negocio.logo_url} alt="Logo" className="h-20 w-20 object-contain rounded-lg" />
           )}
           <div>
             <p className="text-2xl font-display font-semibold leading-tight">{boleta.negocio.nombre}</p>
@@ -171,9 +171,9 @@ export default function BoletaPublica() {
         <table className="w-full text-sm border-separate border-spacing-0">
           <thead>
             <tr className="bg-ink text-white text-left text-xs font-semibold uppercase tracking-wide">
-              <th className="py-2 px-3 rounded-l-lg">Producto</th>
-              <th className="py-2 px-3 text-center">Cant.</th>
-              <th className="py-2 px-3 text-right rounded-r-lg">Precio</th>
+              <th className="py-1.5 px-3 rounded-l-lg">Producto</th>
+              <th className="py-1.5 px-3 text-center border-l border-white/20">Cant.</th>
+              <th className="py-1.5 px-3 text-right rounded-r-lg border-l border-white/20">Precio</th>
             </tr>
           </thead>
           <tbody>
@@ -187,8 +187,8 @@ export default function BoletaPublica() {
                     </p>
                   )}
                 </td>
-                <td className="py-2.5 px-3 text-center">{i.cantidad}</td>
-                <td className="py-2.5 px-3 text-right font-medium">
+                <td className="py-2.5 px-3 text-center border-l border-border">{i.cantidad}</td>
+                <td className="py-2.5 px-3 text-right font-medium border-l border-border">
                   {moneda}
                   {(i.cantidad * i.precio_unitario).toLocaleString('es-AR')}
                 </td>
@@ -223,7 +223,7 @@ export default function BoletaPublica() {
               </span>
             </div>
           )}
-          <div className="flex justify-between items-baseline font-display font-semibold text-xl rounded-lg bg-ink text-white px-3 py-2.5 mt-1">
+          <div className="flex justify-between items-baseline font-display font-semibold text-lg rounded-lg bg-ink text-white px-3 py-2 mt-1">
             <span className="text-sm font-sans font-medium opacity-80">
               {(boleta.total ?? subtotal) < 0 ? 'SALDO A FAVOR DEL CLIENTE' : 'TOTAL'}
             </span>
@@ -248,6 +248,10 @@ export default function BoletaPublica() {
             <p className="whitespace-pre-wrap text-muted">{boleta.nota}</p>
           </div>
         )}
+
+        {boleta.incluir_garantia &&
+          ((tieneProductos && boleta.negocio.texto_garantia) ||
+            (tieneTrabajos && boleta.negocio.texto_garantia_servicio)) && <Divisor />}
 
         {boleta.incluir_garantia && tieneProductos && boleta.negocio.texto_garantia && (
           <div className="rounded-xl bg-canvas p-4">
