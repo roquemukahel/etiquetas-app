@@ -5,12 +5,22 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { registrarAuditoria } from '../../lib/auditoria';
+import { limpiarImei } from '../../lib/imei';
 import Avatar from '../../Avatar';
+import SelectorColor from '../../SelectorColor';
 
 const ESTADOS = ['pendiente', 'pagado', 'entregado'];
 const FORMAS_PAGO = ['Efectivo', 'Transferencia', 'Tarjeta'];
+const STORAGE_OPTIONS = [64, 128, 256, 512];
 
-type Item = { id: string; descripcion: string; cantidad: number; precio_unitario: number; dispositivo_id: string | null };
+type Item = {
+  id: string;
+  descripcion: string;
+  cantidad: number;
+  precio_unitario: number;
+  dispositivo_id: string | null;
+  tipo: string;
+};
 
 type Vendedor = { id: string; nombre: string };
 
@@ -23,6 +33,7 @@ type Orden = {
   monto_canje: number | null;
   canje_id: string | null;
   vendedor_id: string | null;
+  cliente_id: string | null;
   estado: string;
   created_at: string;
   nota: string | null;
@@ -54,16 +65,27 @@ export default function DetalleOrden() {
   const [vendedorEdit, setVendedorEdit] = useState('');
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
 
+  const [yaDerivado, setYaDerivado] = useState(false);
+  const [derivarAbierto, setDerivarAbierto] = useState(false);
+  const [derivarModelo, setDerivarModelo] = useState('');
+  const [derivarCapacidad, setDerivarCapacidad] = useState<number | null>(null);
+  const [derivarColor, setDerivarColor] = useState('');
+  const [derivarImei, setDerivarImei] = useState('');
+  const [derivarDetalles, setDerivarDetalles] = useState('');
+  const [derivando, setDerivando] = useState(false);
+
   const cargar = async () => {
     const { data } = await supabase
       .from('ordenes')
       .select(
-        '*, clientes ( nombre, apellido, telefono ), vendedores ( nombre, foto_url ), orden_items ( id, descripcion, cantidad, precio_unitario, dispositivo_id )'
+        '*, clientes ( nombre, apellido, telefono ), vendedores ( nombre, foto_url ), orden_items ( id, descripcion, cantidad, precio_unitario, dispositivo_id, tipo )'
       )
       .eq('id', id)
       .single();
     setOrden(data as any);
     setLoading(false);
+    const { data: canjeExistente } = await supabase.from('canjes').select('id').eq('orden_id', id).maybeSingle();
+    setYaDerivado(!!canjeExistente);
   };
 
   useEffect(() => {
@@ -76,6 +98,49 @@ export default function DetalleOrden() {
       setVendedores((data as Vendedor[]) ?? []);
     })();
   }, []);
+
+  const tieneTrabajo = orden?.orden_items.some((i) => i.tipo === 'trabajo') ?? false;
+
+  const abrirDerivar = () => {
+    if (!orden) return;
+    const descripciones = orden.orden_items.filter((i) => i.tipo === 'trabajo').map((i) => i.descripcion);
+    setDerivarModelo('');
+    setDerivarCapacidad(null);
+    setDerivarColor('');
+    setDerivarImei('');
+    setDerivarDetalles(descripciones.join(', '));
+    setDerivarAbierto(true);
+  };
+
+  const derivarAServicioTecnico = async () => {
+    if (!orden || !derivarModelo.trim()) return;
+    setDerivando(true);
+    const nombreCliente = orden.clientes ? `${orden.clientes.nombre} ${orden.clientes.apellido || ''}`.trim() : 'sin cliente';
+    const { data: nuevoCanje } = await supabase
+      .from('canjes')
+      .insert({
+        orden_id: orden.id,
+        cliente_id: orden.cliente_id,
+        modelo: derivarModelo.trim(),
+        capacidad_gb: derivarCapacidad,
+        color: derivarColor.trim() || null,
+        imei: limpiarImei(derivarImei) || null,
+        detalles: derivarDetalles.trim() || null,
+        estado: 'servicio_tecnico',
+        fecha_ingreso_servicio: new Date().toISOString(),
+      })
+      .select('id')
+      .single();
+    await registrarAuditoria(supabase, {
+      accion: `derivó a Servicio Técnico un equipo de una orden (${nombreCliente}, ${derivarModelo.trim()})`,
+      entidad: 'canje',
+      entidadId: nuevoCanje?.id,
+      valorNuevo: { modelo: derivarModelo.trim(), capacidad_gb: derivarCapacidad, color: derivarColor.trim() || null, imei: limpiarImei(derivarImei) || null },
+    });
+    setYaDerivado(true);
+    setDerivarAbierto(false);
+    setDerivando(false);
+  };
 
   const empezarEdicion = () => {
     if (!orden) return;
@@ -461,6 +526,79 @@ export default function DetalleOrden() {
       >
         Ver boleta
       </Link>
+
+      {tieneTrabajo && yaDerivado && (
+        <p className="text-xs text-muted dark:text-dark-text-secondary text-center">
+          Este equipo ya fue derivado a{' '}
+          <Link href="/servicio-tecnico" className="text-accent dark:text-dark-accent underline">
+            Servicio Técnico
+          </Link>
+          .
+        </p>
+      )}
+
+      {tieneTrabajo && !yaDerivado && !derivarAbierto && (
+        <button
+          onClick={abrirDerivar}
+          className="w-full rounded-2xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium"
+        >
+          Derivar a Servicio Técnico
+        </button>
+      )}
+
+      {derivarAbierto && (
+        <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-3 flex flex-col gap-2">
+          <p className="text-xs font-medium text-muted dark:text-dark-text-secondary">Datos del equipo a derivar</p>
+          <input
+            value={derivarModelo}
+            onChange={(e) => setDerivarModelo(e.target.value)}
+            placeholder="Modelo (ej. iPhone 13)"
+            className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+          />
+          <div className="flex gap-2">
+            {STORAGE_OPTIONS.map((gb) => (
+              <button
+                key={gb}
+                onClick={() => setDerivarCapacidad(gb)}
+                className={`flex-1 rounded-lg py-2 text-xs font-medium ${
+                  derivarCapacidad === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
+                }`}
+              >
+                {gb}GB
+              </button>
+            ))}
+          </div>
+          <SelectorColor value={derivarColor} onChange={setDerivarColor} />
+          <input
+            value={derivarImei}
+            onChange={(e) => setDerivarImei(e.target.value)}
+            placeholder="IMEI"
+            className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm font-mono"
+          />
+          <textarea
+            value={derivarDetalles}
+            onChange={(e) => setDerivarDetalles(e.target.value)}
+            placeholder="Detalles (ej. no enciende, pantalla rota)"
+            rows={2}
+            className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={() => setDerivarAbierto(false)}
+              className="flex-1 rounded-lg border border-border dark:border-dark-border py-2 text-sm font-medium"
+            >
+              Cancelar
+            </button>
+            <button
+              disabled={!derivarModelo.trim() || derivando}
+              onClick={derivarAServicioTecnico}
+              className="flex-1 rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
+            >
+              {derivando ? 'Derivando...' : 'Derivar a Servicio Técnico'}
+            </button>
+          </div>
+        </div>
+      )}
 
       <div>
         <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Estado</label>
