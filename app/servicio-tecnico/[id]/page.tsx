@@ -96,6 +96,7 @@ export default function FichaReparacion() {
   const [codigoVisible, setCodigoVisible] = useState(false);
   const [notaTexto, setNotaTexto] = useState('');
   const [codigoPais, setCodigoPais] = useState('54');
+  const [avisoWhatsApp, setAvisoWhatsApp] = useState<{ link: string; nombre: string } | null>(null);
 
   const [f, setFm] = useState<Record<string, any>>({});
 
@@ -306,6 +307,14 @@ export default function FichaReparacion() {
       valorAnterior: { estado: r.estado },
       valorNuevo: { estado: nuevoEstado },
     });
+
+    if (nuevoEstado === 'listo_para_entregar' && r.cliente_id && r.clientes?.telefono && r.token_seguimiento) {
+      const url = `${window.location.origin}/seguimiento/${r.token_seguimiento}`;
+      const nombre = nombreCliente || 'estimado/a';
+      const mensaje = mensajeListoServicio(nombre, r.modelo || 'equipo', url);
+      setAvisoWhatsApp({ link: armarLinkWhatsApp(r.clientes.telefono, mensaje, codigoPais), nombre });
+    }
+
     setGuardando(false);
     cargar();
   };
@@ -491,6 +500,31 @@ export default function FichaReparacion() {
           </span>
         )}
       </div>
+
+      {avisoWhatsApp && (
+        <div className="rounded-xl border border-good/30 bg-good/10 p-3 flex flex-col gap-2">
+          <p className="text-sm">
+            ¡Equipo marcado como listo! ¿Le avisamos a <strong>{avisoWhatsApp.nombre}</strong> por WhatsApp?
+          </p>
+          <div className="flex gap-2">
+            <a
+              href={avisoWhatsApp.link}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => setAvisoWhatsApp(null)}
+              className="flex-1 rounded-lg bg-good text-white text-center py-2 text-sm font-medium"
+            >
+              Enviar WhatsApp
+            </a>
+            <button
+              onClick={() => setAvisoWhatsApp(null)}
+              className="rounded-lg border border-border dark:border-dark-border px-3 py-2 text-sm font-medium"
+            >
+              Ahora no
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Identificación */}
       <Seccion titulo="Identificación">
