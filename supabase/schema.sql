@@ -1281,3 +1281,228 @@ as $$
   left join clientes cli on cli.id = o.cliente_id
   where o.token_boleta = token
 $$;
+
+-- ============================================================
+-- REDISEÑO DE SERVICIO TÉCNICO (Prioridad 1 de un plan más grande)
+--
+-- Hasta acá, Servicio Técnico vivía mezclado dentro de "canjes" (una
+-- tabla que ya cumplía 3 roles: canje/trade-in, derivado a servicio
+-- técnico, reparado). Para poder tener ficha completa por reparación
+-- (checklist de recepción, diagnóstico, presupuesto, ubicación física,
+-- historial detallado, conversión a orden de cobro) se crea una tabla
+-- dedicada `reparaciones`, con numeración de orden propia (ST-000001,
+-- ST-000002, ...).
+--
+-- Los canjes existentes con estado 'servicio_tecnico' o 'reparado' se
+-- migran automáticamente a `reparaciones` más abajo. Las filas
+-- originales en `canjes` NO se borran ni se tocan (quedan como
+-- historial inerte); de acá en adelante, Servicio Técnico deja de
+-- leer o escribir en `canjes` para estos casos — Plan Canje sigue
+-- usando `canjes` normalmente para sus dispositivos "en_canje".
+-- ============================================================
+
+alter table negocios add column if not exists contador_reparaciones int not null default 0;
+
+create table if not exists reparaciones (
+  id uuid primary key default gen_random_uuid(),
+  negocio_id uuid not null references negocios(id) on delete cascade default negocio_actual(),
+  numero_orden text,
+
+  -- Identificación
+  cliente_id uuid references clientes(id) on delete set null,
+  modelo text,
+  capacidad_gb int,
+  color text,
+  imei text,
+  codigo_desbloqueo text, -- se muestra oculto por defecto en la UI; no es cifrado, solo se tapa visualmente
+  accesorios text[] not null default '{}',
+  ubicacion_fisica text,
+
+  -- Recepción / checklist
+  falla_declarada text,
+  estado_estetico text,
+  enciende boolean,
+  pantalla_estado text, -- 'ok' | 'rota' | 'marcada'
+  camaras_ok boolean,
+  botones_ok boolean,
+  biometria_ok boolean, -- Face ID / Touch ID
+  altavoces_ok boolean,
+  conectores_ok boolean,
+  humedad boolean,
+  fotos_ingreso text[] not null default '{}',
+  garantia_condiciones_aceptadas boolean not null default false,
+
+  -- Diagnóstico
+  diagnostico text,
+  tecnico_id uuid references tecnicos(id) on delete set null,
+  prioridad text not null default 'normal', -- 'normal' | 'urgente' | 'critica'
+  trabajo_recomendado text,
+  presupuesto_mano_obra numeric,
+  presupuesto_repuestos numeric,
+  fecha_estimada date,
+  observaciones_internas text,
+
+  -- Estado operativo
+  estado text not null default 'recibido',
+  -- 'recibido' | 'esperando_diagnostico' | 'esperando_aprobacion' |
+  -- 'esperando_repuesto' | 'en_reparacion' | 'listo_para_entregar' |
+  -- 'entregado' | 'cancelado'
+  en_poder_tecnico boolean not null default true,
+
+  -- Reparación y entrega
+  trabajos_realizados text[] not null default '{}',
+  repuestos_utilizados text,
+  resultado_final text,
+  importe_total numeric,
+  forma_pago text,
+  garantia_dias int,
+  fecha_entrega timestamptz,
+
+  -- Trazabilidad de origen y de salida
+  canje_origen_id uuid references canjes(id) on delete set null, -- si vino de Plan Canje
+  orden_origen_id uuid references ordenes(id) on delete set null, -- si vino de una Orden ya creada
+  orden_cobro_id uuid references ordenes(id) on delete set null, -- orden de venta generada al cobrar la reparación
+  reparacion_original_id uuid references reparaciones(id) on delete set null, -- si es un reingreso por garantía
+
+  -- Seguimiento público (mismo mecanismo que ya existía en canjes)
+  token_seguimiento uuid not null default gen_random_uuid(),
+
+  fecha_ingreso_servicio timestamptz not null default now(),
+  fecha_reparado timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create unique index if not exists reparaciones_token_seguimiento_idx on reparaciones(token_seguimiento);
+create unique index if not exists reparaciones_numero_orden_idx on reparaciones(negocio_id, numero_orden);
+
+alter table reparaciones enable row level security;
+
+create policy "reparaciones de mi negocio" on reparaciones
+  for all using (negocio_id = negocio_actual())
+  with check (negocio_id = negocio_actual());
+
+-- Timeline por reparación: notas internas (solo personal) y mensajes
+-- al cliente (registro de lo que se le mandó). Los cambios de estado,
+-- asignaciones e importes quedan en la auditoría general (entidad
+-- 'reparacion'), y la ficha combina ambas fuentes para mostrar un
+-- historial único.
+create table if not exists reparaciones_eventos (
+  id uuid primary key default gen_random_uuid(),
+  negocio_id uuid not null references negocios(id) on delete cascade default negocio_actual(),
+  reparacion_id uuid not null references reparaciones(id) on delete cascade,
+  tipo text not null, -- 'nota_interna' | 'mensaje_cliente'
+  texto text not null,
+  actor_nombre text,
+  actor_tipo text,
+  created_at timestamptz not null default now()
+);
+
+alter table reparaciones_eventos enable row level security;
+
+create policy "eventos de reparaciones de mi negocio" on reparaciones_eventos
+  for all using (negocio_id = negocio_actual())
+  with check (negocio_id = negocio_actual());
+
+-- Genera el próximo número de orden para un negocio, de forma atómica
+-- (bloquea la fila de negocios durante el incremento para que dos
+-- altas simultáneas nunca reciban el mismo número).
+create or replace function siguiente_numero_reparacion(neg_id uuid)
+returns text
+language plpgsql
+as $$
+declare
+  nuevo_numero int;
+begin
+  update negocios
+  set contador_reparaciones = contador_reparaciones + 1
+  where id = neg_id
+  returning contador_reparaciones into nuevo_numero;
+
+  return 'ST-' || lpad(nuevo_numero::text, 6, '0');
+end;
+$$;
+
+create or replace function asignar_numero_reparacion()
+returns trigger
+language plpgsql
+as $$
+begin
+  if new.numero_orden is null then
+    new.numero_orden := siguiente_numero_reparacion(new.negocio_id);
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trigger_numero_reparacion on reparaciones;
+create trigger trigger_numero_reparacion
+  before insert on reparaciones
+  for each row
+  execute function asignar_numero_reparacion();
+
+-- ============================================================
+-- Migración automática: copia los canjes existentes con estado
+-- 'servicio_tecnico' o 'reparado' a la tabla nueva, en orden
+-- cronológico (para que la numeración ST-000001... respete el orden
+-- real de ingreso). No se borra nada de `canjes`.
+-- ============================================================
+insert into reparaciones (
+  negocio_id, cliente_id, modelo, capacidad_gb, color, imei,
+  diagnostico, tecnico_id, estado, en_poder_tecnico,
+  trabajos_realizados, canje_origen_id, token_seguimiento,
+  fecha_ingreso_servicio, fecha_reparado, created_at
+)
+select
+  c.negocio_id, c.cliente_id, c.modelo, c.capacidad_gb, c.color, c.imei,
+  c.detalles, c.tecnico_id,
+  case
+    when c.estado = 'reparado' and (c.agregado_a_stock or c.entregado_a_cliente) then 'entregado'
+    when c.estado = 'reparado' then 'listo_para_entregar'
+    when c.estado = 'servicio_tecnico' and c.tecnico_id is not null then 'en_reparacion'
+    else 'recibido'
+  end,
+  coalesce(c.en_poder_tecnico, true),
+  coalesce(c.trabajos_realizados, '{}'),
+  c.id,
+  c.token_seguimiento,
+  coalesce(c.fecha_ingreso_servicio, c.created_at),
+  c.fecha_reparado,
+  c.created_at
+from canjes c
+where c.estado in ('servicio_tecnico', 'reparado')
+order by coalesce(c.fecha_ingreso_servicio, c.created_at) asc;
+
+-- ============================================================
+-- El seguimiento público ahora lee de `reparaciones` en vez de
+-- `canjes` (los links/QR ya impresos siguen funcionando: el token se
+-- copió tal cual en la migración de arriba).
+-- ============================================================
+create or replace function seguimiento_publico(token uuid)
+returns table (
+  numero_orden text,
+  modelo text,
+  capacidad_gb int,
+  color text,
+  estado text,
+  fecha_ingreso_servicio timestamptz,
+  fecha_estimada date,
+  fecha_reparado timestamptz,
+  trabajos_realizados text[],
+  nombre_cliente text,
+  nombre_negocio text,
+  logo_negocio text
+)
+language sql
+security definer
+stable
+as $$
+  select
+    r.numero_orden, r.modelo, r.capacidad_gb, r.color, r.estado,
+    r.fecha_ingreso_servicio, r.fecha_estimada, r.fecha_reparado, r.trabajos_realizados,
+    cli.nombre,
+    n.nombre, n.logo_url
+  from reparaciones r
+  join negocios n on n.id = r.negocio_id
+  left join clientes cli on cli.id = r.cliente_id
+  where r.token_seguimiento = token
+$$;

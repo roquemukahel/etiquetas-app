@@ -93,13 +93,12 @@ export default function Estadisticas() {
           .select('vendedor_id, cliente_id, total, estado, forma_pago, created_at')
           .gte('created_at', desde.toISOString()),
         supabase
-          .from('canjes')
+          .from('reparaciones')
           .select('tecnico_id, fecha_reparado')
-          .eq('estado', 'reparado')
           .not('fecha_reparado', 'is', null)
           .gte('fecha_reparado', desde.toISOString()),
         supabase
-          .from('canjes')
+          .from('reparaciones')
           .select('cliente_id, fecha_ingreso_servicio')
           .not('cliente_id', 'is', null)
           .not('fecha_ingreso_servicio', 'is', null)

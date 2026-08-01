@@ -19,3 +19,11 @@ export function mensajeSeguimientoServicio(nombreCliente: string, modelo: string
 export function mensajeListoServicio(nombreCliente: string, modelo: string, urlSeguimiento: string) {
   return `Hola ${nombreCliente}! Te contamos que tu ${modelo} ya está listo ✅ Podés pasar a retirarlo cuando quieras. Más detalles acá: ${urlSeguimiento}`;
 }
+
+export function mensajePresupuesto(nombreCliente: string, modelo: string, monto: string, urlSeguimiento: string) {
+  return `Hola ${nombreCliente}! Ya diagnosticamos tu ${modelo}. El presupuesto es de ${monto}. Avisanos si lo aprobás para arrancar con la reparación. Más detalles acá: ${urlSeguimiento}`;
+}
+
+export function mensajeEsperandoRepuesto(nombreCliente: string, modelo: string, urlSeguimiento: string) {
+  return `Hola ${nombreCliente}! Te contamos que tu ${modelo} está esperando un repuesto para poder terminar la reparación. Te avisamos apenas llegue. Más detalles acá: ${urlSeguimiento}`;
+}

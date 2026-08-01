@@ -91,8 +91,8 @@ export default function DetalleOrden() {
       .single();
     setOrden(data as any);
     setLoading(false);
-    const { data: canjeExistente } = await supabase.from('canjes').select('id').eq('orden_id', id).maybeSingle();
-    setYaDerivado(!!canjeExistente);
+    const { data: reparacionExistente } = await supabase.from('reparaciones').select('id').eq('orden_origen_id', id).maybeSingle();
+    setYaDerivado(!!reparacionExistente);
   };
 
   useEffect(() => {
@@ -137,25 +137,24 @@ export default function DetalleOrden() {
     if (!orden || !derivarModelo.trim()) return;
     setDerivando(true);
     const nombreCliente = orden.clientes ? `${orden.clientes.nombre} ${orden.clientes.apellido || ''}`.trim() : 'sin cliente';
-    const { data: nuevoCanje } = await supabase
-      .from('canjes')
+    const { data: nueva } = await supabase
+      .from('reparaciones')
       .insert({
-        orden_id: orden.id,
+        orden_origen_id: orden.id,
         cliente_id: orden.cliente_id,
         modelo: derivarModelo.trim(),
         capacidad_gb: derivarCapacidad,
         color: derivarColor.trim() || null,
         imei: limpiarImei(derivarImei) || null,
-        detalles: derivarDetalles.trim() || null,
-        estado: 'servicio_tecnico',
-        fecha_ingreso_servicio: new Date().toISOString(),
+        falla_declarada: derivarDetalles.trim() || null,
+        estado: 'recibido',
       })
-      .select('id')
+      .select('id, numero_orden')
       .single();
     await registrarAuditoria(supabase, {
-      accion: `derivó a Servicio Técnico un equipo de una orden (${nombreCliente}, ${derivarModelo.trim()})`,
-      entidad: 'canje',
-      entidadId: nuevoCanje?.id,
+      accion: `derivó a Servicio Técnico un equipo de una orden (${nueva?.numero_orden || ''}, ${nombreCliente}, ${derivarModelo.trim()})`,
+      entidad: 'reparacion',
+      entidadId: nueva?.id,
       valorNuevo: { modelo: derivarModelo.trim(), capacidad_gb: derivarCapacidad, color: derivarColor.trim() || null, imei: limpiarImei(derivarImei) || null },
     });
     setYaDerivado(true);

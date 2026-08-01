@@ -117,21 +117,23 @@ export default function DetalleDispositivo() {
   const derivarAServicioTecnico = async () => {
     if (!d) return;
     setDerivando(true);
-    await supabase.from('canjes').insert({
-      modelo: d.modelo,
-      capacidad_gb: d.capacidad_gb,
-      color: d.color,
-      imei: d.imei,
-      salud_bateria: d.salud_bateria,
-      detalles: derivarDetalles.trim() || null,
-      estado: 'servicio_tecnico',
-      fecha_ingreso_servicio: new Date().toISOString(),
-    });
+    const { data: nueva } = await supabase
+      .from('reparaciones')
+      .insert({
+        modelo: d.modelo,
+        capacidad_gb: d.capacidad_gb,
+        color: d.color,
+        imei: d.imei,
+        falla_declarada: derivarDetalles.trim() || null,
+        estado: 'recibido',
+      })
+      .select('id, numero_orden')
+      .single();
     await supabase.from('dispositivos').update({ en_stock: false }).eq('id', d.id);
     await registrarAuditoria(supabase, {
-      accion: `derivó de Stock a Servicio Técnico un dispositivo (${d.modelo || 'sin modelo'}${d.imei ? `, IMEI ${d.imei}` : ''})`,
-      entidad: 'dispositivo',
-      entidadId: d.id,
+      accion: `derivó de Stock a Servicio Técnico un dispositivo (${nueva?.numero_orden || ''}, ${d.modelo || 'sin modelo'}${d.imei ? `, IMEI ${d.imei}` : ''})`,
+      entidad: 'reparacion',
+      entidadId: nueva?.id,
     });
     router.push('/servicio-tecnico');
     router.refresh();

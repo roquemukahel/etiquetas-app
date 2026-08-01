@@ -10,6 +10,7 @@ import { codigoLlamada } from '../lib/paises';
 import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../lib/carpetas';
 import { registrarAuditoria } from '../lib/auditoria';
 import { obtenerTodasLasFilas } from '../lib/db';
+import { ESTADOS_REPARACION, GRUPOS_ESTADO, PRIORIDADES, infoEstado, estadosDeGrupo, GrupoEstado } from '../lib/reparaciones';
 import MiniaturaDispositivo from '../MiniaturaDispositivo';
 import Avatar from '../Avatar';
 import SelectorColor from '../SelectorColor';
@@ -17,26 +18,32 @@ import SelectorColor from '../SelectorColor';
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 
 type Tecnico = { id: string; nombre: string; foto_url: string | null };
-type Trabajo = { id: string; nombre: string; imagen_url: string | null };
 type Cliente = { id: string; nombre: string; apellido: string | null; telefono: string | null };
 
-type Equipo = {
+type Reparacion = {
   id: string;
+  numero_orden: string | null;
   modelo: string | null;
   capacidad_gb: number | null;
   color: string | null;
   imei: string | null;
-  detalles: string | null;
+  falla_declarada: string | null;
+  diagnostico: string | null;
+  ubicacion_fisica: string | null;
   tecnico_id: string | null;
   estado: string;
+  prioridad: string;
   trabajos_realizados: string[] | null;
-  fecha_ingreso_servicio: string | null;
+  fecha_ingreso_servicio: string;
+  fecha_estimada: string | null;
   fecha_reparado: string | null;
   cliente_id: string | null;
   token_seguimiento: string | null;
-  agregado_a_stock: boolean;
   en_poder_tecnico: boolean;
-  entregado_a_cliente: boolean;
+  presupuesto_mano_obra: number | null;
+  presupuesto_repuestos: number | null;
+  importe_total: number | null;
+  orden_cobro_id: string | null;
   clientes: { nombre: string; apellido: string | null; telefono: string | null } | null;
 };
 
@@ -45,16 +52,32 @@ function formatearFecha(iso: string | null) {
   return new Date(iso).toLocaleDateString('es-AR');
 }
 
+function hace(iso: string) {
+  const ms = Date.now() - new Date(iso).getTime();
+  const min = Math.floor(ms / 60000);
+  if (min < 1) return 'recién';
+  if (min < 60) return `hace ${min} min`;
+  const horas = Math.floor(min / 60);
+  if (horas < 24) return `hace ${horas}h`;
+  const dias = Math.floor(horas / 24);
+  return `hace ${dias}d`;
+}
+
+const FINALIZADOS = ['entregado', 'cancelado'];
+const DIAS_DEMORA = 5;
+
 export default function ServicioTecnico() {
   const supabase = crearClienteNavegador();
-  const [equipos, setEquipos] = useState<Equipo[]>([]);
+  const [reparaciones, setReparaciones] = useState<Reparacion[]>([]);
   const [tecnicos, setTecnicos] = useState<Tecnico[]>([]);
-  const [trabajos, setTrabajos] = useState<Trabajo[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'derivados' | 'reparados' | 'tecnicos'>('derivados');
+  const [tab, setTab] = useState<'lista' | 'tecnicos'>('lista');
+  const [grupo, setGrupo] = useState<GrupoEstado>('pendientes');
+  const [busqueda, setBusqueda] = useState('');
+  const [filtroTecnico, setFiltroTecnico] = useState('');
+  const [soloDemorados, setSoloDemorados] = useState(false);
   const [guardando, setGuardando] = useState<string | null>(null);
-  const [panelReparar, setPanelReparar] = useState<string | null>(null);
-  const [seleccionTrabajos, setSeleccionTrabajos] = useState<string[]>([]);
+  const [menuAbierto, setMenuAbierto] = useState<string | null>(null);
   const [tecnicoSeleccionado, setTecnicoSeleccionado] = useState<string | null>(null);
   const [vistaTecnico, setVistaTecnico] = useState<'en_poder' | 'historial'>('en_poder');
   const [asignadoTecnicoId, setAsignadoTecnicoId] = useState('');
@@ -65,7 +88,8 @@ export default function ServicioTecnico() {
   const [nuevaCapacidad, setNuevaCapacidad] = useState<number | null>(null);
   const [nuevoColor, setNuevoColor] = useState('');
   const [nuevoImei, setNuevoImei] = useState('');
-  const [nuevoDetalles, setNuevoDetalles] = useState('');
+  const [nuevaFalla, setNuevaFalla] = useState('');
+  const [nuevaUbicacion, setNuevaUbicacion] = useState('');
   const [guardandoNuevo, setGuardandoNuevo] = useState(false);
 
   const [clientes, setClientes] = useState<Cliente[]>([]);
@@ -77,23 +101,14 @@ export default function ServicioTecnico() {
   const [imagenesCarpetas, setImagenesCarpetas] = useState<Map<string, string>>(new Map());
   const [codigoPais, setCodigoPais] = useState('54');
 
-  const [editando, setEditando] = useState<string | null>(null);
-  const [editModelo, setEditModelo] = useState('');
-  const [editCapacidad, setEditCapacidad] = useState<number | null>(null);
-  const [editColor, setEditColor] = useState('');
-  const [editImei, setEditImei] = useState('');
-  const [editDetalles, setEditDetalles] = useState('');
-  const [guardandoEdicion, setGuardandoEdicion] = useState(false);
-
   const cargar = async () => {
     const { data } = await supabase
-      .from('canjes')
+      .from('reparaciones')
       .select(
-        'id, modelo, capacidad_gb, color, imei, detalles, tecnico_id, estado, trabajos_realizados, fecha_ingreso_servicio, fecha_reparado, cliente_id, token_seguimiento, agregado_a_stock, en_poder_tecnico, entregado_a_cliente, clientes ( nombre, apellido, telefono )'
+        'id, numero_orden, modelo, capacidad_gb, color, imei, falla_declarada, diagnostico, ubicacion_fisica, tecnico_id, estado, prioridad, trabajos_realizados, fecha_ingreso_servicio, fecha_estimada, fecha_reparado, cliente_id, token_seguimiento, en_poder_tecnico, presupuesto_mano_obra, presupuesto_repuestos, importe_total, orden_cobro_id, clientes ( nombre, apellido, telefono )'
       )
-      .in('estado', ['servicio_tecnico', 'reparado'])
-      .order('created_at', { ascending: false });
-    setEquipos((data as any) ?? []);
+      .order('fecha_ingreso_servicio', { ascending: false });
+    setReparaciones((data as any) ?? []);
     setLoading(false);
   };
 
@@ -102,10 +117,6 @@ export default function ServicioTecnico() {
     (async () => {
       const { data } = await supabase.from('tecnicos').select('id, nombre, foto_url').order('nombre');
       setTecnicos((data as Tecnico[]) ?? []);
-    })();
-    (async () => {
-      const { data } = await supabase.from('trabajos').select('id, nombre, imagen_url').order('nombre');
-      setTrabajos((data as Trabajo[]) ?? []);
     })();
     (async () => {
       const { data } = await supabase.from('modelos_stock').select('nombre').order('nombre');
@@ -137,33 +148,55 @@ export default function ServicioTecnico() {
     if (encontrado) setClienteTelefono(encontrado.telefono ?? '');
   };
 
-  const filtrados = useMemo(
-    () =>
-      equipos.filter(
-        (e) =>
-          !e.agregado_a_stock &&
-          !e.entregado_a_cliente &&
-          (tab === 'derivados' ? e.estado === 'servicio_tecnico' : e.estado === 'reparado')
-      ),
-    [equipos, tab]
+  const nombreTecnico = (tecnicoId: string | null) => tecnicos.find((t) => t.id === tecnicoId)?.nombre;
+  const fotoTecnico = (tecnicoId: string | null) => tecnicos.find((t) => t.id === tecnicoId)?.foto_url ?? null;
+
+  const esDemorado = (r: Reparacion) => {
+    if (FINALIZADOS.includes(r.estado)) return false;
+    const dias = (Date.now() - new Date(r.fecha_ingreso_servicio).getTime()) / 86400000;
+    if (dias > DIAS_DEMORA) return true;
+    if (r.fecha_estimada && new Date(r.fecha_estimada) < new Date()) return true;
+    return false;
+  };
+
+  const filtrados = useMemo(() => {
+    const estadosGrupo = estadosDeGrupo(grupo);
+    const q = busqueda.trim().toLowerCase();
+    return reparaciones.filter((r) => {
+      if (!estadosGrupo.includes(r.estado as any)) return false;
+      if (filtroTecnico && r.tecnico_id !== filtroTecnico) return false;
+      if (soloDemorados && !esDemorado(r)) return false;
+      if (q) {
+        const nombreCliente = r.clientes ? `${r.clientes.nombre} ${r.clientes.apellido || ''}`.trim().toLowerCase() : '';
+        const coincide =
+          r.numero_orden?.toLowerCase().includes(q) ||
+          r.modelo?.toLowerCase().includes(q) ||
+          r.imei?.toLowerCase().includes(q) ||
+          nombreCliente.includes(q) ||
+          r.clientes?.telefono?.includes(q);
+        if (!coincide) return false;
+      }
+      return true;
+    });
+  }, [reparaciones, grupo, filtroTecnico, soloDemorados, busqueda]);
+
+  const contadores = useMemo(
+    () => ({
+      sinAsignar: reparaciones.filter((r) => !r.tecnico_id && !FINALIZADOS.includes(r.estado)).length,
+      esperandoRepuesto: reparaciones.filter((r) => r.estado === 'esperando_repuesto').length,
+      listos: reparaciones.filter((r) => r.estado === 'listo_para_entregar').length,
+    }),
+    [reparaciones]
   );
 
-  // Historial: registro permanente de arreglos del técnico, no se filtra
-  // por en_poder_tecnico/agregado_a_stock/entregado_a_cliente a propósito
-  // (no tiene que perder ranking porque el equipo ya se entregó o vendió).
   const historialTecnico = useMemo(
-    () => equipos.filter((e) => e.estado === 'reparado' && e.tecnico_id === tecnicoSeleccionado),
-    [equipos, tecnicoSeleccionado]
+    () => reparaciones.filter((r) => r.estado === 'entregado' && r.tecnico_id === tecnicoSeleccionado),
+    [reparaciones, tecnicoSeleccionado]
   );
 
-  // Equipos que el técnico tiene físicamente con él en este momento
-  // (en reparación, o ya reparados pero todavía sin entregar/vender).
   const equiposEnPoder = useMemo(
-    () =>
-      equipos.filter(
-        (e) => e.tecnico_id === tecnicoSeleccionado && e.en_poder_tecnico && !e.agregado_a_stock && !e.entregado_a_cliente
-      ),
-    [equipos, tecnicoSeleccionado]
+    () => reparaciones.filter((r) => r.tecnico_id === tecnicoSeleccionado && r.en_poder_tecnico && !FINALIZADOS.includes(r.estado)),
+    [reparaciones, tecnicoSeleccionado]
   );
 
   const agregarEquipo = async () => {
@@ -182,24 +215,24 @@ export default function ServicioTecnico() {
       clienteId = nuevoCliente?.id ?? null;
     }
 
-    const { data: nuevoCanje } = await supabase
-      .from('canjes')
+    const { data: nueva } = await supabase
+      .from('reparaciones')
       .insert({
         modelo: nuevoModelo.trim(),
         capacidad_gb: nuevaCapacidad,
         color: nuevoColor.trim() || null,
         imei: limpiarImei(nuevoImei),
-        detalles: nuevoDetalles.trim() || null,
-        estado: 'servicio_tecnico',
-        fecha_ingreso_servicio: new Date().toISOString(),
+        falla_declarada: nuevaFalla.trim() || null,
+        ubicacion_fisica: nuevaUbicacion.trim() || null,
+        estado: 'recibido',
         cliente_id: clienteId,
         tecnico_id: asignadoTecnicoId || null,
       })
       .select('token_seguimiento')
       .single();
 
-    if (clienteId && clienteTelefono.trim() && nuevoCanje?.token_seguimiento) {
-      const url = `${window.location.origin}/seguimiento/${nuevoCanje.token_seguimiento}`;
+    if (clienteId && clienteTelefono.trim() && nueva?.token_seguimiento) {
+      const url = `${window.location.origin}/seguimiento/${nueva.token_seguimiento}`;
       const mensaje = mensajeSeguimientoServicio(nombreParaMensaje || 'estimado/a', nuevoModelo.trim(), url);
       setAvisoWhatsApp({ link: armarLinkWhatsApp(clienteTelefono, mensaje, codigoPais), nombre: nombreParaMensaje, tipo: 'agregado' });
     }
@@ -208,7 +241,8 @@ export default function ServicioTecnico() {
     setNuevaCapacidad(null);
     setNuevoColor('');
     setNuevoImei('');
-    setNuevoDetalles('');
+    setNuevaFalla('');
+    setNuevaUbicacion('');
     setClienteInput('');
     setClienteTelefono('');
     setAsignadoTecnicoId('');
@@ -219,197 +253,94 @@ export default function ServicioTecnico() {
 
   const asignarTecnico = async (id: string, tecnicoId: string) => {
     setGuardando(id);
-    const equipo = equipos.find((e) => e.id === id);
+    const r = reparaciones.find((x) => x.id === id);
     const cambios: { tecnico_id: string | null; en_poder_tecnico?: boolean } = { tecnico_id: tecnicoId || null };
     if (tecnicoId) cambios.en_poder_tecnico = true;
-    await supabase.from('canjes').update(cambios).eq('id', id);
+    await supabase.from('reparaciones').update(cambios).eq('id', id);
     const nombreNuevo = tecnicos.find((t) => t.id === tecnicoId)?.nombre;
     await registrarAuditoria(supabase, {
       accion: tecnicoId
-        ? `asignó a ${nombreNuevo || 'un técnico'} el equipo ${equipo?.modelo || 'sin modelo'}${equipo?.imei ? ` (IMEI ${equipo.imei})` : ''}`
-        : `quitó la asignación de técnico del equipo ${equipo?.modelo || 'sin modelo'}${equipo?.imei ? ` (IMEI ${equipo.imei})` : ''}`,
-      entidad: 'canje',
+        ? `asignó a ${nombreNuevo || 'un técnico'} la reparación ${r?.numero_orden || ''} (${r?.modelo || 'sin modelo'})`
+        : `quitó la asignación de técnico de la reparación ${r?.numero_orden || ''} (${r?.modelo || 'sin modelo'})`,
+      entidad: 'reparacion',
       entidadId: id,
     });
-    setEquipos((eq) => eq.map((e) => (e.id === id ? { ...e, ...cambios } : e)));
+    setReparaciones((rs) => rs.map((x) => (x.id === id ? { ...x, ...cambios } : x)));
     setGuardando(null);
   };
 
-  const marcarEnPoder = async (e: Equipo, enPoder: boolean) => {
-    setGuardando(e.id);
-    await supabase.from('canjes').update({ en_poder_tecnico: enPoder }).eq('id', e.id);
+  const marcarEnPoder = async (r: Reparacion, enPoder: boolean) => {
+    setGuardando(r.id);
+    await supabase.from('reparaciones').update({ en_poder_tecnico: enPoder }).eq('id', r.id);
     await registrarAuditoria(supabase, {
-      accion: `registró que ${nombreTecnico(e.tecnico_id) || 'el técnico'} ${enPoder ? 'todavía tiene' : 'ya entregó'} el equipo ${e.modelo || 'sin modelo'}${e.imei ? ` (IMEI ${e.imei})` : ''}`,
-      entidad: 'canje',
-      entidadId: e.id,
+      accion: `registró que ${nombreTecnico(r.tecnico_id) || 'el técnico'} ${enPoder ? 'todavía tiene' : 'ya entregó'} la reparación ${r.numero_orden || ''} (${r.modelo || 'sin modelo'})`,
+      entidad: 'reparacion',
+      entidadId: r.id,
     });
-    setEquipos((eq) => eq.map((x) => (x.id === e.id ? { ...x, en_poder_tecnico: enPoder } : x)));
+    setReparaciones((rs) => rs.map((x) => (x.id === r.id ? { ...x, en_poder_tecnico: enPoder } : x)));
     setGuardando(null);
   };
 
-  const abrirPanelReparar = (id: string) => {
-    setPanelReparar(panelReparar === id ? null : id);
-    setSeleccionTrabajos([]);
-  };
-
-  const toggleTrabajo = (nombre: string) => {
-    setSeleccionTrabajos((sel) => (sel.includes(nombre) ? sel.filter((n) => n !== nombre) : [...sel, nombre]));
-  };
-
-  const marcarReparado = async (id: string) => {
-    setGuardando(id);
-    const equipo = equipos.find((e) => e.id === id);
-    await supabase
-      .from('canjes')
-      .update({ estado: 'reparado', trabajos_realizados: seleccionTrabajos, fecha_reparado: new Date().toISOString() })
-      .eq('id', id);
+  const cambiarEstado = async (r: Reparacion, nuevoEstado: string) => {
+    setGuardando(r.id);
+    const cambios: any = { estado: nuevoEstado };
+    if (nuevoEstado === 'listo_para_entregar' && !r.fecha_reparado) cambios.fecha_reparado = new Date().toISOString();
+    await supabase.from('reparaciones').update(cambios).eq('id', r.id);
     await registrarAuditoria(supabase, {
-      accion: `marcó como reparado un equipo de Servicio Técnico (${equipo?.modelo || 'sin modelo'}${equipo?.imei ? `, IMEI ${equipo.imei}` : ''})`,
-      entidad: 'canje',
-      entidadId: id,
-      valorNuevo: { trabajos_realizados: seleccionTrabajos },
+      accion: `cambió el estado de la reparación ${r.numero_orden || ''} (${r.modelo || 'sin modelo'}) de "${infoEstado(r.estado).label}" a "${infoEstado(nuevoEstado).label}"`,
+      entidad: 'reparacion',
+      entidadId: r.id,
+      valorAnterior: { estado: r.estado },
+      valorNuevo: { estado: nuevoEstado },
     });
-    setPanelReparar(null);
-    setGuardando(null);
 
-    if (equipo?.cliente_id && equipo.clientes?.telefono && equipo.token_seguimiento) {
-      const url = `${window.location.origin}/seguimiento/${equipo.token_seguimiento}`;
-      const nombre = `${equipo.clientes.nombre} ${equipo.clientes.apellido || ''}`.trim();
-      const mensaje = mensajeListoServicio(nombre || 'estimado/a', equipo.modelo || 'equipo', url);
-      setAvisoWhatsApp({ link: armarLinkWhatsApp(equipo.clientes.telefono, mensaje, codigoPais), nombre, tipo: 'reparado' });
+    if (nuevoEstado === 'listo_para_entregar' && r.cliente_id && r.clientes?.telefono && r.token_seguimiento) {
+      const url = `${window.location.origin}/seguimiento/${r.token_seguimiento}`;
+      const nombre = `${r.clientes.nombre} ${r.clientes.apellido || ''}`.trim();
+      const mensaje = mensajeListoServicio(nombre || 'estimado/a', r.modelo || 'equipo', url);
+      setAvisoWhatsApp({ link: armarLinkWhatsApp(r.clientes.telefono, mensaje, codigoPais), nombre, tipo: 'reparado' });
     }
 
+    setGuardando(null);
     cargar();
   };
 
-  const volverADerivado = async (id: string) => {
-    if (!confirm('¿Volver a mandar este equipo a "Derivados a reparación"?')) return;
-    setGuardando(id);
-    const equipo = equipos.find((e) => e.id === id);
-    await supabase
-      .from('canjes')
-      .update({ estado: 'servicio_tecnico', fecha_reparado: null, fecha_ingreso_servicio: new Date().toISOString() })
-      .eq('id', id);
+  const archivarCancelar = async (r: Reparacion) => {
+    if (!confirm('¿Cancelar/archivar esta reparación? Va a quedar en "Finalizados", no se borra el historial.')) return;
+    setMenuAbierto(null);
+    await cambiarEstado(r, 'cancelado');
+  };
+
+  const eliminarDefinitivo = async (r: Reparacion) => {
+    if (!confirm('¿Eliminar definitivamente esta reparación? Esta acción no se puede deshacer y borra todo su historial.')) return;
+    setGuardando(r.id);
+    setMenuAbierto(null);
+    await supabase.from('reparaciones').delete().eq('id', r.id);
     await registrarAuditoria(supabase, {
-      accion: `volvió a derivar a reparación un equipo de Servicio Técnico (${equipo?.modelo || 'sin modelo'}${equipo?.imei ? `, IMEI ${equipo.imei}` : ''})`,
-      entidad: 'canje',
-      entidadId: id,
+      accion: `eliminó definitivamente una reparación (${r.numero_orden || ''}, ${r.modelo || 'sin modelo'}${r.imei ? `, IMEI ${r.imei}` : ''})`,
+      entidad: 'reparacion',
+      entidadId: r.id,
+      valorAnterior: { modelo: r.modelo, capacidad_gb: r.capacidad_gb, color: r.color, imei: r.imei, estado: r.estado },
     });
     setGuardando(null);
     cargar();
   };
 
-  const agregarAlStock = async (e: Equipo) => {
-    if (guardando) return;
-    if (e.imei) {
-      const { data: existente } = await supabase.from('dispositivos').select('id').eq('imei', e.imei).maybeSingle();
-      if (existente && !confirm(`Ya hay un dispositivo en Stock con el IMEI ${e.imei}. ¿Agregarlo igual?`)) return;
-    }
-    if (!confirm('¿Pasar este equipo al Stock como dispositivo disponible para vender?')) return;
-    setGuardando(e.id);
-    await supabase.from('dispositivos').insert({
-      modelo: e.modelo,
-      capacidad_gb: e.capacidad_gb,
-      color: e.color,
-      imei: e.imei,
-      estado: 'usado',
-      en_stock: true,
+  const enviarWhatsApp = async (r: Reparacion) => {
+    if (!r.cliente_id || !r.clientes?.telefono || !r.token_seguimiento) return;
+    const url = `${window.location.origin}/seguimiento/${r.token_seguimiento}`;
+    const nombre = `${r.clientes.nombre} ${r.clientes.apellido || ''}`.trim();
+    const mensaje =
+      r.estado === 'listo_para_entregar'
+        ? mensajeListoServicio(nombre || 'estimado/a', r.modelo || 'equipo', url)
+        : mensajeSeguimientoServicio(nombre || 'estimado/a', r.modelo || 'equipo', url);
+    await supabase.from('reparaciones_eventos').insert({
+      reparacion_id: r.id,
+      tipo: 'mensaje_cliente',
+      texto: mensaje,
     });
-    await asegurarModelo(supabase, e.modelo);
-    // No se borra: queda con agregado_a_stock=true para no perder el
-    // historial del técnico ni el ranking de Estadísticas.
-    await supabase.from('canjes').update({ agregado_a_stock: true, en_poder_tecnico: false }).eq('id', e.id);
-    await registrarAuditoria(supabase, {
-      accion: `agregó al Stock un equipo propio reparado en Servicio Técnico (${e.modelo || 'sin modelo'}${e.imei ? `, IMEI ${e.imei}` : ''})`,
-      entidad: 'canje',
-      entidadId: e.id,
-    });
-    setGuardando(null);
-    cargar();
+    window.open(armarLinkWhatsApp(r.clientes.telefono, mensaje, codigoPais), '_blank');
   };
-
-  const marcarEntregadoCliente = async (e: Equipo) => {
-    if (guardando) return;
-    if (!confirm('¿Marcar este equipo como entregado al cliente?')) return;
-    setGuardando(e.id);
-    await supabase.from('canjes').update({ entregado_a_cliente: true, en_poder_tecnico: false }).eq('id', e.id);
-    await registrarAuditoria(supabase, {
-      accion: `marcó como entregado al cliente un equipo reparado en Servicio Técnico (${e.modelo || 'sin modelo'}${e.imei ? `, IMEI ${e.imei}` : ''})`,
-      entidad: 'canje',
-      entidadId: e.id,
-    });
-    setGuardando(null);
-    cargar();
-  };
-
-  const eliminarEquipo = async (e: Equipo) => {
-    if (!confirm('¿Eliminar este equipo de Servicio Técnico? Esta acción no se puede deshacer.')) return;
-    setGuardando(e.id);
-    await supabase.from('canjes').delete().eq('id', e.id);
-    await registrarAuditoria(supabase, {
-      accion: `eliminó de Servicio Técnico un equipo (${e.modelo || 'sin modelo'}${e.imei ? `, IMEI ${e.imei}` : ''})`,
-      entidad: 'canje',
-      entidadId: e.id,
-      valorAnterior: { modelo: e.modelo, capacidad_gb: e.capacidad_gb, color: e.color, imei: e.imei, estado: e.estado },
-    });
-    setGuardando(null);
-    cargar();
-  };
-
-  const abrirEdicion = (e: Equipo) => {
-    if (editando === e.id) {
-      setEditando(null);
-      return;
-    }
-    setEditando(e.id);
-    setEditModelo(e.modelo ?? '');
-    setEditCapacidad(e.capacidad_gb);
-    setEditColor(e.color ?? '');
-    setEditImei(e.imei ?? '');
-    setEditDetalles(e.detalles ?? '');
-  };
-
-  const guardarEdicion = async (e: Equipo) => {
-    setGuardandoEdicion(true);
-    const cambios: Record<string, { antes: unknown; despues: unknown }> = {};
-    const nuevoModelo = editModelo.trim() || null;
-    const nuevoColor = editColor.trim() || null;
-    const nuevoImei = limpiarImei(editImei) || null;
-    const nuevosDetalles = editDetalles.trim() || null;
-
-    if (e.modelo !== nuevoModelo) cambios.modelo = { antes: e.modelo, despues: nuevoModelo };
-    if (e.capacidad_gb !== editCapacidad) cambios.capacidad_gb = { antes: e.capacidad_gb, despues: editCapacidad };
-    if (e.color !== nuevoColor) cambios.color = { antes: e.color, despues: nuevoColor };
-    if (e.imei !== nuevoImei) cambios.imei = { antes: e.imei, despues: nuevoImei };
-    if (e.detalles !== nuevosDetalles) cambios.detalles = { antes: e.detalles, despues: nuevosDetalles };
-
-    if (Object.keys(cambios).length === 0) {
-      setEditando(null);
-      setGuardandoEdicion(false);
-      return;
-    }
-
-    await supabase
-      .from('canjes')
-      .update({ modelo: nuevoModelo, capacidad_gb: editCapacidad, color: nuevoColor, imei: nuevoImei, detalles: nuevosDetalles })
-      .eq('id', e.id);
-
-    await registrarAuditoria(supabase, {
-      accion: `editó un equipo de Servicio Técnico (${nuevoModelo || 'sin modelo'}${nuevoImei ? `, IMEI ${nuevoImei}` : ''})`,
-      entidad: 'canje',
-      entidadId: e.id,
-      valorAnterior: Object.fromEntries(Object.entries(cambios).map(([k, v]) => [k, v.antes])),
-      valorNuevo: Object.fromEntries(Object.entries(cambios).map(([k, v]) => [k, v.despues])),
-    });
-
-    setEditando(null);
-    setGuardandoEdicion(false);
-    await asegurarModelo(supabase, nuevoModelo);
-    cargar();
-  };
-
-  const nombreTecnico = (tecnicoId: string | null) => tecnicos.find((t) => t.id === tecnicoId)?.nombre;
-  const fotoTecnico = (tecnicoId: string | null) => tecnicos.find((t) => t.id === tecnicoId)?.foto_url ?? null;
 
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
@@ -428,20 +359,12 @@ export default function ServicioTecnico() {
 
       <div className="flex items-center gap-2 text-sm">
         <button
-          onClick={() => setTab('derivados')}
+          onClick={() => setTab('lista')}
           className={`flex-1 rounded-xl py-2 font-medium ${
-            tab === 'derivados' ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
+            tab === 'lista' ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
           }`}
         >
-          Derivados
-        </button>
-        <button
-          onClick={() => setTab('reparados')}
-          className={`flex-1 rounded-xl py-2 font-medium ${
-            tab === 'reparados' ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
-          }`}
-        >
-          Reparados
+          Reparaciones
         </button>
         <button
           onClick={() => {
@@ -456,7 +379,7 @@ export default function ServicioTecnico() {
         </button>
       </div>
 
-      {(tab === 'derivados' || (tab === 'tecnicos' && tecnicoSeleccionado)) && (
+      {(tab === 'lista' || (tab === 'tecnicos' && tecnicoSeleccionado)) && (
         <>
           <button
             onClick={() => {
@@ -465,7 +388,7 @@ export default function ServicioTecnico() {
             }}
             className="w-full rounded-xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium"
           >
-            {panelNuevo ? 'Cancelar' : '+ Agregar equipo'}
+            {panelNuevo ? 'Cancelar' : '+ Recibir equipo'}
           </button>
 
           {panelNuevo && (
@@ -503,10 +426,16 @@ export default function ServicioTecnico() {
                 className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm font-mono"
               />
               <textarea
-                value={nuevoDetalles}
-                onChange={(e) => setNuevoDetalles(e.target.value)}
-                placeholder="Detalles (ej. no enciende, pantalla rota)"
+                value={nuevaFalla}
+                onChange={(e) => setNuevaFalla(e.target.value)}
+                placeholder="Falla declarada por el cliente (ej. no enciende, pantalla rota)"
                 rows={2}
+                className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+              />
+              <input
+                value={nuevaUbicacion}
+                onChange={(e) => setNuevaUbicacion(e.target.value)}
+                placeholder="Ubicación física (ej. Estante A-3)"
                 className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
               />
 
@@ -551,11 +480,37 @@ export default function ServicioTecnico() {
                 onClick={agregarEquipo}
                 className="rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
               >
-                {guardandoNuevo ? 'Agregando...' : 'Agregar a Servicio Técnico'}
+                {guardandoNuevo ? 'Recibiendo...' : 'Recibir equipo'}
               </button>
             </div>
           )}
         </>
+      )}
+
+      {avisoWhatsApp && (
+        <div className="rounded-xl border border-good/30 bg-good/10 p-3 flex flex-col gap-2">
+          <p className="text-sm">
+            {avisoWhatsApp.tipo === 'agregado' ? 'Equipo recibido.' : '¡Equipo marcado como listo!'} ¿Le avisamos a{' '}
+            <strong>{avisoWhatsApp.nombre}</strong> por WhatsApp?
+          </p>
+          <div className="flex gap-2">
+            <a
+              href={avisoWhatsApp.link}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => setAvisoWhatsApp(null)}
+              className="flex-1 rounded-lg bg-good text-white text-center py-2 text-sm font-medium"
+            >
+              Enviar WhatsApp
+            </a>
+            <button
+              onClick={() => setAvisoWhatsApp(null)}
+              className="rounded-lg border border-border dark:border-dark-border px-3 py-2 text-sm font-medium"
+            >
+              Ahora no
+            </button>
+          </div>
+        </div>
       )}
 
       {tab === 'tecnicos' ? (
@@ -599,97 +554,34 @@ export default function ServicioTecnico() {
                   </p>
                 )}
                 <div className="flex flex-col gap-2">
-                  {equiposEnPoder.map((e) => (
-                    <div key={e.id} className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex flex-col gap-2">
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <p className="text-sm font-medium">
-                            {e.modelo}
-                            {e.capacidad_gb ? ` · ${e.capacidad_gb}GB` : ''}
-                            {e.color ? ` · ${e.color}` : ''}
-                          </p>
-                          {e.imei && (
-                            <p className="text-xs text-muted dark:text-dark-text-secondary">
-                              IMEI: <span className="font-bold font-mono text-ink dark:text-dark-text">{e.imei}</span>
-                            </p>
-                          )}
-                        </div>
-                        <span
-                          className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                            e.estado === 'reparado' ? 'bg-good/15 text-good' : 'bg-warn/15 text-warn'
-                          }`}
-                        >
-                          {e.estado === 'reparado' ? 'Reparado' : 'En reparación'}
-                        </span>
-                      </div>
-
-                      <p className="text-xs">
-                        {e.cliente_id ? (
-                          <span className="text-accent dark:text-dark-accent">
-                            👤 Cliente{e.clientes?.nombre ? `: ${e.clientes.nombre} ${e.clientes.apellido || ''}`.trim() : ''}
-                          </span>
-                        ) : (
-                          <span className="text-muted dark:text-dark-text-secondary">🏬 Propio del local</span>
-                        )}
-                      </p>
-
-                      {e.detalles && <p className="text-xs text-muted dark:text-dark-text-secondary">Detalles: {e.detalles}</p>}
-
-                      <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={e.en_poder_tecnico}
-                          disabled={guardando === e.id}
-                          onChange={(ev) => marcarEnPoder(e, ev.target.checked)}
-                          className="h-4 w-4 accent-ink"
-                        />
-                        {e.en_poder_tecnico ? 'Lo tiene el técnico' : 'Ya lo entregó'}
-                      </label>
-
-                      {e.estado === 'servicio_tecnico' && (
-                        <button
-                          onClick={() => abrirPanelReparar(e.id)}
-                          className="rounded-lg border border-border dark:border-dark-border py-2 text-xs font-medium"
-                        >
-                          {panelReparar === e.id ? 'Cancelar' : 'Marcar como reparado'}
-                        </button>
-                      )}
-
-                      {e.estado === 'reparado' && (
-                        <button
-                          disabled={guardando === e.id}
-                          onClick={() => (e.cliente_id ? marcarEntregadoCliente(e) : agregarAlStock(e))}
-                          className="rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-xs font-medium text-white disabled:opacity-40"
-                        >
-                          {e.cliente_id ? 'Marcar entregado al cliente' : 'Agregar al Stock'}
-                        </button>
-                      )}
-
-                      {panelReparar === e.id && (
-                        <div className="rounded-lg border border-border dark:border-dark-border bg-white dark:bg-dark-surface p-3 flex flex-col gap-2">
-                          <p className="text-xs font-medium text-muted dark:text-dark-text-secondary">Arreglo realizado</p>
-                          {trabajos.map((t) => (
-                            <label key={t.id} className="flex items-center gap-2 text-sm">
-                              <input
-                                type="checkbox"
-                                checked={seleccionTrabajos.includes(t.nombre)}
-                                onChange={() => toggleTrabajo(t.nombre)}
-                                className="h-4 w-4 accent-ink"
-                              />
-                              <MiniaturaDispositivo src={t.imagen_url} size={24} />
-                              {t.nombre}
-                            </label>
-                          ))}
-                          <button
-                            disabled={guardando === e.id}
-                            onClick={() => marcarReparado(e.id)}
-                            className="mt-1 rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-xs font-medium text-white disabled:opacity-40"
-                          >
-                            Confirmar reparado
-                          </button>
-                        </div>
-                      )}
-                    </div>
+                  {equiposEnPoder.map((r) => (
+                    <TarjetaReparacion
+                      key={r.id}
+                      r={r}
+                      nombreTecnico={nombreTecnico}
+                      guardando={guardando}
+                      menuAbierto={menuAbierto}
+                      setMenuAbierto={setMenuAbierto}
+                      tecnicos={tecnicos}
+                      onAsignarTecnico={asignarTecnico}
+                      onCambiarEstado={cambiarEstado}
+                      onWhatsApp={enviarWhatsApp}
+                      onArchivar={archivarCancelar}
+                      onEliminar={eliminarDefinitivo}
+                      imagenesCarpetas={imagenesCarpetas}
+                      extra={
+                        <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={r.en_poder_tecnico}
+                            disabled={guardando === r.id}
+                            onChange={(ev) => marcarEnPoder(r, ev.target.checked)}
+                            className="h-4 w-4 accent-ink"
+                          />
+                          {r.en_poder_tecnico ? 'Lo tiene el técnico' : 'Ya lo entregó'}
+                        </label>
+                      }
+                    />
                   ))}
                 </div>
               </>
@@ -698,25 +590,25 @@ export default function ServicioTecnico() {
             {vistaTecnico === 'historial' && (
               <>
                 {historialTecnico.length === 0 && (
-                  <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Todavía no tiene arreglos registrados.</p>
+                  <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Todavía no tiene reparaciones entregadas.</p>
                 )}
                 <div className="flex flex-col gap-2">
-                  {historialTecnico.map((e) => (
-                    <div key={e.id} className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex flex-col gap-1">
+                  {historialTecnico.map((r) => (
+                    <div key={r.id} className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex flex-col gap-1">
                       <p className="text-sm font-medium">
-                        {e.modelo}
-                        {e.capacidad_gb ? ` · ${e.capacidad_gb}GB` : ''}
+                        {r.numero_orden} · {r.modelo}
+                        {r.capacidad_gb ? ` · ${r.capacidad_gb}GB` : ''}
                       </p>
-                      {e.imei && (
+                      {r.imei && (
                         <p className="text-xs text-muted dark:text-dark-text-secondary">
-                          IMEI: <span className="font-bold font-mono text-ink dark:text-dark-text">{e.imei}</span>
+                          IMEI: <span className="font-bold font-mono text-ink dark:text-dark-text">{r.imei}</span>
                         </p>
                       )}
-                      {e.trabajos_realizados && e.trabajos_realizados.length > 0 && (
-                        <p className="text-xs text-muted dark:text-dark-text-secondary">Arreglo: {e.trabajos_realizados.join(', ')}</p>
+                      {r.trabajos_realizados && r.trabajos_realizados.length > 0 && (
+                        <p className="text-xs text-muted dark:text-dark-text-secondary">Arreglo: {r.trabajos_realizados.join(', ')}</p>
                       )}
-                      {e.fecha_reparado && (
-                        <p className="text-xs text-muted dark:text-dark-text-secondary">Reparado el {formatearFecha(e.fecha_reparado)}</p>
+                      {r.fecha_reparado && (
+                        <p className="text-xs text-muted dark:text-dark-text-secondary">Reparado el {formatearFecha(r.fecha_reparado)}</p>
                       )}
                     </div>
                   ))}
@@ -736,10 +628,10 @@ export default function ServicioTecnico() {
             )}
             <div className="flex flex-col gap-2">
               {tecnicos.map((t) => {
-                const cantidad = equipos.filter((e) => e.estado === 'reparado' && e.tecnico_id === t.id).length;
-                const enPoder = equipos.filter(
-                  (e) => e.tecnico_id === t.id && e.en_poder_tecnico && !e.agregado_a_stock && !e.entregado_a_cliente
-                ).length;
+                const entregadas = reparaciones.filter((r) => r.estado === 'entregado' && r.tecnico_id === t.id).length;
+                const enPoder = reparaciones.filter((r) => r.tecnico_id === t.id && r.en_poder_tecnico && !FINALIZADOS.includes(r.estado)).length;
+                const enCurso = reparaciones.filter((r) => r.tecnico_id === t.id && r.estado === 'en_reparacion').length;
+                const demoradas = reparaciones.filter((r) => r.tecnico_id === t.id && esDemorado(r)).length;
                 return (
                   <button
                     key={t.id}
@@ -754,8 +646,11 @@ export default function ServicioTecnico() {
                       <p className="text-sm font-medium">{t.nombre}</p>
                     </span>
                     <span className="text-right">
-                      <p className="text-xs font-medium">{enPoder} en su poder</p>
-                      <p className="text-xs text-muted dark:text-dark-text-secondary">{cantidad} arreglo{cantidad === 1 ? '' : 's'}</p>
+                      <p className="text-xs font-medium">{enPoder} en su poder{enCurso > 0 ? ` · ${enCurso} en curso` : ''}</p>
+                      <p className="text-xs text-muted dark:text-dark-text-secondary">
+                        {entregadas} entregada{entregadas === 1 ? '' : 's'}
+                        {demoradas > 0 ? ` · ${demoradas} demorada${demoradas === 1 ? '' : 's'}` : ''}
+                      </p>
                     </span>
                   </button>
                 );
@@ -765,257 +660,239 @@ export default function ServicioTecnico() {
         )
       ) : (
         <>
-          {avisoWhatsApp && (
-            <div className="rounded-xl border border-good/30 bg-good/10 p-3 flex flex-col gap-2">
-              <p className="text-sm">
-                {avisoWhatsApp.tipo === 'agregado' ? 'Equipo agregado.' : '¡Equipo marcado como reparado!'} ¿Le avisamos a{' '}
-                <strong>{avisoWhatsApp.nombre}</strong> por WhatsApp?
-              </p>
-              <div className="flex gap-2">
-                <a
-                  href={avisoWhatsApp.link}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={() => setAvisoWhatsApp(null)}
-                  className="flex-1 rounded-lg bg-good text-white text-center py-2 text-sm font-medium"
-                >
-                  Enviar WhatsApp
-                </a>
-                <button
-                  onClick={() => setAvisoWhatsApp(null)}
-                  className="rounded-lg border border-border dark:border-dark-border px-3 py-2 text-sm font-medium"
-                >
-                  Ahora no
-                </button>
-              </div>
+          <div className="flex flex-col gap-2">
+            <input
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              placeholder="Buscar por orden, cliente, IMEI o teléfono..."
+              className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+            />
+            <div className="flex gap-2">
+              <select
+                value={filtroTecnico}
+                onChange={(e) => setFiltroTecnico(e.target.value)}
+                className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+              >
+                <option value="">Todos los técnicos</option>
+                {tecnicos.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.nombre}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={() => setSoloDemorados((v) => !v)}
+                className={`shrink-0 rounded-lg px-3 py-2 text-xs font-medium border ${
+                  soloDemorados ? 'bg-bad text-white border-bad' : 'border-border dark:border-dark-border'
+                }`}
+              >
+                Solo demorados
+              </button>
             </div>
-          )}
+          </div>
+
+          <div className="flex gap-2 text-xs">
+            <span className="rounded-full bg-canvas dark:bg-dark-bg px-3 py-1 font-medium">Sin asignar {contadores.sinAsignar}</span>
+            <span className="rounded-full bg-canvas dark:bg-dark-bg px-3 py-1 font-medium">Esperando repuesto {contadores.esperandoRepuesto}</span>
+            <span className="rounded-full bg-canvas dark:bg-dark-bg px-3 py-1 font-medium">Listos {contadores.listos}</span>
+          </div>
+
+          <div className="flex items-center gap-1.5 text-xs overflow-x-auto pb-1">
+            {GRUPOS_ESTADO.map((g) => (
+              <button
+                key={g.id}
+                onClick={() => setGrupo(g.id)}
+                className={`shrink-0 rounded-xl px-3 py-2 font-medium ${
+                  grupo === g.id ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
+                }`}
+              >
+                {g.label}
+              </button>
+            ))}
+          </div>
 
           {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Cargando...</p>}
           {!loading && filtrados.length === 0 && (
             <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">
-              {tab === 'derivados'
-                ? 'No hay equipos derivados a reparación. Se envían desde Plan Canje o se agregan acá directamente.'
-                : 'Todavía no marcaste ningún equipo como reparado.'}
-            </p>
-          )}
-
-          {!loading && filtrados.length > 0 && (
-            <p className="text-xs text-muted dark:text-dark-text-secondary -mb-1">
-              Etiquetá el dispositivo defectuoso para identificarlo fácil en el local.
+              No hay reparaciones en este filtro.
             </p>
           )}
 
           <div className="flex flex-col gap-2">
-            {filtrados.map((e) => (
-              <div key={e.id} className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex flex-col gap-2">
-                <div className="flex items-start gap-3">
-                  <MiniaturaDispositivo src={imagenPorNombreExacto(e.modelo, imagenesCarpetas)} />
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium">
-                      {e.modelo}
-                      {e.capacidad_gb ? ` · ${e.capacidad_gb}GB` : ''}
-                      {e.color ? ` · ${e.color}` : ''}
-                    </p>
-                    {e.imei && (
-                      <p className="text-xs text-muted dark:text-dark-text-secondary">
-                        IMEI: <span className="font-bold font-mono text-ink dark:text-dark-text">{e.imei}</span>
-                      </p>
-                    )}
-                  </div>
-                </div>
-                <p className="text-xs">
-                  {e.cliente_id ? (
-                    <span className="text-accent dark:text-dark-accent">
-                      👤 Cliente{e.clientes?.nombre ? `: ${e.clientes.nombre} ${e.clientes.apellido || ''}`.trim() : ''}
-                    </span>
-                  ) : (
-                    <span className="text-muted dark:text-dark-text-secondary">🏬 Propio del local</span>
-                  )}
-                </p>
-                {e.detalles && <p className="text-xs text-muted dark:text-dark-text-secondary">Detalles: {e.detalles}</p>}
-                {e.fecha_ingreso_servicio && (
-                  <p className="text-xs text-muted dark:text-dark-text-secondary">Ingresó: {formatearFecha(e.fecha_ingreso_servicio)}</p>
-                )}
-
-                <div className="flex gap-2">
-                  <Link
-                    href={`/servicio-tecnico/etiqueta/${e.id}`}
-                    className="flex-1 rounded-lg border border-border dark:border-dark-border py-2 text-center text-xs font-medium"
-                  >
-                    🏷️ Imprimir etiqueta
-                  </Link>
-                  <button
-                    onClick={() => abrirEdicion(e)}
-                    className="flex-1 rounded-lg border border-border dark:border-dark-border py-2 text-center text-xs font-medium"
-                  >
-                    {editando === e.id ? 'Cancelar' : '✏️ Editar'}
-                  </button>
-                </div>
-
-                {editando === e.id && (
-                  <div className="rounded-lg border border-border dark:border-dark-border bg-white dark:bg-dark-surface p-3 flex flex-col gap-2">
-                    <input
-                      value={editModelo}
-                      onChange={(ev) => setEditModelo(ev.target.value)}
-                      placeholder="Modelo"
-                      list="carpetas-stock-servicio"
-                      className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
-                    />
-                    <div className="flex gap-2">
-                      {STORAGE_OPTIONS.map((gb) => (
-                        <button
-                          key={gb}
-                          onClick={() => setEditCapacidad(gb)}
-                          className={`flex-1 rounded-lg py-2 text-xs font-medium ${
-                            editCapacidad === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
-                          }`}
-                        >
-                          {gb}GB
-                        </button>
-                      ))}
-                    </div>
-                    <SelectorColor value={editColor} onChange={setEditColor} />
-                    <input
-                      value={editImei}
-                      onChange={(ev) => setEditImei(ev.target.value)}
-                      placeholder="IMEI"
-                      className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm font-mono"
-                    />
-                    <textarea
-                      value={editDetalles}
-                      onChange={(ev) => setEditDetalles(ev.target.value)}
-                      placeholder="Detalles"
-                      rows={2}
-                      className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
-                    />
-                    <button
-                      disabled={guardandoEdicion}
-                      onClick={() => guardarEdicion(e)}
-                      className="rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
-                    >
-                      {guardandoEdicion ? 'Guardando...' : 'Guardar cambios'}
-                    </button>
-                  </div>
-                )}
-
-                {tab === 'derivados' && (
-                  <div>
-                    <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Técnico asignado</label>
-                    <select
-                      value={e.tecnico_id ?? ''}
-                      disabled={guardando === e.id}
-                      onChange={(ev) => asignarTecnico(e.id, ev.target.value)}
-                      className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm disabled:opacity-40"
-                    >
-                      <option value="">Sin asignar</option>
-                      {tecnicos.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.nombre}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {tab === 'reparados' && (
-                  <>
-                    {nombreTecnico(e.tecnico_id) && (
-                      <p className="text-xs text-muted dark:text-dark-text-secondary flex items-center gap-1.5">
-                        Reparado por: <Avatar src={fotoTecnico(e.tecnico_id)} nombre={nombreTecnico(e.tecnico_id) ?? '?'} size={34} />{' '}
-                        {nombreTecnico(e.tecnico_id)}
-                      </p>
-                    )}
-                    {e.trabajos_realizados && e.trabajos_realizados.length > 0 && (
-                      <p className="text-xs text-muted dark:text-dark-text-secondary">Arreglo realizado: {e.trabajos_realizados.join(', ')}</p>
-                    )}
-                    {e.fecha_reparado && (
-                      <p className="text-xs text-muted dark:text-dark-text-secondary">Reparado: {formatearFecha(e.fecha_reparado)}</p>
-                    )}
-                  </>
-                )}
-
-                {tab === 'derivados' && (
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => abrirPanelReparar(e.id)}
-                      className="flex-1 rounded-lg border border-border dark:border-dark-border py-2 text-xs font-medium"
-                    >
-                      {panelReparar === e.id ? 'Cancelar' : 'Marcar como reparado'}
-                    </button>
-                    <button
-                      disabled={guardando === e.id}
-                      onClick={() => eliminarEquipo(e)}
-                      className="rounded-lg border border-bad/30 py-2 px-3 text-xs font-medium text-bad disabled:opacity-40"
-                    >
-                      Eliminar
-                    </button>
-                  </div>
-                )}
-
-                {tab === 'reparados' && (
-                  <div className="flex gap-2">
-                    <button
-                      disabled={guardando === e.id}
-                      onClick={() => volverADerivado(e.id)}
-                      className="flex-1 rounded-lg border border-border dark:border-dark-border py-2 text-xs font-medium disabled:opacity-40"
-                    >
-                      Volver a Derivados
-                    </button>
-                    <button
-                      disabled={guardando === e.id}
-                      onClick={() => (e.cliente_id ? marcarEntregadoCliente(e) : agregarAlStock(e))}
-                      className="flex-1 rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-xs font-medium text-white disabled:opacity-40"
-                    >
-                      {e.cliente_id ? 'Marcar entregado al cliente' : 'Agregar al Stock'}
-                    </button>
-                    <button
-                      disabled={guardando === e.id}
-                      onClick={() => eliminarEquipo(e)}
-                      className="rounded-lg border border-bad/30 py-2 px-3 text-xs font-medium text-bad disabled:opacity-40"
-                    >
-                      Eliminar
-                    </button>
-                  </div>
-                )}
-
-                {panelReparar === e.id && (
-                  <div className="rounded-lg border border-border dark:border-dark-border bg-white dark:bg-dark-surface p-3 flex flex-col gap-2">
-                    <p className="text-xs font-medium text-muted dark:text-dark-text-secondary">Arreglo realizado</p>
-                    {trabajos.length === 0 && (
-                      <p className="text-xs text-muted dark:text-dark-text-secondary">
-                        Todavía no cargaste trabajos en el catálogo.{' '}
-                        <Link href="/servicio-tecnico/trabajos" className="text-accent dark:text-dark-accent underline">
-                          Cargar acá
-                        </Link>
-                      </p>
-                    )}
-                    {trabajos.map((t) => (
-                      <label key={t.id} className="flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={seleccionTrabajos.includes(t.nombre)}
-                          onChange={() => toggleTrabajo(t.nombre)}
-                          className="h-4 w-4 accent-ink"
-                        />
-                        <MiniaturaDispositivo src={t.imagen_url} size={24} />
-                        {t.nombre}
-                      </label>
-                    ))}
-                    <button
-                      disabled={guardando === e.id}
-                      onClick={() => marcarReparado(e.id)}
-                      className="mt-1 rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-xs font-medium text-white disabled:opacity-40"
-                    >
-                      Confirmar reparado
-                    </button>
-                  </div>
-                )}
-              </div>
+            {filtrados.map((r) => (
+              <TarjetaReparacion
+                key={r.id}
+                r={r}
+                nombreTecnico={nombreTecnico}
+                guardando={guardando}
+                menuAbierto={menuAbierto}
+                setMenuAbierto={setMenuAbierto}
+                tecnicos={tecnicos}
+                onAsignarTecnico={asignarTecnico}
+                onCambiarEstado={cambiarEstado}
+                onWhatsApp={enviarWhatsApp}
+                onArchivar={archivarCancelar}
+                onEliminar={eliminarDefinitivo}
+                imagenesCarpetas={imagenesCarpetas}
+              />
             ))}
           </div>
         </>
       )}
     </main>
+  );
+}
+
+function TarjetaReparacion({
+  r,
+  nombreTecnico,
+  guardando,
+  menuAbierto,
+  setMenuAbierto,
+  tecnicos,
+  onAsignarTecnico,
+  onCambiarEstado,
+  onWhatsApp,
+  onArchivar,
+  onEliminar,
+  imagenesCarpetas,
+  extra,
+}: {
+  r: Reparacion;
+  nombreTecnico: (id: string | null) => string | undefined;
+  guardando: string | null;
+  menuAbierto: string | null;
+  setMenuAbierto: (id: string | null) => void;
+  tecnicos: Tecnico[];
+  onAsignarTecnico: (id: string, tecnicoId: string) => void;
+  onCambiarEstado: (r: Reparacion, estado: string) => void;
+  onWhatsApp: (r: Reparacion) => void;
+  onArchivar: (r: Reparacion) => void;
+  onEliminar: (r: Reparacion) => void;
+  imagenesCarpetas: Map<string, string>;
+  extra?: React.ReactNode;
+}) {
+  const est = infoEstado(r.estado);
+  const presupuesto =
+    r.presupuesto_mano_obra != null || r.presupuesto_repuestos != null
+      ? `$${((r.presupuesto_mano_obra || 0) + (r.presupuesto_repuestos || 0)).toLocaleString('es-AR')}`
+      : 'pendiente';
+  const nombreCliente = r.clientes ? `${r.clientes.nombre} ${r.clientes.apellido || ''}`.trim() : null;
+
+  return (
+    <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex flex-col gap-2">
+      <div className="flex items-start gap-3">
+        <MiniaturaDispositivo src={imagenPorNombreExacto(r.modelo, imagenesCarpetas)} />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium truncate">
+            {r.numero_orden} · {r.modelo}
+            {r.capacidad_gb ? ` · ${r.capacidad_gb}GB` : ''}
+            {r.color ? ` · ${r.color}` : ''}
+          </p>
+          <p className="text-xs text-muted dark:text-dark-text-secondary truncate">
+            {nombreTecnico(r.tecnico_id) || 'Sin técnico'}
+            {nombreCliente ? ` · ${nombreCliente}` : ''}
+          </p>
+          {r.imei && (
+            <p className="text-xs text-muted dark:text-dark-text-secondary">
+              IMEI: <span className="font-bold font-mono text-ink dark:text-dark-text">{r.imei}</span>
+            </p>
+          )}
+        </div>
+        <div className="relative shrink-0">
+          <button
+            onClick={() => setMenuAbierto(menuAbierto === r.id ? null : r.id)}
+            className="text-lg leading-none px-1 text-muted dark:text-dark-text-secondary"
+          >
+            ⋯
+          </button>
+          {menuAbierto === r.id && (
+            <div className="absolute right-0 top-6 z-10 w-44 rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-elevated flex flex-col overflow-hidden">
+              <Link
+                href={`/servicio-tecnico/etiqueta/${r.id}`}
+                className="px-3 py-2 text-xs text-left hover:bg-canvas dark:hover:bg-dark-bg"
+              >
+                🏷️ Imprimir etiqueta
+              </Link>
+              <button
+                onClick={() => onArchivar(r)}
+                className="px-3 py-2 text-xs text-left hover:bg-canvas dark:hover:bg-dark-bg"
+              >
+                Cancelar / archivar
+              </button>
+              <button
+                onClick={() => onEliminar(r)}
+                className="px-3 py-2 text-xs text-left text-bad hover:bg-bad/10"
+              >
+                Eliminar definitivamente
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {r.falla_declarada && <p className="text-xs text-muted dark:text-dark-text-secondary">{r.falla_declarada}</p>}
+
+      <div className="flex items-center gap-2 flex-wrap text-xs">
+        <span className={`rounded-full px-2 py-0.5 font-medium ${est.color}`}>{est.label}</span>
+        {r.prioridad !== 'normal' && (
+          <span className={`font-medium ${PRIORIDADES.find((p) => p.id === r.prioridad)?.color}`}>
+            {PRIORIDADES.find((p) => p.id === r.prioridad)?.label}
+          </span>
+        )}
+        {r.ubicacion_fisica && <span className="text-muted dark:text-dark-text-secondary">📍 {r.ubicacion_fisica}</span>}
+        <span className="text-muted dark:text-dark-text-secondary">Ingresó {hace(r.fecha_ingreso_servicio)}</span>
+      </div>
+
+      <p className="text-xs text-muted dark:text-dark-text-secondary">Presupuesto: {presupuesto}</p>
+
+      {extra}
+
+      <div className="flex gap-2">
+        <Link
+          href={`/servicio-tecnico/${r.id}`}
+          className="flex-1 rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-center text-xs font-medium text-white"
+        >
+          Abrir ficha
+        </Link>
+        {r.cliente_id && (
+          <button
+            disabled={guardando === r.id}
+            onClick={() => onWhatsApp(r)}
+            className="rounded-lg border border-good/30 text-good px-3 py-2 text-xs font-medium disabled:opacity-40"
+          >
+            WhatsApp
+          </button>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <select
+          value={r.tecnico_id ?? ''}
+          disabled={guardando === r.id}
+          onChange={(ev) => onAsignarTecnico(r.id, ev.target.value)}
+          className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-2 text-xs disabled:opacity-40"
+        >
+          <option value="">Sin asignar</option>
+          {tecnicos.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.nombre}
+            </option>
+          ))}
+        </select>
+        <select
+          value={r.estado}
+          disabled={guardando === r.id}
+          onChange={(ev) => onCambiarEstado(r, ev.target.value)}
+          className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-2 text-xs disabled:opacity-40"
+        >
+          {ESTADOS_REPARACION.map((e) => (
+            <option key={e.id} value={e.id}>
+              {e.label}
+            </option>
+          ))}
+        </select>
+      </div>
+    </div>
   );
 }

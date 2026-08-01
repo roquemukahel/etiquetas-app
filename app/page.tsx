@@ -124,15 +124,14 @@ export default async function Home() {
       supabase.from('modelos_stock').select('nombre, imagen_url'),
       supabase.from('productos').select('nombre, imagen_url'),
       supabase
-        .from('canjes')
+        .from('reparaciones')
         .select('modelo, fecha_reparado, tecnicos ( nombre, foto_url )')
-        .eq('estado', 'reparado')
         .not('fecha_reparado', 'is', null)
         .order('fecha_reparado', { ascending: false })
         .limit(5),
       supabase.from('dispositivos').select('modelo, created_at').order('created_at', { ascending: false }).limit(5),
       supabase.from('clientes').select('nombre, apellido, created_at').order('created_at', { ascending: false }).limit(5),
-      supabase.from('canjes').select('id', { count: 'exact', head: true }).eq('estado', 'reparado').eq('agregado_a_stock', false),
+      supabase.from('reparaciones').select('id', { count: 'exact', head: true }).eq('estado', 'listo_para_entregar'),
       supabase
         .from('dispositivos')
         .select('id', { count: 'exact', head: true })
@@ -145,12 +144,13 @@ export default async function Home() {
         .eq('en_stock', true)
         .lte('en_stock_desde', hace30dias.toISOString()),
       supabase
-        .from('canjes')
+        .from('reparaciones')
         .select('id', { count: 'exact', head: true })
-        .eq('estado', 'servicio_tecnico')
+        .neq('estado', 'entregado')
+        .neq('estado', 'cancelado')
         .lte('fecha_ingreso_servicio', hace60dias.toISOString()),
       supabase.from('dispositivos').select('modelo').eq('en_stock', true),
-      supabase.from('canjes').select('id', { count: 'exact', head: true }).eq('estado', 'en_canje'),
+      supabase.from('canjes').select('id', { count: 'exact', head: true }).eq('estado', 'en_canje').eq('oculto_en_canje', false),
       supabase.from('compras').select('id', { count: 'exact', head: true }).eq('estado', 'pendiente'),
       supabase
         .from('dispositivos')

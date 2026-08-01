@@ -11,6 +11,7 @@ const STORAGE_OPTIONS = [64, 128, 256, 512];
 
 type Compra = {
   id: string;
+  cliente_id: string | null;
   modelo: string | null;
   capacidad_gb: number | null;
   imei: string | null;
@@ -87,14 +88,18 @@ export default function DetalleCompra() {
     setProcesando(true);
     setError(null);
 
-    const { error: insertError } = await supabase.from('canjes').insert({
-      modelo: compra.modelo,
-      capacidad_gb: compra.capacidad_gb,
-      imei: compra.imei,
-      detalles: compra.detalles,
-      estado: 'servicio_tecnico',
-      fecha_ingreso_servicio: new Date().toISOString(),
-    });
+    const { data: nueva, error: insertError } = await supabase
+      .from('reparaciones')
+      .insert({
+        cliente_id: compra.cliente_id,
+        modelo: compra.modelo,
+        capacidad_gb: compra.capacidad_gb,
+        imei: compra.imei,
+        falla_declarada: compra.detalles,
+        estado: 'recibido',
+      })
+      .select('id, numero_orden')
+      .single();
     if (insertError) {
       setError('No pudimos derivar: ' + insertError.message);
       setProcesando(false);
@@ -102,9 +107,9 @@ export default function DetalleCompra() {
     }
     await supabase.from('compras').update({ estado: 'servicio_tecnico' }).eq('id', id);
     await registrarAuditoria(supabase, {
-      accion: `derivó a Servicio Técnico un dispositivo comprado (${compra.modelo || 'sin modelo'}${compra.imei ? `, IMEI ${compra.imei}` : ''}) de ${nombreCliente(compra)}`,
-      entidad: 'compra',
-      entidadId: compra.id,
+      accion: `derivó a Servicio Técnico un dispositivo comprado (${nueva?.numero_orden || ''}, ${compra.modelo || 'sin modelo'}${compra.imei ? `, IMEI ${compra.imei}` : ''}) de ${nombreCliente(compra)}`,
+      entidad: 'reparacion',
+      entidadId: nueva?.id,
     });
     setCompra({ ...compra, estado: 'servicio_tecnico' });
     setProcesando(false);

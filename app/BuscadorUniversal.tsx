@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from './lib/supabase/client';
 import { obtenerTodasLasFilas } from './lib/db';
+import { infoEstado } from './lib/reparaciones';
 
 type Cliente = { id: string; nombre: string; apellido: string | null; telefono: string | null; dni: string | null };
 type Dispositivo = {
@@ -20,6 +21,16 @@ type Canje = {
   modelo: string | null;
   imei: string | null;
   detalles: string | null;
+  estado: string;
+  cliente_id: string | null;
+  clientes: { nombre: string; apellido: string | null } | null;
+};
+type Reparacion = {
+  id: string;
+  numero_orden: string | null;
+  modelo: string | null;
+  imei: string | null;
+  falla_declarada: string | null;
   estado: string;
   cliente_id: string | null;
   clientes: { nombre: string; apellido: string | null } | null;
@@ -60,16 +71,20 @@ export default function BuscadorUniversal() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [dispositivos, setDispositivos] = useState<Dispositivo[]>([]);
   const [canjes, setCanjes] = useState<Canje[]>([]);
+  const [reparaciones, setReparaciones] = useState<Reparacion[]>([]);
   const [compras, setCompras] = useState<Compra[]>([]);
   const [ordenes, setOrdenes] = useState<Orden[]>([]);
 
   const cargarDatos = async () => {
     if (cargado) return;
     setCargado(true);
-    const [cl, di, { data: ca }, { data: co }, { data: or }] = await Promise.all([
+    const [cl, di, { data: ca }, { data: re }, { data: co }, { data: or }] = await Promise.all([
       obtenerTodasLasFilas<Cliente>(supabase, 'clientes', 'id, nombre, apellido, telefono, dni'),
       obtenerTodasLasFilas<Dispositivo>(supabase, 'dispositivos', 'id, modelo, imei, numero_serie, en_stock, capacidad_gb, color'),
       supabase.from('canjes').select('id, modelo, imei, detalles, estado, cliente_id, clientes ( nombre, apellido )'),
+      supabase
+        .from('reparaciones')
+        .select('id, numero_orden, modelo, imei, falla_declarada, estado, cliente_id, clientes ( nombre, apellido )'),
       supabase.from('compras').select('id, modelo, imei, detalles, cliente_id, clientes ( nombre, apellido )'),
       supabase
         .from('ordenes')
@@ -78,6 +93,7 @@ export default function BuscadorUniversal() {
     setClientes(cl);
     setDispositivos(di);
     setCanjes((ca as any) ?? []);
+    setReparaciones((re as any) ?? []);
     setCompras((co as any) ?? []);
     setOrdenes((or as any) ?? []);
   };
@@ -116,6 +132,18 @@ export default function BuscadorUniversal() {
     [canjes, q, activo, idsClientesCoincidentes]
   );
 
+  const reparacionesCoincidentes = useMemo(
+    () =>
+      activo
+        ? reparaciones.filter(
+            (r) =>
+              [r.modelo, r.imei, r.falla_declarada, r.numero_orden].some((v) => coincide(v, q)) ||
+              (r.cliente_id && idsClientesCoincidentes.has(r.cliente_id))
+          )
+        : [],
+    [reparaciones, q, activo, idsClientesCoincidentes]
+  );
+
   const comprasCoincidentes = useMemo(
     () =>
       activo
@@ -145,10 +173,9 @@ export default function BuscadorUniversal() {
     clientesCoincidentes.length === 0 &&
     dispositivosCoincidentes.length === 0 &&
     canjesCoincidentes.length === 0 &&
+    reparacionesCoincidentes.length === 0 &&
     comprasCoincidentes.length === 0 &&
     ordenesCoincidentes.length === 0;
-
-  const linkCanje = (c: Canje) => (c.estado === 'en_canje' ? '/canje' : `/servicio-tecnico/etiqueta/${c.id}`);
 
   return (
     <div ref={contenedorRef} className="relative">
@@ -208,17 +235,25 @@ export default function BuscadorUniversal() {
             ))}
           </Grupo>
 
-          <Grupo titulo="Plan Canje / Servicio Técnico" cantidad={canjesCoincidentes.length}>
+          <Grupo titulo="Plan Canje" cantidad={canjesCoincidentes.length}>
             {canjesCoincidentes.map((c) => (
               <Resultado
                 key={c.id}
-                href={linkCanje(c)}
+                href="/canje"
                 titulo={c.modelo || 'Dispositivo'}
-                subtitulo={[
-                  nombreCompleto(c.clientes),
-                  c.imei ? `IMEI ${c.imei}` : null,
-                  c.estado === 'en_canje' ? 'En canje' : c.estado === 'reparado' ? 'Reparado' : 'En reparación',
-                ]
+                subtitulo={[nombreCompleto(c.clientes), c.imei ? `IMEI ${c.imei}` : null].filter(Boolean).join(' · ')}
+                onClick={() => setAbierto(false)}
+              />
+            ))}
+          </Grupo>
+
+          <Grupo titulo="Servicio Técnico" cantidad={reparacionesCoincidentes.length}>
+            {reparacionesCoincidentes.map((r) => (
+              <Resultado
+                key={r.id}
+                href={`/servicio-tecnico/${r.id}`}
+                titulo={`${r.numero_orden ? `${r.numero_orden} · ` : ''}${r.modelo || 'Dispositivo'}`}
+                subtitulo={[nombreCompleto(r.clientes), r.imei ? `IMEI ${r.imei}` : null, infoEstado(r.estado).label]
                   .filter(Boolean)
                   .join(' · ')}
                 onClick={() => setAbierto(false)}

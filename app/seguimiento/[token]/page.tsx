@@ -5,11 +5,13 @@ import { useParams } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 
 type Seguimiento = {
+  numero_orden: string | null;
   modelo: string | null;
   capacidad_gb: number | null;
   color: string | null;
   estado: string;
   fecha_ingreso_servicio: string | null;
+  fecha_estimada: string | null;
   fecha_reparado: string | null;
   trabajos_realizados: string[] | null;
   nombre_cliente: string | null;
@@ -18,20 +20,45 @@ type Seguimiento = {
 };
 
 const ESTADOS: Record<string, { titulo: string; desc: string; emoji: string }> = {
-  servicio_tecnico: {
+  recibido: {
+    titulo: 'Recibido',
+    desc: 'Ya recibimos tu equipo. Pronto lo vamos a revisar.',
+    emoji: '📥',
+  },
+  esperando_diagnostico: {
+    titulo: 'Esperando diagnóstico',
+    desc: 'Tu equipo está en cola para que un técnico lo revise.',
+    emoji: '🔍',
+  },
+  esperando_aprobacion: {
+    titulo: 'Esperando tu aprobación',
+    desc: 'Ya armamos el presupuesto. Contactanos para aprobarlo y arrancamos con la reparación.',
+    emoji: '📋',
+  },
+  esperando_repuesto: {
+    titulo: 'Esperando un repuesto',
+    desc: 'Estamos esperando que llegue un repuesto para terminar la reparación.',
+    emoji: '📦',
+  },
+  en_reparacion: {
     titulo: 'En reparación',
-    desc: 'Tu equipo está siendo revisado. Te vamos a avisar apenas esté listo.',
+    desc: 'Tu equipo está siendo reparado. Te vamos a avisar apenas esté listo.',
     emoji: '🔧',
   },
-  reparado: {
+  listo_para_entregar: {
     titulo: '¡Listo para retirar!',
     desc: 'Tu equipo ya está reparado. Pasá por el local cuando quieras.',
     emoji: '✅',
   },
-  en_canje: {
-    titulo: 'Recibido',
-    desc: 'Todavía estamos revisando tu equipo.',
-    emoji: '📥',
+  entregado: {
+    titulo: 'Entregado',
+    desc: 'Este equipo ya fue retirado del local.',
+    emoji: '🎉',
+  },
+  cancelado: {
+    titulo: 'Cancelado',
+    desc: 'Esta reparación fue cancelada. Consultanos por más información.',
+    emoji: '✖️',
   },
 };
 
@@ -90,6 +117,7 @@ export default function Seguimiento() {
         <p className="text-sm text-muted dark:text-dark-text-secondary">{info.desc}</p>
 
         <div className="w-full border-t border-border dark:border-dark-border mt-2 pt-3 flex flex-col gap-1 text-sm">
+          {datos.numero_orden && <p className="text-xs text-muted dark:text-dark-text-secondary">Orden {datos.numero_orden}</p>}
           <p className="font-medium">
             {datos.modelo}
             {datos.capacidad_gb ? ` · ${datos.capacidad_gb}GB` : ''}
@@ -100,7 +128,12 @@ export default function Seguimiento() {
               Ingresó: {new Date(datos.fecha_ingreso_servicio).toLocaleDateString('es-AR')}
             </p>
           )}
-          {datos.estado === 'reparado' && datos.trabajos_realizados && datos.trabajos_realizados.length > 0 && (
+          {datos.fecha_estimada && datos.estado !== 'entregado' && datos.estado !== 'listo_para_entregar' && (
+            <p className="text-xs text-muted dark:text-dark-text-secondary">
+              Fecha estimada: {new Date(datos.fecha_estimada + 'T00:00:00').toLocaleDateString('es-AR')}
+            </p>
+          )}
+          {datos.trabajos_realizados && datos.trabajos_realizados.length > 0 && (
             <p className="text-xs text-muted dark:text-dark-text-secondary">Arreglo: {datos.trabajos_realizados.join(', ')}</p>
           )}
           {datos.fecha_reparado && (

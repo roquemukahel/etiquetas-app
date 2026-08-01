@@ -8,9 +8,10 @@ import EtiquetaServicio from '../../EtiquetaServicio';
 
 type Equipo = {
   id: string;
+  numero_orden: string | null;
   modelo: string | null;
   imei: string | null;
-  detalles: string | null;
+  falla_declarada: string | null;
 };
 
 export default function EtiquetaServicioTecnico() {
@@ -25,7 +26,7 @@ export default function EtiquetaServicioTecnico() {
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase.from('canjes').select('id, modelo, imei, detalles').eq('id', id).single();
+      const { data } = await supabase.from('reparaciones').select('id, numero_orden, modelo, imei, falla_declarada').eq('id', id).single();
       setEquipo(data as Equipo);
       setLoading(false);
     })();
@@ -114,7 +115,7 @@ export default function EtiquetaServicioTecnico() {
     );
   }
 
-  const identificador = equipo.imei ? `IMEI: ${equipo.imei}` : `Ticket #${equipo.id.slice(0, 8).toUpperCase()}`;
+  const identificador = equipo.imei ? `IMEI: ${equipo.imei}` : equipo.numero_orden || `Ticket #${equipo.id.slice(0, 8).toUpperCase()}`;
 
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-5 items-center">
@@ -126,7 +127,7 @@ export default function EtiquetaServicioTecnico() {
       </header>
 
       <div style={{ transform: 'scale(0.5)', transformOrigin: 'top center', height: '177px' }}>
-        <EtiquetaServicio ref={etiquetaRef} logo={logo} modelo={equipo.modelo} identificador={identificador} detalle={equipo.detalles} />
+        <EtiquetaServicio ref={etiquetaRef} logo={logo} modelo={equipo.modelo} identificador={identificador} detalle={equipo.falla_declarada} />
       </div>
 
       {!logo && (
