@@ -1104,3 +1104,12 @@ as $$
   left join clientes cli on cli.id = o.cliente_id
   where o.token_boleta = token
 $$;
+
+-- ============================================================
+-- Marcas a vender: el negocio elige qué marcas comercializa
+-- (iPhone, Samsung, Otras) en Configuración, y eso precarga las
+-- carpetas de Stock con nombres canónicos consistentes (ver
+-- app/lib/catalogosMarcas.ts), para evitar carpetas duplicadas por
+-- typos de mayúsculas/espacios al escribir el modelo a mano.
+-- ============================================================
+alter table negocios add column if not exists marcas_stock text[] not null default '{}';
