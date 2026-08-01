@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { asegurarModelo } from '../../lib/modelos';
 import { registrarAuditoria } from '../../lib/auditoria';
+import { getActor } from '../../lib/actor';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 
@@ -59,12 +60,15 @@ export default function DetalleCompra() {
     setProcesando(true);
     setError(null);
 
+    const actor = getActor();
     const { error: insertError } = await supabase.from('dispositivos').insert({
       modelo: compra.modelo,
       capacidad_gb: compra.capacidad_gb,
       imei: compra.imei,
       estado: 'usado',
       en_stock: true,
+      agregado_por_nombre: actor?.nombre ?? null,
+      agregado_por_foto_url: actor?.fotoUrl ?? null,
     });
     if (insertError) {
       setError('No pudimos agregar al stock: ' + insertError.message);

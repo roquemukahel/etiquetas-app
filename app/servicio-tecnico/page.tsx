@@ -9,6 +9,7 @@ import { armarLinkWhatsApp, mensajeSeguimientoServicio, mensajeListoServicio } f
 import { codigoLlamada } from '../lib/paises';
 import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../lib/carpetas';
 import { registrarAuditoria } from '../lib/auditoria';
+import { getActor } from '../lib/actor';
 import { obtenerTodasLasFilas } from '../lib/db';
 import { ESTADOS_REPARACION, GRUPOS_ESTADO, PRIORIDADES, infoEstado, estadosDeGrupo, GrupoEstado, calcularAlertas } from '../lib/reparaciones';
 import MiniaturaDispositivo from '../MiniaturaDispositivo';
@@ -319,6 +320,7 @@ export default function ServicioTecnico() {
     }
     if (!confirm('¿Pasar este equipo al Stock como dispositivo disponible para vender?')) return;
     setGuardando(r.id);
+    const actor = getActor();
     await supabase.from('dispositivos').insert({
       modelo: r.modelo,
       capacidad_gb: r.capacidad_gb,
@@ -326,6 +328,8 @@ export default function ServicioTecnico() {
       imei: r.imei,
       estado: 'usado',
       en_stock: true,
+      agregado_por_nombre: actor?.nombre ?? null,
+      agregado_por_foto_url: actor?.fotoUrl ?? null,
     });
     await asegurarModelo(supabase, r.modelo);
     await supabase.from('reparaciones').update({ estado: 'entregado', estado_actualizado_at: new Date().toISOString() }).eq('id', r.id);

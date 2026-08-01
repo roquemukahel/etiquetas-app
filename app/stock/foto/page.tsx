@@ -7,6 +7,7 @@ import { crearClienteNavegador } from '../../lib/supabase/client';
 import { asegurarModelo } from '../../lib/modelos';
 import { limpiarImei } from '../../lib/imei';
 import { useDictado } from '../../lib/dictado';
+import { getActor } from '../../lib/actor';
 import SelectorColor from '../../SelectorColor';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
@@ -96,6 +97,7 @@ export default function StockPorFoto() {
     setGuardando(true);
     setError(null);
 
+    const actor = getActor();
     const { error: insertError } = await supabase.from('dispositivos').insert({
       modelo: modelo.trim(),
       capacidad_gb: capacidad,
@@ -106,6 +108,8 @@ export default function StockPorFoto() {
       proveedor: proveedor.trim() || null,
       estado,
       en_stock: true,
+      agregado_por_nombre: actor?.nombre ?? null,
+      agregado_por_foto_url: actor?.fotoUrl ?? null,
     });
 
     if (insertError) {

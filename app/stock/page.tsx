@@ -6,6 +6,7 @@ import { crearClienteNavegador } from '../lib/supabase/client';
 import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../lib/carpetas';
 import { hexColorDe } from '../lib/coloresIphone';
 import { registrarAuditoria } from '../lib/auditoria';
+import { getActor } from '../lib/actor';
 import { leerCSV, valorDe, descargarCSV, insertarEnTandas } from '../lib/csv';
 import { obtenerTodasLasFilas } from '../lib/db';
 import MiniaturaDispositivo from '../MiniaturaDispositivo';
@@ -196,6 +197,7 @@ export default function Stock() {
             return null;
           }
 
+          const actor = getActor();
           return {
             modelo,
             capacidad_gb: capacidad_gb || null,
@@ -207,6 +209,8 @@ export default function Stock() {
             estado: valorDe(fila, 'estado') || 'usado',
             en_stock,
             proveedor: valorDe(fila, 'proveedor') || null,
+            agregado_por_nombre: actor?.nombre ?? null,
+            agregado_por_foto_url: actor?.fotoUrl ?? null,
             ...(fechaCreado && !isNaN(fechaCreado.getTime()) ? { created_at: fechaCreado.toISOString() } : {}),
           };
         })

@@ -6,6 +6,7 @@ import Etiqueta from './Etiqueta';
 import { crearClienteNavegador } from '../lib/supabase/client';
 import { asegurarModelo } from '../lib/modelos';
 import { limpiarImei } from '../lib/imei';
+import { getActor } from '../lib/actor';
 import SelectorColor from '../SelectorColor';
 
 type ExtractedData = {
@@ -142,6 +143,7 @@ export default function NuevaEtiqueta() {
   const handleContinuarAEtiqueta = async () => {
     if (agregarAlStock && datos) {
       setGuardandoStock(true);
+      const actor = getActor();
       await supabase.from('dispositivos').insert({
         modelo: datos.modelo,
         capacidad_gb: datos.capacidad_gb,
@@ -153,6 +155,8 @@ export default function NuevaEtiqueta() {
         proveedor: proveedor.trim() || null,
         estado: 'usado',
         en_stock: true,
+        agregado_por_nombre: actor?.nombre ?? null,
+        agregado_por_foto_url: actor?.fotoUrl ?? null,
       });
       await asegurarModelo(supabase, datos.modelo);
       setGuardandoStock(false);

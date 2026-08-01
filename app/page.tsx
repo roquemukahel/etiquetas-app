@@ -129,7 +129,11 @@ export default async function Home() {
         .not('fecha_reparado', 'is', null)
         .order('fecha_reparado', { ascending: false })
         .limit(5),
-      supabase.from('dispositivos').select('modelo, created_at').order('created_at', { ascending: false }).limit(5),
+      supabase
+        .from('dispositivos')
+        .select('modelo, created_at, agregado_por_nombre, agregado_por_foto_url')
+        .order('created_at', { ascending: false })
+        .limit(5),
       supabase.from('clientes').select('nombre, apellido, created_at').order('created_at', { ascending: false }).limit(5),
       supabase.from('reparaciones').select('id', { count: 'exact', head: true }).eq('estado', 'listo_para_entregar'),
       supabase
@@ -250,8 +254,8 @@ export default async function Home() {
         tipo: 'stock',
         fecha: new Date(d.created_at),
         texto: `Ingresó ${d.modelo || 'un equipo'} al stock`,
-        actorNombre: null,
-        actorFoto: null,
+        actorNombre: d.agregado_por_nombre ?? null,
+        actorFoto: d.agregado_por_foto_url ?? null,
       });
     }
 

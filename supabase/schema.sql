@@ -1519,3 +1519,13 @@ $$;
 -- cuándo cambió de estado por última vez, no solo cuándo ingresó.
 -- ============================================================
 alter table reparaciones add column if not exists estado_actualizado_at timestamptz not null default now();
+
+-- ============================================================
+-- Quién cargó cada dispositivo al stock (para mostrar su foto en
+-- "Actividad reciente", igual que ya se hace con vendedor en ventas y
+-- técnico en reparaciones). Es una foto/nombre "congelados" al
+-- momento de cargarlo, no una referencia en vivo a vendedores/
+-- técnicos — porque quien lo carga puede ser cualquiera de los dos.
+-- ============================================================
+alter table dispositivos add column if not exists agregado_por_nombre text;
+alter table dispositivos add column if not exists agregado_por_foto_url text;

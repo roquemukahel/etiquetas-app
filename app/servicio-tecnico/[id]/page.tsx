@@ -413,6 +413,7 @@ export default function FichaReparacion() {
     }
     if (!confirm('¿Pasar este equipo al Stock como dispositivo disponible para vender?')) return;
     setGuardando(true);
+    const actor = getActor();
     await supabase.from('dispositivos').insert({
       modelo: r.modelo,
       capacidad_gb: r.capacidad_gb,
@@ -420,6 +421,8 @@ export default function FichaReparacion() {
       imei: r.imei,
       estado: 'usado',
       en_stock: true,
+      agregado_por_nombre: actor?.nombre ?? null,
+      agregado_por_foto_url: actor?.fotoUrl ?? null,
     });
     await asegurarModelo(supabase, r.modelo);
     await supabase.from('reparaciones').update({ estado: 'entregado', estado_actualizado_at: new Date().toISOString() }).eq('id', r.id);

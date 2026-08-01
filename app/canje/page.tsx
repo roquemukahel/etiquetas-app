@@ -6,6 +6,7 @@ import { crearClienteNavegador } from '../lib/supabase/client';
 import { asegurarModelo } from '../lib/modelos';
 import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../lib/carpetas';
 import { registrarAuditoria } from '../lib/auditoria';
+import { getActor } from '../lib/actor';
 import { infoEstado } from '../lib/reparaciones';
 import MiniaturaDispositivo from '../MiniaturaDispositivo';
 import Avatar from '../Avatar';
@@ -109,6 +110,7 @@ export default function PlanCanje() {
     }
     if (!confirm('¿Agregar este dispositivo al Stock para venderlo?')) return;
     setProcesando(c.id);
+    const actor = getActor();
     await supabase.from('dispositivos').insert({
       modelo: c.modelo,
       capacidad_gb: c.capacidad_gb,
@@ -117,6 +119,8 @@ export default function PlanCanje() {
       salud_bateria: c.salud_bateria,
       estado: 'usado',
       en_stock: true,
+      agregado_por_nombre: actor?.nombre ?? null,
+      agregado_por_foto_url: actor?.fotoUrl ?? null,
     });
     await asegurarModelo(supabase, c.modelo);
     // No se borra: queda con agregado_a_stock=true, así aparece en
