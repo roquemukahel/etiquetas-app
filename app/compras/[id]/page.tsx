@@ -5,6 +5,9 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { asegurarModelo } from '../../lib/modelos';
+import { registrarAuditoria } from '../../lib/auditoria';
+
+const STORAGE_OPTIONS = [64, 128, 256, 512];
 
 type Compra = {
   id: string;
@@ -27,6 +30,16 @@ export default function DetalleCompra() {
   const [procesando, setProcesando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [editando, setEditando] = useState(false);
+  const [editModelo, setEditModelo] = useState('');
+  const [editCapacidad, setEditCapacidad] = useState<number | null>(null);
+  const [editImei, setEditImei] = useState('');
+  const [editDetalles, setEditDetalles] = useState('');
+  const [editPrecio, setEditPrecio] = useState('');
+  const [guardandoEdicion, setGuardandoEdicion] = useState(false);
+
+  const nombreCliente = (c: Compra) => (c.clientes ? `${c.clientes.nombre} ${c.clientes.apellido || ''}`.trim() : 'sin cliente');
+
   useEffect(() => {
     (async () => {
       const { data } = await supabase
@@ -40,7 +53,7 @@ export default function DetalleCompra() {
   }, [id]);
 
   const agregarAlStock = async () => {
-    if (!compra) return;
+    if (!compra || procesando) return;
     if (!confirm('¿Agregar este dispositivo al Stock para venderlo?')) return;
     setProcesando(true);
     setError(null);
@@ -59,12 +72,17 @@ export default function DetalleCompra() {
     }
     await asegurarModelo(supabase, compra.modelo);
     await supabase.from('compras').update({ estado: 'en_stock' }).eq('id', id);
+    await registrarAuditoria(supabase, {
+      accion: `agregó al Stock un dispositivo comprado (${compra.modelo || 'sin modelo'}${compra.imei ? `, IMEI ${compra.imei}` : ''}) de ${nombreCliente(compra)}`,
+      entidad: 'compra',
+      entidadId: compra.id,
+    });
     setCompra({ ...compra, estado: 'en_stock' });
     setProcesando(false);
   };
 
   const derivarAServicioTecnico = async () => {
-    if (!compra) return;
+    if (!compra || procesando) return;
     if (!confirm('¿Derivar este dispositivo a Servicio Técnico?')) return;
     setProcesando(true);
     setError(null);
@@ -83,8 +101,94 @@ export default function DetalleCompra() {
       return;
     }
     await supabase.from('compras').update({ estado: 'servicio_tecnico' }).eq('id', id);
+    await registrarAuditoria(supabase, {
+      accion: `derivó a Servicio Técnico un dispositivo comprado (${compra.modelo || 'sin modelo'}${compra.imei ? `, IMEI ${compra.imei}` : ''}) de ${nombreCliente(compra)}`,
+      entidad: 'compra',
+      entidadId: compra.id,
+    });
     setCompra({ ...compra, estado: 'servicio_tecnico' });
     setProcesando(false);
+  };
+
+  const eliminarCompra = async () => {
+    if (!compra || procesando) return;
+    if (!confirm('¿Eliminar esta compra? Esta acción no se puede deshacer.')) return;
+    setProcesando(true);
+    setError(null);
+
+    const { error: deleteError } = await supabase.from('compras').delete().eq('id', id);
+    if (deleteError) {
+      setError('No pudimos eliminar la compra: ' + deleteError.message);
+      setProcesando(false);
+      return;
+    }
+    await registrarAuditoria(supabase, {
+      accion: `eliminó una compra (${compra.modelo || 'sin modelo'}${compra.imei ? `, IMEI ${compra.imei}` : ''}) de ${nombreCliente(compra)}`,
+      entidad: 'compra',
+      entidadId: compra.id,
+      valorAnterior: { modelo: compra.modelo, capacidad_gb: compra.capacidad_gb, imei: compra.imei, precio: compra.precio },
+    });
+    router.push('/compras');
+    router.refresh();
+  };
+
+  const abrirEdicion = () => {
+    if (!compra) return;
+    setEditModelo(compra.modelo || '');
+    setEditCapacidad(compra.capacidad_gb);
+    setEditImei(compra.imei || '');
+    setEditDetalles(compra.detalles || '');
+    setEditPrecio(compra.precio != null ? String(compra.precio) : '');
+    setError(null);
+    setEditando(true);
+  };
+
+  const guardarEdicion = async () => {
+    if (!compra) return;
+    setGuardandoEdicion(true);
+    setError(null);
+
+    const nuevoModelo = editModelo.trim() || null;
+    const nuevoImei = editImei.trim() || null;
+    const nuevosDetalles = editDetalles.trim() || null;
+    const nuevoPrecio = editPrecio ? Number(editPrecio) : null;
+
+    const cambios: Record<string, { antes: unknown; despues: unknown }> = {};
+    if (compra.modelo !== nuevoModelo) cambios.modelo = { antes: compra.modelo, despues: nuevoModelo };
+    if (compra.capacidad_gb !== editCapacidad) cambios.capacidad_gb = { antes: compra.capacidad_gb, despues: editCapacidad };
+    if (compra.imei !== nuevoImei) cambios.imei = { antes: compra.imei, despues: nuevoImei };
+    if (compra.detalles !== nuevosDetalles) cambios.detalles = { antes: compra.detalles, despues: nuevosDetalles };
+    if (compra.precio !== nuevoPrecio) cambios.precio = { antes: compra.precio, despues: nuevoPrecio };
+
+    if (Object.keys(cambios).length === 0) {
+      setEditando(false);
+      setGuardandoEdicion(false);
+      return;
+    }
+
+    const { error: updateError } = await supabase
+      .from('compras')
+      .update({ modelo: nuevoModelo, capacidad_gb: editCapacidad, imei: nuevoImei, detalles: nuevosDetalles, precio: nuevoPrecio })
+      .eq('id', id);
+    if (updateError) {
+      setError('No pudimos guardar los cambios: ' + updateError.message);
+      setGuardandoEdicion(false);
+      return;
+    }
+
+    if (cambios.modelo) await asegurarModelo(supabase, nuevoModelo);
+
+    await registrarAuditoria(supabase, {
+      accion: `editó una compra (${nombreCliente(compra)})`,
+      entidad: 'compra',
+      entidadId: compra.id,
+      valorAnterior: Object.fromEntries(Object.entries(cambios).map(([k, v]) => [k, v.antes])),
+      valorNuevo: Object.fromEntries(Object.entries(cambios).map(([k, v]) => [k, v.despues])),
+    });
+
+    setCompra({ ...compra, modelo: nuevoModelo, capacidad_gb: editCapacidad, imei: nuevoImei, detalles: nuevosDetalles, precio: nuevoPrecio });
+    setEditando(false);
+    setGuardandoEdicion(false);
   };
 
   if (loading) {
@@ -106,13 +210,94 @@ export default function DetalleCompra() {
     );
   }
 
+  if (editando) {
+    return (
+      <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
+        <header className="flex items-center gap-3">
+          <button onClick={() => setEditando(false)} className="text-2xl leading-none">
+            &larr;
+          </button>
+          <span className="text-lg font-medium">Editar compra</span>
+        </header>
+
+        {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
+
+        <div>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Modelo</label>
+          <input
+            value={editModelo}
+            onChange={(e) => setEditModelo(e.target.value)}
+            className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+          />
+        </div>
+
+        <div>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Almacenamiento</label>
+          <div className="flex gap-2">
+            {STORAGE_OPTIONS.map((gb) => (
+              <button
+                key={gb}
+                onClick={() => setEditCapacidad(gb)}
+                className={`flex-1 rounded-xl py-2 text-sm font-medium ${
+                  editCapacidad === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
+                }`}
+              >
+                {gb} GB
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">IMEI</label>
+          <input
+            value={editImei}
+            onChange={(e) => setEditImei(e.target.value)}
+            className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm font-mono"
+          />
+        </div>
+
+        <div>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Detalles</label>
+          <textarea
+            value={editDetalles}
+            onChange={(e) => setEditDetalles(e.target.value)}
+            rows={3}
+            className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+          />
+        </div>
+
+        <div>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Precio pagado</label>
+          <input
+            value={editPrecio}
+            onChange={(e) => setEditPrecio(e.target.value)}
+            inputMode="numeric"
+            className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+          />
+        </div>
+
+        <button
+          disabled={guardandoEdicion}
+          onClick={guardarEdicion}
+          className="mt-auto w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
+        >
+          {guardandoEdicion ? 'Guardando...' : 'Guardar cambios'}
+        </button>
+      </main>
+    );
+  }
+
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
       <header className="flex items-center gap-3">
         <Link href="/compras" className="text-2xl leading-none">
           &larr;
         </Link>
-        <span className="text-lg font-medium">Compra</span>
+        <span className="text-lg font-medium mr-auto">Compra</span>
+        <button onClick={abrirEdicion} className="text-xs text-accent dark:text-dark-accent underline">
+          Editar
+        </button>
       </header>
 
       {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
@@ -168,6 +353,13 @@ export default function DetalleCompra() {
             className="w-full rounded-2xl border border-border dark:border-dark-border py-4 text-center text-base font-medium disabled:opacity-40"
           >
             Derivar a Servicio Técnico
+          </button>
+          <button
+            disabled={procesando}
+            onClick={eliminarCompra}
+            className="w-full rounded-2xl border border-bad/30 py-3 text-center text-sm font-medium text-bad disabled:opacity-40"
+          >
+            Eliminar
           </button>
         </div>
       ) : (
