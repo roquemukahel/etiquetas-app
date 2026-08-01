@@ -1476,7 +1476,12 @@ order by coalesce(c.fecha_ingreso_servicio, c.created_at) asc;
 -- El seguimiento público ahora lee de `reparaciones` en vez de
 -- `canjes` (los links/QR ya impresos siguen funcionando: el token se
 -- copió tal cual en la migración de arriba).
+--
+-- Postgres no permite cambiar la forma de las columnas de salida de
+-- una función con "create or replace" (hay que borrarla primero).
 -- ============================================================
+drop function if exists seguimiento_publico(uuid);
+
 create or replace function seguimiento_publico(token uuid)
 returns table (
   numero_orden text,
