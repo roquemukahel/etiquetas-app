@@ -252,7 +252,7 @@ export default function Boleta() {
           <div className="flex items-center gap-3">
             {negocio?.logo_url && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={negocio.logo_url} alt="Logo" className="h-20 w-20 print:h-14 print:w-14 object-contain rounded-lg" />
+              <img src={negocio.logo_url} alt="Logo" className="h-32 w-32 print:h-24 print:w-24 object-contain rounded-lg" />
             )}
             <div>
               <p className="text-2xl print:text-lg font-display font-semibold leading-tight">{negocio?.nombre}</p>
@@ -262,14 +262,14 @@ export default function Boleta() {
             </div>
           </div>
           <div className="flex items-start gap-3">
-            <div className="text-right text-sm text-muted leading-relaxed">
+            <div className="text-right text-sm text-muted leading-relaxed mt-1">
               <p className="font-medium text-ink">Orden #{orden.id.slice(0, 8)}</p>
               <p>{formatearFecha(orden.created_at)}</p>
               {orden.fecha_entrega && <p>Entregado: {formatearFecha(orden.fecha_entrega)}</p>}
             </div>
             {qr && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={qr} alt="Código QR de la boleta" className="h-16 w-16 print:h-14 print:w-14 shrink-0" />
+              <img src={qr} alt="Código QR de la boleta" className="h-20 w-20 print:h-16 print:w-16 shrink-0 -mt-1" />
             )}
           </div>
         </div>

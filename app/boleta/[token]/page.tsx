@@ -110,7 +110,7 @@ export default function BoletaPublica() {
         <div className="flex items-center gap-3">
           {boleta.negocio.logo_url && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={boleta.negocio.logo_url} alt="Logo" className="h-20 w-20 object-contain rounded-lg" />
+            <img src={boleta.negocio.logo_url} alt="Logo" className="h-32 w-32 object-contain rounded-lg" />
           )}
           <div>
             <p className="text-2xl font-display font-semibold leading-tight">{boleta.negocio.nombre}</p>
