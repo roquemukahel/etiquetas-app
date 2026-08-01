@@ -391,6 +391,47 @@ export default function FichaReparacion() {
     router.push(`/ordenes/${orden.id}`);
   };
 
+  const agregarAlStockFicha = async () => {
+    if (!r) return;
+    if (r.imei) {
+      const { data: existente } = await supabase.from('dispositivos').select('id').eq('imei', r.imei).maybeSingle();
+      if (existente && !confirm(`Ya hay un dispositivo en Stock con el IMEI ${r.imei}. ¿Agregarlo igual?`)) return;
+    }
+    if (!confirm('¿Pasar este equipo al Stock como dispositivo disponible para vender?')) return;
+    setGuardando(true);
+    await supabase.from('dispositivos').insert({
+      modelo: r.modelo,
+      capacidad_gb: r.capacidad_gb,
+      color: r.color,
+      imei: r.imei,
+      estado: 'usado',
+      en_stock: true,
+    });
+    await asegurarModelo(supabase, r.modelo);
+    await supabase.from('reparaciones').update({ estado: 'entregado' }).eq('id', r.id);
+    await registrarAuditoria(supabase, {
+      accion: `agregó al Stock un equipo propio reparado en Servicio Técnico (${r.numero_orden || ''}, ${r.modelo || 'sin modelo'}${r.imei ? `, IMEI ${r.imei}` : ''})`,
+      entidad: 'reparacion',
+      entidadId: r.id,
+    });
+    setGuardando(false);
+    cargar();
+  };
+
+  const marcarEntregadoClienteFicha = async () => {
+    if (!r) return;
+    if (!confirm('¿Marcar este equipo como entregado al cliente?')) return;
+    setGuardando(true);
+    await supabase.from('reparaciones').update({ estado: 'entregado', fecha_entrega: new Date().toISOString() }).eq('id', r.id);
+    await registrarAuditoria(supabase, {
+      accion: `marcó como entregado al cliente un equipo reparado en Servicio Técnico (${r.numero_orden || ''}, ${r.modelo || 'sin modelo'}${r.imei ? `, IMEI ${r.imei}` : ''})`,
+      entidad: 'reparacion',
+      entidadId: r.id,
+    });
+    setGuardando(false);
+    cargar();
+  };
+
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center">
@@ -492,6 +533,13 @@ export default function FichaReparacion() {
           </div>
         ) : (
           <div className="text-sm flex flex-col gap-1">
+            <p className="text-xs">
+              {r.cliente_id ? (
+                <span className="text-accent dark:text-dark-accent">👤 Equipo de un cliente</span>
+              ) : (
+                <span className="text-muted dark:text-dark-text-secondary">🏬 Equipo propio del local</span>
+              )}
+            </p>
             {nombreCliente && (
               <p>
                 <span className="text-muted dark:text-dark-text-secondary">Cliente: </span>
@@ -815,15 +863,36 @@ export default function FichaReparacion() {
             </Seccion>
           )}
 
-          {!r.orden_cobro_id ? (
-            <button
-              disabled={guardando}
-              onClick={generarOrdenCobro}
-              className="w-full rounded-2xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium disabled:opacity-40"
-            >
-              Generar orden de cobro
-            </button>
-          ) : (
+          {!r.orden_cobro_id && r.estado === 'listo_para_entregar' && (
+            r.cliente_id ? (
+              <div className="flex gap-2">
+                <button
+                  disabled={guardando}
+                  onClick={marcarEntregadoClienteFicha}
+                  className="flex-1 rounded-2xl bg-good hover:opacity-90 transition-opacity py-3 text-center text-sm font-medium text-white disabled:opacity-40"
+                >
+                  Marcar entregado al cliente
+                </button>
+                <button
+                  disabled={guardando}
+                  onClick={generarOrdenCobro}
+                  className="flex-1 rounded-2xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium disabled:opacity-40"
+                >
+                  Generar orden de cobro
+                </button>
+              </div>
+            ) : (
+              <button
+                disabled={guardando}
+                onClick={agregarAlStockFicha}
+                className="w-full rounded-2xl bg-good hover:opacity-90 transition-opacity py-3 text-center text-sm font-medium text-white disabled:opacity-40"
+              >
+                Agregar al Stock
+              </button>
+            )
+          )}
+
+          {r.orden_cobro_id && (
             <Link
               href={`/ordenes/${r.orden_cobro_id}`}
               className="w-full rounded-2xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium"

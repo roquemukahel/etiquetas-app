@@ -305,6 +305,47 @@ export default function ServicioTecnico() {
     cargar();
   };
 
+  const agregarAlStock = async (r: Reparacion) => {
+    if (guardando) return;
+    if (r.imei) {
+      const { data: existente } = await supabase.from('dispositivos').select('id').eq('imei', r.imei).maybeSingle();
+      if (existente && !confirm(`Ya hay un dispositivo en Stock con el IMEI ${r.imei}. ¿Agregarlo igual?`)) return;
+    }
+    if (!confirm('¿Pasar este equipo al Stock como dispositivo disponible para vender?')) return;
+    setGuardando(r.id);
+    await supabase.from('dispositivos').insert({
+      modelo: r.modelo,
+      capacidad_gb: r.capacidad_gb,
+      color: r.color,
+      imei: r.imei,
+      estado: 'usado',
+      en_stock: true,
+    });
+    await asegurarModelo(supabase, r.modelo);
+    await supabase.from('reparaciones').update({ estado: 'entregado' }).eq('id', r.id);
+    await registrarAuditoria(supabase, {
+      accion: `agregó al Stock un equipo propio reparado en Servicio Técnico (${r.numero_orden || ''}, ${r.modelo || 'sin modelo'}${r.imei ? `, IMEI ${r.imei}` : ''})`,
+      entidad: 'reparacion',
+      entidadId: r.id,
+    });
+    setGuardando(null);
+    cargar();
+  };
+
+  const marcarEntregadoCliente = async (r: Reparacion) => {
+    if (guardando) return;
+    if (!confirm('¿Marcar este equipo como entregado al cliente?')) return;
+    setGuardando(r.id);
+    await supabase.from('reparaciones').update({ estado: 'entregado', fecha_entrega: new Date().toISOString() }).eq('id', r.id);
+    await registrarAuditoria(supabase, {
+      accion: `marcó como entregado al cliente un equipo reparado en Servicio Técnico (${r.numero_orden || ''}, ${r.modelo || 'sin modelo'}${r.imei ? `, IMEI ${r.imei}` : ''})`,
+      entidad: 'reparacion',
+      entidadId: r.id,
+    });
+    setGuardando(null);
+    cargar();
+  };
+
   const archivarCancelar = async (r: Reparacion) => {
     if (!confirm('¿Cancelar/archivar esta reparación? Va a quedar en "Finalizados", no se borra el historial.')) return;
     setMenuAbierto(null);
@@ -568,6 +609,8 @@ export default function ServicioTecnico() {
                       onWhatsApp={enviarWhatsApp}
                       onArchivar={archivarCancelar}
                       onEliminar={eliminarDefinitivo}
+                      onAgregarAlStock={agregarAlStock}
+                      onEntregadoCliente={marcarEntregadoCliente}
                       imagenesCarpetas={imagenesCarpetas}
                       extra={
                         <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
@@ -733,6 +776,8 @@ export default function ServicioTecnico() {
                 onWhatsApp={enviarWhatsApp}
                 onArchivar={archivarCancelar}
                 onEliminar={eliminarDefinitivo}
+                onAgregarAlStock={agregarAlStock}
+                onEntregadoCliente={marcarEntregadoCliente}
                 imagenesCarpetas={imagenesCarpetas}
               />
             ))}
@@ -755,6 +800,8 @@ function TarjetaReparacion({
   onWhatsApp,
   onArchivar,
   onEliminar,
+  onAgregarAlStock,
+  onEntregadoCliente,
   imagenesCarpetas,
   extra,
 }: {
@@ -769,6 +816,8 @@ function TarjetaReparacion({
   onWhatsApp: (r: Reparacion) => void;
   onArchivar: (r: Reparacion) => void;
   onEliminar: (r: Reparacion) => void;
+  onAgregarAlStock: (r: Reparacion) => void;
+  onEntregadoCliente: (r: Reparacion) => void;
   imagenesCarpetas: Map<string, string>;
   extra?: React.ReactNode;
 }) {
@@ -831,6 +880,14 @@ function TarjetaReparacion({
         </div>
       </div>
 
+      <p className="text-xs">
+        {r.cliente_id ? (
+          <span className="text-accent dark:text-dark-accent">👤 Cliente</span>
+        ) : (
+          <span className="text-muted dark:text-dark-text-secondary">🏬 Propio del local</span>
+        )}
+      </p>
+
       {r.falla_declarada && <p className="text-xs text-muted dark:text-dark-text-secondary">{r.falla_declarada}</p>}
 
       <div className="flex items-center gap-2 flex-wrap text-xs">
@@ -847,6 +904,16 @@ function TarjetaReparacion({
       <p className="text-xs text-muted dark:text-dark-text-secondary">Presupuesto: {presupuesto}</p>
 
       {extra}
+
+      {r.estado === 'listo_para_entregar' && (
+        <button
+          disabled={guardando === r.id}
+          onClick={() => (r.cliente_id ? onEntregadoCliente(r) : onAgregarAlStock(r))}
+          className="rounded-lg bg-good hover:opacity-90 transition-opacity py-2 text-center text-xs font-medium text-white disabled:opacity-40"
+        >
+          {r.cliente_id ? '✓ Marcar entregado al cliente' : '✓ Agregar al Stock'}
+        </button>
+      )}
 
       <div className="flex gap-2">
         <Link
