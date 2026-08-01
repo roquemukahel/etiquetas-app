@@ -32,16 +32,6 @@ type Orden = {
   nota: string | null;
   incluir_garantia: boolean;
   token_boleta: string;
-  canjes: {
-    modelo: string | null;
-    capacidad_gb: number | null;
-    color: string | null;
-    imei: string | null;
-    salud_bateria: number | null;
-    detalles: string | null;
-    monto: number | null;
-    vendedores: { nombre: string } | null;
-  } | null;
   clientes: {
     nombre: string;
     apellido: string | null;
@@ -52,6 +42,17 @@ type Orden = {
   } | null;
   vendedores: { nombre: string } | null;
   orden_items: Item[];
+};
+
+type CanjeEntregado = {
+  modelo: string | null;
+  capacidad_gb: number | null;
+  color: string | null;
+  imei: string | null;
+  salud_bateria: number | null;
+  detalles: string | null;
+  monto: number | null;
+  vendedores: { nombre: string } | null;
 };
 
 type Negocio = {
@@ -113,6 +114,7 @@ export default function Boleta() {
   const supabase = crearClienteNavegador();
 
   const [orden, setOrden] = useState<Orden | null>(null);
+  const [canjes, setCanjes] = useState<CanjeEntregado[]>([]);
   const [negocio, setNegocio] = useState<Negocio | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -123,12 +125,20 @@ export default function Boleta() {
       const { data: ordenData, error: ordenError } = await supabase
         .from('ordenes')
         .select(
-          '*, clientes ( nombre, apellido, telefono, email, dni, domicilio ), vendedores ( nombre ), canjes!canje_id ( modelo, capacidad_gb, color, imei, salud_bateria, detalles, monto, vendedores ( nombre ) ), orden_items ( descripcion, cantidad, precio_unitario, tipo, dispositivos ( garantia_vencimiento ) )'
+          '*, clientes ( nombre, apellido, telefono, email, dni, domicilio ), vendedores ( nombre ), orden_items ( descripcion, cantidad, precio_unitario, tipo, dispositivos ( garantia_vencimiento ) )'
         )
         .eq('id', id)
         .single();
       if (ordenError) setError(ordenError.message);
       setOrden(ordenData as any);
+
+      const { data: canjesData } = await supabase
+        .from('canjes')
+        .select('modelo, capacidad_gb, color, imei, salud_bateria, detalles, monto, vendedores ( nombre )')
+        .eq('orden_id', id)
+        .eq('estado', 'en_canje')
+        .order('created_at');
+      setCanjes((canjesData as any) ?? []);
 
       if (ordenData) {
         const url = `${window.location.origin}/boleta/${(ordenData as any).token_boleta}`;
@@ -295,32 +305,34 @@ export default function Boleta() {
           </div>
         </div>
 
-        {orden.canjes && (
-          <div className="rounded-xl bg-accent-soft p-4 flex flex-col gap-1">
-            <p className="text-xs font-semibold uppercase tracking-wide text-accent mb-1">
-              Plan canje — dispositivo entregado
-            </p>
-            <p className="font-medium">
-              {orden.canjes.modelo}
-              {orden.canjes.capacidad_gb ? ` · ${orden.canjes.capacidad_gb}GB` : ''}
-              {orden.canjes.color ? ` · ${orden.canjes.color}` : ''}
-            </p>
-            {orden.canjes.imei && (
-              <p className="text-muted">
-                IMEI: <span className="font-bold text-ink">{orden.canjes.imei}</span>
-              </p>
-            )}
-            {orden.canjes.salud_bateria != null && <p className="text-muted">Batería: {orden.canjes.salud_bateria}%</p>}
-            {orden.canjes.detalles && <p className="text-muted">Detalles: {orden.canjes.detalles}</p>}
-            {orden.canjes.vendedores?.nombre && (
-              <p className="text-muted">Recibido por: {orden.canjes.vendedores.nombre}</p>
-            )}
-            {orden.canjes.monto != null && (
-              <p className="font-medium mt-1">
-                Monto reconocido: {moneda}
-                {orden.canjes.monto.toLocaleString('es-AR')}
-              </p>
-            )}
+        {canjes.length > 0 && (
+          <div className="flex flex-col gap-2">
+            {canjes.map((c, idx) => (
+              <div key={idx} className="rounded-xl bg-accent-soft p-4 flex flex-col gap-1">
+                <p className="text-xs font-semibold uppercase tracking-wide text-accent mb-1">
+                  Plan canje — dispositivo entregado{canjes.length > 1 ? ` (${idx + 1} de ${canjes.length})` : ''}
+                </p>
+                <p className="font-medium">
+                  {c.modelo}
+                  {c.capacidad_gb ? ` · ${c.capacidad_gb}GB` : ''}
+                  {c.color ? ` · ${c.color}` : ''}
+                </p>
+                {c.imei && (
+                  <p className="text-muted">
+                    IMEI: <span className="font-bold text-ink">{c.imei}</span>
+                  </p>
+                )}
+                {c.salud_bateria != null && <p className="text-muted">Batería: {c.salud_bateria}%</p>}
+                {c.detalles && <p className="text-muted">Detalles: {c.detalles}</p>}
+                {c.vendedores?.nombre && <p className="text-muted">Recibido por: {c.vendedores.nombre}</p>}
+                {c.monto != null && (
+                  <p className="font-medium mt-1">
+                    Monto reconocido: {moneda}
+                    {c.monto.toLocaleString('es-AR')}
+                  </p>
+                )}
+              </div>
+            ))}
           </div>
         )}
 

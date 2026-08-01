@@ -30,6 +30,17 @@ type Vendedor = { id: string; nombre: string };
 type Producto = { id: string; nombre: string; precio: number | null };
 type Trabajo = { id: string; nombre: string; precio: number | null; imagen_url: string | null };
 
+type CanjeCarrito = {
+  tempId: string;
+  modelo: string;
+  capacidad_gb: number | null;
+  color: string;
+  imei: string;
+  salud_bateria: string;
+  monto: string;
+  detalles: string;
+};
+
 type ItemCarrito = {
   tempId: string;
   descripcion: string;
@@ -103,6 +114,7 @@ export default function NuevaOrden() {
 
   // --- plan canje ---
   const [canjeActivo, setCanjeActivo] = useState(false);
+  const [canjesCarrito, setCanjesCarrito] = useState<CanjeCarrito[]>([]);
   const [canjeModelo, setCanjeModelo] = useState('');
   const [canjeCapacidad, setCanjeCapacidad] = useState<number | null>(null);
   const [canjeColor, setCanjeColor] = useState('');
@@ -175,14 +187,18 @@ export default function NuevaOrden() {
     () => carrito.reduce((acc, i) => acc + i.cantidad * i.precioUnitario, 0),
     [carrito]
   );
+  const montoCanjeTotal = useMemo(
+    () => canjesCarrito.reduce((acc, c) => acc + (Number(c.monto) || 0), 0),
+    [canjesCarrito]
+  );
+
   const total = useMemo(() => {
     const conImpuesto = subtotal * (1 + (Number(impuesto) || 0) / 100);
-    const montoCanje = canjeActivo ? Number(canjeMonto) || 0 : 0;
     // Sin Math.max(0, ...) a propósito: si el anticipo es mayor al precio
     // (ej. seña de una compra anterior más grande que lo que se lleva hoy),
     // el total puede quedar negativo — representa saldo a favor del cliente.
-    return conImpuesto - (Number(anticipo) || 0) - montoCanje;
-  }, [subtotal, impuesto, anticipo, canjeActivo, canjeMonto]);
+    return conImpuesto - (Number(anticipo) || 0) - montoCanjeTotal;
+  }, [subtotal, impuesto, anticipo, montoCanjeTotal]);
 
   const elegirCliente = (c: Cliente) => {
     setClienteElegido(c);
@@ -299,6 +315,35 @@ export default function NuevaOrden() {
     setPanelAbierto(null);
   };
 
+  const agregarCanje = () => {
+    if (!canjeModelo.trim()) return;
+    setCanjesCarrito((c) => [
+      ...c,
+      {
+        tempId: idTemporal(),
+        modelo: canjeModelo.trim(),
+        capacidad_gb: canjeCapacidad,
+        color: canjeColor.trim(),
+        imei: canjeImei.trim(),
+        salud_bateria: canjeBateria,
+        monto: canjeMonto,
+        detalles: canjeDetalles.trim(),
+      },
+    ]);
+    setCanjeModelo('');
+    setCanjeCapacidad(null);
+    setCanjeColor('');
+    setCanjeImei('');
+    setCanjeBateria('');
+    setCanjeMonto('');
+    setCanjeDetalles('');
+  };
+
+  const quitarCanje = (tempId: string) => setCanjesCarrito((c) => c.filter((x) => x.tempId !== tempId));
+
+  const actualizarMontoCanje = (tempId: string, monto: string) =>
+    setCanjesCarrito((c) => c.map((x) => (x.tempId === tempId ? { ...x, monto } : x)));
+
   const quitarDelCarrito = (tempId: string) => setCarrito((c) => c.filter((i) => i.tempId !== tempId));
 
   const actualizarPrecioItem = (tempId: string, precio: string) =>
@@ -340,7 +385,7 @@ export default function NuevaOrden() {
           forma_pago: formaPago,
           anticipo: Number(anticipo) || 0,
           impuesto_porcentaje: Number(impuesto) || 0,
-          monto_canje: canjeActivo ? Number(canjeMonto) || 0 : 0,
+          monto_canje: montoCanjeTotal,
           total,
           estado: estadoOrden,
           fecha_entrega: estadoOrden === 'entregado' ? new Date().toISOString() : null,
@@ -351,24 +396,21 @@ export default function NuevaOrden() {
         .single();
       if (oErr || !orden) throw new Error(oErr?.message || 'no se pudo crear la orden');
 
-      if (canjeActivo && canjeModelo.trim()) {
-        const { data: canjeData, error: canjeErr } = await supabase
-          .from('canjes')
-          .insert({
+      if (canjesCarrito.length > 0) {
+        const { error: canjesErr } = await supabase.from('canjes').insert(
+          canjesCarrito.map((c) => ({
             orden_id: orden.id,
-            modelo: canjeModelo.trim(),
-            capacidad_gb: canjeCapacidad,
-            color: canjeColor.trim() || null,
-            imei: canjeImei.trim() || null,
-            salud_bateria: canjeBateria ? Number(canjeBateria) : null,
-            detalles: canjeDetalles.trim() || null,
-            monto: canjeMonto ? Number(canjeMonto) : null,
+            modelo: c.modelo,
+            capacidad_gb: c.capacidad_gb,
+            color: c.color.trim() || null,
+            imei: c.imei.trim() || null,
+            salud_bateria: c.salud_bateria ? Number(c.salud_bateria) : null,
+            detalles: c.detalles.trim() || null,
+            monto: c.monto ? Number(c.monto) : null,
             vendedor_id: vendedorId || null,
-          })
-          .select()
-          .single();
-        if (canjeErr || !canjeData) throw new Error(canjeErr?.message || 'no se pudo cargar el dispositivo de canje');
-        await supabase.from('ordenes').update({ canje_id: canjeData.id }).eq('id', orden.id);
+          }))
+        );
+        if (canjesErr) throw new Error(canjesErr.message || 'no se pudieron cargar los dispositivos de canje');
       }
 
       const { error: itemsErr } = await supabase.from('orden_items').insert(
@@ -965,8 +1007,42 @@ export default function NuevaOrden() {
             onChange={(e) => setCanjeActivo(e.target.checked)}
             className="h-5 w-5 accent-ink"
           />
-          <span className="text-sm font-medium">Plan canje: recibo un dispositivo como parte de pago</span>
+          <span className="text-sm font-medium">Plan canje: recibo uno o más dispositivos como parte de pago</span>
         </label>
+
+        {canjesCarrito.length > 0 && (
+          <div className="flex flex-col gap-2">
+            {canjesCarrito.map((c, idx) => (
+              <div
+                key={c.tempId}
+                className="rounded-lg border border-border dark:border-dark-border px-3 py-2 flex items-center justify-between gap-2 text-sm"
+              >
+                <div>
+                  <p className="font-medium">
+                    {canjesCarrito.length > 1 ? `${idx + 1}. ` : ''}
+                    {c.modelo}
+                    {c.capacidad_gb ? ` · ${c.capacidad_gb}GB` : ''}
+                    {c.color ? ` · ${c.color}` : ''}
+                  </p>
+                  {c.imei && <p className="text-xs text-muted dark:text-dark-text-secondary font-mono">IMEI: {c.imei}</p>}
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-xs text-muted dark:text-dark-text-secondary">$</span>
+                  <input
+                    value={c.monto}
+                    onChange={(e) => actualizarMontoCanje(c.tempId, e.target.value)}
+                    inputMode="numeric"
+                    placeholder="Monto"
+                    className="w-24 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded px-2 py-1 text-sm"
+                  />
+                  <button onClick={() => quitarCanje(c.tempId)} className="text-bad text-xs font-medium">
+                    Quitar
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
         {canjeActivo && (
           <div className="flex flex-col gap-2">
@@ -1024,8 +1100,15 @@ export default function NuevaOrden() {
               rows={3}
               className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
             />
+            <button
+              onClick={agregarCanje}
+              disabled={!canjeModelo.trim()}
+              className="rounded-lg border border-border dark:border-dark-border py-2 text-sm font-medium disabled:opacity-40"
+            >
+              + Agregar este dispositivo
+            </button>
             <p className="text-xs text-muted dark:text-dark-text-secondary">
-              El dispositivo entregado va a la sección Plan Canje (no entra directo al stock).
+              El dispositivo entregado va a la sección Plan Canje (no entra directo al stock). Podés cargar más de uno.
             </p>
           </div>
         )}

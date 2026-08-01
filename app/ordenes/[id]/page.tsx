@@ -31,7 +31,6 @@ type Orden = {
   anticipo: number | null;
   impuesto_porcentaje: number | null;
   monto_canje: number | null;
-  canje_id: string | null;
   vendedor_id: string | null;
   cliente_id: string | null;
   estado: string;
@@ -292,10 +291,11 @@ export default function DetalleOrden() {
         .update({ en_stock: true, en_stock_desde: new Date().toISOString(), alerta_stock_enviada: false })
         .in('id', dispositivoIds);
     }
+    // Se borran antes de eliminar la orden: canjes.orden_id queda en null
+    // automáticamente al borrar la orden (on delete set null), así que
+    // después ya no se los podría encontrar por ese filtro.
+    await supabase.from('canjes').delete().eq('orden_id', id).eq('estado', 'en_canje');
     const { error: deleteError } = await supabase.from('ordenes').delete().eq('id', id);
-    if (orden.canje_id) {
-      await supabase.from('canjes').delete().eq('id', orden.canje_id);
-    }
     if (deleteError) {
       setError('No pudimos cancelar la orden: ' + deleteError.message);
       setGuardando(false);

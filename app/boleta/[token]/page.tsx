@@ -39,7 +39,7 @@ type Boleta = {
     texto_garantia_servicio: string | null;
     texto_garantia_servicio_tamano: number;
   };
-  canje: {
+  canjes: {
     modelo: string | null;
     capacidad_gb: number | null;
     color: string | null;
@@ -47,7 +47,7 @@ type Boleta = {
     salud_bateria: number | null;
     detalles: string | null;
     monto: number | null;
-  } | null;
+  }[];
   items: Item[];
 };
 
@@ -142,27 +142,31 @@ export default function BoletaPublica() {
           </div>
         )}
 
-        {boleta.canje && (
-          <div className="rounded-xl bg-accent-soft p-4 flex flex-col gap-1">
-            <p className="text-xs font-semibold uppercase tracking-wide text-accent mb-1">
-              Plan canje — dispositivo entregado
-            </p>
-            <p className="font-medium">
-              {boleta.canje.modelo}
-              {boleta.canje.capacidad_gb ? ` · ${boleta.canje.capacidad_gb}GB` : ''}
-              {boleta.canje.color ? ` · ${boleta.canje.color}` : ''}
-            </p>
-            {boleta.canje.imei && (
-              <p className="text-muted">
-                IMEI: <span className="font-bold text-ink">{boleta.canje.imei}</span>
-              </p>
-            )}
-            {boleta.canje.monto != null && (
-              <p className="font-medium mt-1">
-                Monto reconocido: {moneda}
-                {boleta.canje.monto.toLocaleString('es-AR')}
-              </p>
-            )}
+        {boleta.canjes.length > 0 && (
+          <div className="flex flex-col gap-2">
+            {boleta.canjes.map((c, idx) => (
+              <div key={idx} className="rounded-xl bg-accent-soft p-4 flex flex-col gap-1">
+                <p className="text-xs font-semibold uppercase tracking-wide text-accent mb-1">
+                  Plan canje — dispositivo entregado{boleta.canjes.length > 1 ? ` (${idx + 1} de ${boleta.canjes.length})` : ''}
+                </p>
+                <p className="font-medium">
+                  {c.modelo}
+                  {c.capacidad_gb ? ` · ${c.capacidad_gb}GB` : ''}
+                  {c.color ? ` · ${c.color}` : ''}
+                </p>
+                {c.imei && (
+                  <p className="text-muted">
+                    IMEI: <span className="font-bold text-ink">{c.imei}</span>
+                  </p>
+                )}
+                {c.monto != null && (
+                  <p className="font-medium mt-1">
+                    Monto reconocido: {moneda}
+                    {c.monto.toLocaleString('es-AR')}
+                  </p>
+                )}
+              </div>
+            ))}
           </div>
         )}
 
