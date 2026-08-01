@@ -1113,3 +1113,22 @@ $$;
 -- typos de mayúsculas/espacios al escribir el modelo a mano.
 -- ============================================================
 alter table negocios add column if not exists marcas_stock text[] not null default '{}';
+
+-- ============================================================
+-- Servicio Técnico: posesión física del equipo por parte del técnico
+-- asignado, y distinción entre equipos propios del local (que al
+-- repararse pasan a Stock) y equipos de clientes (que al repararse se
+-- entregan de vuelta al cliente, nunca a Stock).
+--
+-- en_poder_tecnico: true mientras el técnico asignado tiene el equipo
+-- físicamente con él; se pone en true automáticamente al asignarle un
+-- técnico, y el propio técnico (o quien corresponda) lo destilda cuando
+-- ya no lo tiene más (lo entregó). Cada cambio queda en auditoría.
+--
+-- entregado_a_cliente: análogo a agregado_a_stock pero para equipos de
+-- clientes (cliente_id no nulo): en vez de pasar a Stock, se marcan
+-- como entregados y dejan de aparecer en las vistas activas, sin perder
+-- el historial del técnico ni el ranking de Estadísticas.
+-- ============================================================
+alter table canjes add column if not exists en_poder_tecnico boolean not null default true;
+alter table canjes add column if not exists entregado_a_cliente boolean not null default false;

@@ -35,6 +35,8 @@ type Equipo = {
   cliente_id: string | null;
   token_seguimiento: string | null;
   agregado_a_stock: boolean;
+  en_poder_tecnico: boolean;
+  entregado_a_cliente: boolean;
   clientes: { nombre: string; apellido: string | null; telefono: string | null } | null;
 };
 
@@ -54,6 +56,8 @@ export default function ServicioTecnico() {
   const [panelReparar, setPanelReparar] = useState<string | null>(null);
   const [seleccionTrabajos, setSeleccionTrabajos] = useState<string[]>([]);
   const [tecnicoSeleccionado, setTecnicoSeleccionado] = useState<string | null>(null);
+  const [vistaTecnico, setVistaTecnico] = useState<'en_poder' | 'historial'>('en_poder');
+  const [asignadoTecnicoId, setAsignadoTecnicoId] = useState('');
 
   const [carpetasStock, setCarpetasStock] = useState<string[]>([]);
   const [panelNuevo, setPanelNuevo] = useState(false);
@@ -85,7 +89,7 @@ export default function ServicioTecnico() {
     const { data } = await supabase
       .from('canjes')
       .select(
-        'id, modelo, capacidad_gb, color, imei, detalles, tecnico_id, estado, trabajos_realizados, fecha_ingreso_servicio, fecha_reparado, cliente_id, token_seguimiento, agregado_a_stock, clientes ( nombre, apellido, telefono )'
+        'id, modelo, capacidad_gb, color, imei, detalles, tecnico_id, estado, trabajos_realizados, fecha_ingreso_servicio, fecha_reparado, cliente_id, token_seguimiento, agregado_a_stock, en_poder_tecnico, entregado_a_cliente, clientes ( nombre, apellido, telefono )'
       )
       .in('estado', ['servicio_tecnico', 'reparado'])
       .order('created_at', { ascending: false });
@@ -136,13 +140,29 @@ export default function ServicioTecnico() {
   const filtrados = useMemo(
     () =>
       equipos.filter(
-        (e) => !e.agregado_a_stock && (tab === 'derivados' ? e.estado === 'servicio_tecnico' : e.estado === 'reparado')
+        (e) =>
+          !e.agregado_a_stock &&
+          !e.entregado_a_cliente &&
+          (tab === 'derivados' ? e.estado === 'servicio_tecnico' : e.estado === 'reparado')
       ),
     [equipos, tab]
   );
 
+  // Historial: registro permanente de arreglos del técnico, no se filtra
+  // por en_poder_tecnico/agregado_a_stock/entregado_a_cliente a propósito
+  // (no tiene que perder ranking porque el equipo ya se entregó o vendió).
   const historialTecnico = useMemo(
     () => equipos.filter((e) => e.estado === 'reparado' && e.tecnico_id === tecnicoSeleccionado),
+    [equipos, tecnicoSeleccionado]
+  );
+
+  // Equipos que el técnico tiene físicamente con él en este momento
+  // (en reparación, o ya reparados pero todavía sin entregar/vender).
+  const equiposEnPoder = useMemo(
+    () =>
+      equipos.filter(
+        (e) => e.tecnico_id === tecnicoSeleccionado && e.en_poder_tecnico && !e.agregado_a_stock && !e.entregado_a_cliente
+      ),
     [equipos, tecnicoSeleccionado]
   );
 
@@ -173,6 +193,7 @@ export default function ServicioTecnico() {
         estado: 'servicio_tecnico',
         fecha_ingreso_servicio: new Date().toISOString(),
         cliente_id: clienteId,
+        tecnico_id: asignadoTecnicoId || null,
       })
       .select('token_seguimiento')
       .single();
@@ -190,6 +211,7 @@ export default function ServicioTecnico() {
     setNuevoDetalles('');
     setClienteInput('');
     setClienteTelefono('');
+    setAsignadoTecnicoId('');
     setPanelNuevo(false);
     setGuardandoNuevo(false);
     cargar();
@@ -197,8 +219,31 @@ export default function ServicioTecnico() {
 
   const asignarTecnico = async (id: string, tecnicoId: string) => {
     setGuardando(id);
-    await supabase.from('canjes').update({ tecnico_id: tecnicoId || null }).eq('id', id);
-    setEquipos((eq) => eq.map((e) => (e.id === id ? { ...e, tecnico_id: tecnicoId || null } : e)));
+    const equipo = equipos.find((e) => e.id === id);
+    const cambios: { tecnico_id: string | null; en_poder_tecnico?: boolean } = { tecnico_id: tecnicoId || null };
+    if (tecnicoId) cambios.en_poder_tecnico = true;
+    await supabase.from('canjes').update(cambios).eq('id', id);
+    const nombreNuevo = tecnicos.find((t) => t.id === tecnicoId)?.nombre;
+    await registrarAuditoria(supabase, {
+      accion: tecnicoId
+        ? `asignó a ${nombreNuevo || 'un técnico'} el equipo ${equipo?.modelo || 'sin modelo'}${equipo?.imei ? ` (IMEI ${equipo.imei})` : ''}`
+        : `quitó la asignación de técnico del equipo ${equipo?.modelo || 'sin modelo'}${equipo?.imei ? ` (IMEI ${equipo.imei})` : ''}`,
+      entidad: 'canje',
+      entidadId: id,
+    });
+    setEquipos((eq) => eq.map((e) => (e.id === id ? { ...e, ...cambios } : e)));
+    setGuardando(null);
+  };
+
+  const marcarEnPoder = async (e: Equipo, enPoder: boolean) => {
+    setGuardando(e.id);
+    await supabase.from('canjes').update({ en_poder_tecnico: enPoder }).eq('id', e.id);
+    await registrarAuditoria(supabase, {
+      accion: `registró que ${nombreTecnico(e.tecnico_id) || 'el técnico'} ${enPoder ? 'todavía tiene' : 'ya entregó'} el equipo ${e.modelo || 'sin modelo'}${e.imei ? ` (IMEI ${e.imei})` : ''}`,
+      entidad: 'canje',
+      entidadId: e.id,
+    });
+    setEquipos((eq) => eq.map((x) => (x.id === e.id ? { ...x, en_poder_tecnico: enPoder } : x)));
     setGuardando(null);
   };
 
@@ -213,14 +258,20 @@ export default function ServicioTecnico() {
 
   const marcarReparado = async (id: string) => {
     setGuardando(id);
+    const equipo = equipos.find((e) => e.id === id);
     await supabase
       .from('canjes')
       .update({ estado: 'reparado', trabajos_realizados: seleccionTrabajos, fecha_reparado: new Date().toISOString() })
       .eq('id', id);
+    await registrarAuditoria(supabase, {
+      accion: `marcó como reparado un equipo de Servicio Técnico (${equipo?.modelo || 'sin modelo'}${equipo?.imei ? `, IMEI ${equipo.imei}` : ''})`,
+      entidad: 'canje',
+      entidadId: id,
+      valorNuevo: { trabajos_realizados: seleccionTrabajos },
+    });
     setPanelReparar(null);
     setGuardando(null);
 
-    const equipo = equipos.find((e) => e.id === id);
     if (equipo?.cliente_id && equipo.clientes?.telefono && equipo.token_seguimiento) {
       const url = `${window.location.origin}/seguimiento/${equipo.token_seguimiento}`;
       const nombre = `${equipo.clientes.nombre} ${equipo.clientes.apellido || ''}`.trim();
@@ -234,10 +285,16 @@ export default function ServicioTecnico() {
   const volverADerivado = async (id: string) => {
     if (!confirm('¿Volver a mandar este equipo a "Derivados a reparación"?')) return;
     setGuardando(id);
+    const equipo = equipos.find((e) => e.id === id);
     await supabase
       .from('canjes')
       .update({ estado: 'servicio_tecnico', fecha_reparado: null, fecha_ingreso_servicio: new Date().toISOString() })
       .eq('id', id);
+    await registrarAuditoria(supabase, {
+      accion: `volvió a derivar a reparación un equipo de Servicio Técnico (${equipo?.modelo || 'sin modelo'}${equipo?.imei ? `, IMEI ${equipo.imei}` : ''})`,
+      entidad: 'canje',
+      entidadId: id,
+    });
     setGuardando(null);
     cargar();
   };
@@ -261,7 +318,26 @@ export default function ServicioTecnico() {
     await asegurarModelo(supabase, e.modelo);
     // No se borra: queda con agregado_a_stock=true para no perder el
     // historial del técnico ni el ranking de Estadísticas.
-    await supabase.from('canjes').update({ agregado_a_stock: true }).eq('id', e.id);
+    await supabase.from('canjes').update({ agregado_a_stock: true, en_poder_tecnico: false }).eq('id', e.id);
+    await registrarAuditoria(supabase, {
+      accion: `agregó al Stock un equipo propio reparado en Servicio Técnico (${e.modelo || 'sin modelo'}${e.imei ? `, IMEI ${e.imei}` : ''})`,
+      entidad: 'canje',
+      entidadId: e.id,
+    });
+    setGuardando(null);
+    cargar();
+  };
+
+  const marcarEntregadoCliente = async (e: Equipo) => {
+    if (guardando) return;
+    if (!confirm('¿Marcar este equipo como entregado al cliente?')) return;
+    setGuardando(e.id);
+    await supabase.from('canjes').update({ entregado_a_cliente: true, en_poder_tecnico: false }).eq('id', e.id);
+    await registrarAuditoria(supabase, {
+      accion: `marcó como entregado al cliente un equipo reparado en Servicio Técnico (${e.modelo || 'sin modelo'}${e.imei ? `, IMEI ${e.imei}` : ''})`,
+      entidad: 'canje',
+      entidadId: e.id,
+    });
     setGuardando(null);
     cargar();
   };
@@ -380,40 +456,273 @@ export default function ServicioTecnico() {
         </button>
       </div>
 
+      {(tab === 'derivados' || (tab === 'tecnicos' && tecnicoSeleccionado)) && (
+        <>
+          <button
+            onClick={() => {
+              if (!panelNuevo && tab === 'tecnicos' && tecnicoSeleccionado) setAsignadoTecnicoId(tecnicoSeleccionado);
+              setPanelNuevo((v) => !v);
+            }}
+            className="w-full rounded-xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium"
+          >
+            {panelNuevo ? 'Cancelar' : '+ Agregar equipo'}
+          </button>
+
+          {panelNuevo && (
+            <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-3 flex flex-col gap-2">
+              <input
+                value={nuevoModelo}
+                onChange={(e) => setNuevoModelo(e.target.value)}
+                placeholder="Modelo (ej. iPhone 13)"
+                list="carpetas-stock-servicio"
+                className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+              />
+              <datalist id="carpetas-stock-servicio">
+                {carpetasStock.map((c) => (
+                  <option key={c} value={c} />
+                ))}
+              </datalist>
+              <div className="flex gap-2">
+                {STORAGE_OPTIONS.map((gb) => (
+                  <button
+                    key={gb}
+                    onClick={() => setNuevaCapacidad(gb)}
+                    className={`flex-1 rounded-lg py-2 text-xs font-medium ${
+                      nuevaCapacidad === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
+                    }`}
+                  >
+                    {gb}GB
+                  </button>
+                ))}
+              </div>
+              <SelectorColor value={nuevoColor} onChange={setNuevoColor} />
+              <input
+                value={nuevoImei}
+                onChange={(e) => setNuevoImei(e.target.value)}
+                placeholder="IMEI"
+                className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm font-mono"
+              />
+              <textarea
+                value={nuevoDetalles}
+                onChange={(e) => setNuevoDetalles(e.target.value)}
+                placeholder="Detalles (ej. no enciende, pantalla rota)"
+                rows={2}
+                className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+              />
+
+              <p className="text-xs font-medium text-muted dark:text-dark-text-secondary mt-1">Técnico asignado (opcional)</p>
+              <select
+                value={asignadoTecnicoId}
+                onChange={(e) => setAsignadoTecnicoId(e.target.value)}
+                className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+              >
+                <option value="">Sin asignar</option>
+                {tecnicos.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.nombre}
+                  </option>
+                ))}
+              </select>
+
+              <p className="text-xs font-medium text-muted dark:text-dark-text-secondary mt-1">
+                Cliente (opcional — para avisarle por WhatsApp)
+              </p>
+              <input
+                value={clienteInput}
+                onChange={(e) => elegirClienteInput(e.target.value)}
+                placeholder="Nombre del cliente"
+                list="clientes-servicio"
+                className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+              />
+              <datalist id="clientes-servicio">
+                {clientes.map((c) => (
+                  <option key={c.id} value={nombreCompleto(c)} />
+                ))}
+              </datalist>
+              <input
+                value={clienteTelefono}
+                onChange={(e) => setClienteTelefono(e.target.value)}
+                placeholder="Teléfono (con código de área)"
+                className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+              />
+
+              <button
+                disabled={!nuevoModelo.trim() || guardandoNuevo}
+                onClick={agregarEquipo}
+                className="rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
+              >
+                {guardandoNuevo ? 'Agregando...' : 'Agregar a Servicio Técnico'}
+              </button>
+            </div>
+          )}
+        </>
+      )}
+
       {tab === 'tecnicos' ? (
         tecnicoSeleccionado ? (
           <>
-            <button onClick={() => setTecnicoSeleccionado(null)} className="text-sm text-accent dark:text-dark-accent underline self-start">
+            <button
+              onClick={() => setTecnicoSeleccionado(null)}
+              className="text-sm text-accent dark:text-dark-accent underline self-start"
+            >
               &larr; Todos los técnicos
             </button>
             <p className="text-sm font-medium flex items-center gap-2">
               <Avatar src={fotoTecnico(tecnicoSeleccionado)} nombre={nombreTecnico(tecnicoSeleccionado) ?? '?'} size={42} />
               {nombreTecnico(tecnicoSeleccionado)}
             </p>
-            {historialTecnico.length === 0 && (
-              <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Todavía no tiene arreglos registrados.</p>
-            )}
-            <div className="flex flex-col gap-2">
-              {historialTecnico.map((e) => (
-                <div key={e.id} className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex flex-col gap-1">
-                  <p className="text-sm font-medium">
-                    {e.modelo}
-                    {e.capacidad_gb ? ` · ${e.capacidad_gb}GB` : ''}
-                  </p>
-                  {e.imei && (
-                    <p className="text-xs text-muted dark:text-dark-text-secondary">
-                      IMEI: <span className="font-bold font-mono text-ink dark:text-dark-text">{e.imei}</span>
-                    </p>
-                  )}
-                  {e.trabajos_realizados && e.trabajos_realizados.length > 0 && (
-                    <p className="text-xs text-muted dark:text-dark-text-secondary">Arreglo: {e.trabajos_realizados.join(', ')}</p>
-                  )}
-                  {e.fecha_reparado && (
-                    <p className="text-xs text-muted dark:text-dark-text-secondary">Reparado el {formatearFecha(e.fecha_reparado)}</p>
-                  )}
-                </div>
-              ))}
+
+            <div className="flex items-center gap-2 text-sm">
+              <button
+                onClick={() => setVistaTecnico('en_poder')}
+                className={`flex-1 rounded-xl py-2 font-medium ${
+                  vistaTecnico === 'en_poder' ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
+                }`}
+              >
+                En su poder
+              </button>
+              <button
+                onClick={() => setVistaTecnico('historial')}
+                className={`flex-1 rounded-xl py-2 font-medium ${
+                  vistaTecnico === 'historial' ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
+                }`}
+              >
+                Historial
+              </button>
             </div>
+
+            {vistaTecnico === 'en_poder' && (
+              <>
+                {equiposEnPoder.length === 0 && (
+                  <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">
+                    No tiene equipos en su poder en este momento.
+                  </p>
+                )}
+                <div className="flex flex-col gap-2">
+                  {equiposEnPoder.map((e) => (
+                    <div key={e.id} className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex flex-col gap-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-medium">
+                            {e.modelo}
+                            {e.capacidad_gb ? ` · ${e.capacidad_gb}GB` : ''}
+                            {e.color ? ` · ${e.color}` : ''}
+                          </p>
+                          {e.imei && (
+                            <p className="text-xs text-muted dark:text-dark-text-secondary">
+                              IMEI: <span className="font-bold font-mono text-ink dark:text-dark-text">{e.imei}</span>
+                            </p>
+                          )}
+                        </div>
+                        <span
+                          className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                            e.estado === 'reparado' ? 'bg-good/15 text-good' : 'bg-warn/15 text-warn'
+                          }`}
+                        >
+                          {e.estado === 'reparado' ? 'Reparado' : 'En reparación'}
+                        </span>
+                      </div>
+
+                      <p className="text-xs">
+                        {e.cliente_id ? (
+                          <span className="text-accent dark:text-dark-accent">
+                            👤 Cliente{e.clientes?.nombre ? `: ${e.clientes.nombre} ${e.clientes.apellido || ''}`.trim() : ''}
+                          </span>
+                        ) : (
+                          <span className="text-muted dark:text-dark-text-secondary">🏬 Propio del local</span>
+                        )}
+                      </p>
+
+                      {e.detalles && <p className="text-xs text-muted dark:text-dark-text-secondary">Detalles: {e.detalles}</p>}
+
+                      <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={e.en_poder_tecnico}
+                          disabled={guardando === e.id}
+                          onChange={(ev) => marcarEnPoder(e, ev.target.checked)}
+                          className="h-4 w-4 accent-ink"
+                        />
+                        {e.en_poder_tecnico ? 'Lo tiene el técnico' : 'Ya lo entregó'}
+                      </label>
+
+                      {e.estado === 'servicio_tecnico' && (
+                        <button
+                          onClick={() => abrirPanelReparar(e.id)}
+                          className="rounded-lg border border-border dark:border-dark-border py-2 text-xs font-medium"
+                        >
+                          {panelReparar === e.id ? 'Cancelar' : 'Marcar como reparado'}
+                        </button>
+                      )}
+
+                      {e.estado === 'reparado' && (
+                        <button
+                          disabled={guardando === e.id}
+                          onClick={() => (e.cliente_id ? marcarEntregadoCliente(e) : agregarAlStock(e))}
+                          className="rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-xs font-medium text-white disabled:opacity-40"
+                        >
+                          {e.cliente_id ? 'Marcar entregado al cliente' : 'Agregar al Stock'}
+                        </button>
+                      )}
+
+                      {panelReparar === e.id && (
+                        <div className="rounded-lg border border-border dark:border-dark-border bg-white dark:bg-dark-surface p-3 flex flex-col gap-2">
+                          <p className="text-xs font-medium text-muted dark:text-dark-text-secondary">Arreglo realizado</p>
+                          {trabajos.map((t) => (
+                            <label key={t.id} className="flex items-center gap-2 text-sm">
+                              <input
+                                type="checkbox"
+                                checked={seleccionTrabajos.includes(t.nombre)}
+                                onChange={() => toggleTrabajo(t.nombre)}
+                                className="h-4 w-4 accent-ink"
+                              />
+                              <MiniaturaDispositivo src={t.imagen_url} size={24} />
+                              {t.nombre}
+                            </label>
+                          ))}
+                          <button
+                            disabled={guardando === e.id}
+                            onClick={() => marcarReparado(e.id)}
+                            className="mt-1 rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-xs font-medium text-white disabled:opacity-40"
+                          >
+                            Confirmar reparado
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {vistaTecnico === 'historial' && (
+              <>
+                {historialTecnico.length === 0 && (
+                  <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Todavía no tiene arreglos registrados.</p>
+                )}
+                <div className="flex flex-col gap-2">
+                  {historialTecnico.map((e) => (
+                    <div key={e.id} className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex flex-col gap-1">
+                      <p className="text-sm font-medium">
+                        {e.modelo}
+                        {e.capacidad_gb ? ` · ${e.capacidad_gb}GB` : ''}
+                      </p>
+                      {e.imei && (
+                        <p className="text-xs text-muted dark:text-dark-text-secondary">
+                          IMEI: <span className="font-bold font-mono text-ink dark:text-dark-text">{e.imei}</span>
+                        </p>
+                      )}
+                      {e.trabajos_realizados && e.trabajos_realizados.length > 0 && (
+                        <p className="text-xs text-muted dark:text-dark-text-secondary">Arreglo: {e.trabajos_realizados.join(', ')}</p>
+                      )}
+                      {e.fecha_reparado && (
+                        <p className="text-xs text-muted dark:text-dark-text-secondary">Reparado el {formatearFecha(e.fecha_reparado)}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </>
         ) : (
           <>
@@ -428,17 +737,26 @@ export default function ServicioTecnico() {
             <div className="flex flex-col gap-2">
               {tecnicos.map((t) => {
                 const cantidad = equipos.filter((e) => e.estado === 'reparado' && e.tecnico_id === t.id).length;
+                const enPoder = equipos.filter(
+                  (e) => e.tecnico_id === t.id && e.en_poder_tecnico && !e.agregado_a_stock && !e.entregado_a_cliente
+                ).length;
                 return (
                   <button
                     key={t.id}
-                    onClick={() => setTecnicoSeleccionado(t.id)}
+                    onClick={() => {
+                      setTecnicoSeleccionado(t.id);
+                      setVistaTecnico('en_poder');
+                    }}
                     className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex items-center justify-between text-left"
                   >
                     <span className="flex items-center gap-2.5">
                       <Avatar src={t.foto_url} nombre={t.nombre} size={52} />
                       <p className="text-sm font-medium">{t.nombre}</p>
                     </span>
-                    <p className="text-xs text-muted dark:text-dark-text-secondary">{cantidad} arreglo{cantidad === 1 ? '' : 's'}</p>
+                    <span className="text-right">
+                      <p className="text-xs font-medium">{enPoder} en su poder</p>
+                      <p className="text-xs text-muted dark:text-dark-text-secondary">{cantidad} arreglo{cantidad === 1 ? '' : 's'}</p>
+                    </span>
                   </button>
                 );
               })}
@@ -447,92 +765,6 @@ export default function ServicioTecnico() {
         )
       ) : (
         <>
-          {tab === 'derivados' && (
-            <>
-              <button
-                onClick={() => setPanelNuevo((v) => !v)}
-                className="w-full rounded-xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium"
-              >
-                {panelNuevo ? 'Cancelar' : '+ Agregar equipo'}
-              </button>
-
-              {panelNuevo && (
-                <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-3 flex flex-col gap-2">
-                  <input
-                    value={nuevoModelo}
-                    onChange={(e) => setNuevoModelo(e.target.value)}
-                    placeholder="Modelo (ej. iPhone 13)"
-                    list="carpetas-stock-servicio"
-                    className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
-                  />
-                  <datalist id="carpetas-stock-servicio">
-                    {carpetasStock.map((c) => (
-                      <option key={c} value={c} />
-                    ))}
-                  </datalist>
-                  <div className="flex gap-2">
-                    {STORAGE_OPTIONS.map((gb) => (
-                      <button
-                        key={gb}
-                        onClick={() => setNuevaCapacidad(gb)}
-                        className={`flex-1 rounded-lg py-2 text-xs font-medium ${
-                          nuevaCapacidad === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
-                        }`}
-                      >
-                        {gb}GB
-                      </button>
-                    ))}
-                  </div>
-                  <SelectorColor value={nuevoColor} onChange={setNuevoColor} />
-                  <input
-                    value={nuevoImei}
-                    onChange={(e) => setNuevoImei(e.target.value)}
-                    placeholder="IMEI"
-                    className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm font-mono"
-                  />
-                  <textarea
-                    value={nuevoDetalles}
-                    onChange={(e) => setNuevoDetalles(e.target.value)}
-                    placeholder="Detalles (ej. no enciende, pantalla rota)"
-                    rows={2}
-                    className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
-                  />
-
-                  <p className="text-xs font-medium text-muted dark:text-dark-text-secondary mt-1">
-                    Cliente (opcional — para avisarle por WhatsApp)
-                  </p>
-                  <input
-                    value={clienteInput}
-                    onChange={(e) => elegirClienteInput(e.target.value)}
-                    placeholder="Nombre del cliente"
-                    list="clientes-servicio"
-                    className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
-                  />
-                  <datalist id="clientes-servicio">
-                    {clientes.map((c) => (
-                      <option key={c.id} value={nombreCompleto(c)} />
-                    ))}
-                  </datalist>
-                  <input
-                    value={clienteTelefono}
-                    onChange={(e) => setClienteTelefono(e.target.value)}
-                    placeholder="Teléfono (con código de área)"
-                    className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
-                  />
-
-                  <button
-                    disabled={!nuevoModelo.trim() || guardandoNuevo}
-                    onClick={agregarEquipo}
-                    className="rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
-                  >
-                    {guardandoNuevo ? 'Agregando...' : 'Agregar a Servicio Técnico'}
-                  </button>
-                </div>
-              )}
-
-            </>
-          )}
-
           {avisoWhatsApp && (
             <div className="rounded-xl border border-good/30 bg-good/10 p-3 flex flex-col gap-2">
               <p className="text-sm">
@@ -592,6 +824,15 @@ export default function ServicioTecnico() {
                     )}
                   </div>
                 </div>
+                <p className="text-xs">
+                  {e.cliente_id ? (
+                    <span className="text-accent dark:text-dark-accent">
+                      👤 Cliente{e.clientes?.nombre ? `: ${e.clientes.nombre} ${e.clientes.apellido || ''}`.trim() : ''}
+                    </span>
+                  ) : (
+                    <span className="text-muted dark:text-dark-text-secondary">🏬 Propio del local</span>
+                  )}
+                </p>
                 {e.detalles && <p className="text-xs text-muted dark:text-dark-text-secondary">Detalles: {e.detalles}</p>}
                 {e.fecha_ingreso_servicio && (
                   <p className="text-xs text-muted dark:text-dark-text-secondary">Ingresó: {formatearFecha(e.fecha_ingreso_servicio)}</p>
@@ -723,10 +964,10 @@ export default function ServicioTecnico() {
                     </button>
                     <button
                       disabled={guardando === e.id}
-                      onClick={() => agregarAlStock(e)}
+                      onClick={() => (e.cliente_id ? marcarEntregadoCliente(e) : agregarAlStock(e))}
                       className="flex-1 rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-xs font-medium text-white disabled:opacity-40"
                     >
-                      Agregar al Stock
+                      {e.cliente_id ? 'Marcar entregado al cliente' : 'Agregar al Stock'}
                     </button>
                     <button
                       disabled={guardando === e.id}
