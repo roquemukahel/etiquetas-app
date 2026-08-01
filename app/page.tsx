@@ -125,7 +125,7 @@ export default async function Home() {
         .limit(5),
       supabase.from('dispositivos').select('modelo, created_at').order('created_at', { ascending: false }).limit(5),
       supabase.from('clientes').select('nombre, apellido, created_at').order('created_at', { ascending: false }).limit(5),
-      supabase.from('canjes').select('id', { count: 'exact', head: true }).eq('estado', 'reparado'),
+      supabase.from('canjes').select('id', { count: 'exact', head: true }).eq('estado', 'reparado').eq('agregado_a_stock', false),
       supabase
         .from('dispositivos')
         .select('id', { count: 'exact', head: true })
@@ -373,7 +373,12 @@ export default async function Home() {
         </div>
       </header>
 
-      <div className="animate-fade-in-up" style={{ animationDelay: '60ms' }}>
+      {/* relative z-30: la animación de entrada (transform) crea sin querer
+         un contexto de apilamiento nuevo en este div — sin este z-index
+         explícito, el resultado del buscador queda atrapado detrás de las
+         secciones siguientes (ej. centro de notificaciones) sin importar el
+         z-index interno del dropdown. */}
+      <div className="relative z-30 animate-fade-in-up" style={{ animationDelay: '60ms' }}>
         <BuscadorUniversal />
       </div>
 

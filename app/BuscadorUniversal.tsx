@@ -177,7 +177,7 @@ export default function BuscadorUniversal() {
       />
 
       {abierto && activo && (
-        <div className="absolute z-20 mt-2 w-full max-h-[70vh] overflow-y-auto rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-elevated p-2 flex flex-col gap-1">
+        <div className="absolute z-40 mt-2 w-full max-h-[70vh] overflow-y-auto rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-elevated p-2 flex flex-col gap-1">
           {sinResultados && (
             <p className="text-sm text-muted dark:text-dark-text-secondary text-center py-4">
               No encontramos nada con &quot;{query}&quot;.

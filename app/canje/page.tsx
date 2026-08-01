@@ -19,14 +19,18 @@ type Canje = {
   detalles: string | null;
   monto: number | null;
   estado: string;
+  agregado_a_stock: boolean;
+  oculto_en_canje: boolean;
   vendedores: { nombre: string; foto_url: string | null } | null;
 };
+
+type Vista = 'en_canje' | 'derivados' | 'historial';
 
 export default function PlanCanje() {
   const supabase = crearClienteNavegador();
   const [canjes, setCanjes] = useState<Canje[]>([]);
   const [loading, setLoading] = useState(true);
-  const [verDerivados, setVerDerivados] = useState(false);
+  const [vista, setVista] = useState<Vista>('en_canje');
   const [procesando, setProcesando] = useState<string | null>(null);
   const [imagenesCarpetas, setImagenesCarpetas] = useState<Map<string, string>>(new Map());
 
@@ -44,10 +48,11 @@ export default function PlanCanje() {
     (async () => setImagenesCarpetas(await obtenerImagenesCarpetas(supabase)))();
   }, []);
 
-  const filtrados = useMemo(
-    () => canjes.filter((c) => (verDerivados ? c.estado === 'servicio_tecnico' : c.estado === 'en_canje')),
-    [canjes, verDerivados]
-  );
+  const filtrados = useMemo(() => {
+    if (vista === 'historial') return canjes.filter((c) => c.agregado_a_stock);
+    if (vista === 'derivados') return canjes.filter((c) => c.estado === 'servicio_tecnico' && !c.oculto_en_canje);
+    return canjes.filter((c) => c.estado === 'en_canje' && !c.agregado_a_stock);
+  }, [canjes, vista]);
 
   const derivar = async (id: string) => {
     if (!confirm('¿Derivar este dispositivo a Servicio Técnico?')) return;
@@ -69,6 +74,11 @@ export default function PlanCanje() {
   };
 
   const agregarAlStock = async (c: Canje) => {
+    if (procesando) return;
+    if (c.imei) {
+      const { data: existente } = await supabase.from('dispositivos').select('id').eq('imei', c.imei).maybeSingle();
+      if (existente && !confirm(`Ya hay un dispositivo en Stock con el IMEI ${c.imei}. ¿Agregarlo igual?`)) return;
+    }
     if (!confirm('¿Agregar este dispositivo al Stock para venderlo?')) return;
     setProcesando(c.id);
     await supabase.from('dispositivos').insert({
@@ -81,7 +91,9 @@ export default function PlanCanje() {
       en_stock: true,
     });
     await asegurarModelo(supabase, c.modelo);
-    await supabase.from('canjes').delete().eq('id', c.id);
+    // No se borra: queda con agregado_a_stock=true, así aparece en
+    // "Historial" en vez de desaparecer sin dejar rastro.
+    await supabase.from('canjes').update({ agregado_a_stock: true }).eq('id', c.id);
     setProcesando(null);
     cargar();
   };
@@ -100,6 +112,22 @@ export default function PlanCanje() {
     cargar();
   };
 
+  // Para equipos ya derivados a Servicio Técnico: los "quita" de Plan
+  // Canje sin tocar el canje real, que sigue existiendo y editable
+  // desde Servicio Técnico como si nada.
+  const quitarDeCanje = async (c: Canje) => {
+    if (!confirm('¿Quitar este equipo de Plan Canje? Va a seguir existiendo en Servicio Técnico, solo desaparece de acá.')) return;
+    setProcesando(c.id);
+    await supabase.from('canjes').update({ oculto_en_canje: true }).eq('id', c.id);
+    await registrarAuditoria(supabase, {
+      accion: `quitó de Plan Canje un equipo derivado a Servicio Técnico (${c.modelo || 'sin modelo'}${c.imei ? `, IMEI ${c.imei}` : ''})`,
+      entidad: 'canje',
+      entidadId: c.id,
+    });
+    setProcesando(null);
+    cargar();
+  };
+
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
       <header className="flex items-center gap-3">
@@ -111,26 +139,36 @@ export default function PlanCanje() {
 
       <div className="flex items-center gap-2 text-sm">
         <button
-          onClick={() => setVerDerivados(false)}
+          onClick={() => setVista('en_canje')}
           className={`flex-1 rounded-xl py-2 font-medium ${
-            !verDerivados ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
+            vista === 'en_canje' ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
           }`}
         >
           En canje
         </button>
         <button
-          onClick={() => setVerDerivados(true)}
+          onClick={() => setVista('derivados')}
           className={`flex-1 rounded-xl py-2 font-medium ${
-            verDerivados ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
+            vista === 'derivados' ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
           }`}
         >
-          Derivados a Servicio Técnico
+          Derivados
+        </button>
+        <button
+          onClick={() => setVista('historial')}
+          className={`flex-1 rounded-xl py-2 font-medium ${
+            vista === 'historial' ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
+          }`}
+        >
+          Historial
         </button>
       </div>
 
       {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Cargando...</p>}
       {!loading && filtrados.length === 0 && (
-        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">No hay dispositivos para mostrar acá.</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">
+          {vista === 'historial' ? 'Todavía no agregaste ningún canje al stock.' : 'No hay dispositivos para mostrar acá.'}
+        </p>
       )}
 
       <div className="flex flex-col gap-2">
@@ -163,14 +201,14 @@ export default function PlanCanje() {
                 </p>
               )}
             </div>
-            {!verDerivados ? (
+            {vista === 'en_canje' && (
               <div className="flex gap-2 mt-1">
                 <button
                   disabled={procesando === c.id}
                   onClick={() => agregarAlStock(c)}
                   className="flex-1 rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-xs font-medium text-white disabled:opacity-40"
                 >
-                  Agregar al Stock
+                  {procesando === c.id ? 'Agregando...' : 'Agregar al Stock'}
                 </button>
                 <button
                   disabled={procesando === c.id}
@@ -180,7 +218,8 @@ export default function PlanCanje() {
                   Derivar a Servicio Técnico
                 </button>
               </div>
-            ) : (
+            )}
+            {vista === 'derivados' && (
               <button
                 disabled={procesando === c.id}
                 onClick={() => volverACanje(c.id)}
@@ -189,13 +228,24 @@ export default function PlanCanje() {
                 Volver a Plan Canje
               </button>
             )}
-            <button
-              disabled={procesando === c.id}
-              onClick={() => eliminar(c)}
-              className="rounded-lg border border-bad/30 py-2 text-xs font-medium text-bad disabled:opacity-40"
-            >
-              Eliminar
-            </button>
+            {vista === 'en_canje' && (
+              <button
+                disabled={procesando === c.id}
+                onClick={() => eliminar(c)}
+                className="rounded-lg border border-bad/30 py-2 text-xs font-medium text-bad disabled:opacity-40"
+              >
+                Eliminar
+              </button>
+            )}
+            {vista === 'derivados' && (
+              <button
+                disabled={procesando === c.id}
+                onClick={() => quitarDeCanje(c)}
+                className="rounded-lg border border-bad/30 py-2 text-xs font-medium text-bad disabled:opacity-40"
+              >
+                Quitar de Plan Canje
+              </button>
+            )}
           </div>
         ))}
       </div>

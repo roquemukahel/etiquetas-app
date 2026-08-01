@@ -393,10 +393,13 @@ export default function Boleta() {
             </div>
           )}
           <div className="flex justify-between items-baseline font-display font-semibold text-xl rounded-lg bg-ink text-white px-3 py-2.5 mt-1">
-            <span className="text-sm font-sans font-medium opacity-80">TOTAL</span>
+            <span className="text-sm font-sans font-medium opacity-80">
+              {(orden.total ?? subtotal) < 0 ? 'SALDO A FAVOR DEL CLIENTE' : 'TOTAL'}
+            </span>
             <span>
+              {(orden.total ?? subtotal) < 0 ? '-' : ''}
               {moneda}
-              {(orden.total ?? subtotal).toLocaleString('es-AR')}
+              {Math.abs(orden.total ?? subtotal).toLocaleString('es-AR')}
             </span>
           </div>
         </div>

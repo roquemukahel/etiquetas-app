@@ -88,10 +88,10 @@ export default function DetalleOrden() {
     setItemsEdit((items) => items.map((i) => (i.id === itemId ? { ...i, [campo]: valor } : i)));
 
   const subtotalEdit = itemsEdit.reduce((acc, i) => acc + (Number(i.cantidad) || 0) * (Number(i.precioUnitario) || 0), 0);
-  const totalEdit = Math.max(
-    0,
-    subtotalEdit * (1 + (Number(impuestoEdit) || 0) / 100) - (Number(anticipoEdit) || 0) - (orden?.monto_canje || 0)
-  );
+  // Sin Math.max(0, ...) a propósito: un anticipo mayor al precio puede dejar
+  // el total en negativo (saldo a favor del cliente), y eso es válido.
+  const totalEdit =
+    subtotalEdit * (1 + (Number(impuestoEdit) || 0) / 100) - (Number(anticipoEdit) || 0) - (orden?.monto_canje || 0);
 
   const guardarEdicion = async () => {
     if (!orden) return;

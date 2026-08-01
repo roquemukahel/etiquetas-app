@@ -178,7 +178,10 @@ export default function NuevaOrden() {
   const total = useMemo(() => {
     const conImpuesto = subtotal * (1 + (Number(impuesto) || 0) / 100);
     const montoCanje = canjeActivo ? Number(canjeMonto) || 0 : 0;
-    return Math.max(0, conImpuesto - (Number(anticipo) || 0) - montoCanje);
+    // Sin Math.max(0, ...) a propósito: si el anticipo es mayor al precio
+    // (ej. seña de una compra anterior más grande que lo que se lleva hoy),
+    // el total puede quedar negativo — representa saldo a favor del cliente.
+    return conImpuesto - (Number(anticipo) || 0) - montoCanje;
   }, [subtotal, impuesto, anticipo, canjeActivo, canjeMonto]);
 
   const elegirCliente = (c: Cliente) => {

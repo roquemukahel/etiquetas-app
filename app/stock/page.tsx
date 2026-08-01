@@ -324,6 +324,12 @@ export default function Stock() {
       if (!mapa.has(clave)) mapa.set(clave, []);
       mapa.get(clave)!.push(d);
     }
+    // Dentro de cada carpeta, agrupados por capacidad ascendente (todos los
+    // de 128GB primero, después todos los de 256GB, etc.) en vez de mezclados
+    // por fecha de carga.
+    for (const lista of mapa.values()) {
+      lista.sort((a, b) => (a.capacidad_gb ?? Infinity) - (b.capacidad_gb ?? Infinity));
+    }
     return Array.from(mapa.entries()).sort(([a], [b]) => a.localeCompare(b));
   }, [filtrados, carpetas, busqueda, vista]);
 

@@ -12,6 +12,7 @@ import { registrarAuditoria } from '../lib/auditoria';
 import { obtenerTodasLasFilas } from '../lib/db';
 import MiniaturaDispositivo from '../MiniaturaDispositivo';
 import Avatar from '../Avatar';
+import SelectorColor from '../SelectorColor';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 
@@ -33,6 +34,7 @@ type Equipo = {
   fecha_reparado: string | null;
   cliente_id: string | null;
   token_seguimiento: string | null;
+  agregado_a_stock: boolean;
   clientes: { nombre: string; apellido: string | null; telefono: string | null } | null;
 };
 
@@ -71,11 +73,19 @@ export default function ServicioTecnico() {
   const [imagenesCarpetas, setImagenesCarpetas] = useState<Map<string, string>>(new Map());
   const [codigoPais, setCodigoPais] = useState('54');
 
+  const [editando, setEditando] = useState<string | null>(null);
+  const [editModelo, setEditModelo] = useState('');
+  const [editCapacidad, setEditCapacidad] = useState<number | null>(null);
+  const [editColor, setEditColor] = useState('');
+  const [editImei, setEditImei] = useState('');
+  const [editDetalles, setEditDetalles] = useState('');
+  const [guardandoEdicion, setGuardandoEdicion] = useState(false);
+
   const cargar = async () => {
     const { data } = await supabase
       .from('canjes')
       .select(
-        'id, modelo, capacidad_gb, color, imei, detalles, tecnico_id, estado, trabajos_realizados, fecha_ingreso_servicio, fecha_reparado, cliente_id, token_seguimiento, clientes ( nombre, apellido, telefono )'
+        'id, modelo, capacidad_gb, color, imei, detalles, tecnico_id, estado, trabajos_realizados, fecha_ingreso_servicio, fecha_reparado, cliente_id, token_seguimiento, agregado_a_stock, clientes ( nombre, apellido, telefono )'
       )
       .in('estado', ['servicio_tecnico', 'reparado'])
       .order('created_at', { ascending: false });
@@ -124,7 +134,10 @@ export default function ServicioTecnico() {
   };
 
   const filtrados = useMemo(
-    () => equipos.filter((e) => (tab === 'derivados' ? e.estado === 'servicio_tecnico' : e.estado === 'reparado')),
+    () =>
+      equipos.filter(
+        (e) => !e.agregado_a_stock && (tab === 'derivados' ? e.estado === 'servicio_tecnico' : e.estado === 'reparado')
+      ),
     [equipos, tab]
   );
 
@@ -230,6 +243,11 @@ export default function ServicioTecnico() {
   };
 
   const agregarAlStock = async (e: Equipo) => {
+    if (guardando) return;
+    if (e.imei) {
+      const { data: existente } = await supabase.from('dispositivos').select('id').eq('imei', e.imei).maybeSingle();
+      if (existente && !confirm(`Ya hay un dispositivo en Stock con el IMEI ${e.imei}. ¿Agregarlo igual?`)) return;
+    }
     if (!confirm('¿Pasar este equipo al Stock como dispositivo disponible para vender?')) return;
     setGuardando(e.id);
     await supabase.from('dispositivos').insert({
@@ -241,7 +259,9 @@ export default function ServicioTecnico() {
       en_stock: true,
     });
     await asegurarModelo(supabase, e.modelo);
-    await supabase.from('canjes').delete().eq('id', e.id);
+    // No se borra: queda con agregado_a_stock=true para no perder el
+    // historial del técnico ni el ranking de Estadísticas.
+    await supabase.from('canjes').update({ agregado_a_stock: true }).eq('id', e.id);
     setGuardando(null);
     cargar();
   };
@@ -257,6 +277,58 @@ export default function ServicioTecnico() {
       valorAnterior: { modelo: e.modelo, capacidad_gb: e.capacidad_gb, color: e.color, imei: e.imei, estado: e.estado },
     });
     setGuardando(null);
+    cargar();
+  };
+
+  const abrirEdicion = (e: Equipo) => {
+    if (editando === e.id) {
+      setEditando(null);
+      return;
+    }
+    setEditando(e.id);
+    setEditModelo(e.modelo ?? '');
+    setEditCapacidad(e.capacidad_gb);
+    setEditColor(e.color ?? '');
+    setEditImei(e.imei ?? '');
+    setEditDetalles(e.detalles ?? '');
+  };
+
+  const guardarEdicion = async (e: Equipo) => {
+    setGuardandoEdicion(true);
+    const cambios: Record<string, { antes: unknown; despues: unknown }> = {};
+    const nuevoModelo = editModelo.trim() || null;
+    const nuevoColor = editColor.trim() || null;
+    const nuevoImei = limpiarImei(editImei) || null;
+    const nuevosDetalles = editDetalles.trim() || null;
+
+    if (e.modelo !== nuevoModelo) cambios.modelo = { antes: e.modelo, despues: nuevoModelo };
+    if (e.capacidad_gb !== editCapacidad) cambios.capacidad_gb = { antes: e.capacidad_gb, despues: editCapacidad };
+    if (e.color !== nuevoColor) cambios.color = { antes: e.color, despues: nuevoColor };
+    if (e.imei !== nuevoImei) cambios.imei = { antes: e.imei, despues: nuevoImei };
+    if (e.detalles !== nuevosDetalles) cambios.detalles = { antes: e.detalles, despues: nuevosDetalles };
+
+    if (Object.keys(cambios).length === 0) {
+      setEditando(null);
+      setGuardandoEdicion(false);
+      return;
+    }
+
+    await supabase
+      .from('canjes')
+      .update({ modelo: nuevoModelo, capacidad_gb: editCapacidad, color: nuevoColor, imei: nuevoImei, detalles: nuevosDetalles })
+      .eq('id', e.id);
+
+    await registrarAuditoria(supabase, {
+      accion: `editó un equipo de Servicio Técnico (${nuevoModelo || 'sin modelo'}${nuevoImei ? `, IMEI ${nuevoImei}` : ''})`,
+      entidad: 'canje',
+      entidadId: e.id,
+      valorAnterior: Object.fromEntries(Object.entries(cambios).map(([k, v]) => [k, v.antes])),
+      valorNuevo: Object.fromEntries(Object.entries(cambios).map(([k, v]) => [k, v.despues])),
+    });
+
+    setEditando(null);
+    setGuardandoEdicion(false);
+    await asegurarModelo(supabase, nuevoModelo);
     cargar();
   };
 
@@ -411,12 +483,7 @@ export default function ServicioTecnico() {
                       </button>
                     ))}
                   </div>
-                  <input
-                    value={nuevoColor}
-                    onChange={(e) => setNuevoColor(e.target.value)}
-                    placeholder="Color"
-                    className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
-                  />
+                  <SelectorColor value={nuevoColor} onChange={setNuevoColor} />
                   <input
                     value={nuevoImei}
                     onChange={(e) => setNuevoImei(e.target.value)}
@@ -530,12 +597,66 @@ export default function ServicioTecnico() {
                   <p className="text-xs text-muted dark:text-dark-text-secondary">Ingresó: {formatearFecha(e.fecha_ingreso_servicio)}</p>
                 )}
 
-                <Link
-                  href={`/servicio-tecnico/etiqueta/${e.id}`}
-                  className="rounded-lg border border-border dark:border-dark-border py-2 text-center text-xs font-medium"
-                >
-                  🏷️ Imprimir etiqueta
-                </Link>
+                <div className="flex gap-2">
+                  <Link
+                    href={`/servicio-tecnico/etiqueta/${e.id}`}
+                    className="flex-1 rounded-lg border border-border dark:border-dark-border py-2 text-center text-xs font-medium"
+                  >
+                    🏷️ Imprimir etiqueta
+                  </Link>
+                  <button
+                    onClick={() => abrirEdicion(e)}
+                    className="flex-1 rounded-lg border border-border dark:border-dark-border py-2 text-center text-xs font-medium"
+                  >
+                    {editando === e.id ? 'Cancelar' : '✏️ Editar'}
+                  </button>
+                </div>
+
+                {editando === e.id && (
+                  <div className="rounded-lg border border-border dark:border-dark-border bg-white dark:bg-dark-surface p-3 flex flex-col gap-2">
+                    <input
+                      value={editModelo}
+                      onChange={(ev) => setEditModelo(ev.target.value)}
+                      placeholder="Modelo"
+                      list="carpetas-stock-servicio"
+                      className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                    />
+                    <div className="flex gap-2">
+                      {STORAGE_OPTIONS.map((gb) => (
+                        <button
+                          key={gb}
+                          onClick={() => setEditCapacidad(gb)}
+                          className={`flex-1 rounded-lg py-2 text-xs font-medium ${
+                            editCapacidad === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
+                          }`}
+                        >
+                          {gb}GB
+                        </button>
+                      ))}
+                    </div>
+                    <SelectorColor value={editColor} onChange={setEditColor} />
+                    <input
+                      value={editImei}
+                      onChange={(ev) => setEditImei(ev.target.value)}
+                      placeholder="IMEI"
+                      className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm font-mono"
+                    />
+                    <textarea
+                      value={editDetalles}
+                      onChange={(ev) => setEditDetalles(ev.target.value)}
+                      placeholder="Detalles"
+                      rows={2}
+                      className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                    />
+                    <button
+                      disabled={guardandoEdicion}
+                      onClick={() => guardarEdicion(e)}
+                      className="rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
+                    >
+                      {guardandoEdicion ? 'Guardando...' : 'Guardar cambios'}
+                    </button>
+                  </div>
+                )}
 
                 {tab === 'derivados' && (
                   <div>

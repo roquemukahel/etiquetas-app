@@ -927,3 +927,25 @@ as $$
   left join canjes c on c.id = o.canje_id
   where o.token_boleta = token
 $$;
+
+-- ============================================================
+-- Antes, "Agregar al Stock" (desde Plan Canje o desde Servicio Técnico
+-- > Reparados) borraba la fila de canjes por completo. Eso hacía que
+-- el trabajo desapareciera sin dejar rastro: se perdía del historial
+-- de "Técnicos" y del ranking de técnicos en Estadísticas (que
+-- dependen de que la fila siga existiendo con estado='reparado'), y en
+-- Plan Canje no quedaba ningún registro de que ese canje existió.
+--
+-- agregado_a_stock reemplaza ese delete por un update: la fila queda,
+-- pero se saca de las listas activas (Derivados/Reparados en Servicio
+-- Técnico, En canje en Plan Canje) sin tocar su estado, así que el
+-- historial y las estadísticas por técnico siguen viéndolo. Plan Canje
+-- usa esta misma columna para armar una pestaña "Historial".
+--
+-- oculto_en_canje es distinto: permite "eliminar" desde la vista de
+-- Plan Canje > Derivados a Servicio Técnico sin borrar el canje real
+-- (que sigue existiendo y siendo editable desde Servicio Técnico) —
+-- las consultas de Servicio Técnico no miran esta columna.
+-- ============================================================
+alter table canjes add column if not exists agregado_a_stock boolean not null default false;
+alter table canjes add column if not exists oculto_en_canje boolean not null default false;
