@@ -36,6 +36,9 @@ export default function DetalleDispositivo() {
   const [loading, setLoading] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [derivarAbierto, setDerivarAbierto] = useState(false);
+  const [derivarDetalles, setDerivarDetalles] = useState('');
+  const [derivando, setDerivando] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -107,6 +110,29 @@ export default function DetalleDispositivo() {
     await asegurarModelo(supabase, d.modelo);
 
     router.push('/stock');
+    router.refresh();
+  };
+
+  const derivarAServicioTecnico = async () => {
+    if (!d) return;
+    setDerivando(true);
+    await supabase.from('canjes').insert({
+      modelo: d.modelo,
+      capacidad_gb: d.capacidad_gb,
+      color: d.color,
+      imei: d.imei,
+      salud_bateria: d.salud_bateria,
+      detalles: derivarDetalles.trim() || null,
+      estado: 'servicio_tecnico',
+      fecha_ingreso_servicio: new Date().toISOString(),
+    });
+    await supabase.from('dispositivos').update({ en_stock: false }).eq('id', d.id);
+    await registrarAuditoria(supabase, {
+      accion: `derivó de Stock a Servicio Técnico un dispositivo (${d.modelo || 'sin modelo'}${d.imei ? `, IMEI ${d.imei}` : ''})`,
+      entidad: 'dispositivo',
+      entidadId: d.id,
+    });
+    router.push('/servicio-tecnico');
     router.refresh();
   };
 
@@ -234,6 +260,45 @@ export default function DetalleDispositivo() {
           </div>
         </div>
       </div>
+
+      {d.en_stock && !derivarAbierto && (
+        <button
+          onClick={() => setDerivarAbierto(true)}
+          className="w-full rounded-2xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium"
+        >
+          Derivar a Servicio Técnico
+        </button>
+      )}
+
+      {derivarAbierto && (
+        <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-3 flex flex-col gap-2">
+          <p className="text-xs font-medium text-muted dark:text-dark-text-secondary">
+            Este dispositivo va a salir de Stock y va a aparecer en Servicio Técnico.
+          </p>
+          <textarea
+            value={derivarDetalles}
+            onChange={(e) => setDerivarDetalles(e.target.value)}
+            placeholder="Detalles (ej. no enciende, pantalla rota)"
+            rows={2}
+            className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={() => setDerivarAbierto(false)}
+              className="flex-1 rounded-lg border border-border dark:border-dark-border py-2 text-sm font-medium"
+            >
+              Cancelar
+            </button>
+            <button
+              disabled={derivando}
+              onClick={derivarAServicioTecnico}
+              className="flex-1 rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
+            >
+              {derivando ? 'Derivando...' : 'Confirmar'}
+            </button>
+          </div>
+        </div>
+      )}
 
       <button
         disabled={guardando}
