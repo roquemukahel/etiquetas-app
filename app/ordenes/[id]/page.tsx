@@ -12,6 +12,8 @@ const FORMAS_PAGO = ['Efectivo', 'Transferencia', 'Tarjeta'];
 
 type Item = { id: string; descripcion: string; cantidad: number; precio_unitario: number; dispositivo_id: string | null };
 
+type Vendedor = { id: string; nombre: string };
+
 type Orden = {
   id: string;
   forma_pago: string | null;
@@ -20,6 +22,7 @@ type Orden = {
   impuesto_porcentaje: number | null;
   monto_canje: number | null;
   canje_id: string | null;
+  vendedor_id: string | null;
   estado: string;
   created_at: string;
   nota: string | null;
@@ -48,6 +51,8 @@ export default function DetalleOrden() {
   const [anticipoEdit, setAnticipoEdit] = useState('');
   const [impuestoEdit, setImpuestoEdit] = useState('');
   const [itemsEdit, setItemsEdit] = useState<ItemEditable[]>([]);
+  const [vendedorEdit, setVendedorEdit] = useState('');
+  const [vendedores, setVendedores] = useState<Vendedor[]>([]);
 
   const cargar = async () => {
     const { data } = await supabase
@@ -65,6 +70,13 @@ export default function DetalleOrden() {
     cargar();
   }, [id]);
 
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.from('vendedores').select('id, nombre').order('nombre');
+      setVendedores((data as Vendedor[]) ?? []);
+    })();
+  }, []);
+
   const empezarEdicion = () => {
     if (!orden) return;
     setFormaPagoEdit(orden.forma_pago || 'Efectivo');
@@ -72,6 +84,7 @@ export default function DetalleOrden() {
     setIncluirGarantiaEdit(orden.incluir_garantia);
     setAnticipoEdit(orden.anticipo != null ? String(orden.anticipo) : '');
     setImpuestoEdit(orden.impuesto_porcentaje != null ? String(orden.impuesto_porcentaje) : '');
+    setVendedorEdit(orden.vendedor_id || '');
     setItemsEdit(
       orden.orden_items.map((i) => ({
         id: i.id,
@@ -107,6 +120,12 @@ export default function DetalleOrden() {
     const impuestoNuevo = Number(impuestoEdit) || 0;
     if ((orden.impuesto_porcentaje || 0) !== impuestoNuevo) cambios.impuesto_porcentaje = { antes: orden.impuesto_porcentaje, despues: impuestoNuevo };
     if ((orden.total || 0) !== totalEdit) cambios.total = { antes: orden.total, despues: totalEdit };
+    const vendedorNuevo = vendedorEdit || null;
+    if ((orden.vendedor_id || null) !== vendedorNuevo) {
+      const nombreAntes = orden.vendedores?.nombre || 'Sin asignar';
+      const nombreDespues = vendedores.find((v) => v.id === vendedorNuevo)?.nombre || 'Sin asignar';
+      cambios.vendedor_id = { antes: nombreAntes, despues: nombreDespues };
+    }
 
     const itemsCambiados = itemsEdit
       .map((edit) => {
@@ -141,6 +160,7 @@ export default function DetalleOrden() {
         anticipo: anticipoNuevo,
         impuesto_porcentaje: impuestoNuevo,
         total: totalEdit,
+        vendedor_id: vendedorNuevo,
       })
       .eq('id', id);
     if (updateError) {
@@ -273,6 +293,22 @@ export default function DetalleOrden() {
               </button>
             ))}
           </div>
+        </div>
+
+        <div>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Vendedor</label>
+          <select
+            value={vendedorEdit}
+            onChange={(e) => setVendedorEdit(e.target.value)}
+            className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+          >
+            <option value="">Sin asignar</option>
+            {vendedores.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.nombre}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="flex flex-col gap-2">
