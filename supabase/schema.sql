@@ -1511,3 +1511,11 @@ as $$
   left join clientes cli on cli.id = r.cliente_id
   where r.token_seguimiento = token
 $$;
+
+-- ============================================================
+-- Alertas inteligentes: para saber "hace cuánto está en este estado"
+-- (presupuesto sin responder hace 48hs, esperando repuesto hace
+-- mucho, listo sin retirar hace 7 días, etc.) hace falta guardar
+-- cuándo cambió de estado por última vez, no solo cuándo ingresó.
+-- ============================================================
+alter table reparaciones add column if not exists estado_actualizado_at timestamptz not null default now();

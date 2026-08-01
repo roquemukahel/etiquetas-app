@@ -10,7 +10,7 @@ import { codigoLlamada } from '../lib/paises';
 import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../lib/carpetas';
 import { registrarAuditoria } from '../lib/auditoria';
 import { obtenerTodasLasFilas } from '../lib/db';
-import { ESTADOS_REPARACION, GRUPOS_ESTADO, PRIORIDADES, infoEstado, estadosDeGrupo, GrupoEstado } from '../lib/reparaciones';
+import { ESTADOS_REPARACION, GRUPOS_ESTADO, PRIORIDADES, infoEstado, estadosDeGrupo, GrupoEstado, calcularAlertas } from '../lib/reparaciones';
 import MiniaturaDispositivo from '../MiniaturaDispositivo';
 import Avatar from '../Avatar';
 import SelectorColor from '../SelectorColor';
@@ -37,6 +37,9 @@ type Reparacion = {
   fecha_ingreso_servicio: string;
   fecha_estimada: string | null;
   fecha_reparado: string | null;
+  fecha_entrega: string | null;
+  garantia_dias: number | null;
+  estado_actualizado_at: string;
   cliente_id: string | null;
   token_seguimiento: string | null;
   en_poder_tecnico: boolean;
@@ -105,7 +108,7 @@ export default function ServicioTecnico() {
     const { data } = await supabase
       .from('reparaciones')
       .select(
-        'id, numero_orden, modelo, capacidad_gb, color, imei, falla_declarada, diagnostico, ubicacion_fisica, tecnico_id, estado, prioridad, trabajos_realizados, fecha_ingreso_servicio, fecha_estimada, fecha_reparado, cliente_id, token_seguimiento, en_poder_tecnico, presupuesto_mano_obra, presupuesto_repuestos, importe_total, orden_cobro_id, clientes ( nombre, apellido, telefono )'
+        'id, numero_orden, modelo, capacidad_gb, color, imei, falla_declarada, diagnostico, ubicacion_fisica, tecnico_id, estado, prioridad, trabajos_realizados, fecha_ingreso_servicio, fecha_estimada, fecha_reparado, fecha_entrega, garantia_dias, estado_actualizado_at, cliente_id, token_seguimiento, en_poder_tecnico, presupuesto_mano_obra, presupuesto_repuestos, importe_total, orden_cobro_id, clientes ( nombre, apellido, telefono )'
       )
       .order('fecha_ingreso_servicio', { ascending: false });
     setReparaciones((data as any) ?? []);
@@ -188,6 +191,9 @@ export default function ServicioTecnico() {
     }),
     [reparaciones]
   );
+
+  const alertas = useMemo(() => calcularAlertas(reparaciones), [reparaciones]);
+  const [alertasAbiertas, setAlertasAbiertas] = useState(false);
 
   const historialTecnico = useMemo(
     () => reparaciones.filter((r) => r.estado === 'entregado' && r.tecnico_id === tecnicoSeleccionado),
@@ -283,7 +289,7 @@ export default function ServicioTecnico() {
 
   const cambiarEstado = async (r: Reparacion, nuevoEstado: string) => {
     setGuardando(r.id);
-    const cambios: any = { estado: nuevoEstado };
+    const cambios: any = { estado: nuevoEstado, estado_actualizado_at: new Date().toISOString() };
     if (nuevoEstado === 'listo_para_entregar' && !r.fecha_reparado) cambios.fecha_reparado = new Date().toISOString();
     await supabase.from('reparaciones').update(cambios).eq('id', r.id);
     await registrarAuditoria(supabase, {
@@ -322,7 +328,7 @@ export default function ServicioTecnico() {
       en_stock: true,
     });
     await asegurarModelo(supabase, r.modelo);
-    await supabase.from('reparaciones').update({ estado: 'entregado' }).eq('id', r.id);
+    await supabase.from('reparaciones').update({ estado: 'entregado', estado_actualizado_at: new Date().toISOString() }).eq('id', r.id);
     await registrarAuditoria(supabase, {
       accion: `agregó al Stock un equipo propio reparado en Servicio Técnico (${r.numero_orden || ''}, ${r.modelo || 'sin modelo'}${r.imei ? `, IMEI ${r.imei}` : ''})`,
       entidad: 'reparacion',
@@ -336,7 +342,10 @@ export default function ServicioTecnico() {
     if (guardando) return;
     if (!confirm('¿Marcar este equipo como entregado al cliente?')) return;
     setGuardando(r.id);
-    await supabase.from('reparaciones').update({ estado: 'entregado', fecha_entrega: new Date().toISOString() }).eq('id', r.id);
+    await supabase
+      .from('reparaciones')
+      .update({ estado: 'entregado', fecha_entrega: new Date().toISOString(), estado_actualizado_at: new Date().toISOString() })
+      .eq('id', r.id);
     await registrarAuditoria(supabase, {
       accion: `marcó como entregado al cliente un equipo reparado en Servicio Técnico (${r.numero_orden || ''}, ${r.modelo || 'sin modelo'}${r.imei ? `, IMEI ${r.imei}` : ''})`,
       entidad: 'reparacion',
@@ -703,6 +712,32 @@ export default function ServicioTecnico() {
         )
       ) : (
         <>
+          {alertas.length > 0 && (
+            <div className="rounded-xl border border-warn/30 bg-warn/10 flex flex-col overflow-hidden">
+              <button
+                onClick={() => setAlertasAbiertas((v) => !v)}
+                className="flex items-center justify-between px-4 py-3 text-sm font-medium"
+              >
+                <span>🔔 {alertas.length} alerta{alertas.length === 1 ? '' : 's'}</span>
+                <span className="text-xs text-muted dark:text-dark-text-secondary">{alertasAbiertas ? 'Ocultar' : 'Ver'}</span>
+              </button>
+              {alertasAbiertas && (
+                <div className="flex flex-col border-t border-warn/20">
+                  {alertas.map((a) => (
+                    <Link
+                      key={a.id}
+                      href={`/servicio-tecnico/${a.id}`}
+                      className="flex items-center gap-2 px-4 py-2 text-xs hover:bg-white/40 dark:hover:bg-black/10"
+                    >
+                      <span className={`h-2 w-2 rounded-full shrink-0 ${a.color === 'bad' ? 'bg-bad' : 'bg-warn'}`} />
+                      {a.texto}
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="flex flex-col gap-2">
             <input
               value={busqueda}

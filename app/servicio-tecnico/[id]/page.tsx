@@ -297,7 +297,7 @@ export default function FichaReparacion() {
   const cambiarEstado = async (nuevoEstado: string) => {
     if (!r) return;
     setGuardando(true);
-    const cambios: any = { estado: nuevoEstado };
+    const cambios: any = { estado: nuevoEstado, estado_actualizado_at: new Date().toISOString() };
     if (nuevoEstado === 'listo_para_entregar' && !r.fecha_reparado) cambios.fecha_reparado = new Date().toISOString();
     await supabase.from('reparaciones').update(cambios).eq('id', r.id);
     await registrarAuditoria(supabase, {
@@ -386,7 +386,12 @@ export default function FichaReparacion() {
 
     await supabase
       .from('reparaciones')
-      .update({ orden_cobro_id: orden.id, estado: 'entregado', fecha_entrega: new Date().toISOString() })
+      .update({
+        orden_cobro_id: orden.id,
+        estado: 'entregado',
+        fecha_entrega: new Date().toISOString(),
+        estado_actualizado_at: new Date().toISOString(),
+      })
       .eq('id', r.id);
 
     await registrarAuditoria(supabase, {
@@ -417,7 +422,7 @@ export default function FichaReparacion() {
       en_stock: true,
     });
     await asegurarModelo(supabase, r.modelo);
-    await supabase.from('reparaciones').update({ estado: 'entregado' }).eq('id', r.id);
+    await supabase.from('reparaciones').update({ estado: 'entregado', estado_actualizado_at: new Date().toISOString() }).eq('id', r.id);
     await registrarAuditoria(supabase, {
       accion: `agregó al Stock un equipo propio reparado en Servicio Técnico (${r.numero_orden || ''}, ${r.modelo || 'sin modelo'}${r.imei ? `, IMEI ${r.imei}` : ''})`,
       entidad: 'reparacion',
@@ -431,7 +436,10 @@ export default function FichaReparacion() {
     if (!r) return;
     if (!confirm('¿Marcar este equipo como entregado al cliente?')) return;
     setGuardando(true);
-    await supabase.from('reparaciones').update({ estado: 'entregado', fecha_entrega: new Date().toISOString() }).eq('id', r.id);
+    await supabase
+      .from('reparaciones')
+      .update({ estado: 'entregado', fecha_entrega: new Date().toISOString(), estado_actualizado_at: new Date().toISOString() })
+      .eq('id', r.id);
     await registrarAuditoria(supabase, {
       accion: `marcó como entregado al cliente un equipo reparado en Servicio Técnico (${r.numero_orden || ''}, ${r.modelo || 'sin modelo'}${r.imei ? `, IMEI ${r.imei}` : ''})`,
       entidad: 'reparacion',
