@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { asegurarModelo } from '../../lib/modelos';
 import { registrarAuditoria } from '../../lib/auditoria';
+import SelectorColor from '../../SelectorColor';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 const ESTADOS = ['usado', 'sellado'];
@@ -233,7 +234,10 @@ export default function DetalleDispositivo() {
           onChange={(v) => campo('salud_bateria', v ? Number(v) : null)}
           numerico
         />
-        <Campo label="Color" valor={d.color ?? ''} onChange={(v) => campo('color', v)} />
+        <div>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Color</label>
+          <SelectorColor value={d.color ?? ''} onChange={(v) => campo('color', v)} />
+        </div>
         <Campo
           label="Precio"
           valor={d.precio?.toString() ?? ''}
