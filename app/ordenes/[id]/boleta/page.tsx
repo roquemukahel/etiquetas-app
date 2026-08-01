@@ -266,6 +266,17 @@ export default function Boleta() {
               <p className="font-medium text-ink">Orden #{orden.id.slice(0, 8)}</p>
               <p>{formatearFecha(orden.created_at)}</p>
               {orden.fecha_entrega && <p>Entregado: {formatearFecha(orden.fecha_entrega)}</p>}
+              <span
+                className={`inline-block mt-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                  orden.estado === 'entregado'
+                    ? 'bg-good/15 text-good'
+                    : orden.estado === 'pagado'
+                      ? 'bg-accent/15 text-accent'
+                      : 'bg-warn/15 text-warn'
+                }`}
+              >
+                {orden.estado}
+              </span>
             </div>
             {qr && (
               // eslint-disable-next-line @next/next/no-img-element

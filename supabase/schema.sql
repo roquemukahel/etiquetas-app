@@ -1132,3 +1132,70 @@ alter table negocios add column if not exists marcas_stock text[] not null defau
 -- ============================================================
 alter table canjes add column if not exists en_poder_tecnico boolean not null default true;
 alter table canjes add column if not exists entregado_a_cliente boolean not null default false;
+
+-- ============================================================
+-- Muestra el estado de la orden (pendiente/pagado/entregado) también
+-- en la boleta pública por QR, no solo en la interna.
+-- ============================================================
+create or replace function boleta_publica(token uuid)
+returns jsonb
+language sql
+security definer
+stable
+as $$
+  select jsonb_build_object(
+    'id', o.id,
+    'created_at', o.created_at,
+    'fecha_entrega', o.fecha_entrega,
+    'estado', o.estado,
+    'forma_pago', o.forma_pago,
+    'total', o.total,
+    'anticipo', o.anticipo,
+    'impuesto_porcentaje', o.impuesto_porcentaje,
+    'monto_canje', o.monto_canje,
+    'nota', o.nota,
+    'incluir_garantia', o.incluir_garantia,
+    'moneda', coalesce(o.moneda, n.moneda),
+    'negocio', jsonb_build_object(
+      'nombre', n.nombre,
+      'telefono', n.telefono,
+      'direccion', n.direccion,
+      'logo_url', n.logo_url,
+      'eslogan', n.eslogan,
+      'texto_garantia', n.texto_garantia,
+      'texto_garantia_tamano', n.texto_garantia_tamano,
+      'texto_garantia_servicio', n.texto_garantia_servicio,
+      'texto_garantia_servicio_tamano', n.texto_garantia_servicio_tamano
+    ),
+    'cliente_nombre', nullif(trim(concat(cli.nombre, ' ', coalesce(cli.apellido, ''))), ''),
+    'canjes', (
+      select coalesce(jsonb_agg(jsonb_build_object(
+        'modelo', c.modelo,
+        'capacidad_gb', c.capacidad_gb,
+        'color', c.color,
+        'imei', c.imei,
+        'salud_bateria', c.salud_bateria,
+        'detalles', c.detalles,
+        'monto', c.monto
+      ) order by c.created_at), '[]'::jsonb)
+      from canjes c
+      where c.orden_id = o.id and c.estado = 'en_canje'
+    ),
+    'items', (
+      select coalesce(jsonb_agg(jsonb_build_object(
+        'descripcion', oi.descripcion,
+        'cantidad', oi.cantidad,
+        'precio_unitario', oi.precio_unitario,
+        'tipo', oi.tipo,
+        'garantia_vencimiento', d.garantia_vencimiento
+      )), '[]'::jsonb)
+      from orden_items oi
+      left join dispositivos d on d.id = oi.dispositivo_id
+      where oi.orden_id = o.id
+    )
+  )
+  from ordenes o
+  join negocios n on n.id = o.negocio_id
+  left join clientes cli on cli.id = o.cliente_id
+  where o.token_boleta = token
+$$;

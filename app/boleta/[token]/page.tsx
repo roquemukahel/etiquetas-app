@@ -19,6 +19,7 @@ type Boleta = {
   id: string;
   created_at: string;
   fecha_entrega: string | null;
+  estado: string;
   forma_pago: string | null;
   total: number | null;
   anticipo: number | null;
@@ -124,6 +125,17 @@ export default function BoletaPublica() {
           <p className="font-medium text-ink">Orden #{boleta.id.slice(0, 8)}</p>
           <p>{formatearFecha(boleta.created_at)}</p>
           {boleta.fecha_entrega && <p>Entregado: {formatearFecha(boleta.fecha_entrega)}</p>}
+          <span
+            className={`inline-block mt-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+              boleta.estado === 'entregado'
+                ? 'bg-good/15 text-good'
+                : boleta.estado === 'pagado'
+                  ? 'bg-accent/15 text-accent'
+                  : 'bg-warn/15 text-warn'
+            }`}
+          >
+            {boleta.estado}
+          </span>
         </div>
 
         <Divisor />
