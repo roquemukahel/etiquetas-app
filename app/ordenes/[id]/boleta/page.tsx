@@ -32,6 +32,7 @@ type Orden = {
   nota: string | null;
   incluir_garantia: boolean;
   token_boleta: string;
+  moneda: string | null;
   clientes: {
     nombre: string;
     apellido: string | null;
@@ -187,7 +188,7 @@ export default function Boleta() {
   const tieneTrabajos = orden.orden_items.some((i) => i.tipo === 'trabajo');
   const tieneProductos = orden.orden_items.some((i) => i.tipo !== 'trabajo');
   const clienteNombre = orden.clientes ? `${orden.clientes.nombre} ${orden.clientes.apellido || ''}`.trim() : '';
-  const moneda = simboloMoneda(negocio?.moneda);
+  const moneda = simboloMoneda(orden.moneda || negocio?.moneda);
 
   const mensajeWhatsapp =
     `Hola ${orden.clientes?.nombre || ''}! Te paso la boleta de tu compra en ${negocio?.nombre || ''}.\n` +

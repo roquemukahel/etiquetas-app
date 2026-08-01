@@ -7,6 +7,7 @@ import { crearClienteNavegador } from '../../lib/supabase/client';
 import { asegurarModelo } from '../../lib/modelos';
 import { obtenerTodasLasFilas } from '../../lib/db';
 import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../../lib/carpetas';
+import { simboloMoneda } from '../../lib/monedas';
 import MiniaturaDispositivo from '../../MiniaturaDispositivo';
 
 type Dispositivo = {
@@ -127,6 +128,8 @@ export default function NuevaOrden() {
   const [guardando, setGuardando] = useState(false);
   const [garantiaDias, setGarantiaDias] = useState<number | null>(null);
   const [imagenesCarpetas, setImagenesCarpetas] = useState<Map<string, string>>(new Map());
+  const [monedasDisponibles, setMonedasDisponibles] = useState<string[]>(['ARS']);
+  const [monedaOrden, setMonedaOrden] = useState('ARS');
 
   useEffect(() => {
     (async () => {
@@ -134,8 +137,16 @@ export default function NuevaOrden() {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) return;
-      const { data: perfil } = await supabase.from('perfiles').select('negocios ( garantia_dias )').eq('id', user.id).single();
+      const { data: perfil } = await supabase
+        .from('perfiles')
+        .select('negocios ( garantia_dias, moneda, monedas_habilitadas )')
+        .eq('id', user.id)
+        .single();
       setGarantiaDias((perfil as any)?.negocios?.garantia_dias ?? null);
+      const negocio = (perfil as any)?.negocios;
+      const monedas: string[] = negocio?.monedas_habilitadas?.length ? negocio.monedas_habilitadas : ['ARS'];
+      setMonedasDisponibles(monedas);
+      setMonedaOrden(negocio?.moneda || monedas[0]);
     })();
     (async () => {
       setClientes(await obtenerTodasLasFilas<Cliente>(supabase, 'clientes', '*'));
@@ -187,6 +198,8 @@ export default function NuevaOrden() {
     () => carrito.reduce((acc, i) => acc + i.cantidad * i.precioUnitario, 0),
     [carrito]
   );
+  const moneda = useMemo(() => simboloMoneda(monedaOrden), [monedaOrden]);
+
   const montoCanjeTotal = useMemo(
     () => canjesCarrito.reduce((acc, c) => acc + (Number(c.monto) || 0), 0),
     [canjesCarrito]
@@ -386,6 +399,7 @@ export default function NuevaOrden() {
           anticipo: Number(anticipo) || 0,
           impuesto_porcentaje: Number(impuesto) || 0,
           monto_canje: montoCanjeTotal,
+          moneda: monedaOrden,
           total,
           estado: estadoOrden,
           fecha_entrega: estadoOrden === 'entregado' ? new Date().toISOString() : null,
@@ -604,7 +618,7 @@ export default function NuevaOrden() {
                       </span>
                       </span>
                       {d.precio != null && (
-                        <span className="font-medium shrink-0">${d.precio.toLocaleString('es-AR')}</span>
+                        <span className="font-medium shrink-0">{moneda}{d.precio.toLocaleString('es-AR')}</span>
                       )}
                     </button>
                   ))}
@@ -703,7 +717,7 @@ export default function NuevaOrden() {
                     className="rounded-lg border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-3 py-2 flex items-center justify-between text-left text-sm"
                   >
                     <span>{p.nombre}</span>
-                    {p.precio != null && <span className="font-medium">${p.precio.toLocaleString('es-AR')}</span>}
+                    {p.precio != null && <span className="font-medium">{moneda}{p.precio.toLocaleString('es-AR')}</span>}
                   </button>
                 ))}
               </div>
@@ -799,7 +813,7 @@ export default function NuevaOrden() {
                       <MiniaturaDispositivo src={t.imagen_url} size={28} />
                       <span className="truncate">{t.nombre}</span>
                     </span>
-                    {t.precio != null && <span className="font-medium shrink-0">${t.precio.toLocaleString('es-AR')}</span>}
+                    {t.precio != null && <span className="font-medium shrink-0">{moneda}{t.precio.toLocaleString('es-AR')}</span>}
                   </button>
                 ))}
               </div>
@@ -849,7 +863,7 @@ export default function NuevaOrden() {
                     className="w-12 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded px-1 py-0.5 text-xs text-center"
                   />
                   <span>×</span>
-                  <span>$</span>
+                  <span>{moneda}</span>
                   <input
                     value={i.precioUnitario}
                     onChange={(e) => actualizarPrecioItem(i.tempId, e.target.value)}
@@ -859,7 +873,7 @@ export default function NuevaOrden() {
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <p className="text-sm font-medium">${(i.cantidad * i.precioUnitario).toLocaleString('es-AR')}</p>
+                <p className="text-sm font-medium">{moneda}{(i.cantidad * i.precioUnitario).toLocaleString('es-AR')}</p>
                 <button onClick={() => quitarDelCarrito(i.tempId)} className="text-xs text-bad underline">
                   Quitar
                 </button>
@@ -871,7 +885,7 @@ export default function NuevaOrden() {
         {carrito.length > 0 && (
           <div className="flex items-center justify-between text-sm font-medium border-t border-border dark:border-dark-border pt-3">
             <span>Subtotal</span>
-            <span>${subtotal.toLocaleString('es-AR')}</span>
+            <span>{moneda}{subtotal.toLocaleString('es-AR')}</span>
           </div>
         )}
 
@@ -910,6 +924,25 @@ export default function NuevaOrden() {
           <span className="text-muted dark:text-dark-text-secondary">Ítems:</span> {carrito.length}
         </p>
       </div>
+
+      {monedasDisponibles.length > 1 && (
+        <div>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Moneda de esta orden</label>
+          <div className="flex gap-2">
+            {monedasDisponibles.map((m) => (
+              <button
+                key={m}
+                onClick={() => setMonedaOrden(m)}
+                className={`flex-1 rounded-xl py-2 text-sm font-medium ${
+                  monedaOrden === m ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
+                }`}
+              >
+                {m} ({simboloMoneda(m)})
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div>
         <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Vendedor</label>
@@ -1027,7 +1060,7 @@ export default function NuevaOrden() {
                   {c.imei && <p className="text-xs text-muted dark:text-dark-text-secondary font-mono">IMEI: {c.imei}</p>}
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-xs text-muted dark:text-dark-text-secondary">$</span>
+                  <span className="text-xs text-muted dark:text-dark-text-secondary">{moneda}</span>
                   <input
                     value={c.monto}
                     onChange={(e) => actualizarMontoCanje(c.tempId, e.target.value)}
@@ -1133,7 +1166,7 @@ export default function NuevaOrden() {
 
       <div className="flex items-center justify-between text-lg font-medium border-t border-border dark:border-dark-border pt-3">
         <span>Total</span>
-        <span>${total.toLocaleString('es-AR')}</span>
+        <span>{moneda}{total.toLocaleString('es-AR')}</span>
       </div>
 
       <button

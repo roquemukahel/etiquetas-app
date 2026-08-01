@@ -23,6 +23,7 @@ type Negocio = {
   mostrar_facebook: boolean;
   mostrar_tiktok: boolean;
   moneda: string;
+  monedas_habilitadas: string[];
   pais: string;
   texto_declaracion_compra: string | null;
   texto_garantia_tamano: number;
@@ -51,7 +52,7 @@ export default function DatosNegocio() {
       const { data: perfil } = await supabase
         .from('perfiles')
         .select(
-          'negocio_id, negocios ( id, nombre, telefono, direccion, eslogan, logo_url, texto_garantia, texto_garantia_servicio, instagram, facebook, tiktok, mostrar_instagram, mostrar_facebook, mostrar_tiktok, moneda, pais, texto_declaracion_compra, texto_garantia_tamano, texto_garantia_servicio_tamano, texto_declaracion_compra_tamano, garantia_dias )'
+          'negocio_id, negocios ( id, nombre, telefono, direccion, eslogan, logo_url, texto_garantia, texto_garantia_servicio, instagram, facebook, tiktok, mostrar_instagram, mostrar_facebook, mostrar_tiktok, moneda, monedas_habilitadas, pais, texto_declaracion_compra, texto_garantia_tamano, texto_garantia_servicio_tamano, texto_declaracion_compra_tamano, garantia_dias )'
         )
         .eq('id', user.id)
         .single();
@@ -63,6 +64,20 @@ export default function DatosNegocio() {
   const campo = (k: keyof Negocio, v: string) => setNegocio((prev) => (prev ? { ...prev, [k]: v } : prev));
   const campoBool = (k: keyof Negocio, v: boolean) => setNegocio((prev) => (prev ? { ...prev, [k]: v } : prev));
   const campoNum = (k: keyof Negocio, v: number) => setNegocio((prev) => (prev ? { ...prev, [k]: v } : prev));
+
+  const toggleMoneda = (codigo: string) => {
+    setNegocio((prev) => {
+      if (!prev) return prev;
+      const yaEsta = prev.monedas_habilitadas.includes(codigo);
+      if (yaEsta) {
+        if (prev.monedas_habilitadas.length <= 1) return prev; // siempre tiene que quedar al menos una
+        const nuevas = prev.monedas_habilitadas.filter((m) => m !== codigo);
+        return { ...prev, monedas_habilitadas: nuevas, moneda: nuevas[0] };
+      }
+      if (prev.monedas_habilitadas.length >= 2) return prev; // máximo 2
+      return { ...prev, monedas_habilitadas: [...prev.monedas_habilitadas, codigo] };
+    });
+  };
 
   const handleLogo = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -93,7 +108,8 @@ export default function DatosNegocio() {
         mostrar_instagram: negocio.mostrar_instagram,
         mostrar_facebook: negocio.mostrar_facebook,
         mostrar_tiktok: negocio.mostrar_tiktok,
-        moneda: negocio.moneda,
+        moneda: negocio.monedas_habilitadas[0] || negocio.moneda,
+        monedas_habilitadas: negocio.monedas_habilitadas,
         pais: negocio.pais,
         texto_declaracion_compra: negocio.texto_declaracion_compra?.trim() || null,
         texto_garantia_tamano: negocio.texto_garantia_tamano,
@@ -168,18 +184,41 @@ export default function DatosNegocio() {
         <Campo label="Dirección" valor={negocio.direccion ?? ''} onChange={(v) => campo('direccion', v)} />
 
         <div>
-          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Moneda (se usa en la boleta)</label>
-          <select
-            value={negocio.moneda}
-            onChange={(e) => campo('moneda', e.target.value)}
-            className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
-          >
-            {MONEDAS.map((m) => (
-              <option key={m.codigo} value={m.codigo}>
-                {m.nombre} ({m.simbolo})
-              </option>
-            ))}
-          </select>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">
+            Monedas con las que trabajás (elegí hasta 2)
+          </label>
+          <p className="text-xs text-muted dark:text-dark-text-secondary mb-2">
+            {negocio.monedas_habilitadas.length === 2
+              ? 'Al crear una orden vas a poder elegir con cuál de estas dos hacer la boleta.'
+              : 'Si habilitás una segunda moneda, vas a poder elegir con cuál hacer cada boleta al crear una orden.'}
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            {MONEDAS.map((m) => {
+              const elegida = negocio.monedas_habilitadas.includes(m.codigo);
+              const deshabilitado = !elegida && negocio.monedas_habilitadas.length >= 2;
+              return (
+                <label
+                  key={m.codigo}
+                  className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm cursor-pointer ${
+                    elegida
+                      ? 'border-accent dark:border-dark-accent bg-accent-soft'
+                      : 'border-border dark:border-dark-border'
+                  } ${deshabilitado ? 'opacity-40 cursor-not-allowed' : ''}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={elegida}
+                    disabled={deshabilitado}
+                    onChange={() => toggleMoneda(m.codigo)}
+                    className="h-4 w-4 accent-ink shrink-0"
+                  />
+                  <span>
+                    {m.nombre} ({m.simbolo})
+                  </span>
+                </label>
+              );
+            })}
+          </div>
         </div>
 
         <div>
