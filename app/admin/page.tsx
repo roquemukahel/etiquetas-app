@@ -220,26 +220,40 @@ export default function AdminPanel() {
 
               {aprobandoId === c.id && (
                 <div className="rounded-lg bg-canvas dark:bg-dark-bg p-2 flex flex-col gap-2">
-                  <div className="flex gap-2">
-                    <input
-                      value={diasAprobar}
-                      onChange={(e) => setDiasAprobar(e.target.value)}
-                      inputMode="numeric"
-                      placeholder="Días"
-                      className="w-20 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-1.5 text-xs"
-                    />
-                    <select
-                      value={planAprobar}
-                      onChange={(e) => setPlanAprobar(e.target.value)}
-                      className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-1.5 text-xs"
-                    >
-                      {PLANES.map((p) => (
-                        <option key={p} value={p}>
-                          {p}
-                        </option>
-                      ))}
-                    </select>
+                  <div className="flex gap-3">
+                    <label className="flex flex-col gap-0.5">
+                      <span className="text-[10px] text-muted dark:text-dark-text-secondary">Días de acceso</span>
+                      <input
+                        value={diasAprobar}
+                        onChange={(e) => setDiasAprobar(e.target.value)}
+                        inputMode="numeric"
+                        placeholder="Días"
+                        className="w-20 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-1.5 text-xs"
+                      />
+                    </label>
+                    <label className="flex-1 flex flex-col gap-0.5">
+                      <span className="text-[10px] text-muted dark:text-dark-text-secondary">Plan pagado</span>
+                      <select
+                        value={planAprobar}
+                        onChange={(e) => {
+                          const p = e.target.value;
+                          setPlanAprobar(p);
+                          if (p === 'mensual') setDiasAprobar('30');
+                          if (p === 'anual') setDiasAprobar('365');
+                        }}
+                        className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-1.5 text-xs"
+                      >
+                        {PLANES.map((p) => (
+                          <option key={p} value={p}>
+                            {p}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
                   </div>
+                  <p className="text-[10px] text-muted dark:text-dark-text-secondary">
+                    Días de acceso a otorgar desde hoy (30 si pagó el mes, 365 si pagó el año — se completa solo al elegir el plan).
+                  </p>
                   <button
                     disabled={procesando === c.id}
                     onClick={() => confirmarAprobar(c)}
