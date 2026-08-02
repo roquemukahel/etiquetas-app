@@ -5,7 +5,16 @@ import Link from 'next/link';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import Avatar from '../../Avatar';
 
-type Vendedor = { id: string; nombre: string; telefono: string | null; edad: number | null; foto_url: string | null };
+type Vendedor = {
+  id: string;
+  nombre: string;
+  telefono: string | null;
+  edad: number | null;
+  foto_url: string | null;
+  perfil_id: string | null;
+};
+
+type Acceso = { id: string; email: string; es_dueno: boolean; creado: string };
 
 export default function Vendedores() {
   const supabase = crearClienteNavegador();
@@ -20,15 +29,83 @@ export default function Vendedores() {
   const [edadEdit, setEdadEdit] = useState('');
   const [guardandoPerfil, setGuardandoPerfil] = useState(false);
 
+  // Accesos (mail + contraseña) para que cada vendedor entre con su
+  // propia cuenta en vez de compartir el login del negocio. Solo el
+  // dueño puede darlos o quitarlos.
+  const [esDueno, setEsDueno] = useState(false);
+  const [accesosPorPerfil, setAccesosPorPerfil] = useState<Record<string, Acceso>>({});
+  const [dandoAccesoA, setDandoAccesoA] = useState<string | null>(null);
+  const [emailAcceso, setEmailAcceso] = useState('');
+  const [passwordAcceso, setPasswordAcceso] = useState('');
+  const [procesandoAcceso, setProcesandoAcceso] = useState<string | null>(null);
+  const [errorAcceso, setErrorAcceso] = useState<string | null>(null);
+
   const cargar = async () => {
-    const { data } = await supabase.from('vendedores').select('*').order('nombre');
+    const [{ data }, { data: dueno }] = await Promise.all([
+      supabase.from('vendedores').select('*').order('nombre'),
+      supabase.rpc('es_dueno_actual'),
+    ]);
     setVendedores((data as Vendedor[]) ?? []);
+    setEsDueno(!!dueno);
+    if (dueno) {
+      const { data: accesos } = await supabase.rpc('listar_accesos_negocio');
+      const mapa: Record<string, Acceso> = {};
+      for (const a of (accesos as Acceso[]) ?? []) mapa[a.id] = a;
+      setAccesosPorPerfil(mapa);
+    }
     setLoading(false);
   };
 
   useEffect(() => {
     cargar();
   }, []);
+
+  const abrirDarAcceso = (v: Vendedor) => {
+    setDandoAccesoA(dandoAccesoA === v.id ? null : v.id);
+    setEmailAcceso('');
+    setPasswordAcceso('');
+    setErrorAcceso(null);
+  };
+
+  const confirmarDarAcceso = async (v: Vendedor) => {
+    if (!emailAcceso.trim() || passwordAcceso.length < 8) {
+      setErrorAcceso('Completá el mail y una contraseña de al menos 8 caracteres');
+      return;
+    }
+    setProcesandoAcceso(v.id);
+    setErrorAcceso(null);
+    const res = await fetch('/api/vendedores/crear-acceso', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ vendedorId: v.id, email: emailAcceso.trim(), password: passwordAcceso }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setErrorAcceso(data.error || 'No pudimos crear el acceso');
+      setProcesandoAcceso(null);
+      return;
+    }
+    setDandoAccesoA(null);
+    setProcesandoAcceso(null);
+    cargar();
+  };
+
+  const quitarAcceso = async (v: Vendedor) => {
+    if (!v.perfil_id) return;
+    if (!confirm(`¿Quitarle el acceso al sistema a "${v.nombre}"? Va a dejar de poder iniciar sesión (el nombre no se borra).`)) return;
+    setProcesandoAcceso(v.id);
+    const res = await fetch('/api/vendedores/eliminar-acceso', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ perfilId: v.perfil_id }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      alert(data.error || 'No pudimos quitar el acceso');
+    }
+    setProcesandoAcceso(null);
+    cargar();
+  };
 
   const agregar = async () => {
     if (!nombre.trim()) return;
@@ -137,6 +214,60 @@ export default function Vendedores() {
                 Eliminar
               </button>
             </div>
+
+            {esDueno && (
+              <div className="border-t border-border dark:border-dark-border pt-2 flex flex-col gap-2">
+                {v.perfil_id && accesosPorPerfil[v.perfil_id] ? (
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs text-muted dark:text-dark-text-secondary truncate">
+                      🔑 Acceso: <span className="text-ink dark:text-dark-text">{accesosPorPerfil[v.perfil_id].email}</span>
+                    </p>
+                    <button
+                      disabled={procesandoAcceso === v.id}
+                      onClick={() => quitarAcceso(v)}
+                      className="shrink-0 text-[10px] text-bad underline disabled:opacity-40"
+                    >
+                      Quitar acceso
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => abrirDarAcceso(v)}
+                      className="self-start text-xs text-accent dark:text-dark-accent underline"
+                    >
+                      {dandoAccesoA === v.id ? 'Cancelar' : '+ Dar acceso al sistema'}
+                    </button>
+                    {dandoAccesoA === v.id && (
+                      <div className="flex flex-col gap-2 bg-canvas dark:bg-dark-bg rounded-lg p-2">
+                        {errorAcceso && <p className="text-xs text-bad">{errorAcceso}</p>}
+                        <input
+                          value={emailAcceso}
+                          onChange={(e) => setEmailAcceso(e.target.value)}
+                          type="email"
+                          placeholder="Mail para entrar al sistema"
+                          className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-xs"
+                        />
+                        <input
+                          value={passwordAcceso}
+                          onChange={(e) => setPasswordAcceso(e.target.value)}
+                          type="password"
+                          placeholder="Contraseña (mínimo 8 caracteres)"
+                          className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-xs"
+                        />
+                        <button
+                          disabled={procesandoAcceso === v.id}
+                          onClick={() => confirmarDarAcceso(v)}
+                          className="rounded-lg bg-accent dark:bg-dark-accent text-white py-2 text-xs font-medium disabled:opacity-40"
+                        >
+                          {procesandoAcceso === v.id ? 'Creando...' : 'Crear acceso'}
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
 
             {editando === v.id && (
               <div className="flex flex-col gap-2 pt-2 border-t border-border dark:border-dark-border">

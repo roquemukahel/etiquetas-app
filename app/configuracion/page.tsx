@@ -1,16 +1,26 @@
 import Link from 'next/link';
 import ThemeToggle from '../ThemeToggle';
+import { crearClienteServidor } from '../lib/supabase/server';
 
-const SECCIONES = [
+const SECCIONES_BASE = [
   { href: '/configuracion/negocio', titulo: 'Datos del negocio', desc: 'Nombre, logo, contacto y garantía' },
   { href: '/configuracion/vendedores', titulo: 'Vendedores', desc: 'Quién atiende cada venta' },
   { href: '/configuracion/tecnicos', titulo: 'Técnicos', desc: 'Quién repara los equipos de Servicio Técnico' },
-  { href: '/configuracion/suscripcion', titulo: 'Suscripción', desc: 'Estado del pago y plan de Qovento' },
+];
+// Suscripción (billing) solo la ve el dueño del negocio.
+const SECCION_SUSCRIPCION = { href: '/configuracion/suscripcion', titulo: 'Suscripción', desc: 'Estado del pago y plan de Qovento' };
+const SECCIONES_RESTO = [
   { href: '/configuracion/soporte', titulo: 'Soporte', desc: 'Reportá un problema o dejanos un mensaje' },
   { href: '/configuracion/auditoria', titulo: 'Auditoría', desc: 'Quién hizo qué y cuándo' },
 ];
 
-export default function Configuracion() {
+export default async function Configuracion() {
+  const supabase = crearClienteServidor();
+  const { data: esDueno } = await supabase.rpc('es_dueno_actual');
+  const secciones = esDueno
+    ? [...SECCIONES_BASE, SECCION_SUSCRIPCION, ...SECCIONES_RESTO]
+    : [...SECCIONES_BASE, ...SECCIONES_RESTO];
+
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
       <header className="flex items-center gap-3">
@@ -22,7 +32,7 @@ export default function Configuracion() {
 
       <div className="flex flex-col gap-3">
         <ThemeToggle />
-        {SECCIONES.map((s) => (
+        {secciones.map((s) => (
           <Link
             key={s.href}
             href={s.href}

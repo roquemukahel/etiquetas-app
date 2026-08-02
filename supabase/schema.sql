@@ -545,7 +545,10 @@ begin
   insert into negocios (nombre, estado_suscripcion, fecha_fin_prueba)
   values (nombre_negocio, 'trialing', now() + interval '14 days')
   returning id into nuevo_negocio_id;
-  insert into perfiles (id, negocio_id) values (auth.uid(), nuevo_negocio_id);
+  -- Quien se registra es, por definición, el dueño de ese negocio nuevo
+  -- (ver es_dueno más abajo, agregado para poder tener vendedores con
+  -- login propio sin darles acceso a Suscripción ni a crear más accesos).
+  insert into perfiles (id, negocio_id, es_dueno) values (auth.uid(), nuevo_negocio_id, true);
 
   return nuevo_negocio_id;
 end;
@@ -1879,3 +1882,82 @@ begin
   end if;
 end;
 $$;
+
+-- ============================================================
+-- Vendedores con acceso propio (mail + contraseña), en vez de que
+-- todo el que entra al sistema comparta el único login del negocio.
+-- El "dueño" es quien se registró originalmente — hoy cada negocio
+-- tiene un solo perfil, así que no hay ambigüedad al marcarlos: se
+-- backfillea a todos los existentes. De acá en más, crear_negocio_y_
+-- perfil() ya marca es_dueno=true para quien se registra (ver más
+-- arriba), y los vendedores que agregue el dueño se crean con
+-- es_dueno=false (eso lo hace una ruta del servidor con la service
+-- role key, ver app/api/vendedores — no se puede crear una cuenta
+-- con contraseña real solo con SQL).
+--
+-- Solo el dueño puede: agregar/quitar vendedores con acceso y ver
+-- Suscripción. Un vendedor con acceso ve y hace todo lo operativo
+-- igual que hoy (RLS ya scopea todo por negocio_id, no por es_dueno).
+-- ============================================================
+alter table perfiles add column if not exists es_dueno boolean not null default false;
+
+-- Backfill de una sola vez: si un negocio todavía no tiene ningún
+-- dueño marcado, se lo asigna a su perfil más antiguo (hoy, antes de
+-- este cambio, cada negocio tenía un único perfil, así que no hay
+-- ambigüedad posible). Este archivo se puede volver a correr entero
+-- más adelante sin romper nada (todo usa "if not exists"/"or
+-- replace") — por eso este update chequea "not exists dueño" en vez
+-- de tocar todo a lo bruto: si no, cada vez que se re-corriera el
+-- schema completo, le devolvería es_dueno=true a cualquier negocio
+-- que ya tuviera vendedores agregados después (pisando esa
+-- restricción sin querer).
+update perfiles p
+set es_dueno = true
+where p.id = (
+  select p2.id from perfiles p2
+  where p2.negocio_id = p.negocio_id
+  order by p2.created_at asc
+  limit 1
+)
+and not exists (
+  select 1 from perfiles p3
+  where p3.negocio_id = p.negocio_id and p3.es_dueno = true
+);
+
+create or replace function es_dueno_actual()
+returns boolean
+language sql
+security definer
+stable
+as $$
+  select coalesce((select es_dueno from perfiles where id = auth.uid()), false)
+$$;
+
+-- Para que el dueño pueda ver quién tiene acceso a su negocio: la
+-- policy de perfiles (ver arriba) solo deja ver el propio ("id =
+-- auth.uid()"), así que hace falta una función security definer para
+-- listar a los demás perfiles del mismo negocio.
+create or replace function listar_accesos_negocio()
+returns table (id uuid, email text, es_dueno boolean, creado timestamptz)
+language plpgsql
+security definer
+as $$
+begin
+  if not es_dueno_actual() then
+    raise exception 'No autorizado';
+  end if;
+  return query
+    select p.id, u.email, p.es_dueno, p.created_at
+    from perfiles p
+    join auth.users u on u.id = p.id
+    where p.negocio_id = negocio_actual()
+    order by p.created_at;
+end;
+$$;
+
+-- Vincula el "nombre-tag" de un vendedor (usado para trazabilidad,
+-- ver app/lib/actor.ts) con su login real, cuando el dueño le da
+-- acceso al sistema. Es opcional: un vendedor puede seguir existiendo
+-- solo como nombre, sin acceso propio, como hasta ahora.
+alter table vendedores add column if not exists perfil_id uuid references perfiles(id) on delete set null;
+create unique index if not exists vendedores_perfil_id_idx on vendedores(perfil_id) where perfil_id is not null;

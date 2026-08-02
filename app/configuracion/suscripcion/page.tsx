@@ -39,6 +39,9 @@ export default function Suscripcion() {
   const [email, setEmail] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [comprobante, setComprobante] = useState<Comprobante | null>(null);
+  // Es información de facturación del negocio — solo la ve el dueño, no
+  // cualquier vendedor con acceso al sistema.
+  const [autorizado, setAutorizado] = useState<boolean | null>(null);
 
   const cargarComprobante = async (negocioId: string) => {
     const { data } = await supabase
@@ -57,6 +60,14 @@ export default function Suscripcion() {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) return;
+
+      const { data: dueno } = await supabase.rpc('es_dueno_actual');
+      setAutorizado(!!dueno);
+      if (!dueno) {
+        setLoading(false);
+        return;
+      }
+
       setEmail(user.email ?? null);
 
       const { data: perfil } = await supabase
@@ -72,10 +83,21 @@ export default function Suscripcion() {
     })();
   }, []);
 
-  if (loading) {
+  if (loading || autorizado === null) {
     return (
       <main className="flex min-h-screen items-center justify-center">
         <p className="text-sm text-muted dark:text-dark-text-secondary">Cargando...</p>
+      </main>
+    );
+  }
+
+  if (!autorizado) {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
+        <p className="text-sm text-muted dark:text-dark-text-secondary">No tenés acceso a esta sección.</p>
+        <Link href="/configuracion" className="text-sm text-accent dark:text-dark-accent underline">
+          Volver
+        </Link>
       </main>
     );
   }
