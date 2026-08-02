@@ -7,6 +7,8 @@ import { crearClienteNavegador } from '../lib/supabase/client';
 const ESTADOS_SUSCRIPCION = ['trialing', 'active', 'past_due', 'unpaid', 'cancelled', 'expired', 'paused'];
 const PLANES = ['mensual', 'anual', 'pro'];
 
+type Usuario = { id: string; email: string; creado: string };
+
 type Negocio = {
   id: string;
   nombre: string;
@@ -20,9 +22,8 @@ type Negocio = {
   fecha_fin_prueba: string | null;
   plan: string | null;
   acceso_manual_hasta: string | null;
+  usuarios: Usuario[];
 };
-
-type Usuario = { email: string; creado: string };
 
 type Comprobante = {
   id: string;
@@ -52,7 +53,6 @@ export default function AdminPanel() {
   const [busqueda, setBusqueda] = useState('');
   const [procesando, setProcesando] = useState<string | null>(null);
   const [expandido, setExpandido] = useState<string | null>(null);
-  const [usuariosPorNegocio, setUsuariosPorNegocio] = useState<Record<string, Usuario[]>>({});
 
   const [aprobandoId, setAprobandoId] = useState<string | null>(null);
   const [diasAprobar, setDiasAprobar] = useState('30');
@@ -69,7 +69,7 @@ export default function AdminPanel() {
       supabase.rpc('admin_listar_negocios'),
       supabase.rpc('admin_listar_comprobantes_pendientes'),
     ]);
-    setNegocios((negs as Negocio[]) ?? []);
+    setNegocios(((negs as Negocio[]) ?? []).map((n) => ({ ...n, usuarios: n.usuarios ?? [] })));
     setComprobantes((comps as Comprobante[]) ?? []);
     setLoading(false);
   };
@@ -91,7 +91,7 @@ export default function AdminPanel() {
     cargar();
   };
 
-  const toggleExpandir = async (n: Negocio) => {
+  const toggleExpandir = (n: Negocio) => {
     if (expandido === n.id) {
       setExpandido(null);
       return;
@@ -101,10 +101,33 @@ export default function AdminPanel() {
     setEditPlan(n.plan ?? '');
     setEditDias('');
     setEditSinVencimiento(false);
-    if (!usuariosPorNegocio[n.id]) {
-      const { data } = await supabase.rpc('admin_usuarios_de_negocio', { negocio_id_param: n.id });
-      setUsuariosPorNegocio((prev) => ({ ...prev, [n.id]: (data as Usuario[]) ?? [] }));
+  };
+
+  const eliminarUsuario = async (n: Negocio, u: Usuario) => {
+    if (
+      !confirm(`¿Eliminar para siempre la cuenta "${u.email}"? No se puede deshacer.`)
+    )
+      return;
+    setProcesando(n.id);
+    await supabase.rpc('admin_eliminar_usuario', { usuario_id_param: u.id });
+    setProcesando(null);
+    cargar();
+  };
+
+  const eliminarNegocio = async (n: Negocio) => {
+    const escrito = prompt(
+      `Esto borra "${n.nombre}" para siempre: todos sus datos y las cuentas de sus ${n.cantidad_usuarios} usuario(s). No se puede deshacer.\n\nPara confirmar, escribí el nombre exacto del negocio:`
+    );
+    if (escrito === null) return;
+    if (escrito !== n.nombre) {
+      alert('El nombre no coincide. No se eliminó nada.');
+      return;
     }
+    setProcesando(n.id);
+    await supabase.rpc('admin_eliminar_negocio', { negocio_id_param: n.id });
+    setProcesando(null);
+    setExpandido(null);
+    cargar();
   };
 
   const guardarSuscripcion = async (n: Negocio) => {
@@ -322,6 +345,11 @@ export default function AdminPanel() {
                     {n.cantidad_usuarios} usuario{n.cantidad_usuarios === 1 ? '' : 's'} · {n.cantidad_dispositivos}{' '}
                     dispositivos · {n.cantidad_ordenes} órdenes
                   </p>
+                  {n.usuarios.length > 0 && (
+                    <p className="text-xs text-muted dark:text-dark-text-secondary break-all">
+                      {n.usuarios.map((u) => u.email).join(', ')}
+                    </p>
+                  )}
                   <p className="text-xs text-muted dark:text-dark-text-secondary">
                     {n.estado_suscripcion}
                     {n.plan ? ` · ${n.plan}` : ''}
@@ -343,15 +371,22 @@ export default function AdminPanel() {
                 <div className="rounded-lg bg-canvas dark:bg-dark-bg p-3 flex flex-col gap-3">
                   <div>
                     <p className="text-xs font-medium text-muted dark:text-dark-text-secondary mb-1">Usuarios</p>
-                    {!usuariosPorNegocio[n.id] ? (
-                      <p className="text-xs text-muted dark:text-dark-text-secondary">Cargando...</p>
-                    ) : usuariosPorNegocio[n.id].length === 0 ? (
+                    {n.usuarios.length === 0 ? (
                       <p className="text-xs text-muted dark:text-dark-text-secondary">Sin usuarios registrados.</p>
                     ) : (
-                      usuariosPorNegocio[n.id].map((u) => (
-                        <p key={u.email} className="text-xs">
-                          {u.email}
-                        </p>
+                      n.usuarios.map((u) => (
+                        <div key={u.id} className="flex items-center justify-between gap-2 py-0.5">
+                          <p className="text-xs break-all">
+                            {u.email} <span className="text-muted dark:text-dark-text-secondary">· alta {formatearFecha(u.creado)}</span>
+                          </p>
+                          <button
+                            disabled={procesando === n.id}
+                            onClick={() => eliminarUsuario(n, u)}
+                            className="shrink-0 text-[10px] text-bad underline disabled:opacity-40"
+                          >
+                            Eliminar
+                          </button>
+                        </div>
                       ))
                     )}
                   </div>
@@ -407,6 +442,19 @@ export default function AdminPanel() {
                     >
                       Guardar suscripción
                     </button>
+                  </div>
+
+                  <div className="border-t border-border dark:border-dark-border pt-3">
+                    <button
+                      disabled={procesando === n.id}
+                      onClick={() => eliminarNegocio(n)}
+                      className="w-full rounded-lg bg-bad text-white py-2 text-xs font-medium disabled:opacity-40"
+                    >
+                      Eliminar negocio y sus usuarios para siempre
+                    </button>
+                    <p className="text-[10px] text-muted dark:text-dark-text-secondary mt-1">
+                      Borra todo (dispositivos, órdenes, etc.) y las cuentas de sus usuarios. No se puede deshacer.
+                    </p>
                   </div>
                 </div>
               )}

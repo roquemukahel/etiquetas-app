@@ -1763,3 +1763,114 @@ as $$
     true
   )
 $$;
+
+-- ============================================================
+-- Panel admin: mostrar el mail de cada usuario junto con el negocio
+-- (antes había que expandir cada negocio y esperar otra consulta
+-- aparte) y permitir borrar definitivamente cuentas de prueba —
+-- tanto un usuario suelto como un negocio entero con todos sus datos
+-- y usuarios. Todo lo demás en la app usa "activo = false" para
+-- bloquear el acceso sin borrar nada; esto es aparte, para cuando
+-- realmente hay que eliminar información que no debería existir
+-- (cuentas de prueba, principalmente).
+-- ============================================================
+
+drop function if exists admin_listar_negocios();
+
+create or replace function admin_listar_negocios()
+returns table (
+  id uuid,
+  nombre text,
+  activo boolean,
+  creado timestamptz,
+  cantidad_usuarios bigint,
+  cantidad_dispositivos bigint,
+  cantidad_ordenes bigint,
+  ultima_actividad timestamptz,
+  estado_suscripcion text,
+  fecha_fin_prueba timestamptz,
+  plan text,
+  acceso_manual_hasta timestamptz,
+  usuarios jsonb
+)
+language plpgsql
+security definer
+as $$
+begin
+  if not es_admin() then
+    raise exception 'No autorizado';
+  end if;
+  return query
+    select
+      n.id,
+      n.nombre,
+      n.activo,
+      n.created_at,
+      (select count(*) from perfiles p where p.negocio_id = n.id),
+      (select count(*) from dispositivos d where d.negocio_id = n.id),
+      (select count(*) from ordenes o where o.negocio_id = n.id),
+      greatest(
+        n.created_at,
+        coalesce((select max(created_at) from ordenes o where o.negocio_id = n.id), n.created_at),
+        coalesce((select max(created_at) from dispositivos d where d.negocio_id = n.id), n.created_at)
+      ),
+      n.estado_suscripcion,
+      n.fecha_fin_prueba,
+      n.plan,
+      n.acceso_manual_hasta,
+      coalesce(
+        (
+          select jsonb_agg(jsonb_build_object('id', u.id, 'email', u.email, 'creado', p.created_at) order by p.created_at)
+          from perfiles p
+          join auth.users u on u.id = p.id
+          where p.negocio_id = n.id
+        ),
+        '[]'::jsonb
+      )
+    from negocios n
+    order by n.created_at desc;
+end;
+$$;
+
+-- Borra una cuenta de usuario para siempre (no solo del negocio: la
+-- cuenta de login deja de existir). Si era el único usuario del
+-- negocio, el negocio queda sin nadie adentro pero sigue existiendo
+-- con sus datos — usar admin_eliminar_negocio para borrar todo junto.
+create or replace function admin_eliminar_usuario(usuario_id_param uuid)
+returns void
+language plpgsql
+security definer
+as $$
+begin
+  if not es_admin() then
+    raise exception 'No autorizado';
+  end if;
+  delete from auth.users where id = usuario_id_param;
+end;
+$$;
+
+-- Borra un negocio para siempre: todos sus datos (dispositivos,
+-- órdenes, etc. — se van solos por "on delete cascade") y también
+-- las cuentas de login de sus usuarios (si no se borraran acá,
+-- quedarían cuentas activas sin ningún negocio detrás).
+create or replace function admin_eliminar_negocio(negocio_id_param uuid)
+returns void
+language plpgsql
+security definer
+as $$
+declare
+  usuario_ids uuid[];
+begin
+  if not es_admin() then
+    raise exception 'No autorizado';
+  end if;
+
+  select array_agg(id) into usuario_ids from perfiles where negocio_id = negocio_id_param;
+
+  delete from negocios where id = negocio_id_param;
+
+  if usuario_ids is not null then
+    delete from auth.users where id = any(usuario_ids);
+  end if;
+end;
+$$;
