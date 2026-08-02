@@ -3,7 +3,7 @@
 // comisión del intermediario. La dirección es un placeholder: avisale a
 // Claude la dirección real de tu billetera/Binance para reemplazarla acá.
 export const USDT_RED = 'BEP20 (BNB Smart Chain)';
-export const USDT_DIRECCION = 'PEGAR-DIRECCION-DE-BINANCE-ACA';
+export const USDT_DIRECCION = '0xf33f7083b341e65217600e39f51cbe7c7e72b58a';
 
 // Un poco más barato que Lemon Squeezy (US$9.99/US$100) para compensar
 // que el negocio evita la comisión del intermediario.
