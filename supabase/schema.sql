@@ -1937,6 +1937,16 @@ $$;
 -- policy de perfiles (ver arriba) solo deja ver el propio ("id =
 -- auth.uid()"), así que hace falta una función security definer para
 -- listar a los demás perfiles del mismo negocio.
+--
+-- El "drop" antes del "create" es a propósito (igual que se hace más
+-- arriba con admin_listar_negocios): Postgres es estricto con las
+-- funciones que devuelven tablas — si quedó una versión previa con
+-- otra estructura de columnas (por ejemplo, de un intento anterior al
+-- correr este archivo), "create or replace" sola no alcanza y tira
+-- "structure of query does not match function result type" recién al
+-- ejecutarla, no al crearla.
+drop function if exists listar_accesos_negocio();
+
 create or replace function listar_accesos_negocio()
 returns table (id uuid, email text, es_dueno boolean, creado timestamptz)
 language plpgsql
@@ -1947,7 +1957,7 @@ begin
     raise exception 'No autorizado';
   end if;
   return query
-    select p.id, u.email, p.es_dueno, p.created_at
+    select p.id, u.email::text, p.es_dueno, p.created_at
     from perfiles p
     join auth.users u on u.id = p.id
     where p.negocio_id = negocio_actual()
