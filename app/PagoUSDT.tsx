@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import QRCode from 'qrcode';
 import { crearClienteNavegador } from './lib/supabase/client';
 import { USDT_RED, USDT_DIRECCION, PRECIO_USDT_MENSUAL, PRECIO_USDT_ANUAL } from './lib/pagoManual';
 
@@ -31,6 +32,17 @@ export default function PagoUSDT({
   const [referencia, setReferencia] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [qr, setQr] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!abierto || qr) return;
+    // Escanear la dirección evita tener que copiarla a mano (y equivocarse
+    // de un carácter) — sirve con cualquier billetera compatible con
+    // BEP20, no hace falta que sea Binance.
+    QRCode.toDataURL(USDT_DIRECCION, { margin: 0, width: 160 })
+      .then(setQr)
+      .catch(() => setQr(null));
+  }, [abierto, qr]);
 
   const handleArchivo = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -122,12 +134,18 @@ export default function PagoUSDT({
             </div>
           </div>
 
-          <div className="rounded-xl bg-canvas dark:bg-dark-bg p-3 flex flex-col gap-1">
-            <p className="text-xs text-muted dark:text-dark-text-secondary">Red: {USDT_RED}</p>
-            <p className="text-sm font-mono break-all">{USDT_DIRECCION}</p>
-            <p className="text-xs text-muted dark:text-dark-text-secondary mt-1">
-              Monto a transferir: {plan === 'mensual' ? PRECIO_USDT_MENSUAL : PRECIO_USDT_ANUAL} USDT
-            </p>
+          <div className="rounded-xl bg-canvas dark:bg-dark-bg p-3 flex gap-3 items-start">
+            {qr && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={qr} alt="Código QR de la dirección" className="w-24 h-24 rounded-lg shrink-0 bg-white p-1" />
+            )}
+            <div className="flex flex-col gap-1 min-w-0">
+              <p className="text-xs text-muted dark:text-dark-text-secondary">Red: {USDT_RED}</p>
+              <p className="text-sm font-mono break-all">{USDT_DIRECCION}</p>
+              <p className="text-xs text-muted dark:text-dark-text-secondary mt-1">
+                Monto a transferir: {plan === 'mensual' ? PRECIO_USDT_MENSUAL : PRECIO_USDT_ANUAL} USDT
+              </p>
+            </div>
           </div>
 
           <div>
