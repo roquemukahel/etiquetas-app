@@ -41,6 +41,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const supabase = crearClienteNavegador();
   const [sesion, setSesion] = useState<'cargando' | 'si' | 'no'>('cargando');
   const [negocio, setNegocio] = useState<{ nombre: string; logo_url: string | null } | null>(null);
+  const [diasPrueba, setDiasPrueba] = useState<number | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -51,10 +52,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       if (user) {
         const { data: perfil } = await supabase
           .from('perfiles')
-          .select('negocios ( nombre, logo_url )')
+          .select('negocios ( nombre, logo_url, estado_suscripcion, fecha_fin_prueba )')
           .eq('id', user.id)
           .single();
-        setNegocio((perfil as any)?.negocios ?? null);
+        const neg = (perfil as any)?.negocios ?? null;
+        setNegocio(neg);
+        if (neg?.estado_suscripcion === 'trialing' && neg?.fecha_fin_prueba) {
+          const restantes = Math.ceil((new Date(neg.fecha_fin_prueba).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+          setDiasPrueba(Math.max(restantes, 0));
+        }
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -69,15 +75,34 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   if (ocultar || sesion !== 'si') return <>{children}</>;
 
   const esActivo = (href: string) => (href === '/' ? pathname === '/' : (pathname?.startsWith(href) ?? false));
+  const mostrarAvisoPrueba = diasPrueba !== null && !pathname?.startsWith('/configuracion/suscripcion');
 
   return (
     <div>
+      {mostrarAvisoPrueba && (
+        <div className="no-print sticky top-[52px] z-30 w-full bg-accent-soft dark:bg-dark-accent-soft text-accent dark:text-dark-accent text-xs px-4 py-2 flex items-center justify-center gap-3 flex-wrap">
+          <span>
+            Te quedan <strong>{diasPrueba}</strong> día{diasPrueba === 1 ? '' : 's'} de prueba gratis.
+          </span>
+          <Link
+            href="/configuracion/suscripcion"
+            className="shrink-0 rounded-full bg-accent dark:bg-dark-accent text-white px-3 py-1 font-medium"
+          >
+            Realizar el pago
+          </Link>
+        </div>
+      )}
+
       {/* El aside es fixed (fuera del flujo), así que el ancho real lo pone
          el padding-left del div de contenido, no un flex. top-[52px] deja
-         lugar al cartel fijo "Trabajando como..." de SelectorDeActor
-         (sticky top-0, fuera de este componente), para que no lo tape ni
-         quede tapado por él. */}
-      <aside className="hidden lg:flex lg:flex-col lg:fixed lg:w-64 lg:top-[52px] lg:bottom-0 lg:left-0 lg:z-20 lg:border-r lg:border-border dark:lg:border-dark-border lg:bg-white dark:lg:bg-dark-surface">
+         lugar al cartel fijo "Trabajando como..." de SelectorDeActor (sticky
+         top-0, fuera de este componente); si además se muestra el aviso de
+         prueba (otro sticky, justo debajo), se suma su alto para que no se
+         tapen entre sí. */}
+      <aside
+        className={`hidden lg:flex lg:flex-col lg:fixed lg:w-64 ${mostrarAvisoPrueba ? 'lg:top-[88px]' : 'lg:top-[52px]'} lg:bottom-0 lg:left-0 lg:z-20 lg:border-r lg:border-border dark:lg:border-dark-border lg:bg-white dark:lg:bg-dark-surface`}
+      >
+
         <div className="flex items-center gap-2.5 px-5 py-5 border-b border-border dark:border-dark-border">
           {negocio?.logo_url ? (
             // eslint-disable-next-line @next/next/no-img-element

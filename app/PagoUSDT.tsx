@@ -17,13 +17,15 @@ export default function PagoUSDT({
   negocioId,
   comprobante,
   onEnviado,
+  abiertoPorDefecto = false,
 }: {
   negocioId: string;
   comprobante: Comprobante | null;
   onEnviado: () => void;
+  abiertoPorDefecto?: boolean;
 }) {
   const supabase = crearClienteNavegador();
-  const [abierto, setAbierto] = useState(false);
+  const [abierto, setAbierto] = useState(abiertoPorDefecto);
   const [plan, setPlan] = useState<'mensual' | 'anual'>('mensual');
   const [imagen, setImagen] = useState<string | null>(null);
   const [referencia, setReferencia] = useState('');
