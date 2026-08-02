@@ -1529,3 +1529,237 @@ alter table reparaciones add column if not exists estado_actualizado_at timestam
 -- ============================================================
 alter table dispositivos add column if not exists agregado_por_nombre text;
 alter table dispositivos add column if not exists agregado_por_foto_url text;
+
+-- ============================================================
+-- Pago manual (ej. USDT/Binance) como alternativa a Lemon Squeezy,
+-- mientras la verificación de identidad sigue en trámite y para
+-- evitar la comisión del intermediario. El negocio sube un
+-- comprobante desde Configuración > Suscripción; el super-admin lo
+-- revisa a mano en /admin y aprueba (asignando días de acceso y
+-- plan) o rechaza. También se agrega una función para que el admin
+-- pueda editar la suscripción de cualquier negocio a mano, sin
+-- necesidad de un comprobante (cortesías, pruebas extendidas, etc).
+--
+-- IMPORTANTE: para el vencimiento del acceso otorgado a mano se usa
+-- una columna nueva (`acceso_manual_hasta`), NO `fecha_fin_prueba`.
+-- El webhook de Lemon Squeezy nunca borra `fecha_fin_prueba` al pasar
+-- de "trialing" a "active" (se queda con la fecha del trial original,
+-- que ya pasó) — si negocio_suscripcion_activa() reusara esa columna
+-- para todos los "active", cortaría el acceso a cualquier cliente que
+-- ya haya pagado con Lemon Squeezy. `acceso_manual_hasta` arranca en
+-- null para todo el mundo (sin vencimiento) y solo se completa cuando
+-- el admin aprueba un pago manual o carga un vencimiento a mano.
+-- ============================================================
+alter table negocios add column if not exists plan text;
+alter table negocios add column if not exists acceso_manual_hasta timestamptz;
+
+-- "plan" y "acceso_manual_hasta" también los toca únicamente el
+-- admin/webhook, nunca el propio negocio (mismo motivo que
+-- estado_suscripcion/fecha_fin_prueba/activo).
+revoke update (estado_suscripcion, fecha_fin_prueba, lemonsqueezy_customer_id, lemonsqueezy_subscription_id, activo, plan, acceso_manual_hasta)
+  on negocios from authenticated;
+
+create table if not exists comprobantes_pago (
+  id uuid primary key default gen_random_uuid(),
+  negocio_id uuid not null references negocios(id) on delete cascade default negocio_actual(),
+  monto numeric not null,
+  moneda text not null default 'USDT',
+  comprobante_imagen text,
+  referencia text,
+  estado text not null default 'pendiente', -- 'pendiente' | 'aprobado' | 'rechazado'
+  nota_admin text,
+  created_at timestamptz not null default now(),
+  revisado_at timestamptz,
+  revisado_por text
+);
+
+alter table comprobantes_pago enable row level security;
+
+create policy "negocio ve sus propios comprobantes" on comprobantes_pago
+  for select using (negocio_id = negocio_actual());
+
+create policy "negocio crea su propio comprobante" on comprobantes_pago
+  for insert with check (negocio_id = negocio_actual());
+
+-- Nadie (ni siquiera el propio negocio) puede update/delete vía API
+-- normal: la aprobación/rechazo la hace únicamente el admin, a través
+-- de las funciones security definer de abajo.
+
+drop function if exists admin_listar_negocios();
+
+create or replace function admin_listar_negocios()
+returns table (
+  id uuid,
+  nombre text,
+  activo boolean,
+  creado timestamptz,
+  cantidad_usuarios bigint,
+  cantidad_dispositivos bigint,
+  cantidad_ordenes bigint,
+  ultima_actividad timestamptz,
+  estado_suscripcion text,
+  fecha_fin_prueba timestamptz,
+  plan text,
+  acceso_manual_hasta timestamptz
+)
+language plpgsql
+security definer
+as $$
+begin
+  if not es_admin() then
+    raise exception 'No autorizado';
+  end if;
+  return query
+    select
+      n.id,
+      n.nombre,
+      n.activo,
+      n.created_at,
+      (select count(*) from perfiles p where p.negocio_id = n.id),
+      (select count(*) from dispositivos d where d.negocio_id = n.id),
+      (select count(*) from ordenes o where o.negocio_id = n.id),
+      greatest(
+        n.created_at,
+        coalesce((select max(created_at) from ordenes o where o.negocio_id = n.id), n.created_at),
+        coalesce((select max(created_at) from dispositivos d where d.negocio_id = n.id), n.created_at)
+      ),
+      n.estado_suscripcion,
+      n.fecha_fin_prueba,
+      n.plan,
+      n.acceso_manual_hasta
+    from negocios n
+    order by n.created_at desc;
+end;
+$$;
+
+create or replace function admin_listar_comprobantes_pendientes()
+returns table (
+  id uuid,
+  negocio_id uuid,
+  nombre_negocio text,
+  monto numeric,
+  moneda text,
+  comprobante_imagen text,
+  referencia text,
+  created_at timestamptz
+)
+language plpgsql
+security definer
+as $$
+begin
+  if not es_admin() then
+    raise exception 'No autorizado';
+  end if;
+  return query
+    select c.id, c.negocio_id, n.nombre, c.monto, c.moneda, c.comprobante_imagen, c.referencia, c.created_at
+    from comprobantes_pago c
+    join negocios n on n.id = c.negocio_id
+    where c.estado = 'pendiente'
+    order by c.created_at asc;
+end;
+$$;
+
+create or replace function admin_aprobar_pago(comprobante_id uuid, dias int, nuevo_plan text)
+returns void
+language plpgsql
+security definer
+as $$
+declare
+  neg_id uuid;
+begin
+  if not es_admin() then
+    raise exception 'No autorizado';
+  end if;
+
+  select negocio_id into neg_id from comprobantes_pago where id = comprobante_id;
+  if neg_id is null then
+    raise exception 'Comprobante no encontrado';
+  end if;
+
+  update comprobantes_pago
+    set estado = 'aprobado', revisado_at = now(), revisado_por = auth.uid()::text
+    where id = comprobante_id;
+
+  update negocios
+    set estado_suscripcion = 'active',
+        acceso_manual_hasta = now() + (dias || ' days')::interval,
+        plan = nuevo_plan
+    where id = neg_id;
+end;
+$$;
+
+create or replace function admin_rechazar_pago(comprobante_id uuid, motivo text)
+returns void
+language plpgsql
+security definer
+as $$
+begin
+  if not es_admin() then
+    raise exception 'No autorizado';
+  end if;
+  update comprobantes_pago
+    set estado = 'rechazado', nota_admin = motivo, revisado_at = now(), revisado_por = auth.uid()::text
+    where id = comprobante_id;
+end;
+$$;
+
+-- Edición manual de la suscripción de cualquier negocio, sin
+-- necesidad de un comprobante (cortesías, pruebas extendidas, ajustes
+-- puntuales). Todos los parámetros salvo neg_id son opcionales: solo
+-- se actualiza lo que se pasa.
+create or replace function admin_actualizar_suscripcion(
+  neg_id uuid,
+  nuevo_estado text default null,
+  dias_desde_hoy int default null,
+  nuevo_plan text default null,
+  quitar_vencimiento boolean default false
+)
+returns void
+language plpgsql
+security definer
+as $$
+begin
+  if not es_admin() then
+    raise exception 'No autorizado';
+  end if;
+
+  update negocios set
+    estado_suscripcion = coalesce(nuevo_estado, estado_suscripcion),
+    acceso_manual_hasta = case
+      when quitar_vencimiento then null
+      when dias_desde_hoy is not null then now() + (dias_desde_hoy || ' days')::interval
+      else acceso_manual_hasta
+    end,
+    plan = coalesce(nuevo_plan, plan)
+  where id = neg_id;
+end;
+$$;
+
+-- negocio_suscripcion_activa ahora respeta acceso_manual_hasta como
+-- vencimiento del acceso otorgado a mano (pago manual aprobado o
+-- ajuste directo del admin), para 'active'/'past_due'. No toca
+-- fecha_fin_prueba (esa sigue significando únicamente "fin del
+-- trial"), así que las cuentas de Lemon Squeezy no se ven afectadas:
+-- acceso_manual_hasta arranca en null para todo el mundo (sin
+-- vencimiento) y solo se completa cuando el admin otorga acceso manual
+-- con un plazo — a partir de ahí vence solo, sin depender de que
+-- alguien lo desactive a mano.
+create or replace function negocio_suscripcion_activa()
+returns boolean
+language sql
+security definer
+stable
+as $$
+  select coalesce(
+    (
+      select
+        case
+          when estado_suscripcion in ('active', 'past_due') then (acceso_manual_hasta is null or acceso_manual_hasta > now())
+          when estado_suscripcion = 'trialing' then coalesce(fecha_fin_prueba, now()) > now()
+          else false
+        end
+      from negocios where id = negocio_actual()
+    ),
+    true
+  )
+$$;

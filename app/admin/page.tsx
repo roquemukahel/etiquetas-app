@@ -4,6 +4,9 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../lib/supabase/client';
 
+const ESTADOS_SUSCRIPCION = ['trialing', 'active', 'past_due', 'unpaid', 'cancelled', 'expired', 'paused'];
+const PLANES = ['mensual', 'anual', 'pro'];
+
 type Negocio = {
   id: string;
   nombre: string;
@@ -13,9 +16,24 @@ type Negocio = {
   cantidad_dispositivos: number;
   cantidad_ordenes: number;
   ultima_actividad: string;
+  estado_suscripcion: string;
+  fecha_fin_prueba: string | null;
+  plan: string | null;
+  acceso_manual_hasta: string | null;
 };
 
 type Usuario = { email: string; creado: string };
+
+type Comprobante = {
+  id: string;
+  negocio_id: string;
+  nombre_negocio: string;
+  monto: number;
+  moneda: string;
+  comprobante_imagen: string | null;
+  referencia: string | null;
+  created_at: string;
+};
 
 function formatearFecha(iso: string) {
   return new Date(iso).toLocaleDateString('es-AR');
@@ -29,15 +47,30 @@ export default function AdminPanel() {
   const supabase = crearClienteNavegador();
   const [autorizado, setAutorizado] = useState<boolean | null>(null);
   const [negocios, setNegocios] = useState<Negocio[]>([]);
+  const [comprobantes, setComprobantes] = useState<Comprobante[]>([]);
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState('');
   const [procesando, setProcesando] = useState<string | null>(null);
   const [expandido, setExpandido] = useState<string | null>(null);
   const [usuariosPorNegocio, setUsuariosPorNegocio] = useState<Record<string, Usuario[]>>({});
 
+  const [aprobandoId, setAprobandoId] = useState<string | null>(null);
+  const [diasAprobar, setDiasAprobar] = useState('30');
+  const [planAprobar, setPlanAprobar] = useState('mensual');
+  const [imagenAmpliada, setImagenAmpliada] = useState<string | null>(null);
+
+  const [editEstado, setEditEstado] = useState('active');
+  const [editPlan, setEditPlan] = useState('');
+  const [editDias, setEditDias] = useState('');
+  const [editSinVencimiento, setEditSinVencimiento] = useState(false);
+
   const cargar = async () => {
-    const { data } = await supabase.rpc('admin_listar_negocios');
-    setNegocios((data as Negocio[]) ?? []);
+    const [{ data: negs }, { data: comps }] = await Promise.all([
+      supabase.rpc('admin_listar_negocios'),
+      supabase.rpc('admin_listar_comprobantes_pendientes'),
+    ]);
+    setNegocios((negs as Negocio[]) ?? []);
+    setComprobantes((comps as Comprobante[]) ?? []);
     setLoading(false);
   };
 
@@ -58,16 +91,59 @@ export default function AdminPanel() {
     cargar();
   };
 
-  const toggleExpandir = async (id: string) => {
-    if (expandido === id) {
+  const toggleExpandir = async (n: Negocio) => {
+    if (expandido === n.id) {
       setExpandido(null);
       return;
     }
-    setExpandido(id);
-    if (!usuariosPorNegocio[id]) {
-      const { data } = await supabase.rpc('admin_usuarios_de_negocio', { negocio_id_param: id });
-      setUsuariosPorNegocio((prev) => ({ ...prev, [id]: (data as Usuario[]) ?? [] }));
+    setExpandido(n.id);
+    setEditEstado(n.estado_suscripcion);
+    setEditPlan(n.plan ?? '');
+    setEditDias('');
+    setEditSinVencimiento(false);
+    if (!usuariosPorNegocio[n.id]) {
+      const { data } = await supabase.rpc('admin_usuarios_de_negocio', { negocio_id_param: n.id });
+      setUsuariosPorNegocio((prev) => ({ ...prev, [n.id]: (data as Usuario[]) ?? [] }));
     }
+  };
+
+  const guardarSuscripcion = async (n: Negocio) => {
+    setProcesando(n.id);
+    await supabase.rpc('admin_actualizar_suscripcion', {
+      neg_id: n.id,
+      nuevo_estado: editEstado || null,
+      dias_desde_hoy: editDias ? Number(editDias) : null,
+      nuevo_plan: editPlan || null,
+      quitar_vencimiento: editSinVencimiento,
+    });
+    setProcesando(null);
+    cargar();
+  };
+
+  const abrirAprobar = (c: Comprobante) => {
+    setAprobandoId(aprobandoId === c.id ? null : c.id);
+    setDiasAprobar('30');
+    setPlanAprobar('mensual');
+  };
+
+  const confirmarAprobar = async (c: Comprobante) => {
+    setProcesando(c.id);
+    await supabase.rpc('admin_aprobar_pago', {
+      comprobante_id: c.id,
+      dias: Number(diasAprobar) || 30,
+      nuevo_plan: planAprobar,
+    });
+    setProcesando(null);
+    setAprobandoId(null);
+    cargar();
+  };
+
+  const rechazar = async (c: Comprobante) => {
+    const motivo = prompt('¿Por qué se rechaza? (se lo puede volver a intentar)') ?? '';
+    setProcesando(c.id);
+    await supabase.rpc('admin_rechazar_pago', { comprobante_id: c.id, motivo: motivo || null });
+    setProcesando(null);
+    cargar();
   };
 
   const filtrados = negocios.filter((n) => n.nombre.toLowerCase().includes(busqueda.trim().toLowerCase()));
@@ -119,6 +195,92 @@ export default function AdminPanel() {
         </div>
       </div>
 
+      {comprobantes.length > 0 && (
+        <div className="rounded-2xl border border-warn/30 bg-warn/10 p-4 flex flex-col gap-3">
+          <p className="text-sm font-semibold">💵 {comprobantes.length} pago{comprobantes.length === 1 ? '' : 's'} pendiente{comprobantes.length === 1 ? '' : 's'} de revisar</p>
+          {comprobantes.map((c) => (
+            <div key={c.id} className="rounded-xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border p-3 flex flex-col gap-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-medium">{c.nombre_negocio}</p>
+                <p className="text-xs text-muted dark:text-dark-text-secondary">{formatearFecha(c.created_at)}</p>
+              </div>
+              <p className="text-sm">
+                {c.monto} {c.moneda}
+                {c.referencia && <span className="text-xs text-muted dark:text-dark-text-secondary"> · ref: {c.referencia}</span>}
+              </p>
+              {c.comprobante_imagen && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={c.comprobante_imagen}
+                  alt="Comprobante"
+                  onClick={() => setImagenAmpliada(c.comprobante_imagen)}
+                  className="max-h-32 rounded-lg border border-border dark:border-dark-border cursor-pointer self-start"
+                />
+              )}
+
+              {aprobandoId === c.id && (
+                <div className="rounded-lg bg-canvas dark:bg-dark-bg p-2 flex flex-col gap-2">
+                  <div className="flex gap-2">
+                    <input
+                      value={diasAprobar}
+                      onChange={(e) => setDiasAprobar(e.target.value)}
+                      inputMode="numeric"
+                      placeholder="Días"
+                      className="w-20 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-1.5 text-xs"
+                    />
+                    <select
+                      value={planAprobar}
+                      onChange={(e) => setPlanAprobar(e.target.value)}
+                      className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-1.5 text-xs"
+                    >
+                      {PLANES.map((p) => (
+                        <option key={p} value={p}>
+                          {p}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <button
+                    disabled={procesando === c.id}
+                    onClick={() => confirmarAprobar(c)}
+                    className="rounded-lg bg-good text-white py-2 text-xs font-medium disabled:opacity-40"
+                  >
+                    Confirmar aprobación
+                  </button>
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <button
+                  disabled={procesando === c.id}
+                  onClick={() => abrirAprobar(c)}
+                  className="flex-1 rounded-lg bg-accent dark:bg-dark-accent text-white py-2 text-xs font-medium disabled:opacity-40"
+                >
+                  {aprobandoId === c.id ? 'Cancelar' : 'Aprobar'}
+                </button>
+                <button
+                  disabled={procesando === c.id}
+                  onClick={() => rechazar(c)}
+                  className="flex-1 rounded-lg border border-bad/30 text-bad py-2 text-xs font-medium disabled:opacity-40"
+                >
+                  Rechazar
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {imagenAmpliada && (
+        <div
+          className="fixed inset-0 z-50 bg-ink/80 flex items-center justify-center p-6"
+          onClick={() => setImagenAmpliada(null)}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={imagenAmpliada} alt="Comprobante ampliado" className="max-w-full max-h-full rounded-lg" />
+        </div>
+      )}
+
       <input
         value={busqueda}
         onChange={(e) => setBusqueda(e.target.value)}
@@ -132,7 +294,7 @@ export default function AdminPanel() {
           const pocaActividad = inactivoHaceDias > 30;
           return (
             <div key={n.id} className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex flex-col gap-2">
-              <button onClick={() => toggleExpandir(n.id)} className="flex items-center justify-between text-left">
+              <button onClick={() => toggleExpandir(n)} className="flex items-center justify-between text-left">
                 <div>
                   <p className="text-sm font-medium">
                     {n.nombre}{' '}
@@ -146,6 +308,14 @@ export default function AdminPanel() {
                     {n.cantidad_usuarios} usuario{n.cantidad_usuarios === 1 ? '' : 's'} · {n.cantidad_dispositivos}{' '}
                     dispositivos · {n.cantidad_ordenes} órdenes
                   </p>
+                  <p className="text-xs text-muted dark:text-dark-text-secondary">
+                    {n.estado_suscripcion}
+                    {n.plan ? ` · ${n.plan}` : ''}
+                    {n.estado_suscripcion === 'trialing' && n.fecha_fin_prueba
+                      ? ` · prueba hasta ${formatearFecha(n.fecha_fin_prueba)}`
+                      : ''}
+                    {n.acceso_manual_hasta ? ` · acceso manual hasta ${formatearFecha(n.acceso_manual_hasta)}` : ''}
+                  </p>
                 </div>
                 <div className="text-right">
                   <p className={`text-xs ${pocaActividad ? 'text-warn font-medium' : 'text-muted dark:text-dark-text-secondary'}`}>
@@ -156,19 +326,74 @@ export default function AdminPanel() {
               </button>
 
               {expandido === n.id && (
-                <div className="rounded-lg bg-canvas dark:bg-dark-bg p-3 flex flex-col gap-2">
-                  <p className="text-xs font-medium text-muted dark:text-dark-text-secondary">Usuarios</p>
-                  {!usuariosPorNegocio[n.id] ? (
-                    <p className="text-xs text-muted dark:text-dark-text-secondary">Cargando...</p>
-                  ) : usuariosPorNegocio[n.id].length === 0 ? (
-                    <p className="text-xs text-muted dark:text-dark-text-secondary">Sin usuarios registrados.</p>
-                  ) : (
-                    usuariosPorNegocio[n.id].map((u) => (
-                      <p key={u.email} className="text-xs">
-                        {u.email}
-                      </p>
-                    ))
-                  )}
+                <div className="rounded-lg bg-canvas dark:bg-dark-bg p-3 flex flex-col gap-3">
+                  <div>
+                    <p className="text-xs font-medium text-muted dark:text-dark-text-secondary mb-1">Usuarios</p>
+                    {!usuariosPorNegocio[n.id] ? (
+                      <p className="text-xs text-muted dark:text-dark-text-secondary">Cargando...</p>
+                    ) : usuariosPorNegocio[n.id].length === 0 ? (
+                      <p className="text-xs text-muted dark:text-dark-text-secondary">Sin usuarios registrados.</p>
+                    ) : (
+                      usuariosPorNegocio[n.id].map((u) => (
+                        <p key={u.email} className="text-xs">
+                          {u.email}
+                        </p>
+                      ))
+                    )}
+                  </div>
+
+                  <div className="flex flex-col gap-2 border-t border-border dark:border-dark-border pt-3">
+                    <p className="text-xs font-medium text-muted dark:text-dark-text-secondary">Editar suscripción</p>
+                    <select
+                      value={editEstado}
+                      onChange={(e) => setEditEstado(e.target.value)}
+                      className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-1.5 text-xs"
+                    >
+                      {ESTADOS_SUSCRIPCION.map((e) => (
+                        <option key={e} value={e}>
+                          {e}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={editPlan}
+                      onChange={(e) => setEditPlan(e.target.value)}
+                      className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-1.5 text-xs"
+                    >
+                      <option value="">Sin plan asignado</option>
+                      {PLANES.map((p) => (
+                        <option key={p} value={p}>
+                          {p}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="flex items-center gap-2">
+                      <input
+                        value={editDias}
+                        onChange={(e) => setEditDias(e.target.value)}
+                        disabled={editSinVencimiento}
+                        inputMode="numeric"
+                        placeholder="Acceso manual por (días desde hoy)"
+                        className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-1.5 text-xs disabled:opacity-40"
+                      />
+                    </div>
+                    <label className="flex items-center gap-2 text-xs cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={editSinVencimiento}
+                        onChange={(e) => setEditSinVencimiento(e.target.checked)}
+                        className="h-4 w-4 accent-ink"
+                      />
+                      Sin vencimiento (acceso indefinido)
+                    </label>
+                    <button
+                      disabled={procesando === n.id}
+                      onClick={() => guardarSuscripcion(n)}
+                      className="rounded-lg bg-accent dark:bg-dark-accent text-white py-2 text-xs font-medium disabled:opacity-40"
+                    >
+                      Guardar suscripción
+                    </button>
+                  </div>
                 </div>
               )}
 

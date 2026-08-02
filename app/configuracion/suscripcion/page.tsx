@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import PlanesCheckout from '../../PlanesCheckout';
+import PagoUSDT from '../../PagoUSDT';
 
 type EstadoSuscripcion = 'trialing' | 'active' | 'past_due' | 'unpaid' | 'cancelled' | 'expired' | 'paused';
 
@@ -11,6 +12,15 @@ type Negocio = {
   id: string;
   estado_suscripcion: EstadoSuscripcion;
   fecha_fin_prueba: string | null;
+};
+
+type Comprobante = {
+  id: string;
+  monto: number;
+  moneda: string;
+  estado: string;
+  created_at: string;
+  nota_admin: string | null;
 };
 
 const TEXTOS: Record<EstadoSuscripcion, { titulo: string; detalle: string; color: string }> = {
@@ -28,6 +38,18 @@ export default function Suscripcion() {
   const [negocio, setNegocio] = useState<Negocio | null>(null);
   const [email, setEmail] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [comprobante, setComprobante] = useState<Comprobante | null>(null);
+
+  const cargarComprobante = async (negocioId: string) => {
+    const { data } = await supabase
+      .from('comprobantes_pago')
+      .select('id, monto, moneda, estado, created_at, nota_admin')
+      .eq('negocio_id', negocioId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    setComprobante((data as Comprobante) ?? null);
+  };
 
   useEffect(() => {
     (async () => {
@@ -43,7 +65,9 @@ export default function Suscripcion() {
         .eq('id', user.id)
         .single();
 
-      setNegocio((perfil as any)?.negocios ?? null);
+      const neg = (perfil as any)?.negocios ?? null;
+      setNegocio(neg);
+      if (neg) await cargarComprobante(neg.id);
       setLoading(false);
     })();
   }, []);
@@ -97,12 +121,15 @@ export default function Suscripcion() {
       </div>
 
       {(necesitaPagar || negocio.estado_suscripcion === 'trialing') && (
-        <PlanesCheckout
-          negocioId={negocio.id}
-          email={email}
-          textoBotonMensual={necesitaPagar ? 'Suscribirme — Mensual' : 'Antes de que termine la prueba — Mensual'}
-          textoBotonAnual={necesitaPagar ? 'Suscribirme — Anual' : 'Antes de que termine la prueba — Anual'}
-        />
+        <>
+          <PlanesCheckout
+            negocioId={negocio.id}
+            email={email}
+            textoBotonMensual={necesitaPagar ? 'Suscribirme — Mensual' : 'Antes de que termine la prueba — Mensual'}
+            textoBotonAnual={necesitaPagar ? 'Suscribirme — Anual' : 'Antes de que termine la prueba — Anual'}
+          />
+          <PagoUSDT negocioId={negocio.id} comprobante={comprobante} onEnviado={() => cargarComprobante(negocio.id)} />
+        </>
       )}
     </main>
   );
