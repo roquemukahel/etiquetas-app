@@ -102,7 +102,7 @@ export default function SuscripcionVencida() {
           <PlanesCheckout negocioId={datos.negocioId} email={datos.email} />
           <p className="text-xs text-muted dark:text-dark-text-secondary -mb-1">
             Por el momento, el pago con tarjeta está temporalmente no disponible mientras terminamos un
-            trámite de verificación. Podés suscribirte fácilmente pagando con USDT (Binance) acá abajo:
+            trámite de verificación. Podés suscribirte fácilmente pagando con USDT (cripto) acá abajo:
           </p>
           <PagoUSDT
             negocioId={datos.negocioId}

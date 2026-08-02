@@ -105,7 +105,7 @@ export default function PagoUSDT({
         onClick={() => setAbierto((v) => !v)}
         className="text-sm font-medium text-accent dark:text-dark-accent underline self-start"
       >
-        {abierto ? 'Ocultar' : '¿Preferís pagar con USDT (Binance)?'}
+        {abierto ? 'Ocultar' : '¿Preferís pagar con USDT (cripto)?'}
       </button>
 
       {abierto && (

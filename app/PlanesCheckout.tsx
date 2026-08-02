@@ -28,7 +28,7 @@ export default function PlanesCheckout({
       <div className="w-full rounded-2xl border border-dashed border-border dark:border-dark-border p-4 flex flex-col gap-1 text-center">
         <p className="text-sm font-medium text-muted dark:text-dark-text-secondary">Pago con tarjeta — no disponible por el momento</p>
         <p className="text-xs text-muted dark:text-dark-text-secondary">
-          Estamos terminando de habilitar esta opción (US$12.50/mes · US$125/año). Mientras tanto, podés suscribirte pagando con USDT (Binance) más abajo.
+          Estamos terminando de habilitar esta opción (US$12.50/mes · US$125/año). Mientras tanto, podés suscribirte pagando con USDT (cripto) más abajo.
         </p>
       </div>
     );
