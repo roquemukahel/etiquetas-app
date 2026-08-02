@@ -77,7 +77,16 @@ export async function POST(req: NextRequest) {
   }
 
   if (vendedorId) {
-    await admin.from('vendedores').update({ perfil_id: nuevoUsuario.user.id }).eq('id', vendedorId);
+    const { error: linkError } = await admin
+      .from('vendedores')
+      .update({ perfil_id: nuevoUsuario.user.id })
+      .eq('id', vendedorId);
+    if (linkError) {
+      // Sin este link, quedaría un login real que no aparece en ningún
+      // lado de la pantalla de Vendedores — mejor deshacer todo.
+      await admin.auth.admin.deleteUser(nuevoUsuario.user.id);
+      return NextResponse.json({ error: 'No pudimos terminar de crear el acceso: ' + linkError.message }, { status: 400 });
+    }
   } else {
     const { error: vendedorInsertError } = await admin
       .from('vendedores')

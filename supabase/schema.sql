@@ -1961,3 +1961,13 @@ $$;
 -- solo como nombre, sin acceso propio, como hasta ahora.
 alter table vendedores add column if not exists perfil_id uuid references perfiles(id) on delete set null;
 create unique index if not exists vendedores_perfil_id_idx on vendedores(perfil_id) where perfil_id is not null;
+
+-- La policy "vendedores de mi negocio" (ver arriba) permite editar
+-- cualquier columna de un vendedor a cualquiera del negocio, no solo al
+-- dueño — está bien para nombre/teléfono/edad/foto, pero perfil_id es
+-- quien decide qué login se muestra con acceso en la pantalla de
+-- Vendedores. Sin este revoke, cualquier vendedor (no solo el dueño)
+-- podría pisar ese vínculo a mano vía la API normal de Supabase; con
+-- esto, solo las rutas de servidor (que usan la service role key,
+-- ver app/api/vendedores) pueden tocarlo.
+revoke update (perfil_id) on vendedores from authenticated;
