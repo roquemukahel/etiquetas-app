@@ -60,6 +60,28 @@ export default function DetalleCompra() {
     setProcesando(true);
     setError(null);
 
+    // Se marca la compra como "en_stock" ANTES de crear el dispositivo, y
+    // solo si seguía en "pendiente" en ese momento (condición evaluada en
+    // la base). Así, si esta misma compra se llega a abrir en dos pestañas
+    // y se toca "Agregar al Stock" en ambas, solo la primera consigue
+    // reservarla — la segunda no llega a duplicar el dispositivo.
+    const { data: actualizada, error: estadoErr } = await supabase
+      .from('compras')
+      .update({ estado: 'en_stock' })
+      .eq('id', id)
+      .eq('estado', 'pendiente')
+      .select('id');
+    if (estadoErr) {
+      setError('No pudimos agregar al stock: ' + estadoErr.message);
+      setProcesando(false);
+      return;
+    }
+    if (!actualizada || actualizada.length === 0) {
+      setError('Esta compra ya había sido procesada (quizás desde otra pestaña). Recargá la página para ver el estado actual.');
+      setProcesando(false);
+      return;
+    }
+
     const actor = getActor();
     const { error: insertError } = await supabase.from('dispositivos').insert({
       modelo: compra.modelo,
@@ -71,12 +93,12 @@ export default function DetalleCompra() {
       agregado_por_foto_url: actor?.fotoUrl ?? null,
     });
     if (insertError) {
+      await supabase.from('compras').update({ estado: 'pendiente' }).eq('id', id);
       setError('No pudimos agregar al stock: ' + insertError.message);
       setProcesando(false);
       return;
     }
     await asegurarModelo(supabase, compra.modelo);
-    await supabase.from('compras').update({ estado: 'en_stock' }).eq('id', id);
     await registrarAuditoria(supabase, {
       accion: `agregó al Stock un dispositivo comprado (${compra.modelo || 'sin modelo'}${compra.imei ? `, IMEI ${compra.imei}` : ''}) de ${nombreCliente(compra)}`,
       entidad: 'compra',

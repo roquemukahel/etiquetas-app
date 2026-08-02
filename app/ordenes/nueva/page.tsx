@@ -386,7 +386,47 @@ export default function NuevaOrden() {
     setGuardando(true);
     setError(null);
 
+    const dispositivoIds = carrito.map((i) => i.dispositivoId).filter(Boolean) as string[];
+    let dispositivosReservados = false;
+
     try {
+      // Se reserva el stock ANTES de crear la orden, y solo se marca
+      // en_stock:false si todavía figuraba en_stock:true en ese momento
+      // (el "eq" corre en el motor de la base, así que si dos vendedores
+      // confirman el mismo dispositivo casi al mismo tiempo, solo uno de
+      // los dos logra reservarlo). Si falta alguno, se aborta todo antes
+      // de tocar cliente/orden — evita vender dos veces el mismo equipo.
+      if (dispositivoIds.length > 0) {
+        const actualizacionReserva: { en_stock: boolean; garantia_vencimiento?: string } = { en_stock: false };
+        if (garantiaDias) {
+          const vencimiento = new Date();
+          vencimiento.setDate(vencimiento.getDate() + garantiaDias);
+          actualizacionReserva.garantia_vencimiento = vencimiento.toISOString().slice(0, 10);
+        }
+        const { data: reservados, error: reservaErr } = await supabase
+          .from('dispositivos')
+          .update(actualizacionReserva)
+          .in('id', dispositivoIds)
+          .eq('en_stock', true)
+          .select('id');
+        if (reservaErr) throw new Error(reservaErr.message);
+        if (!reservados || reservados.length !== dispositivoIds.length) {
+          if (reservados && reservados.length > 0) {
+            await supabase
+              .from('dispositivos')
+              .update({ en_stock: true })
+              .in(
+                'id',
+                reservados.map((r) => r.id)
+              );
+          }
+          throw new Error(
+            'Uno o más de estos dispositivos ya se vendieron en otra orden. Volvé a la pantalla anterior y actualizá el carrito.'
+          );
+        }
+        dispositivosReservados = true;
+      }
+
       let clienteId = clienteElegido?.id;
       if (modoCliente === 'nuevo') {
         const { data, error: cErr } = await supabase
@@ -455,19 +495,11 @@ export default function NuevaOrden() {
       );
       if (itemsErr) throw new Error(itemsErr.message);
 
-      const dispositivoIds = carrito.map((i) => i.dispositivoId).filter(Boolean) as string[];
-      if (dispositivoIds.length > 0) {
-        const actualizacion: { en_stock: boolean; garantia_vencimiento?: string } = { en_stock: false };
-        if (garantiaDias) {
-          const vencimiento = new Date();
-          vencimiento.setDate(vencimiento.getDate() + garantiaDias);
-          actualizacion.garantia_vencimiento = vencimiento.toISOString().slice(0, 10);
-        }
-        await supabase.from('dispositivos').update(actualizacion).in('id', dispositivoIds);
-      }
-
       router.push(`/ordenes/${orden.id}/boleta`);
     } catch (err: any) {
+      if (dispositivosReservados) {
+        await supabase.from('dispositivos').update({ en_stock: true }).in('id', dispositivoIds);
+      }
       setError('No pudimos crear la orden: ' + (err?.message || 'error desconocido'));
       setGuardando(false);
     }
@@ -875,8 +907,10 @@ export default function NuevaOrden() {
                   <input
                     value={i.cantidad}
                     onChange={(e) => actualizarCantidadItem(i.tempId, e.target.value)}
+                    disabled={i.tipo === 'dispositivo'}
+                    title={i.tipo === 'dispositivo' ? 'Un dispositivo del stock siempre se vende de a uno' : undefined}
                     inputMode="numeric"
-                    className="w-12 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded px-1 py-0.5 text-xs text-center"
+                    className="w-12 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded px-1 py-0.5 text-xs text-center disabled:opacity-50"
                   />
                   <span>×</span>
                   <span>{moneda}</span>

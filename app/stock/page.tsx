@@ -216,9 +216,18 @@ export default function Stock() {
         })
         .filter((d): d is NonNullable<typeof d> => d !== null)
         .filter((d) => {
+          // imeisExistentes se va completando con cada fila aceptada, así
+          // que si el mismo CSV trae el mismo IMEI dos veces (típico al
+          // re-exportar de otro sistema), la segunda también se detecta
+          // como duplicada — antes solo se comparaba contra el stock ya
+          // cargado, y ambas filas pasaban.
           const esDuplicado = !!d.imei && imeisExistentes.has(d.imei);
-          if (esDuplicado) omitidosDuplicado++;
-          return !esDuplicado;
+          if (esDuplicado) {
+            omitidosDuplicado++;
+            return false;
+          }
+          if (d.imei) imeisExistentes.add(d.imei);
+          return true;
         });
 
       setPlanImport({ filas: nuevos, totalCSV: filas.length, omitidosSinModelo, omitidosDuplicado });

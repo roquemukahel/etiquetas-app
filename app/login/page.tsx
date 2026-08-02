@@ -8,6 +8,26 @@ import Turnstile from '../Turnstile';
 
 const REQUIERE_CAPTCHA = !!process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
+// Antes cualquier error de signInWithPassword (captcha vencido, demasiados
+// intentos seguidos, corte de red) se mostraba siempre como "contraseña
+// incorrecta" — un mensaje falso que hacía pensar que el problema era la
+// contraseña cuando en realidad era otra cosa (y ni "reintentar con la
+// misma contraseña" ni cambiarla solucionaba nada, solo esperar o refrescar
+// la página para conseguir un captcha nuevo).
+function mensajeErrorLogin(authError: { message: string; status?: number }) {
+  const msg = authError.message?.toLowerCase() || '';
+  if (msg.includes('captcha')) {
+    return 'No pudimos verificar que sos una persona (venció la verificación). Volvé a intentar.';
+  }
+  if (authError.status === 429 || msg.includes('rate limit') || msg.includes('too many')) {
+    return 'Demasiados intentos seguidos. Esperá un minuto y volvé a intentar.';
+  }
+  if (msg.includes('invalid login credentials') || msg.includes('invalid credentials')) {
+    return 'Email o contraseña incorrectos';
+  }
+  return `No pudimos iniciar sesión: ${authError.message}`;
+}
+
 export default function Login() {
   const router = useRouter();
   const supabase = crearClienteNavegador();
@@ -30,7 +50,7 @@ export default function Login() {
     });
 
     if (authError) {
-      setError('Email o contraseña incorrectos');
+      setError(mensajeErrorLogin(authError));
       setCargando(false);
       return;
     }

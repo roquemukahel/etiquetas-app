@@ -46,7 +46,7 @@ type Orden = {
   orden_items: Item[];
 };
 
-type ItemEditable = { id: string; descripcion: string; cantidad: string; precioUnitario: string };
+type ItemEditable = { id: string; descripcion: string; cantidad: string; precioUnitario: string; tipo: string };
 
 export default function DetalleOrden() {
   const { id } = useParams<{ id: string }>();
@@ -178,6 +178,7 @@ export default function DetalleOrden() {
         descripcion: i.descripcion,
         cantidad: String(i.cantidad),
         precioUnitario: String(i.precio_unitario),
+        tipo: i.tipo,
       }))
     );
     setError(null);
@@ -465,8 +466,10 @@ export default function DetalleOrden() {
                 <input
                   value={i.cantidad}
                   onChange={(e) => actualizarItemEdit(i.id, 'cantidad', e.target.value)}
+                  disabled={i.tipo === 'dispositivo'}
+                  title={i.tipo === 'dispositivo' ? 'Un dispositivo del stock siempre se vende de a uno' : undefined}
                   inputMode="numeric"
-                  className="w-16 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded px-2 py-1 text-center"
+                  className="w-16 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded px-2 py-1 text-center disabled:opacity-50"
                 />
                 <span>×</span>
                 <span>$</span>

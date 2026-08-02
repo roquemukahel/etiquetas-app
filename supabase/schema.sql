@@ -1680,9 +1680,14 @@ begin
     set estado = 'aprobado', revisado_at = now(), revisado_por = auth.uid()::text
     where id = comprobante_id;
 
+  -- Se extiende desde el mayor entre "ahora" y el vencimiento que ya
+  -- tenía, no siempre desde "ahora": si por error se aprueba un segundo
+  -- comprobante (o uno mensual encima de un plan anual todavía vigente),
+  -- esto suma los días nuevos en vez de acortar el acceso pago que el
+  -- negocio ya tenía.
   update negocios
     set estado_suscripcion = 'active',
-        acceso_manual_hasta = now() + (dias || ' days')::interval,
+        acceso_manual_hasta = greatest(coalesce(acceso_manual_hasta, now()), now()) + (dias || ' days')::interval,
         plan = nuevo_plan
     where id = neg_id;
 end;

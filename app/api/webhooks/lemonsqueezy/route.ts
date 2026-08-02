@@ -70,12 +70,19 @@ async function procesarWebhook(req: NextRequest) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
+  // negocio_suscripcion_activa() bloquea un estado 'active'/'past_due' si
+  // acceso_manual_hasta quedó en el pasado (se usa para cortesías/pagos
+  // manuales aprobados a mano, ver admin_aprobar_pago). Si Lemon Squeezy
+  // avisa que la suscripción real está 'active', esa fecha manual vieja ya
+  // no debe seguir bloqueando a alguien que está pagando de verdad — se
+  // limpia para que el estado de Lemon Squeezy mande solo.
   const { error } = await supabase
     .from('negocios')
     .update({
       estado_suscripcion: nuevoEstado,
       lemonsqueezy_subscription_id: String(payload.data.id ?? ''),
       lemonsqueezy_customer_id: atributos.customer_id ? String(atributos.customer_id) : null,
+      ...(nuevoEstado === 'active' ? { acceso_manual_hasta: null } : {}),
     })
     .eq('id', negocioId);
 

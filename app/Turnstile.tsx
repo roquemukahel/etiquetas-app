@@ -5,8 +5,17 @@ import { useEffect, useRef } from 'react';
 declare global {
   interface Window {
     turnstile?: {
-      render: (el: HTMLElement, options: { sitekey: string; callback: (token: string) => void }) => string;
+      render: (
+        el: HTMLElement,
+        options: {
+          sitekey: string;
+          callback: (token: string) => void;
+          'expired-callback'?: () => void;
+          'error-callback'?: () => void;
+        }
+      ) => string;
       remove: (widgetId?: string) => void;
+      reset: (widgetId?: string) => void;
     };
   }
 }
@@ -25,6 +34,20 @@ export default function Turnstile({ onVerify }: { onVerify: (token: string) => v
         widgetId.current = window.turnstile.render(ref.current, {
           sitekey: SITE_KEY!,
           callback: onVerify,
+          // El token de Turnstile vence solo a los pocos minutos. Si la
+          // persona tarda en completar el formulario, el widget lo marca
+          // como vencido en silencio: sin esto, el botón seguía habilitado
+          // con un token ya vencido y el envío fallaba con un error de
+          // captcha que la pantalla de login/registro mostraba como
+          // "contraseña incorrecta" (mensaje engañoso, ver ese archivo).
+          // Acá se limpia el token y se pide uno nuevo automáticamente.
+          'expired-callback': () => {
+            onVerify('');
+            if (widgetId.current && window.turnstile) window.turnstile.reset(widgetId.current);
+          },
+          'error-callback': () => {
+            onVerify('');
+          },
         });
       }
     };

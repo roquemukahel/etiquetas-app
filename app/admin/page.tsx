@@ -153,7 +153,7 @@ export default function AdminPanel() {
     setProcesando(c.id);
     await supabase.rpc('admin_aprobar_pago', {
       comprobante_id: c.id,
-      dias: Number(diasAprobar) || 30,
+      dias: diasAprobar.trim() === '' ? 30 : Number(diasAprobar),
       nuevo_plan: planAprobar,
     });
     setProcesando(null);

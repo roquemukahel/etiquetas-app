@@ -75,7 +75,11 @@ export default function DetalleDispositivo() {
         precio: d.precio,
         proveedor: d.proveedor?.trim() || null,
         estado: d.estado,
-        en_stock: d.en_stock,
+        // Solo se toca en_stock si esta pantalla lo cambió a propósito
+        // (tocando el botón de abajo). Si no, se deja como está en la
+        // base: si alguien lo vendió desde Órdenes mientras esta pantalla
+        // estaba abierta, guardar acá no debe revertir esa venta.
+        ...(d.en_stock !== original.en_stock ? { en_stock: d.en_stock } : {}),
         ...(volvioAStock ? { en_stock_desde: new Date().toISOString(), alerta_stock_enviada: false } : {}),
       })
       .eq('id', id);

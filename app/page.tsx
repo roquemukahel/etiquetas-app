@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { crearClienteServidor } from './lib/supabase/server';
 import BotonSalir from './BotonSalir';
 import QMark from './QMark';
@@ -66,6 +67,17 @@ export default async function Home() {
       .select('negocio_id, negocios ( nombre, logo_url, moneda, estado_suscripcion, fecha_fin_prueba )')
       .eq('id', user.id)
       .single();
+    // Puede pasar si el registro se cortó justo entre crear la cuenta y
+    // crear el negocio (ver app/registro): sin esto, esta pantalla se
+    // queda mostrando un panel vacío para siempre, sin forma de arreglarlo.
+    // No aplica a un super_admin sin negocio propio (usa /admin, no esta
+    // pantalla) — se lo deja pasar para no bloquearlo a él por error.
+    if (!perfil) {
+      const { data: esAdminSinNegocio } = await supabase.rpc('es_admin');
+      if (!esAdminSinNegocio) {
+        redirect('/registro');
+      }
+    }
     const negocio = (perfil as any)?.negocios;
     if (negocio?.nombre) nombreNegocio = negocio.nombre;
     if (negocio?.logo_url) logoUrl = negocio.logo_url;

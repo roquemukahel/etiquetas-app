@@ -110,8 +110,31 @@ export default function PlanCanje() {
     }
     if (!confirm('¿Agregar este dispositivo al Stock para venderlo?')) return;
     setProcesando(c.id);
+
+    // Igual que en Compras: se reserva el canje ANTES de crear el
+    // dispositivo, y solo si seguía con agregado_a_stock=false en ese
+    // momento (condición evaluada en la base). Evita duplicar el
+    // dispositivo si el mismo canje se procesa desde dos pestañas.
+    const { data: actualizado, error: estadoErr } = await supabase
+      .from('canjes')
+      .update({ agregado_a_stock: true })
+      .eq('id', c.id)
+      .eq('agregado_a_stock', false)
+      .select('id');
+    if (estadoErr) {
+      alert('No pudimos agregar al stock: ' + estadoErr.message);
+      setProcesando(null);
+      return;
+    }
+    if (!actualizado || actualizado.length === 0) {
+      alert('Este canje ya había sido agregado al stock (quizás desde otra pestaña).');
+      setProcesando(null);
+      cargar();
+      return;
+    }
+
     const actor = getActor();
-    await supabase.from('dispositivos').insert({
+    const { error: insertError } = await supabase.from('dispositivos').insert({
       modelo: c.modelo,
       capacidad_gb: c.capacidad_gb,
       color: c.color,
@@ -122,10 +145,13 @@ export default function PlanCanje() {
       agregado_por_nombre: actor?.nombre ?? null,
       agregado_por_foto_url: actor?.fotoUrl ?? null,
     });
+    if (insertError) {
+      await supabase.from('canjes').update({ agregado_a_stock: false }).eq('id', c.id);
+      alert('No pudimos agregar al stock: ' + insertError.message);
+      setProcesando(null);
+      return;
+    }
     await asegurarModelo(supabase, c.modelo);
-    // No se borra: queda con agregado_a_stock=true, así aparece en
-    // "Historial" en vez de desaparecer sin dejar rastro.
-    await supabase.from('canjes').update({ agregado_a_stock: true }).eq('id', c.id);
     setProcesando(null);
     cargar();
   };
