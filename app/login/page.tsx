@@ -61,12 +61,7 @@ export default function Login() {
         </div>
 
         <div>
-          <div className="flex items-center justify-between mb-1">
-            <label className="text-xs text-muted dark:text-dark-text-secondary">Contraseña</label>
-            <Link href="/recuperar-contrasena" className="text-xs text-accent dark:text-dark-accent underline">
-              ¿Olvidaste tu contraseña?
-            </Link>
-          </div>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Contraseña</label>
           <input
             required
             type="password"

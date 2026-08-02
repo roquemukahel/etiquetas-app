@@ -1,37 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextRequest, NextResponse } from 'next/server';
 
-const RUTAS_PUBLICAS = [
-  '/login',
-  '/registro',
-  '/recuperar-contrasena',
-  '/restablecer-contrasena',
-  '/completar-registro',
-  '/cuenta-desactivada',
-  '/suscripcion-vencida',
-  '/terminos',
-  '/privacidad',
-  '/seguimiento',
-  '/boleta',
-];
-
-// Rutas donde no tiene sentido (o no corresponde todavía) exigir que el
-// usuario ya tenga negocio/perfil creado: /completar-registro es
-// justamente donde se crea, /admin lo usan los super_admins (que no tienen
-// negocio propio), y el resto son pantallas públicas que un usuario sin
-// perfil también puede necesitar ver.
-const RUTAS_SIN_CHEQUEO_DE_NEGOCIO = [
-  '/completar-registro',
-  '/admin',
-  '/login',
-  '/registro',
-  '/recuperar-contrasena',
-  '/restablecer-contrasena',
-  '/terminos',
-  '/privacidad',
-  '/seguimiento',
-  '/boleta',
-];
+const RUTAS_PUBLICAS = ['/login', '/registro', '/cuenta-desactivada', '/suscripcion-vencida', '/terminos', '/privacidad', '/seguimiento', '/boleta'];
 
 // Vercel siempre deja accesible el dominio *.vercel.app de cada proyecto,
 // además del dominio propio — no se puede desactivar. Para que en la
@@ -60,16 +30,10 @@ export async function middleware(request: NextRequest) {
   // El formulario de contacto de la landing pública (/api/soporte) también
   // lo puede usar alguien sin cuenta: no toca datos de ningún negocio, solo
   // reenvía un mail a una dirección fija.
-  // /auth/callback intercambia el "code" de un enlace de Supabase (confirmar
-  // cuenta, restablecer contraseña) por una sesión. En ese momento todavía
-  // no hay cookies de sesión (recién se están por crear ahí adentro), así
-  // que si pasara por la lógica de abajo el middleware lo trataría como "no
-  // logueado" y lo mandaría a /login antes de llegar a procesar el code.
   if (
     request.nextUrl.pathname.startsWith('/api/webhooks/') ||
     request.nextUrl.pathname.startsWith('/api/cron/') ||
-    request.nextUrl.pathname.startsWith('/api/soporte') ||
-    request.nextUrl.pathname.startsWith('/auth/')
+    request.nextUrl.pathname.startsWith('/api/soporte')
   ) {
     return NextResponse.next();
   }
@@ -110,26 +74,9 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Con la confirmación de mail obligatoria, el negocio y el perfil recién
-  // se crean en /completar-registro (ver ese archivo). Si alguien confirma
-  // el mail pero después inicia sesión por /login en vez de terminar ese
-  // paso (o entra desde otro dispositivo), quedaría con sesión pero sin
-  // negocio — y todo el resto de la app rompe (RLS rechaza cualquier
-  // insert/select porque no hay negocio_id). Este chequeo corre para
-  // cualquier ruta, sin importar por dónde haya entrado, y lo manda a
-  // completar ese paso antes de dejarlo pasar.
-  if (user && !RUTAS_SIN_CHEQUEO_DE_NEGOCIO.some((r) => request.nextUrl.pathname.startsWith(r))) {
-    const { data: perfil } = await supabase.from('perfiles').select('id').eq('id', user.id).maybeSingle();
-    if (!perfil) {
-      const url = request.nextUrl.clone();
-      url.pathname = '/completar-registro';
-      return NextResponse.redirect(url);
-    }
-  }
-
   // Estas rutas son públicas pero NO deben redirigir a un usuario ya logueado
   // (a diferencia de /login o /registro, que no tiene sentido ver estando adentro).
-  const RUTAS_SIEMPRE_ACCESIBLES = ['/completar-registro', '/restablecer-contrasena', '/cuenta-desactivada', '/suscripcion-vencida', '/terminos', '/privacidad', '/seguimiento', '/boleta'];
+  const RUTAS_SIEMPRE_ACCESIBLES = ['/cuenta-desactivada', '/suscripcion-vencida', '/terminos', '/privacidad', '/seguimiento', '/boleta'];
   const esPantallaDeBloqueo = RUTAS_SIEMPRE_ACCESIBLES.some((r) => request.nextUrl.pathname.startsWith(r));
 
   if (user && esPublica && !esPantallaDeBloqueo) {
