@@ -4,10 +4,32 @@ import { useEffect, useState } from 'react';
 import BotonSalir from '../BotonSalir';
 import { crearClienteNavegador } from '../lib/supabase/client';
 import PlanesCheckout from '../PlanesCheckout';
+import PagoUSDT from '../PagoUSDT';
+
+type Comprobante = {
+  id: string;
+  monto: number;
+  moneda: string;
+  estado: string;
+  created_at: string;
+  nota_admin: string | null;
+};
 
 export default function SuscripcionVencida() {
   const supabase = crearClienteNavegador();
   const [datos, setDatos] = useState<{ negocioId: string; email: string | null } | null>(null);
+  const [comprobante, setComprobante] = useState<Comprobante | null>(null);
+
+  const cargarComprobante = async (negocioId: string) => {
+    const { data } = await supabase
+      .from('comprobantes_pago')
+      .select('id, monto, moneda, estado, created_at, nota_admin')
+      .eq('negocio_id', negocioId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    setComprobante((data as Comprobante) ?? null);
+  };
 
   useEffect(() => {
     (async () => {
@@ -24,6 +46,7 @@ export default function SuscripcionVencida() {
 
       if (perfil?.negocio_id) {
         setDatos({ negocioId: perfil.negocio_id, email: user.email ?? null });
+        await cargarComprobante(perfil.negocio_id);
       }
     })();
   }, []);
@@ -36,8 +59,9 @@ export default function SuscripcionVencida() {
         El período de prueba terminó o hubo un problema con el pago. Suscribite para seguir usando Qovento.
       </p>
       {datos && (
-        <div className="w-full max-w-xs">
+        <div className="w-full max-w-xs flex flex-col gap-3">
           <PlanesCheckout negocioId={datos.negocioId} email={datos.email} />
+          <PagoUSDT negocioId={datos.negocioId} comprobante={comprobante} onEnviado={() => cargarComprobante(datos.negocioId)} />
         </div>
       )}
       <BotonSalir />
