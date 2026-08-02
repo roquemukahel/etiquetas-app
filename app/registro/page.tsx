@@ -7,6 +7,7 @@ import { crearClienteNavegador } from '../lib/supabase/client';
 import Turnstile from '../Turnstile';
 
 const REQUIERE_CAPTCHA = !!process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+const KEY_PENDING_NEGOCIO = 'qovento:pending-negocio';
 
 export default function Registro() {
   const router = useRouter();
@@ -19,16 +20,25 @@ export default function Registro() {
   const [aceptaTerminos, setAceptaTerminos] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cargando, setCargando] = useState(false);
+  const [emailEnviado, setEmailEnviado] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setCargando(true);
 
+    // Se guarda acá porque, si el mail necesita confirmación, todavía no hay
+    // sesión para crear el negocio — recién se crea cuando la persona
+    // confirma el mail y vuelve a /completar-registro.
+    window.localStorage.setItem(KEY_PENDING_NEGOCIO, nombreNegocio);
+
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
       password,
-      options: captchaToken ? { captchaToken } : undefined,
+      options: {
+        ...(captchaToken ? { captchaToken } : {}),
+        emailRedirectTo: `${window.location.origin}/auth/callback?next=/completar-registro`,
+      },
     });
 
     if (authError || !authData.user) {
@@ -38,17 +48,19 @@ export default function Registro() {
     }
 
     if (!authData.session) {
-      setError(
-        'La cuenta ya existía o no se generó sesión automáticamente. Probá borrar el usuario en Supabase y registrarte de nuevo, o iniciá sesión si ya tenés cuenta.'
-      );
+      // Falta confirmar el mail: no hay sesión todavía, así que el negocio
+      // se crea recién cuando confirme (ver /completar-registro).
+      setEmailEnviado(true);
       setCargando(false);
       return;
     }
 
-    // Creamos el negocio y el perfil juntos, en un solo paso seguro
+    // La confirmación de mail está desactivada en Supabase: ya hay sesión,
+    // así que se crea el negocio y el perfil de una, como antes.
     const { data: negocioId, error: rpcError } = await supabase.rpc('crear_negocio_y_perfil', {
       nombre_negocio: nombreNegocio,
     });
+    window.localStorage.removeItem(KEY_PENDING_NEGOCIO);
 
     if (rpcError || !negocioId) {
       setError(`La cuenta se creó, pero hubo un problema configurando el negocio: ${rpcError?.message || 'sin datos'}`);
@@ -59,6 +71,22 @@ export default function Registro() {
     router.push('/');
     router.refresh();
   };
+
+  if (emailEnviado) {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center px-6 py-10 gap-3 text-center">
+        <p className="text-2xl">📧</p>
+        <h1 className="text-xl font-display font-semibold">Revisá tu correo</h1>
+        <p className="text-sm text-muted dark:text-dark-text-secondary max-w-xs">
+          Te enviamos un enlace de confirmación a <strong>{email}</strong>. Abrilo desde este mismo dispositivo
+          para activar tu cuenta y terminar de crear tu negocio.
+        </p>
+        <p className="text-xs text-muted dark:text-dark-text-secondary max-w-xs">
+          ¿No te llegó? Revisá la carpeta de spam. Puede demorar unos minutos.
+        </p>
+      </main>
+    );
+  }
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center px-6 py-10">

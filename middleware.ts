@@ -1,7 +1,18 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextRequest, NextResponse } from 'next/server';
 
-const RUTAS_PUBLICAS = ['/login', '/registro', '/cuenta-desactivada', '/suscripcion-vencida', '/terminos', '/privacidad', '/seguimiento', '/boleta'];
+const RUTAS_PUBLICAS = [
+  '/login',
+  '/registro',
+  '/recuperar-contrasena',
+  '/restablecer-contrasena',
+  '/cuenta-desactivada',
+  '/suscripcion-vencida',
+  '/terminos',
+  '/privacidad',
+  '/seguimiento',
+  '/boleta',
+];
 
 // Vercel siempre deja accesible el dominio *.vercel.app de cada proyecto,
 // además del dominio propio — no se puede desactivar. Para que en la
@@ -30,10 +41,16 @@ export async function middleware(request: NextRequest) {
   // El formulario de contacto de la landing pública (/api/soporte) también
   // lo puede usar alguien sin cuenta: no toca datos de ningún negocio, solo
   // reenvía un mail a una dirección fija.
+  // /auth/callback intercambia el "code" de un enlace de Supabase (confirmar
+  // cuenta, restablecer contraseña) por una sesión. En ese momento todavía
+  // no hay cookies de sesión (recién se están por crear ahí adentro), así
+  // que si pasara por la lógica de abajo el middleware lo trataría como "no
+  // logueado" y lo mandaría a /login antes de llegar a procesar el code.
   if (
     request.nextUrl.pathname.startsWith('/api/webhooks/') ||
     request.nextUrl.pathname.startsWith('/api/cron/') ||
-    request.nextUrl.pathname.startsWith('/api/soporte')
+    request.nextUrl.pathname.startsWith('/api/soporte') ||
+    request.nextUrl.pathname.startsWith('/auth/')
   ) {
     return NextResponse.next();
   }
@@ -76,7 +93,7 @@ export async function middleware(request: NextRequest) {
 
   // Estas rutas son públicas pero NO deben redirigir a un usuario ya logueado
   // (a diferencia de /login o /registro, que no tiene sentido ver estando adentro).
-  const RUTAS_SIEMPRE_ACCESIBLES = ['/cuenta-desactivada', '/suscripcion-vencida', '/terminos', '/privacidad', '/seguimiento', '/boleta'];
+  const RUTAS_SIEMPRE_ACCESIBLES = ['/restablecer-contrasena', '/cuenta-desactivada', '/suscripcion-vencida', '/terminos', '/privacidad', '/seguimiento', '/boleta'];
   const esPantallaDeBloqueo = RUTAS_SIEMPRE_ACCESIBLES.some((r) => request.nextUrl.pathname.startsWith(r));
 
   if (user && esPublica && !esPantallaDeBloqueo) {

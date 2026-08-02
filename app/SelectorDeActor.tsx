@@ -10,6 +10,9 @@ import Avatar from './Avatar';
 const RUTAS_SIN_SELECTOR = [
   '/login',
   '/registro',
+  '/recuperar-contrasena',
+  '/restablecer-contrasena',
+  '/completar-registro',
   '/cuenta-desactivada',
   '/suscripcion-vencida',
   '/terminos',

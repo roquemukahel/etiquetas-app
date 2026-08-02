@@ -15,6 +15,9 @@ import QMark from './QMark';
 const RUTAS_SIN_SIDEBAR = [
   '/login',
   '/registro',
+  '/recuperar-contrasena',
+  '/restablecer-contrasena',
+  '/completar-registro',
   '/cuenta-desactivada',
   '/suscripcion-vencida',
   '/terminos',
