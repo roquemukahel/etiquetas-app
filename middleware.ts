@@ -129,7 +129,7 @@ export async function middleware(request: NextRequest) {
 
   // Estas rutas son públicas pero NO deben redirigir a un usuario ya logueado
   // (a diferencia de /login o /registro, que no tiene sentido ver estando adentro).
-  const RUTAS_SIEMPRE_ACCESIBLES = ['/restablecer-contrasena', '/cuenta-desactivada', '/suscripcion-vencida', '/terminos', '/privacidad', '/seguimiento', '/boleta'];
+  const RUTAS_SIEMPRE_ACCESIBLES = ['/completar-registro', '/restablecer-contrasena', '/cuenta-desactivada', '/suscripcion-vencida', '/terminos', '/privacidad', '/seguimiento', '/boleta'];
   const esPantallaDeBloqueo = RUTAS_SIEMPRE_ACCESIBLES.some((r) => request.nextUrl.pathname.startsWith(r));
 
   if (user && esPublica && !esPantallaDeBloqueo) {
