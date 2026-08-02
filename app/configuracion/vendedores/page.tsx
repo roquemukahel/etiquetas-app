@@ -41,17 +41,22 @@ export default function Vendedores() {
   const [errorAcceso, setErrorAcceso] = useState<string | null>(null);
 
   const cargar = async () => {
-    const [{ data }, { data: dueno }] = await Promise.all([
+    const [{ data, error: vendedoresError }, { data: dueno }] = await Promise.all([
       supabase.from('vendedores').select('*').order('nombre'),
       supabase.rpc('es_dueno_actual'),
     ]);
+    if (vendedoresError) setError('No pudimos cargar los vendedores: ' + vendedoresError.message);
     setVendedores((data as Vendedor[]) ?? []);
     setEsDueno(!!dueno);
     if (dueno) {
-      const { data: accesos } = await supabase.rpc('listar_accesos_negocio');
-      const mapa: Record<string, Acceso> = {};
-      for (const a of (accesos as Acceso[]) ?? []) mapa[a.id] = a;
-      setAccesosPorPerfil(mapa);
+      const { data: accesos, error: accesosError } = await supabase.rpc('listar_accesos_negocio');
+      if (accesosError) {
+        setError('No pudimos cargar los accesos existentes: ' + accesosError.message);
+      } else {
+        const mapa: Record<string, Acceso> = {};
+        for (const a of (accesos as Acceso[]) ?? []) mapa[a.id] = a;
+        setAccesosPorPerfil(mapa);
+      }
     }
     setLoading(false);
   };
