@@ -3,12 +3,17 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const RUTAS_PUBLICAS = ['/login', '/registro', '/cuenta-desactivada', '/suscripcion-vencida', '/terminos', '/privacidad', '/seguimiento', '/boleta'];
 
-// Vercel siempre deja accesible el dominio *.vercel.app de cada proyecto,
-// además del dominio propio — no se puede desactivar. Para que en la
-// práctica quede como si no existiera, cualquier visita por ese dominio
-// (o por cualquier otro que no sea el propio) redirige de una a qovento.app.
+// El deployment de PRODUCCIÓN de Vercel siempre queda accesible además por
+// su propio dominio genérico (*.vercel.app) — no se puede desactivar. Para
+// que en la práctica quede como si no existiera, cualquier visita a
+// producción que no sea por el dominio propio redirige a qovento.app.
 // No aplica a las rutas de API (webhooks, cron), que server-a-server pueden
-// llegar por cualquier host.
+// llegar por cualquier host — y, importante, tampoco aplica a los
+// deployments de VISTA PREVIA de otras ramas (Vercel pone VERCEL_ENV
+// distinto de "production" ahí): esos se visitan a propósito por su
+// propio link de Vercel, para probar cambios sin tocar qovento.app. Si no
+// filtráramos por VERCEL_ENV, este redirect también los mandaría de
+// vuelta a producción, haciendo imposible probar cualquier rama nueva.
 const DOMINIO_CANONICO = 'qovento.app';
 
 export async function middleware(request: NextRequest) {
@@ -16,8 +21,9 @@ export async function middleware(request: NextRequest) {
   const esRutaApi = request.nextUrl.pathname.startsWith('/api/');
   // En desarrollo local (npm run dev) el host es localhost — nunca redirigir ahí.
   const esLocal = host.startsWith('localhost') || host.startsWith('127.0.0.1');
+  const esProduccion = process.env.VERCEL_ENV === 'production';
 
-  if (!esRutaApi && !esLocal && host && host !== DOMINIO_CANONICO && host !== `www.${DOMINIO_CANONICO}`) {
+  if (esProduccion && !esRutaApi && !esLocal && host && host !== DOMINIO_CANONICO && host !== `www.${DOMINIO_CANONICO}`) {
     const destino = new URL(request.nextUrl.pathname + request.nextUrl.search, `https://${DOMINIO_CANONICO}`);
     return NextResponse.redirect(destino, 308);
   }
