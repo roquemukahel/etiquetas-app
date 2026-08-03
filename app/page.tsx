@@ -146,7 +146,11 @@ export default async function Home() {
         .select('modelo, created_at, agregado_por_nombre, agregado_por_foto_url')
         .order('created_at', { ascending: false })
         .limit(5),
-      supabase.from('clientes').select('nombre, apellido, created_at').order('created_at', { ascending: false }).limit(5),
+      supabase
+        .from('clientes')
+        .select('nombre, apellido, created_at, agregado_por_nombre, agregado_por_foto_url')
+        .order('created_at', { ascending: false })
+        .limit(5),
       supabase.from('reparaciones').select('id', { count: 'exact', head: true }).eq('estado', 'listo_para_entregar'),
       supabase
         .from('dispositivos')
@@ -262,10 +266,11 @@ export default async function Home() {
     }
 
     for (const d of (stockRecienteData as any[]) ?? []) {
+      const cargadoPor = d.agregado_por_nombre;
       candidatos.push({
         tipo: 'stock',
         fecha: new Date(d.created_at),
-        texto: `Ingresó ${d.modelo || 'un equipo'} al stock`,
+        texto: `${cargadoPor ? `${cargadoPor} ingresó` : 'Ingresó'} ${d.modelo || 'un equipo'} al stock`,
         actorNombre: d.agregado_por_nombre ?? null,
         actorFoto: d.agregado_por_foto_url ?? null,
       });
@@ -273,12 +278,13 @@ export default async function Home() {
 
     for (const c of (clientesRecientesData as any[]) ?? []) {
       const nombreCompleto = `${c.nombre} ${c.apellido || ''}`.trim();
+      const cargadoPor = c.agregado_por_nombre;
       candidatos.push({
         tipo: 'cliente',
         fecha: new Date(c.created_at),
-        texto: `Nuevo cliente registrado: ${nombreCompleto}`,
-        actorNombre: null,
-        actorFoto: null,
+        texto: `${cargadoPor ? `${cargadoPor} cargó` : 'Se cargó'} un nuevo cliente: ${nombreCompleto}`,
+        actorNombre: c.agregado_por_nombre ?? null,
+        actorFoto: c.agregado_por_foto_url ?? null,
       });
     }
 

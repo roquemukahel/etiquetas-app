@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
+import { getActor } from '../../lib/actor';
 
 export default function NuevoCliente() {
   const router = useRouter();
@@ -25,6 +26,7 @@ export default function NuevoCliente() {
     setGuardando(true);
     setError(null);
 
+    const actor = getActor();
     const { error: insertError } = await supabase.from('clientes').insert({
       nombre: nombre.trim(),
       apellido: apellido.trim() || null,
@@ -32,6 +34,8 @@ export default function NuevoCliente() {
       email: email.trim() || null,
       telefono: telefono.trim() || null,
       dni: dni.trim() || null,
+      agregado_por_nombre: actor?.nombre ?? null,
+      agregado_por_foto_url: actor?.fotoUrl ?? null,
     });
 
     if (insertError) {

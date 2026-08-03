@@ -6,6 +6,7 @@ import { crearClienteNavegador } from '../lib/supabase/client';
 import { leerCSV, valorDe, descargarCSV, insertarEnTandas } from '../lib/csv';
 import { obtenerTodasLasFilas } from '../lib/db';
 import { registrarAuditoria } from '../lib/auditoria';
+import { getActor } from '../lib/actor';
 
 type Cliente = {
   id: string;
@@ -59,6 +60,7 @@ export default function Clientes() {
     try {
       const filas = await leerCSV(archivo);
       const dnisExistentes = new Set(clientes.map((c) => c.dni).filter(Boolean));
+      const actor = getActor();
 
       const nuevos = filas
         .map((fila) => {
@@ -71,6 +73,8 @@ export default function Clientes() {
             telefono: valorDe(fila, 'telefono', 'phone') || null,
             dni: valorDe(fila, 'dni') || null,
             domicilio: valorDe(fila, 'domicilio', 'direccion', 'address', 'contactdescription') || null,
+            agregado_por_nombre: actor?.nombre ?? null,
+            agregado_por_foto_url: actor?.fotoUrl ?? null,
           };
         })
         .filter((c): c is NonNullable<typeof c> => c !== null)

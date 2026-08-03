@@ -1892,3 +1892,12 @@ $$;
 -- costo de hashearlo.
 alter table vendedores add column if not exists pin text;
 alter table tecnicos add column if not exists pin text;
+
+-- ============================================================
+-- Quién cargó cada cliente (igual que ya existe para dispositivos en
+-- agregado_por_nombre/agregado_por_foto_url): en "Actividad reciente"
+-- un cliente nuevo no mostraba ni foto ni nombre de quién lo cargó,
+-- a diferencia de una venta o una reparación terminada.
+-- ============================================================
+alter table clientes add column if not exists agregado_por_nombre text;
+alter table clientes add column if not exists agregado_por_foto_url text;

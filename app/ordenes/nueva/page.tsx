@@ -8,6 +8,7 @@ import { asegurarModelo } from '../../lib/modelos';
 import { obtenerTodasLasFilas } from '../../lib/db';
 import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../../lib/carpetas';
 import { simboloMoneda } from '../../lib/monedas';
+import { getActor } from '../../lib/actor';
 import MiniaturaDispositivo from '../../MiniaturaDispositivo';
 
 type Dispositivo = {
@@ -429,6 +430,7 @@ export default function NuevaOrden() {
 
       let clienteId = clienteElegido?.id;
       if (modoCliente === 'nuevo') {
+        const actorCliente = getActor();
         const { data, error: cErr } = await supabase
           .from('clientes')
           .insert({
@@ -437,6 +439,8 @@ export default function NuevaOrden() {
             telefono: nuevoTelefono.trim() || null,
             domicilio: nuevoDomicilio.trim() || null,
             dni: nuevoDni.trim() || null,
+            agregado_por_nombre: actorCliente?.nombre ?? null,
+            agregado_por_foto_url: actorCliente?.fotoUrl ?? null,
           })
           .select()
           .single();
