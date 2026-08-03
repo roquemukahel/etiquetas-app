@@ -1972,7 +1972,7 @@ language plpgsql
 as $$
 begin
   if new.modelo is not null then
-    new.modelo := regexp_replace(new.modelo, 'iphone', 'iPhone', 'gi');
+    new.modelo := regexp_replace(new.modelo, '\yiphone\y', 'iPhone', 'gi');
   end if;
   return new;
 end;
@@ -2004,7 +2004,7 @@ language plpgsql
 as $$
 begin
   if new.nombre is not null then
-    new.nombre := regexp_replace(new.nombre, 'iphone', 'iPhone', 'gi');
+    new.nombre := regexp_replace(new.nombre, '\yiphone\y', 'iPhone', 'gi');
   end if;
   return new;
 end;
