@@ -5,6 +5,7 @@ import BotonSalir from '../BotonSalir';
 import { crearClienteNavegador } from '../lib/supabase/client';
 import PlanesCheckout from '../PlanesCheckout';
 import PagoUSDT from '../PagoUSDT';
+import PagoTransferenciaARS from '../PagoTransferenciaARS';
 
 type Comprobante = {
   id: string;
@@ -102,13 +103,18 @@ export default function SuscripcionVencida() {
           <PlanesCheckout negocioId={datos.negocioId} email={datos.email} />
           <p className="text-xs text-muted dark:text-dark-text-secondary -mb-1">
             Por el momento, el pago con tarjeta está temporalmente no disponible mientras terminamos un
-            trámite de verificación. Podés suscribirte fácilmente pagando con USDT (cripto) acá abajo:
+            trámite de verificación. Podés suscribirte fácilmente pagando con USDT (cripto) o por transferencia bancaria (Argentina) acá abajo:
           </p>
           <PagoUSDT
             negocioId={datos.negocioId}
             comprobante={comprobante}
             onEnviado={() => cargarComprobante(datos.negocioId)}
             abiertoPorDefecto
+          />
+          <PagoTransferenciaARS
+            negocioId={datos.negocioId}
+            comprobante={comprobante}
+            onEnviado={() => cargarComprobante(datos.negocioId)}
           />
         </div>
       )}

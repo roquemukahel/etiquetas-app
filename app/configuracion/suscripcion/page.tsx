@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import PlanesCheckout from '../../PlanesCheckout';
 import PagoUSDT from '../../PagoUSDT';
+import PagoTransferenciaARS from '../../PagoTransferenciaARS';
 
 type EstadoSuscripcion = 'trialing' | 'active' | 'past_due' | 'unpaid' | 'cancelled' | 'expired' | 'paused';
 
@@ -129,6 +130,11 @@ export default function Suscripcion() {
             textoBotonAnual={necesitaPagar ? 'Suscribirme — Anual' : 'Antes de que termine la prueba — Anual'}
           />
           <PagoUSDT negocioId={negocio.id} comprobante={comprobante} onEnviado={() => cargarComprobante(negocio.id)} />
+          <PagoTransferenciaARS
+            negocioId={negocio.id}
+            comprobante={comprobante}
+            onEnviado={() => cargarComprobante(negocio.id)}
+          />
         </>
       )}
     </main>
