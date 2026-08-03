@@ -1953,3 +1953,64 @@ as $$
     where id = tecnico_id and negocio_id = negocio_actual() and pin is not null and pin = pin_ingresado
   )
 $$;
+
+-- ============================================================
+-- "iPhone" siempre con esa capitalización exacta (i minúscula, P
+-- mayúscula, resto minúscula) en cualquier campo de modelo, sin
+-- importar cómo lo haya tipeado cada persona. Esto pasaba: alguien
+-- cargaba "iphone 13" a mano (todo minúscula) y el sistema lo
+-- entendía como una carpeta nueva, distinta de "iPhone 13" — quedaban
+-- dos carpetas idénticas y había que fusionarlas a mano. La app ya
+-- normaliza esto al crear la carpeta (ver asegurarModelo en
+-- app/lib/modelos.ts), pero este trigger lo hace también acá, a
+-- nivel de base de datos, para que quede corregido pase lo que pase
+-- por cualquier camino (incluida la importación por CSV, que no pasa
+-- por esa función).
+create or replace function normalizar_modelo_iphone()
+returns trigger
+language plpgsql
+as $$
+begin
+  if new.modelo is not null then
+    new.modelo := regexp_replace(new.modelo, 'iphone', 'iPhone', 'gi');
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists normalizar_modelo_iphone_dispositivos on dispositivos;
+create trigger normalizar_modelo_iphone_dispositivos
+  before insert or update of modelo on dispositivos
+  for each row execute function normalizar_modelo_iphone();
+
+drop trigger if exists normalizar_modelo_iphone_canjes on canjes;
+create trigger normalizar_modelo_iphone_canjes
+  before insert or update of modelo on canjes
+  for each row execute function normalizar_modelo_iphone();
+
+drop trigger if exists normalizar_modelo_iphone_compras on compras;
+create trigger normalizar_modelo_iphone_compras
+  before insert or update of modelo on compras
+  for each row execute function normalizar_modelo_iphone();
+
+drop trigger if exists normalizar_modelo_iphone_reparaciones on reparaciones;
+create trigger normalizar_modelo_iphone_reparaciones
+  before insert or update of modelo on reparaciones
+  for each row execute function normalizar_modelo_iphone();
+
+create or replace function normalizar_nombre_carpeta_iphone()
+returns trigger
+language plpgsql
+as $$
+begin
+  if new.nombre is not null then
+    new.nombre := regexp_replace(new.nombre, 'iphone', 'iPhone', 'gi');
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists normalizar_nombre_carpeta_iphone on modelos_stock;
+create trigger normalizar_nombre_carpeta_iphone
+  before insert or update of nombre on modelos_stock
+  for each row execute function normalizar_nombre_carpeta_iphone();
