@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import Avatar from '../../Avatar';
 
-type Tecnico = { id: string; nombre: string; telefono: string | null; edad: number | null; foto_url: string | null };
+type Tecnico = { id: string; nombre: string; telefono: string | null; edad: number | null; foto_url: string | null; pin: string | null };
 
 export default function Tecnicos() {
   const supabase = crearClienteNavegador();
@@ -18,6 +18,7 @@ export default function Tecnicos() {
   const [editando, setEditando] = useState<string | null>(null);
   const [telefonoEdit, setTelefonoEdit] = useState('');
   const [edadEdit, setEdadEdit] = useState('');
+  const [pinEdit, setPinEdit] = useState('');
   const [guardandoPerfil, setGuardandoPerfil] = useState(false);
 
   const cargar = async () => {
@@ -55,6 +56,8 @@ export default function Tecnicos() {
     setEditando(editando === t.id ? null : t.id);
     setTelefonoEdit(t.telefono ?? '');
     setEdadEdit(t.edad != null ? String(t.edad) : '');
+    setPinEdit(t.pin ?? '');
+    setError(null);
   };
 
   const cambiarFoto = (t: Tecnico, e: React.ChangeEvent<HTMLInputElement>) => {
@@ -70,10 +73,18 @@ export default function Tecnicos() {
   };
 
   const guardarPerfil = async (t: Tecnico) => {
+    if (pinEdit.trim() && !/^\d{4}$/.test(pinEdit.trim())) {
+      setError('El PIN tiene que ser de 4 números, o dejarlo vacío para no pedir ninguno');
+      return;
+    }
     setGuardandoPerfil(true);
     await supabase
       .from('tecnicos')
-      .update({ telefono: telefonoEdit.trim() || null, edad: edadEdit ? Number(edadEdit) : null })
+      .update({
+        telefono: telefonoEdit.trim() || null,
+        edad: edadEdit ? Number(edadEdit) : null,
+        pin: pinEdit.trim() || null,
+      })
       .eq('id', t.id);
     setGuardandoPerfil(false);
     setEditando(null);
@@ -154,6 +165,20 @@ export default function Tecnicos() {
                     inputMode="numeric"
                     className="w-20 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                   />
+                </div>
+                <div>
+                  <input
+                    value={pinEdit}
+                    onChange={(e) => setPinEdit(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                    placeholder="PIN de 4 dígitos (opcional)"
+                    inputMode="numeric"
+                    maxLength={4}
+                    className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                  />
+                  <p className="text-[10px] text-muted dark:text-dark-text-secondary mt-1">
+                    Si le ponés un PIN, va a tener que escribirlo al elegirse en "Cambiar". Dejalo vacío para que no
+                    pida nada.
+                  </p>
                 </div>
                 <button
                   disabled={guardandoPerfil}

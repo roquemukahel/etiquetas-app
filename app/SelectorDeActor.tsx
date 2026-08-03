@@ -20,7 +20,14 @@ const RUTAS_SIN_SELECTOR = [
 
 const KEY_POSTERGADO = 'qovento:actor-postergado';
 
-type Persona = { id: string; nombre: string; foto_url: string | null; telefono: string | null; edad: number | null };
+type Persona = {
+  id: string;
+  nombre: string;
+  foto_url: string | null;
+  telefono: string | null;
+  edad: number | null;
+  pin: string | null;
+};
 
 export default function SelectorDeActor() {
   const pathname = usePathname();
@@ -37,6 +44,12 @@ export default function SelectorDeActor() {
   const [telefonoPerfil, setTelefonoPerfil] = useState('');
   const [edadPerfil, setEdadPerfil] = useState('');
   const [guardandoPerfil, setGuardandoPerfil] = useState(false);
+  // Si la persona elegida tiene PIN cargado (ver Configuración >
+  // Vendedores/Técnicos), hay que confirmarlo antes de atribuirle la
+  // acción — evita que cualquiera se elija a sí mismo como otra persona.
+  const [personaPin, setPersonaPin] = useState<{ tipo: 'vendedor' | 'tecnico'; persona: Persona } | null>(null);
+  const [pinIngresado, setPinIngresado] = useState('');
+  const [errorPin, setErrorPin] = useState<string | null>(null);
   // La raíz ("/") muestra la landing pública a quien no tiene sesión, así
   // que ahí necesitamos saber si hay usuario logueado antes de decidir si
   // corresponde mostrar el cartel (no tiene sentido preguntarle "con quién
@@ -90,8 +103,8 @@ export default function SelectorDeActor() {
     setCargando(true);
     (async () => {
       const [{ data: vend }, { data: tec }] = await Promise.all([
-        supabase.from('vendedores').select('id, nombre, foto_url, telefono, edad').order('nombre'),
-        supabase.from('tecnicos').select('id, nombre, foto_url, telefono, edad').order('nombre'),
+        supabase.from('vendedores').select('id, nombre, foto_url, telefono, edad, pin').order('nombre'),
+        supabase.from('tecnicos').select('id, nombre, foto_url, telefono, edad, pin').order('nombre'),
       ]);
       setVendedores(vend ?? []);
       setTecnicos(tec ?? []);
@@ -108,6 +121,26 @@ export default function SelectorDeActor() {
     setActorState(nuevo);
     setEligiendoTipo(null);
     setCambiando(false);
+    setPersonaPin(null);
+  };
+
+  const tocarPersona = (tipo: 'vendedor' | 'tecnico', persona: Persona) => {
+    if (persona.pin) {
+      setPersonaPin({ tipo, persona });
+      setPinIngresado('');
+      setErrorPin(null);
+    } else {
+      elegir(tipo, persona);
+    }
+  };
+
+  const confirmarPin = () => {
+    if (!personaPin) return;
+    if (pinIngresado !== personaPin.persona.pin) {
+      setErrorPin('PIN incorrecto');
+      return;
+    }
+    elegir(personaPin.tipo, personaPin.persona);
   };
 
   const abrirMiPerfil = async () => {
@@ -295,6 +328,41 @@ export default function SelectorDeActor() {
                   </div>
                 )}
               </>
+            ) : personaPin ? (
+              <>
+                <button
+                  onClick={() => setPersonaPin(null)}
+                  className="self-start text-xs text-accent dark:text-dark-accent underline"
+                >
+                  &larr; Volver
+                </button>
+                <div className="flex items-center gap-2.5">
+                  <Avatar src={personaPin.persona.foto_url} nombre={personaPin.persona.nombre} size={48} />
+                  <p className="text-sm font-medium">Ingresá el PIN de {personaPin.persona.nombre}</p>
+                </div>
+                {errorPin && <p className="text-xs text-bad">{errorPin}</p>}
+                <input
+                  value={pinIngresado}
+                  onChange={(e) => {
+                    setPinIngresado(e.target.value.replace(/\D/g, '').slice(0, 4));
+                    setErrorPin(null);
+                  }}
+                  onKeyDown={(e) => e.key === 'Enter' && confirmarPin()}
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={4}
+                  autoFocus
+                  placeholder="····"
+                  className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-3 text-center text-lg tracking-[0.5em]"
+                />
+                <button
+                  onClick={confirmarPin}
+                  disabled={pinIngresado.length !== 4}
+                  className="rounded-xl bg-accent dark:bg-dark-accent text-white py-3 text-sm font-medium disabled:opacity-40"
+                >
+                  Confirmar
+                </button>
+              </>
             ) : (
               <>
                 <button
@@ -308,11 +376,12 @@ export default function SelectorDeActor() {
                   {(eligiendoTipo === 'vendedor' ? vendedores : tecnicos).map((p) => (
                     <button
                       key={p.id}
-                      onClick={() => elegir(eligiendoTipo, p)}
+                      onClick={() => tocarPersona(eligiendoTipo, p)}
                       className="rounded-xl border border-border dark:border-dark-border px-4 py-3 text-sm text-left hover:bg-canvas dark:hover:bg-dark-bg flex items-center gap-2.5"
                     >
                       <Avatar src={p.foto_url} nombre={p.nombre} size={64} />
                       {p.nombre}
+                      {p.pin && <span className="ml-auto text-muted dark:text-dark-text-secondary">🔒</span>}
                     </button>
                   ))}
                 </div>

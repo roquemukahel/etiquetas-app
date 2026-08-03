@@ -1879,3 +1879,16 @@ begin
   end if;
 end;
 $$;
+
+-- ============================================================
+-- PIN de 4 dígitos opcional por vendedor/técnico. No reemplaza ningún
+-- login: el selector de "¿con quién tengo el gusto?" (SelectorDeActor)
+-- sigue siendo de un solo toque para el mostrador compartido, pero si
+-- una persona cargó un PIN, hay que tipearlo para elegirla — evita
+-- que cualquiera se atribuya (o le atribuya a otro) una venta o
+-- reparación que no hizo. Se guarda en texto plano a propósito: es un
+-- control liviano de atribución dentro del propio local, no una
+-- credencial real — no protege plata ni datos, así que no amerita el
+-- costo de hashearlo.
+alter table vendedores add column if not exists pin text;
+alter table tecnicos add column if not exists pin text;
