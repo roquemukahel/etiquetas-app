@@ -2,7 +2,13 @@
 
 import { useState } from 'react';
 import { crearClienteNavegador } from './lib/supabase/client';
-import { TRANSFERENCIA_CVU, TRANSFERENCIA_ALIAS, TRANSFERENCIA_TITULAR, PRECIO_ARS_MENSUAL } from './lib/pagoManual';
+import {
+  TRANSFERENCIA_CVU,
+  TRANSFERENCIA_ALIAS,
+  TRANSFERENCIA_TITULAR,
+  PRECIO_ARS_MENSUAL,
+  PRECIO_ARS_ANUAL,
+} from './lib/pagoManual';
 
 type Comprobante = {
   id: string;
@@ -26,6 +32,7 @@ export default function PagoTransferenciaARS({
 }) {
   const supabase = crearClienteNavegador();
   const [abierto, setAbierto] = useState(abiertoPorDefecto);
+  const [plan, setPlan] = useState<'mensual' | 'anual'>('mensual');
   const [imagen, setImagen] = useState<string | null>(null);
   const [referencia, setReferencia] = useState('');
   const [enviando, setEnviando] = useState(false);
@@ -46,9 +53,10 @@ export default function PagoTransferenciaARS({
     }
     setEnviando(true);
     setError(null);
+    const monto = plan === 'mensual' ? PRECIO_ARS_MENSUAL : PRECIO_ARS_ANUAL;
     const { error: insertError } = await supabase.from('comprobantes_pago').insert({
       negocio_id: negocioId,
-      monto: PRECIO_ARS_MENSUAL,
+      monto,
       moneda: 'ARS',
       comprobante_imagen: imagen,
       referencia: referencia.trim() || null,
@@ -98,6 +106,28 @@ export default function PagoTransferenciaARS({
         <div className="flex flex-col gap-3">
           {error && <p className="text-xs text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
 
+          <div>
+            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Plan</label>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setPlan('mensual')}
+                className={`flex-1 rounded-xl py-2 text-sm font-medium ${
+                  plan === 'mensual' ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
+                }`}
+              >
+                Mensual · ${PRECIO_ARS_MENSUAL.toLocaleString('es-AR')}
+              </button>
+              <button
+                onClick={() => setPlan('anual')}
+                className={`flex-1 rounded-xl py-2 text-sm font-medium ${
+                  plan === 'anual' ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
+                }`}
+              >
+                Anual · ${PRECIO_ARS_ANUAL.toLocaleString('es-AR')}
+              </button>
+            </div>
+          </div>
+
           <div className="rounded-xl bg-canvas dark:bg-dark-bg p-3 flex flex-col gap-1">
             <p className="text-xs text-muted dark:text-dark-text-secondary">Alias</p>
             <p className="text-sm font-mono break-all">{TRANSFERENCIA_ALIAS}</p>
@@ -106,7 +136,7 @@ export default function PagoTransferenciaARS({
             <p className="text-xs text-muted dark:text-dark-text-secondary mt-2">Titular</p>
             <p className="text-sm">{TRANSFERENCIA_TITULAR}</p>
             <p className="text-xs text-muted dark:text-dark-text-secondary mt-2">
-              Monto a transferir: ${PRECIO_ARS_MENSUAL.toLocaleString('es-AR')} (plan mensual)
+              Monto a transferir: ${(plan === 'mensual' ? PRECIO_ARS_MENSUAL : PRECIO_ARS_ANUAL).toLocaleString('es-AR')}
             </p>
           </div>
 
