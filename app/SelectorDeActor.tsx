@@ -26,7 +26,7 @@ type Persona = {
   foto_url: string | null;
   telefono: string | null;
   edad: number | null;
-  pin: string | null;
+  tienePin: boolean;
 };
 
 export default function SelectorDeActor() {
@@ -50,6 +50,7 @@ export default function SelectorDeActor() {
   const [personaPin, setPersonaPin] = useState<{ tipo: 'vendedor' | 'tecnico'; persona: Persona } | null>(null);
   const [pinIngresado, setPinIngresado] = useState('');
   const [errorPin, setErrorPin] = useState<string | null>(null);
+  const [verificandoPin, setVerificandoPin] = useState(false);
   // La raíz ("/") muestra la landing pública a quien no tiene sesión, así
   // que ahí necesitamos saber si hay usuario logueado antes de decidir si
   // corresponde mostrar el cartel (no tiene sentido preguntarle "con quién
@@ -102,12 +103,16 @@ export default function SelectorDeActor() {
     if (esRutaExcluida || !mostrarOverlay || cargando) return;
     setCargando(true);
     (async () => {
-      const [{ data: vend }, { data: tec }] = await Promise.all([
-        supabase.from('vendedores').select('id, nombre, foto_url, telefono, edad, pin').order('nombre'),
-        supabase.from('tecnicos').select('id, nombre, foto_url, telefono, edad, pin').order('nombre'),
+      const [{ data: vend }, { data: tec }, { data: idsVend }, { data: idsTec }] = await Promise.all([
+        supabase.from('vendedores').select('id, nombre, foto_url, telefono, edad').order('nombre'),
+        supabase.from('tecnicos').select('id, nombre, foto_url, telefono, edad').order('nombre'),
+        supabase.rpc('ids_vendedores_con_pin'),
+        supabase.rpc('ids_tecnicos_con_pin'),
       ]);
-      setVendedores(vend ?? []);
-      setTecnicos(tec ?? []);
+      const conPinVend = new Set(((idsVend as { id: string }[]) ?? []).map((r) => r.id));
+      const conPinTec = new Set(((idsTec as { id: string }[]) ?? []).map((r) => r.id));
+      setVendedores((vend ?? []).map((v) => ({ ...v, tienePin: conPinVend.has(v.id) })));
+      setTecnicos((tec ?? []).map((t) => ({ ...t, tienePin: conPinTec.has(t.id) })));
       setCargando(false);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -125,7 +130,7 @@ export default function SelectorDeActor() {
   };
 
   const tocarPersona = (tipo: 'vendedor' | 'tecnico', persona: Persona) => {
-    if (persona.pin) {
+    if (persona.tienePin) {
       setPersonaPin({ tipo, persona });
       setPinIngresado('');
       setErrorPin(null);
@@ -134,9 +139,14 @@ export default function SelectorDeActor() {
     }
   };
 
-  const confirmarPin = () => {
+  const confirmarPin = async () => {
     if (!personaPin) return;
-    if (pinIngresado !== personaPin.persona.pin) {
+    setVerificandoPin(true);
+    const rpc = personaPin.tipo === 'vendedor' ? 'verificar_pin_vendedor' : 'verificar_pin_tecnico';
+    const idParam = personaPin.tipo === 'vendedor' ? 'vendedor_id' : 'tecnico_id';
+    const { data: correcto } = await supabase.rpc(rpc, { [idParam]: personaPin.persona.id, pin_ingresado: pinIngresado });
+    setVerificandoPin(false);
+    if (!correcto) {
       setErrorPin('PIN incorrecto');
       return;
     }
@@ -357,10 +367,10 @@ export default function SelectorDeActor() {
                 />
                 <button
                   onClick={confirmarPin}
-                  disabled={pinIngresado.length !== 4}
+                  disabled={pinIngresado.length !== 4 || verificandoPin}
                   className="rounded-xl bg-accent dark:bg-dark-accent text-white py-3 text-sm font-medium disabled:opacity-40"
                 >
-                  Confirmar
+                  {verificandoPin ? 'Verificando...' : 'Confirmar'}
                 </button>
               </>
             ) : (
@@ -381,7 +391,7 @@ export default function SelectorDeActor() {
                     >
                       <Avatar src={p.foto_url} nombre={p.nombre} size={64} />
                       {p.nombre}
-                      {p.pin && <span className="ml-auto text-muted dark:text-dark-text-secondary">🔒</span>}
+                      {p.tienePin && <span className="ml-auto text-muted dark:text-dark-text-secondary">🔒</span>}
                     </button>
                   ))}
                 </div>

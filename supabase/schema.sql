@@ -1901,3 +1901,55 @@ alter table tecnicos add column if not exists pin text;
 -- ============================================================
 alter table clientes add column if not exists agregado_por_nombre text;
 alter table clientes add column if not exists agregado_por_foto_url text;
+
+-- ============================================================
+-- El selector de "¿con quién tengo el gusto?" (SelectorDeActor)
+-- traía la lista de vendedores/técnicos con un simple select('*'),
+-- que incluye la columna "pin" — es decir, el PIN de TODOS quedaba
+-- viajando en la respuesta de red apenas se abría el cartel, visible
+-- para cualquiera que mirara las herramientas de desarrollador del
+-- navegador, sin necesidad de adivinarlo. Estas funciones evitan que
+-- el valor real del PIN salga nunca del servidor: una devuelve solo
+-- los ids que TIENEN un PIN cargado (para mostrar el candadito 🔒 sin
+-- revelar cuál es), y la otra confirma un PIN sin exponerlo.
+create or replace function ids_vendedores_con_pin()
+returns table (id uuid)
+language sql
+security definer
+stable
+as $$
+  select id from vendedores where negocio_id = negocio_actual() and pin is not null
+$$;
+
+create or replace function ids_tecnicos_con_pin()
+returns table (id uuid)
+language sql
+security definer
+stable
+as $$
+  select id from tecnicos where negocio_id = negocio_actual() and pin is not null
+$$;
+
+create or replace function verificar_pin_vendedor(vendedor_id uuid, pin_ingresado text)
+returns boolean
+language sql
+security definer
+stable
+as $$
+  select exists(
+    select 1 from vendedores
+    where id = vendedor_id and negocio_id = negocio_actual() and pin is not null and pin = pin_ingresado
+  )
+$$;
+
+create or replace function verificar_pin_tecnico(tecnico_id uuid, pin_ingresado text)
+returns boolean
+language sql
+security definer
+stable
+as $$
+  select exists(
+    select 1 from tecnicos
+    where id = tecnico_id and negocio_id = negocio_actual() and pin is not null and pin = pin_ingresado
+  )
+$$;
