@@ -331,6 +331,15 @@ export default function FichaReparacion() {
     const cambios: any = { estado: nuevoEstado, estado_actualizado_at: new Date().toISOString() };
     if (nuevoEstado === 'listo_para_entregar' && !r.fecha_reparado) cambios.fecha_reparado = new Date().toISOString();
     await supabase.from('reparaciones').update(cambios).eq('id', r.id);
+
+    // La orden vinculada (creada al recibir el equipo, ver agregarEquipo)
+    // nunca se llegó a cobrar — se borra para no dejar una orden $0
+    // pendiente fantasma en Órdenes. La referencia en reparaciones se
+    // limpia sola (orden_cobro_id tiene "on delete set null").
+    if (nuevoEstado === 'cancelado' && r.orden_cobro_id) {
+      await supabase.from('ordenes').delete().eq('id', r.orden_cobro_id);
+    }
+
     await registrarAuditoria(supabase, {
       accion: `cambió el estado de la reparación ${r.numero_orden || ''} de "${infoEstado(r.estado).label}" a "${infoEstado(nuevoEstado).label}"`,
       entidad: 'reparacion',
@@ -393,36 +402,67 @@ export default function FichaReparacion() {
     // copiarlo a mano, qué no está cubierto por la garantía y por qué.
     const notaCondicion = generarTextoCondicionIngreso(r as any) || null;
 
-    const { data: orden, error: ordenError } = await supabase
-      .from('ordenes')
-      .insert({
-        cliente_id: r.cliente_id,
-        forma_pago: r.forma_pago || 'Efectivo',
-        total,
-        estado: 'pendiente',
-        nota: notaCondicion,
-      })
-      .select()
-      .single();
+    let ordenId = r.orden_cobro_id;
 
-    if (ordenError || !orden) {
-      setError('No pudimos generar la orden: ' + (ordenError?.message || ''));
-      setGuardando(false);
-      return;
+    if (ordenId) {
+      // Ya existía desde que se recibió el equipo (ver agregarEquipo en la
+      // lista) — se actualiza en vez de crear una segunda orden duplicada.
+      const { error: updateError } = await supabase
+        .from('ordenes')
+        .update({ total, forma_pago: r.forma_pago || 'Efectivo', nota: notaCondicion })
+        .eq('id', ordenId);
+      if (updateError) {
+        setError('No pudimos actualizar la orden: ' + updateError.message);
+        setGuardando(false);
+        return;
+      }
+      const { data: itemExistente } = await supabase
+        .from('orden_items')
+        .select('id')
+        .eq('orden_id', ordenId)
+        .limit(1)
+        .maybeSingle();
+      if (itemExistente) {
+        await supabase.from('orden_items').update({ descripcion, precio_unitario: total }).eq('id', itemExistente.id);
+      } else {
+        await supabase.from('orden_items').insert({ orden_id: ordenId, descripcion, cantidad: 1, precio_unitario: total, tipo: 'trabajo' });
+      }
+    } else {
+      // Reparaciones sin cliente al recibirse (equipo propio) o cargadas
+      // antes de este cambio no tienen una orden vinculada todavía — se
+      // crea acá, como antes.
+      const { data: orden, error: ordenError } = await supabase
+        .from('ordenes')
+        .insert({
+          cliente_id: r.cliente_id,
+          forma_pago: r.forma_pago || 'Efectivo',
+          total,
+          estado: 'pendiente',
+          nota: notaCondicion,
+        })
+        .select()
+        .single();
+
+      if (ordenError || !orden) {
+        setError('No pudimos generar la orden: ' + (ordenError?.message || ''));
+        setGuardando(false);
+        return;
+      }
+
+      ordenId = orden.id;
+      await supabase.from('orden_items').insert({
+        orden_id: orden.id,
+        descripcion,
+        cantidad: 1,
+        precio_unitario: total,
+        tipo: 'trabajo',
+      });
     }
-
-    await supabase.from('orden_items').insert({
-      orden_id: orden.id,
-      descripcion,
-      cantidad: 1,
-      precio_unitario: total,
-      tipo: 'trabajo',
-    });
 
     await supabase
       .from('reparaciones')
       .update({
-        orden_cobro_id: orden.id,
+        orden_cobro_id: ordenId,
         estado: 'entregado',
         fecha_entrega: new Date().toISOString(),
         estado_actualizado_at: new Date().toISOString(),
@@ -433,11 +473,11 @@ export default function FichaReparacion() {
       accion: `generó la orden de cobro de la reparación ${r.numero_orden || ''} (${r.modelo || 'sin modelo'})`,
       entidad: 'reparacion',
       entidadId: r.id,
-      valorNuevo: { orden_id: orden.id, total },
+      valorNuevo: { orden_id: ordenId, total },
     });
 
     setGuardando(false);
-    router.push(`/ordenes/${orden.id}`);
+    router.push(`/ordenes/${ordenId}`);
   };
 
   const agregarAlStockFicha = async () => {
@@ -478,6 +518,12 @@ export default function FichaReparacion() {
       .from('reparaciones')
       .update({ estado: 'entregado', fecha_entrega: new Date().toISOString(), estado_actualizado_at: new Date().toISOString() })
       .eq('id', r.id);
+    // Se entregó sin pasar por "Generar orden de cobro" (ej. reparación
+    // gratis) — la orden vinculada queda en $0, pero se marca entregada
+    // para que no quede colgada como "pendiente" para siempre.
+    if (r.orden_cobro_id) {
+      await supabase.from('ordenes').update({ estado: 'entregado' }).eq('id', r.orden_cobro_id);
+    }
     await registrarAuditoria(supabase, {
       accion: `marcó como entregado al cliente un equipo reparado en Servicio Técnico (${r.numero_orden || ''}, ${r.modelo || 'sin modelo'}${r.imei ? `, IMEI ${r.imei}` : ''})`,
       entidad: 'reparacion',

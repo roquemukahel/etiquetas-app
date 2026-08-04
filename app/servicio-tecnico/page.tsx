@@ -20,6 +20,7 @@ import {
   GrupoEstado,
   calcularAlertas,
   ITEMS_CHECKLIST_INGRESO,
+  generarTextoCondicionIngreso,
 } from '../lib/reparaciones';
 import MiniaturaDispositivo from '../MiniaturaDispositivo';
 import Avatar from '../Avatar';
@@ -225,6 +226,24 @@ export default function ServicioTecnico() {
     [reparaciones, tecnicoSeleccionado]
   );
 
+  const datosChecklistNuevo = () => ({
+    enciende: nuevoEnciende,
+    pantalla_estado: nuevaPantalla || null,
+    modulo_ok: nuevoChecklist.modulo_ok ?? null,
+    camara_frontal_ok: nuevoChecklist.camara_frontal_ok ?? null,
+    camara_trasera_ok: nuevoChecklist.camara_trasera_ok ?? null,
+    flash_ok: nuevoChecklist.flash_ok ?? null,
+    microfono_superior_ok: nuevoChecklist.microfono_superior_ok ?? null,
+    microfono_inferior_ok: nuevoChecklist.microfono_inferior_ok ?? null,
+    altavoces_ok: nuevoChecklist.altavoces_ok ?? null,
+    boton_power_ok: nuevoChecklist.boton_power_ok ?? null,
+    boton_volumen_ok: nuevoChecklist.boton_volumen_ok ?? null,
+    biometria_ok: nuevoChecklist.biometria_ok ?? null,
+    conectores_ok: nuevoChecklist.conectores_ok ?? null,
+    humedad: nuevaHumedad,
+    garantia_excepcion_manual: nuevaExcepcionGarantia.trim() || null,
+  });
+
   const agregarEquipo = async () => {
     if (!nuevoModelo.trim()) return;
     setGuardandoNuevo(true);
@@ -239,6 +258,32 @@ export default function ServicioTecnico() {
         .select('id')
         .single();
       clienteId = nuevoCliente?.id ?? null;
+    }
+
+    // Si hay un cliente (no es un equipo propio del local), se arma de una
+    // una orden vinculada — así hay una boleta para entregarle desde el
+    // momento en que se recibe el equipo, con la condición de ingreso ya
+    // en la nota, en vez de recién al terminar la reparación. "Generar
+    // orden de cobro" más adelante actualiza esta misma orden en vez de
+    // crear una segunda (ver generarOrdenCobro en la ficha).
+    let ordenId: string | null = null;
+    if (clienteId) {
+      const notaCondicion = generarTextoCondicionIngreso(datosChecklistNuevo()) || null;
+      const { data: orden } = await supabase
+        .from('ordenes')
+        .insert({ cliente_id: clienteId, estado: 'pendiente', total: 0, nota: notaCondicion })
+        .select('id')
+        .single();
+      if (orden) {
+        ordenId = orden.id;
+        await supabase.from('orden_items').insert({
+          orden_id: orden.id,
+          descripcion: `Servicio técnico — ${nuevoModelo.trim()}`,
+          cantidad: 1,
+          precio_unitario: 0,
+          tipo: 'trabajo',
+        });
+      }
     }
 
     const { data: nueva } = await supabase
@@ -258,6 +303,7 @@ export default function ServicioTecnico() {
         ...nuevoChecklist,
         humedad: nuevaHumedad,
         garantia_excepcion_manual: nuevaExcepcionGarantia.trim() || null,
+        orden_cobro_id: ordenId,
       })
       .select('token_seguimiento')
       .single();
@@ -556,25 +602,7 @@ export default function ServicioTecnico() {
                 rows={2}
                 className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
               />
-              <TextoCondicionGenerado
-                datos={{
-                  enciende: nuevoEnciende,
-                  pantalla_estado: nuevaPantalla || null,
-                  modulo_ok: nuevoChecklist.modulo_ok ?? null,
-                  camara_frontal_ok: nuevoChecklist.camara_frontal_ok ?? null,
-                  camara_trasera_ok: nuevoChecklist.camara_trasera_ok ?? null,
-                  flash_ok: nuevoChecklist.flash_ok ?? null,
-                  microfono_superior_ok: nuevoChecklist.microfono_superior_ok ?? null,
-                  microfono_inferior_ok: nuevoChecklist.microfono_inferior_ok ?? null,
-                  altavoces_ok: nuevoChecklist.altavoces_ok ?? null,
-                  boton_power_ok: nuevoChecklist.boton_power_ok ?? null,
-                  boton_volumen_ok: nuevoChecklist.boton_volumen_ok ?? null,
-                  biometria_ok: nuevoChecklist.biometria_ok ?? null,
-                  conectores_ok: nuevoChecklist.conectores_ok ?? null,
-                  humedad: nuevaHumedad,
-                  garantia_excepcion_manual: nuevaExcepcionGarantia.trim() || null,
-                }}
-              />
+              <TextoCondicionGenerado datos={datosChecklistNuevo()} />
 
               <input
                 value={nuevaUbicacion}

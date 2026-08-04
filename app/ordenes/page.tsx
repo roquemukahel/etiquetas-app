@@ -15,12 +15,26 @@ type Orden = {
 };
 
 const ESTADOS = ['todas', 'pendiente', 'pagado', 'entregado'];
+const TIPOS: { id: 'todas' | 'ventas' | 'servicio'; label: string }[] = [
+  { id: 'todas', label: 'Todas' },
+  { id: 'ventas', label: 'Ventas' },
+  { id: 'servicio', label: 'Servicio técnico' },
+];
+
+// Mismo criterio que ya se usaba solo para la etiqueta de cada tarjeta:
+// una orden es "de servicio técnico" si todos sus ítems son trabajos
+// (nunca hay un dispositivo/producto vendido junto), típicamente porque
+// viene de recibir un equipo a reparar o de cobrar un arreglo.
+function esServicioTecnico(o: Orden) {
+  return o.orden_items.length > 0 && o.orden_items.every((i) => i.tipo === 'trabajo');
+}
 
 export default function Ordenes() {
   const supabase = crearClienteNavegador();
   const [ordenes, setOrdenes] = useState<Orden[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtroEstado, setFiltroEstado] = useState('todas');
+  const [filtroTipo, setFiltroTipo] = useState<'todas' | 'ventas' | 'servicio'>('todas');
 
   useEffect(() => {
     (async () => {
@@ -34,9 +48,13 @@ export default function Ordenes() {
   }, []);
 
   const filtradas = useMemo(() => {
-    if (filtroEstado === 'todas') return ordenes;
-    return ordenes.filter((o) => o.estado === filtroEstado);
-  }, [ordenes, filtroEstado]);
+    return ordenes
+      .filter((o) => filtroEstado === 'todas' || o.estado === filtroEstado)
+      .filter((o) => {
+        if (filtroTipo === 'todas') return true;
+        return filtroTipo === 'servicio' ? esServicioTecnico(o) : !esServicioTecnico(o);
+      });
+  }, [ordenes, filtroEstado, filtroTipo]);
 
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
@@ -46,6 +64,20 @@ export default function Ordenes() {
         </Link>
         <span className="text-lg font-medium">Órdenes</span>
       </header>
+
+      <div className="flex items-center gap-2 text-xs overflow-x-auto">
+        {TIPOS.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setFiltroTipo(t.id)}
+            className={`shrink-0 rounded-xl px-3 py-2 font-medium ${
+              filtroTipo === t.id ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
 
       <div className="flex items-center gap-2 text-xs overflow-x-auto">
         {ESTADOS.map((e) => (
@@ -89,7 +121,7 @@ export default function Ordenes() {
                 {o.orden_items.length > 0 && (
                   <span className="text-xs font-bold text-accent dark:text-dark-accent">
                     {' '}
-                    — {o.orden_items.every((i) => i.tipo === 'trabajo') ? 'Servicio técnico' : 'Venta'}
+                    — {esServicioTecnico(o) ? 'Servicio técnico' : 'Venta'}
                   </span>
                 )}
               </p>
