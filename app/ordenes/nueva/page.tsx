@@ -9,7 +9,10 @@ import { obtenerTodasLasFilas } from '../../lib/db';
 import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../../lib/carpetas';
 import { simboloMoneda } from '../../lib/monedas';
 import { getActor } from '../../lib/actor';
+import { ITEMS_CHECKLIST_INGRESO, generarTextoCondicionIngreso } from '../../lib/reparaciones';
 import MiniaturaDispositivo from '../../MiniaturaDispositivo';
+import CheckTri from '../../CheckTri';
+import TextoCondicionGenerado from '../../TextoCondicionGenerado';
 
 type Dispositivo = {
   id: string;
@@ -103,6 +106,16 @@ export default function NuevaOrden() {
   const [trabajoManualNombre, setTrabajoManualNombre] = useState('');
   const [trabajoManualPrecio, setTrabajoManualPrecio] = useState('');
   const [trabajoModelo, setTrabajoModelo] = useState('');
+
+  // Checklist de recepción para el equipo que se deja a reparar acá mismo
+  // (venta directa, sin pasar por el circuito completo de Servicio
+  // Técnico) — mismo cuadro que en esa sección. De acá sale el texto que
+  // se agrega a la nota de la boleta al sumar el trabajo al carrito.
+  const [trabajoEnciende, setTrabajoEnciende] = useState<boolean | null>(null);
+  const [trabajoPantalla, setTrabajoPantalla] = useState('');
+  const [trabajoChecklist, setTrabajoChecklist] = useState<Record<string, boolean | null>>({});
+  const [trabajoHumedad, setTrabajoHumedad] = useState<boolean | null>(null);
+  const [trabajoExcepcionGarantia, setTrabajoExcepcionGarantia] = useState('');
 
   // --- confirmar ---
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
@@ -316,12 +329,49 @@ export default function NuevaOrden() {
 
   const descripcionTrabajo = (nombre: string) => (trabajoModelo.trim() ? `${nombre} — ${trabajoModelo.trim()}` : nombre);
 
+  const datosChecklistTrabajo = () => ({
+    enciende: trabajoEnciende,
+    pantalla_estado: trabajoPantalla || null,
+    modulo_ok: trabajoChecklist.modulo_ok ?? null,
+    camara_frontal_ok: trabajoChecklist.camara_frontal_ok ?? null,
+    camara_trasera_ok: trabajoChecklist.camara_trasera_ok ?? null,
+    flash_ok: trabajoChecklist.flash_ok ?? null,
+    microfono_superior_ok: trabajoChecklist.microfono_superior_ok ?? null,
+    microfono_inferior_ok: trabajoChecklist.microfono_inferior_ok ?? null,
+    altavoces_ok: trabajoChecklist.altavoces_ok ?? null,
+    boton_power_ok: trabajoChecklist.boton_power_ok ?? null,
+    boton_volumen_ok: trabajoChecklist.boton_volumen_ok ?? null,
+    biometria_ok: trabajoChecklist.biometria_ok ?? null,
+    conectores_ok: trabajoChecklist.conectores_ok ?? null,
+    humedad: trabajoHumedad,
+    garantia_excepcion_manual: trabajoExcepcionGarantia.trim() || null,
+  });
+
+  // La checklist no crea un ticket en Servicio Técnico (esto es venta
+  // directa) — el texto que genera se agrega a la nota de la boleta, para
+  // que el cliente se lleve por escrito qué se le garantiza y qué no.
+  const agregarTextoCondicionANota = () => {
+    const texto = generarTextoCondicionIngreso(datosChecklistTrabajo());
+    if (!texto) return;
+    setNota((n) => (n.trim() ? `${n.trim()}\n\n${texto}` : texto));
+  };
+
+  const resetChecklistTrabajo = () => {
+    setTrabajoEnciende(null);
+    setTrabajoPantalla('');
+    setTrabajoChecklist({});
+    setTrabajoHumedad(null);
+    setTrabajoExcepcionGarantia('');
+  };
+
   const agregarTrabajoDelCatalogo = (t: Trabajo) => {
     setCarrito((c) => [
       ...c,
       { tempId: idTemporal(), descripcion: descripcionTrabajo(t.nombre), cantidad: 1, precioUnitario: t.precio ?? 0, tipo: 'trabajo' },
     ]);
+    agregarTextoCondicionANota();
     setTrabajoModelo('');
+    resetChecklistTrabajo();
     setPanelAbierto(null);
   };
 
@@ -337,9 +387,11 @@ export default function NuevaOrden() {
         tipo: 'trabajo',
       },
     ]);
+    agregarTextoCondicionANota();
     setTrabajoManualNombre('');
     setTrabajoManualPrecio('');
     setTrabajoModelo('');
+    resetChecklistTrabajo();
     setPanelAbierto(null);
   };
 
@@ -846,6 +898,54 @@ export default function NuevaOrden() {
                   <option key={c} value={c} />
                 ))}
               </datalist>
+            </div>
+
+            <div className="flex flex-col gap-2 border-t border-border dark:border-dark-border pt-3">
+              <p className="text-xs font-medium text-muted dark:text-dark-text-secondary">
+                ¿Cómo entra el equipo? (para saber qué se garantiza al entregarlo)
+              </p>
+              <CheckTri label="Enciende" valor={trabajoEnciende} onChange={setTrabajoEnciende} />
+              <div>
+                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Pantalla</label>
+                <div className="flex gap-2">
+                  {[
+                    { id: 'ok', label: 'OK' },
+                    { id: 'marcada', label: 'Marcada' },
+                    { id: 'rota', label: 'Rota' },
+                  ].map((op) => (
+                    <button
+                      key={op.id}
+                      onClick={() => setTrabajoPantalla(op.id)}
+                      className={`flex-1 rounded-lg py-2 text-xs font-medium ${
+                        trabajoPantalla === op.id ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
+                      }`}
+                    >
+                      {op.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {ITEMS_CHECKLIST_INGRESO.map((item) => (
+                <CheckTri
+                  key={item.campo}
+                  label={item.label}
+                  valor={trabajoChecklist[item.campo] ?? null}
+                  onChange={(v) => setTrabajoChecklist((p) => ({ ...p, [item.campo]: v }))}
+                />
+              ))}
+              <CheckTri label="Humedad / manipulación" valor={trabajoHumedad} onChange={setTrabajoHumedad} invertido />
+              <textarea
+                value={trabajoExcepcionGarantia}
+                onChange={(e) => setTrabajoExcepcionGarantia(e.target.value)}
+                placeholder='Excepción adicional a la garantía (opcional, ej. "por golpe fuerte, no garantizamos Face ID")'
+                rows={2}
+                className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+              />
+              <TextoCondicionGenerado datos={datosChecklistTrabajo()} />
+              <p className="text-[10px] text-muted dark:text-dark-text-secondary -mt-1">
+                Al agregar el trabajo al carrito, este texto se suma solo a la nota de la boleta — la garantía general
+                que ya configuraste en Configuración &gt; Datos del negocio sigue apareciendo igual, esto es aparte.
+              </p>
             </div>
 
             {modoTrabajo === 'catalogo' ? (
