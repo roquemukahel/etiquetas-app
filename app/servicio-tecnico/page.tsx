@@ -107,6 +107,7 @@ export default function ServicioTecnico() {
   const [nuevaFalla, setNuevaFalla] = useState('');
   const [nuevaUbicacion, setNuevaUbicacion] = useState('');
   const [guardandoNuevo, setGuardandoNuevo] = useState(false);
+  const [errorNuevo, setErrorNuevo] = useState<string | null>(null);
 
   // Checklist de recepción — qué funciona y qué no al ingresar el equipo,
   // de acá sale el texto de condición/garantía (ver TextoCondicionGenerado).
@@ -247,6 +248,7 @@ export default function ServicioTecnico() {
   const agregarEquipo = async () => {
     if (!nuevoModelo.trim()) return;
     setGuardandoNuevo(true);
+    setErrorNuevo(null);
 
     let clienteId = clienteCoincidente?.id ?? null;
     let nombreParaMensaje = clienteCoincidente ? nombreCompleto(clienteCoincidente) : clienteInput.trim();
@@ -269,20 +271,31 @@ export default function ServicioTecnico() {
     let ordenId: string | null = null;
     if (clienteId) {
       const notaCondicion = generarTextoCondicionIngreso(datosChecklistNuevo()) || null;
-      const { data: orden } = await supabase
+      const { data: orden, error: ordenError } = await supabase
         .from('ordenes')
         .insert({ cliente_id: clienteId, estado: 'pendiente', total: 0, nota: notaCondicion })
         .select('id')
         .single();
-      if (orden) {
-        ordenId = orden.id;
-        await supabase.from('orden_items').insert({
-          orden_id: orden.id,
-          descripcion: `Servicio técnico — ${nuevoModelo.trim()}`,
-          cantidad: 1,
-          precio_unitario: 0,
-          tipo: 'trabajo',
-        });
+      if (ordenError || !orden) {
+        // No seguimos como si nada: sin avisar, quedaría exactamente el
+        // mismo problema de siempre ("no me deja generar boletas"), solo
+        // que ahora en silencio.
+        setErrorNuevo('No pudimos crear la orden para la boleta: ' + (ordenError?.message || 'sin datos'));
+        setGuardandoNuevo(false);
+        return;
+      }
+      ordenId = orden.id;
+      const { error: itemError } = await supabase.from('orden_items').insert({
+        orden_id: orden.id,
+        descripcion: `Servicio técnico — ${nuevoModelo.trim()}`,
+        cantidad: 1,
+        precio_unitario: 0,
+        tipo: 'trabajo',
+      });
+      if (itemError) {
+        setErrorNuevo('No pudimos terminar de armar la boleta: ' + itemError.message);
+        setGuardandoNuevo(false);
+        return;
       }
     }
 
@@ -522,6 +535,7 @@ export default function ServicioTecnico() {
 
           {panelNuevo && (
             <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-3 flex flex-col gap-2">
+              {errorNuevo && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{errorNuevo}</p>}
               <input
                 value={nuevoModelo}
                 onChange={(e) => setNuevoModelo(e.target.value)}

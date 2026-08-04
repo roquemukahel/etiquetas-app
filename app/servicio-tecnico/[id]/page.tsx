@@ -333,11 +333,20 @@ export default function FichaReparacion() {
     await supabase.from('reparaciones').update(cambios).eq('id', r.id);
 
     // La orden vinculada (creada al recibir el equipo, ver agregarEquipo)
-    // nunca se llegó a cobrar — se borra para no dejar una orden $0
-    // pendiente fantasma en Órdenes. La referencia en reparaciones se
-    // limpia sola (orden_cobro_id tiene "on delete set null").
+    // se borra al cancelar SOLO si sigue en $0 y pendiente — es decir, si
+    // nunca se llegó a cobrar. Si ya tiene un total cargado o está pagada
+    // o entregada, es plata real y no se toca aunque después la marquen
+    // como cancelada. La referencia en reparaciones se limpia sola
+    // (orden_cobro_id tiene "on delete set null") cuando sí se borra.
     if (nuevoEstado === 'cancelado' && r.orden_cobro_id) {
-      await supabase.from('ordenes').delete().eq('id', r.orden_cobro_id);
+      const { data: ordenVinculada } = await supabase
+        .from('ordenes')
+        .select('estado, total')
+        .eq('id', r.orden_cobro_id)
+        .maybeSingle();
+      if (ordenVinculada && ordenVinculada.estado === 'pendiente' && !ordenVinculada.total) {
+        await supabase.from('ordenes').delete().eq('id', r.orden_cobro_id);
+      }
     }
 
     await registrarAuditoria(supabase, {
@@ -416,12 +425,20 @@ export default function FichaReparacion() {
         setGuardando(false);
         return;
       }
-      const { data: itemExistente } = await supabase
+      const { data: itemExistente, error: itemBuscarError } = await supabase
         .from('orden_items')
         .select('id')
         .eq('orden_id', ordenId)
         .limit(1)
         .maybeSingle();
+      if (itemBuscarError) {
+        // Si esto falla por un error real (no porque no exista el ítem),
+        // no hay que asumir que no existe: insertar acá duplicaría la
+        // línea de la boleta (una vieja en $0 + una nueva con el total).
+        setError('No pudimos actualizar el ítem de la orden: ' + itemBuscarError.message);
+        setGuardando(false);
+        return;
+      }
       if (itemExistente) {
         await supabase.from('orden_items').update({ descripcion, precio_unitario: total }).eq('id', itemExistente.id);
       } else {
