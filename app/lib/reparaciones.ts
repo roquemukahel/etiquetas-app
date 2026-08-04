@@ -108,10 +108,14 @@ export function generarTextoCondicionIngreso(r: ChecklistIngreso): string {
   const excluidos = [...fallan];
   if (r.pantalla_estado === 'rota') excluidos.push('Pantalla');
 
-  if (excluidos.length > 0 || r.garantia_excepcion_manual) {
+  if (excluidos.length > 0 || r.humedad || r.garantia_excepcion_manual) {
     if (texto) texto += '\n\n';
     texto += 'No se garantiza tras la reparación:';
     if (excluidos.length > 0) texto += `\n- ${excluidos.join(', ')} (no funcionaba / dañado al ingresar)`;
+    // La humedad/manipulación previa es la señal más seria de todas — no
+    // es "tal componente no funciona", es que cualquier cosa adentro
+    // puede fallar más adelante sin que sea culpa de la reparación.
+    if (r.humedad) texto += '\n- Garantía general afectada por signos de humedad o manipulación previa';
     if (r.garantia_excepcion_manual) texto += `\n- ${r.garantia_excepcion_manual}`;
   }
 
