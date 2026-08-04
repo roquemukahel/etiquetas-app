@@ -10,7 +10,13 @@ import { registrarAuditoria } from '../../lib/auditoria';
 import { getActor } from '../../lib/actor';
 import { armarLinkWhatsApp, mensajeSeguimientoServicio, mensajeListoServicio, mensajePresupuesto, mensajeEsperandoRepuesto } from '../../lib/whatsapp';
 import { codigoLlamada } from '../../lib/paises';
-import { ESTADOS_REPARACION, PRIORIDADES, infoEstado } from '../../lib/reparaciones';
+import {
+  ESTADOS_REPARACION,
+  PRIORIDADES,
+  infoEstado,
+  ITEMS_CHECKLIST_INGRESO,
+  generarTextoCondicionIngreso,
+} from '../../lib/reparaciones';
 import SelectorColor from '../../SelectorColor';
 import Avatar from '../../Avatar';
 
@@ -41,6 +47,15 @@ type Reparacion = {
   biometria_ok: boolean | null;
   altavoces_ok: boolean | null;
   conectores_ok: boolean | null;
+  modulo_ok: boolean | null;
+  flash_ok: boolean | null;
+  camara_frontal_ok: boolean | null;
+  camara_trasera_ok: boolean | null;
+  microfono_superior_ok: boolean | null;
+  microfono_inferior_ok: boolean | null;
+  boton_power_ok: boolean | null;
+  boton_volumen_ok: boolean | null;
+  garantia_excepcion_manual: string | null;
   humedad: boolean | null;
   garantia_condiciones_aceptadas: boolean;
   diagnostico: string | null;
@@ -177,11 +192,18 @@ export default function FichaReparacion() {
       estado_estetico: r.estado_estetico ?? '',
       enciende: r.enciende,
       pantalla_estado: r.pantalla_estado ?? '',
-      camaras_ok: r.camaras_ok,
-      botones_ok: r.botones_ok,
       biometria_ok: r.biometria_ok,
       altavoces_ok: r.altavoces_ok,
       conectores_ok: r.conectores_ok,
+      modulo_ok: r.modulo_ok,
+      flash_ok: r.flash_ok,
+      camara_frontal_ok: r.camara_frontal_ok,
+      camara_trasera_ok: r.camara_trasera_ok,
+      microfono_superior_ok: r.microfono_superior_ok,
+      microfono_inferior_ok: r.microfono_inferior_ok,
+      boton_power_ok: r.boton_power_ok,
+      boton_volumen_ok: r.boton_volumen_ok,
+      garantia_excepcion_manual: r.garantia_excepcion_manual ?? '',
       humedad: r.humedad,
       garantia_condiciones_aceptadas: r.garantia_condiciones_aceptadas,
       diagnostico: r.diagnostico ?? '',
@@ -234,11 +256,18 @@ export default function FichaReparacion() {
       estado_estetico: f.estado_estetico.trim() || null,
       enciende: f.enciende,
       pantalla_estado: f.pantalla_estado || null,
-      camaras_ok: f.camaras_ok,
-      botones_ok: f.botones_ok,
       biometria_ok: f.biometria_ok,
       altavoces_ok: f.altavoces_ok,
       conectores_ok: f.conectores_ok,
+      modulo_ok: f.modulo_ok,
+      flash_ok: f.flash_ok,
+      camara_frontal_ok: f.camara_frontal_ok,
+      camara_trasera_ok: f.camara_trasera_ok,
+      microfono_superior_ok: f.microfono_superior_ok,
+      microfono_inferior_ok: f.microfono_inferior_ok,
+      boton_power_ok: f.boton_power_ok,
+      boton_volumen_ok: f.boton_volumen_ok,
+      garantia_excepcion_manual: f.garantia_excepcion_manual.trim() || null,
       humedad: f.humedad,
       garantia_condiciones_aceptadas: f.garantia_condiciones_aceptadas,
       diagnostico: f.diagnostico.trim() || null,
@@ -358,6 +387,9 @@ export default function FichaReparacion() {
     setGuardando(true);
     const total = r.importe_total ?? (r.presupuesto_mano_obra || 0) + (r.presupuesto_repuestos || 0);
     const descripcion = `Servicio técnico — ${r.modelo || 'equipo'}${r.diagnostico ? `: ${r.diagnostico}` : ''}`;
+    // Así el cliente ve en la boleta, sin que nadie tenga que acordarse de
+    // copiarlo a mano, qué no está cubierto por la garantía y por qué.
+    const notaCondicion = generarTextoCondicionIngreso(r as any) || null;
 
     const { data: orden, error: ordenError } = await supabase
       .from('ordenes')
@@ -366,6 +398,7 @@ export default function FichaReparacion() {
         forma_pago: r.forma_pago || 'Efectivo',
         total,
         estado: 'pendiente',
+        nota: notaCondicion,
       })
       .select()
       .single();
@@ -654,12 +687,25 @@ export default function FichaReparacion() {
                 ))}
               </div>
             </div>
-            <CheckTri label="Cámaras" valor={f.camaras_ok} onChange={(v) => setFm((p) => ({ ...p, camaras_ok: v }))} />
-            <CheckTri label="Botones" valor={f.botones_ok} onChange={(v) => setFm((p) => ({ ...p, botones_ok: v }))} />
-            <CheckTri label="Face ID / Touch ID" valor={f.biometria_ok} onChange={(v) => setFm((p) => ({ ...p, biometria_ok: v }))} />
-            <CheckTri label="Altavoces / micrófono" valor={f.altavoces_ok} onChange={(v) => setFm((p) => ({ ...p, altavoces_ok: v }))} />
-            <CheckTri label="Conectores" valor={f.conectores_ok} onChange={(v) => setFm((p) => ({ ...p, conectores_ok: v }))} />
+            {ITEMS_CHECKLIST_INGRESO.map((item) => (
+              <CheckTri
+                key={item.campo}
+                label={item.label}
+                valor={f[item.campo]}
+                onChange={(v) => setFm((p) => ({ ...p, [item.campo]: v }))}
+              />
+            ))}
             <CheckTri label="Humedad / manipulación" valor={f.humedad} onChange={(v) => setFm((p) => ({ ...p, humedad: v }))} invertido />
+            <Campo
+              label="Excepción adicional a la garantía (opcional)"
+              valor={f.garantia_excepcion_manual}
+              onChange={(v) => setFm((p) => ({ ...p, garantia_excepcion_manual: v }))}
+              textarea
+            />
+            <p className="text-[10px] text-muted dark:text-dark-text-secondary -mt-1">
+              Para excluir algo que hoy funciona pero quedó en duda (ej.: "por golpe fuerte, no garantizamos Face ID").
+              Lo que ya marcaste como falla arriba se excluye solo, no hace falta repetirlo acá.
+            </p>
             <label className="flex items-center gap-2 text-sm cursor-pointer mt-1">
               <input
                 type="checkbox"
@@ -669,6 +715,7 @@ export default function FichaReparacion() {
               />
               El cliente aceptó las condiciones de garantía y diagnóstico
             </label>
+            <TextoCondicionGenerado datos={f as any} />
           </div>
         ) : (
           <div className="text-sm flex flex-col gap-1">
@@ -687,14 +734,14 @@ export default function FichaReparacion() {
             <p className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted dark:text-dark-text-secondary">
               {itemChecklist('Enciende', r.enciende)}
               {r.pantalla_estado && <span>Pantalla: {r.pantalla_estado}</span>}
-              {itemChecklist('Cámaras', r.camaras_ok)}
-              {itemChecklist('Botones', r.botones_ok)}
-              {itemChecklist('Face/Touch ID', r.biometria_ok)}
-              {itemChecklist('Altavoces', r.altavoces_ok)}
-              {itemChecklist('Conectores', r.conectores_ok)}
+              {ITEMS_CHECKLIST_INGRESO.map((item) => itemChecklist(item.label, (r as any)[item.campo]))}
+              {/* Reparaciones cargadas antes de este cambio: si nunca se usó la checklist nueva, mostramos la vieja para no perder ese historial. */}
+              {r.camara_frontal_ok == null && r.camara_trasera_ok == null && itemChecklist('Cámaras', r.camaras_ok)}
+              {r.boton_power_ok == null && r.boton_volumen_ok == null && itemChecklist('Botones', r.botones_ok)}
               {r.humedad != null && <span>{r.humedad ? '⚠️ Con humedad/manipulación' : '✅ Sin humedad'}</span>}
             </p>
             {r.garantia_condiciones_aceptadas && <p className="text-xs text-good">✓ Cliente aceptó condiciones de garantía</p>}
+            <TextoCondicionGenerado datos={r as any} />
           </div>
         )}
       </Seccion>
@@ -987,6 +1034,31 @@ export default function FichaReparacion() {
 function itemChecklist(label: string, valor: boolean | null) {
   if (valor == null) return null;
   return <span key={label}>{valor ? `✅ ${label}` : `❌ ${label}`}</span>;
+}
+
+function TextoCondicionGenerado({ datos }: { datos: Parameters<typeof generarTextoCondicionIngreso>[0] }) {
+  const [copiado, setCopiado] = useState(false);
+  const texto = generarTextoCondicionIngreso(datos);
+  if (!texto) return null;
+
+  const copiar = async () => {
+    await navigator.clipboard.writeText(texto);
+    setCopiado(true);
+    setTimeout(() => setCopiado(false), 2000);
+  };
+
+  return (
+    <div className="rounded-lg bg-canvas dark:bg-dark-bg p-3 flex flex-col gap-2 mt-1">
+      <p className="text-xs font-medium text-muted dark:text-dark-text-secondary">Texto para la boleta / cliente</p>
+      <p className="text-xs whitespace-pre-wrap">{texto}</p>
+      <button
+        onClick={copiar}
+        className="self-start rounded-lg border border-border dark:border-dark-border px-3 py-1.5 text-xs font-medium"
+      >
+        {copiado ? '✓ Copiado' : 'Copiar texto'}
+      </button>
+    </div>
+  );
 }
 
 function Seccion({ titulo, children }: { titulo: string; children: React.ReactNode }) {

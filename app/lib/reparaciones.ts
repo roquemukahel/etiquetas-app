@@ -39,6 +39,85 @@ export function infoEstado(estado: string) {
   return ESTADOS_REPARACION.find((e) => e.id === estado) ?? ESTADOS_REPARACION[0];
 }
 
+// Checklist de recepción: qué funciona y qué no al momento de ingresar el
+// equipo. De acá sale el texto de condición/garantía — ver
+// generarTextoCondicionIngreso más abajo.
+export type ChecklistIngreso = {
+  enciende: boolean | null;
+  pantalla_estado: string | null;
+  modulo_ok: boolean | null;
+  camara_frontal_ok: boolean | null;
+  camara_trasera_ok: boolean | null;
+  flash_ok: boolean | null;
+  microfono_superior_ok: boolean | null;
+  microfono_inferior_ok: boolean | null;
+  altavoces_ok: boolean | null;
+  boton_power_ok: boolean | null;
+  boton_volumen_ok: boolean | null;
+  biometria_ok: boolean | null;
+  conectores_ok: boolean | null;
+  humedad: boolean | null;
+  garantia_excepcion_manual: string | null;
+};
+
+export const ITEMS_CHECKLIST_INGRESO: { campo: keyof ChecklistIngreso; label: string }[] = [
+  { campo: 'modulo_ok', label: 'Módulo / Señal' },
+  { campo: 'camara_frontal_ok', label: 'Cámara frontal' },
+  { campo: 'camara_trasera_ok', label: 'Cámara trasera' },
+  { campo: 'flash_ok', label: 'Flash' },
+  { campo: 'microfono_superior_ok', label: 'Micrófono superior' },
+  { campo: 'microfono_inferior_ok', label: 'Micrófono inferior' },
+  { campo: 'altavoces_ok', label: 'Altavoces' },
+  { campo: 'boton_power_ok', label: 'Botón Power' },
+  { campo: 'boton_volumen_ok', label: 'Botón Volumen' },
+  { campo: 'biometria_ok', label: 'Face ID / Touch ID' },
+  { campo: 'conectores_ok', label: 'Conectores' },
+];
+
+// Texto listo para copiar a la boleta o mandar al cliente: qué funciona,
+// qué no, y qué queda automáticamente afuera de la garantía por eso (lo
+// que no funcionaba al ingresar no se puede garantizar después). El
+// técnico puede sumar una excepción manual aparte (ej. un componente que
+// hoy funciona pero quedó en duda por un golpe fuerte en otra parte).
+export function generarTextoCondicionIngreso(r: ChecklistIngreso): string {
+  const funcionan: string[] = [];
+  const fallan: string[] = [];
+
+  if (r.enciende === true) funcionan.push('Enciende');
+  if (r.enciende === false) fallan.push('Enciende');
+  for (const item of ITEMS_CHECKLIST_INGRESO) {
+    const valor = r[item.campo];
+    if (valor === true) funcionan.push(item.label);
+    if (valor === false) fallan.push(item.label);
+  }
+
+  const lineas: string[] = [];
+  if (r.pantalla_estado) {
+    lineas.push(
+      r.pantalla_estado === 'ok' ? 'Pantalla: OK' : r.pantalla_estado === 'marcada' ? 'Pantalla: marcada' : 'Pantalla: rota'
+    );
+  }
+  if (funcionan.length > 0) lineas.push(`Funciona: ${funcionan.join(', ')}`);
+  if (fallan.length > 0) lineas.push(`No funciona: ${fallan.join(', ')}`);
+  if (r.humedad) lineas.push('Con signos de humedad o manipulación previa');
+
+  if (lineas.length === 0 && !r.garantia_excepcion_manual) return '';
+
+  let texto = lineas.length > 0 ? `Condición del equipo al ingresar:\n${lineas.join('\n')}` : '';
+
+  const excluidos = [...fallan];
+  if (r.pantalla_estado === 'rota') excluidos.push('Pantalla');
+
+  if (excluidos.length > 0 || r.garantia_excepcion_manual) {
+    if (texto) texto += '\n\n';
+    texto += 'No se garantiza tras la reparación:';
+    if (excluidos.length > 0) texto += `\n- ${excluidos.join(', ')} (no funcionaba / dañado al ingresar)`;
+    if (r.garantia_excepcion_manual) texto += `\n- ${r.garantia_excepcion_manual}`;
+  }
+
+  return texto;
+}
+
 export function estadosDeGrupo(grupo: GrupoEstado) {
   return ESTADOS_REPARACION.filter((e) => e.grupo === grupo).map((e) => e.id);
 }

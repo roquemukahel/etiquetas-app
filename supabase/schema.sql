@@ -2014,3 +2014,28 @@ drop trigger if exists normalizar_nombre_carpeta_iphone on modelos_stock;
 create trigger normalizar_nombre_carpeta_iphone
   before insert or update of nombre on modelos_stock
   for each row execute function normalizar_nombre_carpeta_iphone();
+
+-- ============================================================
+-- Checklist de recepción más detallado en Servicio Técnico (pedido
+-- por un técnico externo, vía el usuario): además de lo que ya había
+-- (cámaras/botones/altavoces agrupados), ahora se puede marcar por
+-- separado módulo/señal, flash, cámara frontal/trasera, botón power/
+-- volumen y micrófono superior/inferior. Las columnas viejas
+-- (camaras_ok, botones_ok) NO se borran ni se tocan — quedan como
+-- historial de reparaciones cargadas antes de este cambio; el
+-- formulario nuevo ya no las usa, usa estas de acá.
+--
+-- garantia_excepcion_manual es para que el técnico anote a mano una
+-- exclusión de garantía que no se deduce automáticamente de la
+-- checklist (ej.: "por golpe fuerte en el chasis, no garantizamos
+-- Face ID aunque hoy funcione" — el módulo puede estar bien pero el
+-- golpe generar dudas sobre otro componente sensible).
+alter table reparaciones add column if not exists modulo_ok boolean;
+alter table reparaciones add column if not exists flash_ok boolean;
+alter table reparaciones add column if not exists camara_frontal_ok boolean;
+alter table reparaciones add column if not exists camara_trasera_ok boolean;
+alter table reparaciones add column if not exists microfono_superior_ok boolean;
+alter table reparaciones add column if not exists microfono_inferior_ok boolean;
+alter table reparaciones add column if not exists boton_power_ok boolean;
+alter table reparaciones add column if not exists boton_volumen_ok boolean;
+alter table reparaciones add column if not exists garantia_excepcion_manual text;
