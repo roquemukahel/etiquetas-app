@@ -11,10 +11,21 @@ import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../lib/carpetas'
 import { registrarAuditoria } from '../lib/auditoria';
 import { getActor } from '../lib/actor';
 import { obtenerTodasLasFilas } from '../lib/db';
-import { ESTADOS_REPARACION, GRUPOS_ESTADO, PRIORIDADES, infoEstado, estadosDeGrupo, GrupoEstado, calcularAlertas } from '../lib/reparaciones';
+import {
+  ESTADOS_REPARACION,
+  GRUPOS_ESTADO,
+  PRIORIDADES,
+  infoEstado,
+  estadosDeGrupo,
+  GrupoEstado,
+  calcularAlertas,
+  ITEMS_CHECKLIST_INGRESO,
+} from '../lib/reparaciones';
 import MiniaturaDispositivo from '../MiniaturaDispositivo';
 import Avatar from '../Avatar';
 import SelectorColor from '../SelectorColor';
+import CheckTri from '../CheckTri';
+import TextoCondicionGenerado from '../TextoCondicionGenerado';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 
@@ -95,6 +106,14 @@ export default function ServicioTecnico() {
   const [nuevaFalla, setNuevaFalla] = useState('');
   const [nuevaUbicacion, setNuevaUbicacion] = useState('');
   const [guardandoNuevo, setGuardandoNuevo] = useState(false);
+
+  // Checklist de recepción — qué funciona y qué no al ingresar el equipo,
+  // de acá sale el texto de condición/garantía (ver TextoCondicionGenerado).
+  const [nuevoEnciende, setNuevoEnciende] = useState<boolean | null>(null);
+  const [nuevaPantalla, setNuevaPantalla] = useState('');
+  const [nuevoChecklist, setNuevoChecklist] = useState<Record<string, boolean | null>>({});
+  const [nuevaHumedad, setNuevaHumedad] = useState<boolean | null>(null);
+  const [nuevaExcepcionGarantia, setNuevaExcepcionGarantia] = useState('');
 
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [clienteInput, setClienteInput] = useState('');
@@ -234,6 +253,11 @@ export default function ServicioTecnico() {
         estado: 'recibido',
         cliente_id: clienteId,
         tecnico_id: asignadoTecnicoId || null,
+        enciende: nuevoEnciende,
+        pantalla_estado: nuevaPantalla || null,
+        ...nuevoChecklist,
+        humedad: nuevaHumedad,
+        garantia_excepcion_manual: nuevaExcepcionGarantia.trim() || null,
       })
       .select('token_seguimiento')
       .single();
@@ -253,6 +277,11 @@ export default function ServicioTecnico() {
     setClienteInput('');
     setClienteTelefono('');
     setAsignadoTecnicoId('');
+    setNuevoEnciende(null);
+    setNuevaPantalla('');
+    setNuevoChecklist({});
+    setNuevaHumedad(null);
+    setNuevaExcepcionGarantia('');
     setPanelNuevo(false);
     setGuardandoNuevo(false);
     cargar();
@@ -486,6 +515,67 @@ export default function ServicioTecnico() {
                 rows={2}
                 className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
               />
+
+              <p className="text-xs font-medium text-muted dark:text-dark-text-secondary mt-1">
+                ¿Cómo entra el equipo? (para saber qué se garantiza al entregarlo)
+              </p>
+              <CheckTri label="Enciende" valor={nuevoEnciende} onChange={setNuevoEnciende} />
+              <div>
+                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Pantalla</label>
+                <div className="flex gap-2">
+                  {[
+                    { id: 'ok', label: 'OK' },
+                    { id: 'marcada', label: 'Marcada' },
+                    { id: 'rota', label: 'Rota' },
+                  ].map((op) => (
+                    <button
+                      key={op.id}
+                      onClick={() => setNuevaPantalla(op.id)}
+                      className={`flex-1 rounded-lg py-2 text-xs font-medium ${
+                        nuevaPantalla === op.id ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
+                      }`}
+                    >
+                      {op.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {ITEMS_CHECKLIST_INGRESO.map((item) => (
+                <CheckTri
+                  key={item.campo}
+                  label={item.label}
+                  valor={nuevoChecklist[item.campo] ?? null}
+                  onChange={(v) => setNuevoChecklist((p) => ({ ...p, [item.campo]: v }))}
+                />
+              ))}
+              <CheckTri label="Humedad / manipulación" valor={nuevaHumedad} onChange={setNuevaHumedad} invertido />
+              <textarea
+                value={nuevaExcepcionGarantia}
+                onChange={(e) => setNuevaExcepcionGarantia(e.target.value)}
+                placeholder='Excepción adicional a la garantía (opcional, ej. "por golpe fuerte, no garantizamos Face ID")'
+                rows={2}
+                className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+              />
+              <TextoCondicionGenerado
+                datos={{
+                  enciende: nuevoEnciende,
+                  pantalla_estado: nuevaPantalla || null,
+                  modulo_ok: nuevoChecklist.modulo_ok ?? null,
+                  camara_frontal_ok: nuevoChecklist.camara_frontal_ok ?? null,
+                  camara_trasera_ok: nuevoChecklist.camara_trasera_ok ?? null,
+                  flash_ok: nuevoChecklist.flash_ok ?? null,
+                  microfono_superior_ok: nuevoChecklist.microfono_superior_ok ?? null,
+                  microfono_inferior_ok: nuevoChecklist.microfono_inferior_ok ?? null,
+                  altavoces_ok: nuevoChecklist.altavoces_ok ?? null,
+                  boton_power_ok: nuevoChecklist.boton_power_ok ?? null,
+                  boton_volumen_ok: nuevoChecklist.boton_volumen_ok ?? null,
+                  biometria_ok: nuevoChecklist.biometria_ok ?? null,
+                  conectores_ok: nuevoChecklist.conectores_ok ?? null,
+                  humedad: nuevaHumedad,
+                  garantia_excepcion_manual: nuevaExcepcionGarantia.trim() || null,
+                }}
+              />
+
               <input
                 value={nuevaUbicacion}
                 onChange={(e) => setNuevaUbicacion(e.target.value)}

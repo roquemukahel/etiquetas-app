@@ -19,6 +19,8 @@ import {
 } from '../../lib/reparaciones';
 import SelectorColor from '../../SelectorColor';
 import Avatar from '../../Avatar';
+import CheckTri from '../../CheckTri';
+import TextoCondicionGenerado from '../../TextoCondicionGenerado';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 const ACCESORIOS_OPCIONES = ['Funda', 'Cargador', 'SIM', 'Bandeja SIM'];
@@ -1036,31 +1038,6 @@ function itemChecklist(label: string, valor: boolean | null) {
   return <span key={label}>{valor ? `✅ ${label}` : `❌ ${label}`}</span>;
 }
 
-function TextoCondicionGenerado({ datos }: { datos: Parameters<typeof generarTextoCondicionIngreso>[0] }) {
-  const [copiado, setCopiado] = useState(false);
-  const texto = generarTextoCondicionIngreso(datos);
-  if (!texto) return null;
-
-  const copiar = async () => {
-    await navigator.clipboard.writeText(texto);
-    setCopiado(true);
-    setTimeout(() => setCopiado(false), 2000);
-  };
-
-  return (
-    <div className="rounded-lg bg-canvas dark:bg-dark-bg p-3 flex flex-col gap-2 mt-1">
-      <p className="text-xs font-medium text-muted dark:text-dark-text-secondary">Texto para la boleta / cliente</p>
-      <p className="text-xs whitespace-pre-wrap">{texto}</p>
-      <button
-        onClick={copiar}
-        className="self-start rounded-lg border border-border dark:border-dark-border px-3 py-1.5 text-xs font-medium"
-      >
-        {copiado ? '✓ Copiado' : 'Copiar texto'}
-      </button>
-    </div>
-  );
-}
-
 function Seccion({ titulo, children }: { titulo: string; children: React.ReactNode }) {
   return (
     <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-4 flex flex-col gap-2">
@@ -1107,42 +1084,3 @@ function Campo({
   );
 }
 
-function CheckTri({
-  label,
-  valor,
-  onChange,
-  invertido,
-}: {
-  label: string;
-  valor: boolean | null;
-  onChange: (v: boolean | null) => void;
-  invertido?: boolean;
-}) {
-  const opciones = invertido
-    ? [
-        { v: false, label: 'No' },
-        { v: true, label: 'Sí' },
-      ]
-    : [
-        { v: true, label: 'OK' },
-        { v: false, label: 'Falla' },
-      ];
-  return (
-    <div className="flex items-center justify-between gap-2">
-      <label className="text-xs text-muted dark:text-dark-text-secondary">{label}</label>
-      <div className="flex gap-1.5">
-        {opciones.map((op) => (
-          <button
-            key={String(op.v)}
-            onClick={() => onChange(valor === op.v ? null : op.v)}
-            className={`rounded-lg px-2.5 py-1 text-xs font-medium ${
-              valor === op.v ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
-            }`}
-          >
-            {op.label}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
