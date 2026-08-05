@@ -397,11 +397,18 @@ export default function Estadisticas() {
 
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-5 max-w-2xl mx-auto w-full">
+      {/* Fondo de pantalla propio de esta sección. Fixed detrás de todo
+          (-z-10): las tarjetas quedan encima con su fondo blanco/oscuro. */}
+      <div
+        aria-hidden
+        className="fixed inset-0 -z-10 bg-cover bg-center bg-no-repeat"
+        style={{ backgroundImage: 'url(/fondo-estadisticas.png)' }}
+      />
       <header className="flex items-center gap-3">
-        <Link href="/" className="text-2xl leading-none">
+        <Link href="/" className="text-2xl leading-none text-white">
           &larr;
         </Link>
-        <span className="text-lg font-medium">Estadísticas</span>
+        <span className="text-lg font-medium text-white">Estadísticas</span>
       </header>
 
       <div className="flex items-center gap-2 text-sm">
@@ -434,10 +441,11 @@ export default function Estadisticas() {
         <StatTile valor={cantidadVentas.toString()} etiqueta="Dispositivos vendidos" />
         <StatTile valor={`${moneda}${Math.round(ticketPromedio).toLocaleString('es-AR')}`} etiqueta="Ticket promedio" />
       </div>
-      <p className="text-[11px] text-muted dark:text-dark-text-secondary -mt-2">
-        <strong>Vendido</strong> es lo facturado en el período (incluye lo fiado). <strong>Cobrado</strong> es la plata
-        que entró a la caja. <strong>Por cobrar</strong> y <strong>Vencido</strong> son la deuda actual de tus clientes,
-        a hoy.
+      <p className="text-[11px] text-white/75 -mt-2">
+        <strong className="text-white">Vendido</strong> es lo facturado en el período (incluye lo fiado).{' '}
+        <strong className="text-white">Cobrado</strong> es la plata que entró a la caja.{' '}
+        <strong className="text-white">Por cobrar</strong> y <strong className="text-white">Vencido</strong> son la
+        deuda actual de tus clientes, a hoy.
       </p>
 
       {evolucion.length > 0 && (
