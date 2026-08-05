@@ -26,6 +26,7 @@ type Orden = {
   anticipo: number | null;
   impuesto_porcentaje: number | null;
   monto_canje: number | null;
+  cuotas: number | null;
   estado: string;
   created_at: string;
   fecha_entrega: string | null;
@@ -200,6 +201,9 @@ export default function Boleta() {
     `Hola ${orden.clientes?.nombre || ''}! Te paso la boleta de tu compra en ${negocio?.nombre || ''}.\n` +
     orden.orden_items.map((i) => `- ${i.descripcion} x${i.cantidad}: ${moneda}${(i.cantidad * i.precio_unitario).toLocaleString('es-AR')}`).join('\n') +
     `\nTotal: ${moneda}${(orden.total ?? subtotal).toLocaleString('es-AR')}` +
+    (orden.cuotas && orden.cuotas > 1
+      ? `\nEn ${orden.cuotas} cuotas de ${moneda}${Math.round((orden.total ?? subtotal) / orden.cuotas).toLocaleString('es-AR')}`
+      : '') +
     (urlBoleta ? `\n\nPodés ver y descargar tu boleta acá:\n${urlBoleta}` : '');
   const linkWhatsapp = orden.clientes?.telefono
     ? armarLinkWhatsApp(orden.clientes.telefono, mensajeWhatsapp, codigoLlamada(negocio?.pais))
@@ -439,6 +443,15 @@ export default function Boleta() {
               {Math.abs(orden.total ?? subtotal).toLocaleString('es-AR')}
             </span>
           </div>
+          {orden.cuotas != null && orden.cuotas > 1 && (
+            <div className="flex justify-between text-muted">
+              <span>Financiado en {orden.cuotas} cuotas</span>
+              <span>
+                {orden.cuotas} × {moneda}
+                {Math.round((orden.total ?? subtotal) / orden.cuotas).toLocaleString('es-AR')}
+              </span>
+            </div>
+          )}
           {orden.monto_secundario != null && orden.moneda_secundaria && (
             <p className="text-xs text-muted italic text-right">
               ≈ {simboloMoneda(orden.moneda_secundaria)}

@@ -17,6 +17,7 @@ import {
   calcularSaldo,
   vencimientoDesdeHoy,
 } from '../../lib/cuentaCorriente';
+import { planesActivos, interesDe, valorCuota, etiquetaCuotas } from '../../lib/cuotas';
 import { ITEMS_CHECKLIST_INGRESO, generarTextoCondicionIngreso } from '../../lib/reparaciones';
 import MiniaturaDispositivo from '../../MiniaturaDispositivo';
 import CheckTri from '../../CheckTri';
@@ -205,6 +206,8 @@ export default function NuevaOrden() {
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [garantiaDias, setGarantiaDias] = useState<number | null>(null);
+  const [interesCuotas, setInteresCuotas] = useState<Record<string, number> | null>(null);
+  const [cuotasElegidas, setCuotasElegidas] = useState(1);
   const [imagenesCarpetas, setImagenesCarpetas] = useState<Map<string, string>>(new Map());
   const [monedasDisponibles, setMonedasDisponibles] = useState<string[]>(['ARS']);
   const [monedaOrden, setMonedaOrden] = useState('ARS');
@@ -221,10 +224,11 @@ export default function NuevaOrden() {
       if (!user) return;
       const { data: perfil } = await supabase
         .from('perfiles')
-        .select('negocios ( garantia_dias, moneda, monedas_habilitadas, tipo_cambio )')
+        .select('negocios ( garantia_dias, moneda, monedas_habilitadas, tipo_cambio, interes_cuotas )')
         .eq('id', user.id)
         .single();
       setGarantiaDias((perfil as any)?.negocios?.garantia_dias ?? null);
+      setInteresCuotas((perfil as any)?.negocios?.interes_cuotas ?? null);
       const negocio = (perfil as any)?.negocios;
       const monedas: string[] = negocio?.monedas_habilitadas?.length ? negocio.monedas_habilitadas : ['ARS'];
       setMonedasDisponibles(monedas);
@@ -288,13 +292,20 @@ export default function NuevaOrden() {
     [canjesCarrito]
   );
 
+  // Financiación en cuotas: el interés del plan elegido se aplica sobre el
+  // subtotal (precio de contado de la mercadería), antes de impuesto/anticipo/
+  // canje. planes = los planes activos que configuró el negocio.
+  const planes = useMemo(() => planesActivos(interesCuotas), [interesCuotas]);
+  const interesPlan = interesDe(interesCuotas, cuotasElegidas);
+  const subtotalFinanciado = subtotal * (1 + interesPlan / 100);
+
   const total = useMemo(() => {
-    const conImpuesto = subtotal * (1 + (Number(impuesto) || 0) / 100);
+    const conImpuesto = subtotalFinanciado * (1 + (Number(impuesto) || 0) / 100);
     // Sin Math.max(0, ...) a propósito: si el anticipo es mayor al precio
     // (ej. seña de una compra anterior más grande que lo que se lleva hoy),
     // el total puede quedar negativo — representa saldo a favor del cliente.
     return conImpuesto - (Number(anticipo) || 0) - montoCanjeTotal;
-  }, [subtotal, impuesto, anticipo, montoCanjeTotal]);
+  }, [subtotalFinanciado, impuesto, anticipo, montoCanjeTotal]);
 
   // Monto informativo en la segunda moneda: se recalcula solo mientras
   // el usuario no lo haya tocado a mano (si lo edita, respetamos su
@@ -666,6 +677,7 @@ export default function NuevaOrden() {
           forma_pago: etiquetaCobro(),
           anticipo: Number(anticipo) || 0,
           impuesto_porcentaje: Number(impuesto) || 0,
+          cuotas: cuotasElegidas,
           monto_canje: montoCanjeTotal,
           moneda: monedaOrden,
           monto_secundario: mostrarSecundaria && montoSecundario ? Number(montoSecundario) : null,
@@ -1346,6 +1358,43 @@ export default function NuevaOrden() {
           </p>
         )}
       </div>
+
+      {planes.length > 0 && subtotal > 0 && (
+        <div>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Plan de pago</label>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setCuotasElegidas(1)}
+              className={`rounded-xl px-3 py-2 text-sm font-medium ${
+                cuotasElegidas === 1 ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
+              }`}
+            >
+              Contado
+            </button>
+            {planes.map((p) => (
+              <button
+                key={p.cuotas}
+                onClick={() => setCuotasElegidas(p.cuotas)}
+                className={`rounded-xl px-3 py-2 text-sm font-medium text-center ${
+                  cuotasElegidas === p.cuotas ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
+                }`}
+              >
+                {etiquetaCuotas(p.cuotas)}
+                <span className="block text-[10px] opacity-80 font-normal">
+                  de {moneda}{Math.round(valorCuota(subtotal, p.cuotas, p.interes)).toLocaleString('es-AR')}
+                </span>
+              </button>
+            ))}
+          </div>
+          {cuotasElegidas > 1 && (
+            <p className="text-[11px] text-muted dark:text-dark-text-secondary mt-1">
+              {etiquetaCuotas(cuotasElegidas)} de {moneda}
+              {Math.round(valorCuota(subtotal, cuotasElegidas, interesPlan)).toLocaleString('es-AR')} · total financiado{' '}
+              {moneda}{Math.round(subtotalFinanciado).toLocaleString('es-AR')} (interés {interesPlan}%)
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
