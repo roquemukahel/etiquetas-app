@@ -41,6 +41,7 @@ export default function NuevoDispositivo() {
   const [precio, setPrecio] = useState('');
   const [costo, setCosto] = useState('');
   const [proveedor, setProveedor] = useState('');
+  const [detalles, setDetalles] = useState('');
   const [estado, setEstado] = useState('usado');
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
@@ -68,6 +69,7 @@ export default function NuevoDispositivo() {
       costo: costo ? Number(costo) : null,
       proveedor: proveedor.trim() || null,
       proveedor_id: proveedorId,
+      detalles: detalles.trim() || null,
       estado,
       en_stock: true,
       agregado_por_nombre: actor?.nombre ?? null,
@@ -142,6 +144,19 @@ export default function NuevoDispositivo() {
         </datalist>
 
         <div>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">
+            Detalles del equipo (opcional)
+          </label>
+          <textarea
+            value={detalles}
+            onChange={(e) => setDetalles(e.target.value)}
+            rows={2}
+            placeholder="Ej. módulo con detalle, carcasa con un rayón, no anda el flash…"
+            className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+          />
+        </div>
+
+        <div>
           <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Estado</label>
           <div className="flex gap-2">
             {ESTADOS.map((e) => (
@@ -196,7 +211,7 @@ function Campo({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         list={listaId}
-        inputMode={numerico ? 'numeric' : undefined}
+        inputMode={numerico ? 'decimal' : undefined}
         className={`w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm ${mono ? 'font-mono' : ''}`}
       />
     </div>

@@ -192,10 +192,15 @@ export default function Boleta() {
   const clienteNombre = orden.clientes ? `${orden.clientes.nombre} ${orden.clientes.apellido || ''}`.trim() : '';
   const moneda = simboloMoneda(orden.moneda || negocio?.moneda);
 
+  // Link público a la boleta (misma que se ve en /boleta/[token]), para que
+  // el cliente pueda abrirla y descargarla — antes el mensaje era solo texto
+  // y "no llegaba la boleta".
+  const urlBoleta = typeof window !== 'undefined' && orden.token_boleta ? `${window.location.origin}/boleta/${orden.token_boleta}` : '';
   const mensajeWhatsapp =
     `Hola ${orden.clientes?.nombre || ''}! Te paso la boleta de tu compra en ${negocio?.nombre || ''}.\n` +
     orden.orden_items.map((i) => `- ${i.descripcion} x${i.cantidad}: ${moneda}${(i.cantidad * i.precio_unitario).toLocaleString('es-AR')}`).join('\n') +
-    `\nTotal: ${moneda}${(orden.total ?? subtotal).toLocaleString('es-AR')}`;
+    `\nTotal: ${moneda}${(orden.total ?? subtotal).toLocaleString('es-AR')}` +
+    (urlBoleta ? `\n\nPodés ver y descargar tu boleta acá:\n${urlBoleta}` : '');
   const linkWhatsapp = orden.clientes?.telefono
     ? armarLinkWhatsApp(orden.clientes.telefono, mensajeWhatsapp, codigoLlamada(negocio?.pais))
     : null;

@@ -26,6 +26,7 @@ type Dispositivo = {
   costo: number | null;
   proveedor: string | null;
   estado: string | null;
+  detalles: string | null;
   en_stock: boolean;
   garantia_vencimiento: string | null;
 };
@@ -89,6 +90,7 @@ export default function DetalleDispositivo() {
         costo: d.costo,
         proveedor: d.proveedor?.trim() || null,
         proveedor_id: proveedorId,
+        detalles: d.detalles?.trim() || null,
         estado: d.estado,
         // Solo se toca en_stock si esta pantalla lo cambió a propósito
         // (tocando el botón de abajo). Si no, se deja como está en la
@@ -277,6 +279,17 @@ export default function DetalleDispositivo() {
             <option key={p} value={p} />
           ))}
         </datalist>
+
+        <div>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Detalles del equipo (opcional)</label>
+          <textarea
+            value={d.detalles ?? ''}
+            onChange={(e) => campo('detalles', e.target.value)}
+            rows={2}
+            placeholder="Ej. módulo con detalle, carcasa con un rayón…"
+            className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+          />
+        </div>
 
         <div>
           <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Estado</label>

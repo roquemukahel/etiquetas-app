@@ -40,6 +40,7 @@ type Dispositivo = {
   color: string | null;
   precio: number | null;
   estado: string | null;
+  detalles: string | null;
   en_stock: boolean;
   created_at: string;
 };
@@ -693,6 +694,9 @@ export default function Stock() {
                             <p className="text-xs text-muted dark:text-dark-text-secondary">
                               IMEI: <span className="font-bold font-mono text-ink dark:text-dark-text">{d.imei || 'sin IMEI'}</span>
                             </p>
+                            {d.detalles && (
+                              <p className="text-xs text-warn mt-0.5">📝 {d.detalles}</p>
+                            )}
                           </div>
                           <div className="text-right">
                             {d.precio != null && (
