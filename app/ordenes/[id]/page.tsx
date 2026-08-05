@@ -43,6 +43,7 @@ type Orden = {
   moneda: string | null;
   monto_secundario: number | null;
   moneda_secundaria: string | null;
+  boleta_moneda: string | null;
   estado: string;
   created_at: string;
   nota: string | null;
@@ -105,8 +106,12 @@ export default function DetalleOrden() {
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [monedasDisponibles, setMonedasDisponibles] = useState<string[]>([]);
   const [tipoCambio, setTipoCambio] = useState<number | null>(null);
-  const [mostrarSecundariaEdit, setMostrarSecundariaEdit] = useState(false);
+  // Cómo se muestra el monto en la boleta (la orden siempre queda en la
+  // moneda principal). 'principal' = solo US$, 'secundaria' = solo pesos,
+  // 'ambas' = las dos. Se mantiene en sync con boleta_moneda de la orden.
+  const [boletaMonedaEdit, setBoletaMonedaEdit] = useState<'principal' | 'secundaria' | 'ambas'>('principal');
   const [montoSecundarioEdit, setMontoSecundarioEdit] = useState('');
+  const muestraSecundariaEdit = boletaMonedaEdit !== 'principal';
 
   // --- canjes (Plan canje) de esta orden ---
   const [canjesEdit, setCanjesEdit] = useState<CanjeEditable[]>([]);
@@ -224,7 +229,17 @@ export default function DetalleOrden() {
     setAnticipoEdit(orden.anticipo != null ? String(orden.anticipo) : '');
     setImpuestoEdit(orden.impuesto_porcentaje != null ? String(orden.impuesto_porcentaje) : '');
     setVendedorEdit(orden.vendedor_id || '');
-    setMostrarSecundariaEdit(orden.monto_secundario != null);
+    // Orden nueva: usa boleta_moneda. Orden vieja (sin el campo) con monto
+    // secundario cargado = el viejo modo "mostrar también", o sea 'ambas'.
+    const modoInicial: 'principal' | 'secundaria' | 'ambas' =
+      orden.boleta_moneda === 'secundaria'
+        ? 'secundaria'
+        : orden.boleta_moneda === 'ambas'
+          ? 'ambas'
+          : orden.monto_secundario != null
+            ? 'ambas'
+            : 'principal';
+    setBoletaMonedaEdit(modoInicial);
     setMontoSecundarioEdit(orden.monto_secundario != null ? String(orden.monto_secundario) : '');
     setItemsEdit(
       orden.orden_items.map((i) => ({
@@ -333,10 +348,13 @@ export default function DetalleOrden() {
       const nombreDespues = vendedores.find((v) => v.id === vendedorNuevo)?.nombre || 'Sin asignar';
       cambios.vendedor_id = { antes: nombreAntes, despues: nombreDespues };
     }
-    const montoSecundarioNuevo = mostrarSecundariaEdit && montoSecundarioEdit ? Number(montoSecundarioEdit) : null;
-    const monedaSecundariaNueva = mostrarSecundariaEdit ? monedasDisponibles[1] || orden.moneda_secundaria || null : null;
+    const montoSecundarioNuevo = muestraSecundariaEdit && montoSecundarioEdit ? Number(montoSecundarioEdit) : null;
+    const monedaSecundariaNueva = muestraSecundariaEdit ? monedasDisponibles[1] || orden.moneda_secundaria || null : null;
     if ((orden.monto_secundario ?? null) !== montoSecundarioNuevo) {
       cambios.monto_secundario = { antes: orden.monto_secundario, despues: montoSecundarioNuevo };
+    }
+    if ((orden.boleta_moneda || 'principal') !== boletaMonedaEdit) {
+      cambios.boleta_moneda = { antes: orden.boleta_moneda, despues: boletaMonedaEdit };
     }
     if ((orden.monto_canje || 0) !== montoCanjeEdit) {
       cambios.monto_canje = { antes: orden.monto_canje, despues: montoCanjeEdit };
@@ -462,6 +480,7 @@ export default function DetalleOrden() {
         vendedor_id: vendedorNuevo,
         monto_secundario: montoSecundarioNuevo,
         moneda_secundaria: monedaSecundariaNueva,
+        boleta_moneda: boletaMonedaEdit,
       })
       .eq('id', id);
     if (updateError) {
@@ -617,33 +636,46 @@ export default function DetalleOrden() {
 
         {monedasDisponibles.length > 1 && (
           <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-3 flex flex-col gap-2">
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={mostrarSecundariaEdit}
-                onChange={(e) => {
-                  setMostrarSecundariaEdit(e.target.checked);
-                  if (e.target.checked && !montoSecundarioEdit && tipoCambio) {
-                    setMontoSecundarioEdit(Math.round(totalEdit * tipoCambio).toString());
-                  }
-                }}
-                className="h-5 w-5 accent-ink"
-              />
-              <span className="text-sm font-medium">
-                Mostrar también el precio en {monedasDisponibles[1]} ({simboloMoneda(monedasDisponibles[1])})
-              </span>
-            </label>
-            {mostrarSecundariaEdit && (
+            <span className="text-sm font-medium">¿En qué moneda mostrar el monto en la boleta?</span>
+            <div className="flex gap-2">
+              {([
+                { v: 'principal', t: `Solo ${simboloMoneda(monedasDisponibles[0])}` },
+                { v: 'secundaria', t: `Solo ${simboloMoneda(monedasDisponibles[1])}` },
+                { v: 'ambas', t: 'Ambas' },
+              ] as const).map((op) => (
+                <button
+                  key={op.v}
+                  type="button"
+                  onClick={() => {
+                    setBoletaMonedaEdit(op.v);
+                    if (op.v !== 'principal' && !montoSecundarioEdit && tipoCambio) {
+                      setMontoSecundarioEdit(Math.round(totalEdit * tipoCambio).toString());
+                    }
+                  }}
+                  className={`flex-1 rounded-xl py-2 text-sm font-medium ${
+                    boletaMonedaEdit === op.v
+                      ? 'bg-accent dark:bg-dark-accent text-white'
+                      : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
+                  }`}
+                >
+                  {op.t}
+                </button>
+              ))}
+            </div>
+            {muestraSecundariaEdit && (
               <>
+                <label className="text-xs text-muted dark:text-dark-text-secondary mt-1">
+                  Monto en {monedasDisponibles[1]} (con tu tipo de cambio, lo podés corregir)
+                </label>
                 <input
                   value={montoSecundarioEdit}
                   onChange={(e) => setMontoSecundarioEdit(e.target.value)}
-                  inputMode="numeric"
+                  inputMode="decimal"
                   placeholder={`Monto en ${monedasDisponibles[1]}`}
                   className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
                 />
                 <p className="text-xs text-muted dark:text-dark-text-secondary">
-                  Valor informativo, no afecta las Estadísticas.
+                  Las Estadísticas siempre se calculan en {monedasDisponibles[0]}. Esto solo cambia cómo se ve la boleta.
                 </p>
               </>
             )}

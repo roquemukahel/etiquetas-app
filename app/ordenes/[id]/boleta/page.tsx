@@ -196,10 +196,15 @@ export default function Boleta() {
   const totalNum = orden.total ?? subtotal;
   // Cómo mostrar el monto en la boleta (la orden vive en la moneda principal;
   // en modo "solo pesos" convertimos todo con el mismo factor del total).
-  const modo = orden.boleta_moneda || 'principal';
+  // Compatibilidad: órdenes viejas (sin boleta_moneda) que tenían un monto
+  // secundario cargado usaban el viejo "mostrar también" = modo 'ambas'.
+  const modo = orden.boleta_moneda || (orden.monto_secundario != null ? 'ambas' : 'principal');
   const factorBoleta =
     modo === 'secundaria' && orden.monto_secundario != null && totalNum ? orden.monto_secundario / totalNum : 1;
-  const simbBoleta = modo === 'secundaria' && orden.moneda_secundaria ? simboloMoneda(orden.moneda_secundaria) : moneda;
+  // Si no se pudo derivar un factor válido (ej. total 0), no arriesgamos a
+  // mostrar números en dólares con el símbolo de pesos: caemos a la principal.
+  const simbBoleta =
+    modo === 'secundaria' && orden.moneda_secundaria && factorBoleta !== 1 ? simboloMoneda(orden.moneda_secundaria) : moneda;
   const fmt = (n: number) => simbBoleta + Math.round(n * factorBoleta).toLocaleString('es-AR');
 
   // Link público a la boleta (misma que se ve en /boleta/[token]), para que

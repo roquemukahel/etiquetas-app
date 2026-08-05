@@ -103,10 +103,15 @@ export default function BoletaPublica() {
   // en modo "solo pesos" convertimos TODA la boleta con el mismo factor que se
   // usó para el total (monto_secundario / total), así todas las líneas quedan
   // coherentes con el total en pesos.
-  const modo = boleta.boleta_moneda || 'principal';
+  // Compatibilidad: órdenes viejas (sin boleta_moneda) que tenían un monto
+  // secundario cargado usaban el viejo "mostrar también" = modo 'ambas'.
+  const modo = boleta.boleta_moneda || (boleta.monto_secundario != null ? 'ambas' : 'principal');
   const factorBoleta =
     modo === 'secundaria' && boleta.monto_secundario != null && totalNum ? boleta.monto_secundario / totalNum : 1;
-  const simbBoleta = modo === 'secundaria' && boleta.moneda_secundaria ? simboloMoneda(boleta.moneda_secundaria) : moneda;
+  // Si no se pudo derivar un factor válido (ej. total 0), no arriesgamos a
+  // mostrar números en dólares con el símbolo de pesos: caemos a la principal.
+  const simbBoleta =
+    modo === 'secundaria' && boleta.moneda_secundaria && factorBoleta !== 1 ? simboloMoneda(boleta.moneda_secundaria) : moneda;
   const fmt = (n: number) => simbBoleta + Math.round(n * factorBoleta).toLocaleString('es-AR');
 
   return (
