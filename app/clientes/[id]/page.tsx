@@ -8,6 +8,8 @@ import { registrarAuditoria } from '../../lib/auditoria';
 import { getActor, useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import { simboloMoneda } from '../../lib/monedas';
+import { armarLinkWhatsApp } from '../../lib/whatsapp';
+import { codigoLlamada } from '../../lib/paises';
 import { MEDIOS_PAGO, calcularSaldo, estadoCuenta, ESTADO_INFO, diasDeMora } from '../../lib/cuentaCorriente';
 
 type Cliente = {
@@ -40,6 +42,7 @@ type Movimiento = {
   monto: number;
   vencimiento: string | null;
   observacion: string | null;
+  pago_id: string | null;
   anulado: boolean;
   fecha: string;
 };
@@ -55,6 +58,8 @@ export default function DetalleCliente() {
   const [ordenes, setOrdenes] = useState<Orden[]>([]);
   const [movimientos, setMovimientos] = useState<Movimiento[]>([]);
   const [monedaCodigo, setMonedaCodigo] = useState('ARS');
+  const [negocioNombre, setNegocioNombre] = useState('');
+  const [codigoPais, setCodigoPais] = useState('54');
   const [loading, setLoading] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -66,6 +71,13 @@ export default function DetalleCliente() {
   const [pagoMedio, setPagoMedio] = useState<string>('efectivo');
   const [pagoObs, setPagoObs] = useState('');
   const [guardandoPago, setGuardandoPago] = useState(false);
+
+  // Ajuste manual / nota de crédito
+  const [ajustando, setAjustando] = useState(false);
+  const [ajusteTipo, setAjusteTipo] = useState<'descuento' | 'cargo'>('descuento');
+  const [ajusteMonto, setAjusteMonto] = useState('');
+  const [ajusteObs, setAjusteObs] = useState('');
+  const [guardandoAjuste, setGuardandoAjuste] = useState(false);
 
   // Configuración de crédito
   const [configAbierta, setConfigAbierta] = useState(false);
@@ -81,7 +93,7 @@ export default function DetalleCliente() {
   const cargarMovimientos = async () => {
     const { data } = await supabase
       .from('cta_cte_movimientos')
-      .select('id, tipo, concepto, monto, vencimiento, observacion, anulado, fecha')
+      .select('id, tipo, concepto, monto, vencimiento, observacion, pago_id, anulado, fecha')
       .eq('cliente_id', id)
       .eq('anulado', false)
       .order('fecha', { ascending: true });
@@ -106,11 +118,13 @@ export default function DetalleCliente() {
       if (user?.user) {
         const { data: perfil } = await supabase
           .from('perfiles')
-          .select('negocios ( moneda )')
+          .select('negocios ( moneda, nombre, pais )')
           .eq('id', user.user.id)
           .single();
-        const codigo = (perfil as any)?.negocios?.moneda;
-        if (codigo) setMonedaCodigo(codigo);
+        const neg = (perfil as any)?.negocios;
+        if (neg?.moneda) setMonedaCodigo(neg.moneda);
+        if (neg?.nombre) setNegocioNombre(neg.nombre);
+        setCodigoPais(codigoLlamada(neg?.pais));
       }
       setLoading(false);
     })();
@@ -218,6 +232,67 @@ export default function DetalleCliente() {
     await cargarMovimientos();
   };
 
+  const abrirAjuste = () => {
+    setAjusteTipo('descuento');
+    setAjusteMonto('');
+    setAjusteObs('');
+    setError(null);
+    setAjustando(true);
+  };
+
+  const registrarAjuste = async () => {
+    const monto = Number(ajusteMonto);
+    if (!monto || monto <= 0) {
+      setError('Poné un monto mayor a cero.');
+      return;
+    }
+    setGuardandoAjuste(true);
+    setError(null);
+    const a = getActor();
+    // Descuento/condonación = abono (baja la deuda), nota de crédito.
+    // Cargo manual = cargo (sube la deuda), ej. un interés por mora.
+    const esDescuento = ajusteTipo === 'descuento';
+    const { error: mErr } = await supabase.from('cta_cte_movimientos').insert({
+      cliente_id: id,
+      tipo: esDescuento ? 'abono' : 'cargo',
+      concepto: esDescuento ? 'nota_credito' : 'ajuste',
+      monto,
+      moneda: monedaCodigo,
+      observacion: ajusteObs.trim() || null,
+      registrado_por_nombre: a?.nombre ?? null,
+      registrado_por_foto_url: a?.fotoUrl ?? null,
+    });
+    if (mErr) {
+      setError('No pudimos registrar el ajuste: ' + mErr.message);
+      setGuardandoAjuste(false);
+      return;
+    }
+    setGuardandoAjuste(false);
+    setAjustando(false);
+    await cargarMovimientos();
+  };
+
+  const anularMovimiento = async (m: Movimiento) => {
+    if (
+      !confirm(
+        '¿Anular este movimiento? Deja de contar en el saldo (queda registrado como anulado, no se borra). Sirve para corregir un error de carga.'
+      )
+    )
+      return;
+    setError(null);
+    const { error: mErr } = await supabase.from('cta_cte_movimientos').update({ anulado: true }).eq('id', m.id);
+    if (mErr) {
+      setError('No pudimos anular el movimiento: ' + mErr.message);
+      return;
+    }
+    // Si el movimiento venía de un pago, también anulamos ese pago para que
+    // no siga contando en la caja de Estadísticas.
+    if (m.pago_id) {
+      await supabase.from('pagos').update({ anulado: true }).eq('id', m.pago_id);
+    }
+    await cargarMovimientos();
+  };
+
   const guardarCredito = async () => {
     setGuardandoCredito(true);
     setError(null);
@@ -317,6 +392,35 @@ export default function DetalleCliente() {
   const fmt = (n: number) => `${moneda}${Math.round(n).toLocaleString('es-AR')}`;
   const colorSaldo = saldo > 0.009 ? (vencido > 0 ? 'text-bad' : 'text-warn') : saldo < -0.009 ? 'text-good' : '';
 
+  // Extracto listo para mandar por WhatsApp de un toque (reusa el mismo
+  // helper que las boletas y Servicio Técnico). El empleado solo aprieta
+  // "Enviar" en WhatsApp.
+  const mensajeExtracto = () => {
+    const lineas = extracto
+      .slice(0, 6)
+      .map((m) => {
+        const signo = m.tipo === 'cargo' ? '+' : '−';
+        const et =
+          m.concepto === 'venta'
+            ? 'Compra'
+            : m.concepto === 'pago'
+            ? 'Pago'
+            : m.concepto === 'nota_credito'
+            ? 'Nota de crédito'
+            : 'Ajuste';
+        return `• ${new Date(m.fecha).toLocaleDateString('es-AR')} ${et}: ${signo}${fmt(m.monto)}`;
+      })
+      .join('\n');
+    const estadoTxt =
+      saldo > 0.009
+        ? `Tu saldo pendiente es ${fmt(saldo)}.`
+        : saldo < -0.009
+        ? `Tenés un saldo a favor de ${fmt(Math.abs(saldo))}.`
+        : 'Tu cuenta está al día. ¡Gracias!';
+    return `Hola ${c.nombre}! Te paso el resumen de tu cuenta${negocioNombre ? ` en ${negocioNombre}` : ''}:\n\n${estadoTxt}${lineas ? `\n\nÚltimos movimientos:\n${lineas}` : ''}`;
+  };
+  const linkExtracto = armarLinkWhatsApp(c.telefono, mensajeExtracto(), codigoPais);
+
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
       <header className="flex items-center gap-3">
@@ -394,6 +498,20 @@ export default function DetalleCliente() {
               >
                 🧾 Nueva venta
               </Link>
+              <a
+                href={linkExtracto}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-xl border border-border dark:border-dark-border px-4 py-2 text-sm font-medium"
+              >
+                📤 Enviar extracto
+              </a>
+              <button
+                onClick={abrirAjuste}
+                className="rounded-xl border border-border dark:border-dark-border px-4 py-2 text-sm font-medium"
+              >
+                🔄 Ajuste / Nota de crédito
+              </button>
               <button
                 onClick={() => setConfigAbierta((v) => !v)}
                 className="rounded-xl border border-border dark:border-dark-border px-4 py-2 text-sm font-medium"
@@ -469,6 +587,9 @@ export default function DetalleCliente() {
                           {fmt(m.monto)}
                         </p>
                         <p className="text-[11px] text-muted dark:text-dark-text-secondary">saldo {fmt(m.saldoAcum)}</p>
+                        <button onClick={() => anularMovimiento(m)} className="text-[10px] text-bad underline mt-0.5">
+                          Anular
+                        </button>
                       </div>
                     </div>
                   );
@@ -553,6 +674,51 @@ export default function DetalleCliente() {
                 className="flex-1 rounded-xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2.5 text-sm font-medium text-white disabled:opacity-40"
               >
                 {guardandoPago ? 'Guardando...' : 'Registrar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal ajuste / nota de crédito */}
+      {ajustando && (
+        <div className="fixed inset-0 z-50 bg-ink/60 backdrop-blur-sm flex items-center justify-center px-6" onClick={() => setAjustando(false)}>
+          <div className="w-full max-w-sm bg-white dark:bg-dark-surface rounded-2xl shadow-elevated p-5 flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
+            <p className="text-base font-semibold">Ajustar la cuenta de {c.nombre}</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setAjusteTipo('descuento')}
+                className={`flex-1 rounded-lg py-2 text-sm font-medium ${ajusteTipo === 'descuento' ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'}`}
+              >
+                Descontar deuda
+              </button>
+              <button
+                onClick={() => setAjusteTipo('cargo')}
+                className={`flex-1 rounded-lg py-2 text-sm font-medium ${ajusteTipo === 'cargo' ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'}`}
+              >
+                Agregar deuda
+              </button>
+            </div>
+            <p className="text-[11px] text-muted dark:text-dark-text-secondary">
+              {ajusteTipo === 'descuento'
+                ? 'Baja lo que te debe (nota de crédito, condonación, una devolución).'
+                : 'Sube lo que te debe (por ejemplo un interés por mora o un ajuste).'}
+            </p>
+            <div>
+              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Monto</label>
+              <input value={ajusteMonto} onChange={(e) => setAjusteMonto(e.target.value.replace(/[^\d]/g, ''))} inputMode="numeric" autoFocus placeholder="0" className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2.5 text-lg" />
+            </div>
+            <textarea value={ajusteObs} onChange={(e) => setAjusteObs(e.target.value)} rows={2} placeholder="Motivo (recomendado)" className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm" />
+            <div className="flex gap-2">
+              <button onClick={() => setAjustando(false)} className="flex-1 rounded-xl border border-border dark:border-dark-border py-2.5 text-sm font-medium">
+                Cancelar
+              </button>
+              <button
+                disabled={guardandoAjuste || !ajusteMonto}
+                onClick={registrarAjuste}
+                className="flex-1 rounded-xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2.5 text-sm font-medium text-white disabled:opacity-40"
+              >
+                {guardandoAjuste ? 'Guardando...' : 'Aplicar ajuste'}
               </button>
             </div>
           </div>

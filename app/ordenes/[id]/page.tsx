@@ -527,6 +527,13 @@ export default function DetalleOrden() {
     // automáticamente al borrar la orden (on delete set null), así que
     // después ya no se los podría encontrar por ese filtro.
     await supabase.from('canjes').delete().eq('orden_id', id).eq('estado', 'en_canje');
+    // Lo mismo con la cuenta corriente: si esta venta había generado deuda
+    // (cargo) o registrado pagos, hay que anularlos ANTES de borrar la orden
+    // (después orden_id queda en null y no se los encuentra). Se anulan (no
+    // se borran) para no perder el historial; al estar anulados dejan de
+    // contar en el saldo del cliente y en la caja.
+    await supabase.from('cta_cte_movimientos').update({ anulado: true }).eq('orden_id', id).eq('anulado', false);
+    await supabase.from('pagos').update({ anulado: true }).eq('orden_id', id).eq('anulado', false);
     const { error: deleteError } = await supabase.from('ordenes').delete().eq('id', id);
     if (deleteError) {
       setError('No pudimos cancelar la orden: ' + deleteError.message);
