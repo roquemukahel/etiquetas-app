@@ -6,6 +6,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
+import SelectorColor from '../../SelectorColor';
+import { hexColorDe } from '../../lib/coloresIphone';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 
@@ -14,6 +16,7 @@ type CompraManual = {
   id: string;
   modelo: string | null;
   capacidad_gb: number | null;
+  color: string | null;
   cantidad: number;
   precio_unitario: number | null;
   detalles: string | null;
@@ -23,6 +26,7 @@ type DispositivoComprado = {
   id: string;
   modelo: string | null;
   capacidad_gb: number | null;
+  color: string | null;
   costo: number | null;
   created_at: string;
 };
@@ -34,6 +38,7 @@ type FilaCompra = {
   key: string;
   modelo: string | null;
   capacidad_gb: number | null;
+  color: string | null;
   cantidad: number;
   precioUnitario: number | null;
   fecha: string;
@@ -63,8 +68,12 @@ export default function DetalleProveedor() {
   const [guardandoPerfil, setGuardandoPerfil] = useState(false);
 
   const [agregandoCompra, setAgregandoCompra] = useState(false);
+  // Si es null, el formulario está en modo "cargar nueva"; si tiene un id,
+  // está editando esa compra cargada a mano.
+  const [compraEditandoId, setCompraEditandoId] = useState<string | null>(null);
   const [modelo, setModelo] = useState('');
   const [capacidad, setCapacidad] = useState<number | null>(null);
+  const [color, setColor] = useState('');
   const [cantidad, setCantidad] = useState('1');
   const [precioUnitario, setPrecioUnitario] = useState('');
   const [detallesCompra, setDetallesCompra] = useState('');
@@ -75,12 +84,12 @@ export default function DetalleProveedor() {
       supabase.from('proveedores').select('id, nombre, telefono, detalles').eq('id', id).maybeSingle(),
       supabase
         .from('compras_proveedor')
-        .select('id, modelo, capacidad_gb, cantidad, precio_unitario, detalles, created_at')
+        .select('id, modelo, capacidad_gb, color, cantidad, precio_unitario, detalles, created_at')
         .eq('proveedor_id', id)
         .order('created_at', { ascending: false }),
       supabase
         .from('dispositivos')
-        .select('id, modelo, capacidad_gb, costo, created_at')
+        .select('id, modelo, capacidad_gb, color, costo, created_at')
         .eq('proveedor_id', id)
         .order('created_at', { ascending: false }),
     ]);
@@ -104,6 +113,7 @@ export default function DetalleProveedor() {
       key: `m-${c.id}`,
       modelo: c.modelo,
       capacidad_gb: c.capacidad_gb,
+      color: c.color,
       cantidad: c.cantidad,
       precioUnitario: c.precio_unitario,
       fecha: c.created_at,
@@ -115,6 +125,7 @@ export default function DetalleProveedor() {
       key: `s-${d.id}`,
       modelo: d.modelo,
       capacidad_gb: d.capacidad_gb,
+      color: d.color,
       cantidad: 1,
       precioUnitario: d.costo,
       fecha: d.created_at,
@@ -163,30 +174,62 @@ export default function DetalleProveedor() {
     router.push('/proveedores');
   };
 
-  const agregarCompra = async () => {
-    if (!proveedor || !modelo.trim()) return;
-    setGuardandoCompra(true);
-    setError(null);
-    const { error: insertError } = await supabase.from('compras_proveedor').insert({
-      proveedor_id: proveedor.id,
-      modelo: modelo.trim(),
-      capacidad_gb: capacidad,
-      cantidad: Math.max(1, Number(cantidad) || 1),
-      precio_unitario: precioUnitario ? Number(precioUnitario) : null,
-      detalles: detallesCompra.trim() || null,
-    });
-    if (insertError) {
-      setError('No pudimos guardar la compra: ' + insertError.message);
-      setGuardandoCompra(false);
-      return;
-    }
+  const limpiarFormCompra = () => {
     setModelo('');
     setCapacidad(null);
+    setColor('');
     setCantidad('1');
     setPrecioUnitario('');
     setDetallesCompra('');
+  };
+
+  const abrirNuevaCompra = () => {
+    limpiarFormCompra();
+    setCompraEditandoId(null);
+    setAgregandoCompra(true);
+    setError(null);
+  };
+
+  const abrirEdicionCompra = (c: CompraManual) => {
+    setModelo(c.modelo ?? '');
+    setCapacidad(c.capacidad_gb);
+    setColor(c.color ?? '');
+    setCantidad(String(c.cantidad ?? 1));
+    setPrecioUnitario(c.precio_unitario != null ? String(c.precio_unitario) : '');
+    setDetallesCompra(c.detalles ?? '');
+    setCompraEditandoId(c.id);
+    setAgregandoCompra(true);
+    setError(null);
+  };
+
+  const cerrarFormCompra = () => {
     setAgregandoCompra(false);
+    setCompraEditandoId(null);
+    limpiarFormCompra();
+  };
+
+  const guardarCompra = async () => {
+    if (!proveedor || !modelo.trim()) return;
+    setGuardandoCompra(true);
+    setError(null);
+    const datos = {
+      modelo: modelo.trim(),
+      capacidad_gb: capacidad,
+      color: color.trim() || null,
+      cantidad: Math.max(1, Number(cantidad) || 1),
+      precio_unitario: precioUnitario ? Number(precioUnitario) : null,
+      detalles: detallesCompra.trim() || null,
+    };
+    const { error: dbError } = compraEditandoId
+      ? await supabase.from('compras_proveedor').update(datos).eq('id', compraEditandoId)
+      : await supabase.from('compras_proveedor').insert({ proveedor_id: proveedor.id, ...datos });
+    if (dbError) {
+      setError('No pudimos guardar la compra: ' + dbError.message);
+      setGuardandoCompra(false);
+      return;
+    }
     setGuardandoCompra(false);
+    cerrarFormCompra();
     cargar();
   };
 
@@ -305,7 +348,9 @@ export default function DetalleProveedor() {
 
       {agregandoCompra ? (
         <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-3 flex flex-col gap-2">
-          <p className="text-xs font-medium text-muted dark:text-dark-text-secondary">Cargar compra</p>
+          <p className="text-xs font-medium text-muted dark:text-dark-text-secondary">
+            {compraEditandoId ? 'Editar compra' : 'Cargar compra'}
+          </p>
           <input
             value={modelo}
             onChange={(e) => setModelo(e.target.value)}
@@ -316,7 +361,7 @@ export default function DetalleProveedor() {
             {STORAGE_OPTIONS.map((gb) => (
               <button
                 key={gb}
-                onClick={() => setCapacidad(gb)}
+                onClick={() => setCapacidad(capacidad === gb ? null : gb)}
                 className={`flex-1 rounded-lg py-2 text-xs font-medium ${
                   capacidad === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                 }`}
@@ -324,6 +369,10 @@ export default function DetalleProveedor() {
                 {gb}GB
               </button>
             ))}
+          </div>
+          <div>
+            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Color</label>
+            <SelectorColor value={color} onChange={setColor} />
           </div>
           <div className="flex gap-2">
             <div className="flex-1">
@@ -354,14 +403,14 @@ export default function DetalleProveedor() {
           />
           <div className="flex gap-2">
             <button
-              onClick={() => setAgregandoCompra(false)}
+              onClick={cerrarFormCompra}
               className="flex-1 rounded-lg border border-border dark:border-dark-border py-2 text-sm font-medium"
             >
               Cancelar
             </button>
             <button
               disabled={!modelo.trim() || guardandoCompra}
-              onClick={agregarCompra}
+              onClick={guardarCompra}
               className="flex-1 rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
             >
               {guardandoCompra ? 'Guardando...' : 'Guardar'}
@@ -370,7 +419,7 @@ export default function DetalleProveedor() {
         </div>
       ) : (
         <button
-          onClick={() => setAgregandoCompra(true)}
+          onClick={abrirNuevaCompra}
           className="w-full rounded-2xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium"
         >
           + Cargar compra
@@ -387,10 +436,20 @@ export default function DetalleProveedor() {
             className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex items-center justify-between gap-3"
           >
             <div className="min-w-0">
-              <p className="text-sm font-medium truncate">
-                {f.modelo || 'Sin modelo'}
-                {f.capacidad_gb ? ` · ${f.capacidad_gb}GB` : ''}
-                {f.cantidad > 1 ? ` · x${f.cantidad}` : ''}
+              <p className="text-sm font-medium truncate flex items-center gap-1.5">
+                {f.color && hexColorDe(f.color) && (
+                  <span
+                    className="h-3 w-3 rounded-full border border-border dark:border-dark-border shrink-0"
+                    style={{ backgroundColor: hexColorDe(f.color)! }}
+                    title={f.color}
+                  />
+                )}
+                <span className="truncate">
+                  {f.modelo || 'Sin modelo'}
+                  {f.capacidad_gb ? ` · ${f.capacidad_gb}GB` : ''}
+                  {f.color ? ` · ${f.color}` : ''}
+                  {f.cantidad > 1 ? ` · x${f.cantidad}` : ''}
+                </span>
               </p>
               <p className="text-xs text-muted dark:text-dark-text-secondary">
                 {new Date(f.fecha).toLocaleDateString('es-AR')} ·{' '}
@@ -401,6 +460,17 @@ export default function DetalleProveedor() {
             <div className="flex items-center gap-2 shrink-0">
               {f.precioUnitario != null && (
                 <p className="text-sm font-medium">${(f.precioUnitario * f.cantidad).toLocaleString('es-AR')}</p>
+              )}
+              {f.origen === 'manual' && f.idManual && (
+                <button
+                  onClick={() => {
+                    const compra = compras.find((c) => c.id === f.idManual);
+                    if (compra) abrirEdicionCompra(compra);
+                  }}
+                  className="text-xs text-accent dark:text-dark-accent underline"
+                >
+                  Editar
+                </button>
               )}
               {f.origen === 'manual' && f.idManual && puedeEliminar && (
                 <button onClick={() => eliminarCompra(f.idManual!)} className="text-xs text-bad underline">

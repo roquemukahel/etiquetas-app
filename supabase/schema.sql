@@ -2159,11 +2159,17 @@ create table if not exists compras_proveedor (
   proveedor_id uuid not null references proveedores(id) on delete cascade,
   modelo text,
   capacidad_gb int,
+  color text,
   cantidad int not null default 1,
   precio_unitario numeric,
   detalles text,
   created_at timestamptz default now()
 );
+
+-- Color se sumó después de crear la tabla: para las bases donde
+-- compras_proveedor ya existía sin esta columna (misma paleta de colores
+-- que Stock/Servicio Técnico, ver app/SelectorColor.tsx).
+alter table compras_proveedor add column if not exists color text;
 
 alter table compras_proveedor enable row level security;
 

@@ -25,6 +25,14 @@ export default function PermisosEditor({
 }) {
   const set = (k: keyof PermisosForm, v: boolean) => onChange({ ...valor, [k]: v });
 
+  // Una cuenta con acceso alto (administrador o acceso completo) sin PIN es
+  // el agujero de seguridad más grande: desde "Cambiar" cualquiera se puede
+  // elegir como ella y quedar con todos los permisos. Por eso el aviso de
+  // "ponele un PIN" tiene que verse SIEMPRE que no haya PIN, no solo en las
+  // cuentas limitadas (antes solo aparecía ahí), y más fuerte en las de
+  // acceso alto.
+  const accesoAlto = valor.esAdministrador || valor.accesoCompleto;
+
   return (
     <div className="flex flex-col gap-1.5 pt-1">
       <p className="text-xs font-medium text-muted dark:text-dark-text-secondary">Permisos</p>
@@ -108,13 +116,24 @@ export default function PermisosEditor({
               </label>
             </div>
           )}
-          {!tienePin && (
-            <p className="text-[10px] text-warn mt-0.5">
+        </div>
+      )}
+
+      {!tienePin && (
+        <p className={`text-[11px] mt-1 ${accesoAlto ? 'text-bad font-medium' : 'text-warn'}`}>
+          {accesoAlto ? (
+            <>
+              ⚠️ Esta cuenta no tiene PIN. Como tiene acceso alto, cualquiera puede elegirse como esta persona
+              desde "Cambiar" (arriba a la derecha) y quedar con todos los permisos. Ponele un PIN de 4 dígitos
+              para que nadie se pueda hacer pasar por ella.
+            </>
+          ) : (
+            <>
               Sin un PIN cargado, cualquiera puede elegirse como esta persona sin escribir nada — para que el
               límite tenga efecto, cargale también un PIN.
-            </p>
+            </>
           )}
-        </div>
+        </p>
       )}
     </div>
   );

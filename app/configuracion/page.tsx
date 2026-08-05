@@ -1,14 +1,6 @@
 import Link from 'next/link';
 import ThemeToggle from '../ThemeToggle';
-
-const SECCIONES = [
-  { href: '/configuracion/negocio', titulo: 'Datos del negocio', desc: 'Nombre, logo, contacto y garantía' },
-  { href: '/configuracion/vendedores', titulo: 'Vendedores', desc: 'Quién atiende cada venta' },
-  { href: '/configuracion/tecnicos', titulo: 'Técnicos', desc: 'Quién repara los equipos de Servicio Técnico' },
-  { href: '/configuracion/suscripcion', titulo: 'Suscripción', desc: 'Estado del pago y plan de Qovento' },
-  { href: '/configuracion/soporte', titulo: 'Soporte', desc: 'Reportá un problema o dejanos un mensaje' },
-  { href: '/configuracion/auditoria', titulo: 'Auditoría', desc: 'Quién hizo qué y cuándo' },
-];
+import Secciones from './Secciones';
 
 export default function Configuracion() {
   return (
@@ -22,16 +14,7 @@ export default function Configuracion() {
 
       <div className="flex flex-col gap-3">
         <ThemeToggle />
-        {SECCIONES.map((s) => (
-          <Link
-            key={s.href}
-            href={s.href}
-            className="rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-5 flex flex-col hover:border-accent/40 dark:hover:border-dark-accent/40 hover:shadow-elevated transition-all active:scale-[0.98]"
-          >
-            <span className="text-base font-medium">{s.titulo}</span>
-            <span className="text-xs text-muted dark:text-dark-text-secondary">{s.desc}</span>
-          </Link>
-        ))}
+        <Secciones />
       </div>
 
       <p className="text-xs text-muted dark:text-dark-text-secondary text-center mt-auto pt-4">
