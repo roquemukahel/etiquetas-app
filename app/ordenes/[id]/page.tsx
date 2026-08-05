@@ -6,6 +6,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { registrarAuditoria } from '../../lib/auditoria';
 import { limpiarImei } from '../../lib/imei';
+import { useActor } from '../../lib/actor';
+import { tienePermiso } from '../../lib/permisos';
 import { simboloMoneda } from '../../lib/monedas';
 import Avatar from '../../Avatar';
 import SelectorColor from '../../SelectorColor';
@@ -13,6 +15,10 @@ import SelectorColor from '../../SelectorColor';
 const ESTADOS = ['pendiente', 'pagado', 'entregado'];
 const FORMAS_PAGO = ['Efectivo', 'Transferencia', 'Tarjeta'];
 const STORAGE_OPTIONS = [64, 128, 256, 512];
+
+function idTemporal() {
+  return Math.random().toString(36).slice(2);
+}
 
 type Item = {
   id: string;
@@ -48,12 +54,41 @@ type Orden = {
 
 type ItemEditable = { id: string; descripcion: string; cantidad: string; precioUnitario: string; tipo: string };
 
+type Canje = {
+  id: string;
+  modelo: string | null;
+  capacidad_gb: number | null;
+  color: string | null;
+  imei: string | null;
+  salud_bateria: number | null;
+  detalles: string | null;
+  monto: number | null;
+};
+
+// id: null para un canje nuevo que todavía no existe en la base (se crea
+// recién al guardar) — así se puede diferenciar de uno ya cargado que solo
+// se está editando.
+type CanjeEditable = {
+  id: string | null;
+  tempId: string;
+  modelo: string;
+  capacidad_gb: number | null;
+  color: string;
+  imei: string;
+  salud_bateria: string;
+  detalles: string;
+  monto: string;
+};
+
 export default function DetalleOrden() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const supabase = crearClienteNavegador();
+  const actor = useActor();
+  const puedeEliminar = tienePermiso(actor, 'eliminar');
 
   const [orden, setOrden] = useState<Orden | null>(null);
+  const [canjes, setCanjes] = useState<Canje[]>([]);
   const [loading, setLoading] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -71,6 +106,17 @@ export default function DetalleOrden() {
   const [tipoCambio, setTipoCambio] = useState<number | null>(null);
   const [mostrarSecundariaEdit, setMostrarSecundariaEdit] = useState(false);
   const [montoSecundarioEdit, setMontoSecundarioEdit] = useState('');
+
+  // --- canjes (Plan canje) de esta orden ---
+  const [canjesEdit, setCanjesEdit] = useState<CanjeEditable[]>([]);
+  const [canjeModelo, setCanjeModelo] = useState('');
+  const [canjeCapacidad, setCanjeCapacidad] = useState<number | null>(null);
+  const [canjeColor, setCanjeColor] = useState('');
+  const [canjeImei, setCanjeImei] = useState('');
+  const [canjeBateria, setCanjeBateria] = useState('');
+  const [canjeMonto, setCanjeMonto] = useState('');
+  const [canjeDetalles, setCanjeDetalles] = useState('');
+  const [agregandoCanje, setAgregandoCanje] = useState(false);
 
   const [yaDerivado, setYaDerivado] = useState(false);
   const [derivarAbierto, setDerivarAbierto] = useState(false);
@@ -93,6 +139,13 @@ export default function DetalleOrden() {
     setLoading(false);
     const { data: reparacionExistente } = await supabase.from('reparaciones').select('id').eq('orden_origen_id', id).maybeSingle();
     setYaDerivado(!!reparacionExistente);
+    const { data: canjesData } = await supabase
+      .from('canjes')
+      .select('id, modelo, capacidad_gb, color, imei, salud_bateria, detalles, monto')
+      .eq('orden_id', id)
+      .eq('estado', 'en_canje')
+      .order('created_at');
+    setCanjes((canjesData as Canje[]) ?? []);
   };
 
   useEffect(() => {
@@ -181,6 +234,27 @@ export default function DetalleOrden() {
         tipo: i.tipo,
       }))
     );
+    setCanjesEdit(
+      canjes.map((c) => ({
+        id: c.id,
+        tempId: c.id,
+        modelo: c.modelo || '',
+        capacidad_gb: c.capacidad_gb,
+        color: c.color || '',
+        imei: c.imei || '',
+        salud_bateria: c.salud_bateria != null ? String(c.salud_bateria) : '',
+        detalles: c.detalles || '',
+        monto: c.monto != null ? String(c.monto) : '',
+      }))
+    );
+    setCanjeModelo('');
+    setCanjeCapacidad(null);
+    setCanjeColor('');
+    setCanjeImei('');
+    setCanjeBateria('');
+    setCanjeMonto('');
+    setCanjeDetalles('');
+    setAgregandoCanje(false);
     setError(null);
     setEditando(true);
   };
@@ -200,11 +274,43 @@ export default function DetalleOrden() {
   const actualizarItemEdit = (itemId: string, campo: 'descripcion' | 'cantidad' | 'precioUnitario', valor: string) =>
     setItemsEdit((items) => items.map((i) => (i.id === itemId ? { ...i, [campo]: valor } : i)));
 
+  const agregarCanjeEdit = () => {
+    if (!canjeModelo.trim()) return;
+    setCanjesEdit((c) => [
+      ...c,
+      {
+        id: null,
+        tempId: idTemporal(),
+        modelo: canjeModelo.trim(),
+        capacidad_gb: canjeCapacidad,
+        color: canjeColor.trim(),
+        imei: canjeImei.trim(),
+        salud_bateria: canjeBateria,
+        monto: canjeMonto,
+        detalles: canjeDetalles.trim(),
+      },
+    ]);
+    setCanjeModelo('');
+    setCanjeCapacidad(null);
+    setCanjeColor('');
+    setCanjeImei('');
+    setCanjeBateria('');
+    setCanjeMonto('');
+    setCanjeDetalles('');
+    setAgregandoCanje(false);
+  };
+
+  const quitarCanjeEdit = (tempId: string) => setCanjesEdit((c) => c.filter((x) => x.tempId !== tempId));
+
+  const actualizarCanjeEdit = (tempId: string, monto: string) =>
+    setCanjesEdit((c) => c.map((x) => (x.tempId === tempId ? { ...x, monto } : x)));
+
   const subtotalEdit = itemsEdit.reduce((acc, i) => acc + (Number(i.cantidad) || 0) * (Number(i.precioUnitario) || 0), 0);
+  const montoCanjeEdit = canjesEdit.reduce((acc, c) => acc + (Number(c.monto) || 0), 0);
   // Sin Math.max(0, ...) a propósito: un anticipo mayor al precio puede dejar
   // el total en negativo (saldo a favor del cliente), y eso es válido.
   const totalEdit =
-    subtotalEdit * (1 + (Number(impuestoEdit) || 0) / 100) - (Number(anticipoEdit) || 0) - (orden?.monto_canje || 0);
+    subtotalEdit * (1 + (Number(impuestoEdit) || 0) / 100) - (Number(anticipoEdit) || 0) - montoCanjeEdit;
 
   const guardarEdicion = async () => {
     if (!orden) return;
@@ -231,6 +337,22 @@ export default function DetalleOrden() {
     if ((orden.monto_secundario ?? null) !== montoSecundarioNuevo) {
       cambios.monto_secundario = { antes: orden.monto_secundario, despues: montoSecundarioNuevo };
     }
+    if ((orden.monto_canje || 0) !== montoCanjeEdit) {
+      cambios.monto_canje = { antes: orden.monto_canje, despues: montoCanjeEdit };
+    }
+
+    // Para un canje ya existente, el formulario solo deja editar el monto
+    // (el resto de los datos del equipo se cargan una sola vez al recibirlo)
+    // — por eso el diff de "modificados" compara únicamente eso.
+    const canjesNuevos = canjesEdit.filter((c) => c.id === null);
+    const canjesEliminados = canjes.filter((original) => !canjesEdit.some((c) => c.id === original.id));
+    const canjesModificados = canjesEdit.filter((c) => {
+      if (c.id === null) return false;
+      const original = canjes.find((o) => o.id === c.id);
+      if (!original) return false;
+      const montoNuevo = c.monto ? Number(c.monto) : null;
+      return (original.monto ?? null) !== montoNuevo;
+    });
 
     const itemsCambiados = itemsEdit
       .map((edit) => {
@@ -250,7 +372,13 @@ export default function DetalleOrden() {
       })
       .filter(Boolean) as { id: string; antes: unknown; despues: unknown }[];
 
-    if (Object.keys(cambios).length === 0 && itemsCambiados.length === 0) {
+    if (
+      Object.keys(cambios).length === 0 &&
+      itemsCambiados.length === 0 &&
+      canjesNuevos.length === 0 &&
+      canjesEliminados.length === 0 &&
+      canjesModificados.length === 0
+    ) {
       setEditando(false);
       setGuardando(false);
       return;
@@ -265,6 +393,7 @@ export default function DetalleOrden() {
         anticipo: anticipoNuevo,
         impuesto_porcentaje: impuestoNuevo,
         total: totalEdit,
+        monto_canje: montoCanjeEdit,
         vendedor_id: vendedorNuevo,
         monto_secundario: montoSecundarioNuevo,
         moneda_secundaria: monedaSecundariaNueva,
@@ -284,7 +413,53 @@ export default function DetalleOrden() {
         .eq('id', cambio.id);
     }
 
+    if (canjesEliminados.length > 0) {
+      const { error: canjesDelError } = await supabase
+        .from('canjes')
+        .delete()
+        .in('id', canjesEliminados.map((c) => c.id));
+      if (canjesDelError) {
+        setError('No pudimos quitar algún canje: ' + canjesDelError.message);
+        setGuardando(false);
+        return;
+      }
+    }
+
+    for (const c of canjesModificados) {
+      const { error: canjeUpdError } = await supabase
+        .from('canjes')
+        .update({ monto: c.monto ? Number(c.monto) : null })
+        .eq('id', c.id);
+      if (canjeUpdError) {
+        setError('No pudimos actualizar un canje: ' + canjeUpdError.message);
+        setGuardando(false);
+        return;
+      }
+    }
+
+    if (canjesNuevos.length > 0) {
+      const { error: canjesInsError } = await supabase.from('canjes').insert(
+        canjesNuevos.map((c) => ({
+          orden_id: id,
+          modelo: c.modelo.trim() || null,
+          capacidad_gb: c.capacidad_gb,
+          color: c.color.trim() || null,
+          imei: c.imei.trim() || null,
+          salud_bateria: c.salud_bateria ? Number(c.salud_bateria) : null,
+          detalles: c.detalles.trim() || null,
+          monto: c.monto ? Number(c.monto) : null,
+          vendedor_id: vendedorNuevo,
+        }))
+      );
+      if (canjesInsError) {
+        setError('No pudimos agregar algún canje nuevo: ' + canjesInsError.message);
+        setGuardando(false);
+        return;
+      }
+    }
+
     const nombreCliente = orden.clientes ? `${orden.clientes.nombre} ${orden.clientes.apellido || ''}`.trim() : 'sin cliente';
+    const huboCambiosCanje = canjesNuevos.length > 0 || canjesEliminados.length > 0 || canjesModificados.length > 0;
     await registrarAuditoria(supabase, {
       accion: `editó una orden (${nombreCliente})`,
       entidad: 'orden',
@@ -292,10 +467,12 @@ export default function DetalleOrden() {
       valorAnterior: {
         ...Object.fromEntries(Object.entries(cambios).map(([k, v]) => [k, v.antes])),
         ...(itemsCambiados.length > 0 ? { items: itemsCambiados.map((c) => ({ id: c.id, ...(c.antes as object) })) } : {}),
+        ...(huboCambiosCanje ? { canjes: canjes.map((c) => ({ id: c.id, modelo: c.modelo, monto: c.monto })) } : {}),
       },
       valorNuevo: {
         ...Object.fromEntries(Object.entries(cambios).map(([k, v]) => [k, v.despues])),
         ...(itemsCambiados.length > 0 ? { items: itemsCambiados.map((c) => ({ id: c.id, ...(c.despues as object) })) } : {}),
+        ...(huboCambiosCanje ? { canjes: canjesEdit.map((c) => ({ id: c.id, modelo: c.modelo, monto: c.monto })) } : {}),
       },
     });
 
@@ -322,7 +499,7 @@ export default function DetalleOrden() {
   };
 
   const handleCancelar = async () => {
-    if (!orden) return;
+    if (!orden || !puedeEliminar) return;
     if (!confirm('¿Cancelar esta orden? Los dispositivos vuelven a aparecer en stock.')) return;
     setGuardando(true);
     setError(null);
@@ -484,6 +661,116 @@ export default function DetalleOrden() {
           ))}
         </div>
 
+        <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-3 flex flex-col gap-2">
+          <p className="text-xs font-medium text-muted dark:text-dark-text-secondary">Plan canje</p>
+
+          {canjesEdit.length > 0 && (
+            <div className="flex flex-col gap-2">
+              {canjesEdit.map((c, idx) => (
+                <div key={c.tempId} className="rounded-lg bg-canvas dark:bg-dark-bg p-2.5 flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">
+                      {canjesEdit.length > 1 ? `${idx + 1}. ` : ''}
+                      {c.modelo || 'Sin modelo'}
+                      {c.capacidad_gb ? ` · ${c.capacidad_gb}GB` : ''}
+                      {c.color ? ` · ${c.color}` : ''}
+                    </p>
+                    {c.imei && <p className="text-xs text-muted dark:text-dark-text-secondary">IMEI: {c.imei}</p>}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs">$</span>
+                    <input
+                      value={c.monto}
+                      onChange={(e) => actualizarCanjeEdit(c.tempId, e.target.value)}
+                      inputMode="numeric"
+                      className="w-20 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded px-2 py-1 text-sm"
+                    />
+                    <button onClick={() => quitarCanjeEdit(c.tempId)} className="text-xs text-bad underline">
+                      Quitar
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {agregandoCanje ? (
+            <div className="flex flex-col gap-2 pt-1 border-t border-border dark:border-dark-border">
+              <input
+                value={canjeModelo}
+                onChange={(e) => setCanjeModelo(e.target.value)}
+                placeholder="Modelo (ej. iPhone 11)"
+                className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+              />
+              <div className="flex gap-2">
+                {STORAGE_OPTIONS.map((gb) => (
+                  <button
+                    key={gb}
+                    onClick={() => setCanjeCapacidad(gb)}
+                    className={`flex-1 rounded-lg py-2 text-xs font-medium ${
+                      canjeCapacidad === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
+                    }`}
+                  >
+                    {gb}GB
+                  </button>
+                ))}
+              </div>
+              <SelectorColor value={canjeColor} onChange={setCanjeColor} />
+              <div className="flex gap-2">
+                <input
+                  value={canjeImei}
+                  onChange={(e) => setCanjeImei(e.target.value)}
+                  placeholder="IMEI"
+                  className="flex-1 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm font-mono"
+                />
+                <input
+                  value={canjeBateria}
+                  onChange={(e) => setCanjeBateria(e.target.value)}
+                  placeholder="Batería %"
+                  inputMode="numeric"
+                  className="w-24 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <input
+                value={canjeMonto}
+                onChange={(e) => setCanjeMonto(e.target.value)}
+                placeholder="Monto que se le reconoce"
+                inputMode="numeric"
+                className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+              />
+              <textarea
+                value={canjeDetalles}
+                onChange={(e) => setCanjeDetalles(e.target.value)}
+                placeholder="Detalles (opcional)"
+                rows={2}
+                className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setAgregandoCanje(false)}
+                  className="flex-1 rounded-lg border border-border dark:border-dark-border py-2 text-sm font-medium"
+                >
+                  Cancelar
+                </button>
+                <button
+                  disabled={!canjeModelo.trim()}
+                  onClick={agregarCanjeEdit}
+                  className="flex-1 rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
+                >
+                  Agregar
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setAgregandoCanje(true)}
+              className="self-start text-xs text-accent dark:text-dark-accent underline"
+            >
+              + Agregar equipo de canje
+            </button>
+          )}
+        </div>
+
         <div className="flex gap-2">
           <div className="flex-1">
             <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Anticipo</label>
@@ -600,6 +887,26 @@ export default function DetalleOrden() {
         ))}
       </div>
 
+      {canjes.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <p className="text-xs font-medium text-muted dark:text-dark-text-secondary">Plan canje</p>
+          {canjes.map((c) => (
+            <div
+              key={c.id}
+              className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex items-center justify-between text-sm"
+            >
+              <span>
+                {c.modelo || 'Sin modelo'}
+                {c.capacidad_gb ? ` · ${c.capacidad_gb}GB` : ''}
+                {c.color ? ` · ${c.color}` : ''}
+                {c.imei ? ` · IMEI ${c.imei}` : ''}
+              </span>
+              {c.monto != null && <span className="font-medium">${c.monto.toLocaleString('es-AR')}</span>}
+            </div>
+          ))}
+        </div>
+      )}
+
       <Link
         href={`/ordenes/${orden.id}/boleta`}
         className="w-full rounded-2xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium"
@@ -698,13 +1005,15 @@ export default function DetalleOrden() {
         </div>
       </div>
 
-      <button
-        disabled={guardando}
-        onClick={handleCancelar}
-        className="mt-auto w-full rounded-2xl border border-bad/30 py-3 text-center text-sm font-medium text-bad disabled:opacity-40"
-      >
-        Cancelar orden
-      </button>
+      {puedeEliminar && (
+        <button
+          disabled={guardando}
+          onClick={handleCancelar}
+          className="mt-auto w-full rounded-2xl border border-bad/30 py-3 text-center text-sm font-medium text-bad disabled:opacity-40"
+        >
+          Cancelar orden
+        </button>
+      )}
     </main>
   );
 }

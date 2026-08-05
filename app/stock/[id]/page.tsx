@@ -6,6 +6,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { asegurarModelo } from '../../lib/modelos';
 import { registrarAuditoria } from '../../lib/auditoria';
+import { useActor } from '../../lib/actor';
+import { tienePermiso } from '../../lib/permisos';
 import SelectorColor from '../../SelectorColor';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
@@ -30,6 +32,8 @@ export default function DetalleDispositivo() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const supabase = crearClienteNavegador();
+  const actor = useActor();
+  const puedeEliminar = tienePermiso(actor, 'eliminar');
 
   const [d, setD] = useState<Dispositivo | null>(null);
   const [original, setOriginal] = useState<Dispositivo | null>(null);
@@ -144,7 +148,7 @@ export default function DetalleDispositivo() {
   };
 
   const handleEliminar = async () => {
-    if (!d) return;
+    if (!d || !puedeEliminar) return;
     if (!confirm('¿Eliminar este dispositivo del historial? No se puede deshacer.')) return;
     setGuardando(true);
     const { error: deleteError } = await supabase.from('dispositivos').delete().eq('id', id);
@@ -317,13 +321,15 @@ export default function DetalleDispositivo() {
       >
         {guardando ? 'Guardando...' : 'Guardar cambios'}
       </button>
-      <button
-        disabled={guardando}
-        onClick={handleEliminar}
-        className="w-full rounded-2xl border border-bad/30 py-3 text-center text-sm font-medium text-bad disabled:opacity-40"
-      >
-        Eliminar del historial
-      </button>
+      {puedeEliminar && (
+        <button
+          disabled={guardando}
+          onClick={handleEliminar}
+          className="w-full rounded-2xl border border-bad/30 py-3 text-center text-sm font-medium text-bad disabled:opacity-40"
+        >
+          Eliminar del historial
+        </button>
+      )}
     </main>
   );
 }

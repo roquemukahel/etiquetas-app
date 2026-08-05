@@ -6,7 +6,8 @@ import { crearClienteNavegador } from '../lib/supabase/client';
 import { leerCSV, valorDe, descargarCSV, insertarEnTandas } from '../lib/csv';
 import { obtenerTodasLasFilas } from '../lib/db';
 import { registrarAuditoria } from '../lib/auditoria';
-import { getActor } from '../lib/actor';
+import { getActor, useActor } from '../lib/actor';
+import { tienePermiso } from '../lib/permisos';
 
 type Cliente = {
   id: string;
@@ -20,6 +21,8 @@ type Cliente = {
 
 export default function Clientes() {
   const supabase = crearClienteNavegador();
+  const actor = useActor();
+  const puedeEliminar = tienePermiso(actor, 'eliminar');
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState('');
@@ -118,6 +121,7 @@ export default function Clientes() {
   };
 
   const eliminarSeleccionados = async () => {
+    if (!puedeEliminar) return;
     const ids = Array.from(seleccionados);
     if (ids.length === 0) return;
     if (!confirm(`¿Eliminar ${ids.length} cliente${ids.length === 1 ? '' : 's'}? No se puede deshacer.`)) return;
@@ -215,9 +219,11 @@ export default function Clientes() {
           </div>
         </div>
       ) : (
-        <button onClick={() => setModoSeleccion(true)} className="self-start text-xs text-accent dark:text-dark-accent underline">
-          Seleccionar varios
-        </button>
+        puedeEliminar && (
+          <button onClick={() => setModoSeleccion(true)} className="self-start text-xs text-accent dark:text-dark-accent underline">
+            Seleccionar varios
+          </button>
+        )
       )}
 
       {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Cargando...</p>}

@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../lib/supabase/client';
+import { useActor } from '../lib/actor';
+import { tienePermiso } from '../lib/permisos';
 
 type Orden = {
   id: string;
@@ -31,6 +33,8 @@ function esServicioTecnico(o: Orden) {
 
 export default function Ordenes() {
   const supabase = crearClienteNavegador();
+  const actor = useActor();
+  const puedeVender = tienePermiso(actor, 'vender');
   const [ordenes, setOrdenes] = useState<Orden[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtroEstado, setFiltroEstado] = useState('todas');
@@ -93,12 +97,18 @@ export default function Ordenes() {
         ))}
       </div>
 
-      <Link
-        href="/ordenes/nueva"
-        className="w-full rounded-2xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium"
-      >
-        + Nueva orden
-      </Link>
+      {puedeVender ? (
+        <Link
+          href="/ordenes/nueva"
+          className="w-full rounded-2xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium"
+        >
+          + Nueva orden
+        </Link>
+      ) : (
+        <p className="text-xs text-muted dark:text-dark-text-secondary text-center">
+          No tenés permiso para crear órdenes.
+        </p>
+      )}
 
       {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Cargando...</p>}
 

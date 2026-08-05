@@ -6,7 +6,8 @@ import { useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { asegurarModelo } from '../../lib/modelos';
 import { limpiarImei } from '../../lib/imei';
-import { getActor } from '../../lib/actor';
+import { getActor, useActor } from '../../lib/actor';
+import { tienePermiso } from '../../lib/permisos';
 import SelectorColor from '../../SelectorColor';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
@@ -15,6 +16,8 @@ const ESTADOS = ['usado', 'sellado'];
 export default function NuevoDispositivo() {
   const router = useRouter();
   const supabase = crearClienteNavegador();
+  const actorActual = useActor();
+  const puedeAgregarStock = tienePermiso(actorActual, 'agregar_stock');
 
   const [carpetas, setCarpetas] = useState<string[]>([]);
   const [proveedores, setProveedores] = useState<string[]>([]);
@@ -40,7 +43,7 @@ export default function NuevoDispositivo() {
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
 
-  const puedeGuardar = modelo.trim().length > 0;
+  const puedeGuardar = modelo.trim().length > 0 && puedeAgregarStock;
 
   const handleGuardar = async () => {
     if (!puedeGuardar) return;
@@ -84,6 +87,9 @@ export default function NuevoDispositivo() {
       </header>
 
       {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
+      {!puedeAgregarStock && (
+        <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">No tenés permiso para agregar dispositivos al stock.</p>
+      )}
 
       <div className="flex flex-col gap-3">
         <Campo label="Modelo (carpeta)" valor={modelo} onChange={setModelo} placeholder="iPhone 13" listaId="carpetas-stock" />

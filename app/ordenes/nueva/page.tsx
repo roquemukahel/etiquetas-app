@@ -8,7 +8,8 @@ import { asegurarModelo } from '../../lib/modelos';
 import { obtenerTodasLasFilas } from '../../lib/db';
 import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../../lib/carpetas';
 import { simboloMoneda } from '../../lib/monedas';
-import { getActor } from '../../lib/actor';
+import { getActor, useActor } from '../../lib/actor';
+import { tienePermiso } from '../../lib/permisos';
 import { ITEMS_CHECKLIST_INGRESO, generarTextoCondicionIngreso } from '../../lib/reparaciones';
 import MiniaturaDispositivo from '../../MiniaturaDispositivo';
 import CheckTri from '../../CheckTri';
@@ -66,6 +67,8 @@ function idTemporal() {
 export default function NuevaOrden() {
   const router = useRouter();
   const supabase = crearClienteNavegador();
+  const actorActual = useActor();
+  const puedeVender = tienePermiso(actorActual, 'vender');
 
   const [step, setStep] = useState<'cliente' | 'carrito' | 'confirmar'>('cliente');
 
@@ -432,7 +435,7 @@ export default function NuevaOrden() {
   const actualizarCantidadItem = (tempId: string, cantidad: string) =>
     setCarrito((c) => c.map((i) => (i.tempId === tempId ? { ...i, cantidad: Math.max(1, Number(cantidad) || 1) } : i)));
 
-  const puedeConfirmar = carrito.length > 0;
+  const puedeConfirmar = carrito.length > 0 && puedeVender;
 
   const handleConfirmar = async () => {
     if (!puedeConfirmar) return;
@@ -1342,6 +1345,9 @@ export default function NuevaOrden() {
         <span>{moneda}{total.toLocaleString('es-AR')}</span>
       </div>
 
+      {!puedeVender && (
+        <p className="text-xs text-bad text-center">No tenés permiso para crear órdenes.</p>
+      )}
       <button
         disabled={!puedeConfirmar || guardando}
         onClick={handleConfirmar}

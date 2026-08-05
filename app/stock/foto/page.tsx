@@ -7,7 +7,8 @@ import { crearClienteNavegador } from '../../lib/supabase/client';
 import { asegurarModelo } from '../../lib/modelos';
 import { limpiarImei } from '../../lib/imei';
 import { useDictado } from '../../lib/dictado';
-import { getActor } from '../../lib/actor';
+import { getActor, useActor } from '../../lib/actor';
+import { tienePermiso } from '../../lib/permisos';
 import SelectorColor from '../../SelectorColor';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
@@ -28,6 +29,8 @@ function fileToBase64(file: File): Promise<string> {
 export default function StockPorFoto() {
   const router = useRouter();
   const supabase = crearClienteNavegador();
+  const actorActual = useActor();
+  const puedeAgregarStock = tienePermiso(actorActual, 'agregar_stock');
 
   const [carpetas, setCarpetas] = useState<string[]>([]);
   const [proveedores, setProveedores] = useState<string[]>([]);
@@ -90,7 +93,7 @@ export default function StockPorFoto() {
     }
   };
 
-  const puedeGuardar = modelo.trim().length > 0;
+  const puedeGuardar = modelo.trim().length > 0 && puedeAgregarStock;
 
   const handleGuardar = async () => {
     if (!puedeGuardar) return;
@@ -134,6 +137,9 @@ export default function StockPorFoto() {
       </header>
 
       {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
+      {!puedeAgregarStock && (
+        <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">No tenés permiso para agregar dispositivos al stock.</p>
+      )}
 
       <label className="flex items-center gap-3 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 cursor-pointer shadow-card">
         <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhotoChange} />

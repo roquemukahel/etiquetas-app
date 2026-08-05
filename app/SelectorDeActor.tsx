@@ -27,6 +27,11 @@ type Persona = {
   telefono: string | null;
   edad: number | null;
   tienePin: boolean;
+  // Solo vienen cargados para vendedores (ver permisos por vendedor).
+  acceso_completo?: boolean;
+  puede_vender?: boolean;
+  puede_eliminar?: boolean;
+  puede_agregar_stock?: boolean;
 };
 
 export default function SelectorDeActor() {
@@ -104,7 +109,10 @@ export default function SelectorDeActor() {
     setCargando(true);
     (async () => {
       const [{ data: vend }, { data: tec }, { data: idsVend }, { data: idsTec }] = await Promise.all([
-        supabase.from('vendedores').select('id, nombre, foto_url, telefono, edad').order('nombre'),
+        supabase
+          .from('vendedores')
+          .select('id, nombre, foto_url, telefono, edad, acceso_completo, puede_vender, puede_eliminar, puede_agregar_stock')
+          .order('nombre'),
         supabase.from('tecnicos').select('id, nombre, foto_url, telefono, edad').order('nombre'),
         supabase.rpc('ids_vendedores_con_pin'),
         supabase.rpc('ids_tecnicos_con_pin'),
@@ -121,7 +129,21 @@ export default function SelectorDeActor() {
   if (esRutaExcluida || actor === undefined || (esRaiz && sesion === 'cargando')) return null;
 
   const elegir = (tipo: 'vendedor' | 'tecnico', persona: Persona) => {
-    const nuevo: Actor = { tipo, id: persona.id, nombre: persona.nombre, fotoUrl: persona.foto_url };
+    const nuevo: Actor = {
+      tipo,
+      id: persona.id,
+      nombre: persona.nombre,
+      fotoUrl: persona.foto_url,
+      permisos:
+        tipo === 'vendedor'
+          ? {
+              accesoCompleto: persona.acceso_completo ?? true,
+              puedeVender: persona.puede_vender ?? true,
+              puedeEliminar: persona.puede_eliminar ?? true,
+              puedeAgregarStock: persona.puede_agregar_stock ?? true,
+            }
+          : undefined,
+    };
     guardarActor(nuevo);
     setActorState(nuevo);
     setEligiendoTipo(null);

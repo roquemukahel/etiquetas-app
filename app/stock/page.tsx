@@ -6,7 +6,8 @@ import { crearClienteNavegador } from '../lib/supabase/client';
 import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../lib/carpetas';
 import { hexColorDe } from '../lib/coloresIphone';
 import { registrarAuditoria } from '../lib/auditoria';
-import { getActor } from '../lib/actor';
+import { getActor, useActor } from '../lib/actor';
+import { tienePermiso } from '../lib/permisos';
 import { leerCSV, valorDe, descargarCSV, insertarEnTandas } from '../lib/csv';
 import { obtenerTodasLasFilas } from '../lib/db';
 import MiniaturaDispositivo from '../MiniaturaDispositivo';
@@ -47,6 +48,9 @@ type Producto = { id: string; nombre: string; precio: number | null; imagen_url:
 
 export default function Stock() {
   const supabase = crearClienteNavegador();
+  const actor = useActor();
+  const puedeEliminar = tienePermiso(actor, 'eliminar');
+  const puedeAgregarStock = tienePermiso(actor, 'agregar_stock');
   const [tab, setTab] = useState<'celulares' | 'accesorios'>('celulares');
 
   const [dispositivos, setDispositivos] = useState<Dispositivo[]>([]);
@@ -108,7 +112,7 @@ export default function Stock() {
   const [eliminandoCarpeta, setEliminandoCarpeta] = useState<string | null>(null);
 
   const eliminarCarpeta = async (modelo: string, items: Dispositivo[]) => {
-    if (items.length === 0) return;
+    if (items.length === 0 || !puedeEliminar) return;
     if (
       !confirm(
         `¿Eliminar los ${items.length} dispositivo${items.length === 1 ? '' : 's'} de "${modelo}"? No se puede deshacer.`
@@ -240,7 +244,7 @@ export default function Stock() {
   };
 
   const confirmarImportacion = async () => {
-    if (!planImport) return;
+    if (!planImport || !puedeAgregarStock) return;
     setImportando(true);
     setProgresoImport(null);
 
@@ -282,6 +286,7 @@ export default function Stock() {
   };
 
   const eliminarSeleccionados = async () => {
+    if (!puedeEliminar) return;
     const ids = Array.from(seleccionados);
     if (ids.length === 0) return;
     if (!confirm(`¿Eliminar ${ids.length} dispositivo${ids.length === 1 ? '' : 's'} del historial? No se puede deshacer.`)) return;
@@ -359,7 +364,7 @@ export default function Stock() {
   }, [dispositivos]);
 
   const agregarProducto = async () => {
-    if (!nombreProducto.trim()) return;
+    if (!nombreProducto.trim() || !puedeAgregarStock) return;
     setGuardandoProducto(true);
     setErrorProducto(null);
     const { error: insertError } = await supabase
@@ -377,6 +382,7 @@ export default function Stock() {
   };
 
   const eliminarProducto = async (id: string) => {
+    if (!puedeEliminar) return;
     if (!confirm('¿Eliminar este producto?')) return;
     await supabase.from('productos').delete().eq('id', id);
     cargarProductos();
@@ -478,39 +484,43 @@ export default function Stock() {
             </button>
           </div>
 
-          <div className="flex gap-2">
-            <Link
-              href="/stock/nuevo"
-              className="flex-1 rounded-2xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium"
-            >
-              + Cargar a mano
-            </Link>
-            <Link
-              href="/stock/foto"
-              className="flex-1 rounded-2xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium"
-            >
-              + Cargar con foto
-            </Link>
-          </div>
+          {puedeAgregarStock && (
+            <div className="flex gap-2">
+              <Link
+                href="/stock/nuevo"
+                className="flex-1 rounded-2xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium"
+              >
+                + Cargar a mano
+              </Link>
+              <Link
+                href="/stock/foto"
+                className="flex-1 rounded-2xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium"
+              >
+                + Cargar con foto
+              </Link>
+            </div>
+          )}
 
           <div className="flex gap-2">
-            <label className="flex-1 rounded-xl border border-border dark:border-dark-border py-2.5 text-center text-xs font-medium cursor-pointer">
-              {preparando
-                ? 'Leyendo archivo...'
-                : importando
-                ? progresoImport
-                  ? `Importando... ${progresoImport.hechas}/${progresoImport.total}`
-                  : 'Importando...'
-                : '⬆ Importar CSV'}
-              <input
-                ref={inputImportRef}
-                type="file"
-                accept=".csv"
-                className="hidden"
-                disabled={preparando || importando}
-                onChange={prepararImportacion}
-              />
-            </label>
+            {puedeAgregarStock && (
+              <label className="flex-1 rounded-xl border border-border dark:border-dark-border py-2.5 text-center text-xs font-medium cursor-pointer">
+                {preparando
+                  ? 'Leyendo archivo...'
+                  : importando
+                  ? progresoImport
+                    ? `Importando... ${progresoImport.hechas}/${progresoImport.total}`
+                    : 'Importando...'
+                  : '⬆ Importar CSV'}
+                <input
+                  ref={inputImportRef}
+                  type="file"
+                  accept=".csv"
+                  className="hidden"
+                  disabled={preparando || importando}
+                  onChange={prepararImportacion}
+                />
+              </label>
+            )}
             <button
               onClick={exportarDispositivos}
               disabled={dispositivos.length === 0}
@@ -520,7 +530,7 @@ export default function Stock() {
             </button>
           </div>
 
-          {planImport && (
+          {planImport && puedeAgregarStock && (
             <div className="rounded-xl border border-accent/30 dark:border-dark-accent/30 bg-accent-soft dark:bg-dark-accent-soft p-3.5 flex flex-col gap-2.5">
               <p className="text-sm font-medium">Revisá antes de confirmar</p>
               <ul className="text-xs text-muted dark:text-dark-text-secondary flex flex-col gap-1">
@@ -585,12 +595,14 @@ export default function Stock() {
               </div>
             </div>
           ) : (
-            <button
-              onClick={() => setModoSeleccion(true)}
-              className="self-start text-xs text-accent dark:text-dark-accent underline"
-            >
-              Seleccionar varios
-            </button>
+            puedeEliminar && (
+              <button
+                onClick={() => setModoSeleccion(true)}
+                className="self-start text-xs text-accent dark:text-dark-accent underline"
+              >
+                Seleccionar varios
+              </button>
+            )
           )}
 
           {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Cargando...</p>}
@@ -627,7 +639,7 @@ export default function Stock() {
                       </span>
                     )}
                   </button>
-                  {items.length > 0 && (
+                  {items.length > 0 && puedeEliminar && (
                     <button
                       onClick={() => eliminarCarpeta(modelo, items)}
                       disabled={eliminandoCarpeta === modelo}
@@ -713,30 +725,32 @@ export default function Stock() {
         <>
           {errorProducto && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{errorProducto}</p>}
 
-          <div className="flex flex-col gap-2">
-            <div className="flex gap-2">
-              <input
-                value={nombreProducto}
-                onChange={(e) => setNombreProducto(e.target.value)}
-                placeholder="Nombre (ej. Funda, AirPods)"
-                className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
-              />
-              <input
-                value={precioProducto}
-                onChange={(e) => setPrecioProducto(e.target.value)}
-                placeholder="Precio"
-                inputMode="numeric"
-                className="w-24 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
-              />
+          {puedeAgregarStock && (
+            <div className="flex flex-col gap-2">
+              <div className="flex gap-2">
+                <input
+                  value={nombreProducto}
+                  onChange={(e) => setNombreProducto(e.target.value)}
+                  placeholder="Nombre (ej. Funda, AirPods)"
+                  className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+                />
+                <input
+                  value={precioProducto}
+                  onChange={(e) => setPrecioProducto(e.target.value)}
+                  placeholder="Precio"
+                  inputMode="numeric"
+                  className="w-24 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+                />
+              </div>
+              <button
+                disabled={!nombreProducto.trim() || guardandoProducto}
+                onClick={agregarProducto}
+                className="w-full rounded-xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-3 text-sm font-medium text-white disabled:opacity-40"
+              >
+                Agregar al catálogo
+              </button>
             </div>
-            <button
-              disabled={!nombreProducto.trim() || guardandoProducto}
-              onClick={agregarProducto}
-              className="w-full rounded-xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-3 text-sm font-medium text-white disabled:opacity-40"
-            >
-              Agregar al catálogo
-            </button>
-          </div>
+          )}
 
           {loadingProductos && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Cargando...</p>}
           {!loadingProductos && productos.length === 0 && (
@@ -765,9 +779,11 @@ export default function Stock() {
                     <p className="text-sm font-medium">{p.nombre}</p>
                     <div className="flex items-center gap-3 shrink-0">
                       {p.precio != null && <p className="text-sm text-muted dark:text-dark-text-secondary">${p.precio.toLocaleString('es-AR')}</p>}
-                      <button onClick={() => eliminarProducto(p.id)} className="text-xs text-bad underline">
-                        Eliminar
-                      </button>
+                      {puedeEliminar && (
+                        <button onClick={() => eliminarProducto(p.id)} className="text-xs text-bad underline">
+                          Eliminar
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>

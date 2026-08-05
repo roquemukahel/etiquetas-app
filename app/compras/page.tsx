@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { crearClienteNavegador } from '../lib/supabase/client';
 import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../lib/carpetas';
 import { registrarAuditoria } from '../lib/auditoria';
+import { useActor } from '../lib/actor';
+import { tienePermiso } from '../lib/permisos';
 import MiniaturaDispositivo from '../MiniaturaDispositivo';
 
 type Compra = {
@@ -26,6 +28,8 @@ const ETIQUETA_ESTADO: Record<string, string> = {
 
 export default function Compras() {
   const supabase = crearClienteNavegador();
+  const actor = useActor();
+  const puedeEliminar = tienePermiso(actor, 'eliminar');
   const [compras, setCompras] = useState<Compra[]>([]);
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState('');
@@ -64,6 +68,7 @@ export default function Compras() {
   };
 
   const eliminarSeleccionados = async () => {
+    if (!puedeEliminar) return;
     const ids = Array.from(seleccionados);
     if (ids.length === 0) return;
     if (!confirm(`¿Eliminar ${ids.length} compra${ids.length === 1 ? '' : 's'}? No se puede deshacer.`)) return;
@@ -135,9 +140,11 @@ export default function Compras() {
           </div>
         </div>
       ) : (
-        <button onClick={() => setModoSeleccion(true)} className="self-start text-xs text-accent dark:text-dark-accent underline">
-          Seleccionar varios
-        </button>
+        puedeEliminar && (
+          <button onClick={() => setModoSeleccion(true)} className="self-start text-xs text-accent dark:text-dark-accent underline">
+            Seleccionar varios
+          </button>
+        )
       )}
 
       {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Cargando...</p>}

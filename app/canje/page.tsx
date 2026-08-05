@@ -6,7 +6,8 @@ import { crearClienteNavegador } from '../lib/supabase/client';
 import { asegurarModelo } from '../lib/modelos';
 import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../lib/carpetas';
 import { registrarAuditoria } from '../lib/auditoria';
-import { getActor } from '../lib/actor';
+import { getActor, useActor } from '../lib/actor';
+import { tienePermiso } from '../lib/permisos';
 import { infoEstado } from '../lib/reparaciones';
 import MiniaturaDispositivo from '../MiniaturaDispositivo';
 import Avatar from '../Avatar';
@@ -41,6 +42,9 @@ type Vista = 'en_canje' | 'derivados' | 'historial';
 
 export default function PlanCanje() {
   const supabase = crearClienteNavegador();
+  const actor = useActor();
+  const puedeEliminar = tienePermiso(actor, 'eliminar');
+  const puedeAgregarStock = tienePermiso(actor, 'agregar_stock');
   const [canjes, setCanjes] = useState<Canje[]>([]);
   const [derivados, setDerivados] = useState<ReparacionDerivada[]>([]);
   const [loading, setLoading] = useState(true);
@@ -103,7 +107,7 @@ export default function PlanCanje() {
   };
 
   const agregarAlStock = async (c: Canje) => {
-    if (procesando) return;
+    if (procesando || !puedeAgregarStock) return;
     if (c.imei) {
       const { data: existente } = await supabase.from('dispositivos').select('id').eq('imei', c.imei).maybeSingle();
       if (existente && !confirm(`Ya hay un dispositivo en Stock con el IMEI ${c.imei}. ¿Agregarlo igual?`)) return;
@@ -157,6 +161,7 @@ export default function PlanCanje() {
   };
 
   const eliminar = async (c: Canje) => {
+    if (!puedeEliminar) return;
     if (!confirm('¿Eliminar este dispositivo de Plan Canje? Esta acción no se puede deshacer.')) return;
     setProcesando(c.id);
     await supabase.from('canjes').delete().eq('id', c.id);
@@ -285,13 +290,15 @@ export default function PlanCanje() {
                 </div>
                 {vista === 'en_canje' && (
                   <div className="flex gap-2 mt-1">
-                    <button
-                      disabled={procesando === c.id}
-                      onClick={() => agregarAlStock(c)}
-                      className="flex-1 rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-xs font-medium text-white disabled:opacity-40"
-                    >
-                      {procesando === c.id ? 'Agregando...' : 'Agregar al Stock'}
-                    </button>
+                    {puedeAgregarStock && (
+                      <button
+                        disabled={procesando === c.id}
+                        onClick={() => agregarAlStock(c)}
+                        className="flex-1 rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-xs font-medium text-white disabled:opacity-40"
+                      >
+                        {procesando === c.id ? 'Agregando...' : 'Agregar al Stock'}
+                      </button>
+                    )}
                     <button
                       disabled={procesando === c.id}
                       onClick={() => derivar(c)}
@@ -301,7 +308,7 @@ export default function PlanCanje() {
                     </button>
                   </div>
                 )}
-                {vista === 'en_canje' && (
+                {vista === 'en_canje' && puedeEliminar && (
                   <button
                     disabled={procesando === c.id}
                     onClick={() => eliminar(c)}

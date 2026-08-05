@@ -6,7 +6,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { asegurarModelo } from '../../lib/modelos';
 import { registrarAuditoria } from '../../lib/auditoria';
-import { getActor } from '../../lib/actor';
+import { getActor, useActor } from '../../lib/actor';
+import { tienePermiso } from '../../lib/permisos';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 
@@ -26,6 +27,9 @@ export default function DetalleCompra() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const supabase = crearClienteNavegador();
+  const actor = useActor();
+  const puedeEliminar = tienePermiso(actor, 'eliminar');
+  const puedeAgregarStock = tienePermiso(actor, 'agregar_stock');
 
   const [compra, setCompra] = useState<Compra | null>(null);
   const [loading, setLoading] = useState(true);
@@ -55,7 +59,7 @@ export default function DetalleCompra() {
   }, [id]);
 
   const agregarAlStock = async () => {
-    if (!compra || procesando) return;
+    if (!compra || procesando || !puedeAgregarStock) return;
     if (!confirm('¿Agregar este dispositivo al Stock para venderlo?')) return;
     setProcesando(true);
     setError(null);
@@ -142,7 +146,7 @@ export default function DetalleCompra() {
   };
 
   const eliminarCompra = async () => {
-    if (!compra || procesando) return;
+    if (!compra || procesando || !puedeEliminar) return;
     if (!confirm('¿Eliminar esta compra? Esta acción no se puede deshacer.')) return;
     setProcesando(true);
     setError(null);
@@ -383,13 +387,15 @@ export default function DetalleCompra() {
       {compra.estado === 'pendiente' ? (
         <div className="flex flex-col gap-2">
           <p className="text-xs text-muted dark:text-dark-text-secondary font-medium">¿Qué hacemos con este dispositivo?</p>
-          <button
-            disabled={procesando}
-            onClick={agregarAlStock}
-            className="w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
-          >
-            Agregar al Stock
-          </button>
+          {puedeAgregarStock && (
+            <button
+              disabled={procesando}
+              onClick={agregarAlStock}
+              className="w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
+            >
+              Agregar al Stock
+            </button>
+          )}
           <button
             disabled={procesando}
             onClick={derivarAServicioTecnico}
@@ -397,13 +403,15 @@ export default function DetalleCompra() {
           >
             Derivar a Servicio Técnico
           </button>
-          <button
-            disabled={procesando}
-            onClick={eliminarCompra}
-            className="w-full rounded-2xl border border-bad/30 py-3 text-center text-sm font-medium text-bad disabled:opacity-40"
-          >
-            Eliminar
-          </button>
+          {puedeEliminar && (
+            <button
+              disabled={procesando}
+              onClick={eliminarCompra}
+              className="w-full rounded-2xl border border-bad/30 py-3 text-center text-sm font-medium text-bad disabled:opacity-40"
+            >
+              Eliminar
+            </button>
+          )}
         </div>
       ) : (
         <p className="text-sm text-good bg-good/10 rounded-lg px-3 py-2">

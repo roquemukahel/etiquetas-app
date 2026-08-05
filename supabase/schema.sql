@@ -2039,3 +2039,21 @@ alter table reparaciones add column if not exists microfono_inferior_ok boolean;
 alter table reparaciones add column if not exists boton_power_ok boolean;
 alter table reparaciones add column if not exists boton_volumen_ok boolean;
 alter table reparaciones add column if not exists garantia_excepcion_manual text;
+
+-- ============================================================
+-- Permisos por vendedor (pedido por el dueño para limitar qué puede
+-- hacer cada uno). Es un límite a nivel de la app, apoyado en el PIN
+-- que ya elige cada vendedor en el selector de "Cambiar" — NO es un
+-- login real con su propio usuario/contraseña ni una restricción a
+-- nivel de base de datos (cualquiera con acceso al negocio en Supabase
+-- sigue viendo todo). Por eso, para que un permiso restringido tenga
+-- sentido, ese vendedor necesita tener un PIN cargado — si no, cualquiera
+-- puede simplemente elegirse a sí mismo como otro vendedor sin PIN.
+--
+-- Default true en las cuatro columnas: un vendedor recién cargado (o
+-- ya existente antes de este cambio) sigue teniendo acceso completo
+-- hasta que el dueño decida restringirlo a mano.
+alter table vendedores add column if not exists acceso_completo boolean not null default true;
+alter table vendedores add column if not exists puede_vender boolean not null default true;
+alter table vendedores add column if not exists puede_eliminar boolean not null default true;
+alter table vendedores add column if not exists puede_agregar_stock boolean not null default true;

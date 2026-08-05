@@ -5,7 +5,18 @@ import Link from 'next/link';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import Avatar from '../../Avatar';
 
-type Vendedor = { id: string; nombre: string; telefono: string | null; edad: number | null; foto_url: string | null; pin: string | null };
+type Vendedor = {
+  id: string;
+  nombre: string;
+  telefono: string | null;
+  edad: number | null;
+  foto_url: string | null;
+  pin: string | null;
+  acceso_completo: boolean;
+  puede_vender: boolean;
+  puede_eliminar: boolean;
+  puede_agregar_stock: boolean;
+};
 
 export default function Vendedores() {
   const supabase = crearClienteNavegador();
@@ -19,6 +30,10 @@ export default function Vendedores() {
   const [telefonoEdit, setTelefonoEdit] = useState('');
   const [edadEdit, setEdadEdit] = useState('');
   const [pinEdit, setPinEdit] = useState('');
+  const [accesoCompletoEdit, setAccesoCompletoEdit] = useState(true);
+  const [puedeVenderEdit, setPuedeVenderEdit] = useState(true);
+  const [puedeEliminarEdit, setPuedeEliminarEdit] = useState(true);
+  const [puedeAgregarStockEdit, setPuedeAgregarStockEdit] = useState(true);
   const [guardandoPerfil, setGuardandoPerfil] = useState(false);
 
   const cargar = async () => {
@@ -57,6 +72,10 @@ export default function Vendedores() {
     setTelefonoEdit(v.telefono ?? '');
     setEdadEdit(v.edad != null ? String(v.edad) : '');
     setPinEdit(v.pin ?? '');
+    setAccesoCompletoEdit(v.acceso_completo);
+    setPuedeVenderEdit(v.puede_vender);
+    setPuedeEliminarEdit(v.puede_eliminar);
+    setPuedeAgregarStockEdit(v.puede_agregar_stock);
     setError(null);
   };
 
@@ -84,6 +103,10 @@ export default function Vendedores() {
         telefono: telefonoEdit.trim() || null,
         edad: edadEdit ? Number(edadEdit) : null,
         pin: pinEdit.trim() || null,
+        acceso_completo: accesoCompletoEdit,
+        puede_vender: puedeVenderEdit,
+        puede_eliminar: puedeEliminarEdit,
+        puede_agregar_stock: puedeAgregarStockEdit,
       })
       .eq('id', v.id);
     setGuardandoPerfil(false);
@@ -180,6 +203,57 @@ export default function Vendedores() {
                     pida nada.
                   </p>
                 </div>
+
+                <div className="flex flex-col gap-1.5 pt-1">
+                  <p className="text-xs font-medium text-muted dark:text-dark-text-secondary">Permisos</p>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={accesoCompletoEdit}
+                      onChange={(e) => setAccesoCompletoEdit(e.target.checked)}
+                      className="h-4 w-4 accent-ink"
+                    />
+                    <span className="text-sm">Acceso completo</span>
+                  </label>
+                  {!accesoCompletoEdit && (
+                    <div className="flex flex-col gap-1.5 pl-6">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={puedeVenderEdit}
+                          onChange={(e) => setPuedeVenderEdit(e.target.checked)}
+                          className="h-4 w-4 accent-ink"
+                        />
+                        <span className="text-sm">Puede vender (crear órdenes)</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={puedeEliminarEdit}
+                          onChange={(e) => setPuedeEliminarEdit(e.target.checked)}
+                          className="h-4 w-4 accent-ink"
+                        />
+                        <span className="text-sm">Puede eliminar (órdenes, clientes, stock, canjes, compras)</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={puedeAgregarStockEdit}
+                          onChange={(e) => setPuedeAgregarStockEdit(e.target.checked)}
+                          className="h-4 w-4 accent-ink"
+                        />
+                        <span className="text-sm">Puede agregar dispositivos al stock</span>
+                      </label>
+                      {!pinEdit.trim() && (
+                        <p className="text-[10px] text-warn mt-0.5">
+                          Sin un PIN cargado, cualquiera puede elegirse como este vendedor sin escribir nada — para
+                          que el límite tenga efecto, cargale también un PIN.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
                 <button
                   disabled={guardandoPerfil}
                   onClick={() => guardarPerfil(v)}

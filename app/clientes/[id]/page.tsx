@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { registrarAuditoria } from '../../lib/auditoria';
+import { useActor } from '../../lib/actor';
+import { tienePermiso } from '../../lib/permisos';
 
 type Cliente = {
   id: string;
@@ -28,6 +30,8 @@ export default function DetalleCliente() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const supabase = crearClienteNavegador();
+  const actor = useActor();
+  const puedeEliminar = tienePermiso(actor, 'eliminar');
 
   const [c, setC] = useState<Cliente | null>(null);
   const [ordenes, setOrdenes] = useState<Orden[]>([]);
@@ -87,7 +91,7 @@ export default function DetalleCliente() {
   };
 
   const handleEliminar = async () => {
-    if (!c) return;
+    if (!c || !puedeEliminar) return;
     if (!confirm('¿Eliminar este cliente? No se puede deshacer.')) return;
     setGuardando(true);
     const { error: deleteError } = await supabase.from('clientes').delete().eq('id', id);
@@ -182,13 +186,15 @@ export default function DetalleCliente() {
           >
             {guardando ? 'Guardando...' : 'Guardar cambios'}
           </button>
-          <button
-            disabled={guardando}
-            onClick={handleEliminar}
-            className="w-full rounded-2xl border border-bad/30 py-3 text-center text-sm font-medium text-bad disabled:opacity-40"
-          >
-            Eliminar cliente
-          </button>
+          {puedeEliminar && (
+            <button
+              disabled={guardando}
+              onClick={handleEliminar}
+              className="w-full rounded-2xl border border-bad/30 py-3 text-center text-sm font-medium text-bad disabled:opacity-40"
+            >
+              Eliminar cliente
+            </button>
+          )}
         </>
       )}
 
