@@ -4,8 +4,33 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import Avatar from '../../Avatar';
+import PermisosEditor, { PermisosForm } from '../../PermisosEditor';
 
-type Tecnico = { id: string; nombre: string; telefono: string | null; edad: number | null; foto_url: string | null; pin: string | null };
+type Tecnico = {
+  id: string;
+  nombre: string;
+  telefono: string | null;
+  edad: number | null;
+  foto_url: string | null;
+  pin: string | null;
+  acceso_completo: boolean;
+  puede_vender: boolean;
+  puede_eliminar: boolean;
+  puede_agregar_stock: boolean;
+  puede_ver_estadisticas: boolean;
+  puede_recibir_servicio_tecnico: boolean;
+  puede_gestionar_servicio_tecnico: boolean;
+};
+
+const PERMISOS_DEFAULT: PermisosForm = {
+  accesoCompleto: true,
+  puedeVender: true,
+  puedeEliminar: true,
+  puedeAgregarStock: true,
+  puedeVerEstadisticas: true,
+  puedeRecibirServicioTecnico: true,
+  puedeGestionarServicioTecnico: true,
+};
 
 export default function Tecnicos() {
   const supabase = crearClienteNavegador();
@@ -19,6 +44,7 @@ export default function Tecnicos() {
   const [telefonoEdit, setTelefonoEdit] = useState('');
   const [edadEdit, setEdadEdit] = useState('');
   const [pinEdit, setPinEdit] = useState('');
+  const [permisosEdit, setPermisosEdit] = useState<PermisosForm>(PERMISOS_DEFAULT);
   const [guardandoPerfil, setGuardandoPerfil] = useState(false);
 
   const cargar = async () => {
@@ -57,6 +83,15 @@ export default function Tecnicos() {
     setTelefonoEdit(t.telefono ?? '');
     setEdadEdit(t.edad != null ? String(t.edad) : '');
     setPinEdit(t.pin ?? '');
+    setPermisosEdit({
+      accesoCompleto: t.acceso_completo,
+      puedeVender: t.puede_vender,
+      puedeEliminar: t.puede_eliminar,
+      puedeAgregarStock: t.puede_agregar_stock,
+      puedeVerEstadisticas: t.puede_ver_estadisticas,
+      puedeRecibirServicioTecnico: t.puede_recibir_servicio_tecnico,
+      puedeGestionarServicioTecnico: t.puede_gestionar_servicio_tecnico,
+    });
     setError(null);
   };
 
@@ -84,6 +119,13 @@ export default function Tecnicos() {
         telefono: telefonoEdit.trim() || null,
         edad: edadEdit ? Number(edadEdit) : null,
         pin: pinEdit.trim() || null,
+        acceso_completo: permisosEdit.accesoCompleto,
+        puede_vender: permisosEdit.puedeVender,
+        puede_eliminar: permisosEdit.puedeEliminar,
+        puede_agregar_stock: permisosEdit.puedeAgregarStock,
+        puede_ver_estadisticas: permisosEdit.puedeVerEstadisticas,
+        puede_recibir_servicio_tecnico: permisosEdit.puedeRecibirServicioTecnico,
+        puede_gestionar_servicio_tecnico: permisosEdit.puedeGestionarServicioTecnico,
       })
       .eq('id', t.id);
     setGuardandoPerfil(false);
@@ -180,6 +222,9 @@ export default function Tecnicos() {
                     pida nada.
                   </p>
                 </div>
+
+                <PermisosEditor valor={permisosEdit} onChange={setPermisosEdit} tienePin={!!pinEdit.trim()} />
+
                 <button
                   disabled={guardandoPerfil}
                   onClick={() => guardarPerfil(t)}

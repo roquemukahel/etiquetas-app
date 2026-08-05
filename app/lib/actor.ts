@@ -6,12 +6,18 @@ import { useEffect, useState } from 'react';
 // técnico). Es identificación por nombre para trazabilidad, NO un login con
 // contraseña — cualquiera puede elegir el nombre de otro. Se guarda en este
 // dispositivo/navegador (localStorage), no viaja con la cuenta.
-export type PermisosVendedor = {
+//
+// Mismas 7 columnas de permisos en vendedores y técnicos (un técnico a
+// veces también vende, un vendedor a veces recibe/gestiona Servicio
+// Técnico) — ver app/lib/permisos.ts.
+export type Permisos = {
   accesoCompleto: boolean;
   puedeVender: boolean;
   puedeEliminar: boolean;
   puedeAgregarStock: boolean;
   puedeVerEstadisticas: boolean;
+  puedeRecibirServicioTecnico: boolean;
+  puedeGestionarServicioTecnico: boolean;
 };
 
 export type Actor = {
@@ -19,13 +25,17 @@ export type Actor = {
   id: string;
   nombre: string;
   fotoUrl?: string | null;
-  // Solo se completa para vendedores (ver app/lib/permisos.ts). Ausente en
-  // técnicos o en un actor guardado antes de que existiera este campo.
-  permisos?: PermisosVendedor;
+  // Ausente en un actor guardado antes de que existiera este campo.
+  permisos?: Permisos;
 };
 
 const KEY = 'qovento:actor';
 const EVENTO_CAMBIO = 'qovento:actor-changed';
+
+// Mensaje único para cuando una acción necesita saber quién la hizo (para
+// que aparezca bien en Actividad reciente) pero no hay nadie elegido en
+// "Cambiar" — mismo texto en todos los lugares que lo usan.
+export const MENSAJE_ACTOR_REQUERIDO = 'Elegí primero quién sos (arriba, donde dice "Cambiar") antes de continuar.';
 
 export function getActor(): Actor | null {
   if (typeof window === 'undefined') return null;

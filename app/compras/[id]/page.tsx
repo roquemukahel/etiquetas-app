@@ -6,7 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { asegurarModelo } from '../../lib/modelos';
 import { registrarAuditoria } from '../../lib/auditoria';
-import { getActor, useActor } from '../../lib/actor';
+import { getActor, useActor, MENSAJE_ACTOR_REQUERIDO } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
@@ -29,6 +29,7 @@ export default function DetalleCompra() {
   const supabase = crearClienteNavegador();
   const actor = useActor();
   const puedeEliminar = tienePermiso(actor, 'eliminar');
+  const puedeRecibirServicioTecnico = tienePermiso(actor, 'recibir_servicio_tecnico');
   const puedeAgregarStock = tienePermiso(actor, 'agregar_stock');
 
   const [compra, setCompra] = useState<Compra | null>(null);
@@ -60,6 +61,10 @@ export default function DetalleCompra() {
 
   const agregarAlStock = async () => {
     if (!compra || procesando || !puedeAgregarStock) return;
+    if (!getActor()) {
+      setError(MENSAJE_ACTOR_REQUERIDO);
+      return;
+    }
     if (!confirm('¿Agregar este dispositivo al Stock para venderlo?')) return;
     setProcesando(true);
     setError(null);
@@ -113,7 +118,7 @@ export default function DetalleCompra() {
   };
 
   const derivarAServicioTecnico = async () => {
-    if (!compra || procesando) return;
+    if (!compra || procesando || !puedeRecibirServicioTecnico) return;
     if (!confirm('¿Derivar este dispositivo a Servicio Técnico?')) return;
     setProcesando(true);
     setError(null);
@@ -396,13 +401,15 @@ export default function DetalleCompra() {
               Agregar al Stock
             </button>
           )}
-          <button
-            disabled={procesando}
-            onClick={derivarAServicioTecnico}
-            className="w-full rounded-2xl border border-border dark:border-dark-border py-4 text-center text-base font-medium disabled:opacity-40"
-          >
-            Derivar a Servicio Técnico
-          </button>
+          {puedeRecibirServicioTecnico && (
+            <button
+              disabled={procesando}
+              onClick={derivarAServicioTecnico}
+              className="w-full rounded-2xl border border-border dark:border-dark-border py-4 text-center text-base font-medium disabled:opacity-40"
+            >
+              Derivar a Servicio Técnico
+            </button>
+          )}
           {puedeEliminar && (
             <button
               disabled={procesando}

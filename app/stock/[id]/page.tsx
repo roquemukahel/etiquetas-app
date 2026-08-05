@@ -36,6 +36,7 @@ export default function DetalleDispositivo() {
   const supabase = crearClienteNavegador();
   const actor = useActor();
   const puedeEliminar = tienePermiso(actor, 'eliminar');
+  const puedeRecibirServicioTecnico = tienePermiso(actor, 'recibir_servicio_tecnico');
 
   const [d, setD] = useState<Dispositivo | null>(null);
   const [original, setOriginal] = useState<Dispositivo | null>(null);
@@ -133,7 +134,7 @@ export default function DetalleDispositivo() {
   };
 
   const derivarAServicioTecnico = async () => {
-    if (!d) return;
+    if (!d || !puedeRecibirServicioTecnico) return;
     setDerivando(true);
     const { data: nueva } = await supabase
       .from('reparaciones')
@@ -296,7 +297,7 @@ export default function DetalleDispositivo() {
         </div>
       </div>
 
-      {d.en_stock && !derivarAbierto && (
+      {d.en_stock && !derivarAbierto && puedeRecibirServicioTecnico && (
         <button
           onClick={() => setDerivarAbierto(true)}
           className="w-full rounded-2xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium"

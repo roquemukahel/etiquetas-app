@@ -6,7 +6,7 @@ import Etiqueta from './Etiqueta';
 import { crearClienteNavegador } from '../lib/supabase/client';
 import { asegurarModelo } from '../lib/modelos';
 import { limpiarImei } from '../lib/imei';
-import { getActor } from '../lib/actor';
+import { getActor, MENSAJE_ACTOR_REQUERIDO } from '../lib/actor';
 import SelectorColor from '../SelectorColor';
 
 type ExtractedData = {
@@ -142,8 +142,12 @@ export default function NuevaEtiqueta() {
 
   const handleContinuarAEtiqueta = async () => {
     if (agregarAlStock && datos) {
-      setGuardandoStock(true);
       const actor = getActor();
+      if (!actor) {
+        setError(MENSAJE_ACTOR_REQUERIDO);
+        return;
+      }
+      setGuardandoStock(true);
       await supabase.from('dispositivos').insert({
         modelo: datos.modelo,
         capacidad_gb: datos.capacidad_gb,

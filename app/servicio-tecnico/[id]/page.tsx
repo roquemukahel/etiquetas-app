@@ -7,7 +7,8 @@ import { crearClienteNavegador } from '../../lib/supabase/client';
 import { asegurarModelo } from '../../lib/modelos';
 import { limpiarImei } from '../../lib/imei';
 import { registrarAuditoria } from '../../lib/auditoria';
-import { getActor } from '../../lib/actor';
+import { getActor, useActor, MENSAJE_ACTOR_REQUERIDO } from '../../lib/actor';
+import { tienePermiso } from '../../lib/permisos';
 import { armarLinkWhatsApp, mensajeSeguimientoServicio, mensajeListoServicio, mensajePresupuesto, mensajeEsperandoRepuesto } from '../../lib/whatsapp';
 import { codigoLlamada } from '../../lib/paises';
 import {
@@ -101,6 +102,8 @@ export default function FichaReparacion() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const supabase = crearClienteNavegador();
+  const actor = useActor();
+  const puedeGestionar = tienePermiso(actor, 'gestionar_servicio_tecnico');
 
   const [r, setR] = useState<Reparacion | null>(null);
   const [tecnicos, setTecnicos] = useState<Tecnico[]>([]);
@@ -242,7 +245,7 @@ export default function FichaReparacion() {
     }));
 
   const guardar = async () => {
-    if (!r) return;
+    if (!r || !puedeGestionar) return;
     setGuardando(true);
     setError(null);
 
@@ -326,7 +329,7 @@ export default function FichaReparacion() {
   };
 
   const cambiarEstado = async (nuevoEstado: string) => {
-    if (!r) return;
+    if (!r || !puedeGestionar) return;
     setGuardando(true);
     const cambios: any = { estado: nuevoEstado, estado_actualizado_at: new Date().toISOString() };
     if (nuevoEstado === 'listo_para_entregar' && !r.fecha_reparado) cambios.fecha_reparado = new Date().toISOString();
@@ -402,7 +405,7 @@ export default function FichaReparacion() {
   };
 
   const generarOrdenCobro = async () => {
-    if (!r) return;
+    if (!r || !puedeGestionar) return;
     if (!confirm('¿Generar la orden de cobro con el importe de esta reparación?')) return;
     setGuardando(true);
     const total = r.importe_total ?? (r.presupuesto_mano_obra || 0) + (r.presupuesto_repuestos || 0);
@@ -498,14 +501,18 @@ export default function FichaReparacion() {
   };
 
   const agregarAlStockFicha = async () => {
-    if (!r) return;
+    if (!r || !puedeGestionar) return;
+    const actor = getActor();
+    if (!actor) {
+      setError(MENSAJE_ACTOR_REQUERIDO);
+      return;
+    }
     if (r.imei) {
       const { data: existente } = await supabase.from('dispositivos').select('id').eq('imei', r.imei).maybeSingle();
       if (existente && !confirm(`Ya hay un dispositivo en Stock con el IMEI ${r.imei}. ¿Agregarlo igual?`)) return;
     }
     if (!confirm('¿Pasar este equipo al Stock como dispositivo disponible para vender?')) return;
     setGuardando(true);
-    const actor = getActor();
     await supabase.from('dispositivos').insert({
       modelo: r.modelo,
       capacidad_gb: r.capacidad_gb,
@@ -528,7 +535,7 @@ export default function FichaReparacion() {
   };
 
   const marcarEntregadoClienteFicha = async () => {
-    if (!r) return;
+    if (!r || !puedeGestionar) return;
     if (!confirm('¿Marcar este equipo como entregado al cliente?')) return;
     setGuardando(true);
     await supabase
@@ -581,18 +588,25 @@ export default function FichaReparacion() {
         <Link href={`/servicio-tecnico/etiqueta/${r.id}`} className="text-xs text-accent dark:text-dark-accent underline">
           🏷️ Etiqueta
         </Link>
-        <button onClick={() => (editando ? setEditando(false) : abrirEdicion())} className="text-xs text-accent dark:text-dark-accent underline">
-          {editando ? 'Cancelar' : 'Editar'}
-        </button>
+        {puedeGestionar && (
+          <button onClick={() => (editando ? setEditando(false) : abrirEdicion())} className="text-xs text-accent dark:text-dark-accent underline">
+            {editando ? 'Cancelar' : 'Editar'}
+          </button>
+        )}
       </header>
 
       {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
+      {!puedeGestionar && (
+        <p className="text-xs text-muted dark:text-dark-text-secondary text-center">
+          No tenés permiso para gestionar Servicio Técnico — solo podés ver esta ficha.
+        </p>
+      )}
 
       <div className="flex items-center gap-3 flex-wrap">
         <span className={`rounded-full px-3 py-1 text-xs font-medium ${est.color}`}>{est.label}</span>
         <select
           value={r.estado}
-          disabled={guardando}
+          disabled={guardando || !puedeGestionar}
           onChange={(e) => cambiarEstado(e.target.value)}
           className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-1.5 text-xs disabled:opacity-40"
         >
@@ -1020,7 +1034,7 @@ export default function FichaReparacion() {
             </Seccion>
           )}
 
-          {!r.orden_cobro_id && r.estado === 'listo_para_entregar' && (
+          {!r.orden_cobro_id && r.estado === 'listo_para_entregar' && puedeGestionar && (
             r.cliente_id ? (
               <div className="flex gap-2">
                 <button

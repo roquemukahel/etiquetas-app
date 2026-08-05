@@ -2113,3 +2113,21 @@ where d.proveedor_id is null
 -- proveedores) — mismo patrón que los permisos de arriba: default true
 -- para no restringir a nadie hasta que el dueño lo haga a mano.
 alter table vendedores add column if not exists puede_ver_estadisticas boolean not null default true;
+
+-- ============================================================
+-- Permisos unificados vendedor/técnico. Un técnico a veces también
+-- vende, y un vendedor a veces recibe/gestiona equipos de Servicio
+-- Técnico — por eso las mismas siete columnas de permisos van en las
+-- dos tablas. Como con los permisos de vendedor de arriba: todo default
+-- true, es un límite de la app apoyado en el PIN, no una restricción de
+-- base de datos real.
+alter table vendedores add column if not exists puede_recibir_servicio_tecnico boolean not null default true;
+alter table vendedores add column if not exists puede_gestionar_servicio_tecnico boolean not null default true;
+
+alter table tecnicos add column if not exists acceso_completo boolean not null default true;
+alter table tecnicos add column if not exists puede_vender boolean not null default true;
+alter table tecnicos add column if not exists puede_eliminar boolean not null default true;
+alter table tecnicos add column if not exists puede_agregar_stock boolean not null default true;
+alter table tecnicos add column if not exists puede_ver_estadisticas boolean not null default true;
+alter table tecnicos add column if not exists puede_recibir_servicio_tecnico boolean not null default true;
+alter table tecnicos add column if not exists puede_gestionar_servicio_tecnico boolean not null default true;

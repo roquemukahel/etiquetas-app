@@ -8,7 +8,7 @@ import { asegurarModelo } from '../../lib/modelos';
 import { asegurarProveedor } from '../../lib/proveedores';
 import { limpiarImei } from '../../lib/imei';
 import { useDictado } from '../../lib/dictado';
-import { getActor, useActor } from '../../lib/actor';
+import { getActor, useActor, MENSAJE_ACTOR_REQUERIDO } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import SelectorColor from '../../SelectorColor';
 
@@ -99,10 +99,14 @@ export default function StockPorFoto() {
 
   const handleGuardar = async () => {
     if (!puedeGuardar) return;
+    const actor = getActor();
+    if (!actor) {
+      setError(MENSAJE_ACTOR_REQUERIDO);
+      return;
+    }
     setGuardando(true);
     setError(null);
 
-    const actor = getActor();
     const proveedorId = await asegurarProveedor(supabase, proveedor);
     const { error: insertError } = await supabase.from('dispositivos').insert({
       modelo: modelo.trim(),

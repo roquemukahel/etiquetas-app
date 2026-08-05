@@ -86,6 +86,7 @@ export default function DetalleOrden() {
   const supabase = crearClienteNavegador();
   const actor = useActor();
   const puedeEliminar = tienePermiso(actor, 'eliminar');
+  const puedeRecibirServicioTecnico = tienePermiso(actor, 'recibir_servicio_tecnico');
 
   const [orden, setOrden] = useState<Orden | null>(null);
   const [canjes, setCanjes] = useState<Canje[]>([]);
@@ -187,7 +188,7 @@ export default function DetalleOrden() {
   };
 
   const derivarAServicioTecnico = async () => {
-    if (!orden || !derivarModelo.trim()) return;
+    if (!orden || !derivarModelo.trim() || !puedeRecibirServicioTecnico) return;
     setDerivando(true);
     const nombreCliente = orden.clientes ? `${orden.clientes.nombre} ${orden.clientes.apellido || ''}`.trim() : 'sin cliente';
     const { data: nueva } = await supabase
@@ -924,7 +925,7 @@ export default function DetalleOrden() {
         </p>
       )}
 
-      {tieneTrabajo && !yaDerivado && !derivarAbierto && (
+      {tieneTrabajo && !yaDerivado && !derivarAbierto && puedeRecibirServicioTecnico && (
         <button
           onClick={abrirDerivar}
           className="w-full rounded-2xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium"

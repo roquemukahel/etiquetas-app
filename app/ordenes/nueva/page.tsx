@@ -435,7 +435,10 @@ export default function NuevaOrden() {
   const actualizarCantidadItem = (tempId: string, cantidad: string) =>
     setCarrito((c) => c.map((i) => (i.tempId === tempId ? { ...i, cantidad: Math.max(1, Number(cantidad) || 1) } : i)));
 
-  const puedeConfirmar = carrito.length > 0 && puedeVender;
+  // vendedorId es obligatorio a propósito: dejarlo "Sin asignar" ensuciaba
+  // el ranking de vendedores en Estadísticas con ventas sin nadie a quien
+  // atribuírselas.
+  const puedeConfirmar = carrito.length > 0 && puedeVender && !!vendedorId;
 
   const handleConfirmar = async () => {
     if (!puedeConfirmar) return;
@@ -1127,13 +1130,20 @@ export default function NuevaOrden() {
           onChange={(e) => setVendedorId(e.target.value)}
           className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
         >
-          <option value="">Sin asignar</option>
+          <option value="" disabled>
+            Elegí quién atendió esta venta...
+          </option>
           {vendedores.map((v) => (
             <option key={v.id} value={v.id}>
               {v.nombre}
             </option>
           ))}
         </select>
+        {!vendedorId && (
+          <p className="text-[10px] text-warn mt-1">
+            Es obligatorio para poder confirmar la orden — así no queda como "Sin asignar" en Estadísticas.
+          </p>
+        )}
       </div>
 
       <div>

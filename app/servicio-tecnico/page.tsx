@@ -9,7 +9,8 @@ import { armarLinkWhatsApp, mensajeSeguimientoServicio, mensajeListoServicio } f
 import { codigoLlamada } from '../lib/paises';
 import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../lib/carpetas';
 import { registrarAuditoria } from '../lib/auditoria';
-import { getActor } from '../lib/actor';
+import { getActor, useActor, MENSAJE_ACTOR_REQUERIDO } from '../lib/actor';
+import { tienePermiso } from '../lib/permisos';
 import { obtenerTodasLasFilas } from '../lib/db';
 import {
   ESTADOS_REPARACION,
@@ -84,6 +85,10 @@ const DIAS_DEMORA = 5;
 
 export default function ServicioTecnico() {
   const supabase = crearClienteNavegador();
+  const actor = useActor();
+  const puedeRecibir = tienePermiso(actor, 'recibir_servicio_tecnico');
+  const puedeGestionar = tienePermiso(actor, 'gestionar_servicio_tecnico');
+  const puedeEliminarReparacion = tienePermiso(actor, 'eliminar');
   const [reparaciones, setReparaciones] = useState<Reparacion[]>([]);
   const [tecnicos, setTecnicos] = useState<Tecnico[]>([]);
   const [loading, setLoading] = useState(true);
@@ -246,7 +251,7 @@ export default function ServicioTecnico() {
   });
 
   const agregarEquipo = async () => {
-    if (!nuevoModelo.trim()) return;
+    if (!nuevoModelo.trim() || !puedeRecibir) return;
     setGuardandoNuevo(true);
     setErrorNuevo(null);
 
@@ -347,6 +352,10 @@ export default function ServicioTecnico() {
   };
 
   const asignarTecnico = async (id: string, tecnicoId: string) => {
+    if (!puedeGestionar) {
+      alert('No tenés permiso para gestionar Servicio Técnico.');
+      return;
+    }
     setGuardando(id);
     const r = reparaciones.find((x) => x.id === id);
     const cambios: { tecnico_id: string | null; en_poder_tecnico?: boolean } = { tecnico_id: tecnicoId || null };
@@ -365,6 +374,10 @@ export default function ServicioTecnico() {
   };
 
   const marcarEnPoder = async (r: Reparacion, enPoder: boolean) => {
+    if (!puedeGestionar) {
+      alert('No tenés permiso para gestionar Servicio Técnico.');
+      return;
+    }
     setGuardando(r.id);
     await supabase.from('reparaciones').update({ en_poder_tecnico: enPoder }).eq('id', r.id);
     await registrarAuditoria(supabase, {
@@ -377,6 +390,10 @@ export default function ServicioTecnico() {
   };
 
   const cambiarEstado = async (r: Reparacion, nuevoEstado: string) => {
+    if (!puedeGestionar) {
+      alert('No tenés permiso para gestionar Servicio Técnico.');
+      return;
+    }
     setGuardando(r.id);
     const cambios: any = { estado: nuevoEstado, estado_actualizado_at: new Date().toISOString() };
     if (nuevoEstado === 'listo_para_entregar' && !r.fecha_reparado) cambios.fecha_reparado = new Date().toISOString();
@@ -401,14 +418,18 @@ export default function ServicioTecnico() {
   };
 
   const agregarAlStock = async (r: Reparacion) => {
-    if (guardando) return;
+    if (guardando || !puedeGestionar) return;
+    const actor = getActor();
+    if (!actor) {
+      alert(MENSAJE_ACTOR_REQUERIDO);
+      return;
+    }
     if (r.imei) {
       const { data: existente } = await supabase.from('dispositivos').select('id').eq('imei', r.imei).maybeSingle();
       if (existente && !confirm(`Ya hay un dispositivo en Stock con el IMEI ${r.imei}. ¿Agregarlo igual?`)) return;
     }
     if (!confirm('¿Pasar este equipo al Stock como dispositivo disponible para vender?')) return;
     setGuardando(r.id);
-    const actor = getActor();
     await supabase.from('dispositivos').insert({
       modelo: r.modelo,
       capacidad_gb: r.capacidad_gb,
@@ -431,7 +452,7 @@ export default function ServicioTecnico() {
   };
 
   const marcarEntregadoCliente = async (r: Reparacion) => {
-    if (guardando) return;
+    if (guardando || !puedeGestionar) return;
     if (!confirm('¿Marcar este equipo como entregado al cliente?')) return;
     setGuardando(r.id);
     await supabase
@@ -448,12 +469,20 @@ export default function ServicioTecnico() {
   };
 
   const archivarCancelar = async (r: Reparacion) => {
+    if (!puedeGestionar) {
+      alert('No tenés permiso para gestionar Servicio Técnico.');
+      return;
+    }
     if (!confirm('¿Cancelar/archivar esta reparación? Va a quedar en "Finalizados", no se borra el historial.')) return;
     setMenuAbierto(null);
     await cambiarEstado(r, 'cancelado');
   };
 
   const eliminarDefinitivo = async (r: Reparacion) => {
+    if (!puedeEliminarReparacion) {
+      alert('No tenés permiso para eliminar.');
+      return;
+    }
     if (!confirm('¿Eliminar definitivamente esta reparación? Esta acción no se puede deshacer y borra todo su historial.')) return;
     setGuardando(r.id);
     setMenuAbierto(null);
@@ -523,15 +552,21 @@ export default function ServicioTecnico() {
 
       {(tab === 'lista' || (tab === 'tecnicos' && tecnicoSeleccionado)) && (
         <>
-          <button
-            onClick={() => {
-              if (!panelNuevo && tab === 'tecnicos' && tecnicoSeleccionado) setAsignadoTecnicoId(tecnicoSeleccionado);
-              setPanelNuevo((v) => !v);
-            }}
-            className="w-full rounded-xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium"
-          >
-            {panelNuevo ? 'Cancelar' : '+ Recibir equipo'}
-          </button>
+          {puedeRecibir ? (
+            <button
+              onClick={() => {
+                if (!panelNuevo && tab === 'tecnicos' && tecnicoSeleccionado) setAsignadoTecnicoId(tecnicoSeleccionado);
+                setPanelNuevo((v) => !v);
+              }}
+              className="w-full rounded-xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium"
+            >
+              {panelNuevo ? 'Cancelar' : '+ Recibir equipo'}
+            </button>
+          ) : (
+            <p className="text-xs text-muted dark:text-dark-text-secondary text-center">
+              No tenés permiso para recibir equipos de Servicio Técnico.
+            </p>
+          )}
 
           {panelNuevo && (
             <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-3 flex flex-col gap-2">

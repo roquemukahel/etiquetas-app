@@ -6,7 +6,7 @@ import { crearClienteNavegador } from '../lib/supabase/client';
 import { asegurarModelo } from '../lib/modelos';
 import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../lib/carpetas';
 import { registrarAuditoria } from '../lib/auditoria';
-import { getActor, useActor } from '../lib/actor';
+import { getActor, useActor, MENSAJE_ACTOR_REQUERIDO } from '../lib/actor';
 import { tienePermiso } from '../lib/permisos';
 import { infoEstado } from '../lib/reparaciones';
 import MiniaturaDispositivo from '../MiniaturaDispositivo';
@@ -44,6 +44,7 @@ export default function PlanCanje() {
   const supabase = crearClienteNavegador();
   const actor = useActor();
   const puedeEliminar = tienePermiso(actor, 'eliminar');
+  const puedeRecibirServicioTecnico = tienePermiso(actor, 'recibir_servicio_tecnico');
   const puedeAgregarStock = tienePermiso(actor, 'agregar_stock');
   const [canjes, setCanjes] = useState<Canje[]>([]);
   const [derivados, setDerivados] = useState<ReparacionDerivada[]>([]);
@@ -81,6 +82,7 @@ export default function PlanCanje() {
   // canje de Plan Canje, sin tocarlo — preserva vendedor_id/monto del
   // canje original para las estadísticas de Plan Canje.
   const derivar = async (c: Canje) => {
+    if (!puedeRecibirServicioTecnico) return;
     if (!confirm('¿Derivar este dispositivo a Servicio Técnico?')) return;
     setProcesando(c.id);
     const { data: nueva } = await supabase
@@ -108,6 +110,10 @@ export default function PlanCanje() {
 
   const agregarAlStock = async (c: Canje) => {
     if (procesando || !puedeAgregarStock) return;
+    if (!getActor()) {
+      alert(MENSAJE_ACTOR_REQUERIDO);
+      return;
+    }
     if (c.imei) {
       const { data: existente } = await supabase.from('dispositivos').select('id').eq('imei', c.imei).maybeSingle();
       if (existente && !confirm(`Ya hay un dispositivo en Stock con el IMEI ${c.imei}. ¿Agregarlo igual?`)) return;
@@ -299,13 +305,15 @@ export default function PlanCanje() {
                         {procesando === c.id ? 'Agregando...' : 'Agregar al Stock'}
                       </button>
                     )}
-                    <button
-                      disabled={procesando === c.id}
-                      onClick={() => derivar(c)}
-                      className="flex-1 rounded-lg border border-border dark:border-dark-border py-2 text-xs font-medium disabled:opacity-40"
-                    >
-                      Derivar a Servicio Técnico
-                    </button>
+                    {puedeRecibirServicioTecnico && (
+                      <button
+                        disabled={procesando === c.id}
+                        onClick={() => derivar(c)}
+                        className="flex-1 rounded-lg border border-border dark:border-dark-border py-2 text-xs font-medium disabled:opacity-40"
+                      >
+                        Derivar a Servicio Técnico
+                      </button>
+                    )}
                   </div>
                 )}
                 {vista === 'en_canje' && puedeEliminar && (

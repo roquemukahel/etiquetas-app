@@ -27,13 +27,18 @@ type Persona = {
   telefono: string | null;
   edad: number | null;
   tienePin: boolean;
-  // Solo vienen cargados para vendedores (ver permisos por vendedor).
+  // Mismas columnas de permisos en vendedores y técnicos (ver app/lib/actor.ts).
   acceso_completo?: boolean;
   puede_vender?: boolean;
   puede_eliminar?: boolean;
   puede_agregar_stock?: boolean;
   puede_ver_estadisticas?: boolean;
+  puede_recibir_servicio_tecnico?: boolean;
+  puede_gestionar_servicio_tecnico?: boolean;
 };
+
+const COLUMNAS_PERMISOS =
+  'acceso_completo, puede_vender, puede_eliminar, puede_agregar_stock, puede_ver_estadisticas, puede_recibir_servicio_tecnico, puede_gestionar_servicio_tecnico';
 
 export default function SelectorDeActor() {
   const pathname = usePathname();
@@ -112,11 +117,12 @@ export default function SelectorDeActor() {
       const [{ data: vend }, { data: tec }, { data: idsVend }, { data: idsTec }] = await Promise.all([
         supabase
           .from('vendedores')
-          .select(
-            'id, nombre, foto_url, telefono, edad, acceso_completo, puede_vender, puede_eliminar, puede_agregar_stock, puede_ver_estadisticas'
-          )
+          .select(`id, nombre, foto_url, telefono, edad, ${COLUMNAS_PERMISOS}`)
           .order('nombre'),
-        supabase.from('tecnicos').select('id, nombre, foto_url, telefono, edad').order('nombre'),
+        supabase
+          .from('tecnicos')
+          .select(`id, nombre, foto_url, telefono, edad, ${COLUMNAS_PERMISOS}`)
+          .order('nombre'),
         supabase.rpc('ids_vendedores_con_pin'),
         supabase.rpc('ids_tecnicos_con_pin'),
       ]);
@@ -137,16 +143,15 @@ export default function SelectorDeActor() {
       id: persona.id,
       nombre: persona.nombre,
       fotoUrl: persona.foto_url,
-      permisos:
-        tipo === 'vendedor'
-          ? {
-              accesoCompleto: persona.acceso_completo ?? true,
-              puedeVender: persona.puede_vender ?? true,
-              puedeEliminar: persona.puede_eliminar ?? true,
-              puedeAgregarStock: persona.puede_agregar_stock ?? true,
-              puedeVerEstadisticas: persona.puede_ver_estadisticas ?? true,
-            }
-          : undefined,
+      permisos: {
+        accesoCompleto: persona.acceso_completo ?? true,
+        puedeVender: persona.puede_vender ?? true,
+        puedeEliminar: persona.puede_eliminar ?? true,
+        puedeAgregarStock: persona.puede_agregar_stock ?? true,
+        puedeVerEstadisticas: persona.puede_ver_estadisticas ?? true,
+        puedeRecibirServicioTecnico: persona.puede_recibir_servicio_tecnico ?? true,
+        puedeGestionarServicioTecnico: persona.puede_gestionar_servicio_tecnico ?? true,
+      },
     };
     guardarActor(nuevo);
     setActorState(nuevo);
