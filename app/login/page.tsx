@@ -77,7 +77,7 @@ export default function Login() {
           src="/qobi.webp"
           alt=""
           aria-hidden
-          className="hidden lg:block absolute top-1/2 right-full -translate-y-1/2 translate-x-[62%] w-[240px] z-0 pointer-events-none select-none drop-shadow-xl"
+          className="hidden lg:block absolute top-1/2 right-full -translate-y-1/2 translate-x-[24%] w-[280px] z-0 pointer-events-none select-none drop-shadow-2xl"
         />
         <div className="relative z-10 w-full bg-white rounded-2xl shadow-elevated p-8 sm:p-9 flex flex-col gap-5">
           <div className="flex flex-col items-center gap-1">
