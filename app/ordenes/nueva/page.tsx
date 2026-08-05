@@ -212,9 +212,13 @@ export default function NuevaOrden() {
   const [monedasDisponibles, setMonedasDisponibles] = useState<string[]>(['ARS']);
   const [monedaOrden, setMonedaOrden] = useState('ARS');
   const [tipoCambio, setTipoCambio] = useState<number | null>(null);
-  const [mostrarSecundaria, setMostrarSecundaria] = useState(false);
+  // Cómo se muestra el monto en la BOLETA (la orden siempre queda en la
+  // moneda principal → Estadísticas siempre en la principal). 'principal' =
+  // solo US$, 'secundaria' = solo pesos (convertido), 'ambas' = las dos.
+  const [boletaMoneda, setBoletaMoneda] = useState<'principal' | 'secundaria' | 'ambas'>('principal');
   const [montoSecundario, setMontoSecundario] = useState('');
   const [montoSecundarioTocado, setMontoSecundarioTocado] = useState(false);
+  const muestraSecundaria = boletaMoneda !== 'principal';
 
   useEffect(() => {
     (async () => {
@@ -311,10 +315,10 @@ export default function NuevaOrden() {
   // el usuario no lo haya tocado a mano (si lo edita, respetamos su
   // valor y dejamos de pisarlo con el cálculo automático).
   useEffect(() => {
-    if (mostrarSecundaria && tipoCambio && !montoSecundarioTocado) {
+    if (muestraSecundaria && tipoCambio && !montoSecundarioTocado) {
       setMontoSecundario(Math.round(total * tipoCambio).toString());
     }
-  }, [mostrarSecundaria, tipoCambio, montoSecundarioTocado, total]);
+  }, [muestraSecundaria, tipoCambio, montoSecundarioTocado, total]);
 
   // Saldo actual del cliente elegido, para mostrar el crédito disponible y
   // bloquear una venta a cuenta corriente que supere el límite.
@@ -680,8 +684,9 @@ export default function NuevaOrden() {
           cuotas: cuotasElegidas,
           monto_canje: montoCanjeTotal,
           moneda: monedaOrden,
-          monto_secundario: mostrarSecundaria && montoSecundario ? Number(montoSecundario) : null,
-          moneda_secundaria: mostrarSecundaria ? monedasDisponibles[1] : null,
+          monto_secundario: muestraSecundaria && montoSecundario ? Number(montoSecundario) : null,
+          moneda_secundaria: muestraSecundaria ? monedasDisponibles[1] : null,
+          boleta_moneda: boletaMoneda,
           total,
           estado: estadoOrden,
           fecha_entrega: estadoOrden === 'entregado' ? new Date().toISOString() : null,
@@ -1294,36 +1299,48 @@ export default function NuevaOrden() {
 
       {monedasDisponibles.length > 1 && (
         <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-3 flex flex-col gap-2">
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={mostrarSecundaria}
-              onChange={(e) => {
-                setMostrarSecundaria(e.target.checked);
-                setMontoSecundarioTocado(false);
-              }}
-              className="h-5 w-5 accent-ink"
-            />
-            <span className="text-sm font-medium">
-              Mostrar también el precio en {monedasDisponibles[1]} ({simboloMoneda(monedasDisponibles[1])})
-            </span>
-          </label>
-          {mostrarSecundaria && (
+          <span className="text-sm font-medium">¿En qué moneda mostrar el monto en la boleta?</span>
+          <div className="flex gap-2">
+            {([
+              { v: 'principal', t: `Solo ${simboloMoneda(monedasDisponibles[0])}` },
+              { v: 'secundaria', t: `Solo ${simboloMoneda(monedasDisponibles[1])}` },
+              { v: 'ambas', t: 'Ambas' },
+            ] as const).map((op) => (
+              <button
+                key={op.v}
+                type="button"
+                onClick={() => {
+                  setBoletaMoneda(op.v);
+                  setMontoSecundarioTocado(false);
+                }}
+                className={`flex-1 rounded-xl py-2 text-sm font-medium ${
+                  boletaMoneda === op.v
+                    ? 'bg-accent dark:bg-dark-accent text-white'
+                    : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
+                }`}
+              >
+                {op.t}
+              </button>
+            ))}
+          </div>
+          {muestraSecundaria && (
             <>
+              <label className="text-xs text-muted dark:text-dark-text-secondary mt-1">
+                Monto en {monedasDisponibles[1]} (calculado con tu tipo de cambio, lo podés corregir)
+              </label>
               <input
                 value={montoSecundario}
                 onChange={(e) => {
                   setMontoSecundario(e.target.value);
                   setMontoSecundarioTocado(true);
                 }}
-                inputMode="numeric"
+                inputMode="decimal"
                 placeholder={`Monto en ${monedasDisponibles[1]}`}
                 className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
               />
               <p className="text-xs text-muted dark:text-dark-text-secondary">
-                Valor informativo para el cliente, calculado con tu tipo de cambio (lo podés corregir). El total real
-                de la orden sigue siendo en {monedasDisponibles[0]}, y es el único que se tiene en cuenta en
-                Estadísticas.
+                Las Estadísticas siempre se calculan en {monedasDisponibles[0]} (tu moneda principal). Esto solo cambia
+                cómo se ve la boleta del cliente.
               </p>
             </>
           )}

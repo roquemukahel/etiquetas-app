@@ -23,6 +23,7 @@ type Boleta = {
   forma_pago: string | null;
   monto_secundario: number | null;
   moneda_secundaria: string | null;
+  boleta_moneda: string | null;
   total: number | null;
   anticipo: number | null;
   impuesto_porcentaje: number | null;
@@ -97,6 +98,16 @@ export default function BoletaPublica() {
   const tieneTrabajos = boleta.items.some((i) => i.tipo === 'trabajo');
   const tieneProductos = boleta.items.some((i) => i.tipo !== 'trabajo');
   const moneda = simboloMoneda(boleta.moneda);
+  const totalNum = boleta.total ?? subtotal;
+  // Cómo mostrar el monto en la boleta. La orden vive en la moneda principal;
+  // en modo "solo pesos" convertimos TODA la boleta con el mismo factor que se
+  // usó para el total (monto_secundario / total), así todas las líneas quedan
+  // coherentes con el total en pesos.
+  const modo = boleta.boleta_moneda || 'principal';
+  const factorBoleta =
+    modo === 'secundaria' && boleta.monto_secundario != null && totalNum ? boleta.monto_secundario / totalNum : 1;
+  const simbBoleta = modo === 'secundaria' && boleta.moneda_secundaria ? simboloMoneda(boleta.moneda_secundaria) : moneda;
+  const fmt = (n: number) => simbBoleta + Math.round(n * factorBoleta).toLocaleString('es-AR');
 
   return (
     <main className="flex min-h-screen flex-col items-center px-6 py-10">
@@ -175,8 +186,7 @@ export default function BoletaPublica() {
                 )}
                 {c.monto != null && (
                   <p className="font-medium mt-1">
-                    Monto reconocido: {moneda}
-                    {c.monto.toLocaleString('es-AR')}
+                    Monto reconocido: {fmt(c.monto)}
                   </p>
                 )}
               </div>
@@ -207,8 +217,7 @@ export default function BoletaPublica() {
                 </td>
                 <td className="py-2.5 px-3 text-center border-l border-border">{i.cantidad}</td>
                 <td className="py-2.5 px-3 text-right font-medium border-l border-border">
-                  {moneda}
-                  {(i.cantidad * i.precio_unitario).toLocaleString('es-AR')}
+                  {fmt(i.cantidad * i.precio_unitario)}
                 </td>
               </tr>
             ))}
@@ -219,42 +228,38 @@ export default function BoletaPublica() {
           {boleta.anticipo != null && boleta.anticipo > 0 && (
             <div className="flex justify-between text-muted">
               <span>Anticipo</span>
-              <span>
-                {moneda}
-                {boleta.anticipo.toLocaleString('es-AR')}
-              </span>
+              <span>{fmt(boleta.anticipo)}</span>
             </div>
           )}
           <div className="flex justify-between text-muted">
             <span>Subtotal</span>
-            <span>
-              {moneda}
-              {subtotal.toLocaleString('es-AR')}
-            </span>
+            <span>{fmt(subtotal)}</span>
           </div>
           {boleta.monto_canje != null && boleta.monto_canje > 0 && (
             <div className="flex justify-between text-muted">
               <span>Plan canje</span>
-              <span>
-                -{moneda}
-                {boleta.monto_canje.toLocaleString('es-AR')}
-              </span>
+              <span>-{fmt(boleta.monto_canje)}</span>
             </div>
           )}
           <div className="flex justify-between items-baseline font-display font-semibold text-lg rounded-lg bg-ink text-white px-3 py-2 mt-1">
             <span className="text-sm font-sans font-medium opacity-80">
-              {(boleta.total ?? subtotal) < 0 ? 'SALDO A FAVOR DEL CLIENTE' : 'TOTAL'}
+              {totalNum < 0 ? 'SALDO A FAVOR DEL CLIENTE' : 'TOTAL'}
             </span>
             <span>
-              {(boleta.total ?? subtotal) < 0 ? '-' : ''}
-              {moneda}
-              {Math.abs(boleta.total ?? subtotal).toLocaleString('es-AR')}
+              {totalNum < 0 ? '-' : ''}
+              {fmt(Math.abs(totalNum))}
             </span>
           </div>
-          {boleta.monto_secundario != null && boleta.moneda_secundaria && (
+          {modo === 'ambas' && boleta.monto_secundario != null && boleta.moneda_secundaria && (
             <p className="text-xs text-muted italic text-right">
               ≈ {simboloMoneda(boleta.moneda_secundaria)}
               {boleta.monto_secundario.toLocaleString('es-AR')} {boleta.moneda_secundaria} (valor informativo)
+            </p>
+          )}
+          {modo === 'secundaria' && (
+            <p className="text-xs text-muted italic text-right">
+              ≈ {moneda}
+              {Math.abs(totalNum).toLocaleString('es-AR')} {boleta.moneda} (referencia)
             </p>
           )}
         </div>

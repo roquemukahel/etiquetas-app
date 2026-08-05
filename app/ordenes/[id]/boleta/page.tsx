@@ -36,6 +36,7 @@ type Orden = {
   moneda: string | null;
   monto_secundario: number | null;
   moneda_secundaria: string | null;
+  boleta_moneda: string | null;
   clientes: {
     nombre: string;
     apellido: string | null;
@@ -192,6 +193,14 @@ export default function Boleta() {
   const tieneProductos = orden.orden_items.some((i) => i.tipo !== 'trabajo');
   const clienteNombre = orden.clientes ? `${orden.clientes.nombre} ${orden.clientes.apellido || ''}`.trim() : '';
   const moneda = simboloMoneda(orden.moneda || negocio?.moneda);
+  const totalNum = orden.total ?? subtotal;
+  // Cómo mostrar el monto en la boleta (la orden vive en la moneda principal;
+  // en modo "solo pesos" convertimos todo con el mismo factor del total).
+  const modo = orden.boleta_moneda || 'principal';
+  const factorBoleta =
+    modo === 'secundaria' && orden.monto_secundario != null && totalNum ? orden.monto_secundario / totalNum : 1;
+  const simbBoleta = modo === 'secundaria' && orden.moneda_secundaria ? simboloMoneda(orden.moneda_secundaria) : moneda;
+  const fmt = (n: number) => simbBoleta + Math.round(n * factorBoleta).toLocaleString('es-AR');
 
   // Link público a la boleta (misma que se ve en /boleta/[token]), para que
   // el cliente pueda abrirla y descargarla — antes el mensaje era solo texto
@@ -199,10 +208,10 @@ export default function Boleta() {
   const urlBoleta = typeof window !== 'undefined' && orden.token_boleta ? `${window.location.origin}/boleta/${orden.token_boleta}` : '';
   const mensajeWhatsapp =
     `Hola ${orden.clientes?.nombre || ''}! Te paso la boleta de tu compra en ${negocio?.nombre || ''}.\n` +
-    orden.orden_items.map((i) => `- ${i.descripcion} x${i.cantidad}: ${moneda}${(i.cantidad * i.precio_unitario).toLocaleString('es-AR')}`).join('\n') +
-    `\nTotal: ${moneda}${(orden.total ?? subtotal).toLocaleString('es-AR')}` +
+    orden.orden_items.map((i) => `- ${i.descripcion} x${i.cantidad}: ${fmt(i.cantidad * i.precio_unitario)}`).join('\n') +
+    `\nTotal: ${fmt(totalNum)}` +
     (orden.cuotas && orden.cuotas > 1
-      ? `\nEn ${orden.cuotas} cuotas de ${moneda}${Math.round((orden.total ?? subtotal) / orden.cuotas).toLocaleString('es-AR')}`
+      ? `\nEn ${orden.cuotas} cuotas de ${fmt(totalNum / orden.cuotas)}`
       : '') +
     (urlBoleta ? `\n\nPodés ver y descargar tu boleta acá:\n${urlBoleta}` : '');
   const linkWhatsapp = orden.clientes?.telefono
@@ -356,8 +365,7 @@ export default function Boleta() {
                 {c.vendedores?.nombre && <p className="text-muted">Recibido por: {c.vendedores.nombre}</p>}
                 {c.monto != null && (
                   <p className="font-medium mt-1">
-                    Monto reconocido: {moneda}
-                    {c.monto.toLocaleString('es-AR')}
+                    Monto reconocido: {fmt(c.monto)}
                   </p>
                 )}
               </div>
@@ -389,12 +397,10 @@ export default function Boleta() {
                 </td>
                 <td className="py-2.5 print:py-1 px-3 text-center border-l border-border">{i.cantidad}</td>
                 <td className="py-2.5 print:py-1 px-3 text-right border-l border-border">
-                  {moneda}
-                  {i.precio_unitario.toLocaleString('es-AR')}
+                  {fmt(i.precio_unitario)}
                 </td>
                 <td className="py-2.5 print:py-1 px-3 text-right font-medium border-l border-border">
-                  {moneda}
-                  {(i.cantidad * i.precio_unitario).toLocaleString('es-AR')}
+                  {fmt(i.cantidad * i.precio_unitario)}
                 </td>
               </tr>
             ))}
@@ -405,18 +411,12 @@ export default function Boleta() {
           {orden.anticipo != null && orden.anticipo > 0 && (
             <div className="flex justify-between text-muted">
               <span>Anticipo</span>
-              <span>
-                {moneda}
-                {orden.anticipo.toLocaleString('es-AR')}
-              </span>
+              <span>{fmt(orden.anticipo)}</span>
             </div>
           )}
           <div className="flex justify-between text-muted">
             <span>Subtotal</span>
-            <span>
-              {moneda}
-              {subtotal.toLocaleString('es-AR')}
-            </span>
+            <span>{fmt(subtotal)}</span>
           </div>
           {orden.impuesto_porcentaje != null && orden.impuesto_porcentaje > 0 && (
             <div className="flex justify-between text-muted">
@@ -427,35 +427,36 @@ export default function Boleta() {
           {orden.monto_canje != null && orden.monto_canje > 0 && (
             <div className="flex justify-between text-muted">
               <span>Plan canje</span>
-              <span>
-                -{moneda}
-                {orden.monto_canje.toLocaleString('es-AR')}
-              </span>
+              <span>-{fmt(orden.monto_canje)}</span>
             </div>
           )}
           <div className="flex justify-between items-baseline font-display font-semibold text-lg rounded-lg bg-ink text-white px-3 py-2 mt-1">
             <span className="text-sm font-sans font-medium opacity-80">
-              {(orden.total ?? subtotal) < 0 ? 'SALDO A FAVOR DEL CLIENTE' : 'TOTAL'}
+              {totalNum < 0 ? 'SALDO A FAVOR DEL CLIENTE' : 'TOTAL'}
             </span>
             <span>
-              {(orden.total ?? subtotal) < 0 ? '-' : ''}
-              {moneda}
-              {Math.abs(orden.total ?? subtotal).toLocaleString('es-AR')}
+              {totalNum < 0 ? '-' : ''}
+              {fmt(Math.abs(totalNum))}
             </span>
           </div>
           {orden.cuotas != null && orden.cuotas > 1 && (
             <div className="flex justify-between text-muted">
               <span>Financiado en {orden.cuotas} cuotas</span>
               <span>
-                {orden.cuotas} × {moneda}
-                {Math.round((orden.total ?? subtotal) / orden.cuotas).toLocaleString('es-AR')}
+                {orden.cuotas} × {fmt(totalNum / orden.cuotas)}
               </span>
             </div>
           )}
-          {orden.monto_secundario != null && orden.moneda_secundaria && (
+          {modo === 'ambas' && orden.monto_secundario != null && orden.moneda_secundaria && (
             <p className="text-xs text-muted italic text-right">
               ≈ {simboloMoneda(orden.moneda_secundaria)}
               {orden.monto_secundario.toLocaleString('es-AR')} {orden.moneda_secundaria} (valor informativo)
+            </p>
+          )}
+          {modo === 'secundaria' && (
+            <p className="text-xs text-muted italic text-right">
+              ≈ {moneda}
+              {Math.abs(totalNum).toLocaleString('es-AR')} {orden.moneda || negocio?.moneda} (referencia)
             </p>
           )}
         </div>
