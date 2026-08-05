@@ -23,6 +23,8 @@ export type Permisos = {
   puedeVerEstadisticas: boolean;
   puedeRecibirServicioTecnico: boolean;
   puedeGestionarServicioTecnico: boolean;
+  // Sensible: default DENEGADO para no-administradores (ver app/lib/permisos.ts).
+  puedeVerCostos: boolean;
 };
 
 export type Actor = {

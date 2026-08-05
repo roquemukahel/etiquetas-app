@@ -12,6 +12,7 @@ export type PermisosForm = {
   puedeVerEstadisticas: boolean;
   puedeRecibirServicioTecnico: boolean;
   puedeGestionarServicioTecnico: boolean;
+  puedeVerCostos: boolean;
 };
 
 export default function PermisosEditor({
@@ -116,6 +117,21 @@ export default function PermisosEditor({
               </label>
             </div>
           )}
+
+          {/* Ver costos es aparte: sensible, no lo da "acceso completo" por
+              sí solo. Se ofrece siempre a los no-administradores (con o sin
+              acceso completo) para habilitarlo persona por persona. */}
+          <label className="flex items-center gap-2 cursor-pointer border-t border-border dark:border-dark-border pt-1.5 mt-0.5">
+            <input
+              type="checkbox"
+              checked={valor.puedeVerCostos}
+              onChange={(e) => set('puedeVerCostos', e.target.checked)}
+              className="h-4 w-4 accent-ink"
+            />
+            <span className="text-sm">
+              Puede ver costos y ganancias <span className="text-muted dark:text-dark-text-secondary">(capital en stock, margen, rentabilidad)</span>
+            </span>
+          </label>
         </div>
       )}
 

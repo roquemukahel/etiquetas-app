@@ -54,9 +54,9 @@ export default function Stock() {
   const actor = useActor();
   const puedeEliminar = tienePermiso(actor, 'eliminar');
   const puedeAgregarStock = tienePermiso(actor, 'agregar_stock');
-  // El capital muestra costos y ganancias (info sensible del dueño): se
-  // protege con el mismo permiso que las Estadísticas.
-  const puedeVerCapital = tienePermiso(actor, 'ver_estadisticas');
+  // El capital y los costos son info sensible del dueño: se protegen con el
+  // permiso "Ver costos" (default solo administrador, configurable por persona).
+  const puedeVerCostos = tienePermiso(actor, 'ver_costos');
   const [tab, setTab] = useState<'celulares' | 'accesorios'>('celulares');
 
   const [dispositivos, setDispositivos] = useState<Dispositivo[]>([]);
@@ -487,7 +487,7 @@ export default function Stock() {
         )}
       </header>
 
-      {puedeVerCapital && (
+      {puedeVerCostos && (
         <div className="rounded-2xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted dark:text-dark-text-secondary mb-2">
             Capital en stock
@@ -867,7 +867,7 @@ export default function Stock() {
                     <div className="flex items-center gap-3 shrink-0">
                       <div className="text-right leading-tight">
                         {p.precio != null && <p className="text-sm">${p.precio.toLocaleString('es-AR')}</p>}
-                        {p.costo != null && (
+                        {puedeVerCostos && p.costo != null && (
                           <p className="text-[11px] text-muted dark:text-dark-text-secondary">costo ${p.costo.toLocaleString('es-AR')}</p>
                         )}
                       </div>

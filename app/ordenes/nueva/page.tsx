@@ -29,6 +29,7 @@ type Dispositivo = {
   capacidad_gb: number | null;
   color: string | null;
   precio: number | null;
+  costo: number | null;
   imei: string | null;
   salud_bateria: number | null;
 };
@@ -45,7 +46,7 @@ type Cliente = {
 };
 
 type Vendedor = { id: string; nombre: string };
-type Producto = { id: string; nombre: string; precio: number | null };
+type Producto = { id: string; nombre: string; precio: number | null; costo: number | null };
 type Trabajo = { id: string; nombre: string; precio: number | null; imagen_url: string | null };
 
 type CanjeCarrito = {
@@ -64,6 +65,10 @@ type ItemCarrito = {
   descripcion: string;
   cantidad: number;
   precioUnitario: number;
+  // Costo de esta línea al momento de la venta (snapshot para el margen).
+  // Solo se conoce para dispositivos del stock y productos del catálogo; en
+  // ítems cargados a mano queda sin costo.
+  costo?: number | null;
   dispositivoId?: string;
   tipo: 'dispositivo' | 'producto' | 'trabajo';
 };
@@ -388,6 +393,7 @@ export default function NuevaOrden() {
         }${d.imei ? ` · IMEI ${d.imei}` : ''}${d.salud_bateria != null ? ` · Batería ${d.salud_bateria}%` : ''}`,
         cantidad: 1,
         precioUnitario: d.precio ?? 0,
+        costo: d.costo,
         dispositivoId: d.id,
         tipo: 'dispositivo',
       },
@@ -431,7 +437,7 @@ export default function NuevaOrden() {
   const agregarProductoDelCatalogo = (p: Producto) => {
     setCarrito((c) => [
       ...c,
-      { tempId: idTemporal(), descripcion: p.nombre, cantidad: 1, precioUnitario: p.precio ?? 0, tipo: 'producto' },
+      { tempId: idTemporal(), descripcion: p.nombre, cantidad: 1, precioUnitario: p.precio ?? 0, costo: p.costo, tipo: 'producto' },
     ]);
     setPanelAbierto(null);
   };
@@ -722,6 +728,7 @@ export default function NuevaOrden() {
           descripcion: i.descripcion,
           cantidad: i.cantidad,
           precio_unitario: i.precioUnitario,
+          costo: i.costo ?? null,
           tipo: i.tipo,
         }))
       );

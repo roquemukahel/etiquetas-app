@@ -2304,3 +2304,13 @@ as $$
 $$;
 
 grant execute on function saldos_proveedores() to authenticated;
+
+-- ============================================================
+-- Analítica (Estadísticas v2): costo por línea de orden (snapshot al
+-- vender, para margen real) y permiso "Ver costos" (default FALSE: solo
+-- el administrador ve costos/ganancia salvo que se habilite a mano).
+-- Ver estadisticas_costos_supabase.sql.
+-- ============================================================
+alter table orden_items add column if not exists costo numeric;
+alter table vendedores add column if not exists puede_ver_costos boolean not null default false;
+alter table tecnicos add column if not exists puede_ver_costos boolean not null default false;

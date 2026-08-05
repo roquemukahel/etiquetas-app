@@ -23,6 +23,7 @@ type Vendedor = {
   puede_ver_estadisticas: boolean;
   puede_recibir_servicio_tecnico: boolean;
   puede_gestionar_servicio_tecnico: boolean;
+  puede_ver_costos: boolean;
 };
 
 const PERMISOS_DEFAULT: PermisosForm = {
@@ -34,6 +35,9 @@ const PERMISOS_DEFAULT: PermisosForm = {
   puedeVerEstadisticas: true,
   puedeRecibirServicioTecnico: true,
   puedeGestionarServicioTecnico: true,
+  // Sensible: default false (los demás son true). Solo admin ve costos salvo
+  // que se habilite a mano.
+  puedeVerCostos: false,
 };
 
 export default function Vendedores() {
@@ -98,6 +102,7 @@ export default function Vendedores() {
       puedeVerEstadisticas: v.puede_ver_estadisticas,
       puedeRecibirServicioTecnico: v.puede_recibir_servicio_tecnico,
       puedeGestionarServicioTecnico: v.puede_gestionar_servicio_tecnico,
+      puedeVerCostos: v.puede_ver_costos ?? false,
     });
     setError(null);
   };
@@ -134,6 +139,7 @@ export default function Vendedores() {
         puede_ver_estadisticas: permisosEdit.puedeVerEstadisticas,
         puede_recibir_servicio_tecnico: permisosEdit.puedeRecibirServicioTecnico,
         puede_gestionar_servicio_tecnico: permisosEdit.puedeGestionarServicioTecnico,
+        puede_ver_costos: permisosEdit.puedeVerCostos,
       })
       .eq('id', v.id);
     setGuardandoPerfil(false);

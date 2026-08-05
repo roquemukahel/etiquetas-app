@@ -16,7 +16,11 @@ export type Permiso =
   // acceso a alguien sin acceso completo.
   | 'auditoria'
   | 'gestionar_usuarios'
-  | 'ver_proveedores';
+  | 'ver_proveedores'
+  // Ver costos y ganancias (info sensible del dueño). Distinto de todos los
+  // demás: default DENEGADO. Solo el administrador lo tiene por defecto; ni
+  // siquiera "acceso completo" alcanza — se habilita a mano por persona.
+  | 'ver_costos';
 
 // Sin actor elegido todavía, o un actor sin datos de permisos (guardado
 // antes de que existiera esto): no restringimos — mantiene el
@@ -41,6 +45,9 @@ export function tienePermiso(actor: Actor | null, permiso: Permiso): boolean {
   // completo pero sin ser administrador ahora pierde estas dos, algo que
   // no pasaba con ninguno de los otros permisos).
   if (permiso === 'auditoria' || permiso === 'gestionar_usuarios') return false;
+  // Ver costos es sensible: NO lo da "acceso completo" ni el fallback de
+  // dato faltante. Solo el administrador (arriba) o quien lo tenga explícito.
+  if (permiso === 'ver_costos') return actor.permisos.puedeVerCostos ?? false;
   if (actor.permisos.accesoCompleto) return true;
   switch (permiso) {
     case 'vender':

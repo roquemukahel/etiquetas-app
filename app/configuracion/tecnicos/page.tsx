@@ -23,6 +23,7 @@ type Tecnico = {
   puede_ver_estadisticas: boolean;
   puede_recibir_servicio_tecnico: boolean;
   puede_gestionar_servicio_tecnico: boolean;
+  puede_ver_costos: boolean;
 };
 
 const PERMISOS_DEFAULT: PermisosForm = {
@@ -34,6 +35,7 @@ const PERMISOS_DEFAULT: PermisosForm = {
   puedeVerEstadisticas: true,
   puedeRecibirServicioTecnico: true,
   puedeGestionarServicioTecnico: true,
+  puedeVerCostos: false,
 };
 
 export default function Tecnicos() {
@@ -98,6 +100,7 @@ export default function Tecnicos() {
       puedeVerEstadisticas: t.puede_ver_estadisticas,
       puedeRecibirServicioTecnico: t.puede_recibir_servicio_tecnico,
       puedeGestionarServicioTecnico: t.puede_gestionar_servicio_tecnico,
+      puedeVerCostos: t.puede_ver_costos ?? false,
     });
     setError(null);
   };
@@ -134,6 +137,7 @@ export default function Tecnicos() {
         puede_ver_estadisticas: permisosEdit.puedeVerEstadisticas,
         puede_recibir_servicio_tecnico: permisosEdit.puedeRecibirServicioTecnico,
         puede_gestionar_servicio_tecnico: permisosEdit.puedeGestionarServicioTecnico,
+        puede_ver_costos: permisosEdit.puedeVerCostos,
       })
       .eq('id', t.id);
     setGuardandoPerfil(false);
