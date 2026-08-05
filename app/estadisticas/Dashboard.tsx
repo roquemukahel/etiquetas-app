@@ -103,6 +103,7 @@ export default function Estadisticas() {
   const [moneda, setMoneda] = useState('$');
   const [loading, setLoading] = useState(true);
   const [actualizado, setActualizado] = useState<Date | null>(null);
+  const [errorCarga, setErrorCarga] = useState<string | null>(null);
 
   // Preferencia de "ocultar montos" (ojito), recordada en este dispositivo.
   useEffect(() => {
@@ -122,10 +123,15 @@ export default function Estadisticas() {
 
   useEffect(() => {
     (async () => {
+      try {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        setErrorCarga('No pudimos confirmar tu sesión. Volvé a entrar (en este dominio) para ver la analítica.');
+        setLoading(false);
+        return;
+      }
       const desde = new Date();
       desde.setFullYear(desde.getFullYear() - 1);
 
@@ -188,7 +194,12 @@ export default function Estadisticas() {
       setPorCobrar(saldos.reduce((acc, s) => acc + Math.max(0, Number(s.saldo) || 0), 0));
       setVencidoTotal(saldos.reduce((acc, s) => acc + Math.max(0, Number(s.vencido) || 0), 0));
       setActualizado(new Date());
-      setLoading(false);
+      } catch (e) {
+        console.error('Analítica: no se pudieron cargar los datos', e);
+        setErrorCarga(e instanceof Error ? e.message : 'No se pudieron cargar los datos.');
+      } finally {
+        setLoading(false);
+      }
     })();
   }, []);
 
@@ -366,6 +377,10 @@ export default function Estadisticas() {
           </button>
         </div>
       </header>
+
+      {errorCarga && (
+        <div className="rounded-xl bg-bad/10 border border-bad/30 text-bad px-4 py-3 text-sm">{errorCarga}</div>
+      )}
 
       <AnalyticsTabs valor={tab} tabs={TABS} onChange={setTab} />
 

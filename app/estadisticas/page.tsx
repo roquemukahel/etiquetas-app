@@ -10,7 +10,7 @@ const Dashboard = dynamic(() => import('./Dashboard'), {
   ssr: false,
   loading: () => (
     <main className="flex min-h-screen items-center justify-center">
-      <p className="text-sm text-muted dark:text-dark-text-secondary">Cargando analítica...</p>
+      <p className="text-sm text-muted dark:text-dark-text-secondary">Abriendo analítica…</p>
     </main>
   ),
 });
