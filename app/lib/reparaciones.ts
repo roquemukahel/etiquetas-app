@@ -74,11 +74,12 @@ export const ITEMS_CHECKLIST_INGRESO: { campo: keyof ChecklistIngreso; label: st
   { campo: 'conectores_ok', label: 'Conectores' },
 ];
 
-// Texto listo para copiar a la boleta o mandar al cliente: qué funciona,
-// qué no, y qué queda automáticamente afuera de la garantía por eso (lo
-// que no funcionaba al ingresar no se puede garantizar después). El
-// técnico puede sumar una excepción manual aparte (ej. un componente que
-// hoy funciona pero quedó en duda por un golpe fuerte en otra parte).
+// Texto listo para copiar a la boleta o mandar al cliente: DEJA CONSTANCIA
+// de cómo llegó el equipo (qué funcionaba y qué no al ingresar), sin ninguna
+// frase de "no se garantiza" — documenta el estado previo (ej. "el botón
+// power ya no funcionaba al ingresar") para respaldo, no para excluir la
+// garantía de lo que sí se repara. El técnico puede sumar además una
+// aclaración manual libre (ej. un componente que quedó en duda por un golpe).
 export function generarTextoCondicionIngreso(r: ChecklistIngreso): string {
   const funcionan: string[] = [];
   const fallan: string[] = [];
@@ -98,25 +99,20 @@ export function generarTextoCondicionIngreso(r: ChecklistIngreso): string {
     );
   }
   if (funcionan.length > 0) lineas.push(`Funciona: ${funcionan.join(', ')}`);
-  if (fallan.length > 0) lineas.push(`No funciona: ${fallan.join(', ')}`);
+  if (fallan.length > 0) lineas.push(`No funcionaba al ingresar: ${fallan.join(', ')}`);
   if (r.humedad) lineas.push('Con signos de humedad o manipulación previa');
 
   if (lineas.length === 0 && !r.garantia_excepcion_manual) return '';
 
-  let texto = lineas.length > 0 ? `Condición del equipo al ingresar:\n${lineas.join('\n')}` : '';
+  const texto = lineas.length > 0 ? `Condición del equipo al ingresar:\n${lineas.join('\n')}` : '';
 
-  const excluidos = [...fallan];
-  if (r.pantalla_estado === 'rota') excluidos.push('Pantalla');
-
-  if (excluidos.length > 0 || r.humedad || r.garantia_excepcion_manual) {
-    if (texto) texto += '\n\n';
-    texto += 'No se garantiza tras la reparación:';
-    if (excluidos.length > 0) texto += `\n- ${excluidos.join(', ')} (no funcionaba / dañado al ingresar)`;
-    // La humedad/manipulación previa es la señal más seria de todas — no
-    // es "tal componente no funciona", es que cualquier cosa adentro
-    // puede fallar más adelante sin que sea culpa de la reparación.
-    if (r.humedad) texto += '\n- Garantía general afectada por signos de humedad o manipulación previa';
-    if (r.garantia_excepcion_manual) texto += `\n- ${r.garantia_excepcion_manual}`;
+  // Aclaración manual del técnico (texto libre): se muestra tal cual, aparte
+  // de la condición de ingreso. Ya no se genera la vieja frase automática
+  // "No se garantiza tras la reparación" (confundía al cliente: si traen un
+  // equipo con la batería hinchada para repararla, esa reparación sí tiene
+  // garantía; lo que dejamos es la constancia de qué ya venía fallado).
+  if (r.garantia_excepcion_manual) {
+    return texto ? `${texto}\n\nAclaración: ${r.garantia_excepcion_manual}` : `Aclaración: ${r.garantia_excepcion_manual}`;
   }
 
   return texto;
