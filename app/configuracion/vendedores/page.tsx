@@ -16,6 +16,7 @@ type Vendedor = {
   puede_vender: boolean;
   puede_eliminar: boolean;
   puede_agregar_stock: boolean;
+  puede_ver_estadisticas: boolean;
 };
 
 export default function Vendedores() {
@@ -34,6 +35,7 @@ export default function Vendedores() {
   const [puedeVenderEdit, setPuedeVenderEdit] = useState(true);
   const [puedeEliminarEdit, setPuedeEliminarEdit] = useState(true);
   const [puedeAgregarStockEdit, setPuedeAgregarStockEdit] = useState(true);
+  const [puedeVerEstadisticasEdit, setPuedeVerEstadisticasEdit] = useState(true);
   const [guardandoPerfil, setGuardandoPerfil] = useState(false);
 
   const cargar = async () => {
@@ -76,6 +78,7 @@ export default function Vendedores() {
     setPuedeVenderEdit(v.puede_vender);
     setPuedeEliminarEdit(v.puede_eliminar);
     setPuedeAgregarStockEdit(v.puede_agregar_stock);
+    setPuedeVerEstadisticasEdit(v.puede_ver_estadisticas);
     setError(null);
   };
 
@@ -107,6 +110,7 @@ export default function Vendedores() {
         puede_vender: puedeVenderEdit,
         puede_eliminar: puedeEliminarEdit,
         puede_agregar_stock: puedeAgregarStockEdit,
+        puede_ver_estadisticas: puedeVerEstadisticasEdit,
       })
       .eq('id', v.id);
     setGuardandoPerfil(false);
@@ -243,6 +247,15 @@ export default function Vendedores() {
                           className="h-4 w-4 accent-ink"
                         />
                         <span className="text-sm">Puede agregar dispositivos al stock</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={puedeVerEstadisticasEdit}
+                          onChange={(e) => setPuedeVerEstadisticasEdit(e.target.checked)}
+                          className="h-4 w-4 accent-ink"
+                        />
+                        <span className="text-sm">Puede ver Estadísticas</span>
                       </label>
                       {!pinEdit.trim() && (
                         <p className="text-[10px] text-warn mt-0.5">

@@ -11,6 +11,7 @@ export type PermisosVendedor = {
   puedeVender: boolean;
   puedeEliminar: boolean;
   puedeAgregarStock: boolean;
+  puedeVerEstadisticas: boolean;
 };
 
 export type Actor = {

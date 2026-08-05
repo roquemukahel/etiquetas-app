@@ -1,6 +1,6 @@
 import { Actor } from './actor';
 
-export type Permiso = 'vender' | 'eliminar' | 'agregar_stock';
+export type Permiso = 'vender' | 'eliminar' | 'agregar_stock' | 'ver_estadisticas';
 
 // Sin actor elegido todavía, o técnico (los permisos son solo de
 // vendedores), o un vendedor sin datos de permisos (actor guardado antes
@@ -11,5 +11,6 @@ export function tienePermiso(actor: Actor | null, permiso: Permiso): boolean {
   if (actor.permisos.accesoCompleto) return true;
   if (permiso === 'vender') return actor.permisos.puedeVender;
   if (permiso === 'eliminar') return actor.permisos.puedeEliminar;
-  return actor.permisos.puedeAgregarStock;
+  if (permiso === 'agregar_stock') return actor.permisos.puedeAgregarStock;
+  return actor.permisos.puedeVerEstadisticas;
 }

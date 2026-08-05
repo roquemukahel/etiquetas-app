@@ -150,7 +150,7 @@ export default function Stock() {
   const exportarDispositivos = () => {
     descargarCSV(
       'stock-celulares-qovento.csv',
-      ['modelo', 'capacidad_gb', 'color', 'imei', 'numero_serie', 'salud_bateria', 'precio', 'estado', 'en_stock', 'created_at'],
+      ['modelo', 'capacidad_gb', 'color', 'imei', 'numero_serie', 'salud_bateria', 'precio', 'costo', 'proveedor', 'estado', 'en_stock', 'created_at'],
       dispositivos
     );
   };
@@ -185,6 +185,9 @@ export default function Stock() {
           const precioTexto = valorDe(fila, 'precio', 'price');
           const precio = precioTexto ? Number(precioTexto) : null;
 
+          const costoTexto = valorDe(fila, 'costo', 'cost');
+          const costo = costoTexto ? Number(costoTexto) : null;
+
           const cantidadTexto = valorDe(fila, 'quantity');
           const enStockTexto = valorDe(fila, 'en_stock');
           const en_stock = enStockTexto
@@ -210,6 +213,7 @@ export default function Stock() {
             numero_serie: valorDe(fila, 'numero_serie', 'serial') || null,
             salud_bateria,
             precio,
+            costo,
             estado: valorDe(fila, 'estado') || 'usado',
             en_stock,
             proveedor: valorDe(fila, 'proveedor') || null,

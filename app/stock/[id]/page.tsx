@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { asegurarModelo } from '../../lib/modelos';
+import { asegurarProveedor } from '../../lib/proveedores';
 import { registrarAuditoria } from '../../lib/auditoria';
 import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
@@ -22,6 +23,7 @@ type Dispositivo = {
   salud_bateria: number | null;
   color: string | null;
   precio: number | null;
+  costo: number | null;
   proveedor: string | null;
   estado: string | null;
   en_stock: boolean;
@@ -38,6 +40,7 @@ export default function DetalleDispositivo() {
   const [d, setD] = useState<Dispositivo | null>(null);
   const [original, setOriginal] = useState<Dispositivo | null>(null);
   const [carpetas, setCarpetas] = useState<string[]>([]);
+  const [proveedores, setProveedores] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -56,6 +59,10 @@ export default function DetalleDispositivo() {
       const { data } = await supabase.from('modelos_stock').select('nombre').order('nombre');
       setCarpetas((data ?? []).map((m) => m.nombre));
     })();
+    (async () => {
+      const { data } = await supabase.from('proveedores').select('nombre').order('nombre');
+      setProveedores((data ?? []).map((p) => p.nombre));
+    })();
   }, [id]);
 
   const campo = (k: keyof Dispositivo, valor: any) => setD((prev) => (prev ? { ...prev, [k]: valor } : prev));
@@ -66,6 +73,7 @@ export default function DetalleDispositivo() {
     setError(null);
 
     const volvioAStock = !original.en_stock && d.en_stock;
+    const proveedorId = await asegurarProveedor(supabase, d.proveedor);
 
     const { error: updateError } = await supabase
       .from('dispositivos')
@@ -77,7 +85,9 @@ export default function DetalleDispositivo() {
         salud_bateria: d.salud_bateria,
         color: d.color?.trim() || null,
         precio: d.precio,
+        costo: d.costo,
         proveedor: d.proveedor?.trim() || null,
+        proveedor_id: proveedorId,
         estado: d.estado,
         // Solo se toca en_stock si esta pantalla lo cambió a propósito
         // (tocando el botón de abajo). Si no, se deja como está en la
@@ -254,7 +264,18 @@ export default function DetalleDispositivo() {
           onChange={(v) => campo('precio', v ? Number(v) : null)}
           numerico
         />
-        <Campo label="Proveedor (opcional)" valor={d.proveedor ?? ''} onChange={(v) => campo('proveedor', v)} />
+        <Campo
+          label="Costo (lo que le pagaste al proveedor, opcional)"
+          valor={d.costo?.toString() ?? ''}
+          onChange={(v) => campo('costo', v ? Number(v) : null)}
+          numerico
+        />
+        <Campo label="Proveedor (opcional)" valor={d.proveedor ?? ''} onChange={(v) => campo('proveedor', v)} listaId="proveedores-stock-id" />
+        <datalist id="proveedores-stock-id">
+          {proveedores.map((p) => (
+            <option key={p} value={p} />
+          ))}
+        </datalist>
 
         <div>
           <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Estado</label>

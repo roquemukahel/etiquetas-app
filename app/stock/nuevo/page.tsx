@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { asegurarModelo } from '../../lib/modelos';
+import { asegurarProveedor } from '../../lib/proveedores';
 import { limpiarImei } from '../../lib/imei';
 import { getActor, useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
@@ -27,8 +28,8 @@ export default function NuevoDispositivo() {
       setCarpetas((data ?? []).map((m) => m.nombre));
     })();
     (async () => {
-      const { data } = await supabase.from('dispositivos').select('proveedor').not('proveedor', 'is', null);
-      setProveedores(Array.from(new Set((data ?? []).map((d) => d.proveedor).filter(Boolean))) as string[]);
+      const { data } = await supabase.from('proveedores').select('nombre').order('nombre');
+      setProveedores((data ?? []).map((p) => p.nombre));
     })();
   }, []);
 
@@ -38,6 +39,7 @@ export default function NuevoDispositivo() {
   const [bateria, setBateria] = useState('');
   const [color, setColor] = useState('');
   const [precio, setPrecio] = useState('');
+  const [costo, setCosto] = useState('');
   const [proveedor, setProveedor] = useState('');
   const [estado, setEstado] = useState('usado');
   const [error, setError] = useState<string | null>(null);
@@ -51,6 +53,7 @@ export default function NuevoDispositivo() {
     setError(null);
 
     const actor = getActor();
+    const proveedorId = await asegurarProveedor(supabase, proveedor);
     const { error: insertError } = await supabase.from('dispositivos').insert({
       modelo: modelo.trim(),
       capacidad_gb: capacidad,
@@ -58,7 +61,9 @@ export default function NuevoDispositivo() {
       salud_bateria: bateria ? Number(bateria) : null,
       color: color.trim() || null,
       precio: precio ? Number(precio) : null,
+      costo: costo ? Number(costo) : null,
       proveedor: proveedor.trim() || null,
+      proveedor_id: proveedorId,
       estado,
       en_stock: true,
       agregado_por_nombre: actor?.nombre ?? null,
@@ -124,6 +129,7 @@ export default function NuevoDispositivo() {
           <SelectorColor value={color} onChange={setColor} />
         </div>
         <Campo label="Precio" valor={precio} onChange={setPrecio} numerico />
+        <Campo label="Costo (lo que le pagaste al proveedor, opcional)" valor={costo} onChange={setCosto} numerico />
         <Campo label="Proveedor (opcional)" valor={proveedor} onChange={setProveedor} listaId="proveedores-stock" />
         <datalist id="proveedores-stock">
           {proveedores.map((p) => (

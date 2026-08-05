@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { asegurarModelo } from '../../lib/modelos';
+import { asegurarProveedor } from '../../lib/proveedores';
 import { limpiarImei } from '../../lib/imei';
 import { useDictado } from '../../lib/dictado';
 import { getActor, useActor } from '../../lib/actor';
@@ -40,8 +41,8 @@ export default function StockPorFoto() {
       setCarpetas((data ?? []).map((m) => m.nombre));
     })();
     (async () => {
-      const { data } = await supabase.from('dispositivos').select('proveedor').not('proveedor', 'is', null);
-      setProveedores(Array.from(new Set((data ?? []).map((d) => d.proveedor).filter(Boolean))) as string[]);
+      const { data } = await supabase.from('proveedores').select('nombre').order('nombre');
+      setProveedores((data ?? []).map((p) => p.nombre));
     })();
   }, []);
 
@@ -55,6 +56,7 @@ export default function StockPorFoto() {
   const [bateria, setBateria] = useState('');
   const [color, setColor] = useState('');
   const [precio, setPrecio] = useState('');
+  const [costo, setCosto] = useState('');
   const [proveedor, setProveedor] = useState('');
   const [estado, setEstado] = useState('usado');
   const [error, setError] = useState<string | null>(null);
@@ -101,6 +103,7 @@ export default function StockPorFoto() {
     setError(null);
 
     const actor = getActor();
+    const proveedorId = await asegurarProveedor(supabase, proveedor);
     const { error: insertError } = await supabase.from('dispositivos').insert({
       modelo: modelo.trim(),
       capacidad_gb: capacidad,
@@ -108,7 +111,9 @@ export default function StockPorFoto() {
       salud_bateria: bateria ? Number(bateria) : null,
       color: color.trim() || null,
       precio: precio ? Number(precio) : null,
+      costo: costo ? Number(costo) : null,
       proveedor: proveedor.trim() || null,
+      proveedor_id: proveedorId,
       estado,
       en_stock: true,
       agregado_por_nombre: actor?.nombre ?? null,
@@ -210,6 +215,7 @@ export default function StockPorFoto() {
           <SelectorColor value={color} onChange={setColor} />
         </div>
         <Campo label="Precio (opcional)" valor={precio} onChange={setPrecio} numerico />
+        <Campo label="Costo (lo que le pagaste al proveedor, opcional)" valor={costo} onChange={setCosto} numerico />
         <Campo label="Proveedor (opcional)" valor={proveedor} onChange={setProveedor} listaId="proveedores-stock-foto" />
         <datalist id="proveedores-stock-foto">
           {proveedores.map((p) => (

@@ -2057,3 +2057,59 @@ alter table vendedores add column if not exists acceso_completo boolean not null
 alter table vendedores add column if not exists puede_vender boolean not null default true;
 alter table vendedores add column if not exists puede_eliminar boolean not null default true;
 alter table vendedores add column if not exists puede_agregar_stock boolean not null default true;
+
+-- ============================================================
+-- Proveedores de dispositivos (mayoristas/distribuidores a quien se les
+-- compra stock en lote) — distinto de proveedores_repuestos (repuestos de
+-- Servicio Técnico) y de compras (comprarle un celular usado a una
+-- persona/cliente puntual). Antes esto era solo un campo de texto libre
+-- (dispositivos.proveedor, que se deja intacto para no perder historial);
+-- ahora se formaliza como entidad propia para poder armar el ranking de
+-- compras por proveedor que pidió el dueño.
+create table if not exists proveedores (
+  id uuid primary key default gen_random_uuid(),
+  negocio_id uuid not null references negocios(id) on delete cascade default negocio_actual(),
+  nombre text not null,
+  telefono text,
+  detalles text,
+  created_at timestamptz default now()
+);
+
+alter table proveedores enable row level security;
+
+create policy "proveedores de mi negocio" on proveedores
+  for all using (negocio_id = negocio_actual())
+  with check (negocio_id = negocio_actual());
+
+alter table dispositivos add column if not exists proveedor_id uuid references proveedores(id) on delete set null;
+-- Lo que le pagaste al proveedor por el equipo (costo), distinto del
+-- "precio" que ya existía (ese es el precio de venta al cliente).
+alter table dispositivos add column if not exists costo numeric;
+
+-- Migración: por cada nombre distinto (sin importar mayúsculas) que ya
+-- hubiera en dispositivos.proveedor, se crea un proveedor y se enlazan los
+-- dispositivos existentes. No se toca ni se borra el texto viejo. El "not
+-- exists" hace que sea seguro correr este bloque más de una vez (no
+-- duplica proveedores si ya se había ejecutado antes).
+insert into proveedores (negocio_id, nombre)
+select d.negocio_id, min(d.proveedor)
+from dispositivos d
+where d.proveedor is not null and trim(d.proveedor) <> ''
+  and not exists (
+    select 1 from proveedores p
+    where p.negocio_id = d.negocio_id and lower(p.nombre) = lower(trim(d.proveedor))
+  )
+group by d.negocio_id, lower(trim(d.proveedor));
+
+update dispositivos d
+set proveedor_id = p.id
+from proveedores p
+where d.proveedor_id is null
+  and d.proveedor is not null and trim(d.proveedor) <> ''
+  and p.negocio_id = d.negocio_id
+  and lower(p.nombre) = lower(trim(d.proveedor));
+
+-- Permiso para ver Estadísticas (incluye el ranking de compras a
+-- proveedores) — mismo patrón que los permisos de arriba: default true
+-- para no restringir a nadie hasta que el dueño lo haga a mano.
+alter table vendedores add column if not exists puede_ver_estadisticas boolean not null default true;

@@ -32,6 +32,7 @@ type Persona = {
   puede_vender?: boolean;
   puede_eliminar?: boolean;
   puede_agregar_stock?: boolean;
+  puede_ver_estadisticas?: boolean;
 };
 
 export default function SelectorDeActor() {
@@ -111,7 +112,9 @@ export default function SelectorDeActor() {
       const [{ data: vend }, { data: tec }, { data: idsVend }, { data: idsTec }] = await Promise.all([
         supabase
           .from('vendedores')
-          .select('id, nombre, foto_url, telefono, edad, acceso_completo, puede_vender, puede_eliminar, puede_agregar_stock')
+          .select(
+            'id, nombre, foto_url, telefono, edad, acceso_completo, puede_vender, puede_eliminar, puede_agregar_stock, puede_ver_estadisticas'
+          )
           .order('nombre'),
         supabase.from('tecnicos').select('id, nombre, foto_url, telefono, edad').order('nombre'),
         supabase.rpc('ids_vendedores_con_pin'),
@@ -141,6 +144,7 @@ export default function SelectorDeActor() {
               puedeVender: persona.puede_vender ?? true,
               puedeEliminar: persona.puede_eliminar ?? true,
               puedeAgregarStock: persona.puede_agregar_stock ?? true,
+              puedeVerEstadisticas: persona.puede_ver_estadisticas ?? true,
             }
           : undefined,
     };

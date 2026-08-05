@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { crearClienteNavegador } from '../lib/supabase/client';
 import { simboloMoneda } from '../lib/monedas';
 import { obtenerTodasLasFilas } from '../lib/db';
+import { useActor } from '../lib/actor';
+import { tienePermiso } from '../lib/permisos';
 import { RankingBarras, RankingTorta, EvolucionBarras, Dato } from './graficos';
 
 type Periodo = 'hoy' | 'semana' | 'mes' | 'anio';
@@ -53,9 +55,13 @@ type Reparacion = { tecnico_id: string | null; fecha_reparado: string };
 type IngresoServicio = { cliente_id: string | null; fecha_ingreso_servicio: string };
 type Persona = { id: string; nombre: string; foto_url: string | null };
 type Cliente = { id: string; nombre: string; apellido: string | null };
+type Proveedor = { id: string; nombre: string };
+type DispositivoCompra = { proveedor_id: string | null; costo: number | null; created_at: string };
 
 export default function Estadisticas() {
   const supabase = crearClienteNavegador();
+  const actor = useActor();
+  const puedeVerEstadisticas = tienePermiso(actor, 'ver_estadisticas');
 
   const [periodo, setPeriodo] = useState<Periodo>('mes');
   const [vistaVendedores, setVistaVendedores] = useState<VistaRanking>('barras');
@@ -63,13 +69,16 @@ export default function Estadisticas() {
   const [vistaFormaPago, setVistaFormaPago] = useState<VistaRanking>('torta');
   const [vistaCompradores, setVistaCompradores] = useState<VistaRanking>('barras');
   const [vistaClientesServicio, setVistaClientesServicio] = useState<VistaRanking>('barras');
+  const [vistaProveedores, setVistaProveedores] = useState<VistaRanking>('barras');
 
   const [vendedores, setVendedores] = useState<Persona[]>([]);
   const [tecnicos, setTecnicos] = useState<Persona[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [ordenes, setOrdenes] = useState<Orden[]>([]);
   const [reparaciones, setReparaciones] = useState<Reparacion[]>([]);
   const [ingresosServicio, setIngresosServicio] = useState<IngresoServicio[]>([]);
+  const [comprasProveedor, setComprasProveedor] = useState<DispositivoCompra[]>([]);
   const [moneda, setMoneda] = useState('$');
   const [loading, setLoading] = useState(true);
 
@@ -83,36 +92,45 @@ export default function Estadisticas() {
       const desde = new Date();
       desde.setFullYear(desde.getFullYear() - 1);
 
-      const [{ data: perfil }, { data: vend }, { data: tec }, cli, { data: ord }, { data: rep }, { data: ing }] = await Promise.all([
-        supabase.from('perfiles').select('negocios ( moneda )').eq('id', user.id).single(),
-        supabase.from('vendedores').select('id, nombre, foto_url').order('nombre'),
-        supabase.from('tecnicos').select('id, nombre, foto_url').order('nombre'),
-        obtenerTodasLasFilas<Cliente>(supabase, 'clientes', 'id, nombre, apellido', [{ columna: 'nombre' }]),
-        supabase
-          .from('ordenes')
-          .select('vendedor_id, cliente_id, total, estado, forma_pago, created_at')
-          .gte('created_at', desde.toISOString()),
-        supabase
-          .from('reparaciones')
-          .select('tecnico_id, fecha_reparado')
-          .not('fecha_reparado', 'is', null)
-          .gte('fecha_reparado', desde.toISOString()),
-        supabase
-          .from('reparaciones')
-          .select('cliente_id, fecha_ingreso_servicio')
-          .not('cliente_id', 'is', null)
-          .not('fecha_ingreso_servicio', 'is', null)
-          .gte('fecha_ingreso_servicio', desde.toISOString()),
-      ]);
+      const [{ data: perfil }, { data: vend }, { data: tec }, cli, { data: prov }, { data: ord }, { data: rep }, { data: ing }, { data: compras }] =
+        await Promise.all([
+          supabase.from('perfiles').select('negocios ( moneda )').eq('id', user.id).single(),
+          supabase.from('vendedores').select('id, nombre, foto_url').order('nombre'),
+          supabase.from('tecnicos').select('id, nombre, foto_url').order('nombre'),
+          obtenerTodasLasFilas<Cliente>(supabase, 'clientes', 'id, nombre, apellido', [{ columna: 'nombre' }]),
+          supabase.from('proveedores').select('id, nombre').order('nombre'),
+          supabase
+            .from('ordenes')
+            .select('vendedor_id, cliente_id, total, estado, forma_pago, created_at')
+            .gte('created_at', desde.toISOString()),
+          supabase
+            .from('reparaciones')
+            .select('tecnico_id, fecha_reparado')
+            .not('fecha_reparado', 'is', null)
+            .gte('fecha_reparado', desde.toISOString()),
+          supabase
+            .from('reparaciones')
+            .select('cliente_id, fecha_ingreso_servicio')
+            .not('cliente_id', 'is', null)
+            .not('fecha_ingreso_servicio', 'is', null)
+            .gte('fecha_ingreso_servicio', desde.toISOString()),
+          supabase
+            .from('dispositivos')
+            .select('proveedor_id, costo, created_at')
+            .not('proveedor_id', 'is', null)
+            .gte('created_at', desde.toISOString()),
+        ]);
 
       const negocio = (perfil as any)?.negocios;
       if (negocio?.moneda) setMoneda(simboloMoneda(negocio.moneda));
       setVendedores(vend ?? []);
       setTecnicos(tec ?? []);
       setClientes(cli);
+      setProveedores((prov as Proveedor[]) ?? []);
       setOrdenes((ord as Orden[]) ?? []);
       setReparaciones((rep as Reparacion[]) ?? []);
       setIngresosServicio((ing as IngresoServicio[]) ?? []);
+      setComprasProveedor((compras as DispositivoCompra[]) ?? []);
       setLoading(false);
     })();
   }, []);
@@ -222,6 +240,23 @@ export default function Estadisticas() {
       .sort((a, b) => b.valor - a.valor);
   }, [ordenesPeriodo]);
 
+  const comprasProveedorPeriodo = useMemo(
+    () => comprasProveedor.filter((d) => new Date(d.created_at) >= inicio),
+    [comprasProveedor, inicio]
+  );
+
+  const rankingProveedores: Dato[] = useMemo(() => {
+    const mapa = new Map<string, number>();
+    for (const d of comprasProveedorPeriodo) {
+      if (!d.proveedor_id) continue;
+      mapa.set(d.proveedor_id, (mapa.get(d.proveedor_id) ?? 0) + (d.costo || 0));
+    }
+    return Array.from(mapa.entries())
+      .map(([id, valor]) => ({ nombre: proveedores.find((p) => p.id === id)?.nombre ?? 'Proveedor eliminado', valor }))
+      .filter((d) => d.valor > 0)
+      .sort((a, b) => b.valor - a.valor);
+  }, [comprasProveedorPeriodo, proveedores]);
+
   const evolucion = useMemo(() => {
     if (periodo === 'hoy') return [];
     if (periodo === 'anio') {
@@ -261,6 +296,17 @@ export default function Estadisticas() {
     return (
       <main className="flex min-h-screen items-center justify-center">
         <p className="text-sm text-muted dark:text-dark-text-secondary">Cargando...</p>
+      </main>
+    );
+  }
+
+  if (!puedeVerEstadisticas) {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
+        <p className="text-sm text-muted dark:text-dark-text-secondary">No tenés permiso para ver Estadísticas.</p>
+        <Link href="/" className="text-sm text-accent dark:text-dark-accent underline">
+          Volver al inicio
+        </Link>
       </main>
     );
   }
@@ -345,6 +391,16 @@ export default function Estadisticas() {
           <RankingTorta datos={rankingFormaPago} moneda={moneda} />
         )}
       </Seccion>
+
+      {rankingProveedores.length > 0 && (
+        <Seccion titulo="Compras a proveedores" vista={vistaProveedores} onVista={setVistaProveedores}>
+          {vistaProveedores === 'barras' ? (
+            <RankingBarras datos={rankingProveedores} moneda={moneda} />
+          ) : (
+            <RankingTorta datos={rankingProveedores} moneda={moneda} />
+          )}
+        </Seccion>
+      )}
     </main>
   );
 }
