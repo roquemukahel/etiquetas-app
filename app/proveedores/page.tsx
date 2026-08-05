@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../lib/supabase/client';
 import { useActor } from '../lib/actor';
 import { tienePermiso } from '../lib/permisos';
 
-type Proveedor = { id: string; nombre: string; telefono: string | null };
+type Proveedor = { id: string; nombre: string; telefono: string | null; saldo: number };
 
 export default function Proveedores() {
   const supabase = crearClienteNavegador();
@@ -19,10 +19,23 @@ export default function Proveedores() {
   const [error, setError] = useState<string | null>(null);
 
   const cargar = async () => {
-    const { data } = await supabase.from('proveedores').select('id, nombre, telefono').order('nombre');
-    setProveedores((data as Proveedor[]) ?? []);
+    const [{ data }, { data: saldosData }] = await Promise.all([
+      supabase.from('proveedores').select('id, nombre, telefono').order('nombre'),
+      supabase.rpc('saldos_proveedores'),
+    ]);
+    const saldoPorId = new Map<string, number>(
+      ((saldosData as { proveedor_id: string; saldo: number }[]) ?? []).map((s) => [s.proveedor_id, Number(s.saldo) || 0])
+    );
+    const lista = ((data as { id: string; nombre: string; telefono: string | null }[]) ?? []).map((p) => ({
+      ...p,
+      saldo: saldoPorId.get(p.id) ?? 0,
+    }));
+    setProveedores(lista);
     setLoading(false);
   };
+
+  // Total que le debés a todos los proveedores (solo saldos positivos).
+  const totalPorPagar = useMemo(() => proveedores.reduce((acc, p) => acc + Math.max(0, p.saldo), 0), [proveedores]);
 
   useEffect(() => {
     if (!puedeVer) {
@@ -69,8 +82,15 @@ export default function Proveedores() {
       </header>
 
       <p className="text-xs text-muted dark:text-dark-text-secondary -mt-2">
-        A quién le comprás stock en lote. Entrá a cada uno para ver y cargar las compras que le hiciste.
+        A quién le comprás stock en lote. Entrá a cada uno para ver las compras y llevar la cuenta de lo que le debés.
       </p>
+
+      {totalPorPagar > 0 && (
+        <div className="rounded-2xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-4">
+          <p className="text-[11px] uppercase tracking-wide text-muted dark:text-dark-text-secondary">Total por pagar a proveedores</p>
+          <p className="text-2xl font-display font-semibold text-bad">${Math.round(totalPorPagar).toLocaleString('es-AR')}</p>
+        </div>
+      )}
 
       {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
 
@@ -106,7 +126,14 @@ export default function Proveedores() {
               <p className="text-sm font-medium">{p.nombre}</p>
               {p.telefono && <p className="text-xs text-muted dark:text-dark-text-secondary">{p.telefono}</p>}
             </div>
-            <span className="text-muted dark:text-dark-text-secondary">&rsaquo;</span>
+            <div className="flex items-center gap-2">
+              {p.saldo > 0 ? (
+                <span className="text-sm font-medium text-bad">le debés ${Math.round(p.saldo).toLocaleString('es-AR')}</span>
+              ) : p.saldo < 0 ? (
+                <span className="text-xs font-medium text-good">saldo a favor ${Math.round(-p.saldo).toLocaleString('es-AR')}</span>
+              ) : null}
+              <span className="text-muted dark:text-dark-text-secondary">&rsaquo;</span>
+            </div>
           </Link>
         ))}
       </div>
