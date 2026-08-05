@@ -286,6 +286,9 @@ export default function NuevaOrden() {
     [carrito]
   );
   const moneda = useMemo(() => simboloMoneda(monedaOrden), [monedaOrden]);
+  // La otra moneda habilitada (para el monto informativo). Depende de cuál
+  // se eligió como moneda real de la orden.
+  const otraMoneda = useMemo(() => monedasDisponibles.find((m) => m !== monedaOrden), [monedasDisponibles, monedaOrden]);
 
   const montoCanjeTotal = useMemo(
     () => canjesCarrito.reduce((acc, c) => acc + (Number(c.monto) || 0), 0),
@@ -312,9 +315,12 @@ export default function NuevaOrden() {
   // valor y dejamos de pisarlo con el cálculo automático).
   useEffect(() => {
     if (mostrarSecundaria && tipoCambio && !montoSecundarioTocado) {
-      setMontoSecundario(Math.round(total * tipoCambio).toString());
+      // tipoCambio = 1 [moneda 0] = tipoCambio [moneda 1]. Si la orden está
+      // en la moneda 0, la otra sale multiplicando; si está en la 1, dividiendo.
+      const factor = monedaOrden === monedasDisponibles[0] ? tipoCambio : 1 / tipoCambio;
+      setMontoSecundario(Math.round(total * factor).toString());
     }
-  }, [mostrarSecundaria, tipoCambio, montoSecundarioTocado, total]);
+  }, [mostrarSecundaria, tipoCambio, montoSecundarioTocado, total, monedaOrden, monedasDisponibles]);
 
   // Saldo actual del cliente elegido, para mostrar el crédito disponible y
   // bloquear una venta a cuenta corriente que supere el límite.
@@ -681,7 +687,7 @@ export default function NuevaOrden() {
           monto_canje: montoCanjeTotal,
           moneda: monedaOrden,
           monto_secundario: mostrarSecundaria && montoSecundario ? Number(montoSecundario) : null,
-          moneda_secundaria: mostrarSecundaria ? monedasDisponibles[1] : null,
+          moneda_secundaria: mostrarSecundaria ? (otraMoneda ?? null) : null,
           total,
           estado: estadoOrden,
           fecha_entrega: estadoOrden === 'entregado' ? new Date().toISOString() : null,
@@ -1293,6 +1299,29 @@ export default function NuevaOrden() {
       </div>
 
       {monedasDisponibles.length > 1 && (
+        <div>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Moneda de la orden</label>
+          <div className="flex gap-2">
+            {monedasDisponibles.map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setMonedaOrden(m)}
+                className={`flex-1 rounded-xl py-2 text-sm font-medium ${
+                  monedaOrden === m ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
+                }`}
+              >
+                {simboloMoneda(m)} {m}
+              </button>
+            ))}
+          </div>
+          <p className="text-[11px] text-muted dark:text-dark-text-secondary mt-1">
+            En esta moneda se hacen el cobro y la boleta.
+          </p>
+        </div>
+      )}
+
+      {monedasDisponibles.length > 1 && otraMoneda && (
         <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-3 flex flex-col gap-2">
           <label className="flex items-center gap-3 cursor-pointer">
             <input
@@ -1305,7 +1334,7 @@ export default function NuevaOrden() {
               className="h-5 w-5 accent-ink"
             />
             <span className="text-sm font-medium">
-              Mostrar también el precio en {monedasDisponibles[1]} ({simboloMoneda(monedasDisponibles[1])})
+              Mostrar también el precio en {otraMoneda} ({simboloMoneda(otraMoneda)})
             </span>
           </label>
           {mostrarSecundaria && (
@@ -1316,14 +1345,13 @@ export default function NuevaOrden() {
                   setMontoSecundario(e.target.value);
                   setMontoSecundarioTocado(true);
                 }}
-                inputMode="numeric"
-                placeholder={`Monto en ${monedasDisponibles[1]}`}
+                inputMode="decimal"
+                placeholder={`Monto en ${otraMoneda}`}
                 className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
               />
               <p className="text-xs text-muted dark:text-dark-text-secondary">
                 Valor informativo para el cliente, calculado con tu tipo de cambio (lo podés corregir). El total real
-                de la orden sigue siendo en {monedasDisponibles[0]}, y es el único que se tiene en cuenta en
-                Estadísticas.
+                de la orden es en {monedaOrden}.
               </p>
             </>
           )}
