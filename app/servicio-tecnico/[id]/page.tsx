@@ -1153,7 +1153,7 @@ function Campo({
         <input
           value={valor}
           onChange={(e) => onChange(e.target.value)}
-          inputMode={numerico ? 'numeric' : undefined}
+          inputMode={numerico ? 'decimal' : undefined}
           className={`w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm ${mono ? 'font-mono' : ''}`}
         />
       )}
