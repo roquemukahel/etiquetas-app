@@ -99,4 +99,11 @@ export const ICONOS: Record<string, React.ReactNode> = {
       <circle cx="16.5" cy="18" r="1.6" />
     </IconoBase>
   ),
+  cobrar: (
+    <IconoBase>
+      <rect x="2" y="6" width="20" height="12" rx="2" />
+      <circle cx="12" cy="12" r="2.5" />
+      <path d="M6 9v6M18 9v6" />
+    </IconoBase>
+  ),
 };

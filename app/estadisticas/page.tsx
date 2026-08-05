@@ -7,6 +7,7 @@ import { simboloMoneda } from '../lib/monedas';
 import { obtenerTodasLasFilas } from '../lib/db';
 import { useActor } from '../lib/actor';
 import { tienePermiso } from '../lib/permisos';
+import { medioLabel } from '../lib/cuentaCorriente';
 import { RankingBarras, RankingTorta, EvolucionBarras, Dato } from './graficos';
 
 type Periodo = 'hoy' | 'semana' | 'mes' | 'anio';
@@ -69,6 +70,7 @@ function montoVenta(o: Orden): number {
   return (o.total || 0) + (o.anticipo || 0) + (o.monto_canje || 0);
 }
 type OrdenItem = { orden_id: string; cantidad: number };
+type Pago = { medio: string; monto: number; fecha: string };
 type Reparacion = { tecnico_id: string | null; fecha_reparado: string };
 type IngresoServicio = { cliente_id: string | null; fecha_ingreso_servicio: string };
 type Persona = { id: string; nombre: string; foto_url: string | null };
@@ -96,6 +98,9 @@ export default function Estadisticas() {
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [ordenes, setOrdenes] = useState<Orden[]>([]);
   const [ordenItems, setOrdenItems] = useState<OrdenItem[]>([]);
+  const [pagos, setPagos] = useState<Pago[]>([]);
+  const [porCobrar, setPorCobrar] = useState(0);
+  const [vencidoTotal, setVencidoTotal] = useState(0);
   const [reparaciones, setReparaciones] = useState<Reparacion[]>([]);
   const [ingresosServicio, setIngresosServicio] = useState<IngresoServicio[]>([]);
   const [comprasProveedor, setComprasProveedor] = useState<DispositivoCompra[]>([]);
@@ -125,6 +130,8 @@ export default function Estadisticas() {
         { data: ing },
         { data: compras },
         { data: comprasManual },
+        { data: pagosData },
+        { data: saldosData },
       ] = await Promise.all([
         supabase.from('perfiles').select('negocios ( moneda )').eq('id', user.id).single(),
         supabase.from('vendedores').select('id, nombre, foto_url').order('nombre'),
@@ -156,6 +163,8 @@ export default function Estadisticas() {
           .from('compras_proveedor')
           .select('proveedor_id, cantidad, precio_unitario, created_at')
           .gte('created_at', desde.toISOString()),
+        supabase.from('pagos').select('medio, monto, fecha').eq('anulado', false).gte('fecha', desde.toISOString()),
+        supabase.rpc('saldos_cuenta_corriente'),
       ]);
 
       const negocio = (perfil as any)?.negocios;
@@ -170,6 +179,13 @@ export default function Estadisticas() {
       setIngresosServicio((ing as IngresoServicio[]) ?? []);
       setComprasProveedor((compras as DispositivoCompra[]) ?? []);
       setComprasManuales((comprasManual as CompraManual[]) ?? []);
+      setPagos((pagosData as Pago[]) ?? []);
+      // Cartera actual (no depende del período): plata que te deben hoy y
+      // cuánto de eso está vencido. Viene de la función saldos_cuenta_
+      // corriente; si el SQL todavía no se corrió, queda en 0.
+      const saldos = (saldosData as { saldo: number; vencido: number }[]) ?? [];
+      setPorCobrar(saldos.reduce((acc, s) => acc + Math.max(0, Number(s.saldo) || 0), 0));
+      setVencidoTotal(saldos.reduce((acc, s) => acc + Math.max(0, Number(s.vencido) || 0), 0));
       setLoading(false);
     })();
   }, []);
@@ -197,6 +213,11 @@ export default function Estadisticas() {
 
   const cantidadVentas = ordenesPeriodo.reduce((acc, o) => acc + (unidadesPorOrden.get(o.id) || 1), 0);
   const ticketPromedio = cantidadVentas > 0 ? ingresos / cantidadVentas : 0;
+
+  // Caja: la plata que realmente entró en el período, por medio de pago
+  // (distinta de "Vendido", que es lo facturado aunque se haya fiado).
+  const pagosPeriodo = useMemo(() => pagos.filter((p) => new Date(p.fecha) >= inicio), [pagos, inicio]);
+  const cobrado = pagosPeriodo.reduce((acc, p) => acc + (p.monto || 0), 0);
 
   const nombreDe = (lista: Persona[], id: string | null, tipo: string) => {
     if (!id) return 'Sin asignar';
@@ -281,16 +302,16 @@ export default function Estadisticas() {
       .slice(0, 10);
   }, [ingresosServicioPeriodo, clientes]);
 
-  const rankingFormaPago: Dato[] = useMemo(() => {
+  const cajaPorMedio: Dato[] = useMemo(() => {
     const mapa = new Map<string, number>();
-    for (const o of ordenesPeriodo) {
-      const key = o.forma_pago || 'Sin especificar';
-      mapa.set(key, (mapa.get(key) ?? 0) + montoVenta(o));
+    for (const p of pagosPeriodo) {
+      mapa.set(p.medio, (mapa.get(p.medio) ?? 0) + (p.monto || 0));
     }
     return Array.from(mapa.entries())
-      .map(([nombre, valor]) => ({ nombre, valor }))
+      .map(([medio, valor]) => ({ nombre: medioLabel(medio), valor }))
+      .filter((d) => d.valor > 0)
       .sort((a, b) => b.valor - a.valor);
-  }, [ordenesPeriodo]);
+  }, [pagosPeriodo]);
 
   const comprasProveedorPeriodo = useMemo(
     () => comprasProveedor.filter((d) => new Date(d.created_at) >= inicio),
@@ -399,11 +420,25 @@ export default function Estadisticas() {
         ))}
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
-        <StatTile valor={`${moneda}${Math.round(ingresos).toLocaleString('es-AR')}`} etiqueta="Ingresos" />
-        <StatTile valor={cantidadVentas.toString()} etiqueta="Ventas" />
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <StatTile valor={`${moneda}${Math.round(ingresos).toLocaleString('es-AR')}`} etiqueta="Vendido" />
+        <StatTile valor={`${moneda}${Math.round(cobrado).toLocaleString('es-AR')}`} etiqueta="Cobrado (caja)" tono="text-good" />
+        <StatTile valor={`${moneda}${Math.round(porCobrar).toLocaleString('es-AR')}`} etiqueta="Por cobrar" tono="text-warn" />
+        <StatTile
+          valor={`${moneda}${Math.round(vencidoTotal).toLocaleString('es-AR')}`}
+          etiqueta="Vencido"
+          tono={vencidoTotal > 0 ? 'text-bad' : undefined}
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-3 -mt-2">
+        <StatTile valor={cantidadVentas.toString()} etiqueta="Dispositivos vendidos" />
         <StatTile valor={`${moneda}${Math.round(ticketPromedio).toLocaleString('es-AR')}`} etiqueta="Ticket promedio" />
       </div>
+      <p className="text-[11px] text-muted dark:text-dark-text-secondary -mt-2">
+        <strong>Vendido</strong> es lo facturado en el período (incluye lo fiado). <strong>Cobrado</strong> es la plata
+        que entró a la caja. <strong>Por cobrar</strong> y <strong>Vencido</strong> son la deuda actual de tus clientes,
+        a hoy.
+      </p>
 
       {evolucion.length > 0 && (
         <Seccion titulo="Evolución de ingresos">
@@ -447,11 +482,11 @@ export default function Estadisticas() {
         )}
       </Seccion>
 
-      <Seccion titulo="Formas de pago" vista={vistaFormaPago} onVista={setVistaFormaPago}>
+      <Seccion titulo="Caja por medio de pago" vista={vistaFormaPago} onVista={setVistaFormaPago}>
         {vistaFormaPago === 'barras' ? (
-          <RankingBarras datos={rankingFormaPago} moneda={moneda} />
+          <RankingBarras datos={cajaPorMedio} moneda={moneda} />
         ) : (
-          <RankingTorta datos={rankingFormaPago} moneda={moneda} />
+          <RankingTorta datos={cajaPorMedio} moneda={moneda} />
         )}
       </Seccion>
 
@@ -468,10 +503,10 @@ export default function Estadisticas() {
   );
 }
 
-function StatTile({ valor, etiqueta }: { valor: string; etiqueta: string }) {
+function StatTile({ valor, etiqueta, tono }: { valor: string; etiqueta: string; tono?: string }) {
   return (
     <div className="rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-3.5 flex flex-col gap-0.5">
-      <p className="text-xl font-display font-semibold leading-none truncate">{valor}</p>
+      <p className={`text-xl font-display font-semibold leading-none truncate ${tono ?? ''}`}>{valor}</p>
       <p className="text-[11px] text-muted dark:text-dark-text-secondary leading-tight mt-1">{etiqueta}</p>
     </div>
   );

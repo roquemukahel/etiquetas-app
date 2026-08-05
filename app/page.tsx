@@ -17,6 +17,7 @@ const SECCIONES = [
   { href: '/proveedores', titulo: 'Proveedores', desc: 'A quién le comprás stock en lote', icono: 'proveedores', color: 'compras', activo: true },
   { href: '/stock', titulo: 'Stock', desc: 'Dispositivos disponibles en tu local', icono: 'stock', color: 'inventario', activo: true },
   { href: '/clientes', titulo: 'Clientes', desc: 'Tu base de clientes', icono: 'clientes', color: 'clientes', activo: true },
+  { href: '/cuentas-por-cobrar', titulo: 'Cuentas por cobrar', desc: 'Quién te debe y cuánto (cuenta corriente)', icono: 'cobrar', color: 'ventas', activo: true },
   { href: '/canje', titulo: 'Plan Canje', desc: 'Dispositivos recibidos como parte de pago', icono: 'canje', color: 'inventario', activo: true },
   { href: '/servicio-tecnico', titulo: 'Servicio Técnico', desc: 'Equipos derivados a reparación', icono: 'servicio', color: 'servicio', activo: true },
   { href: '/nueva-etiqueta', titulo: 'Nueva etiqueta', desc: 'Fotografiá el IMEI y generá la etiqueta', icono: 'etiqueta', color: 'inventario', activo: true },
