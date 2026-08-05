@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../../lib/supabase/client';
+import { useActor } from '../../lib/actor';
+import { tienePermiso } from '../../lib/permisos';
 import Avatar from '../../Avatar';
 import PermisosEditor, { PermisosForm } from '../../PermisosEditor';
 
@@ -13,6 +15,7 @@ type Vendedor = {
   edad: number | null;
   foto_url: string | null;
   pin: string | null;
+  es_administrador: boolean;
   acceso_completo: boolean;
   puede_vender: boolean;
   puede_eliminar: boolean;
@@ -23,6 +26,7 @@ type Vendedor = {
 };
 
 const PERMISOS_DEFAULT: PermisosForm = {
+  esAdministrador: true,
   accesoCompleto: true,
   puedeVender: true,
   puedeEliminar: true,
@@ -34,6 +38,8 @@ const PERMISOS_DEFAULT: PermisosForm = {
 
 export default function Vendedores() {
   const supabase = crearClienteNavegador();
+  const actor = useActor();
+  const puedeGestionarUsuarios = tienePermiso(actor, 'gestionar_usuarios');
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [loading, setLoading] = useState(true);
   const [nombre, setNombre] = useState('');
@@ -84,6 +90,7 @@ export default function Vendedores() {
     setEdadEdit(v.edad != null ? String(v.edad) : '');
     setPinEdit(v.pin ?? '');
     setPermisosEdit({
+      esAdministrador: v.es_administrador,
       accesoCompleto: v.acceso_completo,
       puedeVender: v.puede_vender,
       puedeEliminar: v.puede_eliminar,
@@ -119,6 +126,7 @@ export default function Vendedores() {
         telefono: telefonoEdit.trim() || null,
         edad: edadEdit ? Number(edadEdit) : null,
         pin: pinEdit.trim() || null,
+        es_administrador: permisosEdit.esAdministrador,
         acceso_completo: permisosEdit.accesoCompleto,
         puede_vender: permisosEdit.puedeVender,
         puede_eliminar: permisosEdit.puedeEliminar,
@@ -132,6 +140,17 @@ export default function Vendedores() {
     setEditando(null);
     cargar();
   };
+
+  if (!puedeGestionarUsuarios) {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
+        <p className="text-sm text-muted dark:text-dark-text-secondary">No tenés permiso para gestionar vendedores.</p>
+        <Link href="/configuracion" className="text-sm text-accent dark:text-dark-accent underline">
+          Volver
+        </Link>
+      </main>
+    );
+  }
 
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4">

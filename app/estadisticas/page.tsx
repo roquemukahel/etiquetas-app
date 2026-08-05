@@ -57,6 +57,7 @@ type Persona = { id: string; nombre: string; foto_url: string | null };
 type Cliente = { id: string; nombre: string; apellido: string | null };
 type Proveedor = { id: string; nombre: string };
 type DispositivoCompra = { proveedor_id: string | null; costo: number | null; created_at: string };
+type CompraManual = { proveedor_id: string; cantidad: number; precio_unitario: number | null; created_at: string };
 
 export default function Estadisticas() {
   const supabase = crearClienteNavegador();
@@ -79,6 +80,7 @@ export default function Estadisticas() {
   const [reparaciones, setReparaciones] = useState<Reparacion[]>([]);
   const [ingresosServicio, setIngresosServicio] = useState<IngresoServicio[]>([]);
   const [comprasProveedor, setComprasProveedor] = useState<DispositivoCompra[]>([]);
+  const [comprasManuales, setComprasManuales] = useState<CompraManual[]>([]);
   const [moneda, setMoneda] = useState('$');
   const [loading, setLoading] = useState(true);
 
@@ -92,34 +94,48 @@ export default function Estadisticas() {
       const desde = new Date();
       desde.setFullYear(desde.getFullYear() - 1);
 
-      const [{ data: perfil }, { data: vend }, { data: tec }, cli, { data: prov }, { data: ord }, { data: rep }, { data: ing }, { data: compras }] =
-        await Promise.all([
-          supabase.from('perfiles').select('negocios ( moneda )').eq('id', user.id).single(),
-          supabase.from('vendedores').select('id, nombre, foto_url').order('nombre'),
-          supabase.from('tecnicos').select('id, nombre, foto_url').order('nombre'),
-          obtenerTodasLasFilas<Cliente>(supabase, 'clientes', 'id, nombre, apellido', [{ columna: 'nombre' }]),
-          supabase.from('proveedores').select('id, nombre').order('nombre'),
-          supabase
-            .from('ordenes')
-            .select('vendedor_id, cliente_id, total, estado, forma_pago, created_at')
-            .gte('created_at', desde.toISOString()),
-          supabase
-            .from('reparaciones')
-            .select('tecnico_id, fecha_reparado')
-            .not('fecha_reparado', 'is', null)
-            .gte('fecha_reparado', desde.toISOString()),
-          supabase
-            .from('reparaciones')
-            .select('cliente_id, fecha_ingreso_servicio')
-            .not('cliente_id', 'is', null)
-            .not('fecha_ingreso_servicio', 'is', null)
-            .gte('fecha_ingreso_servicio', desde.toISOString()),
-          supabase
-            .from('dispositivos')
-            .select('proveedor_id, costo, created_at')
-            .not('proveedor_id', 'is', null)
-            .gte('created_at', desde.toISOString()),
-        ]);
+      const [
+        { data: perfil },
+        { data: vend },
+        { data: tec },
+        cli,
+        { data: prov },
+        { data: ord },
+        { data: rep },
+        { data: ing },
+        { data: compras },
+        { data: comprasManual },
+      ] = await Promise.all([
+        supabase.from('perfiles').select('negocios ( moneda )').eq('id', user.id).single(),
+        supabase.from('vendedores').select('id, nombre, foto_url').order('nombre'),
+        supabase.from('tecnicos').select('id, nombre, foto_url').order('nombre'),
+        obtenerTodasLasFilas<Cliente>(supabase, 'clientes', 'id, nombre, apellido', [{ columna: 'nombre' }]),
+        supabase.from('proveedores').select('id, nombre').order('nombre'),
+        supabase
+          .from('ordenes')
+          .select('vendedor_id, cliente_id, total, estado, forma_pago, created_at')
+          .gte('created_at', desde.toISOString()),
+        supabase
+          .from('reparaciones')
+          .select('tecnico_id, fecha_reparado')
+          .not('fecha_reparado', 'is', null)
+          .gte('fecha_reparado', desde.toISOString()),
+        supabase
+          .from('reparaciones')
+          .select('cliente_id, fecha_ingreso_servicio')
+          .not('cliente_id', 'is', null)
+          .not('fecha_ingreso_servicio', 'is', null)
+          .gte('fecha_ingreso_servicio', desde.toISOString()),
+        supabase
+          .from('dispositivos')
+          .select('proveedor_id, costo, created_at')
+          .not('proveedor_id', 'is', null)
+          .gte('created_at', desde.toISOString()),
+        supabase
+          .from('compras_proveedor')
+          .select('proveedor_id, cantidad, precio_unitario, created_at')
+          .gte('created_at', desde.toISOString()),
+      ]);
 
       const negocio = (perfil as any)?.negocios;
       if (negocio?.moneda) setMoneda(simboloMoneda(negocio.moneda));
@@ -131,6 +147,7 @@ export default function Estadisticas() {
       setReparaciones((rep as Reparacion[]) ?? []);
       setIngresosServicio((ing as IngresoServicio[]) ?? []);
       setComprasProveedor((compras as DispositivoCompra[]) ?? []);
+      setComprasManuales((comprasManual as CompraManual[]) ?? []);
       setLoading(false);
     })();
   }, []);
@@ -244,18 +261,29 @@ export default function Estadisticas() {
     () => comprasProveedor.filter((d) => new Date(d.created_at) >= inicio),
     [comprasProveedor, inicio]
   );
+  const comprasManualesPeriodo = useMemo(
+    () => comprasManuales.filter((c) => new Date(c.created_at) >= inicio),
+    [comprasManuales, inicio]
+  );
 
   const rankingProveedores: Dato[] = useMemo(() => {
     const mapa = new Map<string, number>();
+    // Se suman las dos fuentes: lo que quedó vinculado solo al cargar un
+    // dispositivo al stock con costo (dispositivos.costo) y lo cargado a
+    // mano en la ficha de cada proveedor (compras_proveedor) — ver
+    // /proveedores/[id].
     for (const d of comprasProveedorPeriodo) {
       if (!d.proveedor_id) continue;
       mapa.set(d.proveedor_id, (mapa.get(d.proveedor_id) ?? 0) + (d.costo || 0));
+    }
+    for (const c of comprasManualesPeriodo) {
+      mapa.set(c.proveedor_id, (mapa.get(c.proveedor_id) ?? 0) + (c.precio_unitario || 0) * c.cantidad);
     }
     return Array.from(mapa.entries())
       .map(([id, valor]) => ({ nombre: proveedores.find((p) => p.id === id)?.nombre ?? 'Proveedor eliminado', valor }))
       .filter((d) => d.valor > 0)
       .sort((a, b) => b.valor - a.valor);
-  }, [comprasProveedorPeriodo, proveedores]);
+  }, [comprasProveedorPeriodo, comprasManualesPeriodo, proveedores]);
 
   const evolucion = useMemo(() => {
     if (periodo === 'hoy') return [];

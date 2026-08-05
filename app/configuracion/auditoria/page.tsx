@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../../lib/supabase/client';
+import { useActor } from '../../lib/actor';
+import { tienePermiso } from '../../lib/permisos';
 
 type Registro = {
   id: string;
@@ -25,10 +27,16 @@ function formatearFecha(iso: string) {
 
 export default function Auditoria() {
   const supabase = crearClienteNavegador();
+  const actor = useActor();
+  const puedeVerAuditoria = tienePermiso(actor, 'auditoria');
   const [registros, setRegistros] = useState<Registro[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!puedeVerAuditoria) {
+      setLoading(false);
+      return;
+    }
     (async () => {
       const { data } = await supabase
         .from('auditoria')
@@ -38,7 +46,19 @@ export default function Auditoria() {
       setRegistros((data as Registro[]) ?? []);
       setLoading(false);
     })();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [puedeVerAuditoria]);
+
+  if (!puedeVerAuditoria) {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
+        <p className="text-sm text-muted dark:text-dark-text-secondary">No tenés permiso para ver Auditoría.</p>
+        <Link href="/configuracion" className="text-sm text-accent dark:text-dark-accent underline">
+          Volver
+        </Link>
+      </main>
+    );
+  }
 
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4">

@@ -11,6 +11,11 @@ import { useEffect, useState } from 'react';
 // veces también vende, un vendedor a veces recibe/gestiona Servicio
 // Técnico) — ver app/lib/permisos.ts.
 export type Permisos = {
+  // Un escalón arriba de accesoCompleto: además de todas las acciones
+  // operativas, puede ver Auditoría y gestionar a otros vendedores/
+  // técnicos (agregarlos, editarles permisos/PIN). Ni siquiera
+  // accesoCompleto alcanza para eso — ver app/lib/permisos.ts.
+  esAdministrador: boolean;
   accesoCompleto: boolean;
   puedeVender: boolean;
   puedeEliminar: boolean;

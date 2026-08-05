@@ -91,4 +91,12 @@ export const ICONOS: Record<string, React.ReactNode> = {
       <path d="M12 3v2.5M12 18.5V21M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M3 12h2.5M18.5 12H21M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8" />
     </IconoBase>
   ),
+  proveedores: (
+    <IconoBase>
+      <path d="M2 8h11v8H2Z" />
+      <path d="M13 11h4l3 3v2h-7Z" />
+      <circle cx="6.5" cy="18" r="1.6" />
+      <circle cx="16.5" cy="18" r="1.6" />
+    </IconoBase>
+  ),
 };

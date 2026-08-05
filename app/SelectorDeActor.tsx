@@ -27,7 +27,14 @@ type Persona = {
   telefono: string | null;
   edad: number | null;
   tienePin: boolean;
-  // Mismas columnas de permisos en vendedores y técnicos (ver app/lib/actor.ts).
+  // Mismas columnas de permisos en vendedores y técnicos (ver
+  // app/lib/actor.ts). Vienen de una consulta APARTE (ver más abajo) que
+  // se pide por separado a propósito: si algún permiso nuevo todavía no
+  // existe en la base (el SQL no se corrió), esa consulta puede fallar
+  // sola sin romper la consulta principal (nombre/foto/PIN) — así el
+  // selector y el candadito siguen funcionando aunque los permisos
+  // todavía no estén disponibles.
+  es_administrador?: boolean;
   acceso_completo?: boolean;
   puede_vender?: boolean;
   puede_eliminar?: boolean;
@@ -38,7 +45,7 @@ type Persona = {
 };
 
 const COLUMNAS_PERMISOS =
-  'acceso_completo, puede_vender, puede_eliminar, puede_agregar_stock, puede_ver_estadisticas, puede_recibir_servicio_tecnico, puede_gestionar_servicio_tecnico';
+  'id, es_administrador, acceso_completo, puede_vender, puede_eliminar, puede_agregar_stock, puede_ver_estadisticas, puede_recibir_servicio_tecnico, puede_gestionar_servicio_tecnico';
 
 export default function SelectorDeActor() {
   const pathname = usePathname();
@@ -114,22 +121,24 @@ export default function SelectorDeActor() {
     if (esRutaExcluida || !mostrarOverlay || cargando) return;
     setCargando(true);
     (async () => {
-      const [{ data: vend }, { data: tec }, { data: idsVend }, { data: idsTec }] = await Promise.all([
-        supabase
-          .from('vendedores')
-          .select(`id, nombre, foto_url, telefono, edad, ${COLUMNAS_PERMISOS}`)
-          .order('nombre'),
-        supabase
-          .from('tecnicos')
-          .select(`id, nombre, foto_url, telefono, edad, ${COLUMNAS_PERMISOS}`)
-          .order('nombre'),
+      const [{ data: vend }, { data: tec }, { data: idsVend }, { data: idsTec }, permVendRes, permTecRes] = await Promise.all([
+        supabase.from('vendedores').select('id, nombre, foto_url, telefono, edad').order('nombre'),
+        supabase.from('tecnicos').select('id, nombre, foto_url, telefono, edad').order('nombre'),
         supabase.rpc('ids_vendedores_con_pin'),
         supabase.rpc('ids_tecnicos_con_pin'),
+        supabase.from('vendedores').select(COLUMNAS_PERMISOS),
+        supabase.from('tecnicos').select(COLUMNAS_PERMISOS),
       ]);
       const conPinVend = new Set(((idsVend as { id: string }[]) ?? []).map((r) => r.id));
       const conPinTec = new Set(((idsTec as { id: string }[]) ?? []).map((r) => r.id));
-      setVendedores((vend ?? []).map((v) => ({ ...v, tienePin: conPinVend.has(v.id) })));
-      setTecnicos((tec ?? []).map((t) => ({ ...t, tienePin: conPinTec.has(t.id) })));
+      // permVendRes/permTecRes pueden venir con error (columnas todavía no
+      // creadas) sin que eso afecte nombre/foto/PIN de arriba — en ese
+      // caso el mapa queda vacío y cada persona simplemente no trae datos
+      // de permisos (los defaults "?? true" de más abajo se hacen cargo).
+      const permisosVend = new Map(((permVendRes.data as any[]) ?? []).map((p) => [p.id, p]));
+      const permisosTec = new Map(((permTecRes.data as any[]) ?? []).map((p) => [p.id, p]));
+      setVendedores((vend ?? []).map((v) => ({ ...v, tienePin: conPinVend.has(v.id), ...permisosVend.get(v.id) })));
+      setTecnicos((tec ?? []).map((t) => ({ ...t, tienePin: conPinTec.has(t.id), ...permisosTec.get(t.id) })));
       setCargando(false);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -144,6 +153,7 @@ export default function SelectorDeActor() {
       nombre: persona.nombre,
       fotoUrl: persona.foto_url,
       permisos: {
+        esAdministrador: persona.es_administrador ?? true,
         accesoCompleto: persona.acceso_completo ?? true,
         puedeVender: persona.puede_vender ?? true,
         puedeEliminar: persona.puede_eliminar ?? true,

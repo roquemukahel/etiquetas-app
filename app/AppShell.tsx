@@ -32,6 +32,7 @@ const NAV = [
   { href: '/canje', label: 'Plan Canje', icono: 'canje' },
   { href: '/servicio-tecnico', label: 'Servicio Técnico', icono: 'servicio' },
   { href: '/compras', label: 'Compras', icono: 'compra' },
+  { href: '/proveedores', label: 'Proveedores', icono: 'proveedores' },
   { href: '/estadisticas', label: 'Estadísticas', icono: 'estadisticas' },
   { href: '/configuracion', label: 'Configuración', icono: 'configuracion' },
 ];

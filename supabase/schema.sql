@@ -2131,3 +2131,42 @@ alter table tecnicos add column if not exists puede_agregar_stock boolean not nu
 alter table tecnicos add column if not exists puede_ver_estadisticas boolean not null default true;
 alter table tecnicos add column if not exists puede_recibir_servicio_tecnico boolean not null default true;
 alter table tecnicos add column if not exists puede_gestionar_servicio_tecnico boolean not null default true;
+
+-- ============================================================
+-- Administrador: un nivel por encima de "acceso completo". Acceso
+-- completo ya daba todas las acciones operativas (vender, eliminar,
+-- agregar stock, etc.); administrador además puede ver Auditoría y
+-- gestionar a los demás vendedores/técnicos (agregarlos, editarles
+-- permisos, PIN, etc.) — cosas que ni siquiera "acceso completo" da por
+-- sí solo. Default true por la misma razón que el resto: no bloquear a
+-- nadie hasta que el dueño entre y lo configure a mano. Ojo: como
+-- Configuración > Vendedores/Técnicos queda gateada a "administrador",
+-- si el dueño desmarca a todo el mundo sin dejar a nadie marcado, nadie
+-- (ni él mismo) va a poder volver a entrar ahí para revertirlo — dejar
+-- SIEMPRE a alguien como administrador.
+alter table vendedores add column if not exists es_administrador boolean not null default true;
+alter table tecnicos add column if not exists es_administrador boolean not null default true;
+
+-- ============================================================
+-- Compras a proveedores: registro manual de compras (no depende de
+-- cargar cada dispositivo individualmente al stock con su costo/imei —
+-- sirve para compras en lote, o para anotar la compra antes de meter
+-- cada unidad al stock). Se suma junto con dispositivos.costo para el
+-- ranking de "Compras a proveedores" en Estadísticas.
+create table if not exists compras_proveedor (
+  id uuid primary key default gen_random_uuid(),
+  negocio_id uuid not null references negocios(id) on delete cascade default negocio_actual(),
+  proveedor_id uuid not null references proveedores(id) on delete cascade,
+  modelo text,
+  capacidad_gb int,
+  cantidad int not null default 1,
+  precio_unitario numeric,
+  detalles text,
+  created_at timestamptz default now()
+);
+
+alter table compras_proveedor enable row level security;
+
+create policy "compras_proveedor de mi negocio" on compras_proveedor
+  for all using (negocio_id = negocio_actual())
+  with check (negocio_id = negocio_actual());
