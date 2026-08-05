@@ -9,6 +9,8 @@ import { asegurarProveedor } from '../../lib/proveedores';
 import { limpiarImei } from '../../lib/imei';
 import { getActor, useActor, MENSAJE_ACTOR_REQUERIDO } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
+import { planesActivos, valorCuota } from '../../lib/cuotas';
+import { simboloMoneda } from '../../lib/monedas';
 import SelectorColor from '../../SelectorColor';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
@@ -22,6 +24,8 @@ export default function NuevoDispositivo() {
 
   const [carpetas, setCarpetas] = useState<string[]>([]);
   const [proveedores, setProveedores] = useState<string[]>([]);
+  const [interesCuotas, setInteresCuotas] = useState<Record<string, number> | null>(null);
+  const [monedaCodigo, setMonedaCodigo] = useState('ARS');
   useEffect(() => {
     (async () => {
       const { data } = await supabase.from('modelos_stock').select('nombre').order('nombre');
@@ -30,6 +34,16 @@ export default function NuevoDispositivo() {
     (async () => {
       const { data } = await supabase.from('proveedores').select('nombre').order('nombre');
       setProveedores((data ?? []).map((p) => p.nombre));
+    })();
+    (async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: perfil } = await supabase.from('perfiles').select('negocios ( interes_cuotas, moneda )').eq('id', user.id).single();
+      setInteresCuotas((perfil as any)?.negocios?.interes_cuotas ?? null);
+      const cod = (perfil as any)?.negocios?.moneda;
+      if (cod) setMonedaCodigo(cod);
     })();
   }, []);
 
@@ -135,6 +149,24 @@ export default function NuevoDispositivo() {
           <SelectorColor value={color} onChange={setColor} />
         </div>
         <Campo label="Precio" valor={precio} onChange={setPrecio} numerico />
+        {(() => {
+          const planes = planesActivos(interesCuotas);
+          const base = Number(precio);
+          if (!planes.length || !base) return null;
+          const mon = simboloMoneda(monedaCodigo);
+          return (
+            <div className="rounded-xl bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border px-4 py-3 text-xs text-muted dark:text-dark-text-secondary flex flex-col gap-1">
+              <span className="font-medium text-ink dark:text-dark-text">Precio en cuotas (según tu financiación):</span>
+              {planes.map((p) => (
+                <span key={p.cuotas}>
+                  {p.cuotas} cuotas de {mon}
+                  {Math.round(valorCuota(base, p.cuotas, p.interes)).toLocaleString('es-AR')} · total {mon}
+                  {Math.round(base * (1 + p.interes / 100)).toLocaleString('es-AR')}
+                </span>
+              ))}
+            </div>
+          );
+        })()}
         <Campo label="Costo (lo que le pagaste al proveedor, opcional)" valor={costo} onChange={setCosto} numerico />
         <Campo label="Proveedor (opcional)" valor={proveedor} onChange={setProveedor} listaId="proveedores-stock" />
         <datalist id="proveedores-stock">
