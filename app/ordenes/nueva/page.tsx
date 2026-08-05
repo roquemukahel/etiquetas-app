@@ -74,6 +74,51 @@ function idTemporal() {
   return Math.random().toString(36).slice(2);
 }
 
+// Deja solo dígitos y UN separador decimal, aceptando punto o coma (la coma
+// se pasa a punto). Así se pueden escribir precios con decimales (ej. 123.50)
+// tanto en compu como en celular.
+function sanitizarDecimal(s: string): string {
+  let v = s.replace(',', '.').replace(/[^\d.]/g, '');
+  const i = v.indexOf('.');
+  if (i !== -1) v = v.slice(0, i + 1) + v.slice(i + 1).replace(/\./g, '');
+  return v;
+}
+
+// Input de precio/monto atado a un número pero que conserva lo que el usuario
+// tipea (incluido el punto a medio escribir) — si se atara directo al número,
+// al convertir "123." a 123 se borraría el punto y nunca se podría poner el
+// decimal.
+function InputDecimal({
+  value,
+  onChange,
+  className,
+  placeholder,
+}: {
+  value: number;
+  onChange: (n: number) => void;
+  className?: string;
+  placeholder?: string;
+}) {
+  const [texto, setTexto] = useState(value ? String(value) : '');
+  useEffect(() => {
+    if ((Number(texto) || 0) !== value) setTexto(value ? String(value) : '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+  return (
+    <input
+      value={texto}
+      inputMode="decimal"
+      placeholder={placeholder}
+      onChange={(e) => {
+        const v = sanitizarDecimal(e.target.value);
+        setTexto(v);
+        onChange(Number(v) || 0);
+      }}
+      className={className}
+    />
+  );
+}
+
 export default function NuevaOrden() {
   const router = useRouter();
   const supabase = crearClienteNavegador();
@@ -493,8 +538,8 @@ export default function NuevaOrden() {
 
   const quitarDelCarrito = (tempId: string) => setCarrito((c) => c.filter((i) => i.tempId !== tempId));
 
-  const actualizarPrecioItem = (tempId: string, precio: string) =>
-    setCarrito((c) => c.map((i) => (i.tempId === tempId ? { ...i, precioUnitario: Number(precio) || 0 } : i)));
+  const actualizarPrecioItem = (tempId: string, precio: number) =>
+    setCarrito((c) => c.map((i) => (i.tempId === tempId ? { ...i, precioUnitario: precio } : i)));
 
   const actualizarCantidadItem = (tempId: string, cantidad: string) =>
     setCarrito((c) => c.map((i) => (i.tempId === tempId ? { ...i, cantidad: Math.max(1, Number(cantidad) || 1) } : i)));
@@ -926,9 +971,9 @@ export default function NuevaOrden() {
                 />
                 <input
                   value={nuevoPrecioDispositivo}
-                  onChange={(e) => setNuevoPrecioDispositivo(e.target.value)}
+                  onChange={(e) => setNuevoPrecioDispositivo(sanitizarDecimal(e.target.value))}
                   placeholder="Precio"
-                  inputMode="numeric"
+                  inputMode="decimal"
                   className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                 />
                 <button
@@ -1000,9 +1045,9 @@ export default function NuevaOrden() {
                   />
                   <input
                     value={productoManualPrecio}
-                    onChange={(e) => setProductoManualPrecio(e.target.value)}
+                    onChange={(e) => setProductoManualPrecio(sanitizarDecimal(e.target.value))}
                     placeholder="Precio unitario"
-                    inputMode="numeric"
+                    inputMode="decimal"
                     className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                   />
                 </div>
@@ -1136,9 +1181,9 @@ export default function NuevaOrden() {
                 />
                 <input
                   value={trabajoManualPrecio}
-                  onChange={(e) => setTrabajoManualPrecio(e.target.value)}
+                  onChange={(e) => setTrabajoManualPrecio(sanitizarDecimal(e.target.value))}
                   placeholder="Precio"
-                  inputMode="numeric"
+                  inputMode="decimal"
                   className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                 />
                 <button
@@ -1175,10 +1220,9 @@ export default function NuevaOrden() {
                   />
                   <span>×</span>
                   <span>{moneda}</span>
-                  <input
+                  <InputDecimal
                     value={i.precioUnitario}
-                    onChange={(e) => actualizarPrecioItem(i.tempId, e.target.value)}
-                    inputMode="numeric"
+                    onChange={(n) => actualizarPrecioItem(i.tempId, n)}
                     className="w-20 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded px-1 py-0.5 text-xs"
                   />
                 </div>
@@ -1362,8 +1406,8 @@ export default function NuevaOrden() {
                 </select>
                 <input
                   value={l.monto}
-                  onChange={(e) => actualizarLineaPago(l.tempId, 'monto', e.target.value.replace(/[^\d]/g, ''))}
-                  inputMode="numeric"
+                  onChange={(e) => actualizarLineaPago(l.tempId, 'monto', sanitizarDecimal(e.target.value))}
+                  inputMode="decimal"
                   placeholder="Monto"
                   className="w-28 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                 />
@@ -1451,8 +1495,8 @@ export default function NuevaOrden() {
           <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Anticipo</label>
           <input
             value={anticipo}
-            onChange={(e) => setAnticipo(e.target.value)}
-            inputMode="numeric"
+            onChange={(e) => setAnticipo(sanitizarDecimal(e.target.value))}
+            inputMode="decimal"
             placeholder="0"
             className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
           />
@@ -1461,8 +1505,8 @@ export default function NuevaOrden() {
           <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Impuesto %</label>
           <input
             value={impuesto}
-            onChange={(e) => setImpuesto(e.target.value)}
-            inputMode="numeric"
+            onChange={(e) => setImpuesto(sanitizarDecimal(e.target.value))}
+            inputMode="decimal"
             placeholder="0"
             className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
           />
@@ -1532,8 +1576,8 @@ export default function NuevaOrden() {
                   <span className="text-xs text-muted dark:text-dark-text-secondary">{moneda}</span>
                   <input
                     value={c.monto}
-                    onChange={(e) => actualizarMontoCanje(c.tempId, e.target.value)}
-                    inputMode="numeric"
+                    onChange={(e) => actualizarMontoCanje(c.tempId, sanitizarDecimal(e.target.value))}
+                    inputMode="decimal"
                     placeholder="Monto"
                     className="w-24 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded px-2 py-1 text-sm"
                   />
@@ -1590,9 +1634,9 @@ export default function NuevaOrden() {
             />
             <input
               value={canjeMonto}
-              onChange={(e) => setCanjeMonto(e.target.value)}
+              onChange={(e) => setCanjeMonto(sanitizarDecimal(e.target.value))}
               placeholder="Monto reconocido"
-              inputMode="numeric"
+              inputMode="decimal"
               className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
             />
             <textarea
