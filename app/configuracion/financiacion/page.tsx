@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
-import { PLANES_CUOTAS } from '../../lib/cuotas';
+import { PLANES_CUOTAS, etiquetaCuotas } from '../../lib/cuotas';
 
 export default function Financiacion() {
   const supabase = crearClienteNavegador();
@@ -105,7 +105,7 @@ export default function Financiacion() {
         <div className="flex flex-col gap-3">
           {PLANES_CUOTAS.map((c) => (
             <div key={c} className="flex items-center gap-3 rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3">
-              <span className="text-sm font-medium w-20">{c} cuotas</span>
+              <span className="text-sm font-medium w-20">{etiquetaCuotas(c)}</span>
               <div className="flex-1 flex items-center gap-2">
                 <input
                   value={interes[String(c)] ?? ''}

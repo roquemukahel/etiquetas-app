@@ -17,7 +17,7 @@ import {
   calcularSaldo,
   vencimientoDesdeHoy,
 } from '../../lib/cuentaCorriente';
-import { planesActivos, interesDe, valorCuota } from '../../lib/cuotas';
+import { planesActivos, interesDe, valorCuota, etiquetaCuotas } from '../../lib/cuotas';
 import { ITEMS_CHECKLIST_INGRESO, generarTextoCondicionIngreso } from '../../lib/reparaciones';
 import MiniaturaDispositivo from '../../MiniaturaDispositivo';
 import CheckTri from '../../CheckTri';
@@ -1379,7 +1379,7 @@ export default function NuevaOrden() {
                   cuotasElegidas === p.cuotas ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
                 }`}
               >
-                {p.cuotas} cuotas
+                {etiquetaCuotas(p.cuotas)}
                 <span className="block text-[10px] opacity-80 font-normal">
                   de {moneda}{Math.round(valorCuota(subtotal, p.cuotas, p.interes)).toLocaleString('es-AR')}
                 </span>
@@ -1388,7 +1388,7 @@ export default function NuevaOrden() {
           </div>
           {cuotasElegidas > 1 && (
             <p className="text-[11px] text-muted dark:text-dark-text-secondary mt-1">
-              {cuotasElegidas} cuotas de {moneda}
+              {etiquetaCuotas(cuotasElegidas)} de {moneda}
               {Math.round(valorCuota(subtotal, cuotasElegidas, interesPlan)).toLocaleString('es-AR')} · total financiado{' '}
               {moneda}{Math.round(subtotalFinanciado).toLocaleString('es-AR')} (interés {interesPlan}%)
             </p>

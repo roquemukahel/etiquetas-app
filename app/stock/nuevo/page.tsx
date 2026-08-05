@@ -9,7 +9,7 @@ import { asegurarProveedor } from '../../lib/proveedores';
 import { limpiarImei } from '../../lib/imei';
 import { getActor, useActor, MENSAJE_ACTOR_REQUERIDO } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
-import { planesActivos, valorCuota } from '../../lib/cuotas';
+import { planesActivos, valorCuota, etiquetaCuotas } from '../../lib/cuotas';
 import { simboloMoneda } from '../../lib/monedas';
 import SelectorColor from '../../SelectorColor';
 
@@ -159,7 +159,7 @@ export default function NuevoDispositivo() {
               <span className="font-medium text-ink dark:text-dark-text">Precio en cuotas (según tu financiación):</span>
               {planes.map((p) => (
                 <span key={p.cuotas}>
-                  {p.cuotas} cuotas de {mon}
+                  {etiquetaCuotas(p.cuotas)} de {mon}
                   {Math.round(valorCuota(base, p.cuotas, p.interes)).toLocaleString('es-AR')} · total {mon}
                   {Math.round(base * (1 + p.interes / 100)).toLocaleString('es-AR')}
                 </span>

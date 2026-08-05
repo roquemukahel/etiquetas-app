@@ -3,7 +3,12 @@
 // un objeto {"3": 10, "6": 20, "12": 40}. Contado (1 cuota) siempre existe y
 // no tiene interés.
 
-export const PLANES_CUOTAS = [3, 6, 12];
+export const PLANES_CUOTAS = [1, 3, 6, 12];
+
+// Etiqueta con singular/plural ("1 cuota" vs "3 cuotas").
+export function etiquetaCuotas(c: number): string {
+  return `${c} cuota${c === 1 ? '' : 's'}`;
+}
 
 export type PlanCuota = { cuotas: number; interes: number };
 
