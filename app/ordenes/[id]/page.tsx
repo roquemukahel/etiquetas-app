@@ -385,33 +385,23 @@ export default function DetalleOrden() {
       return;
     }
 
-    const { error: updateError } = await supabase
-      .from('ordenes')
-      .update({
-        forma_pago: formaPagoEdit,
-        nota: notaEdit.trim() || null,
-        incluir_garantia: incluirGarantiaEdit,
-        anticipo: anticipoNuevo,
-        impuesto_porcentaje: impuestoNuevo,
-        total: totalEdit,
-        monto_canje: montoCanjeEdit,
-        vendedor_id: vendedorNuevo,
-        monto_secundario: montoSecundarioNuevo,
-        moneda_secundaria: monedaSecundariaNueva,
-      })
-      .eq('id', id);
-    if (updateError) {
-      setError('No pudimos guardar los cambios: ' + updateError.message);
-      setGuardando(false);
-      return;
-    }
-
+    // Importante: primero se sincronizan los ítems y los canjes (los datos
+    // que justifican el total), y recién al final se actualiza la orden
+    // con el total ya calculado. Si se hiciera al revés y algún paso de
+    // en medio fallara, la orden quedaría con un total que descuenta un
+    // canje que en realidad nunca se llegó a crear/borrar/editar en la
+    // base — un descuento fantasma sin canje real detrás.
     for (const cambio of itemsCambiados) {
       const despues = cambio.despues as { descripcion: string; cantidad: number; precio_unitario: number };
-      await supabase
+      const { error: itemUpdError } = await supabase
         .from('orden_items')
         .update({ descripcion: despues.descripcion, cantidad: despues.cantidad, precio_unitario: despues.precio_unitario })
         .eq('id', cambio.id);
+      if (itemUpdError) {
+        setError('No pudimos actualizar un ítem: ' + itemUpdError.message);
+        setGuardando(false);
+        return;
+      }
     }
 
     if (canjesEliminados.length > 0) {
@@ -457,6 +447,27 @@ export default function DetalleOrden() {
         setGuardando(false);
         return;
       }
+    }
+
+    const { error: updateError } = await supabase
+      .from('ordenes')
+      .update({
+        forma_pago: formaPagoEdit,
+        nota: notaEdit.trim() || null,
+        incluir_garantia: incluirGarantiaEdit,
+        anticipo: anticipoNuevo,
+        impuesto_porcentaje: impuestoNuevo,
+        total: totalEdit,
+        monto_canje: montoCanjeEdit,
+        vendedor_id: vendedorNuevo,
+        monto_secundario: montoSecundarioNuevo,
+        moneda_secundaria: monedaSecundariaNueva,
+      })
+      .eq('id', id);
+    if (updateError) {
+      setError('No pudimos guardar los cambios: ' + updateError.message);
+      setGuardando(false);
+      return;
     }
 
     const nombreCliente = orden.clientes ? `${orden.clientes.nombre} ${orden.clientes.apellido || ''}`.trim() : 'sin cliente';

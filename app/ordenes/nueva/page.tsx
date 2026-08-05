@@ -437,8 +437,11 @@ export default function NuevaOrden() {
 
   // vendedorId es obligatorio a propósito: dejarlo "Sin asignar" ensuciaba
   // el ranking de vendedores en Estadísticas con ventas sin nadie a quien
-  // atribuírselas.
-  const puedeConfirmar = carrito.length > 0 && puedeVender && !!vendedorId;
+  // atribuírselas. Pero si el negocio todavía no cargó ningún vendedor en
+  // Configuración, no hay de quién elegir — exigirlo igual dejaría a ese
+  // negocio sin poder vender nunca más, así que en ese caso puntual no se
+  // bloquea.
+  const puedeConfirmar = carrito.length > 0 && puedeVender && (vendedores.length === 0 || !!vendedorId);
 
   const handleConfirmar = async () => {
     if (!puedeConfirmar) return;
@@ -447,6 +450,7 @@ export default function NuevaOrden() {
 
     const dispositivoIds = carrito.map((i) => i.dispositivoId).filter(Boolean) as string[];
     let dispositivosReservados = false;
+    let ordenCreadaId: string | null = null;
 
     try {
       // Se reserva el stock ANTES de crear la orden, y solo se marca
@@ -527,6 +531,7 @@ export default function NuevaOrden() {
         .select()
         .single();
       if (oErr || !orden) throw new Error(oErr?.message || 'no se pudo crear la orden');
+      ordenCreadaId = orden.id;
 
       if (canjesCarrito.length > 0) {
         const { error: canjesErr } = await supabase.from('canjes').insert(
@@ -561,6 +566,15 @@ export default function NuevaOrden() {
     } catch (err: any) {
       if (dispositivosReservados) {
         await supabase.from('dispositivos').update({ en_stock: true }).in('id', dispositivoIds);
+      }
+      // Si la orden llegó a crearse pero algo después falló (canjes o
+      // ítems), no puede quedar dando vueltas una orden fantasma con un
+      // total que no corresponde a nada — se borra. Si ya se había
+      // alcanzado a insertar algún canje, canjes.orden_id tiene "on
+      // delete set null": el canje no se pierde (el equipo sí se
+      // recibió), solo queda sin orden asociada.
+      if (ordenCreadaId) {
+        await supabase.from('ordenes').delete().eq('id', ordenCreadaId);
       }
       setError('No pudimos crear la orden: ' + (err?.message || 'error desconocido'));
       setGuardando(false);
@@ -1139,9 +1153,15 @@ export default function NuevaOrden() {
             </option>
           ))}
         </select>
-        {!vendedorId && (
+        {!vendedorId && vendedores.length > 0 && (
           <p className="text-[10px] text-warn mt-1">
             Es obligatorio para poder confirmar la orden — así no queda como "Sin asignar" en Estadísticas.
+          </p>
+        )}
+        {vendedores.length === 0 && (
+          <p className="text-[10px] text-muted dark:text-dark-text-secondary mt-1">
+            Todavía no cargaste vendedores en Configuración — podés confirmar sin elegir uno, pero después no vas a
+            poder saber quién hizo esta venta en Estadísticas.
           </p>
         )}
       </div>
