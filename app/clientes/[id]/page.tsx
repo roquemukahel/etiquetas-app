@@ -25,6 +25,7 @@ type Cliente = {
   plazo_dias: number | null;
   suspendido: boolean | null;
   cta_cte_observaciones: string | null;
+  portal_token: string | null;
 };
 
 type Orden = {
@@ -71,6 +72,7 @@ export default function DetalleCliente() {
   const [pagoMedio, setPagoMedio] = useState<string>('efectivo');
   const [pagoObs, setPagoObs] = useState('');
   const [guardandoPago, setGuardandoPago] = useState(false);
+  const [linkCopiado, setLinkCopiado] = useState(false);
 
   // Ajuste manual / nota de crédito
   const [ajustando, setAjustando] = useState(false);
@@ -392,6 +394,11 @@ export default function DetalleCliente() {
   const fmt = (n: number) => `${moneda}${Math.round(n).toLocaleString('es-AR')}`;
   const colorSaldo = saldo > 0.009 ? (vencido > 0 ? 'text-bad' : 'text-warn') : saldo < -0.009 ? 'text-good' : '';
 
+  // Link del portal de autoconsulta (solo si ya tiene token — necesita el
+  // SQL del portal corrido). El cliente entra y ve su cuenta sin login.
+  const portalUrl =
+    c.portal_token && typeof window !== 'undefined' ? `${window.location.origin}/cuenta/${c.portal_token}` : '';
+
   // Extracto listo para mandar por WhatsApp de un toque (reusa el mismo
   // helper que las boletas y Servicio Técnico). El empleado solo aprieta
   // "Enviar" en WhatsApp.
@@ -417,7 +424,9 @@ export default function DetalleCliente() {
         : saldo < -0.009
         ? `Tenés un saldo a favor de ${fmt(Math.abs(saldo))}.`
         : 'Tu cuenta está al día. ¡Gracias!';
-    return `Hola ${c.nombre}! Te paso el resumen de tu cuenta${negocioNombre ? ` en ${negocioNombre}` : ''}:\n\n${estadoTxt}${lineas ? `\n\nÚltimos movimientos:\n${lineas}` : ''}`;
+    return `Hola ${c.nombre}! Te paso el resumen de tu cuenta${negocioNombre ? ` en ${negocioNombre}` : ''}:\n\n${estadoTxt}${
+      lineas ? `\n\nÚltimos movimientos:\n${lineas}` : ''
+    }${portalUrl ? `\n\nPodés ver tu cuenta actualizada cuando quieras acá:\n${portalUrl}` : ''}`;
   };
   const linkExtracto = armarLinkWhatsApp(c.telefono, mensajeExtracto(), codigoPais);
 
@@ -506,6 +515,18 @@ export default function DetalleCliente() {
               >
                 📤 Enviar extracto
               </a>
+              {portalUrl && (
+                <button
+                  onClick={() => {
+                    navigator.clipboard?.writeText(portalUrl);
+                    setLinkCopiado(true);
+                    setTimeout(() => setLinkCopiado(false), 2000);
+                  }}
+                  className="rounded-xl border border-border dark:border-dark-border px-4 py-2 text-sm font-medium"
+                >
+                  {linkCopiado ? '✓ Link copiado' : '🔗 Portal del cliente'}
+                </button>
+              )}
               <button
                 onClick={abrirAjuste}
                 className="rounded-xl border border-border dark:border-dark-border px-4 py-2 text-sm font-medium"
