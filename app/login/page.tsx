@@ -60,53 +60,62 @@ export default function Login() {
   };
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center px-6 py-10">
-      <div className="flex flex-col items-center mb-8">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/qovento-logo.png" alt="Qovento" className="h-40 w-auto object-contain" />
+    // Fondo: en computadora se usa la imagen dividida (izquierda azul con
+    // logo+frase, derecha blanca). En tablet/celular la ilustración se
+    // oculta y queda un degradado azul de marca, con la tarjeta centrada.
+    // min-h-screen (no h-screen) permite scroll vertical si no entra.
+    <main
+      className="min-h-screen w-full flex items-center justify-center lg:justify-end overflow-x-hidden bg-cover bg-center bg-no-repeat bg-gradient-to-br from-[#0b2a5e] via-[#103a78] to-[#0a1c40] lg:bg-[url('/fondo-login.png')] px-4 sm:px-6 lg:pr-[7vw] py-10"
+    >
+      <div className="w-full max-w-[400px] bg-white rounded-2xl shadow-elevated p-8 sm:p-9 flex flex-col gap-5">
+        <div className="flex flex-col items-center gap-1">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/qovento-icon.png" alt="Qovento" className="h-14 w-14 object-contain" />
+          <p className="text-lg font-display font-semibold text-ink">Iniciá sesión</p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
+
+          <div>
+            <label className="text-xs text-muted block mb-1">Email</label>
+            <input
+              required
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full bg-white border border-border rounded-xl px-4 py-3 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-accent/40"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs text-muted block mb-1">Contraseña</label>
+            <input
+              required
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full bg-white border border-border rounded-xl px-4 py-3 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-accent/40"
+            />
+          </div>
+
+          <Turnstile onVerify={setCaptchaToken} />
+
+          <button
+            disabled={cargando || (REQUIERE_CAPTCHA && !captchaToken)}
+            className="mt-1 w-full rounded-2xl bg-accent hover:bg-accent-hover transition-colors py-3.5 text-center text-base font-medium text-white disabled:opacity-40"
+          >
+            {cargando ? 'Entrando...' : 'Iniciar sesión'}
+          </button>
+
+          <p className="text-center text-sm text-muted">
+            ¿No tenés cuenta?{' '}
+            <Link href="/registro" className="text-accent underline">
+              Registrate
+            </Link>
+          </p>
+        </form>
       </div>
-
-      <form onSubmit={handleSubmit} className="w-full max-w-xs flex flex-col gap-4">
-        {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
-
-        <div>
-          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Email</label>
-          <input
-            required
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
-          />
-        </div>
-
-        <div>
-          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Contraseña</label>
-          <input
-            required
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
-          />
-        </div>
-
-        <Turnstile onVerify={setCaptchaToken} />
-
-        <button
-          disabled={cargando || (REQUIERE_CAPTCHA && !captchaToken)}
-          className="mt-2 w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
-        >
-          {cargando ? 'Entrando...' : 'Iniciar sesión'}
-        </button>
-
-        <p className="text-center text-sm text-muted dark:text-dark-text-secondary">
-          ¿No tenés cuenta?{' '}
-          <Link href="/registro" className="text-accent dark:text-dark-accent underline">
-            Registrate
-          </Link>
-        </p>
-      </form>
     </main>
   );
 }
