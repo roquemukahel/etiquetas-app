@@ -10,6 +10,7 @@ import { getActor, useActor } from '../lib/actor';
 import { tienePermiso } from '../lib/permisos';
 import { leerCSV, valorDe, descargarCSV, insertarEnTandas } from '../lib/csv';
 import { obtenerTodasLasFilas } from '../lib/db';
+import { sanitizarDecimal } from '../lib/numeros';
 import MiniaturaDispositivo from '../MiniaturaDispositivo';
 
 // Cuando el CSV viene de otro sistema y no separó el IMEI, la batería ni la
@@ -387,7 +388,19 @@ export default function Stock() {
     const unidadesAcc = productos.reduce((a, p) => a + p.cantidad, 0);
     const costo = costoCel + costoAcc;
     const venta = ventaCel + ventaAcc;
-    return { costo, venta, ganancia: venta - costo, unidadesCel: enStock.length, unidadesAcc };
+    // Ganancia SOLO sobre los ítems que tienen costo cargado. Si se hiciera
+    // venta − costo, cada ítem con precio pero sin costo sumaría su precio
+    // entero como "ganancia" y quedaría inflada.
+    const gananciaCel = enStock
+      .filter((d) => d.costo != null)
+      .reduce((a, d) => a + ((d.precio || 0) - (d.costo || 0)), 0);
+    const gananciaAcc = productos
+      .filter((p) => p.costo != null)
+      .reduce((a, p) => a + ((p.precio || 0) - (p.costo || 0)) * p.cantidad, 0);
+    const ganancia = gananciaCel + gananciaAcc;
+    // Cuántos ítems no tienen costo cargado (no cuentan en capital ni ganancia).
+    const sinCosto = enStock.filter((d) => d.costo == null).length + productos.filter((p) => p.costo == null && p.cantidad > 0).length;
+    return { costo, venta, ganancia, unidadesCel: enStock.length, unidadesAcc, sinCosto };
   }, [dispositivos, productos]);
 
   const agregarProducto = async () => {
@@ -495,7 +508,8 @@ export default function Stock() {
           </div>
           <p className="text-[11px] text-muted dark:text-dark-text-secondary mt-2 text-center">
             {capital.unidadesCel} celular{capital.unidadesCel === 1 ? '' : 'es'} en stock · {capital.unidadesAcc} accesorio
-            {capital.unidadesAcc === 1 ? '' : 's'}. El costo cuenta solo los equipos/accesorios que tengan costo cargado.
+            {capital.unidadesAcc === 1 ? '' : 's'}. El capital y la ganancia cuentan solo los ítems con costo cargado
+            {capital.sinCosto > 0 ? ` (${capital.sinCosto} sin costo quedan afuera)` : ''}.
           </p>
         </div>
       )}
@@ -802,14 +816,14 @@ export default function Stock() {
               <div className="flex gap-2">
                 <input
                   value={costoProducto}
-                  onChange={(e) => setCostoProducto(e.target.value)}
+                  onChange={(e) => setCostoProducto(sanitizarDecimal(e.target.value))}
                   placeholder="Costo (lo que te costó)"
                   inputMode="decimal"
                   className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
                 />
                 <input
                   value={precioProducto}
-                  onChange={(e) => setPrecioProducto(e.target.value)}
+                  onChange={(e) => setPrecioProducto(sanitizarDecimal(e.target.value))}
                   placeholder="Precio (venta)"
                   inputMode="decimal"
                   className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
@@ -873,7 +887,7 @@ export default function Stock() {
                         Costo
                         <input
                           value={valorCosto}
-                          onChange={(e) => setValorCosto(e.target.value)}
+                          onChange={(e) => setValorCosto(sanitizarDecimal(e.target.value))}
                           inputMode="decimal"
                           placeholder="Costo"
                           className="w-20 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-2 py-1 text-sm"
@@ -883,7 +897,7 @@ export default function Stock() {
                         Precio
                         <input
                           value={valorPrecio}
-                          onChange={(e) => setValorPrecio(e.target.value)}
+                          onChange={(e) => setValorPrecio(sanitizarDecimal(e.target.value))}
                           inputMode="decimal"
                           placeholder="Precio"
                           className="w-20 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-2 py-1 text-sm"

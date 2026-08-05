@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
+import { sanitizarDecimal } from '../../lib/numeros';
 import SelectorColor from '../../SelectorColor';
 import { hexColorDe } from '../../lib/coloresIphone';
 
@@ -443,7 +444,7 @@ export default function DetalleProveedor() {
           <div className="flex flex-col gap-2 border-t border-border dark:border-dark-border pt-3">
             <input
               value={montoCta}
-              onChange={(e) => setMontoCta(e.target.value)}
+              onChange={(e) => setMontoCta(sanitizarDecimal(e.target.value))}
               inputMode="decimal"
               autoFocus
               placeholder={accionCta === 'pago' ? 'Monto que le pagás' : 'Monto que le quedás debiendo'}
