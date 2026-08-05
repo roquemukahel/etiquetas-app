@@ -1,19 +1,12 @@
-'use client';
+import Dashboard from './Dashboard';
 
-import dynamic from 'next/dynamic';
-
-// El dashboard de Analítica es 100% cliente (trae los datos con la sesión del
-// usuario, no en el build). Lo cargamos con ssr:false para que Next NO intente
-// pre-generarlo en el build — si lo hiciera, el render sin datos/sesión cuelga
-// la generación estática y tumba todo el build (timeout de 60s).
-const Dashboard = dynamic(() => import('./Dashboard'), {
-  ssr: false,
-  loading: () => (
-    <main className="flex min-h-screen items-center justify-center">
-      <p className="text-sm text-muted dark:text-dark-text-secondary">Abriendo analítica…</p>
-    </main>
-  ),
-});
+// El dashboard de Analítica depende 100% de la sesión y de datos que solo
+// existen en el navegador. Marcamos la ruta como dinámica para que Next NO la
+// pre-genere en el build (la generación estática se colgaba, timeout de 60s).
+// A diferencia de next/dynamic({ssr:false}), acá el dashboard viaja en el
+// bundle normal de la ruta (no como chunk perezoso aparte), así no hay un
+// "chunk" que pueda quedar colgado al cargar.
+export const dynamic = 'force-dynamic';
 
 export default function EstadisticasPage() {
   return <Dashboard />;
