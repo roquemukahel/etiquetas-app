@@ -11,6 +11,7 @@ import { getActor, useActor, MENSAJE_ACTOR_REQUERIDO } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import { armarLinkWhatsApp, mensajeSeguimientoServicio, mensajeListoServicio, mensajePresupuesto, mensajeEsperandoRepuesto } from '../../lib/whatsapp';
 import { codigoLlamada } from '../../lib/paises';
+import { simboloMoneda, MONEDAS } from '../../lib/monedas';
 import {
   ESTADOS_REPARACION,
   PRIORIDADES,
@@ -75,6 +76,7 @@ type Reparacion = {
   repuestos_utilizados: string | null;
   resultado_final: string | null;
   importe_total: number | null;
+  moneda: string | null;
   forma_pago: string | null;
   garantia_dias: number | null;
   fecha_entrega: string | null;
@@ -116,6 +118,8 @@ export default function FichaReparacion() {
   const [codigoVisible, setCodigoVisible] = useState(false);
   const [notaTexto, setNotaTexto] = useState('');
   const [codigoPais, setCodigoPais] = useState('54');
+  const [monedasNegocio, setMonedasNegocio] = useState<string[]>([]);
+  const [monedaPrincipal, setMonedaPrincipal] = useState('ARS');
   const [avisoWhatsApp, setAvisoWhatsApp] = useState<{ link: string; nombre: string } | null>(null);
 
   const [f, setFm] = useState<Record<string, any>>({});
@@ -174,8 +178,16 @@ export default function FichaReparacion() {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) return;
-      const { data: perfil } = await supabase.from('perfiles').select('negocios ( pais )').eq('id', user.id).single();
-      setCodigoPais(codigoLlamada((perfil as any)?.negocios?.pais));
+      const { data: perfil } = await supabase
+        .from('perfiles')
+        .select('negocios ( pais, moneda, monedas_habilitadas )')
+        .eq('id', user.id)
+        .single();
+      const neg = (perfil as any)?.negocios;
+      setCodigoPais(codigoLlamada(neg?.pais));
+      const habilitadas: string[] = neg?.monedas_habilitadas?.length ? neg.monedas_habilitadas : [neg?.moneda || 'ARS'];
+      setMonedasNegocio(habilitadas);
+      setMonedaPrincipal(neg?.moneda || habilitadas[0]);
     })();
   }, [id]);
 
@@ -223,6 +235,7 @@ export default function FichaReparacion() {
       repuestos_utilizados: r.repuestos_utilizados ?? '',
       resultado_final: r.resultado_final ?? '',
       importe_total: r.importe_total != null ? String(r.importe_total) : '',
+      moneda: r.moneda ?? '',
       forma_pago: r.forma_pago ?? '',
       garantia_dias: r.garantia_dias != null ? String(r.garantia_dias) : '',
     });
@@ -287,6 +300,7 @@ export default function FichaReparacion() {
       repuestos_utilizados: f.repuestos_utilizados.trim() || null,
       resultado_final: f.resultado_final.trim() || null,
       importe_total: f.importe_total ? Number(f.importe_total) : null,
+      moneda: f.moneda || null,
       forma_pago: f.forma_pago || null,
       garantia_dias: f.garantia_dias ? Number(f.garantia_dias) : null,
     };
@@ -393,7 +407,7 @@ export default function FichaReparacion() {
     let mensaje = '';
     if (tipo === 'recibido') mensaje = mensajeSeguimientoServicio(nombre, modelo, url);
     if (tipo === 'presupuesto') {
-      const monto = `$${((r.presupuesto_mano_obra || 0) + (r.presupuesto_repuestos || 0)).toLocaleString('es-AR')}`;
+      const monto = `${simboloMoneda(r.moneda || monedaPrincipal)}${((r.presupuesto_mano_obra || 0) + (r.presupuesto_repuestos || 0)).toLocaleString('es-AR')}`;
       mensaje = mensajePresupuesto(nombre, modelo, monto, url);
     }
     if (tipo === 'repuesto') mensaje = mensajeEsperandoRepuesto(nombre, modelo, url);
@@ -421,7 +435,7 @@ export default function FichaReparacion() {
       // lista) — se actualiza en vez de crear una segunda orden duplicada.
       const { error: updateError } = await supabase
         .from('ordenes')
-        .update({ total, forma_pago: r.forma_pago || 'Efectivo', nota: notaCondicion })
+        .update({ total, forma_pago: r.forma_pago || 'Efectivo', moneda: r.moneda || monedaPrincipal, nota: notaCondicion })
         .eq('id', ordenId);
       if (updateError) {
         setError('No pudimos actualizar la orden: ' + updateError.message);
@@ -456,6 +470,7 @@ export default function FichaReparacion() {
         .insert({
           cliente_id: r.cliente_id,
           forma_pago: r.forma_pago || 'Efectivo',
+          moneda: r.moneda || monedaPrincipal,
           total,
           estado: 'pendiente',
           nota: notaCondicion,
@@ -862,9 +877,28 @@ export default function FichaReparacion() {
               </div>
             </div>
             <Campo label="Trabajo recomendado" valor={f.trabajo_recomendado} onChange={(v) => setFm((p) => ({ ...p, trabajo_recomendado: v }))} textarea />
+            {monedasNegocio.length > 1 && (
+              <div>
+                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Moneda del cobro</label>
+                <div className="flex gap-2">
+                  {monedasNegocio.map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setFm((p) => ({ ...p, moneda: m }))}
+                      className={`flex-1 rounded-lg py-2 text-xs font-medium ${
+                        (f.moneda || monedaPrincipal) === m ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
+                      }`}
+                    >
+                      {simboloMoneda(m)} {MONEDAS.find((x) => x.codigo === m)?.nombre ?? m}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="flex gap-2">
-              <Campo label="Mano de obra ($)" valor={f.presupuesto_mano_obra} onChange={(v) => setFm((p) => ({ ...p, presupuesto_mano_obra: v }))} numerico />
-              <Campo label="Repuestos ($)" valor={f.presupuesto_repuestos} onChange={(v) => setFm((p) => ({ ...p, presupuesto_repuestos: v }))} numerico />
+              <Campo label={`Mano de obra (${simboloMoneda(f.moneda || monedaPrincipal)})`} valor={f.presupuesto_mano_obra} onChange={(v) => setFm((p) => ({ ...p, presupuesto_mano_obra: v }))} numerico />
+              <Campo label={`Repuestos (${simboloMoneda(f.moneda || monedaPrincipal)})`} valor={f.presupuesto_repuestos} onChange={(v) => setFm((p) => ({ ...p, presupuesto_repuestos: v }))} numerico />
             </div>
             <div>
               <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Fecha estimada de entrega</label>
@@ -893,11 +927,14 @@ export default function FichaReparacion() {
             )}
             {(r.presupuesto_mano_obra != null || r.presupuesto_repuestos != null) && (
               <p>
-                <span className="text-muted dark:text-dark-text-secondary">Presupuesto: </span>$
+                <span className="text-muted dark:text-dark-text-secondary">Presupuesto: </span>
+                {simboloMoneda(r.moneda || monedaPrincipal)}
                 {((r.presupuesto_mano_obra || 0) + (r.presupuesto_repuestos || 0)).toLocaleString('es-AR')}
                 {' '}
                 <span className="text-xs text-muted dark:text-dark-text-secondary">
-                  (mano de obra ${(r.presupuesto_mano_obra || 0).toLocaleString('es-AR')} + repuestos $
+                  (mano de obra {simboloMoneda(r.moneda || monedaPrincipal)}
+                  {(r.presupuesto_mano_obra || 0).toLocaleString('es-AR')} + repuestos{' '}
+                  {simboloMoneda(r.moneda || monedaPrincipal)}
                   {(r.presupuesto_repuestos || 0).toLocaleString('es-AR')})
                 </span>
               </p>
@@ -937,7 +974,7 @@ export default function FichaReparacion() {
             </div>
             <Campo label="Repuestos utilizados" valor={f.repuestos_utilizados} onChange={(v) => setFm((p) => ({ ...p, repuestos_utilizados: v }))} textarea />
             <Campo label="Resultado final / pruebas" valor={f.resultado_final} onChange={(v) => setFm((p) => ({ ...p, resultado_final: v }))} textarea />
-            <Campo label="Importe total ($)" valor={f.importe_total} onChange={(v) => setFm((p) => ({ ...p, importe_total: v }))} numerico />
+            <Campo label={`Importe total (${simboloMoneda(f.moneda || monedaPrincipal)})`} valor={f.importe_total} onChange={(v) => setFm((p) => ({ ...p, importe_total: v }))} numerico />
             <div>
               <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Forma de pago</label>
               <div className="flex gap-2">
@@ -978,7 +1015,9 @@ export default function FichaReparacion() {
             )}
             {r.importe_total != null && (
               <p>
-                <span className="text-muted dark:text-dark-text-secondary">Importe total: </span>${r.importe_total.toLocaleString('es-AR')}
+                <span className="text-muted dark:text-dark-text-secondary">Importe total: </span>
+                {simboloMoneda(r.moneda || monedaPrincipal)}
+                {r.importe_total.toLocaleString('es-AR')}
               </p>
             )}
             {r.forma_pago && (
