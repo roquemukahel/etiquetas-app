@@ -16,6 +16,38 @@ html, body {
   }
 }
 
+/* ============================================================
+   Modo Qovento: un modo propio (aparte de claro/oscuro) con el fondo
+   azulado de marca en TODA la app. Usa el estilo oscuro como base
+   (la clase `dark` también se activa, ver app/lib/theme.ts) y esta
+   clase `qovento` agrega el fondo. El fondo va en un ::before fijo
+   detrás de todo (z-index:-1) — más suave que background-attachment
+   fixed y sin los saltos de iOS. Las tarjetas (fondo oscuro) quedan
+   encima; el menú lateral se vuelve transparente para que el fondo
+   sea continuo.
+   ============================================================ */
+html.qovento body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-image: url('/fondo-qovento.webp');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  pointer-events: none;
+}
+
+html.qovento aside {
+  background-color: transparent !important;
+}
+
+@media print {
+  html.qovento body::before {
+    display: none !important;
+  }
+}
+
 @keyframes fade-in-up {
   from {
     opacity: 0;
