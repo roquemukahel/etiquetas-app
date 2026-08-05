@@ -200,7 +200,7 @@ export default function BuscadorUniversal() {
           setAbierto(true);
         }}
         placeholder="Buscar cliente, teléfono, IMEI, orden o reparación…"
-        className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-2xl pl-11 pr-4 py-4 text-[15px] shadow-card focus:outline-none focus:ring-2 focus:ring-accent/40 dark:focus:ring-dark-accent/40 transition-shadow"
+        className="qv-search w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-2xl pl-11 pr-4 py-4 text-[15px] shadow-card focus:outline-none focus:ring-2 focus:ring-accent/40 dark:focus:ring-dark-accent/40 transition-shadow"
       />
 
       {abierto && activo && (

@@ -29,17 +29,81 @@ html, body {
 html.qovento body::before {
   content: '';
   position: fixed;
-  inset: 0;
+  /* Arranca debajo del cartel superior (~52px) y alineado arriba, para que
+     el logo de la imagen (arriba a la derecha) no quede tapado por la barra. */
+  inset: 52px 0 0 0;
   z-index: -1;
   background-image: url('/fondo-qovento.webp');
   background-size: cover;
-  background-position: center;
+  background-position: center top;
   background-repeat: no-repeat;
   pointer-events: none;
 }
 
+/* Menú lateral en modo Qovento: vidrio azul oscuro (semi-transparente, con
+   desenfoque) — más legible que totalmente transparente, y con una
+   separación azulada respecto del contenido. */
 html.qovento aside {
-  background-color: transparent !important;
+  background-color: rgba(9, 20, 43, 0.72) !important;
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  border-right-color: rgba(96, 165, 250, 0.18) !important;
+}
+
+/* ---- Tarjetas de vidrio azul del dashboard (solo modo Qovento) ----
+   Se activan con la clase-marcador .qv-card en cada tarjeta; en modo
+   claro/oscuro la clase no hace nada (no hay regla), así que esos modos
+   quedan igual que siempre. */
+html.qovento .qv-card {
+  background: linear-gradient(145deg, rgba(18, 35, 70, 0.84) 0%, rgba(10, 22, 48, 0.9) 100%);
+  border: 1px solid rgba(96, 165, 250, 0.18);
+  border-radius: 16px;
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+html.qovento .qv-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(96, 165, 250, 0.42);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.3), 0 0 24px rgba(59, 130, 246, 0.08);
+}
+
+/* La tarjeta de resumen financiero: un poco más de protagonismo, con una
+   iluminación radial muy tenue en la esquina superior derecha. */
+html.qovento .qv-financial {
+  background:
+    radial-gradient(circle at 90% 10%, rgba(59, 130, 246, 0.16), transparent 38%),
+    linear-gradient(145deg, rgba(19, 38, 77, 0.92), rgba(9, 20, 44, 0.94));
+  border: 1px solid rgba(96, 165, 250, 0.24);
+}
+
+html.qovento .qv-financial-value {
+  color: #ffffff;
+  text-shadow: 0 0 24px rgba(59, 130, 246, 0.16);
+}
+
+/* Buscador global: se diferencia apenas de las tarjetas y reacciona al foco. */
+html.qovento .qv-search {
+  background: rgba(9, 20, 43, 0.78);
+  border-color: rgba(96, 165, 250, 0.2);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 8px 24px rgba(0, 0, 0, 0.16);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+html.qovento .qv-search:focus {
+  border-color: rgba(59, 130, 246, 0.65);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12), 0 12px 28px rgba(0, 0, 0, 0.2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.qovento .qv-card,
+  html.qovento .qv-card:hover {
+    transition: none;
+    transform: none;
+  }
 }
 
 @media print {
