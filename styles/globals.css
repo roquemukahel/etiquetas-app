@@ -50,20 +50,27 @@ html.qovento aside {
   border-right-color: rgba(96, 165, 250, 0.18) !important;
 }
 
-/* ---- Tarjetas de vidrio azul del dashboard (solo modo Qovento) ----
-   Se activan con la clase-marcador .qv-card en cada tarjeta; en modo
-   claro/oscuro la clase no hace nada (no hay regla), así que esos modos
-   quedan igual que siempre. */
+/* ---- Tarjetas de vidrio azul en TODA la app (solo modo Qovento) ----
+   En este sistema, una "tarjeta" es un contenedor con sombra de tarjeta
+   (shadow-card / shadow-elevated) y fondo de superficie (dark:bg-dark-
+   surface). Con esta regla, TODAS las tarjetas de todas las pantallas
+   toman el vidrio azul automáticamente, sin marcarlas una por una. El
+   :is(...) limita a contenedores (no toca inputs/campos ni el buscador).
+   La clase .qv-card sigue sirviendo como marca manual si hiciera falta.
+   En modo claro/oscuro nada de esto aplica (todo va bajo html.qovento). */
+html.qovento :is(div, a, li, article, section, button).shadow-card.dark\:bg-dark-surface,
+html.qovento :is(div, a, li, article, section, button).shadow-elevated.dark\:bg-dark-surface,
 html.qovento .qv-card {
-  background: linear-gradient(145deg, rgba(18, 35, 70, 0.84) 0%, rgba(10, 22, 48, 0.9) 100%);
+  background: linear-gradient(145deg, rgba(18, 35, 70, 0.86) 0%, rgba(10, 22, 48, 0.92) 100%);
   border: 1px solid rgba(96, 165, 250, 0.18);
-  border-radius: 16px;
-  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  -webkit-backdrop-filter: blur(14px);
-  backdrop-filter: blur(14px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.04);
   transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
+/* Las tarjetas clickeables (links/botones) se elevan apenas al pasar el mouse. */
+html.qovento a.shadow-card.dark\:bg-dark-surface:hover,
+html.qovento a.shadow-elevated.dark\:bg-dark-surface:hover,
+html.qovento button.shadow-card.dark\:bg-dark-surface:hover,
 html.qovento .qv-card:hover {
   transform: translateY(-2px);
   border-color: rgba(96, 165, 250, 0.42);
