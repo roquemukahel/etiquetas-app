@@ -65,7 +65,7 @@ export default function Login() {
     // oculta y queda un degradado azul de marca, con la tarjeta centrada.
     // min-h-screen (no h-screen) permite scroll vertical si no entra.
     <main
-      className="min-h-screen w-full flex items-center justify-center lg:justify-end overflow-x-hidden bg-cover bg-center bg-no-repeat bg-gradient-to-br from-[#0b2a5e] via-[#103a78] to-[#0a1c40] lg:bg-[url('/fondo-login.png')] px-4 sm:px-6 lg:pr-[7vw] py-10"
+      className="min-h-screen w-full flex items-center justify-center lg:justify-end overflow-x-hidden bg-cover bg-center bg-no-repeat bg-gradient-to-br from-[#0b2a5e] via-[#103a78] to-[#0a1c40] lg:bg-[url('/fondo-login.webp')] px-4 sm:px-6 lg:pr-[7vw] py-10"
     >
       <div className="w-full max-w-[400px] bg-white rounded-2xl shadow-elevated p-8 sm:p-9 flex flex-col gap-5">
         <div className="flex flex-col items-center gap-1">
