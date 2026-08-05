@@ -495,15 +495,24 @@ export default function Stock() {
           <div className="grid grid-cols-3 gap-2 text-center">
             <div>
               <p className="text-lg font-display font-semibold">${Math.round(capital.costo).toLocaleString('es-AR')}</p>
-              <p className="text-[11px] text-muted dark:text-dark-text-secondary">Invertido (a costo)</p>
+              <p className="text-[11px] text-muted dark:text-dark-text-secondary inline-flex items-center justify-center">
+                Invertido (a costo)
+                <InfoTip texto="Lo que te costó todo el stock que tenés hoy sin vender (celulares + accesorios). Cuando vendés algo, sale del stock y este número baja: esa plata pasó a ser tu venta." />
+              </p>
             </div>
             <div>
               <p className="text-lg font-display font-semibold">${Math.round(capital.venta).toLocaleString('es-AR')}</p>
-              <p className="text-[11px] text-muted dark:text-dark-text-secondary">Valor de venta</p>
+              <p className="text-[11px] text-muted dark:text-dark-text-secondary inline-flex items-center justify-center">
+                Valor de venta
+                <InfoTip texto="A cuánto venderías todo el stock actual si lo vendieras a tus precios de lista." />
+              </p>
             </div>
             <div>
               <p className="text-lg font-display font-semibold text-good">${Math.round(capital.ganancia).toLocaleString('es-AR')}</p>
-              <p className="text-[11px] text-muted dark:text-dark-text-secondary">Ganancia potencial</p>
+              <p className="text-[11px] text-muted dark:text-dark-text-secondary inline-flex items-center justify-center">
+                Ganancia potencial
+                <InfoTip texto="Lo que ganarías si vendés todo el stock actual a precio de lista (valor de venta − costo). Cuenta solo los ítems que tengan costo cargado." />
+              </p>
             </div>
           </div>
           <p className="text-[11px] text-muted dark:text-dark-text-secondary mt-2 text-center">
@@ -932,5 +941,27 @@ export default function Stock() {
         </>
       )}
     </main>
+  );
+}
+
+// Leyenda al pasar el mouse (o al enfocar con teclado) sobre las métricas del
+// capital en stock. Native title de fallback + burbuja propia para que se vea
+// prolijo y con buen contraste en claro/oscuro.
+function InfoTip({ texto }: { texto: string }) {
+  return (
+    <span className="relative inline-flex group align-middle">
+      <span
+        tabIndex={0}
+        role="img"
+        aria-label={texto}
+        title={texto}
+        className="ml-1 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border border-muted/50 dark:border-dark-text-secondary/50 text-[8px] font-semibold leading-none text-muted dark:text-dark-text-secondary cursor-help"
+      >
+        i
+      </span>
+      <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-1.5 w-52 -translate-x-1/2 rounded-lg bg-ink dark:bg-dark-surface-elevated px-3 py-2 text-[11px] font-normal normal-case leading-snug text-white text-left opacity-0 shadow-elevated transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
+        {texto}
+      </span>
+    </span>
   );
 }
