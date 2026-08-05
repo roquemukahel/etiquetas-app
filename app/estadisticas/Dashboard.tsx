@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../lib/supabase/client';
 import { simboloMoneda } from '../lib/monedas';
-import { obtenerTodasLasFilas } from '../lib/db';
 import { useActor } from '../lib/actor';
 import { tienePermiso } from '../lib/permisos';
 import { medioLabel } from '../lib/cuentaCorriente';
@@ -88,7 +87,9 @@ export default function Estadisticas() {
   const [nombreNegocio, setNombreNegocio] = useState('');
   const [vendedores, setVendedores] = useState<Persona[]>([]);
   const [tecnicos, setTecnicos] = useState<Persona[]>([]);
-  const [clientes, setClientes] = useState<Cliente[]>([]);
+  // Solo los nombres de los clientes que aparecen en órdenes/reparaciones del
+  // período (no los 6000+ clientes enteros), para no saturar la carga.
+  const [nombresClientes, setNombresClientes] = useState<Map<string, string>>(new Map());
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [ordenes, setOrdenes] = useState<OrdenR[]>([]);
   const [ordenItems, setOrdenItems] = useState<(ItemR & { created_at: string })[]>([]);
@@ -139,7 +140,6 @@ export default function Estadisticas() {
         { data: perfil },
         { data: vend },
         { data: tec },
-        cli,
         { data: prov },
         { data: ord },
         { data: items },
@@ -154,7 +154,6 @@ export default function Estadisticas() {
         supabase.from('perfiles').select('negocios ( nombre, moneda )').eq('id', user.id).single(),
         supabase.from('vendedores').select('id, nombre, foto_url').order('nombre'),
         supabase.from('tecnicos').select('id, nombre, foto_url').order('nombre'),
-        obtenerTodasLasFilas<Cliente>(supabase, 'clientes', 'id, nombre, apellido', [{ columna: 'nombre' }]),
         supabase.from('proveedores').select('id, nombre').order('nombre'),
         supabase
           .from('ordenes')
@@ -180,7 +179,6 @@ export default function Estadisticas() {
       setNombreNegocio(negocio?.nombre ?? '');
       setVendedores(vend ?? []);
       setTecnicos(tec ?? []);
-      setClientes(cli);
       setProveedores((prov as Proveedor[]) ?? []);
       setOrdenes((ord as OrdenR[]) ?? []);
       setOrdenItems((items as (ItemR & { created_at: string })[]) ?? []);
@@ -193,6 +191,24 @@ export default function Estadisticas() {
       const saldos = (saldosData as { saldo: number; vencido: number }[]) ?? [];
       setPorCobrar(saldos.reduce((acc, s) => acc + Math.max(0, Number(s.saldo) || 0), 0));
       setVencidoTotal(saldos.reduce((acc, s) => acc + Math.max(0, Number(s.vencido) || 0), 0));
+
+      // Nombres SOLO de los clientes que aparecen en órdenes/servicio (no los
+      // miles). Un pedido acotado por ids en vez de traer toda la tabla.
+      const idsClientes = Array.from(
+        new Set(
+          [
+            ...((ord as OrdenR[]) ?? []).map((o) => o.cliente_id),
+            ...((ing as IngresoServicio[]) ?? []).map((i) => i.cliente_id),
+          ].filter(Boolean) as string[]
+        )
+      );
+      const nombres = new Map<string, string>();
+      for (let i = 0; i < idsClientes.length; i += 300) {
+        const { data: cs } = await supabase.from('clientes').select('id, nombre, apellido').in('id', idsClientes.slice(i, i + 300));
+        for (const c of (cs as Cliente[] | null) ?? []) nombres.set(c.id, `${c.nombre} ${c.apellido || ''}`.trim());
+      }
+      setNombresClientes(nombres);
+
       setActualizado(new Date());
       } catch (e) {
         console.error('Analítica: no se pudieron cargar los datos', e);
@@ -264,8 +280,7 @@ export default function Estadisticas() {
 
   const nombreClienteDe = (id: string | null) => {
     if (!id) return 'Sin cliente';
-    const c = clientes.find((c) => c.id === id);
-    return c ? `${c.nombre} ${c.apellido || ''}`.trim() : 'Cliente eliminado';
+    return nombresClientes.get(id) ?? 'Cliente eliminado';
   };
 
   const rankingCompradores: Dato[] = useMemo(() => {
@@ -279,7 +294,7 @@ export default function Estadisticas() {
       .filter((d) => d.valor > 0)
       .sort((a, b) => b.valor - a.valor)
       .slice(0, 10);
-  }, [ordenesPeriodo, clientes]);
+  }, [ordenesPeriodo, nombresClientes]);
 
   const rankingClientesServicio: Dato[] = useMemo(() => {
     const mapa = new Map<string, number>();
@@ -291,7 +306,7 @@ export default function Estadisticas() {
       .map(([id, valor]) => ({ nombre: nombreClienteDe(id), valor }))
       .sort((a, b) => b.valor - a.valor)
       .slice(0, 10);
-  }, [ingresosServicio, clientes, inicio]);
+  }, [ingresosServicio, nombresClientes, inicio]);
 
   const cajaPorMedio: Dato[] = useMemo(() => {
     const mapa = new Map<string, number>();
