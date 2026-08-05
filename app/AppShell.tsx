@@ -79,6 +79,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   const esActivo = (href: string) => (href === '/' ? pathname === '/' : (pathname?.startsWith(href) ?? false));
   const mostrarAvisoPrueba = diasPrueba !== null && !pathname?.startsWith('/configuracion/suscripcion');
+  // En Estadísticas, modo oscuro, el fondo de imagen tiene que cubrir también
+  // el menú lateral: lo dejamos transparente para que la imagen (que va por
+  // detrás, ver app/estadisticas) se vea a través. En modo claro el menú
+  // sigue blanco normal.
+  const menuTransparente = pathname === '/estadisticas';
 
   return (
     <div>
@@ -103,7 +108,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
          prueba (otro sticky, justo debajo), se suma su alto para que no se
          tapen entre sí. */}
       <aside
-        className={`hidden lg:flex lg:flex-col lg:fixed lg:w-64 ${mostrarAvisoPrueba ? 'lg:top-[88px]' : 'lg:top-[52px]'} lg:bottom-0 lg:left-0 lg:z-20 lg:border-r lg:border-border dark:lg:border-dark-border lg:bg-white dark:lg:bg-dark-surface`}
+        className={`hidden lg:flex lg:flex-col lg:fixed lg:w-64 ${mostrarAvisoPrueba ? 'lg:top-[88px]' : 'lg:top-[52px]'} lg:bottom-0 lg:left-0 lg:z-20 lg:border-r lg:border-border dark:lg:border-dark-border lg:bg-white ${menuTransparente ? 'dark:lg:bg-transparent' : 'dark:lg:bg-dark-surface'}`}
       >
 
         <div className="flex items-center gap-2.5 px-5 py-5 border-b border-border dark:border-dark-border">
