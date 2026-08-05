@@ -8,6 +8,7 @@ import { obtenerTodasLasFilas } from '../lib/db';
 import { registrarAuditoria } from '../lib/auditoria';
 import { getActor, useActor } from '../lib/actor';
 import { tienePermiso } from '../lib/permisos';
+import { simboloMoneda } from '../lib/monedas';
 
 type Cliente = {
   id: string;
@@ -35,6 +36,10 @@ export default function Clientes() {
   const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
   const [eliminandoSeleccion, setEliminandoSeleccion] = useState(false);
 
+  const [saldos, setSaldos] = useState<Map<string, { saldo: number; vencido: number }>>(new Map());
+  const [monedaCodigo, setMonedaCodigo] = useState('ARS');
+  const moneda = useMemo(() => simboloMoneda(monedaCodigo), [monedaCodigo]);
+
   const cargar = async () => {
     const data = await obtenerTodasLasFilas<Cliente>(supabase, 'clientes', '*', [{ columna: 'nombre' }]);
     setClientes(data);
@@ -43,6 +48,28 @@ export default function Clientes() {
 
   useEffect(() => {
     cargar();
+  }, []);
+
+  // Saldos de cuenta corriente de todos los clientes en un solo llamado. Si
+  // el SQL todavía no se corrió, la función no existe y esto falla en
+  // silencio: el mapa queda vacío y simplemente no se muestran saldos.
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.rpc('saldos_cuenta_corriente');
+      const m = new Map<string, { saldo: number; vencido: number }>();
+      for (const r of (data as { cliente_id: string; saldo: number; vencido: number }[]) ?? []) {
+        m.set(r.cliente_id, { saldo: Number(r.saldo) || 0, vencido: Number(r.vencido) || 0 });
+      }
+      setSaldos(m);
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) {
+        const { data: perfil } = await supabase.from('perfiles').select('negocios ( moneda )').eq('id', user.id).single();
+        const cod = (perfil as any)?.negocios?.moneda;
+        if (cod) setMonedaCodigo(cod);
+      }
+    })();
   }, []);
 
   const exportar = () => {
@@ -237,6 +264,20 @@ export default function Clientes() {
       <div className="flex flex-col gap-2">
         {filtrados.map((c) => {
           const seleccionado = seleccionados.has(c.id);
+          const s = saldos.get(c.id);
+          const saldoChip =
+            s && Math.abs(s.saldo) > 0.009 ? (
+              <span
+                className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${
+                  s.saldo > 0 ? (s.vencido > 0 ? 'bg-bad/10 text-bad' : 'bg-warn/10 text-warn') : 'bg-good/10 text-good'
+                }`}
+                title={s.saldo > 0 ? 'Te debe' : 'Saldo a favor'}
+              >
+                {s.saldo < 0 ? '+' : ''}
+                {moneda}
+                {Math.round(Math.abs(s.saldo)).toLocaleString('es-AR')}
+              </span>
+            ) : null;
           const clases = `rounded-xl border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex items-center gap-3 w-full text-left ${
             seleccionado ? 'ring-2 ring-accent dark:ring-dark-accent border-transparent' : 'border-border dark:border-dark-border'
           }`;
@@ -260,7 +301,10 @@ export default function Clientes() {
                   </p>
                   <p className="text-xs text-muted dark:text-dark-text-secondary truncate">{c.telefono || c.email || 'sin contacto'}</p>
                 </div>
-                {c.dni && <p className="text-xs text-muted dark:text-dark-text-secondary font-mono shrink-0">{c.dni}</p>}
+                <div className="flex items-center gap-2 shrink-0">
+                  {saldoChip}
+                  {c.dni && <p className="text-xs text-muted dark:text-dark-text-secondary font-mono">{c.dni}</p>}
+                </div>
               </div>
             </>
           );

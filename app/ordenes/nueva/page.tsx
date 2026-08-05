@@ -10,6 +10,13 @@ import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../../lib/carpet
 import { simboloMoneda } from '../../lib/monedas';
 import { getActor, useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
+import {
+  MEDIOS_PAGO,
+  CUENTA_CORRIENTE,
+  medioLabel,
+  calcularSaldo,
+  vencimientoDesdeHoy,
+} from '../../lib/cuentaCorriente';
 import { ITEMS_CHECKLIST_INGRESO, generarTextoCondicionIngreso } from '../../lib/reparaciones';
 import MiniaturaDispositivo from '../../MiniaturaDispositivo';
 import CheckTri from '../../CheckTri';
@@ -30,6 +37,10 @@ type Cliente = {
   nombre: string;
   apellido: string | null;
   telefono: string | null;
+  cta_cte_habilitada?: boolean;
+  limite_credito?: number | null;
+  plazo_dias?: number | null;
+  suspendido?: boolean;
 };
 
 type Vendedor = { id: string; nombre: string };
@@ -57,7 +68,6 @@ type ItemCarrito = {
 };
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
-const FORMAS_PAGO = ['Efectivo', 'Transferencia', 'Tarjeta'];
 const ESTADOS_ORDEN = ['pendiente', 'pagado', 'entregado'];
 
 function idTemporal() {
@@ -123,7 +133,13 @@ export default function NuevaOrden() {
   // --- confirmar ---
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [vendedorId, setVendedorId] = useState('');
-  const [formaPago, setFormaPago] = useState('Efectivo');
+  // Cobro. En modo simple, un solo medio cubre todo el total. En modo
+  // mixto, se reparte el total en varias líneas (medio + monto), y una de
+  // ellas puede ser "Cuenta corriente" (que en vez de plata genera deuda).
+  const [medioSimple, setMedioSimple] = useState<string>('efectivo');
+  const [pagoMixto, setPagoMixto] = useState(false);
+  const [lineasPago, setLineasPago] = useState<{ tempId: string; medio: string; monto: string }[]>([]);
+  const [saldoCliente, setSaldoCliente] = useState(0);
   const [anticipo, setAnticipo] = useState('');
   const [impuesto, setImpuesto] = useState('');
   const [estadoOrden, setEstadoOrden] = useState('pendiente');
@@ -243,6 +259,54 @@ export default function NuevaOrden() {
       setMontoSecundario(Math.round(total * tipoCambio).toString());
     }
   }, [mostrarSecundaria, tipoCambio, montoSecundarioTocado, total]);
+
+  // Saldo actual del cliente elegido, para mostrar el crédito disponible y
+  // bloquear una venta a cuenta corriente que supere el límite.
+  useEffect(() => {
+    if (!clienteElegido?.id) {
+      setSaldoCliente(0);
+      return;
+    }
+    (async () => {
+      const { data } = await supabase
+        .from('cta_cte_movimientos')
+        .select('tipo, monto')
+        .eq('cliente_id', clienteElegido.id)
+        .eq('anulado', false);
+      setSaldoCliente(calcularSaldo((data as { tipo: string; monto: number }[]) ?? []));
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clienteElegido?.id]);
+
+  const ctaCteDisponible = !!clienteElegido?.cta_cte_habilitada && !clienteElegido?.suspendido;
+
+  // Si el cliente no tiene cuenta corriente (o cambió a uno que no la
+  // tiene), no dejar "Cuenta corriente" elegido en modo simple.
+  useEffect(() => {
+    if (!ctaCteDisponible && medioSimple === CUENTA_CORRIENTE) setMedioSimple('efectivo');
+  }, [ctaCteDisponible, medioSimple]);
+
+  // Cuánto de esta venta queda como deuda en la cuenta corriente.
+  const montoCuentaCorriente = useMemo(() => {
+    if (!pagoMixto) return medioSimple === CUENTA_CORRIENTE ? Math.max(0, total) : 0;
+    return lineasPago
+      .filter((l) => l.medio === CUENTA_CORRIENTE)
+      .reduce((acc, l) => acc + (Number(l.monto) || 0), 0);
+  }, [pagoMixto, medioSimple, lineasPago, total]);
+
+  const montoAsignado = useMemo(() => {
+    if (!pagoMixto) return total;
+    return lineasPago.reduce((acc, l) => acc + (Number(l.monto) || 0), 0);
+  }, [pagoMixto, lineasPago, total]);
+
+  const restantePorAsignar = total - montoAsignado;
+  // En modo mixto, la suma de las líneas tiene que dar el total. Si el total
+  // es 0 o negativo (saldo a favor), no hay nada que cobrar.
+  const asignacionOk = !pagoMixto || total <= 0 || Math.abs(restantePorAsignar) < 0.5;
+
+  const creditoDisponible =
+    clienteElegido?.limite_credito == null ? Infinity : clienteElegido.limite_credito - saldoCliente;
+  const excedeLimite = montoCuentaCorriente > creditoDisponible + 0.5;
 
   const elegirCliente = (c: Cliente) => {
     setClienteElegido(c);
@@ -441,7 +505,46 @@ export default function NuevaOrden() {
   // Configuración, no hay de quién elegir — exigirlo igual dejaría a ese
   // negocio sin poder vender nunca más, así que en ese caso puntual no se
   // bloquea.
-  const puedeConfirmar = carrito.length > 0 && puedeVender && (vendedores.length === 0 || !!vendedorId);
+  const puedeConfirmar =
+    carrito.length > 0 &&
+    puedeVender &&
+    (vendedores.length === 0 || !!vendedorId) &&
+    asignacionOk &&
+    !excedeLimite &&
+    (montoCuentaCorriente <= 0 || ctaCteDisponible);
+
+  // Etiqueta legible del cobro para guardar en la orden (forma_pago) y
+  // mostrar en listados/boleta, sin perder el detalle real que vive en la
+  // tabla de pagos.
+  const etiquetaCobro = (): string => {
+    if (!pagoMixto) return medioLabel(medioSimple);
+    const medios = Array.from(new Set(lineasPago.filter((l) => Number(l.monto) > 0).map((l) => l.medio)));
+    if (medios.length === 0) return 'Sin especificar';
+    if (medios.length === 1) return medioLabel(medios[0]);
+    return 'Mixto';
+  };
+
+  // Construye las filas de pagos (plata que entra) para esta venta.
+  const construirPagos = (): { medio: string; monto: number }[] => {
+    if (!pagoMixto) {
+      if (medioSimple === CUENTA_CORRIENTE || total <= 0) return [];
+      return [{ medio: medioSimple, monto: total }];
+    }
+    return lineasPago
+      .filter((l) => l.medio !== CUENTA_CORRIENTE && Number(l.monto) > 0)
+      .map((l) => ({ medio: l.medio, monto: Number(l.monto) }));
+  };
+
+  const agregarLineaPago = () => {
+    const usados = new Set(lineasPago.map((l) => l.medio));
+    const medioLibre = [...MEDIOS_PAGO.map((m) => m.codigo), CUENTA_CORRIENTE].find((m) => !usados.has(m)) ?? 'efectivo';
+    // La nueva línea arranca con lo que falta asignar, para el caso típico.
+    const sugerido = restantePorAsignar > 0 ? String(Math.round(restantePorAsignar)) : '';
+    setLineasPago((ls) => [...ls, { tempId: idTemporal(), medio: medioLibre, monto: sugerido }]);
+  };
+  const actualizarLineaPago = (tempId: string, campo: 'medio' | 'monto', valor: string) =>
+    setLineasPago((ls) => ls.map((l) => (l.tempId === tempId ? { ...l, [campo]: valor } : l)));
+  const quitarLineaPago = (tempId: string) => setLineasPago((ls) => ls.filter((l) => l.tempId !== tempId));
 
   const handleConfirmar = async () => {
     if (!puedeConfirmar) return;
@@ -515,7 +618,7 @@ export default function NuevaOrden() {
         .insert({
           cliente_id: clienteId,
           vendedor_id: vendedorId || null,
-          forma_pago: formaPago,
+          forma_pago: etiquetaCobro(),
           anticipo: Number(anticipo) || 0,
           impuesto_porcentaje: Number(impuesto) || 0,
           monto_canje: montoCanjeTotal,
@@ -561,6 +664,40 @@ export default function NuevaOrden() {
         }))
       );
       if (itemsErr) throw new Error(itemsErr.message);
+
+      // Cobro: pagos (plata que entra) + cargo de cuenta corriente (deuda
+      // que nace). La etiqueta de la orden ya resume el medio; el detalle
+      // real vive acá para poder armar la caja por medio de pago.
+      const actorCobro = getActor();
+      const pagosNuevos = construirPagos();
+      if (pagosNuevos.length > 0) {
+        const { error: pagosErr } = await supabase.from('pagos').insert(
+          pagosNuevos.map((p) => ({
+            cliente_id: clienteId ?? null,
+            orden_id: orden.id,
+            medio: p.medio,
+            monto: p.monto,
+            moneda: monedaOrden,
+            registrado_por_nombre: actorCobro?.nombre ?? null,
+            registrado_por_foto_url: actorCobro?.fotoUrl ?? null,
+          }))
+        );
+        if (pagosErr) throw new Error(pagosErr.message);
+      }
+      if (montoCuentaCorriente > 0 && clienteId) {
+        const { error: movErr } = await supabase.from('cta_cte_movimientos').insert({
+          cliente_id: clienteId,
+          tipo: 'cargo',
+          concepto: 'venta',
+          monto: montoCuentaCorriente,
+          moneda: monedaOrden,
+          orden_id: orden.id,
+          vencimiento: vencimientoDesdeHoy(clienteElegido?.plazo_dias),
+          registrado_por_nombre: actorCobro?.nombre ?? null,
+          registrado_por_foto_url: actorCobro?.fotoUrl ?? null,
+        });
+        if (movErr) throw new Error(movErr.message);
+      }
 
       router.push(`/ordenes/${orden.id}/boleta`);
     } catch (err: any) {
@@ -1166,21 +1303,147 @@ export default function NuevaOrden() {
         )}
       </div>
 
-      <div>
-        <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Forma de pago</label>
-        <div className="flex gap-2">
-          {FORMAS_PAGO.map((f) => (
-            <button
-              key={f}
-              onClick={() => setFormaPago(f)}
-              className={`flex-1 rounded-xl py-2 text-sm font-medium ${
-                formaPago === f ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
-              }`}
-            >
-              {f}
-            </button>
-          ))}
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <label className="text-xs text-muted dark:text-dark-text-secondary">Cómo se paga</label>
+          <button
+            onClick={() => {
+              const nuevo = !pagoMixto;
+              setPagoMixto(nuevo);
+              if (nuevo && lineasPago.length === 0) {
+                setLineasPago([{ tempId: idTemporal(), medio: 'efectivo', monto: total > 0 ? String(Math.round(total)) : '' }]);
+              }
+            }}
+            className="text-xs text-accent dark:text-dark-accent underline"
+          >
+            {pagoMixto ? 'Un solo medio' : 'Dividir en varios (mixto)'}
+          </button>
         </div>
+
+        {!pagoMixto ? (
+          <div className="flex flex-wrap gap-2">
+            {MEDIOS_PAGO.map((m) => (
+              <button
+                key={m.codigo}
+                onClick={() => setMedioSimple(m.codigo)}
+                className={`rounded-xl px-3 py-2 text-sm font-medium ${
+                  medioSimple === m.codigo ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
+                }`}
+              >
+                {m.icono} {m.label}
+              </button>
+            ))}
+            {ctaCteDisponible && (
+              <button
+                onClick={() => setMedioSimple(CUENTA_CORRIENTE)}
+                className={`rounded-xl px-3 py-2 text-sm font-medium ${
+                  medioSimple === CUENTA_CORRIENTE ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
+                }`}
+              >
+                📒 Cuenta corriente
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {lineasPago.map((l) => (
+              <div key={l.tempId} className="flex gap-2 items-center">
+                <select
+                  value={l.medio}
+                  onChange={(e) => actualizarLineaPago(l.tempId, 'medio', e.target.value)}
+                  className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-2 text-sm"
+                >
+                  {MEDIOS_PAGO.map((m) => (
+                    <option key={m.codigo} value={m.codigo}>
+                      {m.label}
+                    </option>
+                  ))}
+                  {ctaCteDisponible && <option value={CUENTA_CORRIENTE}>Cuenta corriente</option>}
+                </select>
+                <input
+                  value={l.monto}
+                  onChange={(e) => actualizarLineaPago(l.tempId, 'monto', e.target.value.replace(/[^\d]/g, ''))}
+                  inputMode="numeric"
+                  placeholder="Monto"
+                  className="w-28 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                />
+                <button onClick={() => quitarLineaPago(l.tempId)} className="text-bad text-xs font-medium shrink-0">
+                  Quitar
+                </button>
+              </div>
+            ))}
+            <button
+              onClick={agregarLineaPago}
+              className="rounded-lg border border-border dark:border-dark-border py-2 text-sm font-medium"
+            >
+              + Agregar medio
+            </button>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted dark:text-dark-text-secondary">Asignado</span>
+              <span className={asignacionOk ? 'text-good font-medium' : 'text-warn font-medium'}>
+                {moneda}{Math.round(montoAsignado).toLocaleString('es-AR')} / {moneda}{Math.round(total).toLocaleString('es-AR')}
+                {asignacionOk ? ' ✓' : ''}
+              </span>
+            </div>
+            {!asignacionOk && restantePorAsignar > 0 && ctaCteDisponible && (
+              <button
+                onClick={() =>
+                  setLineasPago((ls) => [
+                    ...ls,
+                    { tempId: idTemporal(), medio: CUENTA_CORRIENTE, monto: String(Math.round(restantePorAsignar)) },
+                  ])
+                }
+                className="text-xs text-accent dark:text-dark-accent underline self-start"
+              >
+                Poner el resto ({moneda}{Math.round(restantePorAsignar).toLocaleString('es-AR')}) en cuenta corriente
+              </button>
+            )}
+            {!asignacionOk && (
+              <p className="text-[10px] text-warn">
+                La suma de los medios tiene que dar el total.{' '}
+                {restantePorAsignar > 0
+                  ? `Falta asignar ${moneda}${Math.round(restantePorAsignar).toLocaleString('es-AR')}.`
+                  : `Te pasaste por ${moneda}${Math.round(-restantePorAsignar).toLocaleString('es-AR')}.`}
+              </p>
+            )}
+          </div>
+        )}
+
+        {ctaCteDisponible && montoCuentaCorriente > 0 && (
+          <div className="rounded-lg bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border px-3 py-2 text-xs flex flex-col gap-1">
+            <div className="flex justify-between">
+              <span className="text-muted dark:text-dark-text-secondary">📒 Queda debiendo</span>
+              <span className="font-medium">{moneda}{Math.round(montoCuentaCorriente).toLocaleString('es-AR')}</span>
+            </div>
+            {saldoCliente > 0 && (
+              <div className="flex justify-between">
+                <span className="text-muted dark:text-dark-text-secondary">Saldo anterior</span>
+                <span>{moneda}{Math.round(saldoCliente).toLocaleString('es-AR')}</span>
+              </div>
+            )}
+            {clienteElegido?.limite_credito != null && (
+              <div className="flex justify-between">
+                <span className="text-muted dark:text-dark-text-secondary">Límite de crédito</span>
+                <span>{moneda}{Math.round(clienteElegido.limite_credito).toLocaleString('es-AR')}</span>
+              </div>
+            )}
+            {excedeLimite && (
+              <p className="text-bad">
+                Supera el límite de crédito (disponible {moneda}
+                {Math.round(Math.max(0, creditoDisponible)).toLocaleString('es-AR')}). No se puede confirmar hasta
+                cobrarle o subirle el límite.
+              </p>
+            )}
+          </div>
+        )}
+
+        {clienteElegido && !ctaCteDisponible && (
+          <p className="text-[10px] text-muted dark:text-dark-text-secondary">
+            {clienteElegido.suspendido
+              ? 'Este cliente está suspendido para cuenta corriente.'
+              : 'Para venderle a cuenta corriente (fiado), primero habilitá su cuenta corriente desde la ficha del cliente.'}
+          </p>
+        )}
       </div>
 
       <div className="flex gap-2">
