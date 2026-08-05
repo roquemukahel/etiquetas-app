@@ -44,13 +44,31 @@ function inicioDePeriodo(periodo: Periodo): Date {
 }
 
 type Orden = {
+  id: string;
   vendedor_id: string | null;
   cliente_id: string | null;
   total: number | null;
+  // total = subtotal (con impuesto) − anticipo − canje (ver
+  // app/ordenes/nueva/page.tsx). Es lo que queda por cobrar, NO el valor
+  // vendido. Para Estadísticas queremos el valor real de la venta, así
+  // que sumamos de vuelta el anticipo y el canje (ver montoVenta).
+  anticipo: number | null;
+  monto_canje: number | null;
   estado: string;
   forma_pago: string | null;
   created_at: string;
 };
+
+// Valor real de la venta. El "total" de la orden ya viene con el anticipo
+// y el canje descontados (es el saldo a cobrar), pero una venta con un
+// equipo entregado en canje o con seña sigue valiendo lo mismo: el equipo
+// que entró por canje es mercadería que después se revende, y la seña es
+// plata que igual entró. Antes Estadísticas sumaba solo "total", así que
+// toda venta con canje quedaba subvaluada — este es el arreglo.
+function montoVenta(o: Orden): number {
+  return (o.total || 0) + (o.anticipo || 0) + (o.monto_canje || 0);
+}
+type OrdenItem = { orden_id: string; cantidad: number };
 type Reparacion = { tecnico_id: string | null; fecha_reparado: string };
 type IngresoServicio = { cliente_id: string | null; fecha_ingreso_servicio: string };
 type Persona = { id: string; nombre: string; foto_url: string | null };
@@ -77,6 +95,7 @@ export default function Estadisticas() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [ordenes, setOrdenes] = useState<Orden[]>([]);
+  const [ordenItems, setOrdenItems] = useState<OrdenItem[]>([]);
   const [reparaciones, setReparaciones] = useState<Reparacion[]>([]);
   const [ingresosServicio, setIngresosServicio] = useState<IngresoServicio[]>([]);
   const [comprasProveedor, setComprasProveedor] = useState<DispositivoCompra[]>([]);
@@ -101,6 +120,7 @@ export default function Estadisticas() {
         cli,
         { data: prov },
         { data: ord },
+        { data: items },
         { data: rep },
         { data: ing },
         { data: compras },
@@ -113,8 +133,9 @@ export default function Estadisticas() {
         supabase.from('proveedores').select('id, nombre').order('nombre'),
         supabase
           .from('ordenes')
-          .select('vendedor_id, cliente_id, total, estado, forma_pago, created_at')
+          .select('id, vendedor_id, cliente_id, total, anticipo, monto_canje, estado, forma_pago, created_at')
           .gte('created_at', desde.toISOString()),
+        supabase.from('orden_items').select('orden_id, cantidad').gte('created_at', desde.toISOString()),
         supabase
           .from('reparaciones')
           .select('tecnico_id, fecha_reparado')
@@ -144,6 +165,7 @@ export default function Estadisticas() {
       setClientes(cli);
       setProveedores((prov as Proveedor[]) ?? []);
       setOrdenes((ord as Orden[]) ?? []);
+      setOrdenItems((items as OrdenItem[]) ?? []);
       setReparaciones((rep as Reparacion[]) ?? []);
       setIngresosServicio((ing as IngresoServicio[]) ?? []);
       setComprasProveedor((compras as DispositivoCompra[]) ?? []);
@@ -159,8 +181,21 @@ export default function Estadisticas() {
     [ordenes, inicio]
   );
 
-  const ingresos = ordenesPeriodo.reduce((acc, o) => acc + (o.total || 0), 0);
-  const cantidadVentas = ordenesPeriodo.length;
+  const ingresos = ordenesPeriodo.reduce((acc, o) => acc + montoVenta(o), 0);
+
+  // "Ventas" cuenta cada DISPOSITIVO vendido, no cada boleta: una orden con
+  // dos celulares suma dos. Sumamos las cantidades de los orden_items de
+  // cada orden cobrada del período. Fallback a 1 si una orden no trajo sus
+  // ítems (no debería pasar), para no volverla invisible.
+  const unidadesPorOrden = useMemo(() => {
+    const mapa = new Map<string, number>();
+    for (const it of ordenItems) {
+      mapa.set(it.orden_id, (mapa.get(it.orden_id) ?? 0) + (it.cantidad || 0));
+    }
+    return mapa;
+  }, [ordenItems]);
+
+  const cantidadVentas = ordenesPeriodo.reduce((acc, o) => acc + (unidadesPorOrden.get(o.id) || 1), 0);
   const ticketPromedio = cantidadVentas > 0 ? ingresos / cantidadVentas : 0;
 
   const nombreDe = (lista: Persona[], id: string | null, tipo: string) => {
@@ -177,7 +212,7 @@ export default function Estadisticas() {
     const mapa = new Map<string, number>();
     for (const o of ordenesPeriodo) {
       const key = o.vendedor_id ?? '-';
-      mapa.set(key, (mapa.get(key) ?? 0) + (o.total || 0));
+      mapa.set(key, (mapa.get(key) ?? 0) + montoVenta(o));
     }
     return Array.from(mapa.entries())
       .map(([id, valor]) => ({
@@ -220,7 +255,7 @@ export default function Estadisticas() {
     const mapa = new Map<string, number>();
     for (const o of ordenesPeriodo) {
       if (!o.cliente_id) continue;
-      mapa.set(o.cliente_id, (mapa.get(o.cliente_id) ?? 0) + (o.total || 0));
+      mapa.set(o.cliente_id, (mapa.get(o.cliente_id) ?? 0) + montoVenta(o));
     }
     return Array.from(mapa.entries())
       .map(([id, valor]) => ({ nombre: nombreClienteDe(id), valor }))
@@ -250,7 +285,7 @@ export default function Estadisticas() {
     const mapa = new Map<string, number>();
     for (const o of ordenesPeriodo) {
       const key = o.forma_pago || 'Sin especificar';
-      mapa.set(key, (mapa.get(key) ?? 0) + (o.total || 0));
+      mapa.set(key, (mapa.get(key) ?? 0) + montoVenta(o));
     }
     return Array.from(mapa.entries())
       .map(([nombre, valor]) => ({ nombre, valor }))
@@ -296,7 +331,7 @@ export default function Estadisticas() {
       for (const o of ordenesPeriodo) {
         const m = new Date(o.created_at).getMonth();
         const item = meses.find((x) => x.mes === m);
-        if (item) item.valor += o.total || 0;
+        if (item) item.valor += montoVenta(o);
       }
       return meses.map(({ label, valor }) => ({ label, valor }));
     }
@@ -315,7 +350,7 @@ export default function Estadisticas() {
     for (const o of ordenesPeriodo) {
       const fechaO = new Date(o.created_at);
       const dia = dias.find((d) => d.fecha.toDateString() === fechaO.toDateString());
-      if (dia) dia.valor += o.total || 0;
+      if (dia) dia.valor += montoVenta(o);
     }
     return dias.map(({ label, valor }) => ({ label, valor }));
   }, [ordenesPeriodo, periodo, inicio]);

@@ -10,6 +10,7 @@ export const MONEDAS = [
   { codigo: 'COP', nombre: 'Peso colombiano', simbolo: 'COL$' },
   { codigo: 'BOB', nombre: 'Boliviano', simbolo: 'Bs' },
   { codigo: 'PEN', nombre: 'Sol peruano', simbolo: 'S/' },
+  { codigo: 'VES', nombre: 'Bolívar venezolano', simbolo: 'Bs.S' },
 ];
 
 export function simboloMoneda(codigo: string | null | undefined) {
