@@ -3,6 +3,12 @@
 import { useEffect, useState } from 'react';
 import { getTema, setTema, Tema } from './lib/theme';
 
+const OPCIONES: { valor: Tema; label: string; emoji: string }[] = [
+  { valor: 'light', label: 'Claro', emoji: '☀️' },
+  { valor: 'dark', label: 'Oscuro', emoji: '🌙' },
+  { valor: 'qovento', label: 'Qovento', emoji: '💎' },
+];
+
 export default function ThemeToggle() {
   const [tema, setTemaState] = useState<Tema>('light');
 
@@ -10,34 +16,38 @@ export default function ThemeToggle() {
     setTemaState(getTema());
   }, []);
 
-  const toggle = () => {
-    const nuevo: Tema = tema === 'light' ? 'dark' : 'light';
-    setTema(nuevo);
-    setTemaState(nuevo);
+  const elegir = (t: Tema) => {
+    setTema(t);
+    setTemaState(t);
   };
 
   return (
-    <button
-      onClick={toggle}
-      className="w-full rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-5 flex items-center justify-between hover:border-accent/40 dark:hover:border-dark-accent/40 hover:shadow-elevated transition-all active:scale-[0.98]"
-    >
-      <div className="text-left">
-        <span className="text-base font-medium block text-ink dark:text-dark-text">Modo oscuro</span>
-        <span className="text-xs text-muted dark:text-dark-text-secondary">
-          {tema === 'dark' ? 'Activado' : 'Desactivado'}
-        </span>
+    <div className="rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-5 flex flex-col gap-3">
+      <div>
+        <p className="text-base font-medium text-ink dark:text-dark-text">Apariencia</p>
+        <p className="text-xs text-muted dark:text-dark-text-secondary">Elegí cómo se ve la app</p>
       </div>
-      <div
-        className={`h-7 w-12 rounded-full shrink-0 transition-colors relative ${
-          tema === 'dark' ? 'bg-accent dark:bg-dark-accent' : 'bg-black/10'
-        }`}
-      >
-        <div
-          className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow-card transition-transform ${
-            tema === 'dark' ? 'translate-x-5' : 'translate-x-0.5'
-          }`}
-        />
+      <div className="grid grid-cols-3 gap-2">
+        {OPCIONES.map((o) => (
+          <button
+            key={o.valor}
+            onClick={() => elegir(o.valor)}
+            className={`rounded-xl border p-3 flex flex-col items-center gap-1.5 transition-colors active:scale-[0.98] ${
+              tema === o.valor
+                ? 'border-accent dark:border-dark-accent bg-accent-soft dark:bg-dark-accent-soft'
+                : 'border-border dark:border-dark-border hover:border-accent/40 dark:hover:border-dark-accent/40'
+            }`}
+          >
+            <span className="text-xl leading-none">{o.emoji}</span>
+            <span className="text-sm font-medium text-ink dark:text-dark-text">{o.label}</span>
+          </button>
+        ))}
       </div>
-    </button>
+      {tema === 'qovento' && (
+        <p className="text-xs text-muted dark:text-dark-text-secondary">
+          Modo Qovento: fondo azulado de la marca en toda la app. ✨
+        </p>
+      )}
+    </div>
   );
 }

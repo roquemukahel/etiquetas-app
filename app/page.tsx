@@ -427,7 +427,7 @@ export default async function Home() {
         <BuscadorUniversal />
       </div>
 
-      <div className="rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-4 flex flex-col gap-2.5 animate-fade-in-up" style={{ animationDelay: '90ms' }}>
+      <div className="qv-card rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-4 flex flex-col gap-2.5 animate-fade-in-up" style={{ animationDelay: '90ms' }}>
         <p className="text-xs font-semibold uppercase tracking-wide text-muted dark:text-dark-text-secondary">
           Centro de notificaciones
         </p>
@@ -452,12 +452,12 @@ export default async function Home() {
       <div className="lg:grid lg:grid-cols-3 lg:gap-6 flex flex-col gap-6 animate-fade-in-up" style={{ animationDelay: '120ms' }}>
         <Link
           href="/estadisticas"
-          className="group lg:col-span-2 rounded-2xl bg-gradient-to-br from-ink to-[#1B2540] dark:from-dark-surface dark:to-dark-bg text-white p-6 flex flex-col gap-4 shadow-elevated hover:opacity-95 transition-opacity active:scale-[0.99]"
+          className="qv-card qv-financial group lg:col-span-2 rounded-2xl bg-gradient-to-br from-ink to-[#1B2540] dark:from-dark-surface dark:to-dark-bg text-white p-6 flex flex-col gap-4 shadow-elevated hover:opacity-95 transition-opacity active:scale-[0.99]"
         >
           <div className="flex items-start justify-between">
             <div>
               <p className="text-xs text-white/60 mb-1">Ingresos este mes</p>
-              <p className="text-4xl sm:text-5xl font-display font-semibold tracking-tight">
+              <p className="qv-financial-value text-4xl sm:text-5xl font-display font-semibold tracking-tight">
                 <NumeroAnimado prefijo={moneda} valor={ingresosMes} />
               </p>
               <div className="flex items-center gap-2 mt-2">
@@ -502,7 +502,7 @@ export default async function Home() {
           <span className="text-xs text-white/50 group-hover:text-white/70">Ver estadísticas completas &rarr;</span>
         </Link>
 
-        <div className="rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-elevated p-5 flex flex-col gap-3">
+        <div className="qv-card rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-elevated p-5 flex flex-col gap-3">
           <p className="text-sm font-semibold tracking-tight">Productos más vendidos</p>
           {masVendidos.length === 0 ? (
             <p className="text-xs text-muted dark:text-dark-text-secondary">Todavía no hay ventas este mes.</p>
@@ -543,7 +543,7 @@ export default async function Home() {
 
       {actividad.length > 0 && (
         <div
-          className="rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-5 flex flex-col gap-3 animate-fade-in-up"
+          className="qv-card rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-5 flex flex-col gap-3 animate-fade-in-up"
           style={{ animationDelay: '210ms' }}
         >
           <p className="text-sm font-semibold tracking-tight">Actividad reciente</p>
@@ -586,7 +586,7 @@ export default async function Home() {
             <Link
               key={s.titulo}
               href={s.href}
-              className="group rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-4 flex items-center gap-4 hover:border-accent/40 dark:hover:border-dark-accent/40 hover:shadow-elevated hover:-translate-y-1 transition-all active:scale-[0.99]"
+              className="qv-card group rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-4 flex items-center gap-4 hover:border-accent/40 dark:hover:border-dark-accent/40 hover:shadow-elevated hover:-translate-y-1 transition-all active:scale-[0.99]"
             >
               <div
                 className={`h-14 w-14 shrink-0 rounded-2xl bg-gradient-to-br ${COLOR_ICONO[s.color]} text-white flex items-center justify-center shadow-card group-hover:scale-110 group-hover:rotate-3 transition-transform`}
@@ -656,7 +656,7 @@ function StatTile({
   return (
     <Link
       href={href}
-      className="group relative overflow-hidden rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-3.5 flex flex-col gap-2 hover:shadow-elevated hover:-translate-y-1 transition-all"
+      className="qv-card group relative overflow-hidden rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-3.5 flex flex-col gap-2 hover:shadow-elevated hover:-translate-y-1 transition-all"
     >
       <span className={`absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r ${COLOR_ICONO[color]}`} />
       <div
