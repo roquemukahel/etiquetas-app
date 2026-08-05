@@ -30,6 +30,17 @@ type DispositivoComprado = {
   costo: number | null;
   created_at: string;
 };
+// Cuenta corriente con el proveedor: lo que el negocio le debe. cargo =
+// aumenta la deuda; abono = le pagaste. El saldo se calcula, no se guarda.
+type Movimiento = {
+  id: string;
+  tipo: string;
+  concepto: string;
+  monto: number;
+  medio: string | null;
+  observacion: string | null;
+  fecha: string;
+};
 
 // Una sola lista para mostrar, mezclando las dos fuentes: lo cargado a
 // mano acá (compras_proveedor) y lo que ya quedó vinculado solo al
@@ -58,8 +69,16 @@ export default function DetalleProveedor() {
   const [proveedor, setProveedor] = useState<Proveedor | null>(null);
   const [compras, setCompras] = useState<CompraManual[]>([]);
   const [dispositivos, setDispositivos] = useState<DispositivoComprado[]>([]);
+  const [movimientos, setMovimientos] = useState<Movimiento[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Cuenta corriente con el proveedor (lo que le debés)
+  const [accionCta, setAccionCta] = useState<null | 'deuda' | 'pago'>(null);
+  const [montoCta, setMontoCta] = useState('');
+  const [medioCta, setMedioCta] = useState('efectivo');
+  const [obsCta, setObsCta] = useState('');
+  const [guardandoCta, setGuardandoCta] = useState(false);
 
   const [editandoPerfil, setEditandoPerfil] = useState(false);
   const [nombreEdit, setNombreEdit] = useState('');
@@ -80,7 +99,7 @@ export default function DetalleProveedor() {
   const [guardandoCompra, setGuardandoCompra] = useState(false);
 
   const cargar = async () => {
-    const [{ data: prov }, { data: comprasData }, { data: dispData }] = await Promise.all([
+    const [{ data: prov }, { data: comprasData }, { data: dispData }, { data: movData }] = await Promise.all([
       supabase.from('proveedores').select('id, nombre, telefono, detalles').eq('id', id).maybeSingle(),
       supabase
         .from('compras_proveedor')
@@ -92,10 +111,17 @@ export default function DetalleProveedor() {
         .select('id, modelo, capacidad_gb, color, costo, created_at')
         .eq('proveedor_id', id)
         .order('created_at', { ascending: false }),
+      supabase
+        .from('proveedor_movimientos')
+        .select('id, tipo, concepto, monto, medio, observacion, fecha')
+        .eq('proveedor_id', id)
+        .eq('anulado', false)
+        .order('fecha', { ascending: false }),
     ]);
     setProveedor((prov as Proveedor) ?? null);
     setCompras((comprasData as CompraManual[]) ?? []);
     setDispositivos((dispData as DispositivoComprado[]) ?? []);
+    setMovimientos((movData as Movimiento[]) ?? []);
     setLoading(false);
   };
 
@@ -138,6 +164,51 @@ export default function DetalleProveedor() {
 
   const totalGastado = filas.reduce((acc, f) => acc + (f.precioUnitario || 0) * f.cantidad, 0);
   const totalUnidades = filas.reduce((acc, f) => acc + f.cantidad, 0);
+
+  // Saldo = Σ(deudas) − Σ(pagos). Positivo = le debés; negativo = saldo a favor.
+  const saldo = useMemo(
+    () => movimientos.reduce((acc, m) => acc + (m.tipo === 'cargo' ? m.monto : -m.monto), 0),
+    [movimientos]
+  );
+
+  const registrarCta = async () => {
+    if (!proveedor) return;
+    const monto = Number(montoCta);
+    if (!monto || monto <= 0) {
+      setError('Poné un monto válido');
+      return;
+    }
+    setGuardandoCta(true);
+    setError(null);
+    const esPago = accionCta === 'pago';
+    const { error: dbError } = await supabase.from('proveedor_movimientos').insert({
+      proveedor_id: proveedor.id,
+      tipo: esPago ? 'abono' : 'cargo',
+      concepto: esPago ? 'pago' : 'deuda',
+      monto,
+      medio: esPago ? medioCta : null,
+      observacion: obsCta.trim() || null,
+      registrado_por_nombre: actor?.nombre ?? null,
+      registrado_por_foto_url: actor?.fotoUrl ?? null,
+    });
+    if (dbError) {
+      setError('No pudimos guardar el movimiento: ' + dbError.message);
+      setGuardandoCta(false);
+      return;
+    }
+    setGuardandoCta(false);
+    setAccionCta(null);
+    setMontoCta('');
+    setObsCta('');
+    setMedioCta('efectivo');
+    cargar();
+  };
+
+  const anularMovimiento = async (movId: string) => {
+    if (!confirm('¿Anular este movimiento? Deja de contar para el saldo.')) return;
+    await supabase.from('proveedor_movimientos').update({ anulado: true }).eq('id', movId);
+    cargar();
+  };
 
   const abrirEdicionPerfil = () => {
     if (!proveedor) return;
@@ -334,6 +405,110 @@ export default function DetalleProveedor() {
           </div>
         ) : null
       )}
+
+      <div className="rounded-2xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-4 flex flex-col gap-3">
+        <div>
+          <p className="text-[11px] uppercase tracking-wide text-muted dark:text-dark-text-secondary">Le debés a este proveedor</p>
+          <p className={`text-2xl font-display font-semibold ${saldo > 0 ? 'text-bad' : saldo < 0 ? 'text-good' : ''}`}>
+            ${Math.round(Math.abs(saldo)).toLocaleString('es-AR')}
+          </p>
+          {saldo < 0 && <p className="text-[11px] text-good">Tenés saldo a favor con él</p>}
+          {saldo === 0 && <p className="text-[11px] text-muted dark:text-dark-text-secondary">Estás al día</p>}
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => {
+              setAccionCta(accionCta === 'deuda' ? null : 'deuda');
+              setMontoCta('');
+              setObsCta('');
+              setError(null);
+            }}
+            className="flex-1 rounded-xl border border-border dark:border-dark-border py-2 text-sm font-medium"
+          >
+            + Registrar deuda
+          </button>
+          <button
+            onClick={() => {
+              setAccionCta(accionCta === 'pago' ? null : 'pago');
+              setMontoCta('');
+              setObsCta('');
+              setError(null);
+            }}
+            className="flex-1 rounded-xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-sm font-medium text-white"
+          >
+            Registrar pago
+          </button>
+        </div>
+        {accionCta && (
+          <div className="flex flex-col gap-2 border-t border-border dark:border-dark-border pt-3">
+            <input
+              value={montoCta}
+              onChange={(e) => setMontoCta(e.target.value)}
+              inputMode="decimal"
+              autoFocus
+              placeholder={accionCta === 'pago' ? 'Monto que le pagás' : 'Monto que le quedás debiendo'}
+              className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+            />
+            {accionCta === 'pago' && (
+              <select
+                value={medioCta}
+                onChange={(e) => setMedioCta(e.target.value)}
+                className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+              >
+                <option value="efectivo">Efectivo</option>
+                <option value="transferencia">Transferencia</option>
+                <option value="débito">Débito</option>
+                <option value="crédito">Crédito</option>
+                <option value="usdt">USDT</option>
+                <option value="cheque">Cheque</option>
+              </select>
+            )}
+            <input
+              value={obsCta}
+              onChange={(e) => setObsCta(e.target.value)}
+              placeholder="Observación (opcional)"
+              className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+            />
+            <div className="flex gap-2">
+              <button onClick={() => setAccionCta(null)} className="flex-1 rounded-lg border border-border dark:border-dark-border py-2 text-sm font-medium">
+                Cancelar
+              </button>
+              <button
+                disabled={guardandoCta}
+                onClick={registrarCta}
+                className="flex-1 rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
+              >
+                {guardandoCta ? 'Guardando...' : 'Guardar'}
+              </button>
+            </div>
+          </div>
+        )}
+        {movimientos.length > 0 && (
+          <div className="flex flex-col gap-1.5 border-t border-border dark:border-dark-border pt-3">
+            <p className="text-[11px] uppercase tracking-wide text-muted dark:text-dark-text-secondary">Movimientos</p>
+            {movimientos.map((m) => (
+              <div key={m.id} className="flex items-center justify-between gap-2 text-sm">
+                <div className="min-w-0">
+                  <p className="truncate">
+                    {m.concepto === 'pago' ? 'Pago' : m.concepto === 'deuda' ? 'Deuda' : 'Ajuste'}
+                    {m.medio ? ` · ${m.medio}` : ''}
+                    {m.observacion ? ` · ${m.observacion}` : ''}
+                  </p>
+                  <p className="text-[11px] text-muted dark:text-dark-text-secondary">{new Date(m.fecha).toLocaleDateString('es-AR')}</p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <p className={`text-sm font-medium ${m.tipo === 'cargo' ? 'text-bad' : 'text-good'}`}>
+                    {m.tipo === 'cargo' ? '+' : '−'}${Math.round(m.monto).toLocaleString('es-AR')}
+                  </p>
+                  <button onClick={() => anularMovimiento(m.id)} className="text-[11px] text-bad underline">
+                    Anular
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-3.5 flex flex-col gap-0.5">

@@ -2257,3 +2257,50 @@ as $$
 $$;
 
 grant execute on function boleta_publica(uuid) to anon, authenticated;
+
+-- ============================================================
+-- Cuentas por pagar a proveedores (lo que el negocio le debe a cada
+-- proveedor). Espejo de la cuenta corriente de clientes. Saldo =
+-- Σ(cargos/deudas) − Σ(abonos/pagos). Ver cuentas_por_pagar_supabase.sql.
+-- ============================================================
+create table if not exists proveedor_movimientos (
+  id uuid primary key default gen_random_uuid(),
+  negocio_id uuid not null references negocios(id) on delete cascade default negocio_actual(),
+  proveedor_id uuid not null references proveedores(id) on delete cascade,
+  tipo text not null,
+  concepto text not null,
+  monto numeric not null,
+  moneda text not null default 'ARS',
+  medio text,
+  observacion text,
+  anulado boolean not null default false,
+  registrado_por_nombre text,
+  registrado_por_foto_url text,
+  fecha timestamptz not null default now(),
+  created_at timestamptz not null default now()
+);
+
+alter table proveedor_movimientos enable row level security;
+
+drop policy if exists "proveedor_movimientos de mi negocio" on proveedor_movimientos;
+create policy "proveedor_movimientos de mi negocio" on proveedor_movimientos
+  for all using (negocio_id = negocio_actual())
+  with check (negocio_id = negocio_actual());
+
+create index if not exists idx_proveedor_mov on proveedor_movimientos (proveedor_id) where not anulado;
+
+create or replace function saldos_proveedores()
+returns table (proveedor_id uuid, saldo numeric)
+language sql
+security definer
+stable
+as $$
+  select
+    m.proveedor_id,
+    sum(case when m.tipo = 'cargo' then m.monto else -m.monto end) as saldo
+  from proveedor_movimientos m
+  where m.negocio_id = negocio_actual() and not m.anulado
+  group by m.proveedor_id
+$$;
+
+grant execute on function saldos_proveedores() to authenticated;
