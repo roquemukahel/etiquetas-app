@@ -39,19 +39,23 @@ type Dispositivo = {
   salud_bateria: number | null;
   color: string | null;
   precio: number | null;
+  costo: number | null;
   estado: string | null;
   detalles: string | null;
   en_stock: boolean;
   created_at: string;
 };
 
-type Producto = { id: string; nombre: string; precio: number | null; imagen_url: string | null; cantidad: number };
+type Producto = { id: string; nombre: string; precio: number | null; costo: number | null; imagen_url: string | null; cantidad: number };
 
 export default function Stock() {
   const supabase = crearClienteNavegador();
   const actor = useActor();
   const puedeEliminar = tienePermiso(actor, 'eliminar');
   const puedeAgregarStock = tienePermiso(actor, 'agregar_stock');
+  // El capital muestra costos y ganancias (info sensible del dueño): se
+  // protege con el mismo permiso que las Estadísticas.
+  const puedeVerCapital = tienePermiso(actor, 'ver_estadisticas');
   const [tab, setTab] = useState<'celulares' | 'accesorios'>('celulares');
 
   const [dispositivos, setDispositivos] = useState<Dispositivo[]>([]);
@@ -65,10 +69,13 @@ export default function Stock() {
   const [loadingProductos, setLoadingProductos] = useState(true);
   const [nombreProducto, setNombreProducto] = useState('');
   const [precioProducto, setPrecioProducto] = useState('');
+  const [costoProducto, setCostoProducto] = useState('');
   const [guardandoProducto, setGuardandoProducto] = useState(false);
   const [errorProducto, setErrorProducto] = useState<string | null>(null);
   const [editandoCantidad, setEditandoCantidad] = useState<string | null>(null);
   const [valorCantidad, setValorCantidad] = useState('');
+  const [valorCosto, setValorCosto] = useState('');
+  const [valorPrecio, setValorPrecio] = useState('');
   const [preparando, setPreparando] = useState(false);
   const [importando, setImportando] = useState(false);
   const [progresoImport, setProgresoImport] = useState<{ hechas: number; total: number } | null>(null);
@@ -368,13 +375,30 @@ export default function Stock() {
     return mapa;
   }, [dispositivos]);
 
+  // Capital invertido en stock: celulares en stock (suma de costos) +
+  // accesorios (costo × cantidad disponible). También el valor de venta y
+  // la ganancia potencial (lo que ganarías si vendés todo lo que tenés).
+  const capital = useMemo(() => {
+    const enStock = dispositivos.filter((d) => d.en_stock);
+    const costoCel = enStock.reduce((a, d) => a + (d.costo || 0), 0);
+    const ventaCel = enStock.reduce((a, d) => a + (d.precio || 0), 0);
+    const costoAcc = productos.reduce((a, p) => a + (p.costo || 0) * p.cantidad, 0);
+    const ventaAcc = productos.reduce((a, p) => a + (p.precio || 0) * p.cantidad, 0);
+    const unidadesAcc = productos.reduce((a, p) => a + p.cantidad, 0);
+    const costo = costoCel + costoAcc;
+    const venta = ventaCel + ventaAcc;
+    return { costo, venta, ganancia: venta - costo, unidadesCel: enStock.length, unidadesAcc };
+  }, [dispositivos, productos]);
+
   const agregarProducto = async () => {
     if (!nombreProducto.trim() || !puedeAgregarStock) return;
     setGuardandoProducto(true);
     setErrorProducto(null);
-    const { error: insertError } = await supabase
-      .from('productos')
-      .insert({ nombre: nombreProducto.trim(), precio: precioProducto ? Number(precioProducto) : null });
+    const { error: insertError } = await supabase.from('productos').insert({
+      nombre: nombreProducto.trim(),
+      precio: precioProducto ? Number(precioProducto) : null,
+      costo: costoProducto ? Number(costoProducto) : null,
+    });
     if (insertError) {
       setErrorProducto('No pudimos guardar: ' + insertError.message);
       setGuardandoProducto(false);
@@ -382,6 +406,7 @@ export default function Stock() {
     }
     setNombreProducto('');
     setPrecioProducto('');
+    setCostoProducto('');
     setGuardandoProducto(false);
     cargarProductos();
   };
@@ -394,23 +419,30 @@ export default function Stock() {
   };
 
   const abrirEdicionCantidad = (p: Producto) => {
-    setEditandoCantidad(editandoCantidad === p.id ? null : p.id);
-    setValorCantidad(String(p.cantidad));
+    const abrir = editandoCantidad !== p.id;
+    setEditandoCantidad(abrir ? p.id : null);
+    if (abrir) {
+      setValorCantidad(String(p.cantidad));
+      setValorCosto(p.costo != null ? String(p.costo) : '');
+      setValorPrecio(p.precio != null ? String(p.precio) : '');
+    }
   };
 
   const guardarCantidad = async (p: Producto) => {
     const nueva = Number(valorCantidad) || 0;
-    if (nueva === p.cantidad) {
+    const costoNuevo = valorCosto ? Number(valorCosto) : null;
+    const precioNuevo = valorPrecio ? Number(valorPrecio) : null;
+    if (nueva === p.cantidad && costoNuevo === (p.costo ?? null) && precioNuevo === (p.precio ?? null)) {
       setEditandoCantidad(null);
       return;
     }
-    await supabase.from('productos').update({ cantidad: nueva }).eq('id', p.id);
+    await supabase.from('productos').update({ cantidad: nueva, costo: costoNuevo, precio: precioNuevo }).eq('id', p.id);
     await registrarAuditoria(supabase, {
-      accion: `cambió el stock de "${p.nombre}" de ${p.cantidad} a ${nueva} unidades`,
+      accion: `editó el accesorio "${p.nombre}"`,
       entidad: 'producto',
       entidadId: p.id,
-      valorAnterior: { cantidad: p.cantidad },
-      valorNuevo: { cantidad: nueva },
+      valorAnterior: { cantidad: p.cantidad, costo: p.costo, precio: p.precio },
+      valorNuevo: { cantidad: nueva, costo: costoNuevo, precio: precioNuevo },
     });
     setEditandoCantidad(null);
     cargarProductos();
@@ -441,6 +473,32 @@ export default function Stock() {
           </Link>
         )}
       </header>
+
+      {puedeVerCapital && (
+        <div className="rounded-2xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted dark:text-dark-text-secondary mb-2">
+            Capital en stock
+          </p>
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div>
+              <p className="text-lg font-display font-semibold">${Math.round(capital.costo).toLocaleString('es-AR')}</p>
+              <p className="text-[11px] text-muted dark:text-dark-text-secondary">Invertido (a costo)</p>
+            </div>
+            <div>
+              <p className="text-lg font-display font-semibold">${Math.round(capital.venta).toLocaleString('es-AR')}</p>
+              <p className="text-[11px] text-muted dark:text-dark-text-secondary">Valor de venta</p>
+            </div>
+            <div>
+              <p className="text-lg font-display font-semibold text-good">${Math.round(capital.ganancia).toLocaleString('es-AR')}</p>
+              <p className="text-[11px] text-muted dark:text-dark-text-secondary">Ganancia potencial</p>
+            </div>
+          </div>
+          <p className="text-[11px] text-muted dark:text-dark-text-secondary mt-2 text-center">
+            {capital.unidadesCel} celular{capital.unidadesCel === 1 ? '' : 'es'} en stock · {capital.unidadesAcc} accesorio
+            {capital.unidadesAcc === 1 ? '' : 's'}. El costo cuenta solo los equipos/accesorios que tengan costo cargado.
+          </p>
+        </div>
+      )}
 
       <div className="flex items-center gap-2 text-sm">
         <button
@@ -735,19 +793,26 @@ export default function Stock() {
 
           {puedeAgregarStock && (
             <div className="flex flex-col gap-2">
+              <input
+                value={nombreProducto}
+                onChange={(e) => setNombreProducto(e.target.value)}
+                placeholder="Nombre (ej. Funda, AirPods)"
+                className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+              />
               <div className="flex gap-2">
                 <input
-                  value={nombreProducto}
-                  onChange={(e) => setNombreProducto(e.target.value)}
-                  placeholder="Nombre (ej. Funda, AirPods)"
+                  value={costoProducto}
+                  onChange={(e) => setCostoProducto(e.target.value)}
+                  placeholder="Costo (lo que te costó)"
+                  inputMode="decimal"
                   className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
                 />
                 <input
                   value={precioProducto}
                   onChange={(e) => setPrecioProducto(e.target.value)}
-                  placeholder="Precio"
-                  inputMode="numeric"
-                  className="w-24 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+                  placeholder="Precio (venta)"
+                  inputMode="decimal"
+                  className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
                 />
               </div>
               <button
@@ -786,7 +851,12 @@ export default function Stock() {
                   <div className="flex-1 flex items-center justify-between gap-2 min-w-0">
                     <p className="text-sm font-medium">{p.nombre}</p>
                     <div className="flex items-center gap-3 shrink-0">
-                      {p.precio != null && <p className="text-sm text-muted dark:text-dark-text-secondary">${p.precio.toLocaleString('es-AR')}</p>}
+                      <div className="text-right leading-tight">
+                        {p.precio != null && <p className="text-sm">${p.precio.toLocaleString('es-AR')}</p>}
+                        {p.costo != null && (
+                          <p className="text-[11px] text-muted dark:text-dark-text-secondary">costo ${p.costo.toLocaleString('es-AR')}</p>
+                        )}
+                      </div>
                       {puedeEliminar && (
                         <button onClick={() => eliminarProducto(p.id)} className="text-xs text-bad underline">
                           Eliminar
@@ -798,14 +868,37 @@ export default function Stock() {
 
                 <div className="flex items-center justify-between gap-2 pl-14">
                   {editandoCantidad === p.id ? (
-                    <div className="flex items-center gap-2">
-                      <input
-                        value={valorCantidad}
-                        onChange={(e) => setValorCantidad(e.target.value)}
-                        inputMode="numeric"
-                        autoFocus
-                        className="w-16 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-2 py-1 text-sm"
-                      />
+                    <div className="flex flex-wrap items-center gap-2">
+                      <label className="flex items-center gap-1 text-xs text-muted dark:text-dark-text-secondary">
+                        Costo
+                        <input
+                          value={valorCosto}
+                          onChange={(e) => setValorCosto(e.target.value)}
+                          inputMode="decimal"
+                          placeholder="Costo"
+                          className="w-20 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-2 py-1 text-sm"
+                        />
+                      </label>
+                      <label className="flex items-center gap-1 text-xs text-muted dark:text-dark-text-secondary">
+                        Precio
+                        <input
+                          value={valorPrecio}
+                          onChange={(e) => setValorPrecio(e.target.value)}
+                          inputMode="decimal"
+                          placeholder="Precio"
+                          className="w-20 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-2 py-1 text-sm"
+                        />
+                      </label>
+                      <label className="flex items-center gap-1 text-xs text-muted dark:text-dark-text-secondary">
+                        Cant.
+                        <input
+                          value={valorCantidad}
+                          onChange={(e) => setValorCantidad(e.target.value)}
+                          inputMode="numeric"
+                          autoFocus
+                          className="w-14 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-2 py-1 text-sm"
+                        />
+                      </label>
                       <button onClick={() => guardarCantidad(p)} className="text-xs text-accent dark:text-dark-accent underline">
                         Guardar
                       </button>

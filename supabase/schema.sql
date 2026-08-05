@@ -862,6 +862,11 @@ alter table tecnicos add column if not exists foto_url text;
 -- ============================================================
 alter table productos add column if not exists cantidad int not null default 0;
 
+-- Costo del accesorio (lo que te costó a vos), distinto del precio de venta.
+-- Igual que dispositivos.costo. Para calcular el capital invertido en stock.
+-- Ver accesorio_costo_supabase.sql.
+alter table productos add column if not exists costo numeric;
+
 -- ============================================================
 -- Eslogan propio del negocio (distinto del de Qovento), para mostrar
 -- en la boleta junto a su logo y nombre. Antes la boleta mostraba por
