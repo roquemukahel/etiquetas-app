@@ -15,6 +15,7 @@ const RUTAS_SIN_SELECTOR = [
   '/terminos',
   '/privacidad',
   '/seguimiento',
+  '/cuenta/',
   '/boleta',
 ];
 

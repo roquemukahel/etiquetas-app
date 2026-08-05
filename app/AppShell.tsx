@@ -20,6 +20,7 @@ const RUTAS_SIN_SIDEBAR = [
   '/terminos',
   '/privacidad',
   '/seguimiento',
+  '/cuenta/',
   '/boleta',
   '/admin',
 ];
