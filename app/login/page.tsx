@@ -68,16 +68,16 @@ export default function Login() {
       className="min-h-screen w-full flex items-center justify-center lg:justify-end overflow-x-hidden bg-cover bg-center bg-no-repeat bg-gradient-to-br from-[#0b2a5e] via-[#103a78] to-[#0a1c40] lg:bg-[url('/fondo-login.webp')] px-4 sm:px-6 lg:pr-[7vw] py-10"
     >
       <div className="relative w-full max-w-[400px]">
-        {/* Qobi, la mascota, asomándose desde detrás del formulario (solo en
-            computadora, donde el sector azul da lugar). Va DETRÁS de la
-            tarjeta (z-0 contra z-10) y agarrando el borde izquierdo, así
-            parece que sale del formulario. */}
+        {/* Qobi, la mascota, agarrando el borde izquierdo del formulario
+            (solo en computadora, donde el sector azul da lugar). Va ADELANTE
+            de la tarjeta (z-20 contra z-10) con las manos sobre el borde, así
+            parece que la está agarrando. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/qobi.webp"
           alt=""
           aria-hidden
-          className="hidden lg:block absolute top-1/2 right-full -translate-y-1/2 translate-x-[24%] w-[280px] z-0 pointer-events-none select-none drop-shadow-2xl"
+          className="hidden lg:block absolute top-1/2 right-full -translate-y-1/2 translate-x-[9%] w-[280px] z-20 pointer-events-none select-none drop-shadow-2xl"
         />
         <div className="relative z-10 w-full bg-white rounded-2xl shadow-elevated p-8 sm:p-9 flex flex-col gap-5">
           <div className="flex flex-col items-center gap-1">
