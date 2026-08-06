@@ -21,6 +21,7 @@ import {
   GrupoEstado,
   calcularAlertas,
   ITEMS_CHECKLIST_INGRESO,
+  CAMPOS_DEPENDEN_MODULO,
   generarTextoCondicionIngreso,
 } from '../lib/reparaciones';
 import MiniaturaDispositivo from '../MiniaturaDispositivo';
@@ -236,6 +237,8 @@ export default function ServicioTecnico() {
     enciende: nuevoEnciende,
     pantalla_estado: nuevaPantalla || null,
     modulo_ok: nuevoChecklist.modulo_ok ?? null,
+    senal_ok: nuevoChecklist.senal_ok ?? null,
+    boton_silencio_ok: nuevoChecklist.boton_silencio_ok ?? null,
     camara_frontal_ok: nuevoChecklist.camara_frontal_ok ?? null,
     camara_trasera_ok: nuevoChecklist.camara_trasera_ok ?? null,
     flash_ok: nuevoChecklist.flash_ok ?? null,
@@ -615,34 +618,18 @@ export default function ServicioTecnico() {
                 ¿Cómo entra el equipo? (para saber qué se garantiza al entregarlo)
               </p>
               <CheckTri label="Enciende" valor={nuevoEnciende} onChange={setNuevoEnciende} />
-              <div>
-                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Pantalla</label>
-                <div className="flex gap-2">
-                  {[
-                    { id: 'ok', label: 'OK' },
-                    { id: 'marcada', label: 'Marcada' },
-                    { id: 'rota', label: 'Rota' },
-                  ].map((op) => (
-                    <button
-                      key={op.id}
-                      onClick={() => setNuevaPantalla(op.id)}
-                      className={`flex-1 rounded-lg py-2 text-xs font-medium ${
-                        nuevaPantalla === op.id ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
-                      }`}
-                    >
-                      {op.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              {ITEMS_CHECKLIST_INGRESO.map((item) => (
-                <CheckTri
-                  key={item.campo}
-                  label={item.label}
-                  valor={nuevoChecklist[item.campo] ?? null}
-                  onChange={(v) => setNuevoChecklist((p) => ({ ...p, [item.campo]: v }))}
-                />
-              ))}
+              {ITEMS_CHECKLIST_INGRESO.map((item) => {
+                const deshabilitado = CAMPOS_DEPENDEN_MODULO.includes(item.campo) && nuevoChecklist.modulo_ok === false;
+                return (
+                  <CheckTri
+                    key={item.campo}
+                    label={item.label}
+                    disabled={deshabilitado}
+                    valor={deshabilitado ? null : nuevoChecklist[item.campo] ?? null}
+                    onChange={(v) => setNuevoChecklist((p) => ({ ...p, [item.campo]: v }))}
+                  />
+                );
+              })}
               <CheckTri label="Humedad / manipulación" valor={nuevaHumedad} onChange={setNuevaHumedad} invertido />
               <textarea
                 value={nuevaExcepcionGarantia}

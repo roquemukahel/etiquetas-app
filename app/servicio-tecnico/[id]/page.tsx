@@ -16,6 +16,7 @@ import {
   PRIORIDADES,
   infoEstado,
   ITEMS_CHECKLIST_INGRESO,
+  CAMPOS_DEPENDEN_MODULO,
   generarTextoCondicionIngreso,
 } from '../../lib/reparaciones';
 import SelectorColor from '../../SelectorColor';
@@ -51,6 +52,8 @@ type Reparacion = {
   altavoces_ok: boolean | null;
   conectores_ok: boolean | null;
   modulo_ok: boolean | null;
+  senal_ok: boolean | null;
+  boton_silencio_ok: boolean | null;
   flash_ok: boolean | null;
   camara_frontal_ok: boolean | null;
   camara_trasera_ok: boolean | null;
@@ -201,6 +204,8 @@ export default function FichaReparacion() {
       altavoces_ok: r.altavoces_ok,
       conectores_ok: r.conectores_ok,
       modulo_ok: r.modulo_ok,
+      senal_ok: r.senal_ok,
+      boton_silencio_ok: r.boton_silencio_ok,
       flash_ok: r.flash_ok,
       camara_frontal_ok: r.camara_frontal_ok,
       camara_trasera_ok: r.camara_trasera_ok,
@@ -265,6 +270,8 @@ export default function FichaReparacion() {
       altavoces_ok: f.altavoces_ok,
       conectores_ok: f.conectores_ok,
       modulo_ok: f.modulo_ok,
+      senal_ok: f.senal_ok,
+      boton_silencio_ok: f.boton_silencio_ok,
       flash_ok: f.flash_ok,
       camara_frontal_ok: f.camara_frontal_ok,
       camara_trasera_ok: f.camara_trasera_ok,
@@ -753,34 +760,18 @@ export default function FichaReparacion() {
             <Campo label="Falla declarada por el cliente" valor={f.falla_declarada} onChange={(v) => setFm((p) => ({ ...p, falla_declarada: v }))} textarea />
             <Campo label="Estado estético" valor={f.estado_estetico} onChange={(v) => setFm((p) => ({ ...p, estado_estetico: v }))} />
             <CheckTri label="Enciende" valor={f.enciende} onChange={(v) => setFm((p) => ({ ...p, enciende: v }))} />
-            <div>
-              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Pantalla</label>
-              <div className="flex gap-2">
-                {[
-                  { id: 'ok', label: 'OK' },
-                  { id: 'marcada', label: 'Marcada' },
-                  { id: 'rota', label: 'Rota' },
-                ].map((op) => (
-                  <button
-                    key={op.id}
-                    onClick={() => setFm((p) => ({ ...p, pantalla_estado: op.id }))}
-                    className={`flex-1 rounded-lg py-2 text-xs font-medium ${
-                      f.pantalla_estado === op.id ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
-                    }`}
-                  >
-                    {op.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            {ITEMS_CHECKLIST_INGRESO.map((item) => (
-              <CheckTri
-                key={item.campo}
-                label={item.label}
-                valor={f[item.campo]}
-                onChange={(v) => setFm((p) => ({ ...p, [item.campo]: v }))}
-              />
-            ))}
+            {ITEMS_CHECKLIST_INGRESO.map((item) => {
+              const deshabilitado = CAMPOS_DEPENDEN_MODULO.includes(item.campo) && f.modulo_ok === false;
+              return (
+                <CheckTri
+                  key={item.campo}
+                  label={item.label}
+                  disabled={deshabilitado}
+                  valor={deshabilitado ? null : f[item.campo]}
+                  onChange={(v) => setFm((p) => ({ ...p, [item.campo]: v }))}
+                />
+              );
+            })}
             <CheckTri label="Humedad / manipulación" valor={f.humedad} onChange={(v) => setFm((p) => ({ ...p, humedad: v }))} invertido />
             <Campo
               label="Excepción adicional a la garantía (opcional)"
@@ -819,7 +810,6 @@ export default function FichaReparacion() {
             )}
             <p className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted dark:text-dark-text-secondary">
               {itemChecklist('Enciende', r.enciende)}
-              {r.pantalla_estado && <span>Pantalla: {r.pantalla_estado}</span>}
               {ITEMS_CHECKLIST_INGRESO.map((item) => itemChecklist(item.label, (r as any)[item.campo]))}
               {/* Reparaciones cargadas antes de este cambio: si nunca se usó la checklist nueva, mostramos la vieja para no perder ese historial. */}
               {r.camara_frontal_ok == null && r.camara_trasera_ok == null && itemChecklist('Cámaras', r.camaras_ok)}

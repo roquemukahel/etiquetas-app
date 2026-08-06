@@ -18,7 +18,7 @@ import {
   vencimientoDesdeHoy,
 } from '../../lib/cuentaCorriente';
 import { planesActivos, interesDe, valorCuota, etiquetaCuotas } from '../../lib/cuotas';
-import { ITEMS_CHECKLIST_INGRESO, generarTextoCondicionIngreso } from '../../lib/reparaciones';
+import { ITEMS_CHECKLIST_INGRESO, CAMPOS_DEPENDEN_MODULO, generarTextoCondicionIngreso } from '../../lib/reparaciones';
 import MiniaturaDispositivo from '../../MiniaturaDispositivo';
 import CheckTri from '../../CheckTri';
 import TextoCondicionGenerado from '../../TextoCondicionGenerado';
@@ -460,6 +460,8 @@ export default function NuevaOrden() {
     enciende: trabajoEnciende,
     pantalla_estado: trabajoPantalla || null,
     modulo_ok: trabajoChecklist.modulo_ok ?? null,
+    senal_ok: trabajoChecklist.senal_ok ?? null,
+    boton_silencio_ok: trabajoChecklist.boton_silencio_ok ?? null,
     camara_frontal_ok: trabajoChecklist.camara_frontal_ok ?? null,
     camara_trasera_ok: trabajoChecklist.camara_trasera_ok ?? null,
     flash_ok: trabajoChecklist.flash_ok ?? null,
@@ -1124,34 +1126,18 @@ export default function NuevaOrden() {
                 ¿Cómo entra el equipo? (para saber qué se garantiza al entregarlo)
               </p>
               <CheckTri label="Enciende" valor={trabajoEnciende} onChange={setTrabajoEnciende} />
-              <div>
-                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Pantalla</label>
-                <div className="flex gap-2">
-                  {[
-                    { id: 'ok', label: 'OK' },
-                    { id: 'marcada', label: 'Marcada' },
-                    { id: 'rota', label: 'Rota' },
-                  ].map((op) => (
-                    <button
-                      key={op.id}
-                      onClick={() => setTrabajoPantalla(op.id)}
-                      className={`flex-1 rounded-lg py-2 text-xs font-medium ${
-                        trabajoPantalla === op.id ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
-                      }`}
-                    >
-                      {op.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              {ITEMS_CHECKLIST_INGRESO.map((item) => (
-                <CheckTri
-                  key={item.campo}
-                  label={item.label}
-                  valor={trabajoChecklist[item.campo] ?? null}
-                  onChange={(v) => setTrabajoChecklist((p) => ({ ...p, [item.campo]: v }))}
-                />
-              ))}
+              {ITEMS_CHECKLIST_INGRESO.map((item) => {
+                const deshabilitado = CAMPOS_DEPENDEN_MODULO.includes(item.campo) && trabajoChecklist.modulo_ok === false;
+                return (
+                  <CheckTri
+                    key={item.campo}
+                    label={item.label}
+                    disabled={deshabilitado}
+                    valor={deshabilitado ? null : trabajoChecklist[item.campo] ?? null}
+                    onChange={(v) => setTrabajoChecklist((p) => ({ ...p, [item.campo]: v }))}
+                  />
+                );
+              })}
               <CheckTri label="Humedad / manipulación" valor={trabajoHumedad} onChange={setTrabajoHumedad} invertido />
               <textarea
                 value={trabajoExcepcionGarantia}
