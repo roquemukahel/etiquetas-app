@@ -203,3 +203,101 @@ create policy "comision_liquidacion_pagos negocio" on comision_liquidacion_pagos
 -- Nota: la restricción "un vendedor ve solo SUS comisiones" se aplica en la capa
 -- de aplicación (el actor no es un usuario de auth propio, es un vendedor elegido
 -- con permisos). El aislamiento por NEGOCIO ya lo garantiza RLS acá.
+
+-- ============================================================
+-- FASE 5 — Operaciones ATÓMICAS (security definer + filtro por negocio_actual)
+-- Las transiciones de estado se validan acá (backend), no en el navegador.
+-- ============================================================
+
+-- Crear una liquidación con TODOS los movimientos 'aprobada' de un vendedor en
+-- el rango. Atómico: crea la liquidación y vincula los movimientos.
+create or replace function comision_crear_liquidacion(p_vendedor uuid, p_desde date, p_hasta date)
+returns uuid language plpgsql security definer as $$
+declare
+  v_negocio uuid := negocio_actual();
+  v_liq uuid;
+  v_bruto numeric := 0;
+begin
+  if v_negocio is null then raise exception 'Sin negocio'; end if;
+  select coalesce(sum(comision), 0) into v_bruto
+  from comision_movimientos
+  where negocio_id = v_negocio and vendedor_id = p_vendedor and estado = 'aprobada'
+    and (p_desde is null or fecha_hecho >= p_desde)
+    and (p_hasta is null or fecha_hecho < (p_hasta + 1));
+
+  if v_bruto is null then v_bruto := 0; end if;
+
+  insert into comision_liquidaciones (negocio_id, vendedor_id, periodo_desde, periodo_hasta, estado, total_bruto, total_neto)
+  values (v_negocio, p_vendedor, p_desde, p_hasta, 'confirmada', v_bruto, v_bruto)
+  returning id into v_liq;
+
+  update comision_movimientos
+    set estado = 'en_liquidacion', liquidacion_id = v_liq
+  where negocio_id = v_negocio and vendedor_id = p_vendedor and estado = 'aprobada'
+    and (p_desde is null or fecha_hecho >= p_desde)
+    and (p_hasta is null or fecha_hecho < (p_hasta + 1));
+
+  return v_liq;
+end $$;
+
+-- Registrar un pago (parcial) de una liquidación. Recalcula pagado/estado.
+create or replace function comision_registrar_pago(p_liquidacion uuid, p_monto numeric, p_medio text, p_referencia text, p_usuario text)
+returns void language plpgsql security definer as $$
+declare
+  v_negocio uuid := negocio_actual();
+  v_neto numeric;
+  v_pagado numeric;
+  v_estado text;
+begin
+  if v_negocio is null then raise exception 'Sin negocio'; end if;
+  select total_neto into v_neto from comision_liquidaciones where id = p_liquidacion and negocio_id = v_negocio;
+  if v_neto is null then raise exception 'Liquidación no encontrada'; end if;
+
+  insert into comision_liquidacion_pagos (negocio_id, liquidacion_id, monto, medio, referencia, usuario)
+  values (v_negocio, p_liquidacion, p_monto, p_medio, p_referencia, p_usuario);
+
+  select coalesce(sum(monto), 0) into v_pagado from comision_liquidacion_pagos where liquidacion_id = p_liquidacion;
+  v_estado := case when v_pagado >= v_neto then 'pagada' when v_pagado > 0 then 'parcial' else 'confirmada' end;
+
+  update comision_liquidaciones
+    set pagado = v_pagado, estado = v_estado,
+        pagada_at = case when v_estado = 'pagada' then now() else pagada_at end
+  where id = p_liquidacion;
+
+  if v_estado = 'pagada' then
+    update comision_movimientos set estado = 'pagada', pagada_at = now()
+    where liquidacion_id = p_liquidacion and estado = 'en_liquidacion';
+  end if;
+end $$;
+
+-- Reversión de comisiones de una venta cancelada/devuelta. Crea un movimiento
+-- negativo por cada comisión original no revertida. Si el original ya se pagó,
+-- NO lo toca (la reversión queda pendiente para descontar en la próxima
+-- liquidación); si no, marca el original como 'revertida'.
+create or replace function comision_revertir_orden(p_orden uuid, p_motivo text, p_usuario text)
+returns int language plpgsql security definer as $$
+declare
+  v_negocio uuid := negocio_actual();
+  v_count int := 0;
+  r record;
+begin
+  if v_negocio is null then raise exception 'Sin negocio'; end if;
+  for r in
+    select m.* from comision_movimientos m
+    where m.negocio_id = v_negocio and m.orden_id = p_orden
+      and m.tipo_movimiento = 'comision' and m.estado <> 'revertida'
+      and not exists (select 1 from comision_movimientos rev where rev.movimiento_original_id = m.id)
+  loop
+    insert into comision_movimientos (negocio_id, vendedor_id, orden_id, orden_item_id, producto_id, tipo_item,
+      tipo_venta, tipo_movimiento, fecha_hecho, base, valor_regla, participacion, comision, moneda, plan_id,
+      plan_version, regla_id, regla_snapshot, estado, movimiento_original_id, motivo, usuario)
+    values (r.negocio_id, r.vendedor_id, r.orden_id, r.orden_item_id, r.producto_id, r.tipo_item,
+      r.tipo_venta, 'reversion', r.fecha_hecho, r.base, r.valor_regla, r.participacion, -r.comision, r.moneda, r.plan_id,
+      r.plan_version, r.regla_id, r.regla_snapshot, 'generada', r.id, p_motivo, p_usuario);
+    if r.estado <> 'pagada' then
+      update comision_movimientos set estado = 'revertida' where id = r.id;
+    end if;
+    v_count := v_count + 1;
+  end loop;
+  return v_count;
+end $$;

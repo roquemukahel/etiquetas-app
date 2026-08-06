@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { registrarAuditoria } from '../../lib/auditoria';
+import { revertirComisionesOrden } from '../../lib/comisiones/operaciones';
 import { limpiarImei } from '../../lib/imei';
 import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
@@ -588,6 +589,12 @@ export default function DetalleOrden() {
     // contar en el saldo del cliente y en la caja.
     await supabase.from('cta_cte_movimientos').update({ anulado: true }).eq('orden_id', id).eq('anulado', false);
     await supabase.from('pagos').update({ anulado: true }).eq('orden_id', id).eq('anulado', false);
+    // Comisiones: revertir las de esta venta ANTES de borrar la orden (después
+    // orden_id queda en null). Si el módulo no está activo o no había
+    // comisiones, la función no hace nada. No rompe la cancelación si falla.
+    try {
+      await revertirComisionesOrden(supabase, id, 'Venta cancelada', null);
+    } catch {}
     const { error: deleteError } = await supabase.from('ordenes').delete().eq('id', id);
     if (deleteError) {
       setError('No pudimos cancelar la orden: ' + deleteError.message);

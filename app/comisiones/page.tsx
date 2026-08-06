@@ -2,11 +2,23 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../lib/supabase/client';
 import { simboloMoneda } from '../lib/monedas';
 import { useActor } from '../lib/actor';
 import { tienePermiso } from '../lib/permisos';
-import { LABEL_ESTADO_MOV, LABEL_TIPO_MOV, COLOR_ESTADO_MOV, LABEL_TIPO_VENTA, type EstadoMovimiento, type TipoMovimiento } from '../lib/comisiones/tipos';
+import { registrarAuditoria } from '../lib/auditoria';
+import { liquidarVendedor, crearAjuste } from '../lib/comisiones/operaciones';
+import {
+  LABEL_ESTADO_MOV,
+  LABEL_TIPO_MOV,
+  COLOR_ESTADO_MOV,
+  LABEL_TIPO_VENTA,
+  LABEL_ESTADO_LIQ,
+  type EstadoMovimiento,
+  type TipoMovimiento,
+  type EstadoLiquidacion,
+} from '../lib/comisiones/tipos';
 
 type Movimiento = {
   id: string;
@@ -22,9 +34,11 @@ type Movimiento = {
   vendedores: { nombre: string } | null;
   ordenes: { clientes: { nombre: string; apellido: string | null } | null } | null;
 };
+type Liquidacion = { id: string; vendedor_id: string; estado: EstadoLiquidacion; total_neto: number; pagado: number; created_at: string; vendedores: { nombre: string } | null };
 
 export default function Comisiones() {
   const supabase = crearClienteNavegador();
+  const router = useRouter();
   const actor = useActor();
   const puedeGestionar = tienePermiso(actor, 'gestionar_comisiones');
   const puedeVer = tienePermiso(actor, 'ver_comisiones');
@@ -32,38 +46,49 @@ export default function Comisiones() {
   const [activas, setActivas] = useState<boolean | null>(null);
   const [moneda, setMoneda] = useState('$');
   const [movs, setMovs] = useState<Movimiento[]>([]);
+  const [liquidaciones, setLiquidaciones] = useState<Liquidacion[]>([]);
   const [loading, setLoading] = useState(true);
+  const [trabajando, setTrabajando] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // Ajuste manual
+  const [ajusteAbierto, setAjusteAbierto] = useState(false);
+  const [ajVendedor, setAjVendedor] = useState('');
+  const [ajMonto, setAjMonto] = useState('');
+  const [ajPositivo, setAjPositivo] = useState(true);
+  const [ajMotivo, setAjMotivo] = useState('');
+
+  const cargar = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return setLoading(false);
+    const { data: perfil } = await supabase.from('perfiles').select('negocios ( moneda, comisiones_activas )').eq('id', user.id).single();
+    const neg = (perfil as any)?.negocios;
+    if (neg?.moneda) setMoneda(simboloMoneda(neg.moneda));
+    setActivas(!!neg?.comisiones_activas);
+
+    let q = supabase
+      .from('comision_movimientos')
+      .select('id, vendedor_id, orden_id, tipo_venta, tipo_movimiento, base, comision, estado, fecha_hecho, created_at, vendedores ( nombre ), ordenes ( clientes ( nombre, apellido ) )')
+      .order('created_at', { ascending: false })
+      .limit(500);
+    if (!puedeGestionar && actor?.id) q = q.eq('vendedor_id', actor.id);
+    const { data } = await q;
+    setMovs((data as any) ?? []);
+
+    let ql = supabase.from('comision_liquidaciones').select('id, vendedor_id, estado, total_neto, pagado, created_at, vendedores ( nombre )').order('created_at', { ascending: false }).limit(100);
+    if (!puedeGestionar && actor?.id) ql = ql.eq('vendedor_id', actor.id);
+    const { data: liq } = await ql;
+    setLiquidaciones((liq as any) ?? []);
+    setLoading(false);
+  };
 
   useEffect(() => {
-    (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return setLoading(false);
-      const { data: perfil } = await supabase
-        .from('perfiles')
-        .select('negocios ( moneda, comisiones_activas )')
-        .eq('id', user.id)
-        .single();
-      const neg = (perfil as any)?.negocios;
-      if (neg?.moneda) setMoneda(simboloMoneda(neg.moneda));
-      setActivas(!!neg?.comisiones_activas);
-
-      // Un vendedor sin acceso completo ve SOLO sus movimientos.
-      let q = supabase
-        .from('comision_movimientos')
-        .select('id, vendedor_id, orden_id, tipo_venta, tipo_movimiento, base, comision, estado, fecha_hecho, created_at, vendedores ( nombre ), ordenes ( clientes ( nombre, apellido ) )')
-        .order('created_at', { ascending: false })
-        .limit(500);
-      if (!puedeGestionar && actor?.id) q = q.eq('vendedor_id', actor.id);
-      const { data } = await q;
-      setMovs((data as any) ?? []);
-      setLoading(false);
-    })();
+    cargar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [puedeGestionar, actor?.id]);
 
   const m = (n: number) => `${moneda}${Math.round(n).toLocaleString('es-AR')}`;
 
-  // Totales por estado / tipo
   const tot = useMemo(() => {
     const t = { generada: 0, aprobada: 0, en_liquidacion: 0, pagada: 0, ajustesReversiones: 0, base: 0 };
     for (const mv of movs) {
@@ -74,39 +99,72 @@ export default function Comisiones() {
         else if (mv.estado === 'en_liquidacion') t.en_liquidacion += mv.comision;
         else if (mv.estado === 'pagada') t.pagada += mv.comision;
       } else {
-        t.ajustesReversiones += mv.comision; // negativos/positivos
+        t.ajustesReversiones += mv.comision;
       }
     }
     return t;
   }, [movs]);
 
-  // Resumen por vendedor
   const porVendedor = useMemo(() => {
-    const mapa = new Map<string, { nombre: string; ventaMin: number; comMin: number; ventaMay: number; comMay: number; ajustes: number; pagado: number; total: number }>();
+    const mapa = new Map<string, { vendedorId: string; nombre: string; comMin: number; comMay: number; ajustes: number; pendiente: number; total: number }>();
     for (const mv of movs) {
       const key = mv.vendedor_id;
-      const row = mapa.get(key) ?? { nombre: mv.vendedores?.nombre ?? 'Vendedor', ventaMin: 0, comMin: 0, ventaMay: 0, comMay: 0, ajustes: 0, pagado: 0, total: 0 };
+      const row = mapa.get(key) ?? { vendedorId: key, nombre: mv.vendedores?.nombre ?? 'Vendedor', comMin: 0, comMay: 0, ajustes: 0, pendiente: 0, total: 0 };
       if (mv.tipo_movimiento === 'comision') {
-        if (mv.tipo_venta === 'mayorista') { row.ventaMay += Number(mv.base) || 0; row.comMay += mv.comision; }
-        else { row.ventaMin += Number(mv.base) || 0; row.comMin += mv.comision; }
-        if (mv.estado === 'pagada') row.pagado += mv.comision;
-      } else {
-        row.ajustes += mv.comision;
-        if (mv.estado === 'pagada') row.pagado += mv.comision;
-      }
+        if (mv.tipo_venta === 'mayorista') row.comMay += mv.comision;
+        else row.comMin += mv.comision;
+      } else row.ajustes += mv.comision;
+      // Pendiente de liquidar = generada + aprobada (aún no en liquidación ni pagada)
+      if (mv.estado === 'generada' || mv.estado === 'aprobada') row.pendiente += mv.comision;
       row.total = row.comMin + row.comMay + row.ajustes;
       mapa.set(key, row);
     }
     return Array.from(mapa.values()).sort((a, b) => b.total - a.total);
   }, [movs]);
 
-  if (loading) {
-    return (
-      <main className="flex min-h-screen items-center justify-center">
-        <p className="text-sm text-muted dark:text-dark-text-secondary">Cargando comisiones...</p>
-      </main>
-    );
-  }
+  const liquidar = async (vendedorId: string, nombre: string, pendiente: number) => {
+    if (!puedeGestionar || trabajando) return;
+    if (!confirm(`¿Liquidar ${m(pendiente)} de ${nombre}? Se aprueban las comisiones pendientes y se arma la liquidación.`)) return;
+    setTrabajando(vendedorId);
+    setError(null);
+    const { liquidacionId, error: e } = await liquidarVendedor(supabase, vendedorId, null, null);
+    if (e || !liquidacionId) {
+      setError(e || 'No se pudo liquidar.');
+      setTrabajando(null);
+      return;
+    }
+    await registrarAuditoria(supabase, { accion: `creó una liquidación de comisiones de ${nombre} (${m(pendiente)})`, entidad: 'comision_liquidacion', entidadId: liquidacionId });
+    router.push(`/comisiones/liquidaciones/${liquidacionId}`);
+  };
+
+  const guardarAjuste = async () => {
+    if (!puedeGestionar || !ajVendedor || !ajMotivo.trim()) {
+      setError('Elegí vendedor y escribí un motivo.');
+      return;
+    }
+    const monto = Number(ajMonto.replace(',', '.'));
+    if (!monto || monto <= 0) {
+      setError('Ingresá un monto válido.');
+      return;
+    }
+    setTrabajando('ajuste');
+    setError(null);
+    const { error: e } = await crearAjuste(supabase, { vendedorId: ajVendedor, monto, positivo: ajPositivo, motivo: ajMotivo.trim(), moneda: null, usuario: actor?.nombre ?? null });
+    if (e) {
+      setError(e);
+      setTrabajando(null);
+      return;
+    }
+    await registrarAuditoria(supabase, { accion: `cargó un ajuste de comisión ${ajPositivo ? '(+)' : '(−)'} de ${m(monto)}: ${ajMotivo.trim()}`, entidad: 'comision_movimiento' });
+    setAjusteAbierto(false);
+    setAjVendedor('');
+    setAjMonto('');
+    setAjMotivo('');
+    setTrabajando(null);
+    cargar();
+  };
+
+  if (loading) return <main className="flex min-h-screen items-center justify-center"><p className="text-sm text-muted dark:text-dark-text-secondary">Cargando comisiones...</p></main>;
 
   if (!puedeVer) {
     return (
@@ -122,22 +180,18 @@ export default function Comisiones() {
       <header className="flex items-center gap-3">
         <Link href="/" className="text-2xl leading-none">&larr;</Link>
         <span className="text-lg font-medium mr-auto">Comisiones</span>
-        {puedeGestionar && (
-          <Link href="/configuracion/comisiones" className="text-xs text-accent dark:text-dark-accent underline">Configurar</Link>
-        )}
+        {puedeGestionar && <Link href="/configuracion/comisiones" className="text-xs text-accent dark:text-dark-accent underline">Configurar</Link>}
       </header>
+
+      {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
 
       {activas === false && (
         <div className="rounded-2xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface p-5 text-center flex flex-col items-center gap-2">
           <p className="text-sm font-medium">Las comisiones están desactivadas</p>
-          <p className="text-xs text-muted dark:text-dark-text-secondary max-w-sm">Activalas y poné el porcentaje de los vendedores para que las ventas empiecen a generar comisiones.</p>
-          {puedeGestionar && (
-            <Link href="/configuracion/comisiones" className="mt-1 rounded-xl bg-accent dark:bg-dark-accent text-white px-4 py-2 text-xs font-medium">Activar comisiones</Link>
-          )}
+          {puedeGestionar && <Link href="/configuracion/comisiones" className="mt-1 rounded-xl bg-accent dark:bg-dark-accent text-white px-4 py-2 text-xs font-medium">Activar comisiones</Link>}
         </div>
       )}
 
-      {/* Tarjetas resumen */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Tarjeta valor={m(tot.generada)} etiqueta="Generadas (a revisar)" tono="text-accent dark:text-dark-accent" />
         <Tarjeta valor={m(tot.aprobada)} etiqueta="Aprobadas por liquidar" tono="text-good" />
@@ -145,11 +199,30 @@ export default function Comisiones() {
         <Tarjeta valor={m(tot.ajustesReversiones)} etiqueta="Ajustes y reversiones" tono={tot.ajustesReversiones < 0 ? 'text-bad' : undefined} />
       </div>
 
-      {/* Tabla por vendedor */}
       <section className="rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card overflow-hidden">
-        <div className="px-4 py-3 border-b border-border dark:border-dark-border">
+        <div className="px-4 py-3 border-b border-border dark:border-dark-border flex items-center justify-between">
           <p className="text-sm font-semibold">Por vendedor</p>
+          {puedeGestionar && <button onClick={() => setAjusteAbierto((v) => !v)} className="text-xs text-accent dark:text-dark-accent underline">Ajuste manual</button>}
         </div>
+
+        {ajusteAbierto && puedeGestionar && (
+          <div className="px-4 py-3 border-b border-border dark:border-dark-border bg-canvas dark:bg-dark-bg flex flex-col gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <select value={ajVendedor} onChange={(e) => setAjVendedor(e.target.value)} className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-2 text-sm">
+                <option value="">Vendedor…</option>
+                {porVendedor.map((v) => <option key={v.vendedorId} value={v.vendedorId}>{v.nombre}</option>)}
+              </select>
+              <select value={ajPositivo ? '1' : '0'} onChange={(e) => setAjPositivo(e.target.value === '1')} className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-2 text-sm">
+                <option value="1">Bonificación (+)</option>
+                <option value="0">Descuento (−)</option>
+              </select>
+              <input value={ajMonto} onChange={(e) => setAjMonto(e.target.value.replace(',', '.').replace(/[^\d.]/g, ''))} inputMode="decimal" placeholder="Monto" className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm" />
+              <input value={ajMotivo} onChange={(e) => setAjMotivo(e.target.value)} placeholder="Motivo (obligatorio)" className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm" />
+            </div>
+            <button disabled={trabajando === 'ajuste'} onClick={guardarAjuste} className="self-start rounded-lg bg-accent dark:bg-dark-accent text-white px-4 py-2 text-xs font-medium disabled:opacity-40">Guardar ajuste</button>
+          </div>
+        )}
+
         {porVendedor.length === 0 ? (
           <p className="text-sm text-muted dark:text-dark-text-secondary text-center py-8">Todavía no hay comisiones.</p>
         ) : (
@@ -158,20 +231,30 @@ export default function Comisiones() {
               <thead>
                 <tr className="text-[11px] uppercase tracking-wide text-muted dark:text-dark-text-secondary text-right">
                   <th className="text-left font-medium px-4 py-2">Vendedor</th>
-                  <th className="font-medium px-2 py-2">Com. minorista</th>
-                  <th className="font-medium px-2 py-2">Com. mayorista</th>
-                  <th className="font-medium px-2 py-2">Ajustes</th>
-                  <th className="font-medium px-4 py-2">Total</th>
+                  <th className="font-medium px-2 py-2">Minorista</th>
+                  <th className="font-medium px-2 py-2">Mayorista</th>
+                  <th className="font-medium px-2 py-2">Total</th>
+                  {puedeGestionar && <th className="font-medium px-4 py-2">Pendiente</th>}
                 </tr>
               </thead>
               <tbody>
-                {porVendedor.map((v, i) => (
-                  <tr key={i} className="border-t border-border dark:border-dark-border">
+                {porVendedor.map((v) => (
+                  <tr key={v.vendedorId} className="border-t border-border dark:border-dark-border">
                     <td className="text-left px-4 py-2.5 font-medium">{v.nombre}</td>
                     <td className="text-right px-2 py-2.5 tabular-nums">{m(v.comMin)}</td>
                     <td className="text-right px-2 py-2.5 tabular-nums">{m(v.comMay)}</td>
-                    <td className={`text-right px-2 py-2.5 tabular-nums ${v.ajustes < 0 ? 'text-bad' : ''}`}>{v.ajustes !== 0 ? m(v.ajustes) : '—'}</td>
-                    <td className="text-right px-4 py-2.5 tabular-nums font-semibold">{m(v.total)}</td>
+                    <td className="text-right px-2 py-2.5 tabular-nums font-semibold">{m(v.total)}</td>
+                    {puedeGestionar && (
+                      <td className="text-right px-4 py-2.5">
+                        {v.pendiente > 0 ? (
+                          <button disabled={trabajando === v.vendedorId} onClick={() => liquidar(v.vendedorId, v.nombre, v.pendiente)} className="rounded-lg bg-good text-white px-3 py-1.5 text-xs font-medium disabled:opacity-40 whitespace-nowrap">
+                            {trabajando === v.vendedorId ? '…' : `Liquidar ${m(v.pendiente)}`}
+                          </button>
+                        ) : (
+                          <span className="text-xs text-muted dark:text-dark-text-secondary">—</span>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -180,11 +263,26 @@ export default function Comisiones() {
         )}
       </section>
 
-      {/* Movimientos recientes */}
+      {liquidaciones.length > 0 && (
+        <section className="rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card">
+          <div className="px-4 py-3 border-b border-border dark:border-dark-border"><p className="text-sm font-semibold">Liquidaciones</p></div>
+          <div className="flex flex-col divide-y divide-border dark:divide-dark-border">
+            {liquidaciones.map((l) => (
+              <Link key={l.id} href={`/comisiones/liquidaciones/${l.id}`} className="flex items-center gap-3 px-4 py-2.5 hover:bg-canvas dark:hover:bg-dark-bg transition-colors">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium truncate">{l.vendedores?.nombre ?? 'Vendedor'}</p>
+                  <p className="text-[11px] text-muted dark:text-dark-text-secondary">{new Date(l.created_at).toLocaleDateString('es-AR')} · {LABEL_ESTADO_LIQ[l.estado]}</p>
+                </div>
+                <span className="text-sm tabular-nums font-semibold">{m(l.total_neto)}</span>
+                <span className="text-muted dark:text-dark-text-secondary">&rarr;</span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
       <section className="rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card">
-        <div className="px-4 py-3 border-b border-border dark:border-dark-border">
-          <p className="text-sm font-semibold">Movimientos</p>
-        </div>
+        <div className="px-4 py-3 border-b border-border dark:border-dark-border"><p className="text-sm font-semibold">Movimientos</p></div>
         {movs.length === 0 ? (
           <p className="text-sm text-muted dark:text-dark-text-secondary text-center py-8">Sin movimientos.</p>
         ) : (
@@ -198,9 +296,7 @@ export default function Comisiones() {
                       {mv.vendedores?.nombre ?? 'Vendedor'}
                       {mv.tipo_venta && <span className="text-xs text-muted dark:text-dark-text-secondary"> · {LABEL_TIPO_VENTA[mv.tipo_venta as 'minorista' | 'mayorista'] ?? mv.tipo_venta}</span>}
                     </p>
-                    <p className="text-[11px] text-muted dark:text-dark-text-secondary truncate">
-                      {LABEL_TIPO_MOV[mv.tipo_movimiento]}{cliente ? ` · ${cliente}` : ''} · {new Date(mv.fecha_hecho || mv.created_at).toLocaleDateString('es-AR')}
-                    </p>
+                    <p className="text-[11px] text-muted dark:text-dark-text-secondary truncate">{LABEL_TIPO_MOV[mv.tipo_movimiento]}{cliente ? ` · ${cliente}` : ''} · {new Date(mv.fecha_hecho || mv.created_at).toLocaleDateString('es-AR')}</p>
                   </div>
                   <span className={`text-[10px] font-medium rounded-full px-2 py-0.5 shrink-0 ${COLOR_ESTADO_MOV[mv.estado]}`}>{LABEL_ESTADO_MOV[mv.estado]}</span>
                   <span className={`text-sm tabular-nums font-semibold shrink-0 w-24 text-right ${mv.comision < 0 ? 'text-bad' : ''}`}>{m(mv.comision)}</span>
@@ -210,10 +306,6 @@ export default function Comisiones() {
           </div>
         )}
       </section>
-
-      <p className="text-[11px] text-muted dark:text-dark-text-secondary text-center">
-        Las comisiones las calcula el sistema al confirmar cada venta. Aprobación, liquidaciones y pagos: próxima etapa.
-      </p>
     </main>
   );
 }
