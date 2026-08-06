@@ -33,26 +33,26 @@ const CARACTERISTICAS = [
 export default function LandingPublica() {
   return (
     <main className="flex flex-col min-h-screen bg-canvas dark:bg-dark-bg text-ink dark:text-dark-text">
-      <header className="sticky top-0 z-30 bg-canvas/90 dark:bg-dark-bg/90 backdrop-blur border-b border-border dark:border-dark-border">
-        <div className="max-w-5xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
+      <header className="sticky top-0 z-30 bg-[#070B18]/80 backdrop-blur-md border-b border-white/10">
+        <div className="max-w-[1280px] mx-auto px-5 sm:px-8 lg:px-12 py-3 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/qovento-icon.png" alt="Qovento" className="h-7 w-7 object-contain" />
-            <span className="font-display font-semibold text-lg">Qovento</span>
+            <span className="font-display font-semibold text-lg text-white">Qovento</span>
           </div>
-          <nav className="hidden sm:flex items-center gap-6 text-sm font-medium text-muted dark:text-dark-text-secondary">
-            <a href="#inicio" className="hover:text-ink dark:hover:text-dark-text transition-colors">Inicio</a>
-            <a href="#caracteristicas" className="hover:text-ink dark:hover:text-dark-text transition-colors">Características</a>
-            <a href="#planes" className="hover:text-ink dark:hover:text-dark-text transition-colors">Planes</a>
-            <a href="#contacto" className="hover:text-ink dark:hover:text-dark-text transition-colors">Contacto</a>
+          <nav className="hidden sm:flex items-center gap-6 text-sm font-medium text-white/70">
+            <a href="#inicio" className="hover:text-white transition-colors">Inicio</a>
+            <a href="#caracteristicas" className="hover:text-white transition-colors">Características</a>
+            <a href="#planes" className="hover:text-white transition-colors">Planes</a>
+            <a href="#contacto" className="hover:text-white transition-colors">Contacto</a>
           </nav>
           <div className="flex items-center gap-2">
-            <Link href="/login" className="text-sm font-medium px-3 py-2 rounded-xl hover:bg-white dark:hover:bg-dark-surface transition-colors">
+            <Link href="/login" className="text-sm font-medium px-3 py-2 rounded-xl text-white/80 hover:text-white hover:bg-white/10 transition-colors">
               Iniciar sesión
             </Link>
             <Link
               href="/registro"
-              className="text-sm font-medium px-4 py-2 rounded-xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover text-white transition-colors"
+              className="text-sm font-medium px-4 py-2 rounded-xl bg-gradient-to-r from-[#2F6BFF] to-[#7C3AED] hover:brightness-110 text-white transition shadow-[0_6px_20px_-6px_rgba(47,107,255,0.7)]"
             >
               Empezá gratis
             </Link>
@@ -60,29 +60,77 @@ export default function LandingPublica() {
         </div>
       </header>
 
-      <section id="inicio" className="max-w-5xl mx-auto px-6 pt-16 pb-20 flex flex-col items-center text-center gap-6">
-        <span className="text-xs font-semibold uppercase tracking-wide text-accent dark:text-dark-accent bg-accent-soft dark:bg-dark-accent-soft rounded-full px-3 py-1">
-          Para casas de celulares
-        </span>
-        <h1 className="font-display font-semibold text-4xl sm:text-5xl leading-tight max-w-3xl">
-          Recibí, documentá, etiquetá y vendé celulares sin perder ni un dato
-        </h1>
-        <p className="text-base sm:text-lg text-muted dark:text-dark-text-secondary max-w-xl">{ESLOGAN}</p>
-        <div className="flex flex-col sm:flex-row gap-3 mt-2">
-          <Link
-            href="/registro"
-            className="rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors text-white px-6 py-3.5 text-sm font-medium shadow-elevated"
-          >
-            Empezá gratis
-          </Link>
-          <a
-            href="#caracteristicas"
-            className="rounded-2xl border border-border dark:border-dark-border px-6 py-3.5 text-sm font-medium hover:bg-white dark:hover:bg-dark-surface transition-colors"
-          >
-            Ver qué incluye
-          </a>
+      <section id="inicio" className="relative overflow-hidden bg-[#070B18] text-white">
+        {/* Fondo en escritorio: la interfaz de Qovento + Qovi a la derecha; el
+           lado izquierdo queda despejado para el texto. object-right para que
+           Qovi nunca quede recortado; el degradado da contraste al texto. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/qovento-hero-qovi.webp"
+          alt=""
+          aria-hidden="true"
+          fetchPriority="high"
+          className="hidden lg:block absolute inset-0 h-full w-full object-cover object-right select-none pointer-events-none"
+        />
+        <div aria-hidden="true" className="hidden lg:block absolute inset-0 bg-gradient-to-r from-[#070B18] via-[#070B18]/80 to-transparent" />
+
+        <div className="relative mx-auto max-w-[1280px] px-5 sm:px-8 lg:px-12">
+          <div className="lg:flex lg:items-center lg:min-h-[clamp(720px,88vh,850px)]">
+            <div className="w-full lg:w-[46%] lg:max-w-[560px] flex flex-col items-start gap-5 pt-12 pb-8 lg:py-0">
+              <span className="animate-fade-in-up text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-300 bg-sky-400/10 border border-sky-400/25 rounded-full px-3 py-1.5">
+                Gestión integral para locales de celulares
+              </span>
+              <h1
+                className="animate-fade-in-up font-display font-semibold text-white leading-[1.08] text-[clamp(2.1rem,4.6vw,3.4rem)]"
+                style={{ animationDelay: '60ms' }}
+              >
+                Todo tu negocio, organizado{' '}
+                <span className="bg-gradient-to-r from-sky-400 to-violet-500 bg-clip-text text-transparent">
+                  en un solo lugar
+                </span>
+                .
+              </h1>
+              <p
+                className="animate-fade-in-up text-slate-300 leading-relaxed text-[clamp(1rem,1.4vw,1.2rem)] max-w-[560px]"
+                style={{ animationDelay: '120ms' }}
+              >
+                Gestioná ventas, stock, reparaciones, clientes y estadísticas desde una plataforma simple, rápida y
+                completamente conectada.
+              </p>
+              <div
+                className="animate-fade-in-up flex flex-col sm:flex-row gap-3 mt-1 w-full sm:w-auto"
+                style={{ animationDelay: '180ms' }}
+              >
+                <Link
+                  href="/registro"
+                  className="rounded-2xl bg-gradient-to-r from-[#2F6BFF] to-[#7C3AED] hover:brightness-110 hover:-translate-y-0.5 transition text-white px-6 py-3.5 text-sm font-semibold text-center shadow-[0_10px_30px_-8px_rgba(47,107,255,0.65)]"
+                >
+                  Empezá gratis
+                </Link>
+                <a
+                  href="#caracteristicas"
+                  className="rounded-2xl bg-white/5 border border-white/20 hover:bg-white/10 transition text-white px-6 py-3.5 text-sm font-semibold text-center"
+                >
+                  Ver cómo funciona
+                </a>
+              </div>
+              <p className="animate-fade-in-up text-xs text-slate-400 mt-1" style={{ animationDelay: '240ms' }}>
+                14 días gratis · Sin tarjeta de crédito · Configuración en minutos
+              </p>
+            </div>
+          </div>
+
+          {/* Móvil y tablet: la imagen como bloque visual independiente, debajo
+             del texto (no como fondo, para no recortar a Qovi ni tapar el texto). */}
+          <div className="lg:hidden pb-12">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/qovento-hero-qovi.webp"
+              alt="Interfaz de Qovento con Qovi, la mascota del sistema"
+              className="w-full rounded-2xl border border-white/10 object-cover aspect-[2/1] shadow-[0_0_60px_-15px_rgba(59,130,246,0.55)]"
+            />
+          </div>
         </div>
-        <p className="text-xs text-muted dark:text-dark-text-secondary">Sin tarjeta de crédito · Andá probándolo en minutos</p>
       </section>
 
       <section className="max-w-5xl mx-auto px-6 pb-20 w-full">
