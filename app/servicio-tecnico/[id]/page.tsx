@@ -17,8 +17,8 @@ import {
   infoEstado,
   ITEMS_CHECKLIST_INGRESO,
   CAMPOS_DEPENDEN_MODULO,
-  generarTextoCondicionIngreso,
 } from '../../lib/reparaciones';
+import { generarOrdenDeReparacion } from '../../lib/ordenesServicio';
 import SelectorColor from '../../SelectorColor';
 import Avatar from '../../Avatar';
 import CheckTri from '../../CheckTri';
@@ -415,93 +415,13 @@ export default function FichaReparacion() {
     if (!r || !puedeGestionar) return;
     if (!confirm('¿Generar la orden de cobro con el importe de esta reparación?')) return;
     setGuardando(true);
-    const total = r.importe_total ?? (r.presupuesto_mano_obra || 0) + (r.presupuesto_repuestos || 0);
-    const descripcion = `Servicio técnico — ${r.modelo || 'equipo'}${r.diagnostico ? `: ${r.diagnostico}` : ''}`;
-    // Así el cliente ve en la boleta, sin que nadie tenga que acordarse de
-    // copiarlo a mano, qué no está cubierto por la garantía y por qué.
-    const notaCondicion = generarTextoCondicionIngreso(r as any) || null;
-    // Aclaraciones del técnico para el cliente (diagnóstico + lo que se hizo).
-    // Viajan a la orden; el vendedor decide desde Órdenes si salen en la boleta.
-    const aclaracionesTecnico =
-      [r.diagnostico ? `Diagnóstico: ${r.diagnostico}` : null, r.resultado_final ? `Trabajo realizado: ${r.resultado_final}` : null]
-        .filter(Boolean)
-        .join('\n') || null;
-
-    let ordenId = r.orden_cobro_id;
-
-    if (ordenId) {
-      // Ya existía desde que se recibió el equipo (ver agregarEquipo en la
-      // lista) — se actualiza en vez de crear una segunda orden duplicada.
-      const { error: updateError } = await supabase
-        .from('ordenes')
-        .update({ total, forma_pago: r.forma_pago || 'Efectivo', nota: notaCondicion, aclaraciones_tecnico: aclaracionesTecnico })
-        .eq('id', ordenId);
-      if (updateError) {
-        setError('No pudimos actualizar la orden: ' + updateError.message);
-        setGuardando(false);
-        return;
-      }
-      const { data: itemExistente, error: itemBuscarError } = await supabase
-        .from('orden_items')
-        .select('id')
-        .eq('orden_id', ordenId)
-        .limit(1)
-        .maybeSingle();
-      if (itemBuscarError) {
-        // Si esto falla por un error real (no porque no exista el ítem),
-        // no hay que asumir que no existe: insertar acá duplicaría la
-        // línea de la boleta (una vieja en $0 + una nueva con el total).
-        setError('No pudimos actualizar el ítem de la orden: ' + itemBuscarError.message);
-        setGuardando(false);
-        return;
-      }
-      if (itemExistente) {
-        await supabase.from('orden_items').update({ descripcion, precio_unitario: total }).eq('id', itemExistente.id);
-      } else {
-        await supabase.from('orden_items').insert({ orden_id: ordenId, descripcion, cantidad: 1, precio_unitario: total, tipo: 'trabajo' });
-      }
-    } else {
-      // Reparaciones sin cliente al recibirse (equipo propio) o cargadas
-      // antes de este cambio no tienen una orden vinculada todavía — se
-      // crea acá, como antes.
-      const { data: orden, error: ordenError } = await supabase
-        .from('ordenes')
-        .insert({
-          cliente_id: r.cliente_id,
-          forma_pago: r.forma_pago || 'Efectivo',
-          total,
-          estado: 'pendiente',
-          nota: notaCondicion,
-          aclaraciones_tecnico: aclaracionesTecnico,
-        })
-        .select()
-        .single();
-
-      if (ordenError || !orden) {
-        setError('No pudimos generar la orden: ' + (ordenError?.message || ''));
-        setGuardando(false);
-        return;
-      }
-
-      ordenId = orden.id;
-      await supabase.from('orden_items').insert({
-        orden_id: orden.id,
-        descripcion,
-        cantidad: 1,
-        precio_unitario: total,
-        tipo: 'trabajo',
-      });
+    // Misma lógica compartida que usa la sección "Listos para cobrar" de Órdenes.
+    const { ordenId, total, error: genError } = await generarOrdenDeReparacion(supabase, r as any);
+    if (genError || !ordenId) {
+      setError(genError || 'No pudimos generar la orden.');
+      setGuardando(false);
+      return;
     }
-
-    await supabase
-      .from('reparaciones')
-      .update({
-        orden_cobro_id: ordenId,
-        estado: 'entregado',
-        fecha_entrega: new Date().toISOString(),
-        estado_actualizado_at: new Date().toISOString(),
-      })
-      .eq('id', r.id);
 
     await registrarAuditoria(supabase, {
       accion: `generó la orden de cobro de la reparación ${r.numero_orden || ''} (${r.modelo || 'sin modelo'})`,

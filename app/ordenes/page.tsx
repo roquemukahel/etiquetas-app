@@ -2,9 +2,12 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../lib/supabase/client';
 import { useActor } from '../lib/actor';
 import { tienePermiso } from '../lib/permisos';
+import { registrarAuditoria } from '../lib/auditoria';
+import { generarOrdenDeReparacion } from '../lib/ordenesServicio';
 
 type Orden = {
   id: string;
@@ -14,6 +17,24 @@ type Orden = {
   created_at: string;
   clientes: { nombre: string; apellido: string | null } | null;
   orden_items: { descripcion: string; tipo: string }[];
+};
+
+// Reparaciones que el técnico ya marcó "listo para entregar" y todavía no se
+// cobraron: el vendedor genera la boleta desde acá. Traemos todos los campos
+// (select *) porque son poquitas filas y el helper necesita el checklist para
+// armar la nota de condición del equipo.
+type ReparacionLista = {
+  id: string;
+  numero_orden: string | null;
+  modelo: string | null;
+  imei: string | null;
+  diagnostico: string | null;
+  importe_total: number | null;
+  presupuesto_mano_obra: number | null;
+  presupuesto_repuestos: number | null;
+  cliente_id: string | null;
+  orden_cobro_id: string | null;
+  clientes: { nombre: string; apellido: string | null } | null;
 };
 
 const ESTADOS = ['todas', 'pendiente', 'pagado', 'entregado'];
@@ -33,23 +54,57 @@ function esServicioTecnico(o: Orden) {
 
 export default function Ordenes() {
   const supabase = crearClienteNavegador();
+  const router = useRouter();
   const actor = useActor();
   const puedeVender = tienePermiso(actor, 'vender');
   const [ordenes, setOrdenes] = useState<Orden[]>([]);
+  const [reparacionesListas, setReparacionesListas] = useState<ReparacionLista[]>([]);
+  const [generando, setGenerando] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [filtroEstado, setFiltroEstado] = useState('todas');
   const [filtroTipo, setFiltroTipo] = useState<'todas' | 'ventas' | 'servicio'>('todas');
 
-  useEffect(() => {
-    (async () => {
-      const { data } = await supabase
+  const cargar = async () => {
+    const [{ data: ordenesData }, { data: listasData }] = await Promise.all([
+      supabase
         .from('ordenes')
         .select('*, clientes ( nombre, apellido ), orden_items ( descripcion, tipo )')
-        .order('created_at', { ascending: false });
-      setOrdenes((data as any) ?? []);
-      setLoading(false);
-    })();
+        .order('created_at', { ascending: false }),
+      // Reparaciones terminadas por el técnico (con cliente) que faltan cobrar.
+      supabase
+        .from('reparaciones')
+        .select('*, clientes ( nombre, apellido )')
+        .eq('estado', 'listo_para_entregar')
+        .not('cliente_id', 'is', null)
+        .order('fecha_reparado', { ascending: true }),
+    ]);
+    setOrdenes((ordenesData as any) ?? []);
+    setReparacionesListas((listasData as any) ?? []);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    cargar();
   }, []);
+
+  const generarBoleta = async (r: ReparacionLista) => {
+    if (!puedeVender || generando) return;
+    if (!confirm(`¿Generar la boleta de ${r.modelo || 'este equipo'}? Se cobra el importe de la reparación.`)) return;
+    setGenerando(r.id);
+    const { ordenId, total, error } = await generarOrdenDeReparacion(supabase, r as any);
+    if (error || !ordenId) {
+      alert(error || 'No pudimos generar la boleta.');
+      setGenerando(null);
+      return;
+    }
+    await registrarAuditoria(supabase, {
+      accion: `generó la boleta de una reparación lista (${r.numero_orden || ''}, ${r.modelo || 'sin modelo'})`,
+      entidad: 'reparacion',
+      entidadId: r.id,
+      valorNuevo: { orden_id: ordenId, total },
+    });
+    router.push(`/ordenes/${ordenId}`);
+  };
 
   const filtradas = useMemo(() => {
     return ordenes
@@ -108,6 +163,49 @@ export default function Ordenes() {
         <p className="text-xs text-muted dark:text-dark-text-secondary text-center">
           No tenés permiso para crear órdenes.
         </p>
+      )}
+
+      {puedeVender && reparacionesListas.length > 0 && (
+        <section className="rounded-2xl border border-good/40 bg-good/5 p-3 flex flex-col gap-2">
+          <p className="text-sm font-medium text-good">
+            🔧 Reparados por el técnico · listos para cobrar ({reparacionesListas.length})
+          </p>
+          {reparacionesListas.map((r) => {
+            const importe = r.importe_total ?? (r.presupuesto_mano_obra || 0) + (r.presupuesto_repuestos || 0);
+            return (
+              <div
+                key={r.id}
+                className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-3 py-2.5 flex items-center justify-between gap-2"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">
+                    {r.modelo || 'Equipo'}
+                    {r.numero_orden && <span className="text-xs text-muted dark:text-dark-text-secondary"> · {r.numero_orden}</span>}
+                  </p>
+                  <p className="text-xs text-muted dark:text-dark-text-secondary truncate">
+                    {r.clientes ? `${r.clientes.nombre} ${r.clientes.apellido || ''}`.trim() : 'Sin cliente'}
+                    {importe > 0 && ` · $${importe.toLocaleString('es-AR')}`}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Link
+                    href={`/servicio-tecnico/${r.id}`}
+                    className="text-xs text-accent dark:text-dark-accent underline whitespace-nowrap"
+                  >
+                    Ver ficha
+                  </Link>
+                  <button
+                    disabled={generando === r.id}
+                    onClick={() => generarBoleta(r)}
+                    className="rounded-lg bg-good hover:opacity-90 transition-opacity px-3 py-2 text-xs font-medium text-white disabled:opacity-40 whitespace-nowrap"
+                  >
+                    {generando === r.id ? 'Generando…' : 'Generar boleta'}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </section>
       )}
 
       {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Cargando...</p>}
