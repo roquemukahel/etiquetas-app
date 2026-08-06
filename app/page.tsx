@@ -10,6 +10,7 @@ import { imagenParaDescripcion } from './lib/carpetas';
 import { ICONOS, COLOR_ICONO } from './Iconos';
 import NumeroAnimado from './NumeroAnimado';
 import Avatar from './Avatar';
+import BienvenidaQovi from './BienvenidaQovi';
 
 const SECCIONES = [
   { href: '/ordenes', titulo: 'Órdenes', desc: 'Ventas, boletas y canjes', icono: 'ordenes', color: 'ventas', activo: true },
@@ -376,6 +377,8 @@ export default async function Home() {
 
   return (
     <main className="flex min-h-screen flex-col px-6 py-8 gap-6 max-w-2xl lg:max-w-[1180px] mx-auto w-full">
+      <BienvenidaQovi />
+
       {diasDePrueba != null && (
         <Link
           href="/configuracion/suscripcion"
