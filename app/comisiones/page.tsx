@@ -47,6 +47,7 @@ export default function Comisiones() {
   const [moneda, setMoneda] = useState('$');
   const [movs, setMovs] = useState<Movimiento[]>([]);
   const [liquidaciones, setLiquidaciones] = useState<Liquidacion[]>([]);
+  const [vendedores, setVendedores] = useState<{ id: string; nombre: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [trabajando, setTrabajando] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -79,6 +80,13 @@ export default function Comisiones() {
     if (!puedeGestionar && actor?.id) ql = ql.eq('vendedor_id', actor.id);
     const { data: liq } = await ql;
     setLiquidaciones((liq as any) ?? []);
+
+    // Todos los vendedores del negocio (para el ajuste manual, aunque todavía no
+    // tengan comisiones generadas).
+    if (puedeGestionar) {
+      const { data: vend } = await supabase.from('vendedores').select('id, nombre').order('nombre');
+      setVendedores((vend as any) ?? []);
+    }
     setLoading(false);
   };
 
@@ -210,7 +218,7 @@ export default function Comisiones() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               <select value={ajVendedor} onChange={(e) => setAjVendedor(e.target.value)} className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-2 text-sm">
                 <option value="">Vendedor…</option>
-                {porVendedor.map((v) => <option key={v.vendedorId} value={v.vendedorId}>{v.nombre}</option>)}
+                {vendedores.map((v) => <option key={v.id} value={v.id}>{v.nombre}</option>)}
               </select>
               <select value={ajPositivo ? '1' : '0'} onChange={(e) => setAjPositivo(e.target.value === '1')} className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-2 text-sm">
                 <option value="1">Bonificación (+)</option>
