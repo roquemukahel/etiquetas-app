@@ -2304,3 +2304,12 @@ as $$
 $$;
 
 grant execute on function saldos_proveedores() to authenticated;
+
+-- ============================================================
+-- Servicio Técnico: conexión con Órdenes + checklist más granular.
+-- Ver servicio_conexion_supabase.sql.
+-- ============================================================
+alter table reparaciones add column if not exists senal_ok boolean;
+alter table reparaciones add column if not exists boton_silencio_ok boolean;
+alter table ordenes add column if not exists checklist_ingreso jsonb;
+alter table ordenes add column if not exists aclaraciones_tecnico text;
