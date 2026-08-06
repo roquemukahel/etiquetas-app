@@ -51,6 +51,12 @@ describe('motor de comisiones', () => {
     expect(calcularComisionVenta(venta, reglas, DEC).comision).toBe(2000);
   });
 
+  it('ganancia sin costo histórico no genera comisión (no asume costo 0)', () => {
+    const venta: Venta = { tipo_venta: 'minorista', lineas: [linea({ precio_unitario: 100000, costo_unitario: null })] };
+    const reglas: Regla[] = [{ id: 'r', tipo_calculo: 'porcentaje_ganancia', valor: 10, alcance: 'todas' }];
+    expect(calcularComisionVenta(venta, reglas, DEC).comision).toBe(0);
+  });
+
   it('ganancia <= 0 no genera comisión', () => {
     const venta: Venta = { tipo_venta: 'minorista', lineas: [linea({ precio_unitario: 100000, costo_unitario: 120000 })] };
     const reglas: Regla[] = [{ id: 'r', tipo_calculo: 'porcentaje_ganancia', valor: 10, alcance: 'todas' }];

@@ -184,7 +184,13 @@ export function calcularComisionVenta(venta: Venta, reglas: Regla[], decimales: 
           comision = (base * regla.valor) / 100;
           break;
         case 'porcentaje_ganancia': {
-          const costo = (l.costo_unitario ?? 0) * (l.cantidad || 0);
+          // Sin costo histórico NO se puede calcular la ganancia: no se genera
+          // comisión (nunca se asume costo 0, que pagaría de más).
+          if (l.costo_unitario == null) {
+            comision = 0;
+            break;
+          }
+          const costo = l.costo_unitario * (l.cantidad || 0);
           const ganancia = base - costo;
           comision = ganancia > 0 ? (ganancia * regla.valor) / 100 : 0;
           break;

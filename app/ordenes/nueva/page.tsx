@@ -223,6 +223,7 @@ export default function NuevaOrden() {
   const [cuotasElegidas, setCuotasElegidas] = useState(0);
   // Minorista/mayorista: clasifica la venta (para comisiones). Default minorista.
   const [tipoVenta, setTipoVenta] = useState<'minorista' | 'mayorista'>('minorista');
+  const [comisionesActivas, setComisionesActivas] = useState(false);
   const [imagenesCarpetas, setImagenesCarpetas] = useState<Map<string, string>>(new Map());
   const [monedasDisponibles, setMonedasDisponibles] = useState<string[]>(['ARS']);
   const [monedaOrden, setMonedaOrden] = useState('ARS');
@@ -243,7 +244,7 @@ export default function NuevaOrden() {
       if (!user) return;
       const { data: perfil } = await supabase
         .from('perfiles')
-        .select('negocios ( garantia_dias, moneda, monedas_habilitadas, tipo_cambio, interes_cuotas )')
+        .select('negocios ( garantia_dias, moneda, monedas_habilitadas, tipo_cambio, interes_cuotas, comisiones_activas )')
         .eq('id', user.id)
         .single();
       setGarantiaDias((perfil as any)?.negocios?.garantia_dias ?? null);
@@ -253,6 +254,7 @@ export default function NuevaOrden() {
       setMonedasDisponibles(monedas);
       setMonedaOrden(negocio?.moneda || monedas[0]);
       setTipoCambio(negocio?.tipo_cambio ?? null);
+      setComisionesActivas(!!negocio?.comisiones_activas);
     })();
     (async () => {
       setClientes(await obtenerTodasLasFilas<Cliente>(supabase, 'clientes', '*'));
@@ -798,15 +800,22 @@ export default function NuevaOrden() {
       // (idempotente). No rompe la venta si falla. Si el módulo está activo pero
       // no se generó comisión por un motivo ACCIONABLE (falta vendedor, plan o
       // reglas), avisamos — para no dejar al usuario a ciegas.
-      try {
-        const rc = await generarComisionesAccion(orden.id);
-        const motivosSilenciosos = ['Comisiones desactivadas', 'Esta venta no genera comisión', 'La venta todavía no está cobrada'];
-        if (rc.error) {
-          alert('⚠️ No se pudo generar la comisión: ' + rc.error);
-        } else if (rc.generadas === 0 && rc.motivo && !motivosSilenciosos.includes(rc.motivo)) {
-          alert('⚠️ Esta venta no generó comisión: ' + rc.motivo + '.');
-        }
-      } catch {}
+      if (comisionesActivas) {
+        try {
+          const rc = await generarComisionesAccion(orden.id);
+          const motivosSilenciosos = [
+            'Comisiones desactivadas',
+            'Esta venta no genera comisión',
+            'La venta todavía no está cobrada',
+            'La comisión de esta venta ya estaba generada',
+          ];
+          if (rc.error) {
+            alert('⚠️ No se pudo generar la comisión: ' + rc.error);
+          } else if (rc.generadas === 0 && rc.motivo && !motivosSilenciosos.includes(rc.motivo)) {
+            alert('⚠️ Esta venta no generó comisión: ' + rc.motivo + '.');
+          }
+        } catch {}
+      }
 
       router.push(`/ordenes/${orden.id}/boleta`);
     } catch (err: any) {
@@ -1461,25 +1470,27 @@ export default function NuevaOrden() {
         </div>
       )}
 
-      <div className="flex items-center justify-between gap-2">
-        <label className="text-xs text-muted dark:text-dark-text-secondary">Tipo de venta</label>
-        <div className="inline-flex items-center gap-1 rounded-xl bg-canvas dark:bg-dark-bg p-0.5">
-          {(['minorista', 'mayorista'] as const).map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setTipoVenta(t)}
-              className={`rounded-lg px-3 py-1.5 text-xs font-medium capitalize transition-colors ${
-                tipoVenta === t
-                  ? 'bg-white dark:bg-dark-surface-elevated text-ink dark:text-dark-text shadow-card'
-                  : 'text-muted dark:text-dark-text-secondary'
-              }`}
-            >
-              {t}
-            </button>
-          ))}
+      {comisionesActivas && (
+        <div className="flex items-center justify-between gap-2">
+          <label className="text-xs text-muted dark:text-dark-text-secondary">Tipo de venta</label>
+          <div className="inline-flex items-center gap-1 rounded-xl bg-canvas dark:bg-dark-bg p-0.5">
+            {(['minorista', 'mayorista'] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTipoVenta(t)}
+                className={`rounded-lg px-3 py-1.5 text-xs font-medium capitalize transition-colors ${
+                  tipoVenta === t
+                    ? 'bg-white dark:bg-dark-surface-elevated text-ink dark:text-dark-text shadow-card'
+                    : 'text-muted dark:text-dark-text-secondary'
+                }`}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
