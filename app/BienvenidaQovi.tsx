@@ -10,12 +10,44 @@ export default function BienvenidaQovi() {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
+    let cancelado = false;
+
+    // Modo prueba: qovento.app/?qovi=1 lo fuerza a aparecer aunque ya se haya
+    // visto (para poder revisarlo sin cambiar la versión ni molestar a nadie).
+    let forzar = false;
     try {
-      if (localStorage.getItem(CLAVE) !== '1') {
-        const t = setTimeout(() => setVisible(true), 500);
-        return () => clearTimeout(t);
-      }
+      forzar = new URLSearchParams(window.location.search).get('qovi') === '1';
     } catch {}
+
+    try {
+      if (!forzar && localStorage.getItem(CLAVE) === '1') return;
+    } catch {
+      if (!forzar) return;
+    }
+
+    const esDesktop = typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches;
+    const inicio = Date.now();
+
+    // No salir de golpe: en desktop, esperar a que YA esté el menú lateral
+    // (<aside>) en pantalla; en celular no hay sidebar, así que sale tras un
+    // respiro. Tope de 4s por si el menú tarda, para no quedar nunca sin salir.
+    const revisar = () => {
+      if (cancelado) return;
+      const listo = !esDesktop || !!document.querySelector('aside') || Date.now() - inicio > 4000;
+      if (listo) {
+        setTimeout(() => {
+          if (!cancelado) setVisible(true);
+        }, 500);
+      } else {
+        setTimeout(revisar, 250);
+      }
+    };
+
+    const t = setTimeout(revisar, forzar ? 100 : 800);
+    return () => {
+      cancelado = true;
+      clearTimeout(t);
+    };
   }, []);
 
   const cerrar = () => {
