@@ -195,9 +195,14 @@ export default function ConfiguracionComisiones() {
           </div>
 
           {activas && (
-            <Link href="/comisiones" className="text-sm text-accent dark:text-dark-accent underline text-center">
-              Ir al panel de comisiones →
-            </Link>
+            <div className="flex flex-col items-center gap-1.5">
+              <Link href="/comisiones/planes" className="text-sm text-accent dark:text-dark-accent underline text-center">
+                Reglas avanzadas (distinta comisión por dispositivos, accesorios, producto…) →
+              </Link>
+              <Link href="/comisiones" className="text-sm text-accent dark:text-dark-accent underline text-center">
+                Ir al panel de comisiones →
+              </Link>
+            </div>
           )}
         </div>
       )}
