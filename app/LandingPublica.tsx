@@ -64,14 +64,12 @@ export default function LandingPublica() {
         {/* Fondo en escritorio: la interfaz de Qovento + Qovi a la derecha; el
            lado izquierdo queda despejado para el texto. object-right para que
            Qovi nunca quede recortado; el degradado da contraste al texto. */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/qovento-hero-qovi.webp"
-          alt=""
-          aria-hidden="true"
-          fetchPriority="high"
-          className="hidden xl:block absolute inset-0 h-full w-full object-cover object-right select-none pointer-events-none"
-        />
+        <picture aria-hidden="true" className="hidden xl:block absolute inset-0 h-full w-full select-none pointer-events-none">
+          <source type="image/avif" srcSet="/qovento-hero-qovi.avif" />
+          <source type="image/webp" srcSet="/qovento-hero-qovi.webp" />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/qovento-hero-qovi.webp" alt="" fetchPriority="high" className="h-full w-full object-cover object-right" />
+        </picture>
         <div aria-hidden="true" className="hidden xl:block absolute inset-0 bg-gradient-to-r from-[#070B18] via-[#070B18]/80 to-transparent" />
 
         <div className="relative mx-auto max-w-[1280px] px-5 sm:px-8 lg:px-12">
@@ -114,7 +112,7 @@ export default function LandingPublica() {
                   Ver cómo funciona
                 </a>
               </div>
-              <p className="animate-fade-in-up text-xs text-slate-400 mt-1" style={{ animationDelay: '240ms' }}>
+              <p className="animate-fade-in-up text-sm text-slate-200 font-medium mt-1" style={{ animationDelay: '240ms' }}>
                 14 días gratis · Sin tarjeta de crédito · Configuración en minutos
               </p>
             </div>
@@ -123,20 +121,24 @@ export default function LandingPublica() {
           {/* Móvil y tablet: la imagen como bloque visual independiente, debajo
              del texto (no como fondo, para no recortar a Qovi ni tapar el texto). */}
           <div className="xl:hidden pb-12">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/qovento-hero-qovi.webp"
-              alt="Interfaz de Qovento con Qovi, la mascota del sistema"
-              className="w-full rounded-2xl border border-white/10 object-cover aspect-[2/1] shadow-[0_0_60px_-15px_rgba(59,130,246,0.55)]"
-            />
+            <picture>
+              <source type="image/avif" srcSet="/qovento-hero-qovi-sm.avif" />
+              <source type="image/webp" srcSet="/qovento-hero-qovi-sm.webp" />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/qovento-hero-qovi-sm.webp"
+                alt="Interfaz de Qovento con Qovi, la mascota del sistema"
+                className="w-full rounded-2xl border border-white/10 object-cover aspect-[2/1] shadow-[0_0_60px_-15px_rgba(59,130,246,0.55)]"
+              />
+            </picture>
           </div>
         </div>
       </section>
 
-      <section className="max-w-5xl mx-auto px-6 pb-20 w-full">
+      <section className="relative z-10 max-w-5xl mx-auto px-6 pb-20 w-full xl:-mt-24">
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {FUNCIONES.map((f) => (
-            <div key={f.titulo} className="rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-5">
+            <div key={f.titulo} className="rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-elevated p-5">
               <p className="text-sm font-semibold">{f.titulo}</p>
               <p className="text-xs text-muted dark:text-dark-text-secondary mt-1 leading-relaxed">{f.desc}</p>
             </div>
