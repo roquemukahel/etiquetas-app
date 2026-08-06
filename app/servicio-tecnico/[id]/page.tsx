@@ -413,6 +413,12 @@ export default function FichaReparacion() {
     // Así el cliente ve en la boleta, sin que nadie tenga que acordarse de
     // copiarlo a mano, qué no está cubierto por la garantía y por qué.
     const notaCondicion = generarTextoCondicionIngreso(r as any) || null;
+    // Aclaraciones del técnico para el cliente (diagnóstico + lo que se hizo).
+    // Viajan a la orden; el vendedor decide desde Órdenes si salen en la boleta.
+    const aclaracionesTecnico =
+      [r.diagnostico ? `Diagnóstico: ${r.diagnostico}` : null, r.resultado_final ? `Trabajo realizado: ${r.resultado_final}` : null]
+        .filter(Boolean)
+        .join('\n') || null;
 
     let ordenId = r.orden_cobro_id;
 
@@ -421,7 +427,7 @@ export default function FichaReparacion() {
       // lista) — se actualiza en vez de crear una segunda orden duplicada.
       const { error: updateError } = await supabase
         .from('ordenes')
-        .update({ total, forma_pago: r.forma_pago || 'Efectivo', nota: notaCondicion })
+        .update({ total, forma_pago: r.forma_pago || 'Efectivo', nota: notaCondicion, aclaraciones_tecnico: aclaracionesTecnico })
         .eq('id', ordenId);
       if (updateError) {
         setError('No pudimos actualizar la orden: ' + updateError.message);
@@ -459,6 +465,7 @@ export default function FichaReparacion() {
           total,
           estado: 'pendiente',
           nota: notaCondicion,
+          aclaraciones_tecnico: aclaracionesTecnico,
         })
         .select()
         .single();

@@ -44,6 +44,8 @@ type Orden = {
   monto_secundario: number | null;
   moneda_secundaria: string | null;
   boleta_moneda: string | null;
+  aclaraciones_tecnico: string | null;
+  incluir_aclaraciones_tecnico: boolean;
   estado: string;
   created_at: string;
   nota: string | null;
@@ -923,6 +925,26 @@ export default function DetalleOrden() {
           </p>
         )}
       </div>
+
+      {orden.aclaraciones_tecnico && (
+        <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex flex-col gap-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted dark:text-dark-text-secondary">Aclaraciones del técnico</p>
+          <p className="text-sm whitespace-pre-wrap">{orden.aclaraciones_tecnico}</p>
+          <label className="flex items-center gap-2 cursor-pointer text-sm border-t border-border dark:border-dark-border pt-2">
+            <input
+              type="checkbox"
+              checked={orden.incluir_aclaraciones_tecnico}
+              onChange={async (e) => {
+                const val = e.target.checked;
+                setOrden((o) => (o ? { ...o, incluir_aclaraciones_tecnico: val } : o));
+                await supabase.from('ordenes').update({ incluir_aclaraciones_tecnico: val }).eq('id', orden.id);
+              }}
+              className="h-4 w-4 accent-ink"
+            />
+            Incluir estas aclaraciones en la boleta
+          </label>
+        </div>
+      )}
 
       <div className="flex flex-col gap-2">
         {orden.orden_items.map((i, idx) => (

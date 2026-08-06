@@ -24,6 +24,8 @@ type Boleta = {
   monto_secundario: number | null;
   moneda_secundaria: string | null;
   boleta_moneda: string | null;
+  aclaraciones_tecnico: string | null;
+  incluir_aclaraciones_tecnico: boolean;
   total: number | null;
   anticipo: number | null;
   impuesto_porcentaje: number | null;
@@ -281,6 +283,13 @@ export default function BoletaPublica() {
           <div className="rounded-xl bg-canvas p-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">Nota</p>
             <p className="whitespace-pre-wrap text-muted">{boleta.nota}</p>
+          </div>
+        )}
+
+        {boleta.incluir_aclaraciones_tecnico && boleta.aclaraciones_tecnico && (
+          <div className="rounded-xl bg-canvas p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">Aclaraciones del técnico</p>
+            <p className="whitespace-pre-wrap text-muted">{boleta.aclaraciones_tecnico}</p>
           </div>
         )}
 

@@ -37,6 +37,8 @@ type Orden = {
   monto_secundario: number | null;
   moneda_secundaria: string | null;
   boleta_moneda: string | null;
+  aclaraciones_tecnico: string | null;
+  incluir_aclaraciones_tecnico: boolean;
   clientes: {
     nombre: string;
     apellido: string | null;
@@ -485,6 +487,13 @@ export default function Boleta() {
           <div className="rounded-xl bg-canvas p-4 print:p-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">Nota</p>
             <p className="whitespace-pre-wrap text-muted">{orden.nota}</p>
+          </div>
+        )}
+
+        {orden.incluir_aclaraciones_tecnico && orden.aclaraciones_tecnico && (
+          <div className="rounded-xl bg-canvas p-4 print:p-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">Aclaraciones del técnico</p>
+            <p className="whitespace-pre-wrap text-muted">{orden.aclaraciones_tecnico}</p>
           </div>
         )}
 
