@@ -76,7 +76,7 @@ export default function LandingPublica() {
 
         <div className="relative mx-auto max-w-[1280px] px-5 sm:px-8 lg:px-12">
           <div className="xl:flex xl:items-center xl:min-h-[clamp(720px,88vh,850px)]">
-            <div className="w-full xl:w-[46%] xl:max-w-[560px] flex flex-col items-start gap-5 pt-12 pb-8 xl:py-0">
+            <div className="w-full xl:w-[42%] xl:max-w-[560px] flex flex-col items-start gap-5 pt-12 pb-8 xl:py-0">
               <span className="animate-fade-in-up text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-300 bg-sky-400/10 border border-sky-400/25 rounded-full px-3 py-1.5">
                 Gestión integral para locales de celulares
               </span>
