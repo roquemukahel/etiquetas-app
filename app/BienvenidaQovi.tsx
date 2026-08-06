@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 
 // Se muestra UNA sola vez por dispositivo (localStorage). Para volver a mostrarlo
 // a todos en el futuro (otro anuncio), cambiar esta clave por una nueva versión.
-const CLAVE = 'qovento:saludo-qovi-2026-08-v2';
+const CLAVE = 'qovento:saludo-qovi-2026-08-v3';
 
 export default function BienvenidaQovi() {
   const [visible, setVisible] = useState(false);
@@ -47,7 +47,7 @@ export default function BienvenidaQovi() {
       {/* Qovi + globo, anclados abajo a la izquierda: sale del menú lateral
          (en desktop arranca a la altura del sidebar; en celular, del borde). */}
       <div
-        className="absolute bottom-3 left-1 sm:left-3 lg:left-[200px] flex items-end max-w-[calc(100%-0.5rem)]"
+        className="absolute bottom-3 left-1 sm:left-3 lg:left-[256px] flex items-end max-w-[calc(100%-0.5rem)]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
