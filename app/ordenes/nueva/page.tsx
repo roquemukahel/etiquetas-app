@@ -19,6 +19,8 @@ import {
 } from '../../lib/cuentaCorriente';
 import { planesActivos, interesDe, valorCuota, etiquetaCuotas } from '../../lib/cuotas';
 import { ITEMS_CHECKLIST_INGRESO, CAMPOS_DEPENDEN_MODULO, generarTextoCondicionIngreso } from '../../lib/reparaciones';
+import SelectorColor from '../../SelectorColor';
+import { limpiarImei } from '../../lib/imei';
 import MiniaturaDispositivo from '../../MiniaturaDispositivo';
 import CheckTri from '../../CheckTri';
 import TextoCondicionGenerado from '../../TextoCondicionGenerado';
@@ -165,6 +167,12 @@ export default function NuevaOrden() {
   const [trabajoManualNombre, setTrabajoManualNombre] = useState('');
   const [trabajoManualPrecio, setTrabajoManualPrecio] = useState('');
   const [trabajoModelo, setTrabajoModelo] = useState('');
+  const [trabajoImei, setTrabajoImei] = useState('');
+  const [trabajoColor, setTrabajoColor] = useState('');
+  // Datos del equipo de servicio técnico (modelo/imei/color + checklist),
+  // capturados al agregar el trabajo, para guardarlos en la orden y que al
+  // derivar a Servicio Técnico NO haya que recargar nada.
+  const [checklistOrden, setChecklistOrden] = useState<Record<string, unknown> | null>(null);
 
   // Checklist de recepción para el equipo que se deja a reparar acá mismo
   // (venta directa, sin pasar por el circuito completo de Servicio
@@ -480,7 +488,16 @@ export default function NuevaOrden() {
   // directa) — el texto que genera se agrega a la nota de la boleta, para
   // que el cliente se lleve por escrito qué se le garantiza y qué no.
   const agregarTextoCondicionANota = () => {
-    const texto = generarTextoCondicionIngreso(datosChecklistTrabajo());
+    const datos = datosChecklistTrabajo();
+    // Guardamos el equipo + checklist para poder derivarlo a Servicio Técnico
+    // sin recargar (el técnico lo recibe ya cargado).
+    setChecklistOrden({
+      modelo: trabajoModelo.trim() || null,
+      imei: limpiarImei(trabajoImei) || null,
+      color: trabajoColor.trim() || null,
+      ...datos,
+    });
+    const texto = generarTextoCondicionIngreso(datos);
     if (!texto) return;
     setNota((n) => (n.trim() ? `${n.trim()}\n\n${texto}` : texto));
   };
@@ -491,6 +508,8 @@ export default function NuevaOrden() {
     setTrabajoChecklist({});
     setTrabajoHumedad(null);
     setTrabajoExcepcionGarantia('');
+    setTrabajoImei('');
+    setTrabajoColor('');
   };
 
   const agregarTrabajoDelCatalogo = (t: Trabajo) => {
@@ -689,6 +708,7 @@ export default function NuevaOrden() {
           monto_secundario: muestraSecundaria && montoSecundario ? Number(montoSecundario) : null,
           moneda_secundaria: muestraSecundaria ? monedasDisponibles[1] : null,
           boleta_moneda: boletaMoneda,
+          checklist_ingreso: checklistOrden,
           total,
           estado: estadoOrden,
           fecha_entrega: estadoOrden === 'entregado' ? new Date().toISOString() : null,
@@ -1119,6 +1139,21 @@ export default function NuevaOrden() {
                   <option key={c} value={c} />
                 ))}
               </datalist>
+            </div>
+
+            <div>
+              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">IMEI del equipo (opcional)</label>
+              <input
+                value={trabajoImei}
+                onChange={(e) => setTrabajoImei(e.target.value)}
+                placeholder="IMEI"
+                inputMode="numeric"
+                className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm font-mono"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Color del equipo (opcional)</label>
+              <SelectorColor value={trabajoColor} onChange={setTrabajoColor} />
             </div>
 
             <div className="flex flex-col gap-2 border-t border-border dark:border-dark-border pt-3">

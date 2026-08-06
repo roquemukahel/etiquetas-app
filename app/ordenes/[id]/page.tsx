@@ -46,6 +46,7 @@ type Orden = {
   boleta_moneda: string | null;
   aclaraciones_tecnico: string | null;
   incluir_aclaraciones_tecnico: boolean;
+  checklist_ingreso: Record<string, unknown> | null;
   estado: string;
   created_at: string;
   nota: string | null;
@@ -187,11 +188,14 @@ export default function DetalleOrden() {
 
   const abrirDerivar = () => {
     if (!orden) return;
+    // Pre-cargamos con lo que el vendedor ya registró en la orden (modelo,
+    // imei, color) — es el MISMO equipo, no hay que reescribirlo.
+    const ci = (orden.checklist_ingreso ?? {}) as any;
     const descripciones = orden.orden_items.filter((i) => i.tipo === 'trabajo').map((i) => i.descripcion);
-    setDerivarModelo('');
+    setDerivarModelo(ci.modelo || '');
     setDerivarCapacidad(null);
-    setDerivarColor('');
-    setDerivarImei('');
+    setDerivarColor(ci.color || '');
+    setDerivarImei(ci.imei || '');
     setDerivarDetalles(descripciones.join(', '));
     setDerivarAbierto(true);
   };
@@ -200,6 +204,9 @@ export default function DetalleOrden() {
     if (!orden || !derivarModelo.trim() || !puedeRecibirServicioTecnico) return;
     setDerivando(true);
     const nombreCliente = orden.clientes ? `${orden.clientes.nombre} ${orden.clientes.apellido || ''}`.trim() : 'sin cliente';
+    // Checklist de ingreso que cargó el vendedor → se copia a la reparación
+    // para que el técnico lo reciba ya cargado (no recarga nada).
+    const ci = (orden.checklist_ingreso ?? {}) as any;
     const { data: nueva } = await supabase
       .from('reparaciones')
       .insert({
@@ -211,6 +218,22 @@ export default function DetalleOrden() {
         imei: limpiarImei(derivarImei) || null,
         falla_declarada: derivarDetalles.trim() || null,
         estado: 'recibido',
+        enciende: ci.enciende ?? null,
+        modulo_ok: ci.modulo_ok ?? null,
+        senal_ok: ci.senal_ok ?? null,
+        camara_frontal_ok: ci.camara_frontal_ok ?? null,
+        camara_trasera_ok: ci.camara_trasera_ok ?? null,
+        flash_ok: ci.flash_ok ?? null,
+        microfono_superior_ok: ci.microfono_superior_ok ?? null,
+        microfono_inferior_ok: ci.microfono_inferior_ok ?? null,
+        altavoces_ok: ci.altavoces_ok ?? null,
+        boton_silencio_ok: ci.boton_silencio_ok ?? null,
+        boton_power_ok: ci.boton_power_ok ?? null,
+        boton_volumen_ok: ci.boton_volumen_ok ?? null,
+        biometria_ok: ci.biometria_ok ?? null,
+        conectores_ok: ci.conectores_ok ?? null,
+        humedad: ci.humedad ?? null,
+        garantia_excepcion_manual: ci.garantia_excepcion_manual ?? null,
       })
       .select('id, numero_orden')
       .single();
