@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 
 // Se muestra UNA sola vez por dispositivo (localStorage). Para volver a mostrarlo
 // a todos en el futuro (otro anuncio), cambiar esta clave por una nueva versión.
-const CLAVE = 'qovento:saludo-qovi-2026-08';
+const CLAVE = 'qovento:saludo-qovi-2026-08-v2';
 
 export default function BienvenidaQovi() {
   const [visible, setVisible] = useState(false);
