@@ -16,7 +16,13 @@ export type Permiso =
   // acceso a alguien sin acceso completo.
   | 'auditoria'
   | 'gestionar_usuarios'
-  | 'ver_proveedores';
+  | 'ver_proveedores'
+  // Comisiones: gestionar (planes, aprobar, liquidar, pagar, ajustar) queda
+  // como 'ver_proveedores' — solo con acceso completo/administrador. Ver
+  // comisiones lo puede cualquiera (el vendedor ve SOLO las suyas, filtrado en
+  // las consultas).
+  | 'gestionar_comisiones'
+  | 'ver_comisiones';
 
 // Sin actor elegido todavía, o un actor sin datos de permisos (guardado
 // antes de que existiera esto): no restringimos — mantiene el
@@ -55,6 +61,12 @@ export function tienePermiso(actor: Actor | null, permiso: Permiso): boolean {
       return actor.permisos.puedeRecibirServicioTecnico ?? true;
     case 'gestionar_servicio_tecnico':
       return actor.permisos.puedeGestionarServicioTecnico ?? true;
+    case 'ver_comisiones':
+      // Cualquiera puede ver comisiones; las consultas filtran a las propias
+      // del vendedor cuando no tiene acceso completo.
+      return true;
+    // 'gestionar_comisiones' NO está acá a propósito: cae en default → solo
+    // administrador o acceso completo (que ya devolvieron true más arriba).
     default:
       return false;
   }

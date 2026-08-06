@@ -18,6 +18,7 @@ import {
   vencimientoDesdeHoy,
 } from '../../lib/cuentaCorriente';
 import { planesActivos, interesDe, valorCuota, etiquetaCuotas } from '../../lib/cuotas';
+import { generarComisionesAccion } from '../../comisiones/acciones';
 import { ITEMS_CHECKLIST_INGRESO, CAMPOS_DEPENDEN_MODULO, generarTextoCondicionIngreso } from '../../lib/reparaciones';
 import SelectorColor from '../../SelectorColor';
 import { limpiarImei } from '../../lib/imei';
@@ -67,6 +68,8 @@ type ItemCarrito = {
   cantidad: number;
   precioUnitario: number;
   dispositivoId?: string;
+  productoId?: string | null; // producto de catálogo (para comisiones por producto)
+  costo?: number | null; // snapshot del costo al vender (para comisión sobre ganancia)
   tipo: 'dispositivo' | 'producto' | 'trabajo';
 };
 
@@ -218,6 +221,8 @@ export default function NuevaOrden() {
   // 0 = Contado (paga ahora, sin recargo). 1+ = financiado en cuotas (1 cuota =
   // a ~1 mes, con recargo). Ver app/lib/cuotas.ts.
   const [cuotasElegidas, setCuotasElegidas] = useState(0);
+  // Minorista/mayorista: clasifica la venta (para comisiones). Default minorista.
+  const [tipoVenta, setTipoVenta] = useState<'minorista' | 'mayorista'>('minorista');
   const [imagenesCarpetas, setImagenesCarpetas] = useState<Map<string, string>>(new Map());
   const [monedasDisponibles, setMonedasDisponibles] = useState<string[]>(['ARS']);
   const [monedaOrden, setMonedaOrden] = useState('ARS');
@@ -399,6 +404,7 @@ export default function NuevaOrden() {
         cantidad: 1,
         precioUnitario: d.precio ?? 0,
         dispositivoId: d.id,
+        costo: (d as any).costo ?? null,
         tipo: 'dispositivo',
       },
     ]);
@@ -441,7 +447,7 @@ export default function NuevaOrden() {
   const agregarProductoDelCatalogo = (p: Producto) => {
     setCarrito((c) => [
       ...c,
-      { tempId: idTemporal(), descripcion: p.nombre, cantidad: 1, precioUnitario: p.precio ?? 0, tipo: 'producto' },
+      { tempId: idTemporal(), descripcion: p.nombre, cantidad: 1, precioUnitario: p.precio ?? 0, productoId: p.id, costo: (p as any).costo ?? null, tipo: 'producto' },
     ]);
     setPanelAbierto(null);
   };
@@ -705,6 +711,7 @@ export default function NuevaOrden() {
           anticipo: Number(anticipo) || 0,
           impuesto_porcentaje: Number(impuesto) || 0,
           cuotas: cuotasElegidas,
+          tipo_venta: tipoVenta,
           monto_canje: montoCanjeTotal,
           moneda: monedaOrden,
           monto_secundario: muestraSecundaria && montoSecundario ? Number(montoSecundario) : null,
@@ -743,9 +750,11 @@ export default function NuevaOrden() {
         carrito.map((i) => ({
           orden_id: orden.id,
           dispositivo_id: i.dispositivoId || null,
+          producto_id: i.productoId || null,
           descripcion: i.descripcion,
           cantidad: i.cantidad,
           precio_unitario: i.precioUnitario,
+          costo: i.costo ?? null,
           tipo: i.tipo,
         }))
       );
@@ -784,6 +793,12 @@ export default function NuevaOrden() {
         });
         if (movErr) throw new Error(movErr.message);
       }
+
+      // Comisiones: el servidor genera los movimientos si el módulo está activo
+      // y la venta quedó confirmada (idempotente). No rompe la venta si falla.
+      try {
+        await generarComisionesAccion(orden.id);
+      } catch {}
 
       router.push(`/ordenes/${orden.id}/boleta`);
     } catch (err: any) {
@@ -1437,6 +1452,26 @@ export default function NuevaOrden() {
           )}
         </div>
       )}
+
+      <div className="flex items-center justify-between gap-2">
+        <label className="text-xs text-muted dark:text-dark-text-secondary">Tipo de venta</label>
+        <div className="inline-flex items-center gap-1 rounded-xl bg-canvas dark:bg-dark-bg p-0.5">
+          {(['minorista', 'mayorista'] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTipoVenta(t)}
+              className={`rounded-lg px-3 py-1.5 text-xs font-medium capitalize transition-colors ${
+                tipoVenta === t
+                  ? 'bg-white dark:bg-dark-surface-elevated text-ink dark:text-dark-text shadow-card'
+                  : 'text-muted dark:text-dark-text-secondary'
+              }`}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
