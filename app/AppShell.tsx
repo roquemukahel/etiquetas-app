@@ -31,6 +31,7 @@ const NAV = [
   { href: '/stock', label: 'Stock', icono: 'stock' },
   { href: '/clientes', label: 'Clientes', icono: 'clientes' },
   { href: '/cuentas-por-cobrar', label: 'Cuentas por cobrar', icono: 'cobrar' },
+  { href: '/comisiones', label: 'Comisiones', icono: 'estadisticas' },
   { href: '/canje', label: 'Plan Canje', icono: 'canje' },
   { href: '/servicio-tecnico', label: 'Servicio Técnico', icono: 'servicio' },
   { href: '/compras', label: 'Compras', icono: 'compra' },

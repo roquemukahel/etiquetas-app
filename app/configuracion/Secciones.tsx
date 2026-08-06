@@ -16,6 +16,7 @@ const SECCIONES: Seccion[] = [
   { href: '/configuracion/vendedores', titulo: 'Vendedores', desc: 'Quién atiende cada venta', permiso: 'gestionar_usuarios' },
   { href: '/configuracion/tecnicos', titulo: 'Técnicos', desc: 'Quién repara los equipos de Servicio Técnico', permiso: 'gestionar_usuarios' },
   { href: '/configuracion/financiacion', titulo: 'Financiación en cuotas', desc: 'Interés de cada plan (3, 6 y 12 cuotas)', permiso: 'gestionar_usuarios' },
+  { href: '/configuracion/comisiones', titulo: 'Comisiones', desc: 'Comisión de los vendedores por venta (minorista/mayorista)', permiso: 'gestionar_comisiones' },
   { href: '/configuracion/suscripcion', titulo: 'Suscripción', desc: 'Estado del pago y plan de Qovento' },
   { href: '/configuracion/soporte', titulo: 'Soporte', desc: 'Reportá un problema o dejanos un mensaje' },
   { href: '/configuracion/auditoria', titulo: 'Auditoría', desc: 'Quién hizo qué y cuándo', permiso: 'auditoria' },
