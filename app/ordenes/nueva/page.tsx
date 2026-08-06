@@ -215,7 +215,9 @@ export default function NuevaOrden() {
   const [guardando, setGuardando] = useState(false);
   const [garantiaDias, setGarantiaDias] = useState<number | null>(null);
   const [interesCuotas, setInteresCuotas] = useState<Record<string, number> | null>(null);
-  const [cuotasElegidas, setCuotasElegidas] = useState(1);
+  // 0 = Contado (paga ahora, sin recargo). 1+ = financiado en cuotas (1 cuota =
+  // a ~1 mes, con recargo). Ver app/lib/cuotas.ts.
+  const [cuotasElegidas, setCuotasElegidas] = useState(0);
   const [imagenesCarpetas, setImagenesCarpetas] = useState<Map<string, string>>(new Map());
   const [monedasDisponibles, setMonedasDisponibles] = useState<string[]>(['ARS']);
   const [monedaOrden, setMonedaOrden] = useState('ARS');
@@ -1402,12 +1404,13 @@ export default function NuevaOrden() {
           <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Plan de pago</label>
           <div className="flex flex-wrap gap-2">
             <button
-              onClick={() => setCuotasElegidas(1)}
+              onClick={() => setCuotasElegidas(0)}
               className={`rounded-xl px-3 py-2 text-sm font-medium ${
-                cuotasElegidas === 1 ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
+                cuotasElegidas === 0 ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
               }`}
             >
               Contado
+              <span className="block text-[10px] opacity-80 font-normal">ahora · sin recargo</span>
             </button>
             {planes.map((p) => (
               <button
@@ -1424,8 +1427,9 @@ export default function NuevaOrden() {
               </button>
             ))}
           </div>
-          {cuotasElegidas > 1 && (
+          {cuotasElegidas >= 1 && (
             <p className="text-[11px] text-muted dark:text-dark-text-secondary mt-1">
+              {cuotasElegidas === 1 ? 'Paga a ~1 mes: ' : ''}
               {etiquetaCuotas(cuotasElegidas)} de {moneda}
               {Math.round(valorCuota(subtotal, cuotasElegidas, interesPlan)).toLocaleString('es-AR')} · total financiado{' '}
               {moneda}{Math.round(subtotalFinanciado).toLocaleString('es-AR')} (interés {interesPlan}%)

@@ -1,7 +1,13 @@
 // Financiación en cuotas. El interés (%) por plan se configura por negocio
 // (Configuración > Financiación) y se guarda en negocios.interes_cuotas como
-// un objeto {"3": 10, "6": 20, "12": 40}. Contado (1 cuota) siempre existe y
-// no tiene interés.
+// un objeto {"1": 8, "3": 10, "6": 20, "12": 40}.
+//
+// IMPORTANTE — "Contado" NO es lo mismo que "1 cuota":
+//   • Contado = paga en el momento, SIN recargo. Se guarda como cuotas = 0.
+//   • 1 cuota = paga todo junto pero a ~1 mes → SÍ lleva el recargo configurado.
+//   • 3/6/12 cuotas = paga en 3/6/12 meses, con su recargo.
+// Por eso el interés se aplica desde 1 cuota en adelante; solo Contado (0) es
+// sin interés.
 
 export const PLANES_CUOTAS = [1, 3, 6, 12];
 
@@ -32,8 +38,10 @@ export function valorCuota(contado: number, cuotas: number, interes: number): nu
   return precioFinanciado(contado, interes) / cuotas;
 }
 
-// Interés (%) de un plan puntual según la config del negocio.
+// Interés (%) de un plan puntual según la config del negocio. Contado (0, o
+// cualquier valor <= 0) no tiene interés; de 1 cuota en adelante se aplica el
+// recargo configurado para ese plan (1 cuota = paga a ~1 mes, no es contado).
 export function interesDe(interesCuotas: Record<string, number> | null | undefined, cuotas: number): number {
-  if (!interesCuotas || cuotas <= 1) return 0;
+  if (!interesCuotas || cuotas <= 0) return 0;
   return Number(interesCuotas[String(cuotas)]) || 0;
 }

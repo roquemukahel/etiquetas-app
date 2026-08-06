@@ -95,8 +95,13 @@ export default function Financiacion() {
       {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
 
       <p className="text-sm text-muted dark:text-dark-text-secondary">
-        Poné el <strong>interés (%)</strong> de cada plan de cuotas. Dejá un plan vacío para no ofrecerlo. Al vender,
-        vas a poder elegir el plan y el precio se calcula solo sobre el precio de contado. El contado no tiene interés.
+        Poné el <strong>interés (%)</strong> de cada plan. Dejá un plan vacío para no ofrecerlo. Al vender, elegís el
+        plan y el recargo se calcula sobre el precio de contado.
+      </p>
+      <p className="text-xs text-muted dark:text-dark-text-secondary bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2">
+        Ojo: <strong>Contado</strong> (pago en el momento) NO tiene recargo y es aparte — no se configura acá.{' '}
+        <strong>1 cuota</strong> NO es contado: es cuando el cliente paga todo junto pero <strong>a ~1 mes</strong>, así
+        que sí lleva su recargo. 3 cuotas = 3 meses, 6 = 6 meses, 12 = 12 meses.
       </p>
 
       {loading ? (
@@ -105,7 +110,10 @@ export default function Financiacion() {
         <div className="flex flex-col gap-3">
           {PLANES_CUOTAS.map((c) => (
             <div key={c} className="flex items-center gap-3 rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3">
-              <span className="text-sm font-medium w-20">{etiquetaCuotas(c)}</span>
+              <span className="w-24 leading-tight">
+                <span className="block text-sm font-medium">{etiquetaCuotas(c)}</span>
+                <span className="block text-[10px] text-muted dark:text-dark-text-secondary">a ~{c} {c === 1 ? 'mes' : 'meses'}</span>
+              </span>
               <div className="flex-1 flex items-center gap-2">
                 <input
                   value={interes[String(c)] ?? ''}
