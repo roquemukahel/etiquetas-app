@@ -113,11 +113,19 @@ export async function generarComisionesDeOrden(supabase: any, ordenId: string): 
 
   if (filas.length === 0) return { generadas: 0, error: null, motivo: 'Esta venta no genera comisión' };
 
-  // 9. Insertar idempotente (si ya existían, no duplica)
-  const { data, error } = await supabase
+  // 9. Idempotencia a nivel app (sin depender del ON CONFLICT con índice
+  //    parcial, que Postgres no acepta como target): miramos qué comisiones ya
+  //    existen para esta orden y solo insertamos las que faltan.
+  const { data: existentes } = await supabase
     .from('comision_movimientos')
-    .upsert(filas, { onConflict: 'idempotency_key', ignoreDuplicates: true })
-    .select('id');
+    .select('idempotency_key')
+    .eq('orden_id', orden.id)
+    .eq('tipo_movimiento', 'comision');
+  const yaExisten = new Set((existentes ?? []).map((e: { idempotency_key: string | null }) => e.idempotency_key));
+  const nuevas = filas.filter((f) => !yaExisten.has(f.idempotency_key));
+  if (nuevas.length === 0) return { generadas: 0, error: null, motivo: 'La comisión de esta venta ya estaba generada' };
+
+  const { data, error } = await supabase.from('comision_movimientos').insert(nuevas).select('id');
   if (error) return { generadas: 0, error: error.message };
   return { generadas: data?.length ?? 0, error: null };
 }
