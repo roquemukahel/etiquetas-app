@@ -396,20 +396,20 @@ export default function SelectorDeActor() {
                 <input
                   value={pinIngresado}
                   onChange={(e) => {
-                    setPinIngresado(e.target.value.replace(/\D/g, '').slice(0, 4));
+                    setPinIngresado(e.target.value.replace(/\D/g, '').slice(0, 6));
                     setErrorPin(null);
                   }}
                   onKeyDown={(e) => e.key === 'Enter' && confirmarPin()}
                   type="password"
                   inputMode="numeric"
-                  maxLength={4}
+                  maxLength={6}
                   autoFocus
                   placeholder="····"
                   className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-3 text-center text-lg tracking-[0.5em]"
                 />
                 <button
                   onClick={confirmarPin}
-                  disabled={pinIngresado.length !== 4 || verificandoPin}
+                  disabled={pinIngresado.length < 4 || verificandoPin}
                   className="rounded-xl bg-accent dark:bg-dark-accent text-white py-3 text-sm font-medium disabled:opacity-40"
                 >
                   {verificandoPin ? 'Verificando...' : 'Confirmar'}

@@ -115,8 +115,8 @@ export default function Tecnicos() {
   };
 
   const guardarPerfil = async (t: Tecnico) => {
-    if (pinEdit.trim() && !/^\d{4}$/.test(pinEdit.trim())) {
-      setError('El PIN tiene que ser de 4 números, o dejarlo vacío para no pedir ninguno');
+    if (pinEdit.trim() && !/^\d{4,6}$/.test(pinEdit.trim())) {
+      setError('El PIN tiene que ser de 4 a 6 números, o dejarlo vacío para no pedir ninguno');
       return;
     }
     setGuardandoPerfil(true);
@@ -230,10 +230,10 @@ export default function Tecnicos() {
                 <div>
                   <input
                     value={pinEdit}
-                    onChange={(e) => setPinEdit(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                    placeholder="PIN de 4 dígitos (opcional)"
+                    onChange={(e) => setPinEdit(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    placeholder="PIN de 4 a 6 dígitos (opcional)"
                     inputMode="numeric"
-                    maxLength={4}
+                    maxLength={6}
                     className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                   />
                   <p className="text-[10px] text-muted dark:text-dark-text-secondary mt-1">

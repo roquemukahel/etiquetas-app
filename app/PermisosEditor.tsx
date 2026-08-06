@@ -124,7 +124,7 @@ export default function PermisosEditor({
           {accesoAlto ? (
             <>
               ⚠️ Esta cuenta no tiene PIN. Como tiene acceso alto, cualquiera puede elegirse como esta persona
-              desde "Cambiar" (arriba a la derecha) y quedar con todos los permisos. Ponele un PIN de 4 dígitos
+              desde "Cambiar" (arriba a la derecha) y quedar con todos los permisos. Ponele un PIN de 4 a 6 dígitos
               para que nadie se pueda hacer pasar por ella.
             </>
           ) : (
