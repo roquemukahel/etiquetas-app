@@ -2,39 +2,27 @@
 
 import { useEffect, useState } from 'react';
 
-// Se muestra UNA sola vez por dispositivo (localStorage). Para volver a mostrarlo
-// a todos en el futuro (otro anuncio), cambiar esta clave por una nueva versión.
-const CLAVE = 'qovento:saludo-qovi-2026-08-v3';
+// A pedido del usuario, el saludo aparece SIEMPRE al entrar/actualizar el
+// Inicio, 30 s después de cargar (no "una sola vez"). Si más adelante querés que
+// aparezca solo una vez o una vez por día, se cambia acá la lógica del delay.
+const DEMORA_MS = 30000;
 
 export default function BienvenidaQovi() {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    // Modo prueba: qovento.app/?qovi=1 lo fuerza a aparecer aunque ya se haya
-    // visto (para revisarlo sin cambiar la versión ni molestar a los clientes).
+    // Modo prueba: qovento.app/?qovi=1 lo hace salir rápido (para revisarlo sin
+    // esperar los 30 s).
     let forzar = false;
     try {
       forzar = new URLSearchParams(window.location.search).get('qovi') === '1';
     } catch {}
 
-    try {
-      if (!forzar && localStorage.getItem(CLAVE) === '1') return;
-    } catch {
-      if (!forzar) return;
-    }
-
-    // Un respiro para no salir de golpe apenas entra (que la pantalla se
-    // acomode primero). Tiempo fijo y confiable, sin depender de otras partes.
-    const t = setTimeout(() => setVisible(true), 1500);
+    const t = setTimeout(() => setVisible(true), forzar ? 800 : DEMORA_MS);
     return () => clearTimeout(t);
   }, []);
 
-  const cerrar = () => {
-    try {
-      localStorage.setItem(CLAVE, '1');
-    } catch {}
-    setVisible(false);
-  };
+  const cerrar = () => setVisible(false);
 
   useEffect(() => {
     if (!visible) return;
