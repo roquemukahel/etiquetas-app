@@ -20,13 +20,19 @@ export async function generarComisionesDeOrden(supabase: any, ordenId: string): 
   // 2. Config del negocio
   const { data: negocio } = await supabase
     .from('negocios')
-    .select('comisiones_activas, comisiones_desde, comision_plan_default_id, moneda')
+    .select('comisiones_activas, comisiones_desde, comisiones_generar_en, comision_plan_default_id, moneda')
     .eq('id', orden.negocio_id)
     .single();
   if (!negocio?.comisiones_activas) return { generadas: 0, error: null, motivo: 'Comisiones desactivadas' };
 
-  // 3. Solo ventas confirmadas (cobradas/entregadas)
-  if (!['pagado', 'entregado'].includes(orden.estado)) return { generadas: 0, error: null, motivo: 'La venta no está confirmada' };
+  // 3. Momento de generación. En Qovento una orden creada YA es una venta real
+  //    (aunque quede 'pendiente' de cobro), así que por defecto ('confirmada')
+  //    genera igual. Solo el modo 'cobrada' (opcional, aún sin UI) exige que la
+  //    venta esté pagada/entregada.
+  const generarEn = negocio.comisiones_generar_en || 'confirmada';
+  if (generarEn === 'cobrada' && !['pagado', 'entregado'].includes(orden.estado)) {
+    return { generadas: 0, error: null, motivo: 'La venta todavía no está cobrada' };
+  }
 
   // 4. Vigencia: no comisionar ventas anteriores a la fecha de activación
   if (negocio.comisiones_desde && new Date(orden.created_at) < new Date(negocio.comisiones_desde + 'T00:00:00'))
