@@ -165,33 +165,14 @@ export function reglaParaLinea(l: LineaVenta, venta: Venta, reglas: Regla[]): Re
 export function calcularComisionVenta(venta: Venta, reglas: Regla[], decimales: number): ResultadoComision {
   const bases = basesConDescuentoGeneral(venta, decimales);
 
-  // ¿La regla de venta más específica es un importe fijo por venta?
-  const reglaVenta = reglaParaLinea(
-    { id: '__venta__', tipo_item: '', producto_id: null, cantidad: 1, precio_unitario: 0 },
-    venta,
-    reglas.filter((r) => r.tipo_calculo === 'fijo_por_venta')
-  );
-  const hayReglaEspecificaDeLinea = venta.lineas.some((l) => {
-    const r = reglaParaLinea(l, venta, reglas);
-    return r && r.tipo_calculo !== 'fijo_por_venta';
-  });
-
-  if (reglaVenta && !hayReglaEspecificaDeLinea) {
-    const comision = redondear(reglaVenta.valor, decimales);
-    const baseTotal = redondear(
-      bases.reduce((a, b) => a + b, 0),
-      decimales
-    );
-    return {
-      base: baseTotal,
-      comision,
-      detalle: [{ linea_id: '__venta__', base: baseTotal, regla_id: reglaVenta.id, tipo_calculo: 'fijo_por_venta', comision }],
-    };
-  }
-
   const detalle: DetalleLinea[] = [];
   let baseTotal = 0;
   let comisionTotal = 0;
+  // Un "monto fijo por venta" se cobra UNA sola vez, aunque su regla sea la más
+  // específica en varias líneas (ej. varios dispositivos): se registra en la
+  // primera línea donde gana y se marca como ya aplicada.
+  const fijasAplicadas = new Set<string>();
+
   venta.lineas.forEach((l, i) => {
     const base = bases[i];
     baseTotal += base;
@@ -212,7 +193,10 @@ export function calcularComisionVenta(venta: Venta, reglas: Regla[], decimales: 
           comision = regla.valor * (l.cantidad || 0);
           break;
         case 'fijo_por_venta':
-          comision = 0; // se maneja arriba; una línea suelta no vuelve a sumarlo
+          // Una sola vez por venta, sin importar el alcance (todas / minorista /
+          // mayorista / tipo de ítem / producto).
+          comision = fijasAplicadas.has(regla.id) ? 0 : regla.valor;
+          fijasAplicadas.add(regla.id);
           break;
       }
     }

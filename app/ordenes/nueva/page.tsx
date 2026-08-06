@@ -795,9 +795,17 @@ export default function NuevaOrden() {
       }
 
       // Comisiones: el servidor genera los movimientos si el módulo está activo
-      // y la venta quedó confirmada (idempotente). No rompe la venta si falla.
+      // (idempotente). No rompe la venta si falla. Si el módulo está activo pero
+      // no se generó comisión por un motivo ACCIONABLE (falta vendedor, plan o
+      // reglas), avisamos — para no dejar al usuario a ciegas.
       try {
-        await generarComisionesAccion(orden.id);
+        const rc = await generarComisionesAccion(orden.id);
+        const motivosSilenciosos = ['Comisiones desactivadas', 'Esta venta no genera comisión', 'La venta todavía no está cobrada'];
+        if (rc.error) {
+          alert('⚠️ No se pudo generar la comisión: ' + rc.error);
+        } else if (rc.generadas === 0 && rc.motivo && !motivosSilenciosos.includes(rc.motivo)) {
+          alert('⚠️ Esta venta no generó comisión: ' + rc.motivo + '.');
+        }
       } catch {}
 
       router.push(`/ordenes/${orden.id}/boleta`);

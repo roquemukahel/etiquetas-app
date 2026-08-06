@@ -74,6 +74,22 @@ describe('motor de comisiones', () => {
     expect(calcularComisionVenta(venta, reglas, DEC).comision).toBe(5000);
   });
 
+  // Monto fijo por venta con alcance por TIPO DE ÍTEM: se cobra una sola vez
+  // aunque haya varios dispositivos (antes daba $0 = no generaba comisión).
+  it('fijo por venta con alcance de dispositivos se cobra una vez', () => {
+    const venta: Venta = {
+      tipo_venta: 'minorista',
+      lineas: [
+        linea({ id: 'd1', tipo_item: 'dispositivo', precio_unitario: 500000 }),
+        linea({ id: 'd2', tipo_item: 'dispositivo', precio_unitario: 300000 }),
+        linea({ id: 'a1', tipo_item: 'producto', precio_unitario: 20000 }),
+      ],
+    };
+    const reglas: Regla[] = [{ id: 'r', tipo_calculo: 'fijo_por_venta', valor: 10, alcance: 'tipo_item', tipo_item: 'dispositivo' }];
+    const res = calcularComisionVenta(venta, reglas, DEC);
+    expect(res.comision).toBe(10); // una sola vez, no $0
+  });
+
   // §7 — prioridad: la regla de producto específico gana sobre la general
   it('aplica la regla más específica (producto > general), sin sumar', () => {
     const venta: Venta = {
