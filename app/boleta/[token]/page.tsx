@@ -112,18 +112,19 @@ export default function BoletaPublica() {
   // mostrar números en dólares con el símbolo de pesos: caemos a la principal.
   const simbBoleta =
     modo === 'secundaria' && boleta.moneda_secundaria && factorBoleta !== 1 ? simboloMoneda(boleta.moneda_secundaria) : moneda;
-  const fmt = (n: number) => simbBoleta + Math.round(n * factorBoleta).toLocaleString('es-AR');
+  // Monto EXACTO: hasta 2 decimales si los tiene, sin forzar ",00" en enteros.
+  const fmt = (n: number) => simbBoleta + (n * factorBoleta).toLocaleString('es-AR', { maximumFractionDigits: 2 });
 
   return (
     <main className="flex min-h-screen flex-col items-center px-6 py-10">
-      <div className="w-full max-w-xl flex flex-col gap-6 text-[15px] text-ink bg-white rounded-2xl border border-border shadow-card px-8 pt-3 pb-8">
-        <div className="flex flex-col items-center gap-0.5">
-          <div className="flex items-center gap-1.5 opacity-80">
+      <div className="w-full max-w-xl flex flex-col gap-6 text-[15px] text-ink bg-white rounded-2xl border border-border shadow-card px-8 pt-2 pb-8">
+        <div className="flex flex-col items-center gap-0 leading-none">
+          <div className="flex items-center gap-1 opacity-70">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/qovento-icon.png" alt="" className="h-4 w-4 object-contain" />
-            <span className="text-[11px] font-semibold text-muted tracking-wide">Qovento</span>
+            <img src="/qovento-icon.png" alt="" className="h-2.5 w-2.5 object-contain" />
+            <span className="text-[8px] font-semibold text-muted tracking-wide">Qovento</span>
           </div>
-          <p className="text-[10px] text-muted text-center max-w-xs leading-snug">{ESLOGAN}</p>
+          <p className="text-[7px] text-muted text-center max-w-xs leading-tight">{ESLOGAN}</p>
         </div>
 
         <div className="flex items-center gap-3">

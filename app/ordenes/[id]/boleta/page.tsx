@@ -205,7 +205,9 @@ export default function Boleta() {
   // mostrar números en dólares con el símbolo de pesos: caemos a la principal.
   const simbBoleta =
     modo === 'secundaria' && orden.moneda_secundaria && factorBoleta !== 1 ? simboloMoneda(orden.moneda_secundaria) : moneda;
-  const fmt = (n: number) => simbBoleta + Math.round(n * factorBoleta).toLocaleString('es-AR');
+  // Monto EXACTO: hasta 2 decimales si los tiene (US$7,64 no se redondea a 8),
+  // pero sin forzar ",00" en los enteros (US$470 queda US$470).
+  const fmt = (n: number) => simbBoleta + (n * factorBoleta).toLocaleString('es-AR', { maximumFractionDigits: 2 });
 
   // Link público a la boleta (misma que se ve en /boleta/[token]), para que
   // el cliente pueda abrirla y descargarla — antes el mensaje era solo texto
@@ -224,7 +226,7 @@ export default function Boleta() {
     : null;
 
   return (
-    <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
+    <main className="flex min-h-screen flex-col px-6 py-6 gap-4 print:p-0 print:gap-0">
       <header className="no-print flex items-center gap-3 flex-wrap">
         <Link href="/ordenes" className="text-2xl leading-none text-ink">
           &larr;
@@ -262,15 +264,15 @@ export default function Boleta() {
 
       <div
         id="boleta"
-        className="flex flex-col gap-6 print:gap-3 text-[15px] text-ink bg-white rounded-2xl border border-border shadow-card px-8 pt-3 pb-8 print:px-4 print:pt-2 print:pb-4"
+        className="flex flex-col gap-6 print:gap-3 text-[15px] text-ink bg-white rounded-2xl border border-border shadow-card px-8 pt-2 pb-8 print:px-3 print:pt-0.5 print:pb-3 print:rounded-none"
       >
-        <div className="flex flex-col items-center gap-0.5">
-          <div className="flex items-center gap-1.5 opacity-80">
+        <div className="flex flex-col items-center gap-0 leading-none">
+          <div className="flex items-center gap-1 opacity-70">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/qovento-icon.png" alt="" className="h-4 w-4 object-contain" />
-            <span className="text-[11px] font-semibold text-muted tracking-wide">Qovento</span>
+            <img src="/qovento-icon.png" alt="" className="h-2.5 w-2.5 object-contain" />
+            <span className="text-[8px] font-semibold text-muted tracking-wide">Qovento</span>
           </div>
-          <p className="text-[10px] text-muted text-center max-w-xs leading-snug">{ESLOGAN}</p>
+          <p className="text-[7px] text-muted text-center max-w-xs leading-tight">{ESLOGAN}</p>
         </div>
 
         <div className="flex items-start justify-between gap-4">
@@ -544,7 +546,7 @@ export default function Boleta() {
           }
           @page {
             size: A4;
-            margin: 1.5cm;
+            margin: 0.5cm;
           }
         }
       `}</style>
