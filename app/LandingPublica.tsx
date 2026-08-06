@@ -70,13 +70,13 @@ export default function LandingPublica() {
           alt=""
           aria-hidden="true"
           fetchPriority="high"
-          className="hidden lg:block absolute inset-0 h-full w-full object-cover object-right select-none pointer-events-none"
+          className="hidden xl:block absolute inset-0 h-full w-full object-cover object-right select-none pointer-events-none"
         />
-        <div aria-hidden="true" className="hidden lg:block absolute inset-0 bg-gradient-to-r from-[#070B18] via-[#070B18]/80 to-transparent" />
+        <div aria-hidden="true" className="hidden xl:block absolute inset-0 bg-gradient-to-r from-[#070B18] via-[#070B18]/80 to-transparent" />
 
         <div className="relative mx-auto max-w-[1280px] px-5 sm:px-8 lg:px-12">
-          <div className="lg:flex lg:items-center lg:min-h-[clamp(720px,88vh,850px)]">
-            <div className="w-full lg:w-[46%] lg:max-w-[560px] flex flex-col items-start gap-5 pt-12 pb-8 lg:py-0">
+          <div className="xl:flex xl:items-center xl:min-h-[clamp(720px,88vh,850px)]">
+            <div className="w-full xl:w-[46%] xl:max-w-[560px] flex flex-col items-start gap-5 pt-12 pb-8 xl:py-0">
               <span className="animate-fade-in-up text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-300 bg-sky-400/10 border border-sky-400/25 rounded-full px-3 py-1.5">
                 Gestión integral para locales de celulares
               </span>
@@ -122,7 +122,7 @@ export default function LandingPublica() {
 
           {/* Móvil y tablet: la imagen como bloque visual independiente, debajo
              del texto (no como fondo, para no recortar a Qovi ni tapar el texto). */}
-          <div className="lg:hidden pb-12">
+          <div className="xl:hidden pb-12">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/qovento-hero-qovi.webp"
