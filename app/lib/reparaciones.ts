@@ -8,7 +8,7 @@ export type EstadoReparacion =
   | 'entregado'
   | 'cancelado';
 
-export type GrupoEstado = 'pendientes' | 'en_proceso' | 'en_espera' | 'listos' | 'finalizados';
+export type GrupoEstado = 'pendientes' | 'en_proceso' | 'en_espera' | 'listos';
 
 export const ESTADOS_REPARACION: { id: EstadoReparacion; label: string; grupo: GrupoEstado; color: string }[] = [
   { id: 'recibido', label: 'Recibido', grupo: 'pendientes', color: 'bg-accent/15 text-accent' },
@@ -17,8 +17,8 @@ export const ESTADOS_REPARACION: { id: EstadoReparacion; label: string; grupo: G
   { id: 'esperando_repuesto', label: 'Esperando repuesto', grupo: 'en_espera', color: 'bg-warn/15 text-warn' },
   { id: 'en_reparacion', label: 'En reparación', grupo: 'en_proceso', color: 'bg-warn/15 text-warn' },
   { id: 'listo_para_entregar', label: 'Listo para entregar', grupo: 'listos', color: 'bg-good/15 text-good' },
-  { id: 'entregado', label: 'Entregado', grupo: 'finalizados', color: 'bg-muted/15 text-muted' },
-  { id: 'cancelado', label: 'Cancelado / sin solución', grupo: 'finalizados', color: 'bg-bad/15 text-bad' },
+  { id: 'entregado', label: 'Entregado', grupo: 'listos', color: 'bg-muted/15 text-muted' },
+  { id: 'cancelado', label: 'Cancelado / sin solución', grupo: 'listos', color: 'bg-bad/15 text-bad' },
 ];
 
 export const GRUPOS_ESTADO: { id: GrupoEstado; label: string }[] = [
@@ -26,7 +26,6 @@ export const GRUPOS_ESTADO: { id: GrupoEstado; label: string }[] = [
   { id: 'en_proceso', label: 'En proceso' },
   { id: 'en_espera', label: 'En espera' },
   { id: 'listos', label: 'Listos' },
-  { id: 'finalizados', label: 'Finalizados' },
 ];
 
 export const PRIORIDADES: { id: string; label: string; color: string }[] = [

@@ -476,7 +476,7 @@ export default function ServicioTecnico() {
       alert('No tenés permiso para gestionar Servicio Técnico.');
       return;
     }
-    if (!confirm('¿Cancelar/archivar esta reparación? Va a quedar en "Finalizados", no se borra el historial.')) return;
+    if (!confirm('¿Cancelar esta reparación? Va a quedar marcada como cancelada en "Listos", no se borra el historial.')) return;
     setMenuAbierto(null);
     await cambiarEstado(r, 'cancelado');
   };
@@ -1098,7 +1098,7 @@ function TarjetaReparacion({
 
       {extra}
 
-      {r.estado === 'listo_para_entregar' && (
+      {(r.estado === 'listo_para_entregar' || r.estado === 'cancelado') && (
         <button
           disabled={guardando === r.id}
           onClick={() => (r.cliente_id ? onEntregadoCliente(r) : onAgregarAlStock(r))}
@@ -1106,6 +1106,12 @@ function TarjetaReparacion({
         >
           {r.cliente_id ? '✓ Marcar entregado al cliente' : '✓ Agregar al Stock'}
         </button>
+      )}
+
+      {r.estado === 'entregado' && (
+        <div className="rounded-lg bg-muted/10 py-2 text-center text-xs font-medium text-muted dark:text-dark-text-secondary">
+          {r.cliente_id ? '✓ Entregado al cliente' : '✓ En stock'}
+        </div>
       )}
 
       <div className="flex gap-2">

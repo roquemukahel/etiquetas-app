@@ -10,3 +10,7 @@ CONTEXTO-QOVENTO.md
 .claude/
 next-env.d.ts
 *.tsbuildinfo
+.env
+.env.local
+.env*.local
+.vercel/
