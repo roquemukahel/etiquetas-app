@@ -101,6 +101,8 @@ export default function DetalleOrden() {
   const [formaPagoEdit, setFormaPagoEdit] = useState('Efectivo');
   const [notaEdit, setNotaEdit] = useState('');
   const [incluirGarantiaEdit, setIncluirGarantiaEdit] = useState(true);
+  const [aclaracionesEdit, setAclaracionesEdit] = useState('');
+  const [incluirAclaracionesEdit, setIncluirAclaracionesEdit] = useState(true);
   const [anticipoEdit, setAnticipoEdit] = useState('');
   const [impuestoEdit, setImpuestoEdit] = useState('');
   const [itemsEdit, setItemsEdit] = useState<ItemEditable[]>([]);
@@ -228,6 +230,8 @@ export default function DetalleOrden() {
     setFormaPagoEdit(orden.forma_pago || 'Efectivo');
     setNotaEdit(orden.nota || '');
     setIncluirGarantiaEdit(orden.incluir_garantia);
+    setAclaracionesEdit(orden.aclaraciones_tecnico || '');
+    setIncluirAclaracionesEdit(orden.incluir_aclaraciones_tecnico);
     setAnticipoEdit(orden.anticipo != null ? String(orden.anticipo) : '');
     setImpuestoEdit(orden.impuesto_porcentaje != null ? String(orden.impuesto_porcentaje) : '');
     setVendedorEdit(orden.vendedor_id || '');
@@ -339,6 +343,10 @@ export default function DetalleOrden() {
     if ((orden.forma_pago || '') !== formaPagoEdit) cambios.forma_pago = { antes: orden.forma_pago, despues: formaPagoEdit };
     if ((orden.nota || '') !== notaEdit.trim()) cambios.nota = { antes: orden.nota, despues: notaEdit.trim() || null };
     if (orden.incluir_garantia !== incluirGarantiaEdit) cambios.incluir_garantia = { antes: orden.incluir_garantia, despues: incluirGarantiaEdit };
+    if ((orden.aclaraciones_tecnico || '') !== aclaracionesEdit.trim())
+      cambios.aclaraciones_tecnico = { antes: orden.aclaraciones_tecnico, despues: aclaracionesEdit.trim() || null };
+    if (orden.incluir_aclaraciones_tecnico !== incluirAclaracionesEdit)
+      cambios.incluir_aclaraciones_tecnico = { antes: orden.incluir_aclaraciones_tecnico, despues: incluirAclaracionesEdit };
     const anticipoNuevo = Number(anticipoEdit) || 0;
     if ((orden.anticipo || 0) !== anticipoNuevo) cambios.anticipo = { antes: orden.anticipo, despues: anticipoNuevo };
     const impuestoNuevo = Number(impuestoEdit) || 0;
@@ -475,6 +483,8 @@ export default function DetalleOrden() {
         forma_pago: formaPagoEdit,
         nota: notaEdit.trim() || null,
         incluir_garantia: incluirGarantiaEdit,
+        aclaraciones_tecnico: aclaracionesEdit.trim() || null,
+        incluir_aclaraciones_tecnico: incluirAclaracionesEdit,
         anticipo: anticipoNuevo,
         impuesto_porcentaje: impuestoNuevo,
         total: totalEdit,
@@ -864,6 +874,28 @@ export default function DetalleOrden() {
           />
           <span className="text-sm font-medium">Incluir el texto de garantía en la boleta</span>
         </label>
+
+        {(tieneTrabajo || orden.aclaraciones_tecnico) && (
+          <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-3 flex flex-col gap-2">
+            <label className="text-xs font-medium text-muted dark:text-dark-text-secondary">Aclaraciones del técnico (salen en la boleta)</label>
+            <textarea
+              value={aclaracionesEdit}
+              onChange={(e) => setAclaracionesEdit(e.target.value)}
+              rows={2}
+              placeholder="Lo que el técnico aclara para el cliente (diagnóstico, qué se hizo, pruebas…)"
+              className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+            />
+            <label className="flex items-center gap-2 cursor-pointer text-sm">
+              <input
+                type="checkbox"
+                checked={incluirAclaracionesEdit}
+                onChange={(e) => setIncluirAclaracionesEdit(e.target.checked)}
+                className="h-4 w-4 accent-ink"
+              />
+              Incluir estas aclaraciones en la boleta
+            </label>
+          </div>
+        )}
 
         <div className="flex items-center justify-between text-lg font-medium border-t border-border dark:border-dark-border pt-3">
           <span>Total</span>
