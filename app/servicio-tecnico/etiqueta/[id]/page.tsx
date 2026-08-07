@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { crearClienteNavegador } from '../../../lib/supabase/client';
 import EtiquetaServicio from '../../EtiquetaServicio';
+import { TAMANOS, type FormatoEtiqueta } from '../../../nueva-etiqueta/Etiqueta';
 
 type Equipo = {
   id: string;
@@ -22,6 +23,7 @@ export default function EtiquetaServicioTecnico() {
   const [logo, setLogoState] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [descargando, setDescargando] = useState(false);
+  const [formato, setFormato] = useState<FormatoEtiqueta>('estandar');
   const etiquetaRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -66,12 +68,27 @@ export default function EtiquetaServicioTecnico() {
     URL.revokeObjectURL(url);
   };
 
+  // Captura desde la copia a tamaño real fuera de pantalla (no desde la vista
+  // previa reducida), esperando a las fuentes: evita el texto encimado.
+  const capturarLienzo = async () => {
+    if (!etiquetaRef.current) return null;
+    const html2canvas = (await import('html2canvas')).default;
+    if (typeof document !== 'undefined' && 'fonts' in document) {
+      try {
+        await (document as any).fonts.ready;
+      } catch {
+        /* sin soporte de Font Loading API */
+      }
+    }
+    return html2canvas(etiquetaRef.current, { scale: 3, backgroundColor: '#ffffff' });
+  };
+
   const descargarPNG = async () => {
     if (!etiquetaRef.current) return;
     setDescargando(true);
     try {
-      const html2canvas = (await import('html2canvas')).default;
-      const canvas = await html2canvas(etiquetaRef.current, { scale: 2 });
+      const canvas = await capturarLienzo();
+      if (!canvas) return;
       const blob: Blob | null = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
       if (blob) await compartirOdescargar(blob, `servicio-${equipo?.id.slice(0, 8) || 'etiqueta'}.png`, 'image/png');
     } finally {
@@ -83,12 +100,13 @@ export default function EtiquetaServicioTecnico() {
     if (!etiquetaRef.current) return;
     setDescargando(true);
     try {
-      const html2canvas = (await import('html2canvas')).default;
       const { jsPDF } = await import('jspdf');
-      const canvas = await html2canvas(etiquetaRef.current, { scale: 2 });
+      const canvas = await capturarLienzo();
+      if (!canvas) return;
       const img = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({ unit: 'cm', format: [5, 3] });
-      pdf.addImage(img, 'PNG', 0, 0, 5, 3);
+      const { wCm, hCm } = TAMANOS[formato];
+      const pdf = new jsPDF({ unit: 'cm', format: [wCm, hCm], orientation: wCm >= hCm ? 'landscape' : 'portrait' });
+      pdf.addImage(img, 'PNG', 0, 0, wCm, hCm);
       const blob = pdf.output('blob');
       await compartirOdescargar(blob, `servicio-${equipo?.id.slice(0, 8) || 'etiqueta'}.pdf`, 'application/pdf');
     } finally {
@@ -126,8 +144,51 @@ export default function EtiquetaServicioTecnico() {
         <span className="text-lg font-medium">Etiqueta del equipo</span>
       </header>
 
-      <div style={{ transform: 'scale(0.5)', transformOrigin: 'top center', height: '177px' }}>
-        <EtiquetaServicio ref={etiquetaRef} logo={logo} modelo={equipo.modelo} identificador={identificador} detalle={equipo.falla_declarada} />
+      <div className="w-full">
+        <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Tamaño de la etiqueta</label>
+        <div className="flex gap-2">
+          {(Object.keys(TAMANOS) as FormatoEtiqueta[]).map((f) => (
+            <button
+              key={f}
+              onClick={() => setFormato(f)}
+              className={`flex-1 rounded-xl py-2 text-sm font-medium ${
+                formato === f
+                  ? 'bg-accent dark:bg-dark-accent text-white'
+                  : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
+              }`}
+            >
+              {TAMANOS[f].label}
+            </button>
+          ))}
+        </div>
+        <p className="text-xs text-muted dark:text-dark-text-secondary mt-1">{TAMANOS[formato].ayuda}</p>
+      </div>
+
+      {/* Vista previa reducida (solo para mostrar; NO se captura desde acá) */}
+      <div
+        style={{
+          width: `${TAMANOS[formato].wPx * (288 / TAMANOS[formato].wPx)}px`,
+          height: `${TAMANOS[formato].hPx * (288 / TAMANOS[formato].wPx)}px`,
+          boxShadow: '0 4px 24px rgba(0,0,0,0.12)',
+          borderRadius: formato === 'estandar' ? '8px' : '2px',
+          overflow: 'hidden',
+        }}
+      >
+        <div
+          style={{
+            transform: `scale(${288 / TAMANOS[formato].wPx})`,
+            transformOrigin: 'top left',
+            width: `${TAMANOS[formato].wPx}px`,
+            height: `${TAMANOS[formato].hPx}px`,
+          }}
+        >
+          <EtiquetaServicio logo={logo} modelo={equipo.modelo} identificador={identificador} detalle={equipo.falla_declarada} formato={formato} />
+        </div>
+      </div>
+
+      {/* Copia a tamaño real fuera de pantalla: la que captura html2canvas */}
+      <div aria-hidden style={{ position: 'fixed', left: '-10000px', top: 0, pointerEvents: 'none' }}>
+        <EtiquetaServicio ref={etiquetaRef} logo={logo} modelo={equipo.modelo} identificador={identificador} detalle={equipo.falla_declarada} formato={formato} />
       </div>
 
       {!logo && (
