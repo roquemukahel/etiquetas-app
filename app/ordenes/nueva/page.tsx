@@ -308,9 +308,32 @@ export default function NuevaOrden() {
   );
   const moneda = useMemo(() => simboloMoneda(monedaOrden), [monedaOrden]);
 
+  // Los canjes que efectivamente cuentan: los ya agregados con el botón MÁS el
+  // que esté cargado en el formulario sin agregar todavía. Así, si el usuario
+  // completa el canje pero se olvida de tocar "+ Agregar", igual se descuenta
+  // del total y se guarda (era la causa de "no me descuenta / no aparece").
+  const canjesEfectivos = useMemo<CanjeCarrito[]>(() => {
+    const enProgreso: CanjeCarrito[] =
+      canjeActivo && canjeModelo.trim()
+        ? [
+            {
+              tempId: '__en_progreso__',
+              modelo: canjeModelo.trim(),
+              capacidad_gb: canjeCapacidad,
+              color: canjeColor,
+              imei: canjeImei,
+              salud_bateria: canjeBateria,
+              monto: canjeMonto,
+              detalles: canjeDetalles,
+            },
+          ]
+        : [];
+    return [...canjesCarrito, ...enProgreso];
+  }, [canjesCarrito, canjeActivo, canjeModelo, canjeCapacidad, canjeColor, canjeImei, canjeBateria, canjeMonto, canjeDetalles]);
+
   const montoCanjeTotal = useMemo(
-    () => canjesCarrito.reduce((acc, c) => acc + (Number(c.monto) || 0), 0),
-    [canjesCarrito]
+    () => canjesEfectivos.reduce((acc, c) => acc + (Number(c.monto) || 0), 0),
+    [canjesEfectivos]
   );
 
   // Financiación en cuotas: el interés del plan elegido se aplica sobre el
@@ -731,9 +754,9 @@ export default function NuevaOrden() {
       if (oErr || !orden) throw new Error(oErr?.message || 'no se pudo crear la orden');
       ordenCreadaId = orden.id;
 
-      if (canjesCarrito.length > 0) {
+      if (canjesEfectivos.length > 0) {
         const { error: canjesErr } = await supabase.from('canjes').insert(
-          canjesCarrito.map((c) => ({
+          canjesEfectivos.map((c) => ({
             orden_id: orden.id,
             modelo: c.modelo,
             capacidad_gb: c.capacidad_gb,
@@ -1799,7 +1822,7 @@ export default function NuevaOrden() {
               + Agregar este dispositivo
             </button>
             <p className="text-xs text-muted dark:text-dark-text-secondary">
-              El dispositivo entregado va a la sección Plan Canje (no entra directo al stock). Podés cargar más de uno.
+              El monto reconocido ya se descuenta del total y el dispositivo se guarda en Plan Canje al confirmar la orden (no entra directo al stock). Usá <span className="font-medium">+ Agregar este dispositivo</span> solo si vas a cargar más de uno.
             </p>
           </div>
         )}
