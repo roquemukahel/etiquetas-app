@@ -20,8 +20,8 @@ function formatearValor(valor: number, moneda?: string, sufijo?: string) {
   return `${valor.toLocaleString('es-AR')}${sufijo ?? ''}`;
 }
 
-// Medalla oro/plata/bronce para los puestos 1/2/3; del 4° en adelante queda
-// el número tal cual. Da el toque estético de "podio" a todos los rankings.
+// Medalla 🥇🥈🥉 para los puestos 1/2/3; del 4° en adelante queda el número.
+// Da el toque estético de "podio" a todos los rankings.
 export function PosicionRanking({ pos }: { pos: number }) {
   if (pos > 3) {
     return (
@@ -30,18 +30,10 @@ export function PosicionRanking({ pos }: { pos: number }) {
       </span>
     );
   }
-  const estilo =
-    pos === 1
-      ? 'bg-gradient-to-b from-[#F6C544] to-[#E0A100] text-[#5a4300]'
-      : pos === 2
-        ? 'bg-gradient-to-b from-[#D6DAE0] to-[#A7AEB6] text-[#3a3f45]'
-        : 'bg-gradient-to-b from-[#E0A46A] to-[#B5793F] text-[#4a2d12]';
+  const medalla = pos === 1 ? '🥇' : pos === 2 ? '🥈' : '🥉';
   return (
-    <span
-      aria-label={`Puesto ${pos}`}
-      className={`w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-[11px] font-bold shadow-sm ring-1 ring-black/5 ${estilo}`}
-    >
-      {pos}
+    <span aria-label={`Puesto ${pos}`} className="w-6 shrink-0 text-center text-lg leading-none">
+      {medalla}
     </span>
   );
 }

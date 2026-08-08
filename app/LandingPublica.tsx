@@ -49,17 +49,8 @@ const DEMO_PAGOS = [
 ];
 
 function MedallaLanding({ pos }: { pos: number }) {
-  const estilo =
-    pos === 1
-      ? 'from-[#F6C544] to-[#E0A100] text-[#5a4300]'
-      : pos === 2
-        ? 'from-[#D6DAE0] to-[#A7AEB6] text-[#3a3f45]'
-        : 'from-[#E0A46A] to-[#B5793F] text-[#4a2d12]';
-  return (
-    <span className={`w-5 h-5 shrink-0 rounded-full flex items-center justify-center text-[10px] font-bold bg-gradient-to-b ${estilo}`}>
-      {pos}
-    </span>
-  );
+  const medalla = pos === 1 ? '🥇' : pos === 2 ? '🥈' : '🥉';
+  return <span className="w-5 shrink-0 text-center text-base leading-none">{medalla}</span>;
 }
 
 function FilaRankingLanding({ pos, nombre, valor, ancho }: { pos: number; nombre: string; valor: string; ancho: number }) {
@@ -168,17 +159,10 @@ export default function LandingPublica() {
               </p>
             </div>
           </div>
-
-          {/* Móvil y tablet: la imagen como bloque visual independiente, debajo
-             del texto (no como fondo, para no recortar a Qovi ni tapar el texto). */}
-          <div className="xl:hidden pb-12">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/qovento-hero-qovi-sm.webp"
-              alt="Interfaz de Qovento con Qovi, la mascota del sistema"
-              className="w-full rounded-2xl border border-white/10 object-cover aspect-[2/1] shadow-[0_0_60px_-15px_rgba(59,130,246,0.55)]"
-            />
-          </div>
+          {/* En celular/tablet no se muestra imagen del hero (quedaba como una
+             foto chica pegada, poco estética). En escritorio (xl) sigue el
+             fondo con la interfaz + Qovi, igual que antes. */}
+          <div className="xl:hidden pb-4" />
         </div>
       </section>
 
