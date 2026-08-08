@@ -224,8 +224,22 @@ const IPHONE_SE_2022: ModeloColores = {
   ],
 };
 
+// iPhone 7 — colores oficiales de Apple (incluye Jet Black / Negro azabache).
+const IPHONE_7: ModeloColores = {
+  carpeta: 'iphone-7',
+  colores: [
+    { nombre: 'Negro', archivo: 'negro', hex: '#2b2b2d' },
+    { nombre: 'Negro azabache', archivo: 'azabache', hex: '#0a0a0a' },
+    { nombre: 'Plata', archivo: 'blanco', hex: '#e6e6e4' },
+    { nombre: 'Oro', archivo: 'oro', hex: '#f0dfc0' },
+    { nombre: 'Oro rosa', archivo: 'rosa', hex: '#f0cfc5' },
+    { nombre: 'Product Red', archivo: 'rojo', hex: '#c41e2a' },
+  ],
+};
+
 // Clave de modelo normalizada: "iPhone 11", "iphone 11", "iPhone11" -> "iphone11".
 const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
+  iphone7: IPHONE_7,
   iphonex: IPHONE_X,
   iphonexr: IPHONE_XR,
   iphonexs: IPHONE_XS,
@@ -237,14 +251,19 @@ const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   iphone8plus: IPHONE_8_PLUS,
   iphone11: IPHONE_11,
   iphone12: IPHONE_12,
+  iphone12mini: IPHONE_12,
   iphone13: IPHONE_13,
+  iphone13mini: IPHONE_13,
   iphone14: IPHONE_14,
+  iphone14plus: IPHONE_14,
   iphone14pro: IPHONE_14_PRO,
   iphone14promax: IPHONE_14_PRO,
   iphone15: IPHONE_15,
+  iphone15plus: IPHONE_15,
   iphone15pro: IPHONE_15_PRO,
   iphone15promax: IPHONE_15_PRO,
   iphone16: IPHONE_16,
+  iphone16plus: IPHONE_16,
   iphone16pro: IPHONE_16_PRO,
   iphone16promax: IPHONE_16_PRO,
   iphone17: IPHONE_17,
