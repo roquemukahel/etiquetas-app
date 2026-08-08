@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
-import { asegurarModelo } from '../../lib/modelos';
+import { asegurarModelo, sugerirCarpetas } from '../../lib/modelos';
 import { asegurarProveedor } from '../../lib/proveedores';
 import { limpiarImei } from '../../lib/imei';
 import { getActor, useActor, MENSAJE_ACTOR_REQUERIDO } from '../../lib/actor';
@@ -123,6 +123,25 @@ export default function NuevoDispositivo() {
             <option key={c} value={c} />
           ))}
         </datalist>
+        {sugerirCarpetas(modelo, carpetas).length > 0 && (
+          <div className="-mt-1 rounded-lg bg-warn/10 border border-warn/30 px-3 py-2 flex flex-col gap-1.5">
+            <p className="text-xs text-ink dark:text-dark-text">
+              Ya existe una carpeta parecida. Para no crear una repetida, ¿usás una de estas?
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {sugerirCarpetas(modelo, carpetas).map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setModelo(c)}
+                  className="rounded-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border px-3 py-1 text-xs font-medium"
+                >
+                  Usar «{c}»
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div>
           <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Almacenamiento</label>
