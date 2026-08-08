@@ -190,74 +190,24 @@ function TarjetaAccion({ mod }: { mod: Modulo }) {
   );
 }
 
-// Qovi como asistente contextual: aparece UNA vez en el encabezado y señala el
-// tema que más atención necesita (con su fuente de datos real).
-function prioridad(m: MetricasAccesos): { texto: string; href: string | null; tono: Tono } {
-  if (m.listosEntregar > 0)
-    return { texto: `Tenés ${m.listosEntregar} ${plural(m.listosEntregar, 'reparación lista', 'reparaciones listas')} para entregar`, href: '/servicio-tecnico', tono: 'good' };
-  if (m.atrasadosServicio > 0)
-    return { texto: `${m.atrasadosServicio} ${plural(m.atrasadosServicio, 'reparación atrasada', 'reparaciones atrasadas')} en Servicio Técnico`, href: '/servicio-tecnico', tono: 'bad' };
-  if (m.sinPrecio > 0) return { texto: `${m.sinPrecio} ${plural(m.sinPrecio, 'equipo sin precio', 'equipos sin precio')} en el stock`, href: '/stock', tono: 'warn' };
-  if (m.porAgotarse > 0) return { texto: `${m.porAgotarse} ${plural(m.porAgotarse, 'modelo', 'modelos')} por agotarse`, href: '/stock', tono: 'warn' };
-  if (m.comprasPendientes > 0) return { texto: `${m.comprasPendientes} ${plural(m.comprasPendientes, 'compra pendiente', 'compras pendientes')}`, href: '/compras', tono: 'warn' };
-  if (m.ordenesPendientes > 0) return { texto: `${m.ordenesPendientes} ${plural(m.ordenesPendientes, 'orden pendiente', 'órdenes pendientes')}`, href: '/ordenes', tono: 'info' };
-  return { texto: '¡Todo al día! Elegí por dónde seguir.', href: null, tono: 'info' };
-}
-
-const PUNTO_TONO: Record<Tono, string> = {
-  info: 'bg-accent',
-  good: 'bg-good',
-  warn: 'bg-warn',
-  bad: 'bg-bad',
-  create: 'bg-violet-500',
-};
-
 function Subtitulo({ children }: { children: React.ReactNode }) {
   return <p className="text-[11px] font-semibold uppercase tracking-wide text-muted dark:text-dark-text-secondary">{children}</p>;
 }
 
 export default function AccesosRapidos({ metricas }: { metricas: MetricasAccesos }) {
-  const pri = prioridad(metricas);
-
-  const Encabezado = (
-    <>
-      {/* Qovi asomándose desde el borde del encabezado */}
-      <span className="relative shrink-0" aria-hidden="true">
-        <span className="absolute inset-0 -z-10 m-auto h-11 w-11 rounded-full bg-accent-soft dark:bg-dark-accent-soft" />
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/qobi.webp" alt="" className="h-14 w-14 object-contain drop-shadow-sm" />
-      </span>
-      <div className="min-w-0 flex-1">
-        <p id="accesos-titulo" className="font-display text-sm font-semibold tracking-tight">
-          Accesos rápidos
-        </p>
-        <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted dark:text-dark-text-secondary">
-          <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${PUNTO_TONO[pri.tono]}`} />
-          <span className="min-w-0 truncate">{pri.texto}</span>
-        </p>
-      </div>
-      {pri.href && (
-        <span className="shrink-0 self-center text-muted transition-transform duration-200 group-hover/qovi:translate-x-0.5 group-hover/qovi:text-accent dark:text-dark-text-secondary dark:group-hover/qovi:text-dark-accent">
-          <Chevron />
-        </span>
-      )}
-    </>
-  );
-
   return (
     <section aria-labelledby="accesos-titulo" className="flex flex-col gap-4 animate-fade-in-up" style={{ animationDelay: '240ms' }}>
-      {pri.href ? (
-        <Link
-          href={pri.href}
-          className="qv-card group/qovi flex items-center gap-3 rounded-2xl border border-border bg-white/70 px-3 py-2 shadow-card transition-shadow hover:shadow-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent dark:border-dark-border dark:bg-dark-surface/70"
-        >
-          {Encabezado}
-        </Link>
-      ) : (
-        <div className="flex items-center gap-3 rounded-2xl border border-border bg-white/70 px-3 py-2 shadow-card dark:border-dark-border dark:bg-dark-surface/70">
-          {Encabezado}
-        </div>
-      )}
+      {/* Encabezado: solo título, con Qovi acompañando (no es clickeable) */}
+      <div className="flex items-center gap-2.5">
+        <span className="relative shrink-0" aria-hidden="true">
+          <span className="absolute inset-0 -z-10 m-auto h-10 w-10 rounded-full bg-accent-soft dark:bg-dark-accent-soft" />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/qobi.webp" alt="" className="h-12 w-12 object-contain drop-shadow-sm" />
+        </span>
+        <h2 id="accesos-titulo" className="font-display text-base font-semibold tracking-tight">
+          Accesos rápidos
+        </h2>
+      </div>
 
       {/* Operación diaria — tarjetas principales */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

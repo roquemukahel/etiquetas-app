@@ -7,11 +7,12 @@ import BuscadorUniversal from './BuscadorUniversal';
 import LandingPublica from './LandingPublica';
 import { simboloMoneda } from './lib/monedas';
 import { imagenParaDescripcion } from './lib/carpetas';
-import { ICONOS, COLOR_ICONO } from './Iconos';
+import { COLOR_ICONO } from './Iconos';
 import NumeroAnimado from './NumeroAnimado';
 import Avatar from './Avatar';
 import BienvenidaQovi from './BienvenidaQovi';
 import AccesosRapidos, { MetricasAccesos } from './inicio/AccesosRapidos';
+import IlustracionModulo from './inicio/IlustracionesModulos';
 import OjoResumenFinanciero from './OjoResumenFinanciero';
 
 export default async function Home() {
@@ -653,16 +654,17 @@ function StatTile({
       className="qv-card group relative overflow-hidden rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-3.5 flex flex-col gap-2 hover:shadow-elevated hover:-translate-y-1 transition-all"
     >
       <span className={`absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r ${COLOR_ICONO[color]}`} />
-      <div
-        className={`h-8 w-8 rounded-lg bg-gradient-to-br ${COLOR_ICONO[color]} text-white flex items-center justify-center [&_svg]:h-4 [&_svg]:w-4 group-hover:scale-110 group-hover:rotate-3 transition-transform`}
-      >
-        {ICONOS[icono]}
-      </div>
-      <div>
-        <p className="text-2xl font-display font-semibold leading-none">
-          <NumeroAnimado valor={valor} />
-        </p>
-        <p className="text-[11px] text-muted dark:text-dark-text-secondary leading-tight mt-1">{etiqueta}</p>
+      <div className="flex items-center gap-2.5">
+        <IlustracionModulo
+          nombre={icono}
+          className="h-11 w-11 shrink-0 transition-transform duration-200 ease-out group-hover:-translate-y-0.5 group-hover:scale-[1.05] motion-reduce:transform-none motion-reduce:transition-none"
+        />
+        <div className="min-w-0">
+          <p className="text-2xl font-display font-semibold leading-none">
+            <NumeroAnimado valor={valor} />
+          </p>
+          <p className="text-[11px] text-muted dark:text-dark-text-secondary leading-tight mt-1 truncate">{etiqueta}</p>
+        </div>
       </div>
     </Link>
   );
