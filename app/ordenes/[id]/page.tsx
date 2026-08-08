@@ -161,7 +161,7 @@ export default function DetalleOrden() {
   const [agregandoCanje, setAgregandoCanje] = useState(false);
 
   const [yaDerivado, setYaDerivado] = useState(false);
-  const [reparacionDerivadaId, setReparacionDerivadaId] = useState<string | null>(null);
+  const [reparacionesDerivadasIds, setReparacionesDerivadasIds] = useState<string[]>([]);
   const [derivarAbierto, setDerivarAbierto] = useState(false);
   const [derivarModelo, setDerivarModelo] = useState('');
   const [derivarCapacidad, setDerivarCapacidad] = useState<number | null>(null);
@@ -179,9 +179,13 @@ export default function DetalleOrden() {
       .eq('id', id)
       .single();
     setOrden(data as any);
-    const { data: reparacionExistente } = await supabase.from('reparaciones').select('id').eq('orden_origen_id', id).maybeSingle();
-    setYaDerivado(!!reparacionExistente);
-    setReparacionDerivadaId((reparacionExistente as any)?.id ?? null);
+    // Una orden puede tener VARIAS reparaciones derivadas (varios equipos de la
+    // misma boleta). Por eso NO se usa .maybeSingle() (que con >1 fila devuelve
+    // null y haría creer que no se derivó nada): se traen todas.
+    const { data: reparacionesLigadas } = await supabase.from('reparaciones').select('id').eq('orden_origen_id', id);
+    const idsRep = (reparacionesLigadas ?? []).map((r: any) => r.id as string);
+    setYaDerivado(idsRep.length > 0);
+    setReparacionesDerivadasIds(idsRep);
     const { data: canjesData } = await supabase
       .from('canjes')
       .select('id, modelo, capacidad_gb, color, imei, salud_bateria, detalles, monto')
@@ -707,11 +711,12 @@ export default function DetalleOrden() {
     await supabase.from('reparaciones').delete().eq('orden_origen_id', id);
     if (yaDerivado) {
       const clienteRep = orden.clientes ? `${orden.clientes.nombre} ${orden.clientes.apellido || ''}`.trim() : 'sin cliente';
+      const cuenta = reparacionesDerivadasIds.length;
       await registrarAuditoria(supabase, {
-        accion: `eliminó la reparación derivada de una orden (${clienteRep})`,
+        accion: `eliminó ${cuenta === 1 ? 'la reparación derivada' : `${cuenta} reparaciones derivadas`} de una orden (${clienteRep})`,
         entidad: 'reparacion',
-        entidadId: reparacionDerivadaId ?? undefined,
-        valorAnterior: { orden_origen_id: id, reparacion_id: reparacionDerivadaId },
+        entidadId: reparacionesDerivadasIds[0] ?? undefined,
+        valorAnterior: { orden_origen_id: id, reparaciones: reparacionesDerivadasIds },
       });
     }
     const { error: deleteError } = await supabase.from('ordenes').delete().eq('id', id);
