@@ -20,9 +20,37 @@ const IPHONE_11: ModeloColores = {
   ],
 };
 
+// iPhone 12 — colores oficiales de Apple. (La imagen de origen vino combinada
+// y se subdividió; es de menor resolución, se ve bien en tamaño chico.)
+const IPHONE_12: ModeloColores = {
+  carpeta: 'iphone-12',
+  colores: [
+    { nombre: 'Negro', archivo: 'negro', hex: '#2b2b2d' },
+    { nombre: 'Blanco', archivo: 'blanco', hex: '#f7f5f0' },
+    { nombre: 'Product Red', archivo: 'rojo', hex: '#d3222a' },
+    { nombre: 'Verde', archivo: 'verde', hex: '#b7d9c0' },
+    { nombre: 'Azul', archivo: 'azul', hex: '#2c5a8c' },
+    { nombre: 'Púrpura', archivo: 'morado', hex: '#b9a9d8' },
+  ],
+};
+
+// iPhone 13 — nombres oficiales de Apple (Medianoche, Blanco estrella, etc.).
+const IPHONE_13: ModeloColores = {
+  carpeta: 'iphone-13',
+  colores: [
+    { nombre: 'Medianoche', archivo: 'negro', hex: '#232a31' },
+    { nombre: 'Blanco estrella', archivo: 'blanco', hex: '#f2ede4' },
+    { nombre: 'Azul', archivo: 'azul', hex: '#3f6f8f' },
+    { nombre: 'Rosa', archivo: 'rosa', hex: '#f4d9dc' },
+    { nombre: 'Product Red', archivo: 'rojo', hex: '#c1122a' },
+  ],
+};
+
 // Clave de modelo normalizada: "iPhone 11", "iphone 11", "iPhone11" -> "iphone11".
 const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   iphone11: IPHONE_11,
+  iphone12: IPHONE_12,
+  iphone13: IPHONE_13,
 };
 
 function claveModelo(modelo: string | null | undefined): string {
