@@ -362,6 +362,12 @@ export default function FichaReparacion() {
         .maybeSingle();
       if (ordenVinculada && ordenVinculada.estado === 'pendiente' && !ordenVinculada.total) {
         await supabase.from('ordenes').delete().eq('id', r.orden_cobro_id);
+        await registrarAuditoria(supabase, {
+          accion: `eliminó la orden de cobro vacía de una reparación cancelada (${r.numero_orden || ''})`,
+          entidad: 'orden',
+          entidadId: r.orden_cobro_id,
+          valorAnterior: { estado: ordenVinculada.estado, total: ordenVinculada.total },
+        });
       }
     }
 

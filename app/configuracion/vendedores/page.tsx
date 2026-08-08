@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../../lib/supabase/client';
+import { registrarAuditoria } from '../../lib/auditoria';
 import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import Avatar from '../../Avatar';
@@ -80,7 +81,14 @@ export default function Vendedores() {
 
   const eliminar = async (id: string) => {
     if (!confirm('¿Eliminar este vendedor?')) return;
+    const vendedor = vendedores.find((v) => v.id === id);
     await supabase.from('vendedores').delete().eq('id', id);
+    await registrarAuditoria(supabase, {
+      accion: `eliminó un vendedor (${vendedor?.nombre || 'sin nombre'})`,
+      entidad: 'vendedor',
+      entidadId: id,
+      valorAnterior: vendedor ? { nombre: vendedor.nombre, telefono: vendedor.telefono } : null,
+    });
     cargar();
   };
 

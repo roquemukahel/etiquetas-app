@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
+import { registrarAuditoria } from '../../lib/auditoria';
 import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import { sanitizarDecimal } from '../../lib/numeros';
@@ -243,6 +244,12 @@ export default function DetalleProveedor() {
     )
       return;
     await supabase.from('proveedores').delete().eq('id', proveedor.id);
+    await registrarAuditoria(supabase, {
+      accion: `eliminó un proveedor (${proveedor.nombre})`,
+      entidad: 'proveedor',
+      entidadId: proveedor.id,
+      valorAnterior: { nombre: proveedor.nombre, telefono: proveedor.telefono },
+    });
     router.push('/proveedores');
   };
 
@@ -308,7 +315,14 @@ export default function DetalleProveedor() {
   const eliminarCompra = async (compraId: string) => {
     if (!puedeEliminar) return;
     if (!confirm('¿Eliminar esta compra?')) return;
+    const compra = compras.find((c) => c.id === compraId);
     await supabase.from('compras_proveedor').delete().eq('id', compraId);
+    await registrarAuditoria(supabase, {
+      accion: `eliminó una compra a proveedor${compra?.modelo ? ` (${compra.modelo})` : ''}`,
+      entidad: 'compra_proveedor',
+      entidadId: compraId,
+      valorAnterior: compra ? { modelo: compra.modelo, precio_unitario: compra.precio_unitario, cantidad: compra.cantidad } : null,
+    });
     cargar();
   };
 

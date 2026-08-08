@@ -7,6 +7,7 @@ import { crearClienteNavegador } from '../../lib/supabase/client';
 import { MONEDAS } from '../../lib/monedas';
 import { PAISES } from '../../lib/paises';
 import { MARCAS_DISPONIBLES, CATALOGO_MODELOS, normalizarNombreModelo } from '../../lib/catalogosMarcas';
+import { registrarAuditoria } from '../../lib/auditoria';
 
 type Negocio = {
   id: string;
@@ -154,6 +155,12 @@ export default function DatosNegocio() {
       return;
     }
     setNegocio((prev) => (prev ? { ...prev, marcas_stock: nuevasMarcas } : prev));
+    await registrarAuditoria(supabase, {
+      accion: `eliminó la marca ${marcaAEliminar.nombre} del negocio (y sus carpetas y equipos)`,
+      entidad: 'marca',
+      entidadId: id,
+      valorAnterior: { marca: id, nombre: marcaAEliminar.nombre, carpetas: marcaAEliminar.carpetas, equipos: marcaAEliminar.equipos },
+    });
     setProcesandoMarca(false);
     setMarcaAEliminar(null);
   };

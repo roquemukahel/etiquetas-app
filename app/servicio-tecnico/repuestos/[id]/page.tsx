@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { crearClienteNavegador } from '../../../lib/supabase/client';
+import { registrarAuditoria } from '../../../lib/auditoria';
 import { simboloMoneda } from '../../../lib/monedas';
 
 type Proveedor = { id: string; nombre: string; telefono: string | null };
@@ -58,6 +59,12 @@ export default function ProveedorRepuestos() {
     if (!proveedor) return;
     if (!confirm(`¿Eliminar a "${proveedor.nombre}"? También se van a borrar los precios que tenga cargados.`)) return;
     await supabase.from('proveedores_repuestos').delete().eq('id', proveedor.id);
+    await registrarAuditoria(supabase, {
+      accion: `eliminó un proveedor de repuestos (${proveedor.nombre})`,
+      entidad: 'repuesto_proveedor',
+      entidadId: proveedor.id,
+      valorAnterior: { nombre: proveedor.nombre, telefono: proveedor.telefono },
+    });
     window.location.href = '/servicio-tecnico/repuestos';
   };
 
@@ -130,7 +137,14 @@ export default function ProveedorRepuestos() {
 
   const eliminarPrecio = async (precioId: string) => {
     if (!confirm('¿Eliminar este repuesto de la lista de este proveedor?')) return;
+    const precio = precios.find((p) => p.id === precioId);
     await supabase.from('repuestos_precios').delete().eq('id', precioId);
+    await registrarAuditoria(supabase, {
+      accion: `eliminó un precio de repuesto de un proveedor (${precio ? nombreRepuestoDe(precio.repuesto_id) : 'sin nombre'})`,
+      entidad: 'repuesto_precio',
+      entidadId: precioId,
+      valorAnterior: precio ? { repuesto_id: precio.repuesto_id, precio: precio.precio } : null,
+    });
     cargar();
   };
 

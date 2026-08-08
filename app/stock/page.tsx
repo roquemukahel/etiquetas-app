@@ -428,7 +428,14 @@ export default function Stock() {
   const eliminarProducto = async (id: string) => {
     if (!puedeEliminar) return;
     if (!confirm('¿Eliminar este producto?')) return;
+    const producto = productos.find((p) => p.id === id);
     await supabase.from('productos').delete().eq('id', id);
+    await registrarAuditoria(supabase, {
+      accion: `eliminó un accesorio del Stock (${producto?.nombre || 'sin nombre'})`,
+      entidad: 'producto',
+      entidadId: id,
+      valorAnterior: producto ? { nombre: producto.nombre, cantidad: producto.cantidad, precio: producto.precio } : null,
+    });
     cargarProductos();
   };
 

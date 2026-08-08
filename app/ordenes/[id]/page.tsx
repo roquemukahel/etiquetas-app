@@ -695,6 +695,15 @@ export default function DetalleOrden() {
     // podría encontrar por orden_origen_id. reparaciones_eventos se va en
     // cascada. No rompe la eliminación de la orden si esto falla.
     await supabase.from('reparaciones').delete().eq('orden_origen_id', id);
+    if (yaDerivado) {
+      const clienteRep = orden.clientes ? `${orden.clientes.nombre} ${orden.clientes.apellido || ''}`.trim() : 'sin cliente';
+      await registrarAuditoria(supabase, {
+        accion: `eliminó la reparación derivada de una orden (${clienteRep})`,
+        entidad: 'reparacion',
+        entidadId: id,
+        valorAnterior: { orden_origen_id: id },
+      });
+    }
     const { error: deleteError } = await supabase.from('ordenes').delete().eq('id', id);
     if (deleteError) {
       setError('No pudimos cancelar la orden: ' + deleteError.message);

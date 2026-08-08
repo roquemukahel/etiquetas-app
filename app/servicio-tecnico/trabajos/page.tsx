@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../../lib/supabase/client';
+import { registrarAuditoria } from '../../lib/auditoria';
 
 type Trabajo = { id: string; nombre: string; precio: number | null; imagen_url: string | null };
 
@@ -45,7 +46,14 @@ export default function Trabajos() {
 
   const eliminar = async (id: string) => {
     if (!confirm('¿Eliminar este trabajo del catálogo?')) return;
+    const trabajo = trabajos.find((t) => t.id === id);
     await supabase.from('trabajos').delete().eq('id', id);
+    await registrarAuditoria(supabase, {
+      accion: `eliminó un trabajo del catálogo (${trabajo?.nombre || 'sin nombre'})`,
+      entidad: 'trabajo',
+      entidadId: id,
+      valorAnterior: trabajo ? { nombre: trabajo.nombre, precio: trabajo.precio } : null,
+    });
     cargar();
   };
 
