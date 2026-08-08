@@ -636,8 +636,10 @@ export default function NuevaOrden() {
     if (!pagoMixto) return medioLabel(medioSimple);
     const medios = Array.from(new Set(lineasPago.filter((l) => Number(l.monto) > 0).map((l) => l.medio)));
     if (medios.length === 0) return 'Sin especificar';
-    if (medios.length === 1) return medioLabel(medios[0]);
-    return 'Mixto';
+    // Antes se guardaba "Mixto" a secas: en la boleta no se sabía CON QUÉ pagó.
+    // Ahora se guarda el desglose de medios (ej. "Efectivo + Transferencia"),
+    // que es lo que muestran las boletas y los listados.
+    return medios.map(medioLabel).join(' + ');
   };
 
   // Construye las filas de pagos (plata que entra) para esta venta.
