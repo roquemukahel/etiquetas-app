@@ -105,6 +105,39 @@ const IPHONE_16: ModeloColores = {
   ],
 };
 
+// iPhone 16 Pro / Pro Max (mismas imágenes para los dos).
+const IPHONE_16_PRO: ModeloColores = {
+  carpeta: 'iphone-16-pro',
+  colores: [
+    { nombre: 'Titanio negro', archivo: 'titanionegro', hex: '#3a3a3c' },
+    { nombre: 'Titanio blanco', archivo: 'titanioblanco', hex: '#e5e4df' },
+    { nombre: 'Titanio natural', archivo: 'titanionatural', hex: '#b8b0a4' },
+    { nombre: 'Titanio desierto', archivo: 'titaniodesierto', hex: '#bda07f' },
+  ],
+};
+
+// iPhone 17 — nombres oficiales de Apple (2025).
+const IPHONE_17: ModeloColores = {
+  carpeta: 'iphone-17',
+  colores: [
+    { nombre: 'Negro', archivo: 'negro', hex: '#2f3033' },
+    { nombre: 'Blanco', archivo: 'blanco', hex: '#eef0ef' },
+    { nombre: 'Azul neblina', archivo: 'azulneblina', hex: '#c5d3dd' },
+    { nombre: 'Lavanda', archivo: 'lavanda', hex: '#d9d3e6' },
+    { nombre: 'Salvia', archivo: 'salvia', hex: '#c3ccb8' },
+  ],
+};
+
+// iPhone 17 Pro / Pro Max (mismas imágenes para los dos).
+const IPHONE_17_PRO: ModeloColores = {
+  carpeta: 'iphone-17-pro',
+  colores: [
+    { nombre: 'Azul intenso', archivo: 'azul', hex: '#2a3f66' },
+    { nombre: 'Plata', archivo: 'blanco', hex: '#e8eae9' },
+    { nombre: 'Naranja cósmico', archivo: 'naranja', hex: '#e06a2b' },
+  ],
+};
+
 // Clave de modelo normalizada: "iPhone 11", "iphone 11", "iPhone11" -> "iphone11".
 const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   iphone11: IPHONE_11,
@@ -117,6 +150,11 @@ const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   iphone15pro: IPHONE_15_PRO,
   iphone15promax: IPHONE_15_PRO,
   iphone16: IPHONE_16,
+  iphone16pro: IPHONE_16_PRO,
+  iphone16promax: IPHONE_16_PRO,
+  iphone17: IPHONE_17,
+  iphone17pro: IPHONE_17_PRO,
+  iphone17promax: IPHONE_17_PRO,
 };
 
 function claveModelo(modelo: string | null | undefined): string {
