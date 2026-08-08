@@ -1,4 +1,75 @@
 import { normalizarNombreModelo } from './modelos';
+import { hexColorDe } from './coloresIphone';
+
+function hexARgb(hex: string): [number, number, number] {
+  const h = hex.replace('#', '');
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+}
+function distanciaColor(a: [number, number, number], b: [number, number, number]): number {
+  return Math.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2);
+}
+
+// Normaliza un nombre de color: minúsculas, sin acentos, solo letras/números.
+function normColor(s: string): string {
+  return s
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
+
+// Equivalencias entre los nombres VIEJOS (paleta anterior, muchos en inglés) y
+// los nombres NUEVOS oficiales de la config. Clave = nombre normalizado viejo,
+// valor = nombre normalizado nuevo. Así un equipo guardado como "Space Gray"
+// matchea con "Gris espacial", "Silver" con "Plata", "Midnight" con "Medianoche",
+// etc. (Los que ya coinciden no necesitan entrada.)
+const ALIAS_COLOR: Record<string, string> = {
+  spacegray: 'grisespacial',
+  spacegrey: 'grisespacial',
+  silver: 'plata',
+  gold: 'oro',
+  dorado: 'oro',
+  rosegold: 'ororosa',
+  jetblack: 'negroazabache',
+  midnight: 'medianoche',
+  starlight: 'blancoestrella',
+  midnightgreen: 'verdenoche',
+  deeppurple: 'purpuraoscuro',
+  pacificblue: 'azulpacifico',
+  sierrablue: 'azulsierra',
+  alpinegreen: 'verdealpino',
+  graphite: 'grafito',
+  spaceblack: 'negroespacial',
+  blacktitanium: 'titanionegro',
+  whitetitanium: 'titanioblanco',
+  bluetitanium: 'titanioazul',
+  naturaltitanium: 'titanionatural',
+  deserttitanium: 'titaniodesierto',
+  ultramarine: 'ultramar',
+  teal: 'verdeazulado',
+  red: 'productred',
+  rojo: 'productred',
+  purple: 'purpura',
+  morado: 'purpura',
+  green: 'verde',
+  blue: 'azul',
+  yellow: 'amarillo',
+  pink: 'rosa',
+  black: 'negro',
+  white: 'blanco',
+  mistblue: 'azulneblina',
+  cloudwhite: 'blanconube',
+  lightgold: 'oroclaro',
+  skyblue: 'azulcielo',
+  lavender: 'lavanda',
+  sage: 'salvia',
+  cosmicorange: 'naranjacosmico',
+  deepblue: 'azulintenso',
+};
+function canonColor(nombre: string): string {
+  const k = normColor(nombre);
+  return ALIAS_COLOR[k] ?? k;
+}
 
 // Colores con IMAGEN por modelo. Primer modelo: iPhone 11 (imágenes propias en
 // public/modelos/iphone-11, ya con el fondo recortado). El resto de los modelos
@@ -367,8 +438,33 @@ export function modeloTieneColoresConImagen(modelo: string | null | undefined): 
 // Devuelve null si el modelo no tiene fotos por color o el color no coincide.
 export function imagenColorDeModelo(modelo: string | null | undefined, color: string | null | undefined): string | null {
   const cols = coloresDeModelo(modelo);
-  const q = (color ?? '').trim().toLowerCase();
+  const q = (color ?? '').trim();
   if (!cols || !q) return null;
-  const c = cols.find((c) => c.nombre.toLowerCase() === q);
-  return c ? c.imagen : null;
+  const ql = q.toLowerCase();
+  // 1) Match exacto por nombre (equipos cargados con el selector nuevo).
+  const exacto = cols.find((c) => c.nombre.toLowerCase() === ql);
+  if (exacto) return exacto.imagen;
+  // 2) Match por nombre canónico: los equipos viejos guardaron el color con los
+  //    nombres de la paleta anterior ("Space Gray", "Silver", "Midnight"...),
+  //    distintos de los oficiales de la config ("Gris espacial", "Plata",
+  //    "Medianoche"). ALIAS_COLOR unifica ambos.
+  const canonQ = canonColor(q);
+  const porCanon = cols.find((c) => canonColor(c.nombre) === canonQ);
+  if (porCanon) return porCanon.imagen;
+  // 3) Último recurso: color más parecido por hex (para nombres que el alias no
+  //    cubre, p.ej. "Blanco"→"Blanco estrella"). Umbral chico para no asignar
+  //    una foto equivocada si el color guardado es raro/ajeno al modelo.
+  const hexGuardado = hexColorDe(q);
+  if (!hexGuardado) return null;
+  const objetivo = hexARgb(hexGuardado);
+  let mejor: ColorConImagen | null = null;
+  let mejorDist = Infinity;
+  for (const c of cols) {
+    const d = distanciaColor(objetivo, hexARgb(c.hex));
+    if (d < mejorDist) {
+      mejorDist = d;
+      mejor = c;
+    }
+  }
+  return mejor && mejorDist <= 40 ? mejor.imagen : null;
 }
