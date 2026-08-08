@@ -57,7 +57,32 @@ type Orden = {
   orden_items: Item[];
 };
 
-type ItemEditable = { id: string; descripcion: string; cantidad: string; precioUnitario: string; tipo: string };
+type ItemEditable = {
+  id: string;
+  descripcion: string;
+  cantidad: string;
+  precioUnitario: string;
+  tipo: string;
+  bateria: string;
+  esNuevo?: boolean;
+};
+
+// La batería del equipo vendido se guarda como sufijo " · Batería X%" en la
+// descripción del ítem, así aparece en las dos boletas (interna y pública)
+// sin tocar la RPC ni el render. Es idempotente: al abrir la edición se separa
+// del texto (SEPARAR_BATERIA) y al guardar se vuelve a pegar limpio, de modo
+// que editar varias veces nunca lo duplica.
+const BATERIA_RE = /\s*·\s*bater[íi]a\s*(\d{1,3})\s*%\s*$/i;
+function separarBateria(descripcion: string): { texto: string; bateria: string } {
+  const m = descripcion.match(BATERIA_RE);
+  if (!m) return { texto: descripcion, bateria: '' };
+  return { texto: descripcion.replace(BATERIA_RE, '').trimEnd(), bateria: m[1] };
+}
+function componerDescripcion(texto: string, bateria: string): string {
+  const base = texto.trim();
+  const b = bateria.trim();
+  return b ? `${base} · Batería ${b}%` : base;
+}
 
 type Canje = {
   id: string;
@@ -272,13 +297,17 @@ export default function DetalleOrden() {
     setBoletaMonedaEdit(modoInicial);
     setMontoSecundarioEdit(orden.monto_secundario != null ? String(orden.monto_secundario) : '');
     setItemsEdit(
-      orden.orden_items.map((i) => ({
-        id: i.id,
-        descripcion: i.descripcion,
-        cantidad: String(i.cantidad),
-        precioUnitario: String(i.precio_unitario),
-        tipo: i.tipo,
-      }))
+      orden.orden_items.map((i) => {
+        const { texto, bateria } = separarBateria(i.descripcion);
+        return {
+          id: i.id,
+          descripcion: texto,
+          cantidad: String(i.cantidad),
+          precioUnitario: String(i.precio_unitario),
+          tipo: i.tipo,
+          bateria,
+        };
+      })
     );
     setCanjesEdit(
       canjes.map((c) => ({
@@ -317,8 +346,19 @@ export default function DetalleOrden() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orden]);
 
-  const actualizarItemEdit = (itemId: string, campo: 'descripcion' | 'cantidad' | 'precioUnitario', valor: string) =>
-    setItemsEdit((items) => items.map((i) => (i.id === itemId ? { ...i, [campo]: valor } : i)));
+  const actualizarItemEdit = (
+    itemId: string,
+    campo: 'descripcion' | 'cantidad' | 'precioUnitario' | 'bateria',
+    valor: string
+  ) => setItemsEdit((items) => items.map((i) => (i.id === itemId ? { ...i, [campo]: valor } : i)));
+
+  const agregarItemEdit = () =>
+    setItemsEdit((items) => [
+      ...items,
+      { id: idTemporal(), descripcion: '', cantidad: '1', precioUnitario: '', tipo: 'producto', bateria: '', esNuevo: true },
+    ]);
+
+  const quitarItemEdit = (itemId: string) => setItemsEdit((items) => items.filter((i) => i.id !== itemId));
 
   const agregarCanjeEdit = () => {
     if (!canjeModelo.trim()) return;
@@ -351,7 +391,12 @@ export default function DetalleOrden() {
   const actualizarCanjeEdit = (tempId: string, monto: string) =>
     setCanjesEdit((c) => c.map((x) => (x.tempId === tempId ? { ...x, monto } : x)));
 
-  const subtotalEdit = itemsEdit.reduce((acc, i) => acc + (Number(i.cantidad) || 0) * (Number(i.precioUnitario) || 0), 0);
+  // Un ítem nuevo sin descripción no se guarda, así que tampoco cuenta para el
+  // total (si no, el total mostraría plata de una línea que después no existe).
+  const subtotalEdit = itemsEdit.reduce((acc, i) => {
+    if (i.esNuevo && !i.descripcion.trim()) return acc;
+    return acc + (Number(i.cantidad) || 0) * (Number(i.precioUnitario) || 0);
+  }, 0);
   const montoCanjeEdit = canjesEdit.reduce((acc, c) => acc + (Number(c.monto) || 0), 0);
   // Sin Math.max(0, ...) a propósito: un anticipo mayor al precio puede dejar
   // el total en negativo (saldo a favor del cliente), y eso es válido.
@@ -409,11 +454,15 @@ export default function DetalleOrden() {
 
     const itemsCambiados = itemsEdit
       .map((edit) => {
+        if (edit.esNuevo) return null;
         const original = orden.orden_items.find((i) => i.id === edit.id);
         if (!original) return null;
         const cantidad = Math.max(1, Number(edit.cantidad) || 1);
         const precio = Number(edit.precioUnitario) || 0;
-        const descripcion = edit.descripcion.trim() || original.descripcion;
+        // Si borran el texto pero el ítem tenía descripción, no la pisamos con
+        // vacío: conservamos la original (sin su sufijo de batería) como base.
+        const base = edit.descripcion.trim() || separarBateria(original.descripcion).texto;
+        const descripcion = componerDescripcion(base, edit.bateria);
         if (original.cantidad === cantidad && original.precio_unitario === precio && original.descripcion === descripcion) {
           return null;
         }
@@ -425,9 +474,23 @@ export default function DetalleOrden() {
       })
       .filter(Boolean) as { id: string; antes: unknown; despues: unknown }[];
 
+    // Ítems nuevos (accesorios agregados a una boleta ya hecha): solo los que
+    // tienen descripción cargada. No tocan el stock (es una corrección de la
+    // boleta), se insertan como orden_items sueltos.
+    const itemsNuevos = itemsEdit
+      .filter((edit) => edit.esNuevo && edit.descripcion.trim())
+      .map((edit) => ({
+        orden_id: id,
+        descripcion: componerDescripcion(edit.descripcion, edit.bateria),
+        cantidad: Math.max(1, Number(edit.cantidad) || 1),
+        precio_unitario: Number(edit.precioUnitario) || 0,
+        tipo: edit.tipo || 'producto',
+      }));
+
     if (
       Object.keys(cambios).length === 0 &&
       itemsCambiados.length === 0 &&
+      itemsNuevos.length === 0 &&
       canjesNuevos.length === 0 &&
       canjesEliminados.length === 0 &&
       canjesModificados.length === 0
@@ -451,6 +514,15 @@ export default function DetalleOrden() {
         .eq('id', cambio.id);
       if (itemUpdError) {
         setError('No pudimos actualizar un ítem: ' + itemUpdError.message);
+        setGuardando(false);
+        return;
+      }
+    }
+
+    if (itemsNuevos.length > 0) {
+      const { error: itemsInsError } = await supabase.from('orden_items').insert(itemsNuevos);
+      if (itemsInsError) {
+        setError('No pudimos agregar un ítem nuevo: ' + itemsInsError.message);
         setGuardando(false);
         return;
       }
@@ -539,6 +611,9 @@ export default function DetalleOrden() {
       valorNuevo: {
         ...Object.fromEntries(Object.entries(cambios).map(([k, v]) => [k, v.despues])),
         ...(itemsCambiados.length > 0 ? { items: itemsCambiados.map((c) => ({ id: c.id, ...(c.despues as object) })) } : {}),
+        ...(itemsNuevos.length > 0
+          ? { items_agregados: itemsNuevos.map((i) => ({ descripcion: i.descripcion, cantidad: i.cantidad, precio_unitario: i.precio_unitario })) }
+          : {}),
         ...(huboCambiosCanje ? { canjes: canjesEdit.map((c) => ({ id: c.id, modelo: c.modelo, monto: c.monto })) } : {}),
       },
     });
@@ -727,11 +802,19 @@ export default function DetalleOrden() {
         <div className="flex flex-col gap-2">
           {itemsEdit.map((i) => (
             <div key={i.id} className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex flex-col gap-2">
-              <input
-                value={i.descripcion}
-                onChange={(e) => actualizarItemEdit(i.id, 'descripcion', e.target.value)}
-                className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
-              />
+              <div className="flex items-center gap-2">
+                <input
+                  value={i.descripcion}
+                  onChange={(e) => actualizarItemEdit(i.id, 'descripcion', e.target.value)}
+                  placeholder={i.esNuevo ? 'Accesorio o ítem (ej. Funda, Vidrio templado)' : undefined}
+                  className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                />
+                {i.esNuevo && (
+                  <button onClick={() => quitarItemEdit(i.id)} className="text-xs text-bad underline shrink-0">
+                    Quitar
+                  </button>
+                )}
+              </div>
               <div className="flex items-center gap-2 text-xs">
                 <input
                   value={i.cantidad}
@@ -750,8 +833,29 @@ export default function DetalleOrden() {
                   className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded px-2 py-1"
                 />
               </div>
+              {i.tipo === 'dispositivo' && (
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-muted dark:text-dark-text-secondary">Batería del equipo</span>
+                  <input
+                    value={i.bateria}
+                    onChange={(e) => actualizarItemEdit(i.id, 'bateria', e.target.value.replace(/[^\d]/g, '').slice(0, 3))}
+                    inputMode="numeric"
+                    placeholder="ej. 89"
+                    className="w-20 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded px-2 py-1 text-center"
+                  />
+                  <span className="text-muted dark:text-dark-text-secondary">%</span>
+                  <span className="text-[10px] text-muted dark:text-dark-text-secondary">(aparece en la boleta)</span>
+                </div>
+              )}
             </div>
           ))}
+
+          <button
+            onClick={agregarItemEdit}
+            className="self-start text-xs text-accent dark:text-dark-accent underline"
+          >
+            + Agregar ítem / accesorio
+          </button>
         </div>
 
         <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-3 flex flex-col gap-2">
