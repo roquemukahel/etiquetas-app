@@ -7,24 +7,13 @@ import BuscadorUniversal from './BuscadorUniversal';
 import LandingPublica from './LandingPublica';
 import { simboloMoneda } from './lib/monedas';
 import { imagenParaDescripcion } from './lib/carpetas';
-import { ICONOS, COLOR_ICONO } from './Iconos';
+import { COLOR_ICONO } from './Iconos';
 import NumeroAnimado from './NumeroAnimado';
 import Avatar from './Avatar';
 import BienvenidaQovi from './BienvenidaQovi';
+import AccesosRapidos, { MetricasAccesos } from './inicio/AccesosRapidos';
+import IlustracionModulo from './inicio/IlustracionesModulos';
 import OjoResumenFinanciero from './OjoResumenFinanciero';
-
-const SECCIONES = [
-  { href: '/ordenes', titulo: 'Órdenes', desc: 'Ventas, boletas y canjes', icono: 'ordenes', color: 'ventas', activo: true },
-  { href: '/compras', titulo: 'Compra de dispositivos', desc: 'Cuando le comprás un celular a alguien', icono: 'compra', color: 'compras', activo: true },
-  { href: '/proveedores', titulo: 'Proveedores', desc: 'A quién le comprás stock en lote', icono: 'proveedores', color: 'compras', activo: true },
-  { href: '/stock', titulo: 'Stock', desc: 'Dispositivos disponibles en tu local', icono: 'stock', color: 'inventario', activo: true },
-  { href: '/clientes', titulo: 'Clientes', desc: 'Tu base de clientes', icono: 'clientes', color: 'clientes', activo: true },
-  { href: '/cuentas-por-cobrar', titulo: 'Cuentas por cobrar', desc: 'Quién te debe y cuánto (cuenta corriente)', icono: 'cobrar', color: 'ventas', activo: true },
-  { href: '/canje', titulo: 'Plan Canje', desc: 'Dispositivos recibidos como parte de pago', icono: 'canje', color: 'inventario', activo: true },
-  { href: '/servicio-tecnico', titulo: 'Servicio Técnico', desc: 'Equipos derivados a reparación', icono: 'servicio', color: 'servicio', activo: true },
-  { href: '/nueva-etiqueta', titulo: 'Nueva etiqueta', desc: 'Fotografiá el IMEI y generá la etiqueta', icono: 'etiqueta', color: 'inventario', activo: true },
-  { href: '/stock/foto', titulo: 'Agregar al stock', desc: 'Fotografiá el IMEI y cargalo directo, sin etiqueta', icono: 'camara', color: 'inventario', activo: true },
-];
 
 export default async function Home() {
   const supabase = crearClienteServidor();
@@ -63,7 +52,18 @@ export default async function Home() {
     actorFoto: string | null;
   }[] = [];
   let notificaciones: { color: string; texto: string; href: string }[] = [];
-  let statsSecciones: Record<string, string[]> = {};
+  let metricas: MetricasAccesos = {
+    ordenesPendientes: 0,
+    ultimaVentaTexto: null,
+    enStock: 0,
+    porAgotarse: 0,
+    sinPrecio: 0,
+    clientes: 0,
+    comprasPendientes: 0,
+    enCanje: 0,
+    listosEntregar: 0,
+    atrasadosServicio: 0,
+  };
 
   if (user) {
     const { data: perfil } = await supabase
@@ -380,23 +380,17 @@ export default async function Home() {
     notificaciones = notifs;
 
     const ultimaVenta = actividad.find((a) => a.tipo === 'venta');
-    statsSecciones = {
-      '/ordenes': [
-        `${pendientes} pendiente${pendientes === 1 ? '' : 's'}`,
-        ultimaVenta ? `Última venta ${hace(ultimaVenta.fecha).toLowerCase()}` : 'Sin ventas recientes',
-      ],
-      '/stock': [
-        `${enStock} equipo${enStock === 1 ? '' : 's'} en stock`,
-        ...(modelosBajos.length > 0 ? [`${modelosBajos.length} por agotarse`] : []),
-        ...((countSinPrecio ?? 0) > 0 ? [`${countSinPrecio} sin precio`] : []),
-      ],
-      '/clientes': [`${totalClientes} cliente${totalClientes === 1 ? '' : 's'} en tu base`],
-      '/canje': [`${countEnCanje ?? 0} en canje`],
-      '/servicio-tecnico': [
-        `${countListosEntregar ?? 0} listo${countListosEntregar === 1 ? '' : 's'} para entregar`,
-        ...((countServicioLargo ?? 0) > 0 ? [`${countServicioLargo} atrasado${countServicioLargo === 1 ? '' : 's'}`] : []),
-      ],
-      '/compras': [`${countComprasPendientes ?? 0} pendiente${countComprasPendientes === 1 ? '' : 's'}`],
+    metricas = {
+      ordenesPendientes: pendientes,
+      ultimaVentaTexto: ultimaVenta ? `Última venta ${hace(ultimaVenta.fecha).toLowerCase()}` : null,
+      enStock,
+      porAgotarse: modelosBajos.length,
+      sinPrecio: countSinPrecio ?? 0,
+      clientes: totalClientes,
+      comprasPendientes: countComprasPendientes ?? 0,
+      enCanje: countEnCanje ?? 0,
+      listosEntregar: countListosEntregar ?? 0,
+      atrasadosServicio: countServicioLargo ?? 0,
     };
 
     for (let i = 6; i >= 0; i--) {
@@ -625,54 +619,7 @@ export default async function Home() {
         </div>
       )}
 
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted dark:text-dark-text-secondary -mb-1">
-        Accesos rápidos
-      </p>
-      <div className="flex flex-col gap-2.5 lg:grid lg:grid-cols-2 lg:gap-3 animate-fade-in-up" style={{ animationDelay: '240ms' }}>
-        {SECCIONES.map((s) =>
-          s.activo ? (
-            <Link
-              key={s.titulo}
-              href={s.href}
-              className="qv-card group rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-4 flex items-center gap-4 hover:border-accent/40 dark:hover:border-dark-accent/40 hover:shadow-elevated hover:-translate-y-1 transition-all active:scale-[0.99]"
-            >
-              <div
-                className={`h-14 w-14 shrink-0 rounded-2xl bg-gradient-to-br ${COLOR_ICONO[s.color]} text-white flex items-center justify-center shadow-card group-hover:scale-110 group-hover:rotate-3 transition-transform`}
-              >
-                {ICONOS[s.icono]}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[15px] font-semibold leading-tight tracking-tight">{s.titulo}</p>
-                <p className="text-xs text-muted dark:text-dark-text-secondary leading-tight mt-1">{s.desc}</p>
-                {statsSecciones[s.href] && statsSecciones[s.href].length > 0 && (
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-1.5">
-                    {statsSecciones[s.href].map((stat, i) => (
-                      <span key={i} className="text-[11px] font-medium text-ink dark:text-dark-text">
-                        {i > 0 && <span className="text-muted dark:text-dark-text-secondary font-normal mr-2">·</span>}
-                        {stat}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <span className="text-muted dark:text-dark-text-secondary group-hover:text-accent dark:group-hover:text-dark-accent group-hover:translate-x-0.5 transition-all">&rarr;</span>
-            </Link>
-          ) : (
-            <div
-              key={s.titulo}
-              className="rounded-2xl bg-canvas dark:bg-dark-surface-elevated border border-border dark:border-dark-border p-4 flex items-center gap-4 opacity-60"
-            >
-              <div className="h-14 w-14 shrink-0 rounded-2xl bg-white dark:bg-dark-surface text-muted dark:text-dark-text-secondary flex items-center justify-center">
-                {ICONOS[s.icono]}
-              </div>
-              <div>
-                <p className="text-[15px] font-semibold leading-tight tracking-tight">{s.titulo}</p>
-                <p className="text-xs text-muted dark:text-dark-text-secondary leading-tight mt-1">Próximamente</p>
-              </div>
-            </div>
-          )
-        )}
-      </div>
+      <AccesosRapidos metricas={metricas} />
 
       <div className="text-center mt-auto pt-6 pb-2 flex flex-col items-center gap-1.5">
         <p className="flex items-center justify-center gap-2 text-sm font-display font-semibold">
@@ -707,11 +654,10 @@ function StatTile({
       className="qv-card group relative overflow-hidden rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-3.5 flex flex-col gap-2 hover:shadow-elevated hover:-translate-y-1 transition-all"
     >
       <span className={`absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r ${COLOR_ICONO[color]}`} />
-      <div
-        className={`h-8 w-8 rounded-lg bg-gradient-to-br ${COLOR_ICONO[color]} text-white flex items-center justify-center [&_svg]:h-4 [&_svg]:w-4 group-hover:scale-110 group-hover:rotate-3 transition-transform`}
-      >
-        {ICONOS[icono]}
-      </div>
+      <IlustracionModulo
+        nombre={icono}
+        className="h-11 w-11 shrink-0 transition-transform duration-200 ease-out group-hover:-translate-y-0.5 group-hover:scale-[1.05] motion-reduce:transform-none motion-reduce:transition-none"
+      />
       <div>
         <p className="text-2xl font-display font-semibold leading-none">
           <NumeroAnimado valor={valor} />
