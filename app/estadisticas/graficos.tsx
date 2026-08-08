@@ -15,7 +15,10 @@ const OTROS_DARK = '#475569';
 
 export type Dato = { nombre: string; valor: number; fotoUrl?: string | null };
 
-function formatearValor(valor: number, moneda?: string, sufijo?: string) {
+function formatearValor(valor: number, moneda?: string, sufijo?: string, oculto?: boolean) {
+  // Con "ocultar montos" solo se enmascara la PLATA (rankings con moneda); los
+  // conteos (arreglos, equipos, unidades) no son sensibles y se siguen viendo.
+  if (oculto && moneda) return '•••';
   if (moneda) return `${moneda}${Math.round(valor).toLocaleString('es-AR')}`;
   return `${valor.toLocaleString('es-AR')}${sufijo ?? ''}`;
 }
@@ -38,21 +41,21 @@ export function PosicionRanking({ pos }: { pos: number }) {
   );
 }
 
-export function RankingBarras({ datos, moneda, sufijo }: { datos: Dato[]; moneda?: string; sufijo?: string }) {
+export function RankingBarras({ datos, moneda, sufijo, oculto }: { datos: Dato[]; moneda?: string; sufijo?: string; oculto?: boolean }) {
   if (datos.length === 0) return <SinDatos />;
   const max = Math.max(1, ...datos.map((d) => d.valor));
 
   return (
     <div className="flex flex-col gap-3">
       {datos.map((d, i) => (
-        <div key={d.nombre} className="flex items-center gap-3">
+        <div key={i} className="flex items-center gap-3">
           <PosicionRanking pos={i + 1} />
           {d.fotoUrl !== undefined && <Avatar src={d.fotoUrl} nombre={d.nombre} size={38} />}
           <div className="flex-1 min-w-0">
             <div className="flex items-baseline justify-between gap-2 mb-1">
               <span className="text-sm font-medium truncate">{d.nombre}</span>
               <span className="text-xs text-muted dark:text-dark-text-secondary shrink-0 tabular-nums">
-                {formatearValor(d.valor, moneda, sufijo)}
+                {formatearValor(d.valor, moneda, sufijo, oculto)}
               </span>
             </div>
             <div className="h-2 rounded-full bg-canvas dark:bg-dark-bg overflow-hidden">
@@ -86,7 +89,7 @@ function arcoPath(cx: number, cy: number, r: number, desdeDeg: number, hastaDeg:
   return `M ${cx} ${cy} L ${inicio.x} ${inicio.y} A ${r} ${r} 0 ${grandArco} 0 ${fin.x} ${fin.y} Z`;
 }
 
-export function RankingTorta({ datos, moneda, sufijo }: { datos: Dato[]; moneda?: string; sufijo?: string }) {
+export function RankingTorta({ datos, moneda, sufijo, oculto }: { datos: Dato[]; moneda?: string; sufijo?: string; oculto?: boolean }) {
   const total = datos.reduce((acc, d) => acc + d.valor, 0);
   if (total <= 0) return <SinDatos />;
 
@@ -99,11 +102,11 @@ export function RankingTorta({ datos, moneda, sufijo }: { datos: Dato[]; moneda?
 
   const segmentos = (colorKey: 'light' | 'dark') => {
     let acumulado = 0;
-    return slices.map((s) => {
+    return slices.map((s, i) => {
       const desde = (acumulado / total) * 360;
       acumulado += s.valor;
       const hasta = (acumulado / total) * 360;
-      return <path key={s.nombre} d={arcoPath(80, 80, 70, desde, hasta)} fill={s[colorKey]} stroke="currentColor" strokeWidth={2} />;
+      return <path key={i} d={arcoPath(80, 80, 70, desde, hasta)} fill={s[colorKey]} stroke="currentColor" strokeWidth={2} />;
     });
   };
 
@@ -114,8 +117,8 @@ export function RankingTorta({ datos, moneda, sufijo }: { datos: Dato[]; moneda?
         <g className="hidden dark:inline text-dark-surface">{segmentos('dark')}</g>
       </svg>
       <div className="flex-1 w-full flex flex-col gap-2 text-sm">
-        {slices.map((s) => (
-          <div key={s.nombre} className="flex items-center justify-between gap-2">
+        {slices.map((s, i) => (
+          <div key={i} className="flex items-center justify-between gap-2">
             <span className="flex items-center gap-2 min-w-0">
               <span className="h-2.5 w-2.5 rounded-full shrink-0 dark:hidden" style={{ backgroundColor: s.light }} />
               <span className="h-2.5 w-2.5 rounded-full shrink-0 hidden dark:inline-block" style={{ backgroundColor: s.dark }} />
@@ -123,7 +126,7 @@ export function RankingTorta({ datos, moneda, sufijo }: { datos: Dato[]; moneda?
               <span className="truncate">{s.nombre}</span>
             </span>
             <span className="text-muted dark:text-dark-text-secondary shrink-0 tabular-nums">
-              {Math.round((s.valor / total) * 100)}% · {formatearValor(s.valor, moneda, sufijo)}
+              {Math.round((s.valor / total) * 100)}%{oculto && moneda ? '' : ` · ${formatearValor(s.valor, moneda, sufijo)}`}
             </span>
           </div>
         ))}

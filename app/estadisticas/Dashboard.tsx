@@ -479,10 +479,10 @@ export default function Estadisticas() {
             </SeccionCard>
             <div className="grid md:grid-cols-2 gap-4">
               <SeccionCard titulo="Ranking de vendedores" accion={<VistaToggle vista={vistaVendedores} onVista={setVistaVendedores} />}>
-                {vistaVendedores === 'barras' ? <RankingBarras datos={rankingVendedores} moneda={moneda} /> : <RankingTorta datos={rankingVendedores} moneda={moneda} />}
+                {vistaVendedores === 'barras' ? <RankingBarras datos={rankingVendedores} moneda={moneda} oculto={ocultarMontos} /> : <RankingTorta datos={rankingVendedores} moneda={moneda} oculto={ocultarMontos} />}
               </SeccionCard>
               <SeccionCard titulo="Mejores compradores" accion={<VistaToggle vista={vistaCompradores} onVista={setVistaCompradores} />}>
-                {vistaCompradores === 'barras' ? <RankingBarras datos={rankingCompradores} moneda={moneda} /> : <RankingTorta datos={rankingCompradores} moneda={moneda} />}
+                {vistaCompradores === 'barras' ? <RankingBarras datos={rankingCompradores} moneda={moneda} oculto={ocultarMontos} /> : <RankingTorta datos={rankingCompradores} moneda={moneda} oculto={ocultarMontos} />}
               </SeccionCard>
             </div>
           </>
@@ -503,9 +503,9 @@ export default function Estadisticas() {
               {cajaPorMedio.length === 0 ? (
                 <EmptyState titulo="Sin cobros en el período" texto="Cuando registres pagos, vas a ver acá cómo se reparten por medio." />
               ) : vistaFormaPago === 'barras' ? (
-                <RankingBarras datos={cajaPorMedio} moneda={moneda} />
+                <RankingBarras datos={cajaPorMedio} moneda={moneda} oculto={ocultarMontos} />
               ) : (
-                <RankingTorta datos={cajaPorMedio} moneda={moneda} />
+                <RankingTorta datos={cajaPorMedio} moneda={moneda} oculto={ocultarMontos} />
               )}
             </SeccionCard>
           </>
@@ -522,11 +522,13 @@ export default function Estadisticas() {
             <SeccionCard titulo="Cuentas por cobrar">
               <div className="flex flex-col gap-3">
                 <p className="text-sm text-muted dark:text-dark-text-secondary">
-                  {vencidoTotal > 0
-                    ? `Tenés ${m(vencidoTotal)} vencidos sobre ${m(porCobrar)} por cobrar. Conviene reclamar los vencidos primero.`
-                    : porCobrar > 0
-                      ? `Te deben ${m(porCobrar)} en total y no hay saldo vencido. Todo al día.`
-                      : 'No hay saldos pendientes de cobro.'}
+                  {ocultarMontos
+                    ? 'Tocá "Mostrar montos" arriba para ver los saldos por cobrar.'
+                    : vencidoTotal > 0
+                      ? `Tenés ${m(vencidoTotal)} vencidos sobre ${m(porCobrar)} por cobrar. Conviene reclamar los vencidos primero.`
+                      : porCobrar > 0
+                        ? `Te deben ${m(porCobrar)} en total y no hay saldo vencido. Todo al día.`
+                        : 'No hay saldos pendientes de cobro.'}
                 </p>
                 <Link href="/cuentas-por-cobrar" className="self-start rounded-xl bg-accent dark:bg-dark-accent text-white text-sm font-medium px-4 py-2 hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors">
                   Ver quién te debe →
@@ -581,7 +583,7 @@ export default function Estadisticas() {
             </div>
             <div className="grid md:grid-cols-2 gap-4">
               <SeccionCard titulo="Mejores compradores" accion={<VistaToggle vista={vistaCompradores} onVista={setVistaCompradores} />}>
-                {rankingCompradores.length === 0 ? <EmptyState titulo="Sin compras en el período" /> : vistaCompradores === 'barras' ? <RankingBarras datos={rankingCompradores} moneda={moneda} /> : <RankingTorta datos={rankingCompradores} moneda={moneda} />}
+                {rankingCompradores.length === 0 ? <EmptyState titulo="Sin compras en el período" /> : vistaCompradores === 'barras' ? <RankingBarras datos={rankingCompradores} moneda={moneda} oculto={ocultarMontos} /> : <RankingTorta datos={rankingCompradores} moneda={moneda} oculto={ocultarMontos} />}
               </SeccionCard>
               <SeccionCard titulo="Clientes de servicio técnico" accion={<VistaToggle vista={vistaClientesServicio} onVista={setVistaClientesServicio} />}>
                 {rankingClientesServicio.length === 0 ? <EmptyState titulo="Sin ingresos de servicio" /> : vistaClientesServicio === 'barras' ? <RankingBarras datos={rankingClientesServicio} sufijo=" equipo(s)" /> : <RankingTorta datos={rankingClientesServicio} sufijo=" equipo(s)" />}
@@ -628,7 +630,7 @@ export default function Estadisticas() {
               <StatCard etiqueta="Proveedores activos" valor={rankingProveedores.length.toLocaleString('es-AR')} tooltip="Proveedores a los que les compraste en el período." />
             </div>
             <SeccionCard titulo="Compras por proveedor" accion={<VistaToggle vista={vistaProveedores} onVista={setVistaProveedores} />}>
-              {rankingProveedores.length === 0 ? <EmptyState titulo="Sin compras en el período" texto="Cuando cargues compras a proveedores, vas a ver el detalle acá." /> : vistaProveedores === 'barras' ? <RankingBarras datos={rankingProveedores} moneda={moneda} /> : <RankingTorta datos={rankingProveedores} moneda={moneda} />}
+              {rankingProveedores.length === 0 ? <EmptyState titulo="Sin compras en el período" texto="Cuando cargues compras a proveedores, vas a ver el detalle acá." /> : vistaProveedores === 'barras' ? <RankingBarras datos={rankingProveedores} moneda={moneda} oculto={ocultarMontos} /> : <RankingTorta datos={rankingProveedores} moneda={moneda} oculto={ocultarMontos} />}
             </SeccionCard>
           </>
         );
@@ -762,23 +764,23 @@ export default function Estadisticas() {
           {/* Rankings (se conservan; se rediseñan en detalle en la próxima etapa) */}
           <div className="grid md:grid-cols-2 gap-4">
             <SeccionCard titulo="Ranking de vendedores" accion={<VistaToggle vista={vistaVendedores} onVista={setVistaVendedores} />}>
-              {vistaVendedores === 'barras' ? <RankingBarras datos={rankingVendedores} moneda={moneda} /> : <RankingTorta datos={rankingVendedores} moneda={moneda} />}
+              {vistaVendedores === 'barras' ? <RankingBarras datos={rankingVendedores} moneda={moneda} oculto={ocultarMontos} /> : <RankingTorta datos={rankingVendedores} moneda={moneda} oculto={ocultarMontos} />}
             </SeccionCard>
             <SeccionCard titulo="Caja por medio de pago" accion={<VistaToggle vista={vistaFormaPago} onVista={setVistaFormaPago} />}>
-              {vistaFormaPago === 'barras' ? <RankingBarras datos={cajaPorMedio} moneda={moneda} /> : <RankingTorta datos={cajaPorMedio} moneda={moneda} />}
+              {vistaFormaPago === 'barras' ? <RankingBarras datos={cajaPorMedio} moneda={moneda} oculto={ocultarMontos} /> : <RankingTorta datos={cajaPorMedio} moneda={moneda} oculto={ocultarMontos} />}
             </SeccionCard>
             <SeccionCard titulo="Ranking de técnicos" accion={<VistaToggle vista={vistaTecnicos} onVista={setVistaTecnicos} />}>
               {vistaTecnicos === 'barras' ? <RankingBarras datos={rankingTecnicos} sufijo=" arreglo(s)" /> : <RankingTorta datos={rankingTecnicos} sufijo=" arreglo(s)" />}
             </SeccionCard>
             <SeccionCard titulo="Mejores compradores" accion={<VistaToggle vista={vistaCompradores} onVista={setVistaCompradores} />}>
-              {vistaCompradores === 'barras' ? <RankingBarras datos={rankingCompradores} moneda={moneda} /> : <RankingTorta datos={rankingCompradores} moneda={moneda} />}
+              {vistaCompradores === 'barras' ? <RankingBarras datos={rankingCompradores} moneda={moneda} oculto={ocultarMontos} /> : <RankingTorta datos={rankingCompradores} moneda={moneda} oculto={ocultarMontos} />}
             </SeccionCard>
             <SeccionCard titulo="Clientes de servicio técnico" accion={<VistaToggle vista={vistaClientesServicio} onVista={setVistaClientesServicio} />}>
               {vistaClientesServicio === 'barras' ? <RankingBarras datos={rankingClientesServicio} sufijo=" equipo(s)" /> : <RankingTorta datos={rankingClientesServicio} sufijo=" equipo(s)" />}
             </SeccionCard>
             {rankingProveedores.length > 0 && (
               <SeccionCard titulo="Compras a proveedores" accion={<VistaToggle vista={vistaProveedores} onVista={setVistaProveedores} />}>
-                {vistaProveedores === 'barras' ? <RankingBarras datos={rankingProveedores} moneda={moneda} /> : <RankingTorta datos={rankingProveedores} moneda={moneda} />}
+                {vistaProveedores === 'barras' ? <RankingBarras datos={rankingProveedores} moneda={moneda} oculto={ocultarMontos} /> : <RankingTorta datos={rankingProveedores} moneda={moneda} oculto={ocultarMontos} />}
               </SeccionCard>
             )}
           </div>
