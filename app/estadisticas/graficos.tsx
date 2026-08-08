@@ -20,6 +20,32 @@ function formatearValor(valor: number, moneda?: string, sufijo?: string) {
   return `${valor.toLocaleString('es-AR')}${sufijo ?? ''}`;
 }
 
+// Medalla oro/plata/bronce para los puestos 1/2/3; del 4° en adelante queda
+// el número tal cual. Da el toque estético de "podio" a todos los rankings.
+export function PosicionRanking({ pos }: { pos: number }) {
+  if (pos > 3) {
+    return (
+      <span className="w-6 text-xs text-muted dark:text-dark-text-secondary text-center shrink-0 tabular-nums">
+        {pos}°
+      </span>
+    );
+  }
+  const estilo =
+    pos === 1
+      ? 'bg-gradient-to-b from-[#F6C544] to-[#E0A100] text-[#5a4300]'
+      : pos === 2
+        ? 'bg-gradient-to-b from-[#D6DAE0] to-[#A7AEB6] text-[#3a3f45]'
+        : 'bg-gradient-to-b from-[#E0A46A] to-[#B5793F] text-[#4a2d12]';
+  return (
+    <span
+      aria-label={`Puesto ${pos}`}
+      className={`w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-[11px] font-bold shadow-sm ring-1 ring-black/5 ${estilo}`}
+    >
+      {pos}
+    </span>
+  );
+}
+
 export function RankingBarras({ datos, moneda, sufijo }: { datos: Dato[]; moneda?: string; sufijo?: string }) {
   if (datos.length === 0) return <SinDatos />;
   const max = Math.max(1, ...datos.map((d) => d.valor));
@@ -28,7 +54,7 @@ export function RankingBarras({ datos, moneda, sufijo }: { datos: Dato[]; moneda
     <div className="flex flex-col gap-3">
       {datos.map((d, i) => (
         <div key={d.nombre} className="flex items-center gap-3">
-          <span className="w-5 text-xs text-muted dark:text-dark-text-secondary text-right shrink-0 tabular-nums">{i + 1}°</span>
+          <PosicionRanking pos={i + 1} />
           {d.fotoUrl !== undefined && <Avatar src={d.fotoUrl} nombre={d.nombre} size={38} />}
           <div className="flex-1 min-w-0">
             <div className="flex items-baseline justify-between gap-2 mb-1">

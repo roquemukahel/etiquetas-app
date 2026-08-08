@@ -64,6 +64,10 @@ export default function AdminPanel() {
   const [editDias, setEditDias] = useState('');
   const [editSinVencimiento, setEditSinVencimiento] = useState(false);
 
+  const [negocioAEliminar, setNegocioAEliminar] = useState<Negocio | null>(null);
+  const [confirmNombre, setConfirmNombre] = useState('');
+  const [errorEliminar, setErrorEliminar] = useState<string | null>(null);
+
   const cargar = async () => {
     const [{ data: negs }, { data: comps }] = await Promise.all([
       supabase.rpc('admin_listar_negocios'),
@@ -109,23 +113,42 @@ export default function AdminPanel() {
     )
       return;
     setProcesando(n.id);
-    await supabase.rpc('admin_eliminar_usuario', { usuario_id_param: u.id });
+    const { error } = await supabase.rpc('admin_eliminar_usuario', { usuario_id_param: u.id });
     setProcesando(null);
+    if (error) {
+      alert(`No se pudo eliminar la cuenta:\n${error.message}`);
+      return;
+    }
     cargar();
   };
 
-  const eliminarNegocio = async (n: Negocio) => {
-    const escrito = prompt(
-      `Esto borra "${n.nombre}" para siempre: todos sus datos y las cuentas de sus ${n.cantidad_usuarios} usuario(s). No se puede deshacer.\n\nPara confirmar, escribí el nombre exacto del negocio:`
-    );
-    if (escrito === null) return;
-    if (escrito !== n.nombre) {
-      alert('El nombre no coincide. No se eliminó nada.');
+  // Abre el modal de confirmación. Antes esto usaba window.prompt(), que en la
+  // app instalada (PWA) a veces ni aparece o devuelve vacío, y además el error
+  // de la RPC se tragaba en silencio → el negocio "no se borraba" sin explicación.
+  const abrirEliminarNegocio = (n: Negocio) => {
+    setNegocioAEliminar(n);
+    setConfirmNombre('');
+    setErrorEliminar(null);
+  };
+
+  const nombreConfirmaOk =
+    !!negocioAEliminar &&
+    confirmNombre.trim().toLowerCase() === negocioAEliminar.nombre.trim().toLowerCase();
+
+  const confirmarEliminarNegocio = async () => {
+    if (!negocioAEliminar || !nombreConfirmaOk) return;
+    const n = negocioAEliminar;
+    setProcesando(n.id);
+    setErrorEliminar(null);
+    const { error } = await supabase.rpc('admin_eliminar_negocio', { negocio_id_param: n.id });
+    setProcesando(null);
+    if (error) {
+      // Mostramos el error real (ej. una foreign key que impide borrar) en vez
+      // de fallar en silencio.
+      setErrorEliminar(error.message);
       return;
     }
-    setProcesando(n.id);
-    await supabase.rpc('admin_eliminar_negocio', { negocio_id_param: n.id });
-    setProcesando(null);
+    setNegocioAEliminar(null);
     setExpandido(null);
     cargar();
   };
@@ -318,6 +341,54 @@ export default function AdminPanel() {
         </div>
       )}
 
+      {negocioAEliminar && (
+        <div className="fixed inset-0 z-50 bg-ink/80 flex items-center justify-center p-6" onClick={() => setNegocioAEliminar(null)}>
+          <div
+            className="w-full max-w-sm rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border p-5 flex flex-col gap-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="text-base font-semibold text-bad">Eliminar negocio para siempre</p>
+            <p className="text-sm text-muted dark:text-dark-text-secondary">
+              Esto borra <span className="font-medium text-ink dark:text-dark-text">{negocioAEliminar.nombre}</span> y
+              todos sus datos (dispositivos, órdenes, etc.) más las cuentas de sus {negocioAEliminar.cantidad_usuarios}{' '}
+              usuario(s). <span className="font-medium">No se puede deshacer.</span>
+            </p>
+            <label className="text-xs text-muted dark:text-dark-text-secondary">
+              Para confirmar, escribí el nombre del negocio:
+              <input
+                autoFocus
+                value={confirmNombre}
+                onChange={(e) => setConfirmNombre(e.target.value)}
+                placeholder={negocioAEliminar.nombre}
+                className="mt-1 w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm text-ink dark:text-dark-text"
+              />
+            </label>
+
+            {errorEliminar && (
+              <p className="text-xs text-bad bg-bad/10 rounded-lg px-3 py-2 break-words">
+                No se pudo eliminar: {errorEliminar}
+              </p>
+            )}
+
+            <div className="flex gap-2 mt-1">
+              <button
+                onClick={() => setNegocioAEliminar(null)}
+                className="flex-1 rounded-lg border border-border dark:border-dark-border py-2 text-sm font-medium"
+              >
+                Cancelar
+              </button>
+              <button
+                disabled={!nombreConfirmaOk || procesando === negocioAEliminar.id}
+                onClick={confirmarEliminarNegocio}
+                className="flex-1 rounded-lg bg-bad text-white py-2 text-sm font-medium disabled:opacity-40"
+              >
+                {procesando === negocioAEliminar.id ? 'Eliminando...' : 'Eliminar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <input
         value={busqueda}
         onChange={(e) => setBusqueda(e.target.value)}
@@ -447,7 +518,7 @@ export default function AdminPanel() {
                   <div className="border-t border-border dark:border-dark-border pt-3">
                     <button
                       disabled={procesando === n.id}
-                      onClick={() => eliminarNegocio(n)}
+                      onClick={() => abrirEliminarNegocio(n)}
                       className="w-full rounded-lg bg-bad text-white py-2 text-xs font-medium disabled:opacity-40"
                     >
                       Eliminar negocio y sus usuarios para siempre
