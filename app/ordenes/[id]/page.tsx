@@ -393,9 +393,12 @@ export default function DetalleOrden() {
 
   // Un ítem nuevo sin descripción no se guarda, así que tampoco cuenta para el
   // total (si no, el total mostraría plata de una línea que después no existe).
+  // La cantidad se acota a 1 igual que al guardar (Math.max(1, ...)): si no,
+  // una cantidad "0" daría total 0 pero la línea se guardaría como 1 → desfase.
   const subtotalEdit = itemsEdit.reduce((acc, i) => {
     if (i.esNuevo && !i.descripcion.trim()) return acc;
-    return acc + (Number(i.cantidad) || 0) * (Number(i.precioUnitario) || 0);
+    const cantidad = Math.max(1, Number(i.cantidad) || 1);
+    return acc + cantidad * (Number(i.precioUnitario) || 0);
   }, 0);
   const montoCanjeEdit = canjesEdit.reduce((acc, c) => acc + (Number(c.monto) || 0), 0);
   // Sin Math.max(0, ...) a propósito: un anticipo mayor al precio puede dejar
@@ -526,6 +529,12 @@ export default function DetalleOrden() {
         setGuardando(false);
         return;
       }
+      // Ya quedaron guardados en la base. Los marcamos como no-nuevos para que,
+      // si un paso posterior falla y el usuario vuelve a tocar "Guardar", NO se
+      // inserten de nuevo (evita el accesorio duplicado y el total desfasado).
+      // El insert de Postgres es atómico (van todos o ninguno), así que si no
+      // hubo error están todos guardados.
+      setItemsEdit((items) => items.map((i) => (i.esNuevo ? { ...i, esNuevo: false } : i)));
     }
 
     if (canjesEliminados.length > 0) {
@@ -571,6 +580,13 @@ export default function DetalleOrden() {
         setGuardando(false);
         return;
       }
+      // Ya insertados: les damos un id no-nulo (deja de contar como "nuevo") para
+      // que un reintento tras un error posterior no los duplique. Con id no-nulo
+      // tampoco entran a canjesModificados (no existen en `canjes` original).
+      const tempIdsInsertados = new Set(canjesNuevos.map((c) => c.tempId));
+      setCanjesEdit((cs) =>
+        cs.map((c) => (c.id === null && tempIdsInsertados.has(c.tempId) ? { ...c, id: `guardado-${c.tempId}` } : c))
+      );
     }
 
     const { error: updateError } = await supabase
