@@ -11,6 +11,8 @@ import { useDictado } from '../../lib/dictado';
 import { getActor, useActor, MENSAJE_ACTOR_REQUERIDO } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import SelectorColor from '../../SelectorColor';
+import SelectorColorImagen from '../../SelectorColorImagen';
+import { coloresDeModelo } from '../../lib/coloresModelo';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 const ESTADOS = ['usado', 'sellado'];
@@ -235,7 +237,14 @@ export default function StockPorFoto() {
         />
         <div>
           <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Color</label>
-          <SelectorColor value={color} onChange={setColor} />
+          {(() => {
+            const coloresImg = coloresDeModelo(modelo);
+            return coloresImg ? (
+              <SelectorColorImagen colores={coloresImg} value={color} onChange={setColor} />
+            ) : (
+              <SelectorColor value={color} onChange={setColor} />
+            );
+          })()}
         </div>
         <Campo label="Precio (opcional)" valor={precio} onChange={setPrecio} numerico />
         <Campo label="Costo (lo que le pagaste al proveedor, opcional)" valor={costo} onChange={setCosto} numerico />

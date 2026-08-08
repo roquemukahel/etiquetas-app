@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../lib/supabase/client';
 import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../lib/carpetas';
+import { imagenColorDeModelo } from '../lib/coloresModelo';
 import { hexColorDe } from '../lib/coloresIphone';
 import { registrarAuditoria } from '../lib/auditoria';
 import { getActor, useActor } from '../lib/actor';
@@ -716,6 +717,14 @@ export default function Stock() {
                       </span>
                     )}
                   </button>
+                  {puedeAgregarStock && modelo !== 'Sin modelo' && (
+                    <Link
+                      href={`/stock/nuevo?modelo=${encodeURIComponent(modelo)}`}
+                      className="shrink-0 text-xs text-accent dark:text-dark-accent underline"
+                    >
+                      + Agregar
+                    </Link>
+                  )}
                   {items.length > 0 && puedeEliminar && (
                     <button
                       onClick={() => eliminarCarpeta(modelo, items)}
@@ -736,6 +745,7 @@ export default function Stock() {
                     const clases = `rounded-xl border-[3px] ${colorHex ? '' : 'border-border dark:border-dark-border'} px-4 py-3 flex items-center gap-3 w-full text-left ${
                       d.en_stock ? 'bg-white dark:bg-dark-surface' : 'bg-white dark:bg-dark-surface opacity-60'
                     } ${seleccionado ? 'ring-2 ring-accent dark:ring-dark-accent' : ''}`;
+                    const imgColor = imagenColorDeModelo(d.modelo, d.color);
                     const contenido = (
                       <>
                         {modoSeleccion && (
@@ -748,6 +758,10 @@ export default function Stock() {
                           >
                             {seleccionado && <span className="text-white text-[10px]">✓</span>}
                           </span>
+                        )}
+                        {imgColor && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={imgColor} alt={d.color || ''} className="h-12 w-auto object-contain shrink-0" />
                         )}
                         <div className="flex-1 flex items-center justify-between gap-2 min-w-0">
                           <div>
