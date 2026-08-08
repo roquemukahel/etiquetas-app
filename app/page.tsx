@@ -11,6 +11,7 @@ import { ICONOS, COLOR_ICONO } from './Iconos';
 import NumeroAnimado from './NumeroAnimado';
 import Avatar from './Avatar';
 import BienvenidaQovi from './BienvenidaQovi';
+import OjoResumenFinanciero from './OjoResumenFinanciero';
 
 const SECCIONES = [
   { href: '/ordenes', titulo: 'Órdenes', desc: 'Ventas, boletas y canjes', icono: 'ordenes', color: 'ventas', activo: true },
@@ -457,6 +458,7 @@ export default async function Home() {
           href="/estadisticas"
           className="qv-card qv-financial group lg:col-span-2 rounded-2xl bg-gradient-to-br from-ink to-[#1B2540] dark:from-dark-surface dark:to-dark-bg text-white p-6 flex flex-col gap-4 shadow-elevated hover:opacity-95 transition-opacity active:scale-[0.99]"
         >
+          <OjoResumenFinanciero>
           <div className="flex items-start justify-between">
             <div>
               <p className="text-xs text-white/60 mb-1">Ingresos este mes</p>
@@ -501,6 +503,7 @@ export default async function Home() {
               serie={serieTicket}
             />
           </div>
+          </OjoResumenFinanciero>
 
           <span className="text-xs text-white/50 group-hover:text-white/70">Ver estadísticas completas &rarr;</span>
         </Link>
