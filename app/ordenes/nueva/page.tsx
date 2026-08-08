@@ -745,6 +745,21 @@ export default function NuevaOrden() {
   const actualizarDerivacion = (key: string, cambios: Partial<Derivacion>) =>
     setDerivaciones((ds) => ds.map((d) => (d.key === key ? { ...d, ...cambios } : d)));
 
+  // Si el carrito cambia con el panel de derivar ya abierto (el vendedor volvió a
+  // "Ítems" y sumó/quitó un equipo), se reconstruye la lista para no derivar un
+  // equipo que se sacó ni omitir uno que se agregó — preservando lo que ya
+  // editó por equipo (incluir, motivo, prioritario, datos).
+  useEffect(() => {
+    if (!derivarActivo) return;
+    setDerivaciones((prev) =>
+      construirDerivaciones().map((nueva) => {
+        const anterior = prev.find((p) => p.key === nueva.key);
+        return anterior ? { ...nueva, ...anterior } : nueva;
+      })
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [carrito]);
+
   const handleConfirmar = async () => {
     if (!puedeConfirmar) return;
     setGuardando(true);

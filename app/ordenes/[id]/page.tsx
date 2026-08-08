@@ -284,6 +284,7 @@ export default function DetalleOrden() {
       valorNuevo: { modelo: derivarModelo.trim(), capacidad_gb: derivarCapacidad, color: derivarColor.trim() || null, imei: limpiarImei(derivarImei) || null },
     });
     setYaDerivado(true);
+    if (nueva?.id) setReparacionesDerivadasIds((ids) => [...ids, nueva.id]);
     setDerivarAbierto(false);
     setDerivando(false);
   };
