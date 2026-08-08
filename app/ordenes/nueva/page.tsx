@@ -193,6 +193,10 @@ export default function NuevaOrden() {
   // "+ Servicio técnico". Solo se copia a la reparación si lo que se deriva ES
   // ese equipo — no si se deriva un dispositivo vendido (datos de otro equipo).
   const [derivarDesdeTrabajo, setDerivarDesdeTrabajo] = useState(false);
+  // Si el equipo ya vino cargado (del "+ Servicio técnico" o de un dispositivo
+  // vendido), se muestra un resumen en vez de pedir los datos de nuevo. Este
+  // flag deja "editar" ese equipo si hiciera falta cambiarlo.
+  const [derivarEditarEquipo, setDerivarEditarEquipo] = useState(false);
 
   // Checklist de recepción para el equipo que se deja a reparar acá mismo
   // (venta directa, sin pasar por el circuito completo de Servicio
@@ -690,6 +694,9 @@ export default function NuevaOrden() {
       if (nuevo && !derivarModelo.trim()) {
         const itemDisp = carrito.find((i) => i.tipo === 'dispositivo' && i.dispositivoId);
         const disp = itemDisp ? dispositivosStock.find((d) => d.id === itemDisp.dispositivoId) : null;
+        // El "+ Servicio técnico" guarda el equipo en checklistOrden (trabajoModelo
+        // se resetea al agregarlo al carrito), así que se lee de ahí.
+        const ct = (checklistOrden ?? {}) as any;
         if (disp) {
           setDerivarModelo(disp.modelo ?? '');
           setDerivarCapacidad(disp.capacidad_gb ?? null);
@@ -697,10 +704,10 @@ export default function NuevaOrden() {
           setDerivarImei(disp.imei ?? '');
           setDerivarPrioritario(true);
           setDerivarDesdeTrabajo(false);
-        } else if (trabajoModelo.trim()) {
-          setDerivarModelo(trabajoModelo.trim());
-          setDerivarColor(trabajoColor.trim());
-          setDerivarImei(trabajoImei.trim());
+        } else if (typeof ct.modelo === 'string' && ct.modelo.trim()) {
+          setDerivarModelo(ct.modelo.trim());
+          setDerivarColor(typeof ct.color === 'string' ? ct.color : '');
+          setDerivarImei(typeof ct.imei === 'string' ? ct.imei : '');
           setDerivarDesdeTrabajo(true);
         }
       }
@@ -1961,36 +1968,58 @@ export default function NuevaOrden() {
 
           {derivarActivo && (
             <div className="flex flex-col gap-2 mt-1">
-              <input
-                value={derivarModelo}
-                onChange={(e) => setDerivarModelo(e.target.value)}
-                placeholder="Modelo del equipo (ej. iPhone 14)"
-                className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
-              />
-              <div className="flex gap-2">
-                {STORAGE_OPTIONS.map((gb) => (
+              {derivarModelo.trim() && !derivarEditarEquipo ? (
+                // El equipo ya se cargó antes (en "+ Servicio técnico" o es el
+                // dispositivo vendido): mostramos un resumen, sin pedir todo de nuevo.
+                <div className="rounded-lg bg-white/70 dark:bg-white/5 border border-amber-300/70 dark:border-amber-400/30 px-3 py-2 flex items-center justify-between gap-2">
+                  <span className="text-sm font-medium text-amber-950 dark:text-amber-100 min-w-0 truncate">
+                    {derivarModelo}
+                    {derivarCapacidad ? ` · ${derivarCapacidad}GB` : ''}
+                    {derivarColor ? ` · ${derivarColor}` : ''}
+                    {derivarImei.trim() ? ` · IMEI ${derivarImei.trim()}` : ''}
+                  </span>
                   <button
-                    key={gb}
                     type="button"
-                    onClick={() => setDerivarCapacidad(gb)}
-                    className={`flex-1 rounded-lg py-2 text-xs font-medium ${
-                      derivarCapacidad === gb ? 'bg-amber-400 text-amber-950' : 'border border-border dark:border-dark-border'
-                    }`}
+                    onClick={() => setDerivarEditarEquipo(true)}
+                    className="shrink-0 text-xs text-amber-800 dark:text-amber-300 underline"
                   >
-                    {gb}GB
+                    Cambiar
                   </button>
-                ))}
-              </div>
-              {!derivarModelo.trim() && (
-                <p className="text-xs text-amber-800 dark:text-amber-300">Cargá el modelo del equipo para que se derive al confirmar.</p>
+                </div>
+              ) : (
+                <>
+                  <input
+                    value={derivarModelo}
+                    onChange={(e) => setDerivarModelo(e.target.value)}
+                    placeholder="Modelo del equipo (ej. iPhone 14)"
+                    className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                  />
+                  <div className="flex gap-2">
+                    {STORAGE_OPTIONS.map((gb) => (
+                      <button
+                        key={gb}
+                        type="button"
+                        onClick={() => setDerivarCapacidad(gb)}
+                        className={`flex-1 rounded-lg py-2 text-xs font-medium ${
+                          derivarCapacidad === gb ? 'bg-amber-400 text-amber-950' : 'border border-border dark:border-dark-border'
+                        }`}
+                      >
+                        {gb}GB
+                      </button>
+                    ))}
+                  </div>
+                  {!derivarModelo.trim() && (
+                    <p className="text-xs text-amber-800 dark:text-amber-300">Cargá el modelo del equipo para que se derive al confirmar.</p>
+                  )}
+                  <SelectorColorAuto modelo={derivarModelo} value={derivarColor} onChange={setDerivarColor} />
+                  <input
+                    value={derivarImei}
+                    onChange={(e) => setDerivarImei(e.target.value)}
+                    placeholder="IMEI (opcional)"
+                    className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm font-mono"
+                  />
+                </>
               )}
-              <SelectorColorAuto modelo={derivarModelo} value={derivarColor} onChange={setDerivarColor} />
-              <input
-                value={derivarImei}
-                onChange={(e) => setDerivarImei(e.target.value)}
-                placeholder="IMEI (opcional)"
-                className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm font-mono"
-              />
               <input
                 value={derivarMotivo}
                 onChange={(e) => setDerivarMotivo(e.target.value)}
