@@ -56,7 +56,7 @@ export default async function Home() {
   let diasDePrueba: number | null = null;
   let suscripcionActiva = false;
   let actividad: {
-    tipo: 'venta' | 'reparacion' | 'stock' | 'cliente';
+    tipo: 'venta' | 'reparacion' | 'stock' | 'cliente' | 'eliminacion' | 'ajuste';
     fecha: Date;
     texto: string;
     actorNombre: string | null;
@@ -126,6 +126,7 @@ export default async function Home() {
       { count: countEnCanje },
       { count: countComprasPendientes },
       { count: countSinPrecio },
+      { data: auditoriaReciente },
     ] = await Promise.all([
       supabase.from('dispositivos').select('id', { count: 'exact', head: true }).eq('en_stock', true),
       supabase.from('ordenes').select('id', { count: 'exact', head: true }).eq('estado', 'pendiente'),
@@ -181,6 +182,14 @@ export default async function Home() {
         .select('id', { count: 'exact', head: true })
         .eq('en_stock', true)
         .is('precio', null),
+      // Acciones sensibles del libro de auditoría (borrados, ediciones,
+      // derivaciones, cambios de config): son actividad del sistema que no
+      // aparece en las tablas vivas (un borrado deja la fila inexistente).
+      supabase
+        .from('auditoria')
+        .select('actor_nombre, accion, created_at')
+        .order('created_at', { ascending: false })
+        .limit(12),
     ]);
     enStock = countStock ?? 0;
     pendientes = countPendientes ?? 0;
@@ -236,7 +245,7 @@ export default async function Home() {
       .slice(0, 5);
 
     const candidatos: {
-      tipo: 'venta' | 'reparacion' | 'stock' | 'cliente';
+      tipo: 'venta' | 'reparacion' | 'stock' | 'cliente' | 'eliminacion' | 'ajuste';
       fecha: Date;
       texto: string;
       actorNombre: string | null;
@@ -289,6 +298,21 @@ export default async function Home() {
         texto: `${cargadoPor ? `${cargadoPor} cargó` : 'Se cargó'} un nuevo cliente: ${nombreCompleto}`,
         actorNombre: c.agregado_por_nombre ?? null,
         actorFoto: c.agregado_por_foto_url ?? null,
+      });
+    }
+
+    for (const a of (auditoriaReciente as any[]) ?? []) {
+      const accion = (a.accion ?? '').trim();
+      if (!accion) continue;
+      const esBorrado = /^(elimin|borr|cancel|quit|revirt|anul)/i.test(accion);
+      candidatos.push({
+        tipo: esBorrado ? 'eliminacion' : 'ajuste',
+        fecha: new Date(a.created_at),
+        // accion ya viene como frase en pasado ("eliminó un proveedor (X)"),
+        // así que con el actor adelante queda "Roque eliminó un proveedor (X)".
+        texto: `${a.actor_nombre ? `${a.actor_nombre} ` : ''}${accion}`,
+        actorNombre: a.actor_nombre ?? null,
+        actorFoto: null,
       });
     }
 
@@ -696,6 +720,8 @@ const ICONO_ACTIVIDAD: Record<string, { emoji: string; color: string }> = {
   reparacion: { emoji: '🔧', color: 'servicio' },
   stock: { emoji: '📦', color: 'inventario' },
   cliente: { emoji: '👤', color: 'clientes' },
+  eliminacion: { emoji: '🗑️', color: 'eliminacion' },
+  ajuste: { emoji: '✏️', color: 'compras' },
 };
 
 const DOT_COLOR: Record<string, string> = {

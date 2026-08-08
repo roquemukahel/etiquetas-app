@@ -768,7 +768,7 @@ export default function Stock() {
                         )}
                         {imgColor && (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={imgColor} alt={d.color || ''} className="h-12 w-auto object-contain shrink-0" />
+                          <img src={imgColor} alt={d.color || ''} className="h-12 w-auto object-contain shrink-0 transition-transform duration-300 ease-out hover:animate-flotarLeve hover:drop-shadow-md" />
                         )}
                         <div className="flex-1 flex items-center justify-between gap-2 min-w-0">
                           <div>
