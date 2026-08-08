@@ -965,9 +965,9 @@ export default function NuevaOrden() {
           </button>
           <button
             onClick={() => setPanelAbierto(panelAbierto === 'trabajo' ? null : 'trabajo')}
-            className="flex-1 rounded-xl border border-border dark:border-dark-border py-3 text-sm font-medium"
+            className="flex-1 rounded-xl border-2 border-amber-400 bg-amber-50 text-amber-900 dark:bg-amber-400/10 dark:text-amber-300 dark:border-amber-400/50 py-3 text-sm font-semibold flex items-center justify-center gap-1.5"
           >
-            + Servicio técnico
+            🔧 Servicio técnico
           </button>
         </div>
 

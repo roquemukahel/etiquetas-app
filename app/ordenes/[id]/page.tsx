@@ -1182,9 +1182,9 @@ export default function DetalleOrden() {
       {tieneTrabajo && !yaDerivado && !derivarAbierto && puedeRecibirServicioTecnico && (
         <button
           onClick={abrirDerivar}
-          className="w-full rounded-2xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium"
+          className="w-full rounded-2xl border-2 border-amber-400 bg-amber-50 text-amber-900 dark:bg-amber-400/10 dark:text-amber-300 dark:border-amber-400/50 py-3 text-center text-sm font-semibold flex items-center justify-center gap-1.5"
         >
-          Derivar a Servicio Técnico
+          🔧 Derivar a Servicio Técnico
         </button>
       )}
 
