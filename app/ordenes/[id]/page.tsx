@@ -156,6 +156,7 @@ export default function DetalleOrden() {
   const [agregandoCanje, setAgregandoCanje] = useState(false);
 
   const [yaDerivado, setYaDerivado] = useState(false);
+  const [reparacionDerivadaId, setReparacionDerivadaId] = useState<string | null>(null);
   const [derivarAbierto, setDerivarAbierto] = useState(false);
   const [derivarModelo, setDerivarModelo] = useState('');
   const [derivarCapacidad, setDerivarCapacidad] = useState<number | null>(null);
@@ -176,6 +177,7 @@ export default function DetalleOrden() {
     setLoading(false);
     const { data: reparacionExistente } = await supabase.from('reparaciones').select('id').eq('orden_origen_id', id).maybeSingle();
     setYaDerivado(!!reparacionExistente);
+    setReparacionDerivadaId((reparacionExistente as any)?.id ?? null);
     const { data: canjesData } = await supabase
       .from('canjes')
       .select('id, modelo, capacidad_gb, color, imei, salud_bateria, detalles, monto')
@@ -700,8 +702,8 @@ export default function DetalleOrden() {
       await registrarAuditoria(supabase, {
         accion: `eliminó la reparación derivada de una orden (${clienteRep})`,
         entidad: 'reparacion',
-        entidadId: id,
-        valorAnterior: { orden_origen_id: id },
+        entidadId: reparacionDerivadaId ?? undefined,
+        valorAnterior: { orden_origen_id: id, reparacion_id: reparacionDerivadaId },
       });
     }
     const { error: deleteError } = await supabase.from('ordenes').delete().eq('id', id);

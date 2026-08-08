@@ -318,6 +318,10 @@ export default async function Home() {
     for (const a of (auditoriaReciente as any[]) ?? []) {
       const accion = (a.accion ?? '').trim();
       if (!accion) continue;
+      // Los ingresos al stock ya aparecen como evento "stock" desde la tabla
+      // viva de dispositivos; saltamos su registro de auditoría para no
+      // mostrar la misma acción dos veces con distinto texto.
+      if (/^agreg[oó] al stock/i.test(accion)) continue;
       const esBorrado = /^(elimin|borr|cancel|quit|revirt|anul)/i.test(accion);
       candidatos.push({
         tipo: esBorrado ? 'eliminacion' : 'ajuste',
