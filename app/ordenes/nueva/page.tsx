@@ -74,6 +74,22 @@ type ItemCarrito = {
   tipo: 'dispositivo' | 'producto' | 'trabajo';
 };
 
+// Un equipo candidato a derivarse a Servicio Técnico al confirmar la boleta.
+// `desdeTrabajo` = es el equipo de la ficha técnica ("+ Servicio técnico"), el
+// único que copia su checklist de ingreso a la reparación.
+type Derivacion = {
+  key: string;
+  incluir: boolean;
+  modelo: string;
+  capacidad: number | null;
+  color: string;
+  imei: string;
+  motivo: string;
+  prioritario: boolean;
+  desdeTrabajo: boolean;
+  editar: boolean;
+};
+
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 const ESTADOS_ORDEN = ['pendiente', 'pagado', 'entregado'];
 
@@ -179,24 +195,13 @@ export default function NuevaOrden() {
   // derivar a Servicio Técnico NO haya que recargar nada.
   const [checklistOrden, setChecklistOrden] = useState<Record<string, unknown> | null>(null);
 
-  // Derivar a Servicio Técnico al confirmar la boleta: el equipo pasa directo a
-  // reparación (ej. subir batería de un equipo que el cliente ya compró). Panel
-  // manual — el vendedor lo activa a propósito.
+  // Derivar a Servicio Técnico al confirmar la boleta: cada equipo de la boleta
+  // pasa directo a reparación (ej. subir batería de varios equipos que el
+  // cliente ya compró). Panel manual — el vendedor lo activa a propósito. Ahora
+  // es una LISTA: un candidato por cada dispositivo vendido + el equipo de la
+  // ficha técnica ("+ Servicio técnico"), para poder derivar VARIOS de una.
   const [derivarActivo, setDerivarActivo] = useState(false);
-  const [derivarModelo, setDerivarModelo] = useState('');
-  const [derivarCapacidad, setDerivarCapacidad] = useState<number | null>(null);
-  const [derivarColor, setDerivarColor] = useState('');
-  const [derivarImei, setDerivarImei] = useState('');
-  const [derivarMotivo, setDerivarMotivo] = useState('');
-  const [derivarPrioritario, setDerivarPrioritario] = useState(false);
-  // El checklist de ingreso (enciende, módulo, etc.) pertenece al equipo del
-  // "+ Servicio técnico". Solo se copia a la reparación si lo que se deriva ES
-  // ese equipo — no si se deriva un dispositivo vendido (datos de otro equipo).
-  const [derivarDesdeTrabajo, setDerivarDesdeTrabajo] = useState(false);
-  // Si el equipo ya vino cargado (del "+ Servicio técnico" o de un dispositivo
-  // vendido), se muestra un resumen en vez de pedir los datos de nuevo. Este
-  // flag deja "editar" ese equipo si hiciera falta cambiarlo.
-  const [derivarEditarEquipo, setDerivarEditarEquipo] = useState(false);
+  const [derivaciones, setDerivaciones] = useState<Derivacion[]>([]);
 
   // Checklist de recepción para el equipo que se deja a reparar acá mismo
   // (venta directa, sin pasar por el circuito completo de Servicio
@@ -685,35 +690,60 @@ export default function NuevaOrden() {
     setLineasPago((ls) => ls.map((l) => (l.tempId === tempId ? { ...l, [campo]: valor } : l)));
   const quitarLineaPago = (tempId: string) => setLineasPago((ls) => ls.filter((l) => l.tempId !== tempId));
 
-  // Al activar el panel de derivar, se pre-cargan los datos del equipo: primero
-  // de un dispositivo VENDIDO del carrito (caso "lo compró y quiere subir
-  // batería" → prioritario por defecto); si no, del "+ Servicio técnico" cargado.
+  // Construye la lista de equipos que se pueden derivar: UNO por cada dispositivo
+  // vendido del carrito (caso "lo compró y quiere subir batería" → prioritario
+  // por defecto) MÁS el equipo de la ficha técnica ("+ Servicio técnico", que
+  // trae su checklist). Si no hay ninguno (solo accesorios), deja una fila
+  // manual en blanco para cargar un equipo a mano.
+  const construirDerivaciones = (): Derivacion[] => {
+    const lista: Derivacion[] = [];
+    for (const item of carrito) {
+      if (item.tipo !== 'dispositivo' || !item.dispositivoId) continue;
+      const disp = dispositivosStock.find((d) => d.id === item.dispositivoId);
+      lista.push({
+        key: item.dispositivoId,
+        incluir: true,
+        modelo: disp?.modelo ?? '',
+        capacidad: disp?.capacidad_gb ?? null,
+        color: disp?.color ?? '',
+        imei: disp?.imei ?? '',
+        motivo: '',
+        prioritario: true,
+        desdeTrabajo: false,
+        editar: !(disp?.modelo ?? '').trim(),
+      });
+    }
+    const ct = (checklistOrden ?? {}) as any;
+    if (typeof ct.modelo === 'string' && ct.modelo.trim()) {
+      lista.push({
+        key: 'trabajo',
+        incluir: true,
+        modelo: ct.modelo.trim(),
+        capacidad: null,
+        color: typeof ct.color === 'string' ? ct.color : '',
+        imei: typeof ct.imei === 'string' ? ct.imei : '',
+        motivo: '',
+        prioritario: false,
+        desdeTrabajo: true,
+        editar: false,
+      });
+    }
+    if (lista.length === 0) {
+      lista.push({ key: 'manual', incluir: true, modelo: '', capacidad: null, color: '', imei: '', motivo: '', prioritario: false, desdeTrabajo: false, editar: true });
+    }
+    return lista;
+  };
+
   const toggleDerivar = () => {
     setDerivarActivo((prev) => {
       const nuevo = !prev;
-      if (nuevo && !derivarModelo.trim()) {
-        const itemDisp = carrito.find((i) => i.tipo === 'dispositivo' && i.dispositivoId);
-        const disp = itemDisp ? dispositivosStock.find((d) => d.id === itemDisp.dispositivoId) : null;
-        // El "+ Servicio técnico" guarda el equipo en checklistOrden (trabajoModelo
-        // se resetea al agregarlo al carrito), así que se lee de ahí.
-        const ct = (checklistOrden ?? {}) as any;
-        if (disp) {
-          setDerivarModelo(disp.modelo ?? '');
-          setDerivarCapacidad(disp.capacidad_gb ?? null);
-          setDerivarColor(disp.color ?? '');
-          setDerivarImei(disp.imei ?? '');
-          setDerivarPrioritario(true);
-          setDerivarDesdeTrabajo(false);
-        } else if (typeof ct.modelo === 'string' && ct.modelo.trim()) {
-          setDerivarModelo(ct.modelo.trim());
-          setDerivarColor(typeof ct.color === 'string' ? ct.color : '');
-          setDerivarImei(typeof ct.imei === 'string' ? ct.imei : '');
-          setDerivarDesdeTrabajo(true);
-        }
-      }
+      setDerivaciones(nuevo ? construirDerivaciones() : []);
       return nuevo;
     });
   };
+
+  const actualizarDerivacion = (key: string, cambios: Partial<Derivacion>) =>
+    setDerivaciones((ds) => ds.map((d) => (d.key === key ? { ...d, ...cambios } : d)));
 
   const handleConfirmar = async () => {
     if (!puedeConfirmar) return;
@@ -874,26 +904,26 @@ export default function NuevaOrden() {
         if (movErr) throw new Error(movErr.message);
       }
 
-      // Derivar a Servicio Técnico: crea la reparación ligada a esta orden
-      // (orden_origen_id) para que el técnico la trabaje. No rompe la venta si
-      // falla (la boleta ya se hizo) — se avisa. Copia el checklist del equipo
-      // si se cargó un "+ Servicio técnico".
-      if (derivarActivo && derivarModelo.trim()) {
-        // Solo se copia el checklist si lo derivado es el equipo del "+ Servicio
-        // técnico"; si es un dispositivo vendido, el checklist es de otro equipo.
-        const ci = (derivarDesdeTrabajo ? checklistOrden ?? {} : {}) as any;
+      // Derivar a Servicio Técnico: crea UNA reparación por cada equipo tildado
+      // (ligada a esta orden por orden_origen_id) para que el técnico las
+      // trabaje. No rompe la venta si falla (la boleta ya se hizo) — se avisa
+      // por cada una. El checklist solo se copia al equipo de la ficha técnica
+      // ("+ Servicio técnico"); los dispositivos vendidos no tienen checklist.
+      const aDerivar = derivarActivo ? derivaciones.filter((d) => d.incluir && d.modelo.trim()) : [];
+      for (const der of aDerivar) {
+        const ci = (der.desdeTrabajo ? checklistOrden ?? {} : {}) as any;
         const { data: repNueva, error: repErr } = await supabase
           .from('reparaciones')
           .insert({
             orden_origen_id: orden.id,
             cliente_id: clienteId ?? null,
-            modelo: derivarModelo.trim(),
-            capacidad_gb: derivarCapacidad,
-            color: derivarColor.trim() || null,
-            imei: limpiarImei(derivarImei) || null,
-            falla_declarada: derivarMotivo.trim() || null,
+            modelo: der.modelo.trim(),
+            capacidad_gb: der.capacidad,
+            color: der.color.trim() || null,
+            imei: limpiarImei(der.imei) || null,
+            falla_declarada: der.motivo.trim() || null,
             estado: 'recibido',
-            prioridad: derivarPrioritario ? 'urgente' : 'normal',
+            prioridad: der.prioritario ? 'urgente' : 'normal',
             enciende: ci.enciende ?? null,
             modulo_ok: ci.modulo_ok ?? null,
             senal_ok: ci.senal_ok ?? null,
@@ -916,13 +946,13 @@ export default function NuevaOrden() {
           .select('id, numero_orden')
           .single();
         if (repErr) {
-          alert('⚠️ La orden se guardó, pero no pudimos derivar a Servicio Técnico: ' + repErr.message);
+          alert(`⚠️ La orden se guardó, pero no pudimos derivar "${der.modelo.trim()}" a Servicio Técnico: ${repErr.message}`);
         } else {
           await registrarAuditoria(supabase, {
-            accion: `derivó a Servicio Técnico un equipo al crear una orden (${derivarModelo.trim()}${derivarPrioritario ? ', prioritario' : ''})`,
+            accion: `derivó a Servicio Técnico un equipo al crear una orden (${der.modelo.trim()}${der.prioritario ? ', prioritario' : ''})`,
             entidad: 'reparacion',
             entidadId: repNueva?.id,
-            valorNuevo: { modelo: derivarModelo.trim(), motivo: derivarMotivo.trim() || null, prioridad: derivarPrioritario ? 'urgente' : 'normal' },
+            valorNuevo: { modelo: der.modelo.trim(), motivo: der.motivo.trim() || null, prioridad: der.prioritario ? 'urgente' : 'normal' },
           });
         }
       }
@@ -1968,73 +1998,103 @@ export default function NuevaOrden() {
 
           {derivarActivo && (
             <div className="flex flex-col gap-2 mt-1">
-              {derivarModelo.trim() && !derivarEditarEquipo ? (
-                // El equipo ya se cargó antes (en "+ Servicio técnico" o es el
-                // dispositivo vendido): mostramos un resumen, sin pedir todo de nuevo.
-                <div className="rounded-lg bg-white/70 dark:bg-white/5 border border-amber-300/70 dark:border-amber-400/30 px-3 py-2 flex items-center justify-between gap-2">
-                  <span className="text-sm font-medium text-amber-950 dark:text-amber-100 min-w-0 truncate">
-                    {derivarModelo}
-                    {derivarCapacidad ? ` · ${derivarCapacidad}GB` : ''}
-                    {derivarColor ? ` · ${derivarColor}` : ''}
-                    {derivarImei.trim() ? ` · IMEI ${derivarImei.trim()}` : ''}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setDerivarEditarEquipo(true)}
-                    className="shrink-0 text-xs text-amber-800 dark:text-amber-300 underline"
-                  >
-                    Cambiar
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <input
-                    value={derivarModelo}
-                    onChange={(e) => setDerivarModelo(e.target.value)}
-                    placeholder="Modelo del equipo (ej. iPhone 14)"
-                    className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
-                  />
-                  <div className="flex gap-2">
-                    {STORAGE_OPTIONS.map((gb) => (
-                      <button
-                        key={gb}
-                        type="button"
-                        onClick={() => setDerivarCapacidad(gb)}
-                        className={`flex-1 rounded-lg py-2 text-xs font-medium ${
-                          derivarCapacidad === gb ? 'bg-amber-400 text-amber-950' : 'border border-border dark:border-dark-border'
-                        }`}
-                      >
-                        {gb}GB
-                      </button>
-                    ))}
-                  </div>
-                  {!derivarModelo.trim() && (
-                    <p className="text-xs text-amber-800 dark:text-amber-300">Cargá el modelo del equipo para que se derive al confirmar.</p>
-                  )}
-                  <SelectorColorAuto modelo={derivarModelo} value={derivarColor} onChange={setDerivarColor} />
-                  <input
-                    value={derivarImei}
-                    onChange={(e) => setDerivarImei(e.target.value)}
-                    placeholder="IMEI (opcional)"
-                    className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm font-mono"
-                  />
-                </>
+              {derivaciones.length > 1 && (
+                <p className="text-xs text-amber-800 dark:text-amber-300">
+                  Tildá los equipos que van a Servicio Técnico. Podés derivar varios de una misma boleta.
+                </p>
               )}
-              <input
-                value={derivarMotivo}
-                onChange={(e) => setDerivarMotivo(e.target.value)}
-                placeholder="¿Qué se le hace? (ej. subir batería, cambiar módulo)"
-                className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
-              />
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={derivarPrioritario}
-                  onChange={(e) => setDerivarPrioritario(e.target.checked)}
-                  className="h-4 w-4 accent-amber-500"
-                />
-                <span className="text-amber-900 dark:text-amber-200">Prioritario — el cliente está esperando</span>
-              </label>
+              {derivaciones.map((der) => {
+                const resumen = `${der.modelo}${der.capacidad ? ` · ${der.capacidad}GB` : ''}${der.color ? ` · ${der.color}` : ''}${
+                  der.imei.trim() ? ` · IMEI ${der.imei.trim()}` : ''
+                }`;
+                return (
+                  <div
+                    key={der.key}
+                    className={`rounded-lg border p-3 flex flex-col gap-2 ${
+                      der.incluir
+                        ? 'bg-white/70 dark:bg-white/5 border-amber-300/70 dark:border-amber-400/30'
+                        : 'bg-transparent border-amber-200/60 dark:border-amber-400/15 opacity-70'
+                    }`}
+                  >
+                    <label className="flex items-start gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={der.incluir}
+                        onChange={(e) => actualizarDerivacion(der.key, { incluir: e.target.checked })}
+                        className="h-4 w-4 accent-amber-500 mt-0.5 shrink-0"
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-medium text-amber-950 dark:text-amber-100 break-words">
+                          {der.modelo.trim() ? resumen : 'Equipo a cargar'}
+                        </span>
+                        {der.desdeTrabajo && (
+                          <span className="block text-[11px] text-amber-700/80 dark:text-amber-300/70">Equipo de la ficha técnica (lleva su checklist)</span>
+                        )}
+                      </span>
+                      {der.incluir && der.modelo.trim() && !der.editar && (
+                        <button
+                          type="button"
+                          onClick={() => actualizarDerivacion(der.key, { editar: true })}
+                          className="shrink-0 text-xs text-amber-800 dark:text-amber-300 underline"
+                        >
+                          Cambiar
+                        </button>
+                      )}
+                    </label>
+
+                    {der.incluir && (
+                      <div className="flex flex-col gap-2 pl-6">
+                        {(der.editar || !der.modelo.trim()) && (
+                          <>
+                            <input
+                              value={der.modelo}
+                              onChange={(e) => actualizarDerivacion(der.key, { modelo: e.target.value })}
+                              placeholder="Modelo del equipo (ej. iPhone 14)"
+                              className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                            />
+                            <div className="flex gap-2">
+                              {STORAGE_OPTIONS.map((gb) => (
+                                <button
+                                  key={gb}
+                                  type="button"
+                                  onClick={() => actualizarDerivacion(der.key, { capacidad: gb })}
+                                  className={`flex-1 rounded-lg py-2 text-xs font-medium ${
+                                    der.capacidad === gb ? 'bg-amber-400 text-amber-950' : 'border border-border dark:border-dark-border'
+                                  }`}
+                                >
+                                  {gb}GB
+                                </button>
+                              ))}
+                            </div>
+                            <SelectorColorAuto modelo={der.modelo} value={der.color} onChange={(v) => actualizarDerivacion(der.key, { color: v })} />
+                            <input
+                              value={der.imei}
+                              onChange={(e) => actualizarDerivacion(der.key, { imei: e.target.value })}
+                              placeholder="IMEI (opcional)"
+                              className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm font-mono"
+                            />
+                          </>
+                        )}
+                        <input
+                          value={der.motivo}
+                          onChange={(e) => actualizarDerivacion(der.key, { motivo: e.target.value })}
+                          placeholder="¿Qué se le hace? (ej. subir batería, cambiar módulo)"
+                          className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                        />
+                        <label className="flex items-center gap-2 text-sm cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={der.prioritario}
+                            onChange={(e) => actualizarDerivacion(der.key, { prioritario: e.target.checked })}
+                            className="h-4 w-4 accent-amber-500"
+                          />
+                          <span className="text-amber-900 dark:text-amber-200">Prioritario — el cliente está esperando</span>
+                        </label>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

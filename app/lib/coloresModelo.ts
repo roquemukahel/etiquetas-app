@@ -113,6 +113,7 @@ const IPHONE_13: ModeloColores = {
     { nombre: 'Blanco estrella', archivo: 'blanco', hex: '#f2ede4' },
     { nombre: 'Azul', archivo: 'azul', hex: '#3f6f8f' },
     { nombre: 'Rosa', archivo: 'rosa', hex: '#f4d9dc' },
+    { nombre: 'Verde', archivo: 'verde', hex: '#3c4a39' },
     { nombre: 'Product Red', archivo: 'rojo', hex: '#c1122a' },
   ],
 };
