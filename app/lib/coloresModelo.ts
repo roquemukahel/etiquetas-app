@@ -290,6 +290,17 @@ const IPHONE_17E: ModeloColores = {
   ],
 };
 
+// iPhone 12 Pro / Pro Max (mismas imágenes).
+const IPHONE_12_PRO: ModeloColores = {
+  carpeta: 'iphone-12-pro',
+  colores: [
+    { nombre: 'Grafito', archivo: 'gris', hex: '#54524e' },
+    { nombre: 'Plata', archivo: 'silver', hex: '#e8e8e3' },
+    { nombre: 'Oro', archivo: 'gold', hex: '#f4e2c8' },
+    { nombre: 'Azul Pacífico', archivo: 'azul', hex: '#3e5266' },
+  ],
+};
+
 // Clave de modelo normalizada: "iPhone 11", "iphone 11", "iPhone11" -> "iphone11".
 const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   iphone7: IPHONE_7,
@@ -307,6 +318,8 @@ const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   iphone11promax: IPHONE_11_PRO,
   iphone12: IPHONE_12,
   iphone12mini: IPHONE_12,
+  iphone12pro: IPHONE_12_PRO,
+  iphone12promax: IPHONE_12_PRO,
   iphone13: IPHONE_13,
   iphone13mini: IPHONE_13,
   iphone13pro: IPHONE_13_PRO,
