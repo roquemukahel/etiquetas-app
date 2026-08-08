@@ -19,9 +19,7 @@ import {
   CAMPOS_DEPENDEN_MODULO,
 } from '../../lib/reparaciones';
 import { generarOrdenDeReparacion } from '../../lib/ordenesServicio';
-import SelectorColor from '../../SelectorColor';
-import SelectorColorImagen from '../../SelectorColorImagen';
-import { coloresDeModelo } from '../../lib/coloresModelo';
+import SelectorColorAuto from '../../SelectorColorAuto';
 import Avatar from '../../Avatar';
 import CheckTri from '../../CheckTri';
 import TextoCondicionGenerado from '../../TextoCondicionGenerado';
@@ -609,14 +607,7 @@ export default function FichaReparacion() {
                 </button>
               ))}
             </div>
-            {(() => {
-              const ci = coloresDeModelo(f.modelo);
-              return ci ? (
-                <SelectorColorImagen colores={ci} value={f.color} onChange={(v) => setFm((p) => ({ ...p, color: v }))} />
-              ) : (
-                <SelectorColor value={f.color} onChange={(v) => setFm((p) => ({ ...p, color: v }))} />
-              );
-            })()}
+            <SelectorColorAuto modelo={f.modelo} value={f.color} onChange={(v) => setFm((p) => ({ ...p, color: v }))} />
             <Campo label="IMEI" valor={f.imei} onChange={(v) => setFm((p) => ({ ...p, imei: v }))} mono />
             <Campo label="Código de desbloqueo (opcional)" valor={f.codigo_desbloqueo} onChange={(v) => setFm((p) => ({ ...p, codigo_desbloqueo: v }))} />
             <Campo label="Ubicación física (ej. Estante A-3)" valor={f.ubicacion_fisica} onChange={(v) => setFm((p) => ({ ...p, ubicacion_fisica: v }))} />

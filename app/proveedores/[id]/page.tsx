@@ -7,9 +7,7 @@ import { crearClienteNavegador } from '../../lib/supabase/client';
 import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import { sanitizarDecimal } from '../../lib/numeros';
-import SelectorColor from '../../SelectorColor';
-import SelectorColorImagen from '../../SelectorColorImagen';
-import { coloresDeModelo } from '../../lib/coloresModelo';
+import SelectorColorAuto from '../../SelectorColorAuto';
 import { hexColorDe } from '../../lib/coloresIphone';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
@@ -548,17 +546,7 @@ export default function DetalleProveedor() {
               </button>
             ))}
           </div>
-          <div>
-            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Color</label>
-            {(() => {
-              const ci = coloresDeModelo(modelo);
-              return ci ? (
-                <SelectorColorImagen colores={ci} value={color} onChange={setColor} />
-              ) : (
-                <SelectorColor value={color} onChange={setColor} />
-              );
-            })()}
-          </div>
+          <SelectorColorAuto label="Color" modelo={modelo} value={color} onChange={setColor} />
           <div className="flex gap-2">
             <div className="flex-1">
               <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Cantidad</label>

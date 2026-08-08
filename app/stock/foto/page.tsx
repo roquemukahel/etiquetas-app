@@ -10,9 +10,7 @@ import { limpiarImei } from '../../lib/imei';
 import { useDictado } from '../../lib/dictado';
 import { getActor, useActor, MENSAJE_ACTOR_REQUERIDO } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
-import SelectorColor from '../../SelectorColor';
-import SelectorColorImagen from '../../SelectorColorImagen';
-import { coloresDeModelo } from '../../lib/coloresModelo';
+import SelectorColorAuto from '../../SelectorColorAuto';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 const ESTADOS = ['usado', 'sellado'];
@@ -235,17 +233,7 @@ export default function StockPorFoto() {
           }
           dictando={campoDictando === 'bateria'}
         />
-        <div>
-          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Color</label>
-          {(() => {
-            const coloresImg = coloresDeModelo(modelo);
-            return coloresImg ? (
-              <SelectorColorImagen colores={coloresImg} value={color} onChange={setColor} />
-            ) : (
-              <SelectorColor value={color} onChange={setColor} />
-            );
-          })()}
-        </div>
+        <SelectorColorAuto label="Color" modelo={modelo} value={color} onChange={setColor} />
         <Campo label="Precio (opcional)" valor={precio} onChange={setPrecio} numerico />
         <Campo label="Costo (lo que le pagaste al proveedor, opcional)" valor={costo} onChange={setCosto} numerico />
         <Campo label="Proveedor (opcional)" valor={proveedor} onChange={setProveedor} listaId="proveedores-stock-foto" />

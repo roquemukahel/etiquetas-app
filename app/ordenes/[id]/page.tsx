@@ -11,9 +11,7 @@ import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import { simboloMoneda } from '../../lib/monedas';
 import Avatar from '../../Avatar';
-import SelectorColor from '../../SelectorColor';
-import SelectorColorImagen from '../../SelectorColorImagen';
-import { coloresDeModelo } from '../../lib/coloresModelo';
+import SelectorColorAuto from '../../SelectorColorAuto';
 
 const ESTADOS = ['pendiente', 'pagado', 'entregado'];
 const FORMAS_PAGO = ['Efectivo', 'Transferencia', 'Tarjeta'];
@@ -930,14 +928,7 @@ export default function DetalleOrden() {
                   </button>
                 ))}
               </div>
-              {(() => {
-                const ci = coloresDeModelo(canjeModelo);
-                return ci ? (
-                  <SelectorColorImagen colores={ci} value={canjeColor} onChange={setCanjeColor} />
-                ) : (
-                  <SelectorColor value={canjeColor} onChange={setCanjeColor} />
-                );
-              })()}
+              <SelectorColorAuto modelo={canjeModelo} value={canjeColor} onChange={setCanjeColor} />
               <div className="flex gap-2">
                 <input
                   value={canjeImei}
@@ -1219,14 +1210,7 @@ export default function DetalleOrden() {
               </button>
             ))}
           </div>
-          {(() => {
-            const ci = coloresDeModelo(derivarModelo);
-            return ci ? (
-              <SelectorColorImagen colores={ci} value={derivarColor} onChange={setDerivarColor} />
-            ) : (
-              <SelectorColor value={derivarColor} onChange={setDerivarColor} />
-            );
-          })()}
+          <SelectorColorAuto modelo={derivarModelo} value={derivarColor} onChange={setDerivarColor} />
           <input
             value={derivarImei}
             onChange={(e) => setDerivarImei(e.target.value)}

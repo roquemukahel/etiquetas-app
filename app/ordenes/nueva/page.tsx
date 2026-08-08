@@ -20,9 +20,7 @@ import {
 import { planesActivos, interesDe, valorCuota, etiquetaCuotas } from '../../lib/cuotas';
 import { generarComisionesAccion } from '../../comisiones/acciones';
 import { ITEMS_CHECKLIST_INGRESO, CAMPOS_DEPENDEN_MODULO, generarTextoCondicionIngreso } from '../../lib/reparaciones';
-import SelectorColor from '../../SelectorColor';
-import SelectorColorImagen from '../../SelectorColorImagen';
-import { coloresDeModelo } from '../../lib/coloresModelo';
+import SelectorColorAuto from '../../SelectorColorAuto';
 import { limpiarImei } from '../../lib/imei';
 import MiniaturaDispositivo from '../../MiniaturaDispositivo';
 import CheckTri from '../../CheckTri';
@@ -1214,17 +1212,7 @@ export default function NuevaOrden() {
                 className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm font-mono"
               />
             </div>
-            <div>
-              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Color del equipo (opcional)</label>
-              {(() => {
-                const ci = coloresDeModelo(trabajoModelo);
-                return ci ? (
-                  <SelectorColorImagen colores={ci} value={trabajoColor} onChange={setTrabajoColor} />
-                ) : (
-                  <SelectorColor value={trabajoColor} onChange={setTrabajoColor} />
-                );
-              })()}
-            </div>
+            <SelectorColorAuto label="Color del equipo (opcional)" modelo={trabajoModelo} value={trabajoColor} onChange={setTrabajoColor} />
 
             <div className="flex flex-col gap-2 border-t border-border dark:border-dark-border pt-3">
               <p className="text-xs font-medium text-muted dark:text-dark-text-secondary">
@@ -1792,26 +1780,14 @@ export default function NuevaOrden() {
                 </button>
               ))}
             </div>
-            {coloresDeModelo(canjeModelo) && (
-              <SelectorColorImagen colores={coloresDeModelo(canjeModelo)!} value={canjeColor} onChange={setCanjeColor} />
-            )}
-            <div className="flex gap-2">
-              {!coloresDeModelo(canjeModelo) && (
-                <input
-                  value={canjeColor}
-                  onChange={(e) => setCanjeColor(e.target.value)}
-                  placeholder="Color"
-                  className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
-                />
-              )}
-              <input
-                value={canjeBateria}
-                onChange={(e) => setCanjeBateria(e.target.value)}
-                placeholder="Batería %"
-                inputMode="numeric"
-                className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
-              />
-            </div>
+            <SelectorColorAuto modelo={canjeModelo} value={canjeColor} onChange={setCanjeColor} />
+            <input
+              value={canjeBateria}
+              onChange={(e) => setCanjeBateria(e.target.value)}
+              placeholder="Batería %"
+              inputMode="numeric"
+              className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+            />
             <input
               value={canjeImei}
               onChange={(e) => setCanjeImei(e.target.value)}

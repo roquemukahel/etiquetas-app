@@ -7,9 +7,7 @@ import { crearClienteNavegador } from '../lib/supabase/client';
 import { asegurarModelo } from '../lib/modelos';
 import { limpiarImei } from '../lib/imei';
 import { getActor, MENSAJE_ACTOR_REQUERIDO } from '../lib/actor';
-import SelectorColor from '../SelectorColor';
-import SelectorColorImagen from '../SelectorColorImagen';
-import { coloresDeModelo } from '../lib/coloresModelo';
+import SelectorColorAuto from '../SelectorColorAuto';
 
 type ExtractedData = {
   modelo: string | null;
@@ -279,17 +277,7 @@ export default function NuevaEtiqueta() {
 
         {agregarAlStock && (
           <div className="flex flex-col gap-3">
-            <div>
-              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Color</label>
-              {(() => {
-                const ci = coloresDeModelo(datos.modelo);
-                return ci ? (
-                  <SelectorColorImagen colores={ci} value={color} onChange={setColor} />
-                ) : (
-                  <SelectorColor value={color} onChange={setColor} />
-                );
-              })()}
-            </div>
+            <SelectorColorAuto label="Color" modelo={datos.modelo} value={color} onChange={setColor} />
             <Campo label="Precio" valor={precio} onChange={setPrecio} />
             <Campo label="Proveedor (opcional)" valor={proveedor} onChange={setProveedor} />
           </div>

@@ -11,9 +11,7 @@ import { getActor, useActor, MENSAJE_ACTOR_REQUERIDO } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import { planesActivos, valorCuota, etiquetaCuotas } from '../../lib/cuotas';
 import { simboloMoneda } from '../../lib/monedas';
-import SelectorColor from '../../SelectorColor';
-import SelectorColorImagen from '../../SelectorColorImagen';
-import { coloresDeModelo } from '../../lib/coloresModelo';
+import SelectorColorAuto from '../../SelectorColorAuto';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 const ESTADOS = ['usado', 'sellado'];
@@ -174,17 +172,7 @@ export default function NuevoDispositivo() {
 
         <Campo label="IMEI" valor={imei} onChange={setImei} mono />
         <Campo label="Salud de batería (%)" valor={bateria} onChange={setBateria} numerico />
-        <div>
-          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Color</label>
-          {(() => {
-            const coloresImg = coloresDeModelo(modelo);
-            return coloresImg ? (
-              <SelectorColorImagen colores={coloresImg} value={color} onChange={setColor} />
-            ) : (
-              <SelectorColor value={color} onChange={setColor} />
-            );
-          })()}
-        </div>
+        <SelectorColorAuto label="Color" modelo={modelo} value={color} onChange={setColor} />
         <Campo label="Precio" valor={precio} onChange={setPrecio} numerico />
         {(() => {
           const planes = planesActivos(interesCuotas);

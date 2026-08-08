@@ -26,9 +26,7 @@ import {
 } from '../lib/reparaciones';
 import MiniaturaDispositivo from '../MiniaturaDispositivo';
 import Avatar from '../Avatar';
-import SelectorColor from '../SelectorColor';
-import SelectorColorImagen from '../SelectorColorImagen';
-import { coloresDeModelo } from '../lib/coloresModelo';
+import SelectorColorAuto from '../SelectorColorAuto';
 import CheckTri from '../CheckTri';
 import TextoCondicionGenerado from '../TextoCondicionGenerado';
 
@@ -603,14 +601,7 @@ export default function ServicioTecnico() {
                   </button>
                 ))}
               </div>
-              {(() => {
-                const ci = coloresDeModelo(nuevoModelo);
-                return ci ? (
-                  <SelectorColorImagen colores={ci} value={nuevoColor} onChange={setNuevoColor} />
-                ) : (
-                  <SelectorColor value={nuevoColor} onChange={setNuevoColor} />
-                );
-              })()}
+              <SelectorColorAuto modelo={nuevoModelo} value={nuevoColor} onChange={setNuevoColor} />
               <input
                 value={nuevoImei}
                 onChange={(e) => setNuevoImei(e.target.value)}
