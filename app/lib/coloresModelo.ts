@@ -71,6 +71,30 @@ const IPHONE_8_PLUS: ModeloColores = {
   ],
 };
 
+// iPhone 8 — mismos colores que el 8 Plus.
+const IPHONE_8: ModeloColores = {
+  carpeta: 'iphone-8',
+  colores: [
+    { nombre: 'Gris espacial', archivo: 'negro', hex: '#3b3a38' },
+    { nombre: 'Plata', archivo: 'blanco', hex: '#e8e8e6' },
+    { nombre: 'Oro', archivo: 'oro', hex: '#eecfc0' },
+    { nombre: 'Product Red', archivo: 'rojo', hex: '#c41e2a' },
+  ],
+};
+
+// iPhone 7 Plus — colores oficiales de Apple (incluye Jet Black / Negro azabache).
+const IPHONE_7_PLUS: ModeloColores = {
+  carpeta: 'iphone-7-plus',
+  colores: [
+    { nombre: 'Negro', archivo: 'negro', hex: '#2b2b2d' },
+    { nombre: 'Negro azabache', archivo: 'azabache', hex: '#0a0a0a' },
+    { nombre: 'Plata', archivo: 'blanco', hex: '#e6e6e4' },
+    { nombre: 'Oro', archivo: 'oro', hex: '#f0dfc0' },
+    { nombre: 'Oro rosa', archivo: 'rosa', hex: '#f0cfc5' },
+    { nombre: 'Product Red', archivo: 'rojo', hex: '#c41e2a' },
+  ],
+};
+
 // iPhone 14 Pro / Pro Max (mismas imágenes para los dos, a pedido del usuario).
 const IPHONE_14_PRO: ModeloColores = {
   carpeta: 'iphone-14-pro',
@@ -152,6 +176,8 @@ const IPHONE_17_PRO: ModeloColores = {
 
 // Clave de modelo normalizada: "iPhone 11", "iphone 11", "iPhone11" -> "iphone11".
 const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
+  iphone7plus: IPHONE_7_PLUS,
+  iphone8: IPHONE_8,
   iphone8plus: IPHONE_8_PLUS,
   iphone11: IPHONE_11,
   iphone12: IPHONE_12,
