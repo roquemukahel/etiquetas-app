@@ -11,6 +11,7 @@ import { ICONOS, COLOR_ICONO } from './Iconos';
 import NumeroAnimado from './NumeroAnimado';
 import Avatar from './Avatar';
 import BienvenidaQovi from './BienvenidaQovi';
+import OjoResumenFinanciero from './OjoResumenFinanciero';
 
 const SECCIONES = [
   { href: '/ordenes', titulo: 'Órdenes', desc: 'Ventas, boletas y canjes', icono: 'ordenes', color: 'ventas', activo: true },
@@ -55,7 +56,7 @@ export default async function Home() {
   let diasDePrueba: number | null = null;
   let suscripcionActiva = false;
   let actividad: {
-    tipo: 'venta' | 'reparacion' | 'stock' | 'cliente';
+    tipo: 'venta' | 'reparacion' | 'stock' | 'cliente' | 'eliminacion' | 'ajuste';
     fecha: Date;
     texto: string;
     actorNombre: string | null;
@@ -125,6 +126,9 @@ export default async function Home() {
       { count: countEnCanje },
       { count: countComprasPendientes },
       { count: countSinPrecio },
+      { data: auditoriaReciente },
+      { data: vendedoresLista },
+      { data: tecnicosLista },
     ] = await Promise.all([
       supabase.from('dispositivos').select('id', { count: 'exact', head: true }).eq('en_stock', true),
       supabase.from('ordenes').select('id', { count: 'exact', head: true }).eq('estado', 'pendiente'),
@@ -180,6 +184,18 @@ export default async function Home() {
         .select('id', { count: 'exact', head: true })
         .eq('en_stock', true)
         .is('precio', null),
+      // Acciones sensibles del libro de auditoría (borrados, ediciones,
+      // derivaciones, cambios de config): son actividad del sistema que no
+      // aparece en las tablas vivas (un borrado deja la fila inexistente).
+      supabase
+        .from('auditoria')
+        .select('actor_nombre, accion, created_at')
+        .order('created_at', { ascending: false })
+        .limit(12),
+      // La auditoría guarda solo el nombre del actor, no su foto. Cruzamos por
+      // nombre con vendedores/técnicos para mostrar el avatar real en el feed.
+      supabase.from('vendedores').select('nombre, foto_url'),
+      supabase.from('tecnicos').select('nombre, foto_url'),
     ]);
     enStock = countStock ?? 0;
     pendientes = countPendientes ?? 0;
@@ -235,7 +251,7 @@ export default async function Home() {
       .slice(0, 5);
 
     const candidatos: {
-      tipo: 'venta' | 'reparacion' | 'stock' | 'cliente';
+      tipo: 'venta' | 'reparacion' | 'stock' | 'cliente' | 'eliminacion' | 'ajuste';
       fecha: Date;
       texto: string;
       actorNombre: string | null;
@@ -288,6 +304,33 @@ export default async function Home() {
         texto: `${cargadoPor ? `${cargadoPor} cargó` : 'Se cargó'} un nuevo cliente: ${nombreCompleto}`,
         actorNombre: c.agregado_por_nombre ?? null,
         actorFoto: c.agregado_por_foto_url ?? null,
+      });
+    }
+
+    const mapaFotoActor = new Map<string, string>();
+    for (const v of (vendedoresLista as any[]) ?? []) {
+      if (v.nombre && v.foto_url) mapaFotoActor.set(v.nombre.trim().toLowerCase(), v.foto_url);
+    }
+    for (const t of (tecnicosLista as any[]) ?? []) {
+      if (t.nombre && t.foto_url) mapaFotoActor.set(t.nombre.trim().toLowerCase(), t.foto_url);
+    }
+
+    for (const a of (auditoriaReciente as any[]) ?? []) {
+      const accion = (a.accion ?? '').trim();
+      if (!accion) continue;
+      // Los ingresos al stock ya aparecen como evento "stock" desde la tabla
+      // viva de dispositivos; saltamos su registro de auditoría para no
+      // mostrar la misma acción dos veces con distinto texto.
+      if (/^agreg[oó] al stock/i.test(accion)) continue;
+      const esBorrado = /^(elimin|borr|cancel|quit|revirt|anul)/i.test(accion);
+      candidatos.push({
+        tipo: esBorrado ? 'eliminacion' : 'ajuste',
+        fecha: new Date(a.created_at),
+        // accion ya viene como frase en pasado ("eliminó un proveedor (X)"),
+        // así que con el actor adelante queda "Roque eliminó un proveedor (X)".
+        texto: `${a.actor_nombre ? `${a.actor_nombre} ` : ''}${accion}`,
+        actorNombre: a.actor_nombre ?? null,
+        actorFoto: a.actor_nombre ? mapaFotoActor.get(a.actor_nombre.trim().toLowerCase()) ?? null : null,
       });
     }
 
@@ -457,6 +500,7 @@ export default async function Home() {
           href="/estadisticas"
           className="qv-card qv-financial group lg:col-span-2 rounded-2xl bg-gradient-to-br from-ink to-[#1B2540] dark:from-dark-surface dark:to-dark-bg text-white p-6 flex flex-col gap-4 shadow-elevated hover:opacity-95 transition-opacity active:scale-[0.99]"
         >
+          <OjoResumenFinanciero>
           <div className="flex items-start justify-between">
             <div>
               <p className="text-xs text-white/60 mb-1">Ingresos este mes</p>
@@ -501,6 +545,7 @@ export default async function Home() {
               serie={serieTicket}
             />
           </div>
+          </OjoResumenFinanciero>
 
           <span className="text-xs text-white/50 group-hover:text-white/70">Ver estadísticas completas &rarr;</span>
         </Link>
@@ -693,6 +738,8 @@ const ICONO_ACTIVIDAD: Record<string, { emoji: string; color: string }> = {
   reparacion: { emoji: '🔧', color: 'servicio' },
   stock: { emoji: '📦', color: 'inventario' },
   cliente: { emoji: '👤', color: 'clientes' },
+  eliminacion: { emoji: '🗑️', color: 'eliminacion' },
+  ajuste: { emoji: '✏️', color: 'compras' },
 };
 
 const DOT_COLOR: Record<string, string> = {

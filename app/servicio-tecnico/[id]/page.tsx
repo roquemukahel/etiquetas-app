@@ -19,7 +19,7 @@ import {
   CAMPOS_DEPENDEN_MODULO,
 } from '../../lib/reparaciones';
 import { generarOrdenDeReparacion } from '../../lib/ordenesServicio';
-import SelectorColor from '../../SelectorColor';
+import SelectorColorAuto from '../../SelectorColorAuto';
 import Avatar from '../../Avatar';
 import CheckTri from '../../CheckTri';
 import TextoCondicionGenerado from '../../TextoCondicionGenerado';
@@ -362,6 +362,12 @@ export default function FichaReparacion() {
         .maybeSingle();
       if (ordenVinculada && ordenVinculada.estado === 'pendiente' && !ordenVinculada.total) {
         await supabase.from('ordenes').delete().eq('id', r.orden_cobro_id);
+        await registrarAuditoria(supabase, {
+          accion: `eliminó la orden de cobro vacía de una reparación cancelada (${r.numero_orden || ''})`,
+          entidad: 'orden',
+          entidadId: r.orden_cobro_id,
+          valorAnterior: { estado: ordenVinculada.estado, total: ordenVinculada.total },
+        });
       }
     }
 
@@ -607,7 +613,7 @@ export default function FichaReparacion() {
                 </button>
               ))}
             </div>
-            <SelectorColor value={f.color} onChange={(v) => setFm((p) => ({ ...p, color: v }))} />
+            <SelectorColorAuto modelo={f.modelo} value={f.color} onChange={(v) => setFm((p) => ({ ...p, color: v }))} />
             <Campo label="IMEI" valor={f.imei} onChange={(v) => setFm((p) => ({ ...p, imei: v }))} mono />
             <Campo label="Código de desbloqueo (opcional)" valor={f.codigo_desbloqueo} onChange={(v) => setFm((p) => ({ ...p, codigo_desbloqueo: v }))} />
             <Campo label="Ubicación física (ej. Estante A-3)" valor={f.ubicacion_fisica} onChange={(v) => setFm((p) => ({ ...p, ubicacion_fisica: v }))} />

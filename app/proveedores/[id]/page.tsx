@@ -4,10 +4,11 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
+import { registrarAuditoria } from '../../lib/auditoria';
 import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import { sanitizarDecimal } from '../../lib/numeros';
-import SelectorColor from '../../SelectorColor';
+import SelectorColorAuto from '../../SelectorColorAuto';
 import { hexColorDe } from '../../lib/coloresIphone';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
@@ -243,6 +244,12 @@ export default function DetalleProveedor() {
     )
       return;
     await supabase.from('proveedores').delete().eq('id', proveedor.id);
+    await registrarAuditoria(supabase, {
+      accion: `eliminó un proveedor (${proveedor.nombre})`,
+      entidad: 'proveedor',
+      entidadId: proveedor.id,
+      valorAnterior: { nombre: proveedor.nombre, telefono: proveedor.telefono },
+    });
     router.push('/proveedores');
   };
 
@@ -308,7 +315,14 @@ export default function DetalleProveedor() {
   const eliminarCompra = async (compraId: string) => {
     if (!puedeEliminar) return;
     if (!confirm('¿Eliminar esta compra?')) return;
+    const compra = compras.find((c) => c.id === compraId);
     await supabase.from('compras_proveedor').delete().eq('id', compraId);
+    await registrarAuditoria(supabase, {
+      accion: `eliminó una compra a proveedor${compra?.modelo ? ` (${compra.modelo})` : ''}`,
+      entidad: 'compra_proveedor',
+      entidadId: compraId,
+      valorAnterior: compra ? { modelo: compra.modelo, precio_unitario: compra.precio_unitario, cantidad: compra.cantidad } : null,
+    });
     cargar();
   };
 
@@ -546,10 +560,7 @@ export default function DetalleProveedor() {
               </button>
             ))}
           </div>
-          <div>
-            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Color</label>
-            <SelectorColor value={color} onChange={setColor} />
-          </div>
+          <SelectorColorAuto label="Color" modelo={modelo} value={color} onChange={setColor} />
           <div className="flex gap-2">
             <div className="flex-1">
               <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Cantidad</label>

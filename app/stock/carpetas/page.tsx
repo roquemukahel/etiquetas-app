@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../../lib/supabase/client';
+import { registrarAuditoria } from '../../lib/auditoria';
 
 type Carpeta = { id: string; nombre: string; imagen_url: string | null };
 
@@ -68,7 +69,14 @@ export default function Carpetas() {
 
   const eliminar = async (id: string) => {
     if (!confirm('¿Eliminar esta carpeta? Los dispositivos que tenga no se borran, solo dejan de tener carpeta asignada explícitamente.')) return;
+    const carpeta = carpetas.find((c) => c.id === id);
     await supabase.from('modelos_stock').delete().eq('id', id);
+    await registrarAuditoria(supabase, {
+      accion: `eliminó una carpeta de Stock (${carpeta?.nombre || 'sin nombre'})`,
+      entidad: 'carpeta',
+      entidadId: id,
+      valorAnterior: carpeta ? { nombre: carpeta.nombre } : null,
+    });
     cargar();
   };
 

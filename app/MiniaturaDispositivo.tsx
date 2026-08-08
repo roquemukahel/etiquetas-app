@@ -6,7 +6,7 @@ export default function MiniaturaDispositivo({ src, size = 40 }: { src: string |
       src={src}
       alt=""
       style={estilo}
-      className="rounded-lg object-cover shrink-0 border border-border dark:border-dark-border"
+      className="rounded-lg object-cover shrink-0 border border-border dark:border-dark-border transition-transform duration-300 ease-out hover:animate-flotarLeve hover:drop-shadow-md"
     />
   ) : (
     <div

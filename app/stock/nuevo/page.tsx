@@ -11,7 +11,7 @@ import { getActor, useActor, MENSAJE_ACTOR_REQUERIDO } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import { planesActivos, valorCuota, etiquetaCuotas } from '../../lib/cuotas';
 import { simboloMoneda } from '../../lib/monedas';
-import SelectorColor from '../../SelectorColor';
+import SelectorColorAuto from '../../SelectorColorAuto';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 const ESTADOS = ['usado', 'sellado'];
@@ -59,6 +59,15 @@ export default function NuevoDispositivo() {
   const [estado, setEstado] = useState('usado');
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
+
+  // Si se llega desde una carpeta ("+ Agregar" en Stock), el modelo viene
+  // pre-cargado por la URL (?modelo=iPhone 11) para que aparezca directo el
+  // selector de colores correspondiente. Se lee de window para no depender de
+  // useSearchParams (evita tener que envolver en Suspense).
+  useEffect(() => {
+    const m = new URLSearchParams(window.location.search).get('modelo');
+    if (m) setModelo(m);
+  }, []);
 
   const puedeGuardar = modelo.trim().length > 0 && puedeAgregarStock;
 
@@ -163,10 +172,7 @@ export default function NuevoDispositivo() {
 
         <Campo label="IMEI" valor={imei} onChange={setImei} mono />
         <Campo label="Salud de batería (%)" valor={bateria} onChange={setBateria} numerico />
-        <div>
-          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Color</label>
-          <SelectorColor value={color} onChange={setColor} />
-        </div>
+        <SelectorColorAuto label="Color" modelo={modelo} value={color} onChange={setColor} />
         <Campo label="Precio" valor={precio} onChange={setPrecio} numerico />
         {(() => {
           const planes = planesActivos(interesCuotas);

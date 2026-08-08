@@ -7,6 +7,7 @@ import { crearClienteNavegador } from '../../lib/supabase/client';
 import { MONEDAS } from '../../lib/monedas';
 import { PAISES } from '../../lib/paises';
 import { MARCAS_DISPONIBLES, CATALOGO_MODELOS, normalizarNombreModelo } from '../../lib/catalogosMarcas';
+import { registrarAuditoria } from '../../lib/auditoria';
 
 type Negocio = {
   id: string;
@@ -46,6 +47,12 @@ export default function DatosNegocio() {
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Destildar una marca con catálogo borra sus carpetas + los equipos adentro:
+  // por lo destructivo, se confirma en un cartel que muestra cuánto se va a borrar.
+  const [marcaAEliminar, setMarcaAEliminar] = useState<{ id: string; nombre: string; carpetas: string[]; equipos: number } | null>(null);
+  const [procesandoMarca, setProcesandoMarca] = useState(false);
+  const [errorMarca, setErrorMarca] = useState<string | null>(null);
+
   useEffect(() => {
     (async () => {
       const {
@@ -82,17 +89,81 @@ export default function DatosNegocio() {
     });
   };
 
-  const toggleMarca = (id: string) =>
+  const toggleMarca = (id: string) => {
+    if (!negocio) return;
+    const yaElegida = negocio.marcas_stock.includes(id);
+    const tieneCatalogo = !!CATALOGO_MODELOS[id];
+    // Destildar una marca CON catálogo es destructivo (borra carpetas + equipos):
+    // se pide confirmación en un cartel. El resto (tildar, o destildar "Otras
+    // marcas" que no tiene catálogo) es un toggle simple sin borrar nada.
+    if (yaElegida && tieneCatalogo) {
+      pedirDesactivarMarca(id);
+      return;
+    }
     setNegocio((prev) =>
       prev
         ? {
             ...prev,
-            marcas_stock: prev.marcas_stock.includes(id)
-              ? prev.marcas_stock.filter((m) => m !== id)
-              : [...prev.marcas_stock, id],
+            marcas_stock: yaElegida ? prev.marcas_stock.filter((m) => m !== id) : [...prev.marcas_stock, id],
           }
         : prev
     );
+  };
+
+  // Junta cuánto se borraría al desactivar la marca y abre el cartel de confirmación.
+  const pedirDesactivarMarca = async (id: string) => {
+    const catalogo = CATALOGO_MODELOS[id] || [];
+    setErrorMarca(null);
+    const [{ data: mods }, { count }] = await Promise.all([
+      supabase.from('modelos_stock').select('nombre').in('nombre', catalogo),
+      supabase.from('dispositivos').select('id', { count: 'exact', head: true }).in('modelo', catalogo),
+    ]);
+    const carpetas = (mods ?? []).map((m) => m.nombre);
+    const nombre = MARCAS_DISPONIBLES.find((m) => m.id === id)?.nombre ?? id;
+    setMarcaAEliminar({ id, nombre, carpetas, equipos: count ?? 0 });
+  };
+
+  const confirmarDesactivarMarca = async () => {
+    if (!marcaAEliminar || !negocio) return;
+    const { id } = marcaAEliminar;
+    const catalogo = CATALOGO_MODELOS[id] || [];
+    setProcesandoMarca(true);
+    setErrorMarca(null);
+
+    // 1) Borrar los equipos de esos modelos (RLS los limita a este negocio).
+    const { error: errDisp } = await supabase.from('dispositivos').delete().in('modelo', catalogo);
+    if (errDisp) {
+      // Puede pasar si algún equipo ya fue vendido (queda referenciado por una
+      // orden). Mostramos el motivo real en vez de fallar en silencio.
+      setErrorMarca('No se pudieron borrar los equipos: ' + errDisp.message);
+      setProcesandoMarca(false);
+      return;
+    }
+    // 2) Borrar las carpetas de esos modelos.
+    const { error: errMod } = await supabase.from('modelos_stock').delete().in('nombre', catalogo);
+    if (errMod) {
+      setErrorMarca('No se pudieron borrar las carpetas: ' + errMod.message);
+      setProcesandoMarca(false);
+      return;
+    }
+    // 3) Quitar la marca del negocio (se persiste ya, sin depender de "Guardar").
+    const nuevasMarcas = negocio.marcas_stock.filter((m) => m !== id);
+    const { error: errNeg } = await supabase.from('negocios').update({ marcas_stock: nuevasMarcas }).eq('id', negocio.id);
+    if (errNeg) {
+      setErrorMarca('No se pudo actualizar el negocio: ' + errNeg.message);
+      setProcesandoMarca(false);
+      return;
+    }
+    setNegocio((prev) => (prev ? { ...prev, marcas_stock: nuevasMarcas } : prev));
+    await registrarAuditoria(supabase, {
+      accion: `eliminó la marca ${marcaAEliminar.nombre} del negocio (y sus carpetas y equipos)`,
+      entidad: 'marca',
+      entidadId: id,
+      valorAnterior: { marca: id, nombre: marcaAEliminar.nombre, carpetas: marcaAEliminar.carpetas, equipos: marcaAEliminar.equipos },
+    });
+    setProcesandoMarca(false);
+    setMarcaAEliminar(null);
+  };
 
   const handleLogo = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -310,11 +381,12 @@ export default function DatosNegocio() {
             Marcas que vendés (crea carpetas de Stock automáticamente)
           </label>
           <p className="text-xs text-muted dark:text-dark-text-secondary mb-2">
-            Al tildar una marca con catálogo (iPhone, Samsung), se crean solas las carpetas de Stock de cada modelo,
-            con el nombre ya escrito bien y parejo — así no tenés que cargarlas una por una a mano ni terminás con
-            carpetas repetidas por una mayúscula o un espacio de más. Si destildás una marca, no se borra ninguna
-            carpeta ya creada. "Otras marcas" es para cuando vendés algo que no está en las listas (por ejemplo,
-            accesorios o consolas): esas seguís creándolas vos desde Stock &gt; Carpetas.
+            Al tildar una marca con catálogo (iPhone, Samsung, Xiaomi) y guardar, se crean solas las carpetas de
+            Stock de cada modelo, con el nombre ya escrito bien y parejo — así no tenés que cargarlas una por una ni
+            terminás con carpetas repetidas por una mayúscula o un espacio de más. Si <span className="font-medium">destildás</span> una
+            marca, te vamos a preguntar si querés borrar sus carpetas y los equipos que tengan cargados adentro (útil
+            si activaste una marca por error). "Otras marcas" es para cuando vendés algo que no está en las listas
+            (por ejemplo, accesorios o consolas): esas seguís creándolas vos desde Stock &gt; Carpetas.
           </p>
           <div className="flex flex-col gap-2">
             {MARCAS_DISPONIBLES.map((m) => {
@@ -398,6 +470,53 @@ export default function DatosNegocio() {
       >
         {guardando ? 'Guardando...' : 'Guardar cambios'}
       </button>
+
+      {marcaAEliminar && (
+        <div className="fixed inset-0 z-50 bg-ink/80 flex items-center justify-center p-6" onClick={() => !procesandoMarca && setMarcaAEliminar(null)}>
+          <div
+            className="w-full max-w-sm rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border p-5 flex flex-col gap-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="text-base font-semibold text-bad">Desactivar {marcaAEliminar.nombre}</p>
+            {marcaAEliminar.carpetas.length === 0 ? (
+              <p className="text-sm text-muted dark:text-dark-text-secondary">
+                No hay carpetas de {marcaAEliminar.nombre} cargadas. Se va a desactivar la marca sin borrar nada.
+              </p>
+            ) : (
+              <p className="text-sm text-muted dark:text-dark-text-secondary">
+                Al desactivar esta marca se van a <span className="font-medium text-ink dark:text-dark-text">eliminar {marcaAEliminar.carpetas.length} carpeta{marcaAEliminar.carpetas.length === 1 ? '' : 's'}</span>
+                {marcaAEliminar.equipos > 0 ? (
+                  <>
+                    {' '}y los <span className="font-medium text-ink dark:text-dark-text">{marcaAEliminar.equipos} equipo{marcaAEliminar.equipos === 1 ? '' : 's'}</span> que tienen cargados adentro
+                  </>
+                ) : null}
+                . <span className="font-medium">No se puede deshacer.</span>
+              </p>
+            )}
+
+            {errorMarca && (
+              <p className="text-xs text-bad bg-bad/10 rounded-lg px-3 py-2 break-words">{errorMarca}</p>
+            )}
+
+            <div className="flex gap-2 mt-1">
+              <button
+                onClick={() => setMarcaAEliminar(null)}
+                disabled={procesandoMarca}
+                className="flex-1 rounded-lg border border-border dark:border-dark-border py-2 text-sm font-medium disabled:opacity-40"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmarDesactivarMarca}
+                disabled={procesandoMarca}
+                className="flex-1 rounded-lg bg-bad text-white py-2 text-sm font-medium disabled:opacity-40"
+              >
+                {procesandoMarca ? 'Borrando...' : marcaAEliminar.carpetas.length === 0 ? 'Desactivar' : 'Sí, borrar todo'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

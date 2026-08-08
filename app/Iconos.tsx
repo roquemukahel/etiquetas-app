@@ -15,6 +15,7 @@ export const COLOR_ICONO: Record<string, string> = {
   clientes: 'from-emerald-500 to-emerald-600',
   servicio: 'from-amber-500 to-amber-600',
   compras: 'from-teal-500 to-teal-600',
+  eliminacion: 'from-rose-500 to-rose-600',
 };
 
 export const ICONOS: Record<string, React.ReactNode> = {

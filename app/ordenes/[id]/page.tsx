@@ -11,7 +11,7 @@ import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import { simboloMoneda } from '../../lib/monedas';
 import Avatar from '../../Avatar';
-import SelectorColor from '../../SelectorColor';
+import SelectorColorAuto from '../../SelectorColorAuto';
 
 const ESTADOS = ['pendiente', 'pagado', 'entregado'];
 const FORMAS_PAGO = ['Efectivo', 'Transferencia', 'Tarjeta'];
@@ -156,6 +156,7 @@ export default function DetalleOrden() {
   const [agregandoCanje, setAgregandoCanje] = useState(false);
 
   const [yaDerivado, setYaDerivado] = useState(false);
+  const [reparacionDerivadaId, setReparacionDerivadaId] = useState<string | null>(null);
   const [derivarAbierto, setDerivarAbierto] = useState(false);
   const [derivarModelo, setDerivarModelo] = useState('');
   const [derivarCapacidad, setDerivarCapacidad] = useState<number | null>(null);
@@ -176,6 +177,7 @@ export default function DetalleOrden() {
     setLoading(false);
     const { data: reparacionExistente } = await supabase.from('reparaciones').select('id').eq('orden_origen_id', id).maybeSingle();
     setYaDerivado(!!reparacionExistente);
+    setReparacionDerivadaId((reparacionExistente as any)?.id ?? null);
     const { data: canjesData } = await supabase
       .from('canjes')
       .select('id, modelo, capacidad_gb, color, imei, salud_bateria, detalles, monto')
@@ -658,7 +660,10 @@ export default function DetalleOrden() {
 
   const handleCancelar = async () => {
     if (!orden || !puedeEliminar) return;
-    if (!confirm('¿Cancelar esta orden? Los dispositivos vuelven a aparecer en stock.')) return;
+    const mensaje = yaDerivado
+      ? '¿Eliminar esta orden? También se va a borrar la reparación derivada en Servicio Técnico. Los dispositivos vendidos vuelven al stock. No se puede deshacer.'
+      : '¿Eliminar esta orden? Los dispositivos vendidos vuelven al stock. No se puede deshacer.';
+    if (!confirm(mensaje)) return;
     setGuardando(true);
     setError(null);
 
@@ -686,6 +691,21 @@ export default function DetalleOrden() {
     try {
       await revertirComisionesOrden(supabase, id, 'Venta cancelada', null);
     } catch {}
+    // Si esta orden derivó un equipo a Servicio Técnico, se borra también la
+    // reparación para que desaparezca de ahí (pedido del usuario). Se hace
+    // ANTES de borrar la orden: si el FK fuera "set null", después no se la
+    // podría encontrar por orden_origen_id. reparaciones_eventos se va en
+    // cascada. No rompe la eliminación de la orden si esto falla.
+    await supabase.from('reparaciones').delete().eq('orden_origen_id', id);
+    if (yaDerivado) {
+      const clienteRep = orden.clientes ? `${orden.clientes.nombre} ${orden.clientes.apellido || ''}`.trim() : 'sin cliente';
+      await registrarAuditoria(supabase, {
+        accion: `eliminó la reparación derivada de una orden (${clienteRep})`,
+        entidad: 'reparacion',
+        entidadId: reparacionDerivadaId ?? undefined,
+        valorAnterior: { orden_origen_id: id, reparacion_id: reparacionDerivadaId },
+      });
+    }
     const { error: deleteError } = await supabase.from('ordenes').delete().eq('id', id);
     if (deleteError) {
       setError('No pudimos cancelar la orden: ' + deleteError.message);
@@ -928,7 +948,7 @@ export default function DetalleOrden() {
                   </button>
                 ))}
               </div>
-              <SelectorColor value={canjeColor} onChange={setCanjeColor} />
+              <SelectorColorAuto modelo={canjeModelo} value={canjeColor} onChange={setCanjeColor} />
               <div className="flex gap-2">
                 <input
                   value={canjeImei}
@@ -1182,9 +1202,9 @@ export default function DetalleOrden() {
       {tieneTrabajo && !yaDerivado && !derivarAbierto && puedeRecibirServicioTecnico && (
         <button
           onClick={abrirDerivar}
-          className="w-full rounded-2xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium"
+          className="w-full rounded-2xl border-2 border-amber-400 bg-amber-50 text-amber-900 dark:bg-amber-400/10 dark:text-amber-300 dark:border-amber-400/50 py-3 text-center text-sm font-semibold flex items-center justify-center gap-1.5"
         >
-          Derivar a Servicio Técnico
+          🔧 Derivar a Servicio Técnico
         </button>
       )}
 
@@ -1210,7 +1230,7 @@ export default function DetalleOrden() {
               </button>
             ))}
           </div>
-          <SelectorColor value={derivarColor} onChange={setDerivarColor} />
+          <SelectorColorAuto modelo={derivarModelo} value={derivarColor} onChange={setDerivarColor} />
           <input
             value={derivarImei}
             onChange={(e) => setDerivarImei(e.target.value)}
@@ -1266,7 +1286,7 @@ export default function DetalleOrden() {
           onClick={handleCancelar}
           className="mt-auto w-full rounded-2xl border border-bad/30 py-3 text-center text-sm font-medium text-bad disabled:opacity-40"
         >
-          Cancelar orden
+          Eliminar orden
         </button>
       )}
     </main>

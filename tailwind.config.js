@@ -35,6 +35,23 @@ module.exports = {
         card: '0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 6px rgba(15, 23, 42, 0.04)',
         elevated: '0 4px 16px rgba(15, 23, 42, 0.08)',
       },
+      keyframes: {
+        flotar: {
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(-7px)' },
+        },
+        // Flotación sutil para íconos chicos (miniaturas): se eleva un poco y
+        // hace un bob leve. Incluye el scale adentro para que no pelee con un
+        // hover:scale por separado (la animación pisa el transform).
+        flotarLeve: {
+          '0%, 100%': { transform: 'translateY(0) scale(1.08)' },
+          '50%': { transform: 'translateY(-3px) scale(1.08)' },
+        },
+      },
+      animation: {
+        flotar: 'flotar 3.2s ease-in-out infinite',
+        flotarLeve: 'flotarLeve 2.2s ease-in-out infinite',
+      },
     },
   },
   plugins: [],

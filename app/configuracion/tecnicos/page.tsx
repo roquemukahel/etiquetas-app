@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../../lib/supabase/client';
+import { registrarAuditoria } from '../../lib/auditoria';
 import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import Avatar from '../../Avatar';
@@ -80,7 +81,14 @@ export default function Tecnicos() {
 
   const eliminar = async (id: string) => {
     if (!confirm('¿Eliminar este técnico?')) return;
+    const tecnico = tecnicos.find((t) => t.id === id);
     await supabase.from('tecnicos').delete().eq('id', id);
+    await registrarAuditoria(supabase, {
+      accion: `eliminó un técnico (${tecnico?.nombre || 'sin nombre'})`,
+      entidad: 'tecnico',
+      entidadId: id,
+      valorAnterior: tecnico ? { nombre: tecnico.nombre, telefono: tecnico.telefono } : null,
+    });
     cargar();
   };
 
