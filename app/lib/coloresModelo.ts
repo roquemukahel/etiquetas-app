@@ -174,8 +174,64 @@ const IPHONE_17_PRO: ModeloColores = {
   ],
 };
 
+// iPhone X — 2 colores oficiales.
+const IPHONE_X: ModeloColores = {
+  carpeta: 'iphone-x',
+  colores: [
+    { nombre: 'Gris espacial', archivo: 'negro', hex: '#3b3a3c' },
+    { nombre: 'Plata', archivo: 'blanco', hex: '#e8e8e6' },
+  ],
+};
+
+// iPhone XR — 6 colores oficiales.
+const IPHONE_XR: ModeloColores = {
+  carpeta: 'iphone-xr',
+  colores: [
+    { nombre: 'Negro', archivo: 'negro', hex: '#1f1f21' },
+    { nombre: 'Blanco', archivo: 'blanco', hex: '#f2f0ec' },
+    { nombre: 'Azul', archivo: 'celeste', hex: '#a7c4d6' },
+    { nombre: 'Amarillo', archivo: 'amarillo', hex: '#f4cf4e' },
+    { nombre: 'Coral', archivo: 'coral', hex: '#f38b6b' },
+    { nombre: 'Product Red', archivo: 'rojo', hex: '#c8202f' },
+  ],
+};
+
+// iPhone XS / XS Max (mismas imágenes).
+const IPHONE_XS: ModeloColores = {
+  carpeta: 'iphone-xs',
+  colores: [
+    { nombre: 'Gris espacial', archivo: 'negro', hex: '#3b3a3c' },
+    { nombre: 'Plata', archivo: 'blanco', hex: '#e8e8e6' },
+    { nombre: 'Oro', archivo: 'oro', hex: '#e5c9a8' },
+  ],
+};
+
+// iPhone SE (mismas imágenes para 2020 y 2022; solo cambian los nombres Apple).
+const IPHONE_SE_2020: ModeloColores = {
+  carpeta: 'iphone-se',
+  colores: [
+    { nombre: 'Negro', archivo: 'negro', hex: '#2b2b2d' },
+    { nombre: 'Blanco', archivo: 'blanco', hex: '#f2f0ec' },
+    { nombre: 'Product Red', archivo: 'rojo', hex: '#c8202f' },
+  ],
+};
+const IPHONE_SE_2022: ModeloColores = {
+  carpeta: 'iphone-se',
+  colores: [
+    { nombre: 'Medianoche', archivo: 'negro', hex: '#232a31' },
+    { nombre: 'Blanco estrella', archivo: 'blanco', hex: '#f2ede4' },
+    { nombre: 'Product Red', archivo: 'rojo', hex: '#c8202f' },
+  ],
+};
+
 // Clave de modelo normalizada: "iPhone 11", "iphone 11", "iPhone11" -> "iphone11".
 const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
+  iphonex: IPHONE_X,
+  iphonexr: IPHONE_XR,
+  iphonexs: IPHONE_XS,
+  iphonexsmax: IPHONE_XS,
+  'iphonese(2020)': IPHONE_SE_2020,
+  'iphonese(2022)': IPHONE_SE_2022,
   iphone7plus: IPHONE_7_PLUS,
   iphone8: IPHONE_8,
   iphone8plus: IPHONE_8_PLUS,
