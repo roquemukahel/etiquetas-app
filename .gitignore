@@ -14,3 +14,7 @@ next-env.d.ts
 .env.local
 .env*.local
 .vercel/
+# Capturas/imágenes sueltas en la raíz (assets reales van en public/)
+/*.png
+/*.jpg
+/*.jpeg
