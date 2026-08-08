@@ -511,6 +511,8 @@ export default function NuevaOrden() {
     altavoces_ok: trabajoChecklist.altavoces_ok ?? null,
     boton_power_ok: trabajoChecklist.boton_power_ok ?? null,
     boton_volumen_ok: trabajoChecklist.boton_volumen_ok ?? null,
+    pin_carga_ok: trabajoChecklist.pin_carga_ok ?? null,
+    carga_magsafe_ok: trabajoChecklist.carga_magsafe_ok ?? null,
     biometria_ok: trabajoChecklist.biometria_ok ?? null,
     conectores_ok: trabajoChecklist.conectores_ok ?? null,
     humedad: trabajoHumedad,

@@ -61,6 +61,8 @@ type Reparacion = {
   microfono_inferior_ok: boolean | null;
   boton_power_ok: boolean | null;
   boton_volumen_ok: boolean | null;
+  pin_carga_ok: boolean | null;
+  carga_magsafe_ok: boolean | null;
   garantia_excepcion_manual: string | null;
   humedad: boolean | null;
   garantia_condiciones_aceptadas: boolean;
@@ -213,6 +215,8 @@ export default function FichaReparacion() {
       microfono_inferior_ok: r.microfono_inferior_ok,
       boton_power_ok: r.boton_power_ok,
       boton_volumen_ok: r.boton_volumen_ok,
+      pin_carga_ok: r.pin_carga_ok,
+      carga_magsafe_ok: r.carga_magsafe_ok,
       garantia_excepcion_manual: r.garantia_excepcion_manual ?? '',
       humedad: r.humedad,
       garantia_condiciones_aceptadas: r.garantia_condiciones_aceptadas,
@@ -279,6 +283,8 @@ export default function FichaReparacion() {
       microfono_inferior_ok: f.microfono_inferior_ok,
       boton_power_ok: f.boton_power_ok,
       boton_volumen_ok: f.boton_volumen_ok,
+      pin_carga_ok: f.pin_carga_ok,
+      carga_magsafe_ok: f.carga_magsafe_ok,
       garantia_excepcion_manual: f.garantia_excepcion_manual.trim() || null,
       humedad: f.humedad,
       garantia_condiciones_aceptadas: f.garantia_condiciones_aceptadas,

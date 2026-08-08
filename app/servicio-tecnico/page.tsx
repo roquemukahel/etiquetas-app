@@ -247,6 +247,8 @@ export default function ServicioTecnico() {
     altavoces_ok: nuevoChecklist.altavoces_ok ?? null,
     boton_power_ok: nuevoChecklist.boton_power_ok ?? null,
     boton_volumen_ok: nuevoChecklist.boton_volumen_ok ?? null,
+    pin_carga_ok: nuevoChecklist.pin_carga_ok ?? null,
+    carga_magsafe_ok: nuevoChecklist.carga_magsafe_ok ?? null,
     biometria_ok: nuevoChecklist.biometria_ok ?? null,
     conectores_ok: nuevoChecklist.conectores_ok ?? null,
     humedad: nuevaHumedad,

@@ -57,6 +57,8 @@ export type ChecklistIngreso = {
   boton_silencio_ok: boolean | null;
   boton_power_ok: boolean | null;
   boton_volumen_ok: boolean | null;
+  pin_carga_ok: boolean | null;
+  carga_magsafe_ok: boolean | null;
   biometria_ok: boolean | null;
   conectores_ok: boolean | null;
   humedad: boolean | null;
@@ -79,6 +81,8 @@ export const ITEMS_CHECKLIST_INGRESO: { campo: keyof ChecklistIngreso; label: st
   { campo: 'boton_silencio_ok', label: 'Botón silencio' },
   { campo: 'boton_power_ok', label: 'Botón Power' },
   { campo: 'boton_volumen_ok', label: 'Botón Volumen' },
+  { campo: 'pin_carga_ok', label: 'Pin de carga' },
+  { campo: 'carga_magsafe_ok', label: 'Carga MagSafe' },
 ];
 
 // Cosas que NO se pueden probar si el módulo no anda → se deshabilitan/anulan
