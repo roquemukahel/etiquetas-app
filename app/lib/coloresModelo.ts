@@ -56,6 +56,18 @@ const IPHONE_14: ModeloColores = {
     { nombre: 'Azul', archivo: 'celeste', hex: '#a7c0d8' },
     { nombre: 'Púrpura', archivo: 'morado', hex: '#e6ddef' },
     { nombre: 'Product Red', archivo: 'rojo', hex: '#d02b2b' },
+    { nombre: 'Amarillo', archivo: 'amarillo', hex: '#f5d33f' },
+  ],
+};
+
+// iPhone 8 Plus — colores oficiales de Apple.
+const IPHONE_8_PLUS: ModeloColores = {
+  carpeta: 'iphone-8-plus',
+  colores: [
+    { nombre: 'Gris espacial', archivo: 'negro', hex: '#3b3a38' },
+    { nombre: 'Plata', archivo: 'blanco', hex: '#e8e8e6' },
+    { nombre: 'Oro', archivo: 'oro', hex: '#eecfc0' },
+    { nombre: 'Product Red', archivo: 'rojo', hex: '#c41e2a' },
   ],
 };
 
@@ -140,6 +152,7 @@ const IPHONE_17_PRO: ModeloColores = {
 
 // Clave de modelo normalizada: "iPhone 11", "iphone 11", "iPhone11" -> "iphone11".
 const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
+  iphone8plus: IPHONE_8_PLUS,
   iphone11: IPHONE_11,
   iphone12: IPHONE_12,
   iphone13: IPHONE_13,
