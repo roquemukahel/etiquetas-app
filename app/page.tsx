@@ -127,6 +127,8 @@ export default async function Home() {
       { count: countComprasPendientes },
       { count: countSinPrecio },
       { data: auditoriaReciente },
+      { data: vendedoresLista },
+      { data: tecnicosLista },
     ] = await Promise.all([
       supabase.from('dispositivos').select('id', { count: 'exact', head: true }).eq('en_stock', true),
       supabase.from('ordenes').select('id', { count: 'exact', head: true }).eq('estado', 'pendiente'),
@@ -190,6 +192,10 @@ export default async function Home() {
         .select('actor_nombre, accion, created_at')
         .order('created_at', { ascending: false })
         .limit(12),
+      // La auditoría guarda solo el nombre del actor, no su foto. Cruzamos por
+      // nombre con vendedores/técnicos para mostrar el avatar real en el feed.
+      supabase.from('vendedores').select('nombre, foto_url'),
+      supabase.from('tecnicos').select('nombre, foto_url'),
     ]);
     enStock = countStock ?? 0;
     pendientes = countPendientes ?? 0;
@@ -301,6 +307,14 @@ export default async function Home() {
       });
     }
 
+    const mapaFotoActor = new Map<string, string>();
+    for (const v of (vendedoresLista as any[]) ?? []) {
+      if (v.nombre && v.foto_url) mapaFotoActor.set(v.nombre.trim().toLowerCase(), v.foto_url);
+    }
+    for (const t of (tecnicosLista as any[]) ?? []) {
+      if (t.nombre && t.foto_url) mapaFotoActor.set(t.nombre.trim().toLowerCase(), t.foto_url);
+    }
+
     for (const a of (auditoriaReciente as any[]) ?? []) {
       const accion = (a.accion ?? '').trim();
       if (!accion) continue;
@@ -312,7 +326,7 @@ export default async function Home() {
         // así que con el actor adelante queda "Roque eliminó un proveedor (X)".
         texto: `${a.actor_nombre ? `${a.actor_nombre} ` : ''}${accion}`,
         actorNombre: a.actor_nombre ?? null,
-        actorFoto: null,
+        actorFoto: a.actor_nombre ? mapaFotoActor.get(a.actor_nombre.trim().toLowerCase()) ?? null : null,
       });
     }
 
