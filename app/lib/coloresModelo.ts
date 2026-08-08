@@ -237,6 +237,59 @@ const IPHONE_7: ModeloColores = {
   ],
 };
 
+// iPhone 11 Pro / Pro Max (mismas imágenes).
+const IPHONE_11_PRO: ModeloColores = {
+  carpeta: 'iphone-11-pro',
+  colores: [
+    { nombre: 'Gris espacial', archivo: 'gris', hex: '#3b3a3c' },
+    { nombre: 'Plata', archivo: 'blanco', hex: '#e8e8e6' },
+    { nombre: 'Oro', archivo: 'gold', hex: '#f4e8d0' },
+    { nombre: 'Verde noche', archivo: 'verde', hex: '#4e5851' },
+  ],
+};
+
+// iPhone 13 Pro / Pro Max (mismas imágenes).
+const IPHONE_13_PRO: ModeloColores = {
+  carpeta: 'iphone-13-pro',
+  colores: [
+    { nombre: 'Grafito', archivo: 'grafito', hex: '#54524e' },
+    { nombre: 'Oro', archivo: 'oro', hex: '#f4e2c8' },
+    { nombre: 'Plata', archivo: 'plata', hex: '#e8e8e3' },
+    { nombre: 'Azul Sierra', archivo: 'azul', hex: '#a6c2d6' },
+    { nombre: 'Verde alpino', archivo: 'verde', hex: '#56645a' },
+  ],
+};
+
+// iPhone 16e.
+const IPHONE_16E: ModeloColores = {
+  carpeta: 'iphone-16e',
+  colores: [
+    { nombre: 'Negro', archivo: 'negro', hex: '#2f3033' },
+    { nombre: 'Blanco', archivo: 'blanco', hex: '#eef0ef' },
+  ],
+};
+
+// iPhone Air — nombres oficiales de Apple (2025).
+const IPHONE_AIR: ModeloColores = {
+  carpeta: 'iphone-air',
+  colores: [
+    { nombre: 'Negro espacial', archivo: 'negro', hex: '#35383b' },
+    { nombre: 'Blanco nube', archivo: 'blanco', hex: '#eef0ef' },
+    { nombre: 'Oro claro', archivo: 'oro', hex: '#e8dcc0' },
+    { nombre: 'Azul cielo', archivo: 'azul', hex: '#a9c6d8' },
+  ],
+};
+
+// iPhone 17e.
+const IPHONE_17E: ModeloColores = {
+  carpeta: 'iphone-17e',
+  colores: [
+    { nombre: 'Negro', archivo: 'negro', hex: '#2f3033' },
+    { nombre: 'Blanco', archivo: 'blanco', hex: '#eef0ef' },
+    { nombre: 'Rosa', archivo: 'rosa', hex: '#f0d4d8' },
+  ],
+};
+
 // Clave de modelo normalizada: "iPhone 11", "iphone 11", "iPhone11" -> "iphone11".
 const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   iphone7: IPHONE_7,
@@ -250,10 +303,14 @@ const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   iphone8: IPHONE_8,
   iphone8plus: IPHONE_8_PLUS,
   iphone11: IPHONE_11,
+  iphone11pro: IPHONE_11_PRO,
+  iphone11promax: IPHONE_11_PRO,
   iphone12: IPHONE_12,
   iphone12mini: IPHONE_12,
   iphone13: IPHONE_13,
   iphone13mini: IPHONE_13,
+  iphone13pro: IPHONE_13_PRO,
+  iphone13promax: IPHONE_13_PRO,
   iphone14: IPHONE_14,
   iphone14plus: IPHONE_14,
   iphone14pro: IPHONE_14_PRO,
@@ -266,9 +323,12 @@ const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   iphone16plus: IPHONE_16,
   iphone16pro: IPHONE_16_PRO,
   iphone16promax: IPHONE_16_PRO,
+  iphone16e: IPHONE_16E,
   iphone17: IPHONE_17,
   iphone17pro: IPHONE_17_PRO,
   iphone17promax: IPHONE_17_PRO,
+  iphone17e: IPHONE_17E,
+  iphoneair: IPHONE_AIR,
 };
 
 function claveModelo(modelo: string | null | undefined): string {
