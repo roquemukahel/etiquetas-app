@@ -189,6 +189,10 @@ export default function NuevaOrden() {
   const [derivarImei, setDerivarImei] = useState('');
   const [derivarMotivo, setDerivarMotivo] = useState('');
   const [derivarPrioritario, setDerivarPrioritario] = useState(false);
+  // El checklist de ingreso (enciende, módulo, etc.) pertenece al equipo del
+  // "+ Servicio técnico". Solo se copia a la reparación si lo que se deriva ES
+  // ese equipo — no si se deriva un dispositivo vendido (datos de otro equipo).
+  const [derivarDesdeTrabajo, setDerivarDesdeTrabajo] = useState(false);
 
   // Checklist de recepción para el equipo que se deja a reparar acá mismo
   // (venta directa, sin pasar por el circuito completo de Servicio
@@ -692,10 +696,12 @@ export default function NuevaOrden() {
           setDerivarColor(disp.color ?? '');
           setDerivarImei(disp.imei ?? '');
           setDerivarPrioritario(true);
+          setDerivarDesdeTrabajo(false);
         } else if (trabajoModelo.trim()) {
           setDerivarModelo(trabajoModelo.trim());
           setDerivarColor(trabajoColor.trim());
           setDerivarImei(trabajoImei.trim());
+          setDerivarDesdeTrabajo(true);
         }
       }
       return nuevo;
@@ -866,7 +872,9 @@ export default function NuevaOrden() {
       // falla (la boleta ya se hizo) — se avisa. Copia el checklist del equipo
       // si se cargó un "+ Servicio técnico".
       if (derivarActivo && derivarModelo.trim()) {
-        const ci = (checklistOrden ?? {}) as any;
+        // Solo se copia el checklist si lo derivado es el equipo del "+ Servicio
+        // técnico"; si es un dispositivo vendido, el checklist es de otro equipo.
+        const ci = (derivarDesdeTrabajo ? checklistOrden ?? {} : {}) as any;
         const { data: repNueva, error: repErr } = await supabase
           .from('reparaciones')
           .insert({
