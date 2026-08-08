@@ -654,17 +654,15 @@ function StatTile({
       className="qv-card group relative overflow-hidden rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-3.5 flex flex-col gap-2 hover:shadow-elevated hover:-translate-y-1 transition-all"
     >
       <span className={`absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r ${COLOR_ICONO[color]}`} />
-      <div className="flex items-center gap-2.5">
-        <IlustracionModulo
-          nombre={icono}
-          className="h-11 w-11 shrink-0 transition-transform duration-200 ease-out group-hover:-translate-y-0.5 group-hover:scale-[1.05] motion-reduce:transform-none motion-reduce:transition-none"
-        />
-        <div className="min-w-0">
-          <p className="text-2xl font-display font-semibold leading-none">
-            <NumeroAnimado valor={valor} />
-          </p>
-          <p className="text-[11px] text-muted dark:text-dark-text-secondary leading-tight mt-1 truncate">{etiqueta}</p>
-        </div>
+      <IlustracionModulo
+        nombre={icono}
+        className="h-11 w-11 shrink-0 transition-transform duration-200 ease-out group-hover:-translate-y-0.5 group-hover:scale-[1.05] motion-reduce:transform-none motion-reduce:transition-none"
+      />
+      <div>
+        <p className="text-2xl font-display font-semibold leading-none">
+          <NumeroAnimado valor={valor} />
+        </p>
+        <p className="text-[11px] text-muted dark:text-dark-text-secondary leading-tight mt-1">{etiqueta}</p>
       </div>
     </Link>
   );
