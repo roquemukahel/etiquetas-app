@@ -21,6 +21,8 @@ import { planesActivos, interesDe, valorCuota, etiquetaCuotas } from '../../lib/
 import { generarComisionesAccion } from '../../comisiones/acciones';
 import { ITEMS_CHECKLIST_INGRESO, CAMPOS_DEPENDEN_MODULO, generarTextoCondicionIngreso } from '../../lib/reparaciones';
 import SelectorColor from '../../SelectorColor';
+import SelectorColorImagen from '../../SelectorColorImagen';
+import { coloresDeModelo } from '../../lib/coloresModelo';
 import { limpiarImei } from '../../lib/imei';
 import MiniaturaDispositivo from '../../MiniaturaDispositivo';
 import CheckTri from '../../CheckTri';
@@ -1214,7 +1216,14 @@ export default function NuevaOrden() {
             </div>
             <div>
               <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Color del equipo (opcional)</label>
-              <SelectorColor value={trabajoColor} onChange={setTrabajoColor} />
+              {(() => {
+                const ci = coloresDeModelo(trabajoModelo);
+                return ci ? (
+                  <SelectorColorImagen colores={ci} value={trabajoColor} onChange={setTrabajoColor} />
+                ) : (
+                  <SelectorColor value={trabajoColor} onChange={setTrabajoColor} />
+                );
+              })()}
             </div>
 
             <div className="flex flex-col gap-2 border-t border-border dark:border-dark-border pt-3">
@@ -1783,19 +1792,24 @@ export default function NuevaOrden() {
                 </button>
               ))}
             </div>
+            {coloresDeModelo(canjeModelo) && (
+              <SelectorColorImagen colores={coloresDeModelo(canjeModelo)!} value={canjeColor} onChange={setCanjeColor} />
+            )}
             <div className="flex gap-2">
-              <input
-                value={canjeColor}
-                onChange={(e) => setCanjeColor(e.target.value)}
-                placeholder="Color"
-                className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
-              />
+              {!coloresDeModelo(canjeModelo) && (
+                <input
+                  value={canjeColor}
+                  onChange={(e) => setCanjeColor(e.target.value)}
+                  placeholder="Color"
+                  className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                />
+              )}
               <input
                 value={canjeBateria}
                 onChange={(e) => setCanjeBateria(e.target.value)}
                 placeholder="Batería %"
                 inputMode="numeric"
-                className="w-24 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
               />
             </div>
             <input

@@ -15,7 +15,7 @@ export default function SelectorColorImagen({
   value: string;
   onChange: (v: string) => void;
 }) {
-  const elegido = value.trim().toLowerCase();
+  const elegido = (value ?? '').trim().toLowerCase();
   return (
     <div className="flex flex-wrap gap-2 sm:gap-2.5">
       {colores.map((c, i) => {

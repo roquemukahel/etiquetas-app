@@ -10,6 +10,8 @@ import { registrarAuditoria } from '../../lib/auditoria';
 import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import SelectorColor from '../../SelectorColor';
+import SelectorColorImagen from '../../SelectorColorImagen';
+import { coloresDeModelo } from '../../lib/coloresModelo';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 const ESTADOS = ['usado', 'sellado'];
@@ -259,7 +261,14 @@ export default function DetalleDispositivo() {
         />
         <div>
           <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Color</label>
-          <SelectorColor value={d.color ?? ''} onChange={(v) => campo('color', v)} />
+          {(() => {
+            const ci = coloresDeModelo(d.modelo);
+            return ci ? (
+              <SelectorColorImagen colores={ci} value={d.color ?? ''} onChange={(v) => campo('color', v)} />
+            ) : (
+              <SelectorColor value={d.color ?? ''} onChange={(v) => campo('color', v)} />
+            );
+          })()}
         </div>
         <Campo
           label="Precio"
