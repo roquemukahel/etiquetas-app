@@ -658,7 +658,10 @@ export default function DetalleOrden() {
 
   const handleCancelar = async () => {
     if (!orden || !puedeEliminar) return;
-    if (!confirm('¿Cancelar esta orden? Los dispositivos vuelven a aparecer en stock.')) return;
+    const mensaje = yaDerivado
+      ? '¿Eliminar esta orden? También se va a borrar la reparación derivada en Servicio Técnico. Los dispositivos vendidos vuelven al stock. No se puede deshacer.'
+      : '¿Eliminar esta orden? Los dispositivos vendidos vuelven al stock. No se puede deshacer.';
+    if (!confirm(mensaje)) return;
     setGuardando(true);
     setError(null);
 
@@ -686,6 +689,12 @@ export default function DetalleOrden() {
     try {
       await revertirComisionesOrden(supabase, id, 'Venta cancelada', null);
     } catch {}
+    // Si esta orden derivó un equipo a Servicio Técnico, se borra también la
+    // reparación para que desaparezca de ahí (pedido del usuario). Se hace
+    // ANTES de borrar la orden: si el FK fuera "set null", después no se la
+    // podría encontrar por orden_origen_id. reparaciones_eventos se va en
+    // cascada. No rompe la eliminación de la orden si esto falla.
+    await supabase.from('reparaciones').delete().eq('orden_origen_id', id);
     const { error: deleteError } = await supabase.from('ordenes').delete().eq('id', id);
     if (deleteError) {
       setError('No pudimos cancelar la orden: ' + deleteError.message);
@@ -1266,7 +1275,7 @@ export default function DetalleOrden() {
           onClick={handleCancelar}
           className="mt-auto w-full rounded-2xl border border-bad/30 py-3 text-center text-sm font-medium text-bad disabled:opacity-40"
         >
-          Cancelar orden
+          Eliminar orden
         </button>
       )}
     </main>
