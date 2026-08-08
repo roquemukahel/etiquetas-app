@@ -120,6 +120,11 @@ export default function DetalleOrden() {
 
   const [orden, setOrden] = useState<Orden | null>(null);
   const [canjes, setCanjes] = useState<Canje[]>([]);
+  // Los canjes se cargan DESPUÉS de la orden. Este flag evita abrir la edición
+  // (sobre todo el auto-abrir con ?editar=1) antes de tenerlos: si no, la
+  // edición arrancaría con la lista de canjes vacía y al guardar los borraría
+  // por creer que el usuario los quitó.
+  const [canjesCargados, setCanjesCargados] = useState(false);
   const [loading, setLoading] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -174,7 +179,6 @@ export default function DetalleOrden() {
       .eq('id', id)
       .single();
     setOrden(data as any);
-    setLoading(false);
     const { data: reparacionExistente } = await supabase.from('reparaciones').select('id').eq('orden_origen_id', id).maybeSingle();
     setYaDerivado(!!reparacionExistente);
     setReparacionDerivadaId((reparacionExistente as any)?.id ?? null);
@@ -185,6 +189,10 @@ export default function DetalleOrden() {
       .eq('estado', 'en_canje')
       .order('created_at');
     setCanjes((canjesData as Canje[]) ?? []);
+    setCanjesCargados(true);
+    // Recién acá se apaga el "Cargando…": así ni el auto-abrir ni el botón
+    // "Editar" pueden arrancar la edición sin los canjes ya cargados.
+    setLoading(false);
   };
 
   useEffect(() => {
@@ -341,12 +349,12 @@ export default function DetalleOrden() {
   // detalle de solo lectura.
   const abrioEdicionDesdeQuery = useRef(false);
   useEffect(() => {
-    if (orden && !abrioEdicionDesdeQuery.current && new URLSearchParams(window.location.search).get('editar') === '1') {
+    if (orden && canjesCargados && !abrioEdicionDesdeQuery.current && new URLSearchParams(window.location.search).get('editar') === '1') {
       abrioEdicionDesdeQuery.current = true;
       empezarEdicion();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orden]);
+  }, [orden, canjesCargados]);
 
   const actualizarItemEdit = (
     itemId: string,
