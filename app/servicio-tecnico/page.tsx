@@ -8,6 +8,7 @@ import { limpiarImei } from '../lib/imei';
 import { armarLinkWhatsApp, mensajeSeguimientoServicio, mensajeListoServicio } from '../lib/whatsapp';
 import { codigoLlamada } from '../lib/paises';
 import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../lib/carpetas';
+import { imagenColorDeModelo } from '../lib/coloresModelo';
 import { registrarAuditoria } from '../lib/auditoria';
 import { getActor, useActor, MENSAJE_ACTOR_REQUERIDO } from '../lib/actor';
 import { tienePermiso } from '../lib/permisos';
@@ -1026,7 +1027,7 @@ function TarjetaReparacion({
   return (
     <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex flex-col gap-2">
       <div className="flex items-start gap-3">
-        <MiniaturaDispositivo src={imagenPorNombreExacto(r.modelo, imagenesCarpetas)} />
+        <MiniaturaDispositivo src={imagenColorDeModelo(r.modelo, r.color) ?? imagenPorNombreExacto(r.modelo, imagenesCarpetas)} />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium truncate">
             {r.numero_orden} · {r.modelo}
