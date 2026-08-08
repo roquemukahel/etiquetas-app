@@ -46,11 +46,77 @@ const IPHONE_13: ModeloColores = {
   ],
 };
 
+// iPhone 14 (render angulado sobre fondo claro). Falta Amarillo (Apple lo
+// agregó en 2023): cuando haya imagen se suma.
+const IPHONE_14: ModeloColores = {
+  carpeta: 'iphone-14',
+  colores: [
+    { nombre: 'Medianoche', archivo: 'negro', hex: '#232a2f' },
+    { nombre: 'Blanco estrella', archivo: 'blanco', hex: '#f4f0e8' },
+    { nombre: 'Azul', archivo: 'celeste', hex: '#a7c0d8' },
+    { nombre: 'Púrpura', archivo: 'morado', hex: '#e6ddef' },
+    { nombre: 'Product Red', archivo: 'rojo', hex: '#d02b2b' },
+  ],
+};
+
+// iPhone 14 Pro / Pro Max (mismas imágenes para los dos, a pedido del usuario).
+const IPHONE_14_PRO: ModeloColores = {
+  carpeta: 'iphone-14-pro',
+  colores: [
+    { nombre: 'Negro espacial', archivo: 'gris', hex: '#35383b' },
+    { nombre: 'Plata', archivo: 'blanco', hex: '#eef1f1' },
+    { nombre: 'Oro', archivo: 'gold', hex: '#f7e7c8' },
+    { nombre: 'Púrpura oscuro', archivo: 'morado', hex: '#4b455a' },
+  ],
+};
+
+// iPhone 15 — nombres simples de Apple.
+const IPHONE_15: ModeloColores = {
+  carpeta: 'iphone-15',
+  colores: [
+    { nombre: 'Negro', archivo: 'negro', hex: '#2f3033' },
+    { nombre: 'Azul', archivo: 'azul', hex: '#bcd0d4' },
+    { nombre: 'Verde', archivo: 'verde', hex: '#cdd6cc' },
+    { nombre: 'Amarillo', archivo: 'amarillo', hex: '#efe6c9' },
+    { nombre: 'Rosa', archivo: 'rosa', hex: '#f0d4d8' },
+  ],
+};
+
+// iPhone 15 Pro / Pro Max (mismas imágenes para los dos).
+const IPHONE_15_PRO: ModeloColores = {
+  carpeta: 'iphone-15-pro',
+  colores: [
+    { nombre: 'Titanio negro', archivo: 'titanionegro', hex: '#3b3b3d' },
+    { nombre: 'Titanio blanco', archivo: 'titanioblanco', hex: '#e8e8e3' },
+    { nombre: 'Titanio azul', archivo: 'titanioazul', hex: '#3f4c5a' },
+    { nombre: 'Titanio natural', archivo: 'titanionatural', hex: '#8f8a80' },
+  ],
+};
+
+// iPhone 16 — nombres oficiales de Apple (Ultramar, Verde azulado, etc.).
+const IPHONE_16: ModeloColores = {
+  carpeta: 'iphone-16',
+  colores: [
+    { nombre: 'Negro', archivo: 'negro', hex: '#35393b' },
+    { nombre: 'Blanco', archivo: 'blanco', hex: '#eef0ef' },
+    { nombre: 'Rosa', archivo: 'rosa', hex: '#f4d9dd' },
+    { nombre: 'Verde azulado', archivo: 'verde', hex: '#a8c4c0' },
+    { nombre: 'Ultramar', archivo: 'azul', hex: '#4a4fb0' },
+  ],
+};
+
 // Clave de modelo normalizada: "iPhone 11", "iphone 11", "iPhone11" -> "iphone11".
 const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   iphone11: IPHONE_11,
   iphone12: IPHONE_12,
   iphone13: IPHONE_13,
+  iphone14: IPHONE_14,
+  iphone14pro: IPHONE_14_PRO,
+  iphone14promax: IPHONE_14_PRO,
+  iphone15: IPHONE_15,
+  iphone15pro: IPHONE_15_PRO,
+  iphone15promax: IPHONE_15_PRO,
+  iphone16: IPHONE_16,
 };
 
 function claveModelo(modelo: string | null | undefined): string {
