@@ -62,6 +62,7 @@ type Reparacion = { tecnico_id: string | null; fecha_reparado: string };
 type IngresoServicio = { cliente_id: string | null; fecha_ingreso_servicio: string };
 type DispositivoCompra = { proveedor_id: string | null; costo: number | null; created_at: string };
 type CompraManual = { proveedor_id: string; cantidad: number; precio_unitario: number | null; created_at: string };
+type StockR = { modelo: string | null; precio: number | null; costo: number | null; en_stock_desde: string | null };
 
 const KEY_OCULTAR = 'qovento:analitica-ocultar-montos';
 
@@ -101,10 +102,13 @@ export default function Estadisticas() {
   const [credito, setCredito] = useState<CreditoR[]>([]);
   const [porCobrar, setPorCobrar] = useState(0);
   const [vencidoTotal, setVencidoTotal] = useState(0);
+  const [deudores, setDeudores] = useState(0);
   const [reparaciones, setReparaciones] = useState<Reparacion[]>([]);
   const [ingresosServicio, setIngresosServicio] = useState<IngresoServicio[]>([]);
   const [comprasProveedor, setComprasProveedor] = useState<DispositivoCompra[]>([]);
   const [comprasManuales, setComprasManuales] = useState<CompraManual[]>([]);
+  // Stock ACTUAL (foto de hoy, no depende del período): capital, antigüedad, por modelo.
+  const [stock, setStock] = useState<StockR[]>([]);
   const [moneda, setMoneda] = useState('$');
   const [loading, setLoading] = useState(true);
   const [actualizado, setActualizado] = useState<Date | null>(null);
@@ -154,6 +158,7 @@ export default function Estadisticas() {
         { data: pagosData },
         { data: creditoData },
         { data: saldosData },
+        { data: stockData },
       ] = await Promise.all([
         supabase.from('perfiles').select('negocios ( nombre, moneda )').eq('id', user.id).single(),
         supabase.from('vendedores').select('id, nombre, foto_url').order('nombre'),
@@ -180,6 +185,7 @@ export default function Estadisticas() {
         supabase.from('pagos').select('medio, monto, fecha').eq('anulado', false).gte('fecha', desde.toISOString()),
         supabase.from('cta_cte_movimientos').select('concepto, tipo, monto, fecha').eq('anulado', false).gte('fecha', desde.toISOString()),
         supabase.rpc('saldos_cuenta_corriente'),
+        supabase.from('dispositivos').select('modelo, precio, costo, en_stock_desde').eq('en_stock', true),
       ]);
 
       const negocio = (perfil as any)?.negocios;
@@ -194,11 +200,13 @@ export default function Estadisticas() {
       setIngresosServicio((ing as IngresoServicio[]) ?? []);
       setComprasProveedor((compras as DispositivoCompra[]) ?? []);
       setComprasManuales((comprasManual as CompraManual[]) ?? []);
+      setStock((stockData as StockR[]) ?? []);
       setPagos((pagosData as PagoR[]) ?? []);
       setCredito((creditoData as CreditoR[]) ?? []);
       const saldos = (saldosData as { saldo: number; vencido: number }[]) ?? [];
       setPorCobrar(saldos.reduce((acc, s) => acc + Math.max(0, Number(s.saldo) || 0), 0));
       setVencidoTotal(saldos.reduce((acc, s) => acc + Math.max(0, Number(s.vencido) || 0), 0));
+      setDeudores(saldos.filter((s) => (Number(s.saldo) || 0) > 0).length);
 
       // Nombres SOLO de los clientes que aparecen en órdenes/servicio (no los
       // miles). Un pedido acotado por ids en vez de traer toda la tabla.
@@ -252,6 +260,12 @@ export default function Estadisticas() {
   const serie = useMemo(
     () => serieEvolucion(ordenes, itemsPorOrden, pagos, rango, metricaChart),
     [ordenes, itemsPorOrden, pagos, rango, metricaChart]
+  );
+  // Serie fija de "dinero ingresado" (para la pestaña Caja, sin depender del
+  // selector de métrica del Resumen).
+  const serieIngresado = useMemo(
+    () => serieEvolucion(ordenes, itemsPorOrden, pagos, rango, 'ingresado'),
+    [ordenes, itemsPorOrden, pagos, rango]
   );
 
   const ticket = actualB.operaciones > 0 ? actualB.ventas / actualB.operaciones : 0;
@@ -338,6 +352,66 @@ export default function Estadisticas() {
       .sort((a, b) => b.valor - a.valor);
   }, [comprasProveedor, comprasManuales, proveedores, inicio]);
 
+  // --- Derivados por pestaña ---
+  const pctFiado = actualB.ventas > 0 ? actualB.credito / actualB.ventas : 0;
+  const contado = Math.max(0, actualB.ventas - actualB.credito);
+
+  const comprasPeriodo = useMemo(() => {
+    const disp = comprasProveedor.filter((d) => new Date(d.created_at) >= inicio).reduce((a, d) => a + (d.costo || 0), 0);
+    const man = comprasManuales.filter((c) => new Date(c.created_at) >= inicio).reduce((a, c) => a + (c.precio_unitario || 0) * c.cantidad, 0);
+    const cant = comprasProveedor.filter((d) => new Date(d.created_at) >= inicio).length + comprasManuales.filter((c) => new Date(c.created_at) >= inicio).reduce((a, c) => a + c.cantidad, 0);
+    return { total: disp + man, cantidad: cant };
+  }, [comprasProveedor, comprasManuales, inicio]);
+
+  const servicioIngresados = useMemo(() => ingresosServicio.filter((i) => new Date(i.fecha_ingreso_servicio) >= inicio).length, [ingresosServicio, inicio]);
+  const servicioReparados = useMemo(() => reparaciones.filter((r) => new Date(r.fecha_reparado) >= inicio).length, [reparaciones, inicio]);
+
+  const clientesQueCompraron = useMemo(() => new Set(ordenesPeriodo.map((o) => o.cliente_id).filter(Boolean)).size, [ordenesPeriodo]);
+  const opsSinCliente = useMemo(() => ordenesPeriodo.filter((o) => !o.cliente_id).length, [ordenesPeriodo]);
+
+  // Tabla de rendimiento por vendedor (ventas · operaciones · ticket).
+  const tablaVendedores = useMemo(() => {
+    const mapa = new Map<string, { ventas: number; ops: number }>();
+    for (const o of ordenesPeriodo) {
+      const k = o.vendedor_id ?? '-';
+      const e = mapa.get(k) ?? { ventas: 0, ops: 0 };
+      e.ventas += montoVenta(o);
+      e.ops += 1;
+      mapa.set(k, e);
+    }
+    return Array.from(mapa.entries())
+      .map(([id, e]) => ({
+        nombre: nombreDe(vendedores, id === '-' ? null : id, 'Vendedor'),
+        fotoUrl: fotoDe(vendedores, id === '-' ? null : id),
+        ventas: e.ventas,
+        ops: e.ops,
+        ticket: e.ops > 0 ? e.ventas / e.ops : 0,
+      }))
+      .sort((a, b) => b.ventas - a.ventas);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ordenesPeriodo, vendedores]);
+
+  // Stock actual (snapshot de hoy — no depende del período).
+  const stockResumen = useMemo(() => {
+    const hace30 = new Date(ahora);
+    hace30.setDate(hace30.getDate() - 30);
+    return {
+      unidades: stock.length,
+      capitalPrecio: stock.reduce((a, d) => a + (d.precio || 0), 0),
+      capitalCosto: stock.reduce((a, d) => a + (d.costo || 0), 0),
+      quietos: stock.filter((d) => d.en_stock_desde && new Date(d.en_stock_desde) <= hace30).length,
+      sinPrecio: stock.filter((d) => d.precio == null).length,
+    };
+  }, [stock, ahora]);
+  const stockPorModelo: Dato[] = useMemo(() => {
+    const mapa = new Map<string, number>();
+    for (const d of stock) mapa.set(d.modelo || 'Sin modelo', (mapa.get(d.modelo || 'Sin modelo') ?? 0) + 1);
+    return Array.from(mapa.entries())
+      .map(([nombre, valor]) => ({ nombre, valor }))
+      .sort((a, b) => b.valor - a.valor)
+      .slice(0, 10);
+  }, [stock]);
+
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center">
@@ -365,6 +439,206 @@ export default function Estadisticas() {
     { key: 'ingresado', label: 'Dinero ingresado' },
     ...(puedeVerCostos ? ([{ key: 'ganancia', label: 'Ganancia' }] as const) : []),
   ];
+
+  const etiquetaPeriodo = ETIQUETA_PERIODO[periodo];
+  const graficoOculto = (
+    <EmptyState icono="🙈" titulo="Montos ocultos" texto="Tocá 'Mostrar montos' arriba para ver el gráfico." />
+  );
+
+  // Filtros de período + comparación (aplican a todas las pestañas salvo Stock,
+  // que es una foto del inventario de hoy).
+  const filtros = (
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <SegmentedChips valor={periodo} opciones={PERIODOS} onChange={setPeriodo} />
+      <label className="flex items-center gap-2 text-xs text-muted dark:text-dark-text-secondary cursor-pointer">
+        <input type="checkbox" checked={comparar} onChange={(e) => setComparar(e.target.checked)} className="h-4 w-4 accent-ink" />
+        Comparar con {ETIQUETA_PERIODO_ANT[periodo]}
+      </label>
+    </div>
+  );
+
+  const varSi = (a: number, b: number) => (comparar ? variacion(a, b) : undefined);
+
+  function renderContenido() {
+    switch (tab) {
+      case 'ventas':
+        return (
+          <>
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+              <StatCard etiqueta="Ventas netas" valor={m(actualB.ventas)} tooltip="Todo lo que facturaste en el período (incluye lo vendido a cuenta corriente/fiado)." variacion={varSi(actualB.ventas, prevB.ventas)} moneda={moneda} sensible oculto={ocultarMontos} />
+              <StatCard etiqueta="Operaciones" valor={actualB.operaciones.toLocaleString('es-AR')} tooltip="Cantidad de ventas cobradas en el período." variacion={varSi(actualB.operaciones, prevB.operaciones)} />
+              <StatCard etiqueta="Ticket promedio" valor={m(ticket)} tooltip="Promedio facturado por operación (ventas ÷ operaciones)." variacion={varSi(ticket, ticketPrev)} moneda={moneda} sensible oculto={ocultarMontos} />
+              <StatCard etiqueta="Unidades vendidas" valor={actualB.unidades.toLocaleString('es-AR')} tooltip="Dispositivos y productos vendidos en el período." variacion={varSi(actualB.unidades, prevB.unidades)} />
+              <StatCard etiqueta="Vendido al contado" valor={m(contado)} tooltip="Ventas del período que NO se financiaron en cuenta corriente." moneda={moneda} tono="text-good" sensible oculto={ocultarMontos} />
+              <StatCard etiqueta="Vendido a crédito" valor={m(actualB.credito)} tooltip="Ventas que quedaron fiadas (cuenta corriente) en el período." moneda={moneda} tono={actualB.credito > 0 ? 'text-warn' : undefined} sensible oculto={ocultarMontos}>
+                {!ocultarMontos && actualB.ventas > 0 && <span className="text-[11px] text-muted dark:text-dark-text-secondary">{Math.round(pctFiado * 100)}% de las ventas</span>}
+              </StatCard>
+            </div>
+            <SeccionCard titulo="Evolución de ventas" subtitulo={comparar ? `Línea llena: ${etiquetaPeriodo}. Punteada: ${ETIQUETA_PERIODO_ANT[periodo]}.` : undefined} accion={<SegmentedChips size="sm" valor={metricaChart} opciones={metricasChart} onChange={setMetricaChart} />}>
+              {ocultarMontos ? graficoOculto : <LineAreaChart puntos={serie} moneda={moneda} compararActivo={comparar} />}
+            </SeccionCard>
+            <div className="grid md:grid-cols-2 gap-4">
+              <SeccionCard titulo="Ranking de vendedores" accion={<VistaToggle vista={vistaVendedores} onVista={setVistaVendedores} />}>
+                {vistaVendedores === 'barras' ? <RankingBarras datos={rankingVendedores} moneda={moneda} oculto={ocultarMontos} /> : <RankingTorta datos={rankingVendedores} moneda={moneda} oculto={ocultarMontos} />}
+              </SeccionCard>
+              <SeccionCard titulo="Mejores compradores" accion={<VistaToggle vista={vistaCompradores} onVista={setVistaCompradores} />}>
+                {vistaCompradores === 'barras' ? <RankingBarras datos={rankingCompradores} moneda={moneda} oculto={ocultarMontos} /> : <RankingTorta datos={rankingCompradores} moneda={moneda} oculto={ocultarMontos} />}
+              </SeccionCard>
+            </div>
+          </>
+        );
+
+      case 'caja':
+        return (
+          <>
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+              <StatCard etiqueta="Dinero ingresado" valor={m(actualB.ingresado)} tooltip="La plata que realmente entró a la caja en el período (incluye cobros de ventas anteriores fiadas)." variacion={varSi(actualB.ingresado, prevB.ingresado)} moneda={moneda} tono="text-good" sensible oculto={ocultarMontos} />
+              <StatCard etiqueta="Medios de pago" valor={cajaPorMedio.length.toLocaleString('es-AR')} tooltip="Cantidad de formas de pago distintas usadas en el período." />
+              <StatCard etiqueta="Vendido a crédito" valor={m(actualB.credito)} tooltip="Lo que se sumó a cuentas corrientes en el período (todavía no entró a la caja)." moneda={moneda} tono={actualB.credito > 0 ? 'text-warn' : undefined} sensible oculto={ocultarMontos} />
+            </div>
+            <SeccionCard titulo="Evolución del dinero ingresado" subtitulo={comparar ? `Línea llena: ${etiquetaPeriodo}. Punteada: ${ETIQUETA_PERIODO_ANT[periodo]}.` : undefined}>
+              {ocultarMontos ? graficoOculto : <LineAreaChart puntos={serieIngresado} moneda={moneda} compararActivo={comparar} />}
+            </SeccionCard>
+            <SeccionCard titulo="Caja por medio de pago" accion={<VistaToggle vista={vistaFormaPago} onVista={setVistaFormaPago} />}>
+              {cajaPorMedio.length === 0 ? (
+                <EmptyState titulo="Sin cobros en el período" texto="Cuando registres pagos, vas a ver acá cómo se reparten por medio." />
+              ) : vistaFormaPago === 'barras' ? (
+                <RankingBarras datos={cajaPorMedio} moneda={moneda} oculto={ocultarMontos} />
+              ) : (
+                <RankingTorta datos={cajaPorMedio} moneda={moneda} oculto={ocultarMontos} />
+              )}
+            </SeccionCard>
+          </>
+        );
+
+      case 'cobrar':
+        return (
+          <>
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+              <StatCard etiqueta="Saldo por cobrar" valor={m(porCobrar)} tooltip="Lo que hoy te deben tus clientes en total (deuda actual, no del período)." tono={vencidoTotal > 0 ? 'text-warn' : undefined} sensible oculto={ocultarMontos} />
+              <StatCard etiqueta="Vencido" valor={m(vencidoTotal)} tooltip="De lo que te deben, cuánto ya pasó su fecha de vencimiento." tono={vencidoTotal > 0 ? 'text-bad' : undefined} sensible oculto={ocultarMontos} />
+              <StatCard etiqueta="Fiado en el período" valor={m(actualB.credito)} tooltip="Cuánto sumaste a cuentas corrientes en el período elegido." variacion={varSi(actualB.credito, prevB.credito)} positivoEsBueno={false} moneda={moneda} sensible oculto={ocultarMontos} />
+            </div>
+            <SeccionCard titulo="Cuentas por cobrar">
+              <div className="flex flex-col gap-3">
+                <p className="text-sm text-muted dark:text-dark-text-secondary">
+                  {ocultarMontos
+                    ? 'Tocá "Mostrar montos" arriba para ver los saldos por cobrar.'
+                    : vencidoTotal > 0
+                      ? `Tenés ${m(vencidoTotal)} vencidos sobre ${m(porCobrar)} por cobrar. Conviene reclamar los vencidos primero.`
+                      : porCobrar > 0
+                        ? `Te deben ${m(porCobrar)} en total y no hay saldo vencido. Todo al día.`
+                        : 'No hay saldos pendientes de cobro.'}
+                </p>
+                <Link href="/cuentas-por-cobrar" className="self-start rounded-xl bg-accent dark:bg-dark-accent text-white text-sm font-medium px-4 py-2 hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors">
+                  Ver quién te debe →
+                </Link>
+              </div>
+            </SeccionCard>
+          </>
+        );
+
+      case 'stock':
+        return (
+          <>
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+              <StatCard etiqueta="Equipos en stock" valor={stockResumen.unidades.toLocaleString('es-AR')} tooltip="Dispositivos disponibles para vender ahora mismo." />
+              <StatCard etiqueta="Capital en stock" valor={m(stockResumen.capitalPrecio)} tooltip="Suma de los precios de venta de todo el stock actual." moneda={moneda} sensible oculto={ocultarMontos} />
+              {puedeVerCostos && <StatCard etiqueta="Capital a costo" valor={m(stockResumen.capitalCosto)} tooltip="Lo que te costó el stock que tenés (a precio de compra)." moneda={moneda} sensible oculto={ocultarMontos} />}
+              <StatCard etiqueta="Parados +30 días" valor={stockResumen.quietos.toLocaleString('es-AR')} tooltip="Equipos que llevan más de 30 días sin venderse." tono={stockResumen.quietos > 0 ? 'text-warn' : undefined} />
+              <StatCard etiqueta="Sin precio" valor={stockResumen.sinPrecio.toLocaleString('es-AR')} tooltip="Equipos cargados sin precio de venta (no se pueden vender así)." tono={stockResumen.sinPrecio > 0 ? 'text-warn' : undefined} />
+            </div>
+            <SeccionCard titulo="Stock por modelo" subtitulo="Foto del inventario de hoy (no depende del período).">
+              {stockPorModelo.length === 0 ? <EmptyState titulo="Sin equipos en stock" /> : <RankingBarras datos={stockPorModelo} sufijo=" equipo(s)" />}
+            </SeccionCard>
+          </>
+        );
+
+      case 'servicio':
+        return (
+          <>
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+              <StatCard etiqueta="Equipos ingresados" valor={servicioIngresados.toLocaleString('es-AR')} tooltip="Equipos que entraron a Servicio Técnico en el período." />
+              <StatCard etiqueta="Equipos reparados" valor={servicioReparados.toLocaleString('es-AR')} tooltip="Reparaciones terminadas en el período." tono="text-good" />
+              <StatCard etiqueta="Técnicos activos" valor={rankingTecnicos.length.toLocaleString('es-AR')} tooltip="Técnicos con al menos un arreglo terminado en el período." />
+            </div>
+            <div className="grid md:grid-cols-2 gap-4">
+              <SeccionCard titulo="Ranking de técnicos" accion={<VistaToggle vista={vistaTecnicos} onVista={setVistaTecnicos} />}>
+                {rankingTecnicos.length === 0 ? <EmptyState titulo="Sin reparaciones terminadas" /> : vistaTecnicos === 'barras' ? <RankingBarras datos={rankingTecnicos} sufijo=" arreglo(s)" /> : <RankingTorta datos={rankingTecnicos} sufijo=" arreglo(s)" />}
+              </SeccionCard>
+              <SeccionCard titulo="Clientes de servicio técnico" accion={<VistaToggle vista={vistaClientesServicio} onVista={setVistaClientesServicio} />}>
+                {rankingClientesServicio.length === 0 ? <EmptyState titulo="Sin ingresos de servicio" /> : vistaClientesServicio === 'barras' ? <RankingBarras datos={rankingClientesServicio} sufijo=" equipo(s)" /> : <RankingTorta datos={rankingClientesServicio} sufijo=" equipo(s)" />}
+              </SeccionCard>
+            </div>
+          </>
+        );
+
+      case 'clientes':
+        return (
+          <>
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+              <StatCard etiqueta="Clientes que compraron" valor={clientesQueCompraron.toLocaleString('es-AR')} tooltip="Clientes distintos con al menos una compra en el período." />
+              <StatCard etiqueta="Ventas sin cliente" valor={opsSinCliente.toLocaleString('es-AR')} tooltip="Operaciones del período que no quedaron asociadas a un cliente." tono={opsSinCliente > 0 ? 'text-warn' : undefined} />
+              <StatCard etiqueta="Clientes que deben" valor={deudores.toLocaleString('es-AR')} tooltip="Clientes con saldo pendiente en su cuenta corriente (a hoy)." tono={deudores > 0 ? 'text-warn' : undefined} />
+            </div>
+            <div className="grid md:grid-cols-2 gap-4">
+              <SeccionCard titulo="Mejores compradores" accion={<VistaToggle vista={vistaCompradores} onVista={setVistaCompradores} />}>
+                {rankingCompradores.length === 0 ? <EmptyState titulo="Sin compras en el período" /> : vistaCompradores === 'barras' ? <RankingBarras datos={rankingCompradores} moneda={moneda} oculto={ocultarMontos} /> : <RankingTorta datos={rankingCompradores} moneda={moneda} oculto={ocultarMontos} />}
+              </SeccionCard>
+              <SeccionCard titulo="Clientes de servicio técnico" accion={<VistaToggle vista={vistaClientesServicio} onVista={setVistaClientesServicio} />}>
+                {rankingClientesServicio.length === 0 ? <EmptyState titulo="Sin ingresos de servicio" /> : vistaClientesServicio === 'barras' ? <RankingBarras datos={rankingClientesServicio} sufijo=" equipo(s)" /> : <RankingTorta datos={rankingClientesServicio} sufijo=" equipo(s)" />}
+              </SeccionCard>
+            </div>
+          </>
+        );
+
+      case 'equipo':
+        return (
+          <>
+            <SeccionCard titulo="Rendimiento por vendedor" subtitulo={`Ventas de ${etiquetaPeriodo}.`}>
+              {tablaVendedores.length === 0 ? (
+                <EmptyState titulo="Sin ventas en el período" />
+              ) : (
+                <div className="flex flex-col divide-y divide-border dark:divide-dark-border">
+                  <div className="grid grid-cols-[1fr_auto_auto] gap-3 pb-2 text-[11px] font-medium text-muted dark:text-dark-text-secondary">
+                    <span>Vendedor</span>
+                    <span className="text-right w-20">Operac.</span>
+                    <span className="text-right w-28">Ventas</span>
+                  </div>
+                  {tablaVendedores.map((v, i) => (
+                    <div key={i} className="grid grid-cols-[1fr_auto_auto] gap-3 py-2 items-center text-sm">
+                      <span className="truncate">{v.nombre}</span>
+                      <span className="text-right w-20 tabular-nums">{v.ops.toLocaleString('es-AR')}</span>
+                      <span className="text-right w-28 tabular-nums font-medium">{ocultarMontos ? '••••' : m(v.ventas)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </SeccionCard>
+            <SeccionCard titulo="Ranking de técnicos" accion={<VistaToggle vista={vistaTecnicos} onVista={setVistaTecnicos} />}>
+              {rankingTecnicos.length === 0 ? <EmptyState titulo="Sin reparaciones terminadas" /> : vistaTecnicos === 'barras' ? <RankingBarras datos={rankingTecnicos} sufijo=" arreglo(s)" /> : <RankingTorta datos={rankingTecnicos} sufijo=" arreglo(s)" />}
+            </SeccionCard>
+          </>
+        );
+
+      case 'proveedores':
+        return (
+          <>
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+              <StatCard etiqueta="Comprado en el período" valor={m(comprasPeriodo.total)} tooltip="Total gastado en compras a proveedores (dispositivos + compras manuales) en el período." moneda={moneda} sensible oculto={ocultarMontos} />
+              <StatCard etiqueta="Unidades compradas" valor={comprasPeriodo.cantidad.toLocaleString('es-AR')} tooltip="Cantidad de equipos/ítems comprados a proveedores en el período." />
+              <StatCard etiqueta="Proveedores activos" valor={rankingProveedores.length.toLocaleString('es-AR')} tooltip="Proveedores a los que les compraste en el período." />
+            </div>
+            <SeccionCard titulo="Compras por proveedor" accion={<VistaToggle vista={vistaProveedores} onVista={setVistaProveedores} />}>
+              {rankingProveedores.length === 0 ? <EmptyState titulo="Sin compras en el período" texto="Cuando cargues compras a proveedores, vas a ver el detalle acá." /> : vistaProveedores === 'barras' ? <RankingBarras datos={rankingProveedores} moneda={moneda} oculto={ocultarMontos} /> : <RankingTorta datos={rankingProveedores} moneda={moneda} oculto={ocultarMontos} />}
+            </SeccionCard>
+          </>
+        );
+
+      default:
+        return null;
+    }
+  }
 
   return (
     <main className="flex min-h-screen flex-col px-4 sm:px-6 py-6 gap-5 max-w-[1360px] mx-auto w-full">
@@ -407,24 +681,11 @@ export default function Estadisticas() {
 
       <AnalyticsTabs valor={tab} tabs={TABS} onChange={setTab} />
 
-      {tab !== 'resumen' ? (
-        <SeccionCard titulo={TABS.find((t) => t.key === tab)?.label ?? ''}>
-          <EmptyState
-            icono="🚧"
-            titulo="En construcción"
-            texto="Esta sección va a tener su análisis dedicado en la próxima etapa. Por ahora, todo el resumen del negocio está en la pestaña Resumen."
-          />
-        </SeccionCard>
-      ) : (
+      {/* Filtros de período (no aplican a Stock, que es la foto de hoy). */}
+      {tab !== 'stock' && filtros}
+
+      {tab === 'resumen' ? (
         <>
-          {/* Filtros: período + comparar */}
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <SegmentedChips valor={periodo} opciones={PERIODOS} onChange={setPeriodo} />
-            <label className="flex items-center gap-2 text-xs text-muted dark:text-dark-text-secondary cursor-pointer">
-              <input type="checkbox" checked={comparar} onChange={(e) => setComparar(e.target.checked)} className="h-4 w-4 accent-ink" />
-              Comparar con {ETIQUETA_PERIODO_ANT[periodo]}
-            </label>
-          </div>
 
           {/* KPIs */}
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
@@ -503,27 +764,29 @@ export default function Estadisticas() {
           {/* Rankings (se conservan; se rediseñan en detalle en la próxima etapa) */}
           <div className="grid md:grid-cols-2 gap-4">
             <SeccionCard titulo="Ranking de vendedores" accion={<VistaToggle vista={vistaVendedores} onVista={setVistaVendedores} />}>
-              {vistaVendedores === 'barras' ? <RankingBarras datos={rankingVendedores} moneda={moneda} /> : <RankingTorta datos={rankingVendedores} moneda={moneda} />}
+              {vistaVendedores === 'barras' ? <RankingBarras datos={rankingVendedores} moneda={moneda} oculto={ocultarMontos} /> : <RankingTorta datos={rankingVendedores} moneda={moneda} oculto={ocultarMontos} />}
             </SeccionCard>
             <SeccionCard titulo="Caja por medio de pago" accion={<VistaToggle vista={vistaFormaPago} onVista={setVistaFormaPago} />}>
-              {vistaFormaPago === 'barras' ? <RankingBarras datos={cajaPorMedio} moneda={moneda} /> : <RankingTorta datos={cajaPorMedio} moneda={moneda} />}
+              {vistaFormaPago === 'barras' ? <RankingBarras datos={cajaPorMedio} moneda={moneda} oculto={ocultarMontos} /> : <RankingTorta datos={cajaPorMedio} moneda={moneda} oculto={ocultarMontos} />}
             </SeccionCard>
             <SeccionCard titulo="Ranking de técnicos" accion={<VistaToggle vista={vistaTecnicos} onVista={setVistaTecnicos} />}>
               {vistaTecnicos === 'barras' ? <RankingBarras datos={rankingTecnicos} sufijo=" arreglo(s)" /> : <RankingTorta datos={rankingTecnicos} sufijo=" arreglo(s)" />}
             </SeccionCard>
             <SeccionCard titulo="Mejores compradores" accion={<VistaToggle vista={vistaCompradores} onVista={setVistaCompradores} />}>
-              {vistaCompradores === 'barras' ? <RankingBarras datos={rankingCompradores} moneda={moneda} /> : <RankingTorta datos={rankingCompradores} moneda={moneda} />}
+              {vistaCompradores === 'barras' ? <RankingBarras datos={rankingCompradores} moneda={moneda} oculto={ocultarMontos} /> : <RankingTorta datos={rankingCompradores} moneda={moneda} oculto={ocultarMontos} />}
             </SeccionCard>
             <SeccionCard titulo="Clientes de servicio técnico" accion={<VistaToggle vista={vistaClientesServicio} onVista={setVistaClientesServicio} />}>
               {vistaClientesServicio === 'barras' ? <RankingBarras datos={rankingClientesServicio} sufijo=" equipo(s)" /> : <RankingTorta datos={rankingClientesServicio} sufijo=" equipo(s)" />}
             </SeccionCard>
             {rankingProveedores.length > 0 && (
               <SeccionCard titulo="Compras a proveedores" accion={<VistaToggle vista={vistaProveedores} onVista={setVistaProveedores} />}>
-                {vistaProveedores === 'barras' ? <RankingBarras datos={rankingProveedores} moneda={moneda} /> : <RankingTorta datos={rankingProveedores} moneda={moneda} />}
+                {vistaProveedores === 'barras' ? <RankingBarras datos={rankingProveedores} moneda={moneda} oculto={ocultarMontos} /> : <RankingTorta datos={rankingProveedores} moneda={moneda} oculto={ocultarMontos} />}
               </SeccionCard>
             )}
           </div>
         </>
+      ) : (
+        renderContenido()
       )}
     </main>
   );
