@@ -1206,7 +1206,7 @@ export default function NuevaOrden() {
                     </button>
                   ))}
                 </div>
-                <SelectorColorAuto modelo={nuevoModelo} value={nuevoColor} onChange={setNuevoColor} />
+                <SelectorColorAuto label="Color" modelo={nuevoModelo} value={nuevoColor} onChange={setNuevoColor} />
                 <input
                   value={nuevoImeiDispositivo}
                   onChange={(e) => setNuevoImeiDispositivo(e.target.value)}
