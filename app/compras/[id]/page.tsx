@@ -126,7 +126,11 @@ export default function DetalleCompra() {
     const { data: nueva, error: insertError } = await supabase
       .from('reparaciones')
       .insert({
-        cliente_id: compra.cliente_id,
+        // Sin cliente_id: al comprarlo, el equipo YA es del local (equipo propio,
+        // "🏬 Propio del local"), no de la persona a la que se lo compramos. Así,
+        // al repararlo, vuelve a NUESTRO stock en vez de figurar para entregar a
+        // un cliente. (A quién se le compró queda en la auditoría de abajo.)
+        cliente_id: null,
         modelo: compra.modelo,
         capacidad_gb: compra.capacidad_gb,
         imei: compra.imei,
