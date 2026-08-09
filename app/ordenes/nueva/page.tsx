@@ -1206,12 +1206,7 @@ export default function NuevaOrden() {
                     </button>
                   ))}
                 </div>
-                <input
-                  value={nuevoColor}
-                  onChange={(e) => setNuevoColor(e.target.value)}
-                  placeholder="Color"
-                  className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
-                />
+                <SelectorColorAuto modelo={nuevoModelo} value={nuevoColor} onChange={setNuevoColor} />
                 <input
                   value={nuevoImeiDispositivo}
                   onChange={(e) => setNuevoImeiDispositivo(e.target.value)}

@@ -6,40 +6,51 @@ import { tienePermiso } from './lib/permisos';
 
 // Ojo para ocultar el resumen financiero del inicio (los ingresos son sensibles:
 // no deberían quedar a la vista de un cliente en el mostrador).
+//  - Arranca SIEMPRE TAPADO al iniciar sesión (por privacidad).
 //  - Cualquiera puede OCULTARLO (tocar el ojo).
-//  - Solo un administrador puede volver a MOSTRARLO.
+//  - Solo un administrador puede MOSTRARLO, y ese "mostrado" dura únicamente la
+//    sesión del navegador (sessionStorage): al cerrar y volver a entrar, vuelve
+//    a estar tapado. Así nunca queda expuesto al iniciar sesión de nuevo.
 //  - Además, si el actor no tiene el permiso "ver estadísticas" (configurable
-//    por el dueño en Configuración > Vendedores), directamente no lo ve.
-// El estado de ocultar se guarda por dispositivo (localStorage): si el dueño lo
-// oculta, queda oculto aunque cambie de pantalla, hasta que un admin lo muestre.
+//    por el dueño en Configuración > Vendedores), directamente no lo puede ver.
 export default function OjoResumenFinanciero({ children }: { children: React.ReactNode }) {
   const actor = useActor();
   const esAdmin = actor?.permisos?.esAdministrador ?? true;
   const puedeVer = tienePermiso(actor, 'ver_estadisticas');
 
-  const [oculto, setOculto] = useState(false);
+  const [oculto, setOculto] = useState(true); // por defecto SIEMPRE tapado
   const [montado, setMontado] = useState(false);
   useEffect(() => {
     setMontado(true);
-    setOculto(localStorage.getItem('resumenFinancieroOculto') === '1');
+    // Solo se muestra si un admin lo reveló en ESTA misma sesión del navegador.
+    // sessionStorage no persiste al cerrar el navegador → un nuevo inicio de
+    // sesión siempre arranca tapado.
+    try {
+      setOculto(sessionStorage.getItem('resumenFinancieroVisible') !== '1');
+    } catch {}
   }, []);
 
   const ocultar = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setOculto(true);
-    localStorage.setItem('resumenFinancieroOculto', '1');
+    try {
+      sessionStorage.removeItem('resumenFinancieroVisible');
+    } catch {}
   };
   const mostrar = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!esAdmin) return; // solo un administrador puede volver a mostrarlo
+    if (!esAdmin) return; // solo un administrador puede mostrarlo
     setOculto(false);
-    localStorage.removeItem('resumenFinancieroOculto');
+    try {
+      sessionStorage.setItem('resumenFinancieroVisible', '1');
+    } catch {}
   };
 
-  // Hasta montar (SSR/primer render) mostramos normal para no parpadear.
-  const ocultoEfectivo = montado && (oculto || !puedeVer);
+  // Tapado también antes de montar (SSR/primer render): así el monto real nunca
+  // llega a verse ni un instante al cargar la página.
+  const ocultoEfectivo = !montado || oculto || !puedeVer;
 
   if (ocultoEfectivo) {
     return (
