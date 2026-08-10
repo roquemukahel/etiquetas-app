@@ -125,6 +125,10 @@ export default function DetalleOrden() {
   // edición arrancaría con la lista de canjes vacía y al guardar los borraría
   // por creer que el usuario los quitó.
   const [canjesCargados, setCanjesCargados] = useState(false);
+  // Si la consulta de canjes falla (red, timeout), NO hay que asumir "cero
+  // canjes": eso llevaría a borrar/pisar un plan canje real al guardar una
+  // edición. Bloquea la página con un reintento en vez de seguir.
+  const [canjesError, setCanjesError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -186,12 +190,20 @@ export default function DetalleOrden() {
     const idsRep = (reparacionesLigadas ?? []).map((r: any) => r.id as string);
     setYaDerivado(idsRep.length > 0);
     setReparacionesDerivadasIds(idsRep);
-    const { data: canjesData } = await supabase
+    const { data: canjesData, error: canjesErr } = await supabase
       .from('canjes')
       .select('id, modelo, capacidad_gb, color, imei, salud_bateria, detalles, monto')
       .eq('orden_id', id)
       .eq('estado', 'en_canje')
       .order('created_at');
+    if (canjesErr) {
+      // No seguimos: si diéramos por "cargados" cero canjes sin haber
+      // confirmado la consulta, una edición posterior guardaría monto_canje=0
+      // y pisaría un plan canje real que sigue existiendo en la base.
+      setCanjesError(true);
+      setLoading(false);
+      return;
+    }
     setCanjes((canjesData as Canje[]) ?? []);
     setCanjesCargados(true);
     // Recién acá se apaga el "Cargando…": así ni el auto-abrir ni el botón
@@ -741,6 +753,24 @@ export default function DetalleOrden() {
     return (
       <main className="flex min-h-screen items-center justify-center">
         <p className="text-sm text-muted dark:text-dark-text-secondary">Cargando...</p>
+      </main>
+    );
+  }
+
+  if (canjesError) {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center gap-3">
+        <p className="text-sm text-bad">No pudimos cargar el plan canje de esta orden.</p>
+        <button
+          onClick={() => {
+            setCanjesError(false);
+            setLoading(true);
+            cargar();
+          }}
+          className="text-sm text-accent dark:text-dark-accent underline"
+        >
+          Reintentar
+        </button>
       </main>
     );
   }
