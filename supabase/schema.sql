@@ -2373,7 +2373,8 @@ as $$
         'cantidad', oi.cantidad,
         'precio_unitario', oi.precio_unitario,
         'tipo', oi.tipo,
-        'garantia_vencimiento', d.garantia_vencimiento
+        'garantia_vencimiento', d.garantia_vencimiento,
+        'estado_dispositivo', d.estado
       )), '[]'::jsonb)
       from orden_items oi
       left join dispositivos d on d.id = oi.dispositivo_id

@@ -13,6 +13,7 @@ type Item = {
   precio_unitario: number;
   tipo: string;
   garantia_vencimiento: string | null;
+  estado_dispositivo: string | null;
 };
 
 type Boleta = {
@@ -217,6 +218,11 @@ export default function BoletaPublica() {
               <tr key={idx} className={idx % 2 === 1 ? 'bg-canvas' : ''}>
                 <td className="py-2.5 px-3">
                   {i.descripcion}
+                  {i.estado_dispositivo === 'sellado' && (
+                    <span className="ml-1.5 inline-block text-[10px] font-bold text-black bg-gradient-to-b from-amber-300 to-amber-500 border border-black/40 rounded-full px-2 py-0.5 align-middle">
+                      ✦ SELLADO
+                    </span>
+                  )}
                   {i.garantia_vencimiento && (
                     <p className="text-xs text-muted mt-0.5">
                       🛡️ Garantía hasta el {new Date(i.garantia_vencimiento + 'T00:00:00').toLocaleDateString('es-AR')}

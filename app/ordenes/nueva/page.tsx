@@ -21,6 +21,7 @@ import { planesActivos, interesDe, valorCuota, etiquetaCuotas } from '../../lib/
 import { generarComisionesAccion } from '../../comisiones/acciones';
 import { ITEMS_CHECKLIST_INGRESO, CAMPOS_DEPENDEN_MODULO, generarTextoCondicionIngreso } from '../../lib/reparaciones';
 import SelectorColorAuto from '../../SelectorColorAuto';
+import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
 import { limpiarImei } from '../../lib/imei';
 import { registrarAuditoria } from '../../lib/auditoria';
 import MiniaturaDispositivo from '../../MiniaturaDispositivo';
@@ -173,6 +174,7 @@ export default function NuevaOrden() {
   const [nuevoModelo, setNuevoModelo] = useState('');
   const [nuevaCapacidad, setNuevaCapacidad] = useState<number | null>(null);
   const [nuevoColor, setNuevoColor] = useState('');
+  const [nuevoEstadoDispositivo, setNuevoEstadoDispositivo] = useState('usado');
   const [nuevoPrecioDispositivo, setNuevoPrecioDispositivo] = useState('');
   const [nuevoImeiDispositivo, setNuevoImeiDispositivo] = useState('');
   const [cargandoDispositivo, setCargandoDispositivo] = useState(false);
@@ -475,7 +477,7 @@ export default function NuevaOrden() {
         color: nuevoColor.trim() || null,
         imei: nuevoImeiDispositivo.trim() || null,
         precio: nuevoPrecioDispositivo ? Number(nuevoPrecioDispositivo) : null,
-        estado: 'usado',
+        estado: nuevoEstadoDispositivo,
         en_stock: true,
       })
       .select()
@@ -491,6 +493,7 @@ export default function NuevaOrden() {
     setNuevoModelo('');
     setNuevaCapacidad(null);
     setNuevoColor('');
+    setNuevoEstadoDispositivo('usado');
     setNuevoImeiDispositivo('');
     setNuevoPrecioDispositivo('');
   };
@@ -1207,6 +1210,7 @@ export default function NuevaOrden() {
                   ))}
                 </div>
                 <SelectorColorAuto label="Color" modelo={nuevoModelo} value={nuevoColor} onChange={setNuevoColor} />
+                <SelectorEstadoDispositivo value={nuevoEstadoDispositivo} onChange={setNuevoEstadoDispositivo} />
                 <input
                   value={nuevoImeiDispositivo}
                   onChange={(e) => setNuevoImeiDispositivo(e.target.value)}

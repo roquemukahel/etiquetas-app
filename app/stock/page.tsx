@@ -748,8 +748,16 @@ export default function Stock() {
                 {expandido && <div className="flex flex-col gap-2">
                   {items.map((d) => {
                     const colorHex = hexColorDe(d.color);
+                    const sellado = d.estado === 'sellado';
                     const seleccionado = seleccionados.has(d.id);
-                    const clases = `rounded-xl border-[3px] ${colorHex ? '' : 'border-border dark:border-dark-border'} px-4 py-3 flex items-center gap-3 w-full text-left ${
+                    // Sellado se marca con un borde dorado/negro bien grueso —
+                    // pisa el borde de color normal (que es solo 3px) para que
+                    // salte a la vista entre el resto de la carpeta.
+                    const clases = `rounded-xl px-4 py-3 flex items-center gap-3 w-full text-left ${
+                      sellado
+                        ? 'border-[6px] border-amber-500 dark:border-amber-400 shadow-[0_0_0_2px_#000]'
+                        : `border-[3px] ${colorHex ? '' : 'border-border dark:border-dark-border'}`
+                    } ${
                       d.en_stock ? 'bg-white dark:bg-dark-surface' : 'bg-white dark:bg-dark-surface opacity-60'
                     } ${seleccionado ? 'ring-2 ring-accent dark:ring-dark-accent' : ''}`;
                     const imgColor = imagenColorDeModelo(d.modelo, d.color);
@@ -783,6 +791,11 @@ export default function Stock() {
                                   ⚠ Batería baja
                                 </span>
                               )}
+                              {sellado && (
+                                <span className="text-[10px] font-bold text-black bg-gradient-to-b from-amber-300 to-amber-500 border border-black/40 rounded-full px-2 py-0.5">
+                                  ✦ SELLADO
+                                </span>
+                              )}
                             </p>
                             <p className="text-xs text-muted dark:text-dark-text-secondary">
                               IMEI: <span className="font-bold font-mono text-ink dark:text-dark-text">{d.imei || 'sin IMEI'}</span>
@@ -805,13 +818,13 @@ export default function Stock() {
                       <button
                         key={d.id}
                         onClick={() => toggleSeleccion(d.id)}
-                        style={colorHex ? { borderColor: colorHex } : undefined}
+                        style={!sellado && colorHex ? { borderColor: colorHex } : undefined}
                         className={clases}
                       >
                         {contenido}
                       </button>
                     ) : (
-                      <Link key={d.id} href={`/stock/${d.id}`} style={colorHex ? { borderColor: colorHex } : undefined} className={clases}>
+                      <Link key={d.id} href={`/stock/${d.id}`} style={!sellado && colorHex ? { borderColor: colorHex } : undefined} className={clases}>
                         {contenido}
                       </Link>
                     );

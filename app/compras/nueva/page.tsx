@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { asegurarModelo } from '../../lib/modelos';
 import { obtenerTodasLasFilas } from '../../lib/db';
+import SelectorColorAuto from '../../SelectorColorAuto';
+import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 
@@ -36,6 +38,8 @@ export default function NuevaCompra() {
   const [carpetas, setCarpetas] = useState<string[]>([]);
   const [modelo, setModelo] = useState('');
   const [capacidad, setCapacidad] = useState<number | null>(null);
+  const [color, setColor] = useState('');
+  const [condicion, setCondicion] = useState('usado');
   const [imei, setImei] = useState('');
   const [detalles, setDetalles] = useState('');
   const [precio, setPrecio] = useState('');
@@ -103,6 +107,8 @@ export default function NuevaCompra() {
           cliente_id: clienteId,
           modelo: modelo.trim(),
           capacidad_gb: capacidad,
+          color: color.trim() || null,
+          condicion,
           imei: imei.trim() || null,
           detalles: detalles.trim() || null,
           precio: precio ? Number(precio) : null,
@@ -236,6 +242,9 @@ export default function NuevaCompra() {
             ))}
           </div>
         </div>
+
+        <SelectorColorAuto label="Color" modelo={modelo} value={color} onChange={setColor} />
+        <SelectorEstadoDispositivo value={condicion} onChange={setCondicion} />
 
         <Campo label="IMEI" valor={imei} onChange={setImei} placeholder="IMEI" />
 
