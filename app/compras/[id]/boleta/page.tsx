@@ -103,7 +103,7 @@ export default function BoletaCompra() {
   const clienteNombre = compra.clientes ? `${compra.clientes.nombre} ${compra.clientes.apellido || ''}`.trim() : '';
 
   return (
-    <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
+    <main className="flex min-h-screen flex-col px-6 py-6 gap-4 print:p-0 print:gap-0">
       <header className="no-print flex items-center gap-3 flex-wrap">
         <Link href="/compras" className="text-2xl leading-none text-ink">
           &larr;
@@ -131,15 +131,15 @@ export default function BoletaCompra() {
 
       <div
         id="boleta"
-        className="flex flex-col gap-6 print:gap-3 text-[15px] text-ink bg-white rounded-2xl border border-border shadow-card p-8 print:p-4"
+        className="flex flex-col gap-6 print:gap-3 text-[15px] text-ink bg-white rounded-2xl border border-border shadow-card px-8 pt-2 pb-8 print:px-3 print:pt-0.5 print:pb-3 print:rounded-none"
       >
-        <div className="flex flex-col items-center gap-0.5 -mb-2 print:-mb-1">
-          <div className="flex items-center gap-1.5 opacity-80">
+        <div className="flex flex-col items-center gap-0 leading-none">
+          <div className="flex items-center gap-1 opacity-70">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/qovento-icon.png" alt="" className="h-4 w-4 object-contain" />
-            <span className="text-[11px] font-semibold text-muted tracking-wide">Qovento</span>
+            <img src="/qovento-icon.png" alt="" className="h-2.5 w-2.5 object-contain" />
+            <span className="text-[8px] font-semibold text-muted tracking-wide">Qovento</span>
           </div>
-          <p className="text-[10px] text-muted text-center max-w-xs leading-snug">{ESLOGAN}</p>
+          <p className="text-[7px] text-muted text-center max-w-xs leading-tight">{ESLOGAN}</p>
         </div>
 
         <div className="flex items-start justify-between gap-4">
@@ -182,7 +182,7 @@ export default function BoletaCompra() {
 
         <Divisor />
 
-        <div className="rounded-xl bg-canvas p-4 flex flex-col gap-1">
+        <div className="rounded-xl bg-canvas p-4 print:p-2 flex flex-col gap-1">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-1">Dispositivo adquirido</p>
           <p className="font-medium">
             {compra.modelo}
@@ -243,7 +243,7 @@ export default function BoletaCompra() {
           }
           @page {
             size: A4;
-            margin: 1.5cm;
+            margin: 0.5cm;
           }
         }
       `}</style>
