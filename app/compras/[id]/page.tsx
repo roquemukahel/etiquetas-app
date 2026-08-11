@@ -9,6 +9,8 @@ import { registrarAuditoria } from '../../lib/auditoria';
 import { getActor, useActor, MENSAJE_ACTOR_REQUERIDO } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import { sanitizarDecimal } from '../../lib/numeros';
+import SelectorColorAuto from '../../SelectorColorAuto';
+import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 
@@ -17,6 +19,8 @@ type Compra = {
   cliente_id: string | null;
   modelo: string | null;
   capacidad_gb: number | null;
+  color: string | null;
+  condicion: string | null;
   imei: string | null;
   detalles: string | null;
   precio: number | null;
@@ -41,6 +45,8 @@ export default function DetalleCompra() {
   const [editando, setEditando] = useState(false);
   const [editModelo, setEditModelo] = useState('');
   const [editCapacidad, setEditCapacidad] = useState<number | null>(null);
+  const [editColor, setEditColor] = useState('');
+  const [editCondicion, setEditCondicion] = useState('usado');
   const [editImei, setEditImei] = useState('');
   const [editDetalles, setEditDetalles] = useState('');
   const [editPrecio, setEditPrecio] = useState('');
@@ -96,8 +102,9 @@ export default function DetalleCompra() {
     const { error: insertError } = await supabase.from('dispositivos').insert({
       modelo: compra.modelo,
       capacidad_gb: compra.capacidad_gb,
+      color: compra.color,
       imei: compra.imei,
-      estado: 'usado',
+      estado: compra.condicion || 'usado',
       en_stock: true,
       agregado_por_nombre: actor?.nombre ?? null,
       agregado_por_foto_url: actor?.fotoUrl ?? null,
@@ -181,6 +188,8 @@ export default function DetalleCompra() {
     if (!compra) return;
     setEditModelo(compra.modelo || '');
     setEditCapacidad(compra.capacidad_gb);
+    setEditColor(compra.color || '');
+    setEditCondicion(compra.condicion || 'usado');
     setEditImei(compra.imei || '');
     setEditDetalles(compra.detalles || '');
     setEditPrecio(compra.precio != null ? String(compra.precio) : '');
@@ -206,6 +215,7 @@ export default function DetalleCompra() {
     setError(null);
 
     const nuevoModelo = editModelo.trim() || null;
+    const nuevoColor = editColor.trim() || null;
     const nuevoImei = editImei.trim() || null;
     const nuevosDetalles = editDetalles.trim() || null;
     const nuevoPrecio = editPrecio ? Number(editPrecio) : null;
@@ -213,6 +223,8 @@ export default function DetalleCompra() {
     const cambios: Record<string, { antes: unknown; despues: unknown }> = {};
     if (compra.modelo !== nuevoModelo) cambios.modelo = { antes: compra.modelo, despues: nuevoModelo };
     if (compra.capacidad_gb !== editCapacidad) cambios.capacidad_gb = { antes: compra.capacidad_gb, despues: editCapacidad };
+    if ((compra.color || null) !== nuevoColor) cambios.color = { antes: compra.color, despues: nuevoColor };
+    if ((compra.condicion || 'usado') !== editCondicion) cambios.condicion = { antes: compra.condicion, despues: editCondicion };
     if (compra.imei !== nuevoImei) cambios.imei = { antes: compra.imei, despues: nuevoImei };
     if (compra.detalles !== nuevosDetalles) cambios.detalles = { antes: compra.detalles, despues: nuevosDetalles };
     if (compra.precio !== nuevoPrecio) cambios.precio = { antes: compra.precio, despues: nuevoPrecio };
@@ -225,7 +237,15 @@ export default function DetalleCompra() {
 
     const { error: updateError } = await supabase
       .from('compras')
-      .update({ modelo: nuevoModelo, capacidad_gb: editCapacidad, imei: nuevoImei, detalles: nuevosDetalles, precio: nuevoPrecio })
+      .update({
+        modelo: nuevoModelo,
+        capacidad_gb: editCapacidad,
+        color: nuevoColor,
+        condicion: editCondicion,
+        imei: nuevoImei,
+        detalles: nuevosDetalles,
+        precio: nuevoPrecio,
+      })
       .eq('id', id);
     if (updateError) {
       setError('No pudimos guardar los cambios: ' + updateError.message);
@@ -243,7 +263,16 @@ export default function DetalleCompra() {
       valorNuevo: Object.fromEntries(Object.entries(cambios).map(([k, v]) => [k, v.despues])),
     });
 
-    setCompra({ ...compra, modelo: nuevoModelo, capacidad_gb: editCapacidad, imei: nuevoImei, detalles: nuevosDetalles, precio: nuevoPrecio });
+    setCompra({
+      ...compra,
+      modelo: nuevoModelo,
+      capacidad_gb: editCapacidad,
+      color: nuevoColor,
+      condicion: editCondicion,
+      imei: nuevoImei,
+      detalles: nuevosDetalles,
+      precio: nuevoPrecio,
+    });
     setEditando(false);
     setGuardandoEdicion(false);
   };
@@ -304,6 +333,9 @@ export default function DetalleCompra() {
             ))}
           </div>
         </div>
+
+        <SelectorColorAuto label="Color" modelo={editModelo} value={editColor} onChange={setEditColor} />
+        <SelectorEstadoDispositivo value={editCondicion} onChange={setEditCondicion} />
 
         <div>
           <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">IMEI</label>
@@ -374,6 +406,12 @@ export default function DetalleCompra() {
           <span className="text-muted dark:text-dark-text-secondary">Dispositivo: </span>
           {compra.modelo}
           {compra.capacidad_gb ? ` · ${compra.capacidad_gb}GB` : ''}
+          {compra.color ? ` · ${compra.color}` : ''}
+          {compra.condicion === 'sellado' && (
+            <span className="ml-1.5 inline-block text-[10px] font-bold text-black bg-gradient-to-b from-amber-300 to-amber-500 border border-black/40 rounded-full px-2 py-0.5 align-middle">
+              ✦ SELLADO
+            </span>
+          )}
         </p>
         {compra.imei && (
           <p>

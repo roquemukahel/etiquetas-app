@@ -12,6 +12,8 @@ type Compra = {
   id: string;
   modelo: string | null;
   capacidad_gb: number | null;
+  color: string | null;
+  condicion: string | null;
   imei: string | null;
   detalles: string | null;
   precio: number | null;
@@ -187,6 +189,12 @@ export default function BoletaCompra() {
           <p className="font-medium">
             {compra.modelo}
             {compra.capacidad_gb ? ` · ${compra.capacidad_gb}GB` : ''}
+            {compra.color ? ` · ${compra.color}` : ''}
+            {compra.condicion === 'sellado' && (
+              <span className="ml-1.5 inline-block text-[10px] font-bold text-black bg-gradient-to-b from-amber-300 to-amber-500 border border-black/40 rounded-full px-2 py-0.5 align-middle">
+                ✦ SELLADO
+              </span>
+            )}
           </p>
           {compra.imei && (
             <p className="text-muted">

@@ -11,9 +11,9 @@ import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import SelectorColorAuto from '../../SelectorColorAuto';
 import { sanitizarDecimal } from '../../lib/numeros';
+import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
-const ESTADOS = ['usado', 'sellado'];
 
 type Dispositivo = {
   id: string;
@@ -289,23 +289,7 @@ export default function DetalleDispositivo() {
           />
         </div>
 
-        <div>
-          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Estado</label>
-          <div className="flex gap-2">
-            {ESTADOS.map((e) => (
-              <button
-                key={e}
-                type="button"
-                onClick={() => campo('estado', e)}
-                className={`flex-1 rounded-xl py-2 text-sm font-medium capitalize ${
-                  d.estado === e ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
-                }`}
-              >
-                {e}
-              </button>
-            ))}
-          </div>
-        </div>
+        <SelectorEstadoDispositivo value={d.estado ?? 'usado'} onChange={(v) => campo('estado', v)} />
       </div>
 
       {d.en_stock && !derivarAbierto && puedeRecibirServicioTecnico && (

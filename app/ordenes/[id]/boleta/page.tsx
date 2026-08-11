@@ -16,7 +16,7 @@ type Item = {
   cantidad: number;
   precio_unitario: number;
   tipo: string;
-  dispositivos: { garantia_vencimiento: string | null } | null;
+  dispositivos: { garantia_vencimiento: string | null; estado: string | null } | null;
 };
 
 type Orden = {
@@ -132,7 +132,7 @@ export default function Boleta() {
       const { data: ordenData, error: ordenError } = await supabase
         .from('ordenes')
         .select(
-          '*, clientes ( nombre, apellido, telefono, email, dni, domicilio ), vendedores ( nombre ), orden_items ( descripcion, cantidad, precio_unitario, tipo, dispositivos ( garantia_vencimiento ) )'
+          '*, clientes ( nombre, apellido, telefono, email, dni, domicilio ), vendedores ( nombre ), orden_items ( descripcion, cantidad, precio_unitario, tipo, dispositivos ( garantia_vencimiento, estado ) )'
         )
         .eq('id', id)
         .single();
@@ -398,6 +398,11 @@ export default function Boleta() {
               <tr key={idx} className={idx % 2 === 1 ? 'bg-canvas' : ''}>
                 <td className="py-2.5 print:py-1 px-3">
                   {i.descripcion}
+                  {i.dispositivos?.estado === 'sellado' && (
+                    <span className="ml-1.5 inline-block text-[10px] font-bold text-black bg-gradient-to-b from-amber-300 to-amber-500 border border-black/40 rounded-full px-2 py-0.5 align-middle">
+                      ✦ SELLADO
+                    </span>
+                  )}
                   {i.dispositivos?.garantia_vencimiento && (
                     <p className="text-xs text-muted mt-0.5">
                       🛡️ Garantía hasta el {new Date(i.dispositivos.garantia_vencimiento + 'T00:00:00').toLocaleDateString('es-AR')}
