@@ -24,6 +24,7 @@ import {
   ITEMS_CHECKLIST_INGRESO,
   CAMPOS_DEPENDEN_MODULO,
   generarTextoCondicionIngreso,
+  ChecklistIngreso,
 } from '../lib/reparaciones';
 import MiniaturaDispositivo from '../MiniaturaDispositivo';
 import Avatar from '../Avatar';
@@ -32,6 +33,24 @@ import CheckTri from '../CheckTri';
 import TextoCondicionGenerado from '../TextoCondicionGenerado';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
+
+function idTemporal() {
+  return Math.random().toString(36).slice(2);
+}
+
+// Un ingreso puede traer varios equipos del mismo cliente (ej. trae 3
+// celulares juntos): cada uno se agrega a esta lista con "+ Agregar otro
+// equipo" y se guardan todos de una, compartiendo cliente/técnico/boleta.
+type EquipoIngreso = {
+  tempId: string;
+  modelo: string;
+  capacidad_gb: number | null;
+  color: string;
+  imei: string;
+  falla: string;
+  ubicacion: string;
+  checklist: ChecklistIngreso;
+};
 
 type Tecnico = { id: string; nombre: string; foto_url: string | null };
 type Cliente = { id: string; nombre: string; apellido: string | null; telefono: string | null };
@@ -113,6 +132,9 @@ export default function ServicioTecnico() {
   const [nuevoImei, setNuevoImei] = useState('');
   const [nuevaFalla, setNuevaFalla] = useState('');
   const [nuevaUbicacion, setNuevaUbicacion] = useState('');
+  // Equipos ya confirmados con "+ Agregar otro equipo" en este mismo
+  // ingreso (además del que esté cargado en el formulario sin agregar).
+  const [equiposAgregados, setEquiposAgregados] = useState<EquipoIngreso[]>([]);
   const [guardandoNuevo, setGuardandoNuevo] = useState(false);
   const [errorNuevo, setErrorNuevo] = useState<string | null>(null);
 
@@ -234,7 +256,7 @@ export default function ServicioTecnico() {
     [reparaciones, tecnicoSeleccionado]
   );
 
-  const datosChecklistNuevo = () => ({
+  const datosChecklistNuevo = (): ChecklistIngreso => ({
     enciende: nuevoEnciende,
     pantalla_estado: nuevaPantalla || null,
     modulo_ok: nuevoChecklist.modulo_ok ?? null,
@@ -256,13 +278,48 @@ export default function ServicioTecnico() {
     garantia_excepcion_manual: nuevaExcepcionGarantia.trim() || null,
   });
 
-  const agregarEquipo = async () => {
-    if (!nuevoModelo.trim() || !puedeRecibir) return;
+  // El equipo que se está completando en el formulario cuenta aunque el
+  // usuario no haya tocado "+ Agregar otro equipo" — mismo criterio que
+  // Plan Canje en Nueva Orden, para no perder un equipo por olvido.
+  const equipoEnProgreso: EquipoIngreso | null = nuevoModelo.trim()
+    ? {
+        tempId: '__en_progreso__',
+        modelo: nuevoModelo.trim(),
+        capacidad_gb: nuevaCapacidad,
+        color: nuevoColor.trim(),
+        imei: nuevoImei.trim(),
+        falla: nuevaFalla.trim(),
+        ubicacion: nuevaUbicacion.trim(),
+        checklist: datosChecklistNuevo(),
+      }
+    : null;
+  const equiposEfectivos: EquipoIngreso[] = equipoEnProgreso ? [...equiposAgregados, equipoEnProgreso] : equiposAgregados;
+
+  const agregarOtroEquipo = () => {
+    if (!equipoEnProgreso) return;
+    setEquiposAgregados((eqs) => [...eqs, { ...equipoEnProgreso, tempId: idTemporal() }]);
+    setNuevoModelo('');
+    setNuevaCapacidad(null);
+    setNuevoColor('');
+    setNuevoImei('');
+    setNuevaFalla('');
+    setNuevaUbicacion('');
+    setNuevoEnciende(null);
+    setNuevaPantalla('');
+    setNuevoChecklist({});
+    setNuevaHumedad(null);
+    setNuevaExcepcionGarantia('');
+  };
+
+  const quitarEquipoAgregado = (tempId: string) => setEquiposAgregados((eqs) => eqs.filter((e) => e.tempId !== tempId));
+
+  const recibirEquipos = async () => {
+    if (equiposEfectivos.length === 0 || !puedeRecibir) return;
     setGuardandoNuevo(true);
     setErrorNuevo(null);
 
     let clienteId = clienteCoincidente?.id ?? null;
-    let nombreParaMensaje = clienteCoincidente ? nombreCompleto(clienteCoincidente) : clienteInput.trim();
+    const nombreParaMensaje = clienteCoincidente ? nombreCompleto(clienteCoincidente) : clienteInput.trim();
 
     if (!clienteId && clienteInput.trim()) {
       const { data: nuevoCliente } = await supabase
@@ -278,10 +335,23 @@ export default function ServicioTecnico() {
     // momento en que se recibe el equipo, con la condición de ingreso ya
     // en la nota, en vez de recién al terminar la reparación. "Generar
     // orden de cobro" más adelante actualiza esta misma orden en vez de
-    // crear una segunda (ver generarOrdenCobro en la ficha).
+    // crear una segunda (ver generarOrdenCobro en la ficha). Con VARIOS
+    // equipos en el mismo ingreso, todos comparten esta única orden/boleta
+    // (un ítem por equipo) en vez de generar una boleta por cada uno.
     let ordenId: string | null = null;
     if (clienteId) {
-      const notaCondicion = generarTextoCondicionIngreso(datosChecklistNuevo()) || null;
+      // Con más de un equipo hay que aclarar a cuál corresponde cada
+      // condición de ingreso — si no, la nota mezclaría "Funciona: ..." de
+      // varios equipos sin poder distinguirlos.
+      const notaCondicion =
+        equiposEfectivos
+          .map((eq) => {
+            const texto = generarTextoCondicionIngreso(eq.checklist);
+            if (!texto) return '';
+            return equiposEfectivos.length > 1 ? `${eq.modelo}\n${texto}` : texto;
+          })
+          .filter(Boolean)
+          .join('\n\n') || null;
       const { data: orden, error: ordenError } = await supabase
         .from('ordenes')
         .insert({ cliente_id: clienteId, estado: 'pendiente', total: 0, nota: notaCondicion })
@@ -296,48 +366,66 @@ export default function ServicioTecnico() {
         return;
       }
       ordenId = orden.id;
-      const { error: itemError } = await supabase.from('orden_items').insert({
-        orden_id: orden.id,
-        descripcion: `Servicio técnico — ${nuevoModelo.trim()}`,
-        cantidad: 1,
-        precio_unitario: 0,
-        tipo: 'trabajo',
-      });
-      if (itemError) {
-        setErrorNuevo('No pudimos terminar de armar la boleta: ' + itemError.message);
+      const { error: itemsError } = await supabase.from('orden_items').insert(
+        equiposEfectivos.map((eq) => ({
+          orden_id: orden.id,
+          descripcion: `Servicio técnico — ${eq.modelo}`,
+          cantidad: 1,
+          precio_unitario: 0,
+          tipo: 'trabajo',
+        }))
+      );
+      if (itemsError) {
+        setErrorNuevo('No pudimos terminar de armar la boleta: ' + itemsError.message);
         setGuardandoNuevo(false);
         return;
       }
     }
 
-    const { data: nueva } = await supabase
+    const { data: creadas, error: repError } = await supabase
       .from('reparaciones')
-      .insert({
-        modelo: nuevoModelo.trim(),
-        capacidad_gb: nuevaCapacidad,
-        color: nuevoColor.trim() || null,
-        imei: limpiarImei(nuevoImei),
-        falla_declarada: nuevaFalla.trim() || null,
-        ubicacion_fisica: nuevaUbicacion.trim() || null,
-        estado: 'recibido',
-        cliente_id: clienteId,
-        tecnico_id: asignadoTecnicoId || null,
-        enciende: nuevoEnciende,
-        pantalla_estado: nuevaPantalla || null,
-        ...nuevoChecklist,
-        humedad: nuevaHumedad,
-        garantia_excepcion_manual: nuevaExcepcionGarantia.trim() || null,
-        orden_cobro_id: ordenId,
-      })
-      .select('token_seguimiento')
-      .single();
-
-    if (clienteId && clienteTelefono.trim() && nueva?.token_seguimiento) {
-      const url = `${window.location.origin}/seguimiento/${nueva.token_seguimiento}`;
-      const mensaje = mensajeSeguimientoServicio(nombreParaMensaje || 'estimado/a', nuevoModelo.trim(), url);
-      setAvisoWhatsApp({ link: armarLinkWhatsApp(clienteTelefono, mensaje, codigoPais), nombre: nombreParaMensaje, tipo: 'agregado' });
+      .insert(
+        equiposEfectivos.map((eq) => ({
+          modelo: eq.modelo,
+          capacidad_gb: eq.capacidad_gb,
+          color: eq.color || null,
+          imei: limpiarImei(eq.imei),
+          falla_declarada: eq.falla || null,
+          ubicacion_fisica: eq.ubicacion || null,
+          estado: 'recibido',
+          cliente_id: clienteId,
+          tecnico_id: asignadoTecnicoId || null,
+          orden_cobro_id: ordenId,
+          ...eq.checklist,
+        }))
+      )
+      .select('modelo, token_seguimiento');
+    if (repError) {
+      setErrorNuevo('No pudimos registrar los equipos: ' + repError.message);
+      setGuardandoNuevo(false);
+      return;
     }
 
+    if (clienteId && clienteTelefono.trim() && creadas && creadas.length > 0) {
+      if (creadas.length === 1) {
+        if (creadas[0].token_seguimiento) {
+          const url = `${window.location.origin}/seguimiento/${creadas[0].token_seguimiento}`;
+          const mensaje = mensajeSeguimientoServicio(nombreParaMensaje || 'estimado/a', creadas[0].modelo || 'equipo', url);
+          setAvisoWhatsApp({ link: armarLinkWhatsApp(clienteTelefono, mensaje, codigoPais), nombre: nombreParaMensaje, tipo: 'agregado' });
+        }
+      } else {
+        // Cada equipo tiene su propio seguimiento — se manda un solo mensaje
+        // avisando de todos, con el link del primero (los demás se pueden
+        // reenviar después desde la ficha de cada uno).
+        const primeraConToken = creadas.find((c) => c.token_seguimiento);
+        const modelos = creadas.map((c) => c.modelo).filter(Boolean).join(', ');
+        const url = primeraConToken ? `${window.location.origin}/seguimiento/${primeraConToken.token_seguimiento}` : '';
+        const mensaje = `Hola ${nombreParaMensaje || 'estimado/a'}! Gracias por elegirnos 🙌 Ya registramos tus equipos (${modelos}) para el servicio técnico.${url ? ` Podés seguir el estado de a uno acá: ${url}` : ''}`;
+        setAvisoWhatsApp({ link: armarLinkWhatsApp(clienteTelefono, mensaje, codigoPais), nombre: nombreParaMensaje, tipo: 'agregado' });
+      }
+    }
+
+    setEquiposAgregados([]);
     setNuevoModelo('');
     setNuevaCapacidad(null);
     setNuevoColor('');
@@ -577,6 +665,26 @@ export default function ServicioTecnico() {
           {panelNuevo && (
             <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-3 flex flex-col gap-2">
               {errorNuevo && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{errorNuevo}</p>}
+              {equiposAgregados.length > 0 && (
+                <div className="rounded-lg bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border p-2 flex flex-col gap-1.5">
+                  <p className="text-xs font-medium text-muted dark:text-dark-text-secondary">Equipos ya cargados en este ingreso</p>
+                  {equiposAgregados.map((eq, idx) => (
+                    <div key={eq.tempId} className="flex items-center justify-between gap-2 text-xs">
+                      <span className="text-ink dark:text-dark-text">
+                        {idx + 1}. {eq.modelo}
+                        {eq.capacidad_gb ? ` · ${eq.capacidad_gb}GB` : ''}
+                        {eq.imei ? ` · IMEI ${eq.imei}` : ''}
+                      </span>
+                      <button onClick={() => quitarEquipoAgregado(eq.tempId)} className="text-bad underline shrink-0">
+                        Quitar
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <p className="text-xs font-medium text-muted dark:text-dark-text-secondary">
+                {equiposAgregados.length > 0 ? `Equipo ${equiposAgregados.length + 1}` : 'Datos del equipo'}
+              </p>
               <input
                 value={nuevoModelo}
                 onChange={(e) => setNuevoModelo(e.target.value)}
@@ -650,6 +758,15 @@ export default function ServicioTecnico() {
                 className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
               />
 
+              <button
+                type="button"
+                disabled={!nuevoModelo.trim()}
+                onClick={agregarOtroEquipo}
+                className="rounded-lg border border-dashed border-border dark:border-dark-border py-2 text-xs font-medium text-accent dark:text-dark-accent disabled:opacity-40"
+              >
+                + Agregar otro equipo a este ingreso
+              </button>
+
               <p className="text-xs font-medium text-muted dark:text-dark-text-secondary mt-1">Técnico asignado (opcional)</p>
               <select
                 value={asignadoTecnicoId}
@@ -687,11 +804,15 @@ export default function ServicioTecnico() {
               />
 
               <button
-                disabled={!nuevoModelo.trim() || guardandoNuevo}
-                onClick={agregarEquipo}
+                disabled={equiposEfectivos.length === 0 || guardandoNuevo}
+                onClick={recibirEquipos}
                 className="rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
               >
-                {guardandoNuevo ? 'Recibiendo...' : 'Recibir equipo'}
+                {guardandoNuevo
+                  ? 'Recibiendo...'
+                  : equiposEfectivos.length > 1
+                    ? `Recibir ${equiposEfectivos.length} equipos`
+                    : 'Recibir equipo'}
               </button>
             </div>
           )}
