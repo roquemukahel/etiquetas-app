@@ -47,7 +47,7 @@ const PERIODOS: { key: Periodo; label: string }[] = [
   { key: 'anio', label: 'Año' },
 ];
 
-const ETIQUETA_PERIODO: Record<Periodo, string> = { hoy: 'hoy', semana: 'la última semana', mes: 'este mes', anio: 'este año' };
+const ETIQUETA_PERIODO: Record<Periodo, string> = { hoy: 'hoy', semana: 'esta semana', mes: 'este mes', anio: 'este año' };
 const ETIQUETA_PERIODO_ANT: Record<Periodo, string> = {
   hoy: 'ayer',
   semana: 'la semana anterior',

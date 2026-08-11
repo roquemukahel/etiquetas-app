@@ -67,10 +67,17 @@ export function rangoDe(periodo: Periodo, ahora: Date): Rango {
     finPrev.setDate(finPrev.getDate() - 1);
     bucket = 'hora';
   } else if (periodo === 'semana') {
+    // Semana calendario (lunes → hoy), no "últimos 7 días": con "Mes"/"Año"
+    // ya se entiende como "desde el inicio del período hasta hoy", pero acá
+    // antes era una ventana móvil de 7 días — confundía (ej. un martes
+    // sumaba también el fin de semana pasado, dando un total inflado que
+    // parecía de "la semana" cuando en realidad eran 6 días de la anterior).
+    const diaSemana = ahora.getDay(); // 0 = domingo … 6 = sábado
+    const diasDesdeLunes = diaSemana === 0 ? 6 : diaSemana - 1;
     inicio = new Date(ahora);
-    inicio.setDate(inicio.getDate() - 6);
+    inicio.setDate(inicio.getDate() - diasDesdeLunes);
     inicio.setHours(0, 0, 0, 0);
-    // Los 7 días anteriores.
+    // Mismo tramo (lunes → el mismo día de la semana) de la semana anterior.
     inicioPrev = new Date(inicio);
     inicioPrev.setDate(inicioPrev.getDate() - 7);
     finPrev = new Date(fin);
