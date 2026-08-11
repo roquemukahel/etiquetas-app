@@ -8,6 +8,7 @@ import { asegurarModelo } from '../../lib/modelos';
 import { registrarAuditoria } from '../../lib/auditoria';
 import { getActor, useActor, MENSAJE_ACTOR_REQUERIDO } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
+import { sanitizarDecimal } from '../../lib/numeros';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 
@@ -327,8 +328,8 @@ export default function DetalleCompra() {
           <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Precio pagado</label>
           <input
             value={editPrecio}
-            onChange={(e) => setEditPrecio(e.target.value)}
-            inputMode="numeric"
+            onChange={(e) => setEditPrecio(sanitizarDecimal(e.target.value))}
+            inputMode="decimal"
             className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
           />
         </div>

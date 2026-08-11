@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import { crearClienteNavegador } from '../../../lib/supabase/client';
 import { registrarAuditoria } from '../../../lib/auditoria';
 import { simboloMoneda } from '../../../lib/monedas';
+import { sanitizarDecimal } from '../../../lib/numeros';
 
 type Proveedor = { id: string; nombre: string; telefono: string | null };
 type Repuesto = { id: string; nombre: string };
@@ -260,9 +261,9 @@ export default function ProveedorRepuestos() {
           </datalist>
           <input
             value={precioNuevo}
-            onChange={(e) => setPrecioNuevo(e.target.value)}
+            onChange={(e) => setPrecioNuevo(sanitizarDecimal(e.target.value))}
             placeholder="Precio"
-            inputMode="numeric"
+            inputMode="decimal"
             className="w-24 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
           />
         </div>

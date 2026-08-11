@@ -10,6 +10,7 @@ import { registrarAuditoria } from '../../lib/auditoria';
 import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import SelectorColorAuto from '../../SelectorColorAuto';
+import { sanitizarDecimal } from '../../lib/numeros';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 const ESTADOS = ['usado', 'sellado'];
@@ -386,8 +387,8 @@ function Campo({
       <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{label}</label>
       <input
         value={valor}
-        onChange={(e) => onChange(e.target.value)}
-        inputMode={numerico ? 'numeric' : undefined}
+        onChange={(e) => onChange(numerico ? sanitizarDecimal(e.target.value) : e.target.value)}
+        inputMode={numerico ? 'decimal' : undefined}
         list={listaId}
         className={`w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm ${mono ? 'font-mono' : ''}`}
       />

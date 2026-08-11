@@ -11,6 +11,7 @@ import { getActor, useActor, MENSAJE_ACTOR_REQUERIDO } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import { planesActivos, valorCuota, etiquetaCuotas } from '../../lib/cuotas';
 import { simboloMoneda } from '../../lib/monedas';
+import { sanitizarDecimal } from '../../lib/numeros';
 import SelectorColorAuto from '../../SelectorColorAuto';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
@@ -265,7 +266,7 @@ function Campo({
       <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{label}</label>
       <input
         value={valor}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => onChange(numerico ? sanitizarDecimal(e.target.value) : e.target.value)}
         placeholder={placeholder}
         list={listaId}
         inputMode={numerico ? 'decimal' : undefined}

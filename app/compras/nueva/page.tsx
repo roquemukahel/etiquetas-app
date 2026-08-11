@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { asegurarModelo } from '../../lib/modelos';
 import { obtenerTodasLasFilas } from '../../lib/db';
+import { sanitizarDecimal } from '../../lib/numeros';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 
@@ -284,9 +285,9 @@ function Campo({
       <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{label}</label>
       <input
         value={valor}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => onChange(numerico ? sanitizarDecimal(e.target.value) : e.target.value)}
         placeholder={placeholder}
-        inputMode={numerico ? 'numeric' : undefined}
+        inputMode={numerico ? 'decimal' : undefined}
         list={listaId}
         className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
       />

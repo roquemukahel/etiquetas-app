@@ -223,6 +223,10 @@ export default function NuevaOrden() {
   const [pagoMixto, setPagoMixto] = useState(false);
   const [lineasPago, setLineasPago] = useState<{ tempId: string; medio: string; monto: string }[]>([]);
   const [saldoCliente, setSaldoCliente] = useState(0);
+  // Si la consulta del saldo falla, NO hay que asumir saldo 0 — eso
+  // habilitaría crédito de más a un cliente que en realidad está al límite
+  // (o suspendido). Bloquea "Cuenta corriente" como medio hasta confirmarlo.
+  const [saldoClienteError, setSaldoClienteError] = useState(false);
   const [anticipo, setAnticipo] = useState('');
   const [impuesto, setImpuesto] = useState('');
   const [estadoOrden, setEstadoOrden] = useState('pendiente');
@@ -391,20 +395,27 @@ export default function NuevaOrden() {
   useEffect(() => {
     if (!clienteElegido?.id) {
       setSaldoCliente(0);
+      setSaldoClienteError(false);
       return;
     }
     (async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('cta_cte_movimientos')
         .select('tipo, monto')
         .eq('cliente_id', clienteElegido.id)
         .eq('anulado', false);
+      if (error) {
+        setSaldoClienteError(true);
+        setSaldoCliente(0);
+        return;
+      }
+      setSaldoClienteError(false);
       setSaldoCliente(calcularSaldo((data as { tipo: string; monto: number }[]) ?? []));
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clienteElegido?.id]);
 
-  const ctaCteDisponible = !!clienteElegido?.cta_cte_habilitada && !clienteElegido?.suspendido;
+  const ctaCteDisponible = !!clienteElegido?.cta_cte_habilitada && !clienteElegido?.suspendido && !saldoClienteError;
 
   // Si el cliente no tiene cuenta corriente (o cambió a uno que no la
   // tiene), no dejar "Cuenta corriente" elegido en modo simple.
@@ -1554,7 +1565,7 @@ export default function NuevaOrden() {
               <input
                 value={montoSecundario}
                 onChange={(e) => {
-                  setMontoSecundario(e.target.value);
+                  setMontoSecundario(sanitizarDecimal(e.target.value));
                   setMontoSecundarioTocado(true);
                 }}
                 inputMode="decimal"
@@ -1796,9 +1807,11 @@ export default function NuevaOrden() {
 
         {clienteElegido && !ctaCteDisponible && (
           <p className="text-[10px] text-muted dark:text-dark-text-secondary">
-            {clienteElegido.suspendido
-              ? 'Este cliente está suspendido para cuenta corriente.'
-              : 'Para venderle a cuenta corriente (fiado), primero habilitá su cuenta corriente desde la ficha del cliente.'}
+            {saldoClienteError
+              ? 'No pudimos confirmar el saldo de este cliente, así que por las dudas no se puede vender a cuenta corriente ahora. Probá de nuevo en un momento.'
+              : clienteElegido.suspendido
+                ? 'Este cliente está suspendido para cuenta corriente.'
+                : 'Para venderle a cuenta corriente (fiado), primero habilitá su cuenta corriente desde la ficha del cliente.'}
           </p>
         )}
       </div>

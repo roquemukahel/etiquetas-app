@@ -575,8 +575,8 @@ export default function DetalleProveedor() {
               <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Precio unitario</label>
               <input
                 value={precioUnitario}
-                onChange={(e) => setPrecioUnitario(e.target.value)}
-                inputMode="numeric"
+                onChange={(e) => setPrecioUnitario(sanitizarDecimal(e.target.value))}
+                inputMode="decimal"
                 className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
               />
             </div>

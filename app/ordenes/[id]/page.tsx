@@ -10,6 +10,7 @@ import { limpiarImei } from '../../lib/imei';
 import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import { simboloMoneda } from '../../lib/monedas';
+import { sanitizarDecimal } from '../../lib/numeros';
 import Avatar from '../../Avatar';
 import SelectorColorAuto from '../../SelectorColorAuto';
 
@@ -866,7 +867,7 @@ export default function DetalleOrden() {
                 </label>
                 <input
                   value={montoSecundarioEdit}
-                  onChange={(e) => setMontoSecundarioEdit(e.target.value)}
+                  onChange={(e) => setMontoSecundarioEdit(sanitizarDecimal(e.target.value))}
                   inputMode="decimal"
                   placeholder={`Monto en ${monedasDisponibles[1]}`}
                   className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
@@ -908,8 +909,8 @@ export default function DetalleOrden() {
                 <span>$</span>
                 <input
                   value={i.precioUnitario}
-                  onChange={(e) => actualizarItemEdit(i.id, 'precioUnitario', e.target.value)}
-                  inputMode="numeric"
+                  onChange={(e) => actualizarItemEdit(i.id, 'precioUnitario', sanitizarDecimal(e.target.value))}
+                  inputMode="decimal"
                   className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded px-2 py-1"
                 />
               </div>
@@ -958,8 +959,8 @@ export default function DetalleOrden() {
                     <span className="text-xs">$</span>
                     <input
                       value={c.monto}
-                      onChange={(e) => actualizarCanjeEdit(c.tempId, e.target.value)}
-                      inputMode="numeric"
+                      onChange={(e) => actualizarCanjeEdit(c.tempId, sanitizarDecimal(e.target.value))}
+                      inputMode="decimal"
                       className="w-20 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded px-2 py-1 text-sm"
                     />
                     <button onClick={() => quitarCanjeEdit(c.tempId)} className="text-xs text-bad underline">
@@ -1010,9 +1011,9 @@ export default function DetalleOrden() {
               </div>
               <input
                 value={canjeMonto}
-                onChange={(e) => setCanjeMonto(e.target.value)}
+                onChange={(e) => setCanjeMonto(sanitizarDecimal(e.target.value))}
                 placeholder="Monto que se le reconoce"
-                inputMode="numeric"
+                inputMode="decimal"
                 className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
               />
               <textarea
@@ -1053,8 +1054,8 @@ export default function DetalleOrden() {
             <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Anticipo</label>
             <input
               value={anticipoEdit}
-              onChange={(e) => setAnticipoEdit(e.target.value)}
-              inputMode="numeric"
+              onChange={(e) => setAnticipoEdit(sanitizarDecimal(e.target.value))}
+              inputMode="decimal"
               className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
             />
           </div>
@@ -1062,8 +1063,8 @@ export default function DetalleOrden() {
             <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Impuesto %</label>
             <input
               value={impuestoEdit}
-              onChange={(e) => setImpuestoEdit(e.target.value)}
-              inputMode="numeric"
+              onChange={(e) => setImpuestoEdit(sanitizarDecimal(e.target.value))}
+              inputMode="decimal"
               className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
             />
           </div>

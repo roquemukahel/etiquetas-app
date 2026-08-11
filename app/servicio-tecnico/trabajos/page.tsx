@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { registrarAuditoria } from '../../lib/auditoria';
+import { sanitizarDecimal } from '../../lib/numeros';
 
 type Trabajo = { id: string; nombre: string; precio: number | null; imagen_url: string | null };
 
@@ -90,9 +91,9 @@ export default function Trabajos() {
           />
           <input
             value={precio}
-            onChange={(e) => setPrecio(e.target.value)}
+            onChange={(e) => setPrecio(sanitizarDecimal(e.target.value))}
             placeholder="Precio"
-            inputMode="numeric"
+            inputMode="decimal"
             className="w-24 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
           />
         </div>

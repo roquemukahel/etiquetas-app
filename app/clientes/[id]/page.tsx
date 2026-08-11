@@ -58,6 +58,9 @@ export default function DetalleCliente() {
   const [c, setC] = useState<Cliente | null>(null);
   const [ordenes, setOrdenes] = useState<Orden[]>([]);
   const [movimientos, setMovimientos] = useState<Movimiento[]>([]);
+  // Si falla la consulta, el saldo NO debe mostrarse como si fuera $0 real
+  // (confundiría "no debe nada" con "no pudimos confirmarlo").
+  const [movimientosError, setMovimientosError] = useState(false);
   const [monedaCodigo, setMonedaCodigo] = useState('ARS');
   const [negocioNombre, setNegocioNombre] = useState('');
   const [codigoPais, setCodigoPais] = useState('54');
@@ -93,13 +96,14 @@ export default function DetalleCliente() {
   const moneda = useMemo(() => simboloMoneda(monedaCodigo), [monedaCodigo]);
 
   const cargarMovimientos = async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('cta_cte_movimientos')
       .select('id, tipo, concepto, monto, vencimiento, observacion, pago_id, anulado, fecha')
       .eq('cliente_id', id)
       .eq('anulado', false)
       .order('fecha', { ascending: true });
-    setMovimientos((data as Movimiento[]) ?? []);
+    setMovimientosError(!!error);
+    setMovimientos(error ? [] : ((data as Movimiento[]) ?? []));
   };
 
   useEffect(() => {
@@ -445,6 +449,11 @@ export default function DetalleCliente() {
       </header>
 
       {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
+      {movimientosError && (
+        <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">
+          No pudimos cargar los movimientos de cuenta corriente — el saldo de abajo puede no ser real. Recargá la página.
+        </p>
+      )}
 
       <div className="flex items-center gap-1.5 text-sm overflow-x-auto">
         {(['cuenta', 'compras', 'servicio', 'datos'] as const).map((t) => (
