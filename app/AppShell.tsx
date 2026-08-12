@@ -35,7 +35,8 @@ const NAV = [
   { href: '/canje', label: 'Plan Canje', icono: 'canje' },
   { href: '/servicio-tecnico', label: 'Servicio Técnico', icono: 'servicio' },
   { href: '/compras', label: 'Compras', icono: 'compra' },
-  { href: '/proveedores', label: 'Proveedores / Ahorro', icono: 'proveedores' },
+  { href: '/proveedores', label: 'Proveedores', icono: 'proveedores' },
+  { href: '/plan-ahorro', label: 'Plan de ahorro', icono: 'ahorro' },
   { href: '/estadisticas', label: 'Estadísticas', icono: 'estadisticas' },
   { href: '/configuracion', label: 'Configuración', icono: 'configuracion' },
 ];

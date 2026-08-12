@@ -107,4 +107,11 @@ export const ICONOS: Record<string, React.ReactNode> = {
       <path d="M6 9v6M18 9v6" />
     </IconoBase>
   ),
+  ahorro: (
+    <IconoBase>
+      <path d="M4 12c0-3.5 3.1-6 7-6 2.2 0 4.1.8 5.4 2H19l2 2-2 1.5v2L17 15l-1.5 2H10c-3.9 0-6-2.5-6-5Z" />
+      <circle cx="15" cy="10.3" r="0.6" fill="currentColor" stroke="none" />
+      <path d="M7 18v1.5M11 18v1.5" />
+    </IconoBase>
+  ),
 };
