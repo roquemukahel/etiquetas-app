@@ -413,6 +413,14 @@ export default function ServicioTecnico() {
       return;
     }
 
+    // Si alguno de los modelos es nuevo (no existía como carpeta en Stock),
+    // se da de alta acá — si no, un ingreso con un modelo recién tipeado
+    // (ej. un modelo que todavía no se había cargado nunca) no aparecía
+    // como carpeta en ningún lado.
+    for (const modeloUnico of new Set(equiposEfectivos.map((eq) => eq.modelo))) {
+      await asegurarModelo(supabase, modeloUnico);
+    }
+
     if (clienteId && clienteTelefono.trim() && creadas && creadas.length > 0) {
       if (creadas.length === 1) {
         if (creadas[0].token_seguimiento) {

@@ -7,6 +7,7 @@ import { crearClienteNavegador } from '../../lib/supabase/client';
 import { registrarAuditoria } from '../../lib/auditoria';
 import { revertirComisionesOrden } from '../../lib/comisiones/operaciones';
 import { limpiarImei } from '../../lib/imei';
+import { asegurarModelo } from '../../lib/modelos';
 import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import { simboloMoneda } from '../../lib/monedas';
@@ -487,6 +488,7 @@ export default function DetalleOrden() {
       setError('No pudimos cargar el dispositivo: ' + (dErr?.message || ''));
       return;
     }
+    await asegurarModelo(supabase, nuevoModeloDispEdit);
     agregarDispositivoDelStockEdit(data as DispositivoStockEdit);
     setNuevoModeloDispEdit('');
     setNuevaCapacidadDispEdit(null);
