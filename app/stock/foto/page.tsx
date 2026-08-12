@@ -11,9 +11,10 @@ import { useDictado } from '../../lib/dictado';
 import { getActor, useActor, MENSAJE_ACTOR_REQUERIDO } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import SelectorColorAuto from '../../SelectorColorAuto';
+import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
+import { sanitizarDecimal } from '../../lib/numeros';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
-const ESTADOS = ['usado', 'sellado'];
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -243,23 +244,7 @@ export default function StockPorFoto() {
           ))}
         </datalist>
 
-        <div>
-          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Estado</label>
-          <div className="flex gap-2">
-            {ESTADOS.map((e) => (
-              <button
-                key={e}
-                type="button"
-                onClick={() => setEstado(e)}
-                className={`flex-1 rounded-xl py-2 text-sm font-medium capitalize ${
-                  estado === e ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
-                }`}
-              >
-                {e}
-              </button>
-            ))}
-          </div>
-        </div>
+        <SelectorEstadoDispositivo value={estado} onChange={setEstado} />
       </div>
 
       <button
@@ -300,9 +285,9 @@ function Campo({
       <div className="flex items-stretch gap-2">
         <input
           value={valor}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(e) => onChange(numerico ? sanitizarDecimal(e.target.value) : e.target.value)}
           placeholder={placeholder}
-          inputMode={numerico ? 'numeric' : undefined}
+          inputMode={numerico ? 'decimal' : undefined}
           list={listaId}
           className={`flex-1 min-w-0 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm ${mono ? 'font-mono' : ''}`}
         />

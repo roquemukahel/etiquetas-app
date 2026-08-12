@@ -19,6 +19,7 @@ import {
   CAMPOS_DEPENDEN_MODULO,
 } from '../../lib/reparaciones';
 import { generarOrdenDeReparacion } from '../../lib/ordenesServicio';
+import { sanitizarDecimal } from '../../lib/numeros';
 import SelectorColorAuto from '../../SelectorColorAuto';
 import Avatar from '../../Avatar';
 import CheckTri from '../../CheckTri';
@@ -1081,7 +1082,7 @@ function Campo({
       ) : (
         <input
           value={valor}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(e) => onChange(numerico ? sanitizarDecimal(e.target.value) : e.target.value)}
           inputMode={numerico ? 'decimal' : undefined}
           className={`w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm ${mono ? 'font-mono' : ''}`}
         />
