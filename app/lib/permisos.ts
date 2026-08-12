@@ -17,6 +17,7 @@ export type Permiso =
   | 'auditoria'
   | 'gestionar_usuarios'
   | 'ver_proveedores'
+  | 'ver_plan_ahorro'
   // Comisiones: gestionar (planes, aprobar, liquidar, pagar, ajustar) queda
   // como 'ver_proveedores' — solo con acceso completo/administrador. Ver
   // comisiones lo puede cualquiera (el vendedor ve SOLO las suyas, filtrado en

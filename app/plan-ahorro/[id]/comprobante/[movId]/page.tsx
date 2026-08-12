@@ -9,8 +9,6 @@ import EtiquetaSeccion from '../../../../EtiquetaSeccion';
 
 type Movimiento = {
   id: string;
-  tipo: string;
-  concepto: string;
   monto: number;
   medio: string | null;
   observacion: string | null;
@@ -19,7 +17,14 @@ type Movimiento = {
   anulado: boolean;
 };
 
-type Proveedor = { id: string; nombre: string; telefono: string | null };
+type Plan = {
+  id: string;
+  modelo: string | null;
+  capacidad_gb: number | null;
+  color: string | null;
+  monto_objetivo: number;
+  clientes: { nombre: string; apellido: string | null; telefono: string | null } | null;
+};
 
 type Negocio = {
   nombre: string;
@@ -27,8 +32,8 @@ type Negocio = {
   direccion: string | null;
   eslogan: string | null;
   logo_url: string | null;
-  texto_declaracion_proveedor: string | null;
-  texto_declaracion_proveedor_tamano: number;
+  texto_declaracion_plan_ahorro: string | null;
+  texto_declaracion_plan_ahorro_tamano: number;
 };
 
 function formatearFecha(iso: string) {
@@ -39,29 +44,37 @@ function Divisor() {
   return <div className="h-[3px] bg-ink rounded-full print:h-[2px]" />;
 }
 
-export default function ComprobanteProveedor() {
+export default function ComprobantePlanAhorro() {
   const { id, movId } = useParams<{ id: string; movId: string }>();
   const supabase = crearClienteNavegador();
 
-  const [proveedor, setProveedor] = useState<Proveedor | null>(null);
+  const [plan, setPlan] = useState<Plan | null>(null);
   const [movimiento, setMovimiento] = useState<Movimiento | null>(null);
+  const [totalPagado, setTotalPagado] = useState(0);
+  // Si esta consulta falla, NO hay que mostrar "$0 juntado" — un cliente
+  // que ya venía pagando vería su progreso borrado por un error de red,
+  // no porque de verdad no haya pagado nada.
+  const [totalPagadoError, setTotalPagadoError] = useState(false);
   const [negocio, setNegocio] = useState<Negocio | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
-      const [{ data: prov }, { data: mov, error: movError }] = await Promise.all([
-        supabase.from('proveedores').select('id, nombre, telefono').eq('id', id).maybeSingle(),
+      const [{ data: planData }, { data: mov, error: movError }, { data: todosMov, error: todosMovError }] = await Promise.all([
+        supabase.from('planes_ahorro').select('id, modelo, capacidad_gb, color, monto_objetivo, clientes ( nombre, apellido, telefono )').eq('id', id).maybeSingle(),
         supabase
-          .from('proveedor_movimientos')
-          .select('id, tipo, concepto, monto, medio, observacion, fecha, registrado_por_nombre, anulado')
+          .from('plan_ahorro_movimientos')
+          .select('id, monto, medio, observacion, fecha, registrado_por_nombre, anulado')
           .eq('id', movId)
           .single(),
+        supabase.from('plan_ahorro_movimientos').select('monto').eq('plan_id', id).eq('anulado', false),
       ]);
       if (movError) setError(movError.message);
-      setProveedor((prov as Proveedor) ?? null);
+      setPlan((planData as any) ?? null);
       setMovimiento((mov as Movimiento) ?? null);
+      setTotalPagadoError(!!todosMovError);
+      setTotalPagado(todosMovError ? 0 : ((todosMov as { monto: number }[]) ?? []).reduce((acc, m) => acc + m.monto, 0));
 
       const {
         data: { user },
@@ -70,7 +83,7 @@ export default function ComprobanteProveedor() {
         const { data: perfil } = await supabase
           .from('perfiles')
           .select(
-            'negocios ( nombre, telefono, direccion, eslogan, logo_url, texto_declaracion_proveedor, texto_declaracion_proveedor_tamano )'
+            'negocios ( nombre, telefono, direccion, eslogan, logo_url, texto_declaracion_plan_ahorro, texto_declaracion_plan_ahorro_tamano )'
           )
           .eq('id', user.id)
           .single();
@@ -88,28 +101,29 @@ export default function ComprobanteProveedor() {
     );
   }
 
-  if (!movimiento || !proveedor) {
+  if (!movimiento || !plan) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
         <p className="text-sm text-muted">No encontramos ese comprobante.</p>
         {error && <p className="text-xs text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
-        <Link href={`/proveedores/${id}`} className="text-sm text-accent underline">
-          Volver al proveedor
+        <Link href={`/plan-ahorro/${id}`} className="text-sm text-accent underline">
+          Volver al plan
         </Link>
       </main>
     );
   }
 
-  const esPago = movimiento.tipo === 'abono';
-  const titulo = esPago ? 'Comprobante de pago' : 'Comprobante de deuda';
+  const falta = Math.max(0, plan.monto_objetivo - totalPagado);
+  const completo = totalPagado >= plan.monto_objetivo;
+  const clienteNombre = plan.clientes ? `${plan.clientes.nombre} ${plan.clientes.apellido || ''}`.trim() : '';
 
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4 print:p-0 print:gap-0">
       <header className="no-print flex items-center gap-3 flex-wrap">
-        <Link href={`/proveedores/${id}`} className="text-2xl leading-none text-ink">
+        <Link href={`/plan-ahorro/${id}`} className="text-2xl leading-none text-ink">
           &larr;
         </Link>
-        <span className="text-lg font-display font-semibold mr-auto">{titulo}</span>
+        <span className="text-lg font-display font-semibold mr-auto">Comprobante de pago</span>
         <button
           onClick={() => window.print()}
           className="rounded-lg border border-border dark:border-dark-border bg-white dark:bg-dark-surface text-ink dark:text-dark-text px-3 py-2 text-xs font-medium hover:bg-canvas dark:hover:bg-dark-bg transition-colors"
@@ -133,7 +147,7 @@ export default function ComprobanteProveedor() {
 
         {movimiento.anulado && (
           <div className="rounded-xl bg-bad/10 border-2 border-bad text-bad text-center py-2 font-display font-semibold tracking-wide">
-            ⚠ ESTE MOVIMIENTO FUE ANULADO — no es válido como comprobante
+            ⚠ ESTE PAGO FUE ANULADO — no es válido como comprobante
           </div>
         )}
 
@@ -149,7 +163,7 @@ export default function ComprobanteProveedor() {
             </div>
           </div>
           <div className="text-right text-sm text-muted leading-relaxed">
-            <p className="font-medium text-ink">{titulo}</p>
+            <p className="font-medium text-ink">Comprobante de pago</p>
             <p>{formatearFecha(movimiento.fecha)}</p>
           </div>
         </div>
@@ -164,35 +178,57 @@ export default function ComprobanteProveedor() {
             {negocio?.direccion && <p className="text-muted">{negocio.direccion}</p>}
           </div>
           <div className="flex flex-col gap-1">
-            <EtiquetaSeccion>Proveedor</EtiquetaSeccion>
-            <p className="font-medium">{proveedor.nombre}</p>
-            {proveedor.telefono && <p className="text-muted">{proveedor.telefono}</p>}
+            <EtiquetaSeccion>Cliente</EtiquetaSeccion>
+            <p className="font-medium">{clienteNombre}</p>
+            {plan.clientes?.telefono && <p className="text-muted">{plan.clientes.telefono}</p>}
           </div>
         </div>
 
         <Divisor />
 
         <div className="rounded-xl bg-canvas p-4 print:p-2 flex flex-col gap-1">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-1">Concepto</p>
-          <p className="font-medium">{esPago ? 'Pago realizado' : 'Deuda registrada'}</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-1">Plan de ahorro</p>
+          <p className="font-medium">
+            {plan.modelo || 'Equipo a definir'}
+            {plan.capacidad_gb ? ` · ${plan.capacidad_gb}GB` : ''}
+            {plan.color ? ` · ${plan.color}` : ''}
+          </p>
           {movimiento.medio && <p className="text-muted">Medio: {movimiento.medio}</p>}
           {movimiento.observacion && <p className="text-muted">Observación: {movimiento.observacion}</p>}
           {movimiento.registrado_por_nombre && <p className="text-muted">Registrado por: {movimiento.registrado_por_nombre}</p>}
         </div>
 
-        <div className="self-end w-full max-w-[280px] flex justify-between items-baseline font-display font-semibold text-xl rounded-lg bg-ink text-white px-3 py-2.5">
-          <span className="text-sm font-sans font-medium opacity-80">{esPago ? 'MONTO PAGADO' : 'MONTO ADEUDADO'}</span>
-          <span>${Math.round(movimiento.monto).toLocaleString('es-AR')}</span>
+        <div className="self-end w-full max-w-[320px] flex flex-col gap-2">
+          <div className="flex justify-between items-baseline font-display font-semibold text-xl rounded-lg bg-ink text-white px-3 py-2.5">
+            <span className="text-sm font-sans font-medium opacity-80">PAGO DE HOY</span>
+            <span>${Math.round(movimiento.monto).toLocaleString('es-AR')}</span>
+          </div>
+          {totalPagadoError ? (
+            <p className="text-xs text-bad text-right">No pudimos confirmar el total juntado hasta ahora — no lo tomes de este comprobante.</p>
+          ) : (
+            <>
+              <div className="flex justify-between text-sm px-1">
+                <span className="text-muted">Total juntado</span>
+                <span className="font-medium">
+                  ${Math.round(totalPagado).toLocaleString('es-AR')} / ${Math.round(plan.monto_objetivo).toLocaleString('es-AR')}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm px-1">
+                <span className="text-muted">{completo ? '¡Objetivo completado!' : 'Falta para completar'}</span>
+                {!completo && <span className="font-medium">${Math.round(falta).toLocaleString('es-AR')}</span>}
+              </div>
+            </>
+          )}
         </div>
 
-        {negocio?.texto_declaracion_proveedor && (
+        {negocio?.texto_declaracion_plan_ahorro && (
           <div className="rounded-xl bg-canvas p-4 print:p-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">Términos y condiciones</p>
             <p
               className="whitespace-pre-wrap text-ink font-medium print:font-semibold"
-              style={{ fontSize: negocio.texto_declaracion_proveedor_tamano }}
+              style={{ fontSize: negocio.texto_declaracion_plan_ahorro_tamano }}
             >
-              {negocio.texto_declaracion_proveedor}
+              {negocio.texto_declaracion_plan_ahorro}
             </p>
           </div>
         )}

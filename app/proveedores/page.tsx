@@ -81,12 +81,11 @@ export default function Proveedores() {
         <Link href="/" className="text-2xl leading-none">
           &larr;
         </Link>
-        <span className="text-lg font-medium">Proveedores / Plan de ahorro</span>
+        <span className="text-lg font-medium">Proveedores</span>
       </header>
 
       <p className="text-xs text-muted dark:text-dark-text-secondary -mt-2">
-        A quién le comprás stock en lote, o con quién tenés un plan de ahorro. Entrá a cada uno para ver el detalle y llevar
-        la cuenta de lo que le debés (o de tu saldo a favor).
+        A quién le comprás stock en lote. Entrá a cada uno para ver las compras y llevar la cuenta de lo que le debés.
       </p>
 
       {(totalPorPagar > 0 || totalAFavor > 0) && (
