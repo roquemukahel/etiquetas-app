@@ -196,20 +196,19 @@ export default function Boleta() {
   const clienteNombre = orden.clientes ? `${orden.clientes.nombre} ${orden.clientes.apellido || ''}`.trim() : '';
   const moneda = simboloMoneda(orden.moneda || negocio?.moneda);
   const totalNum = orden.total ?? subtotal;
-  // Cómo mostrar el monto en la boleta (la orden vive en la moneda principal;
-  // en modo "solo pesos" convertimos todo con el mismo factor del total).
+  // Cómo mostrar el monto en la boleta (la orden vive en la moneda principal).
   // Compatibilidad: órdenes viejas (sin boleta_moneda) que tenían un monto
   // secundario cargado usaban el viejo "mostrar también" = modo 'ambas'.
-  const modo = orden.boleta_moneda || (orden.monto_secundario != null ? 'ambas' : 'principal');
-  const factorBoleta =
-    modo === 'secundaria' && orden.monto_secundario != null && totalNum ? orden.monto_secundario / totalNum : 1;
-  // Si no se pudo derivar un factor válido (ej. total 0), no arriesgamos a
-  // mostrar números en dólares con el símbolo de pesos: caemos a la principal.
-  const simbBoleta =
-    modo === 'secundaria' && orden.moneda_secundaria && factorBoleta !== 1 ? simboloMoneda(orden.moneda_secundaria) : moneda;
+  // El modo "solo secundaria" se sacó de la app (convertía cada línea con un
+  // factor derivado del total, y esa cuenta podía no cerrar bien apenas
+  // había anticipo/canje/cuotas de por medio) — una orden vieja que lo
+  // tuviera guardado se muestra igual que 'ambas': todo en la moneda
+  // principal + una línea de referencia informativa.
+  const modoCrudo = orden.boleta_moneda || (orden.monto_secundario != null ? 'ambas' : 'principal');
+  const modo = modoCrudo === 'secundaria' ? 'ambas' : modoCrudo;
   // Monto EXACTO: hasta 2 decimales si los tiene (US$7,64 no se redondea a 8),
   // pero sin forzar ",00" en los enteros (US$470 queda US$470).
-  const fmt = (n: number) => simbBoleta + (n * factorBoleta).toLocaleString('es-AR', { maximumFractionDigits: 2 });
+  const fmt = (n: number) => moneda + n.toLocaleString('es-AR', { maximumFractionDigits: 2 });
 
   // Link público a la boleta (misma que se ve en /boleta/[token]), para que
   // el cliente pueda abrirla y descargarla — antes el mensaje era solo texto
@@ -465,12 +464,6 @@ export default function Boleta() {
             <p className="text-xs text-muted italic text-right">
               ≈ {simboloMoneda(orden.moneda_secundaria)}
               {orden.monto_secundario.toLocaleString('es-AR')} {orden.moneda_secundaria} (valor informativo)
-            </p>
-          )}
-          {modo === 'secundaria' && (
-            <p className="text-xs text-muted italic text-right">
-              ≈ {moneda}
-              {Math.abs(totalNum).toLocaleString('es-AR')} {orden.moneda || negocio?.moneda} (referencia)
             </p>
           )}
         </div>

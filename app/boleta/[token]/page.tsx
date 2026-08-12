@@ -102,21 +102,18 @@ export default function BoletaPublica() {
   const tieneProductos = boleta.items.some((i) => i.tipo !== 'trabajo');
   const moneda = simboloMoneda(boleta.moneda);
   const totalNum = boleta.total ?? subtotal;
-  // Cómo mostrar el monto en la boleta. La orden vive en la moneda principal;
-  // en modo "solo pesos" convertimos TODA la boleta con el mismo factor que se
-  // usó para el total (monto_secundario / total), así todas las líneas quedan
-  // coherentes con el total en pesos.
+  // Cómo mostrar el monto en la boleta. La orden vive en la moneda principal.
   // Compatibilidad: órdenes viejas (sin boleta_moneda) que tenían un monto
   // secundario cargado usaban el viejo "mostrar también" = modo 'ambas'.
-  const modo = boleta.boleta_moneda || (boleta.monto_secundario != null ? 'ambas' : 'principal');
-  const factorBoleta =
-    modo === 'secundaria' && boleta.monto_secundario != null && totalNum ? boleta.monto_secundario / totalNum : 1;
-  // Si no se pudo derivar un factor válido (ej. total 0), no arriesgamos a
-  // mostrar números en dólares con el símbolo de pesos: caemos a la principal.
-  const simbBoleta =
-    modo === 'secundaria' && boleta.moneda_secundaria && factorBoleta !== 1 ? simboloMoneda(boleta.moneda_secundaria) : moneda;
+  // El modo "solo secundaria" se sacó de la app (convertía cada línea con un
+  // factor derivado del total, y esa cuenta podía no cerrar bien apenas
+  // había anticipo/canje/cuotas de por medio) — una orden vieja que lo
+  // tuviera guardado se muestra igual que 'ambas': todo en la moneda
+  // principal + una línea de referencia informativa.
+  const modoCrudo = boleta.boleta_moneda || (boleta.monto_secundario != null ? 'ambas' : 'principal');
+  const modo = modoCrudo === 'secundaria' ? 'ambas' : modoCrudo;
   // Monto EXACTO: hasta 2 decimales si los tiene, sin forzar ",00" en enteros.
-  const fmt = (n: number) => simbBoleta + (n * factorBoleta).toLocaleString('es-AR', { maximumFractionDigits: 2 });
+  const fmt = (n: number) => moneda + n.toLocaleString('es-AR', { maximumFractionDigits: 2 });
 
   return (
     <main className="flex min-h-screen flex-col items-center px-6 py-10">
@@ -268,12 +265,6 @@ export default function BoletaPublica() {
             <p className="text-xs text-muted italic text-right">
               ≈ {simboloMoneda(boleta.moneda_secundaria)}
               {boleta.monto_secundario.toLocaleString('es-AR')} {boleta.moneda_secundaria} (valor informativo)
-            </p>
-          )}
-          {modo === 'secundaria' && (
-            <p className="text-xs text-muted italic text-right">
-              ≈ {moneda}
-              {Math.abs(totalNum).toLocaleString('es-AR')} {boleta.moneda} (referencia)
             </p>
           )}
         </div>

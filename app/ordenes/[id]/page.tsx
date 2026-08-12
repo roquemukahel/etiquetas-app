@@ -173,9 +173,10 @@ export default function DetalleOrden() {
   const [monedasDisponibles, setMonedasDisponibles] = useState<string[]>([]);
   const [tipoCambio, setTipoCambio] = useState<number | null>(null);
   // Cómo se muestra el monto en la boleta (la orden siempre queda en la
-  // moneda principal). 'principal' = solo US$, 'secundaria' = solo pesos,
-  // 'ambas' = las dos. Se mantiene en sync con boleta_moneda de la orden.
-  const [boletaMonedaEdit, setBoletaMonedaEdit] = useState<'principal' | 'secundaria' | 'ambas'>('principal');
+  // moneda principal). 'principal' = solo US$, 'ambas' = US$ + referencia en
+  // pesos. Se mantiene en sync con boleta_moneda de la orden. ("solo pesos"
+  // se sacó de la app, ver comentario en ordenes/nueva.)
+  const [boletaMonedaEdit, setBoletaMonedaEdit] = useState<'principal' | 'ambas'>('principal');
   const [montoSecundarioEdit, setMontoSecundarioEdit] = useState('');
   const muestraSecundariaEdit = boletaMonedaEdit !== 'principal';
 
@@ -339,14 +340,13 @@ export default function DetalleOrden() {
     setVendedorEdit(orden.vendedor_id || '');
     // Orden nueva: usa boleta_moneda. Orden vieja (sin el campo) con monto
     // secundario cargado = el viejo modo "mostrar también", o sea 'ambas'.
-    const modoInicial: 'principal' | 'secundaria' | 'ambas' =
-      orden.boleta_moneda === 'secundaria'
-        ? 'secundaria'
-        : orden.boleta_moneda === 'ambas'
-          ? 'ambas'
-          : orden.monto_secundario != null
-            ? 'ambas'
-            : 'principal';
+    // "Solo secundaria" se sacó de la app (mostraba números mal calculados
+    // en toda la boleta): una orden vieja que la tuviera guardada se abre
+    // directo en 'ambas' — al guardar, esa orden queda corregida.
+    const modoInicial: 'principal' | 'ambas' =
+      orden.boleta_moneda === 'ambas' || orden.boleta_moneda === 'secundaria' || orden.monto_secundario != null
+        ? 'ambas'
+        : 'principal';
     setBoletaMonedaEdit(modoInicial);
     setMontoSecundarioEdit(orden.monto_secundario != null ? String(orden.monto_secundario) : '');
     setItemsEdit(
@@ -983,7 +983,6 @@ export default function DetalleOrden() {
             <div className="flex gap-2">
               {([
                 { v: 'principal', t: `Solo ${simboloMoneda(monedasDisponibles[0])}` },
-                { v: 'secundaria', t: `Solo ${simboloMoneda(monedasDisponibles[1])}` },
                 { v: 'ambas', t: 'Ambas' },
               ] as const).map((op) => (
                 <button

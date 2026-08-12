@@ -262,8 +262,11 @@ export default function NuevaOrden() {
   const [tipoCambio, setTipoCambio] = useState<number | null>(null);
   // Cómo se muestra el monto en la BOLETA (la orden siempre queda en la
   // moneda principal → Estadísticas siempre en la principal). 'principal' =
-  // solo US$, 'secundaria' = solo pesos (convertido), 'ambas' = las dos.
-  const [boletaMoneda, setBoletaMoneda] = useState<'principal' | 'secundaria' | 'ambas'>('principal');
+  // solo US$, 'ambas' = US$ + una línea de referencia en pesos. ("solo
+  // pesos" existió y se sacó: convertía cada línea con un factor derivado
+  // del total, y esa cuenta no cerraba bien apenas había anticipo/canje/
+  // cuotas de por medio.)
+  const [boletaMoneda, setBoletaMoneda] = useState<'principal' | 'ambas'>('principal');
   const [montoSecundario, setMontoSecundario] = useState('');
   const [montoSecundarioTocado, setMontoSecundarioTocado] = useState(false);
   const muestraSecundaria = boletaMoneda !== 'principal';
@@ -1541,7 +1544,6 @@ export default function NuevaOrden() {
           <div className="flex gap-2">
             {([
               { v: 'principal', t: `Solo ${simboloMoneda(monedasDisponibles[0])}` },
-              { v: 'secundaria', t: `Solo ${simboloMoneda(monedasDisponibles[1])}` },
               { v: 'ambas', t: 'Ambas' },
             ] as const).map((op) => (
               <button
