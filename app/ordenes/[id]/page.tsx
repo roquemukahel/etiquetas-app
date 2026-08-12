@@ -434,10 +434,14 @@ export default function DetalleOrden() {
   const abrirDispositivoEdit = async () => {
     setAgregandoDispositivoEdit(true);
     setModoDispositivoEdit('stock');
-    const { data } = await supabase
+    const { data, error: fetchError } = await supabase
       .from('dispositivos')
       .select('id, modelo, capacidad_gb, color, imei, precio, salud_bateria')
       .eq('en_stock', true);
+    if (fetchError) {
+      setError('No pudimos traer el stock: ' + fetchError.message);
+      return;
+    }
     setDispositivosStockEdit((data as DispositivoStockEdit[]) ?? []);
   };
 

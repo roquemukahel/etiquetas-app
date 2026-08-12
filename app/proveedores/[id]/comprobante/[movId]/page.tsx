@@ -16,6 +16,7 @@ type Movimiento = {
   observacion: string | null;
   fecha: string;
   registrado_por_nombre: string | null;
+  anulado: boolean;
 };
 
 type Proveedor = { id: string; nombre: string; telefono: string | null };
@@ -54,7 +55,7 @@ export default function ComprobanteProveedor() {
         supabase.from('proveedores').select('id, nombre, telefono').eq('id', id).maybeSingle(),
         supabase
           .from('proveedor_movimientos')
-          .select('id, tipo, concepto, monto, medio, observacion, fecha, registrado_por_nombre')
+          .select('id, tipo, concepto, monto, medio, observacion, fecha, registrado_por_nombre, anulado')
           .eq('id', movId)
           .single(),
       ]);
@@ -129,6 +130,12 @@ export default function ComprobanteProveedor() {
           </div>
           <p className="text-[7px] text-muted text-center max-w-xs leading-tight">{ESLOGAN}</p>
         </div>
+
+        {movimiento.anulado && (
+          <div className="rounded-xl bg-bad/10 border-2 border-bad text-bad text-center py-2 font-display font-semibold tracking-wide">
+            ⚠ ESTE MOVIMIENTO FUE ANULADO — no es válido como comprobante
+          </div>
+        )}
 
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">

@@ -101,7 +101,7 @@ export default function DetalleProveedor() {
   const [guardandoCompra, setGuardandoCompra] = useState(false);
 
   const cargar = async () => {
-    const [{ data: prov }, { data: comprasData }, { data: dispData }, { data: movData }] = await Promise.all([
+    const [{ data: prov }, { data: comprasData }, { data: dispData }, { data: movData, error: movError }] = await Promise.all([
       supabase.from('proveedores').select('id, nombre, telefono, detalles').eq('id', id).maybeSingle(),
       supabase
         .from('compras_proveedor')
@@ -123,7 +123,15 @@ export default function DetalleProveedor() {
     setProveedor((prov as Proveedor) ?? null);
     setCompras((comprasData as CompraManual[]) ?? []);
     setDispositivos((dispData as DispositivoComprado[]) ?? []);
-    setMovimientos((movData as Movimiento[]) ?? []);
+    // Si esta consulta falla, NO hay que mostrar el saldo como si fuera $0
+    // real (podría en realidad tener una deuda) — mismo criterio que la
+    // cuenta corriente de clientes.
+    if (movError) {
+      setError('No pudimos cargar los movimientos — el saldo de abajo puede no ser real. Recargá la página.');
+      setMovimientos([]);
+    } else {
+      setMovimientos((movData as Movimiento[]) ?? []);
+    }
     setLoading(false);
   };
 

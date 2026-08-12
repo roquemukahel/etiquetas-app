@@ -90,15 +90,15 @@ export default function Proveedores() {
       </p>
 
       {(totalPorPagar > 0 || totalAFavor > 0) && (
-        <div className="grid grid-cols-2 gap-3">
+        <div className={totalPorPagar > 0 && totalAFavor > 0 ? 'grid grid-cols-2 gap-3' : 'flex'}>
           {totalPorPagar > 0 && (
-            <div className="rounded-2xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-4">
+            <div className="flex-1 rounded-2xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-4">
               <p className="text-[11px] uppercase tracking-wide text-muted dark:text-dark-text-secondary">Total por pagar</p>
               <p className="text-2xl font-display font-semibold text-bad">${Math.round(totalPorPagar).toLocaleString('es-AR')}</p>
             </div>
           )}
           {totalAFavor > 0 && (
-            <div className="rounded-2xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-4">
+            <div className="flex-1 rounded-2xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-4">
               <p className="text-[11px] uppercase tracking-wide text-muted dark:text-dark-text-secondary">Saldo a favor</p>
               <p className="text-2xl font-display font-semibold text-good">${Math.round(totalAFavor).toLocaleString('es-AR')}</p>
             </div>
