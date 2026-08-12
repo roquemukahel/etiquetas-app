@@ -7,6 +7,7 @@ import { crearClienteNavegador } from '../../lib/supabase/client';
 import { asegurarModelo } from '../../lib/modelos';
 import { obtenerTodasLasFilas } from '../../lib/db';
 import { sanitizarDecimal } from '../../lib/numeros';
+import { limpiarImei } from '../../lib/imei';
 import SelectorColorAuto from '../../SelectorColorAuto';
 import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
 
@@ -110,7 +111,7 @@ export default function NuevaCompra() {
           capacidad_gb: capacidad,
           color: color.trim() || null,
           condicion,
-          imei: imei.trim() || null,
+          imei: limpiarImei(imei),
           detalles: detalles.trim() || null,
           precio: precio ? Number(precio) : null,
         })

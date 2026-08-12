@@ -11,6 +11,7 @@ import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import SelectorColorAuto from '../../SelectorColorAuto';
 import { sanitizarDecimal } from '../../lib/numeros';
+import { limpiarImei } from '../../lib/imei';
 import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
@@ -83,7 +84,7 @@ export default function DetalleDispositivo() {
       .update({
         modelo: d.modelo?.trim() || null,
         capacidad_gb: d.capacidad_gb,
-        imei: d.imei?.trim() || null,
+        imei: limpiarImei(d.imei),
         numero_serie: d.numero_serie?.trim() || null,
         salud_bateria: d.salud_bateria,
         color: d.color?.trim() || null,

@@ -9,6 +9,7 @@ import { registrarAuditoria } from '../../lib/auditoria';
 import { getActor, useActor, MENSAJE_ACTOR_REQUERIDO } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import { sanitizarDecimal } from '../../lib/numeros';
+import { limpiarImei } from '../../lib/imei';
 import SelectorColorAuto from '../../SelectorColorAuto';
 import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
 
@@ -216,7 +217,7 @@ export default function DetalleCompra() {
 
     const nuevoModelo = editModelo.trim() || null;
     const nuevoColor = editColor.trim() || null;
-    const nuevoImei = editImei.trim() || null;
+    const nuevoImei = limpiarImei(editImei);
     const nuevosDetalles = editDetalles.trim() || null;
     const nuevoPrecio = editPrecio ? Number(editPrecio) : null;
 
