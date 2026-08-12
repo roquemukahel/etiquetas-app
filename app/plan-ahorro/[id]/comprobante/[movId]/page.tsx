@@ -51,13 +51,17 @@ export default function ComprobantePlanAhorro() {
   const [plan, setPlan] = useState<Plan | null>(null);
   const [movimiento, setMovimiento] = useState<Movimiento | null>(null);
   const [totalPagado, setTotalPagado] = useState(0);
+  // Si esta consulta falla, NO hay que mostrar "$0 juntado" — un cliente
+  // que ya venía pagando vería su progreso borrado por un error de red,
+  // no porque de verdad no haya pagado nada.
+  const [totalPagadoError, setTotalPagadoError] = useState(false);
   const [negocio, setNegocio] = useState<Negocio | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
-      const [{ data: planData }, { data: mov, error: movError }, { data: todosMov }] = await Promise.all([
+      const [{ data: planData }, { data: mov, error: movError }, { data: todosMov, error: todosMovError }] = await Promise.all([
         supabase.from('planes_ahorro').select('id, modelo, capacidad_gb, color, monto_objetivo, clientes ( nombre, apellido, telefono )').eq('id', id).maybeSingle(),
         supabase
           .from('plan_ahorro_movimientos')
@@ -69,7 +73,8 @@ export default function ComprobantePlanAhorro() {
       if (movError) setError(movError.message);
       setPlan((planData as any) ?? null);
       setMovimiento((mov as Movimiento) ?? null);
-      setTotalPagado(((todosMov as { monto: number }[]) ?? []).reduce((acc, m) => acc + m.monto, 0));
+      setTotalPagadoError(!!todosMovError);
+      setTotalPagado(todosMovError ? 0 : ((todosMov as { monto: number }[]) ?? []).reduce((acc, m) => acc + m.monto, 0));
 
       const {
         data: { user },
@@ -198,16 +203,22 @@ export default function ComprobantePlanAhorro() {
             <span className="text-sm font-sans font-medium opacity-80">PAGO DE HOY</span>
             <span>${Math.round(movimiento.monto).toLocaleString('es-AR')}</span>
           </div>
-          <div className="flex justify-between text-sm px-1">
-            <span className="text-muted">Total juntado</span>
-            <span className="font-medium">
-              ${Math.round(totalPagado).toLocaleString('es-AR')} / ${Math.round(plan.monto_objetivo).toLocaleString('es-AR')}
-            </span>
-          </div>
-          <div className="flex justify-between text-sm px-1">
-            <span className="text-muted">{completo ? '¡Objetivo completado!' : 'Falta para completar'}</span>
-            {!completo && <span className="font-medium">${Math.round(falta).toLocaleString('es-AR')}</span>}
-          </div>
+          {totalPagadoError ? (
+            <p className="text-xs text-bad text-right">No pudimos confirmar el total juntado hasta ahora — no lo tomes de este comprobante.</p>
+          ) : (
+            <>
+              <div className="flex justify-between text-sm px-1">
+                <span className="text-muted">Total juntado</span>
+                <span className="font-medium">
+                  ${Math.round(totalPagado).toLocaleString('es-AR')} / ${Math.round(plan.monto_objetivo).toLocaleString('es-AR')}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm px-1">
+                <span className="text-muted">{completo ? '¡Objetivo completado!' : 'Falta para completar'}</span>
+                {!completo && <span className="font-medium">${Math.round(falta).toLocaleString('es-AR')}</span>}
+              </div>
+            </>
+          )}
         </div>
 
         {negocio?.texto_declaracion_plan_ahorro && (

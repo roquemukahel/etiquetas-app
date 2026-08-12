@@ -193,6 +193,18 @@ export default function DetallePlanAhorro() {
         detalles: editDetalles.trim() || null,
       })
       .eq('id', plan.id);
+    // El objetivo define cuándo el plan se considera completo (y se entrega
+    // el equipo) — a diferencia del resto de los campos, un cambio acá
+    // queda registrado para poder auditarlo después.
+    if (plan.monto_objetivo !== nuevoMontoObjetivo) {
+      await registrarAuditoria(supabase, {
+        accion: `cambió el monto objetivo del plan de ahorro de ${nombreCliente(plan)} de $${plan.monto_objetivo} a $${nuevoMontoObjetivo}`,
+        entidad: 'plan_ahorro',
+        entidadId: plan.id,
+        valorAnterior: { monto_objetivo: plan.monto_objetivo },
+        valorNuevo: { monto_objetivo: nuevoMontoObjetivo },
+      });
+    }
     setPlan({
       ...plan,
       modelo: editModelo.trim() || null,
