@@ -7,6 +7,9 @@ export type ReparacionParaOrden = {
   id: string;
   cliente_id: string | null;
   modelo: string | null;
+  capacidad_gb: number | null;
+  color: string | null;
+  imei: string | null;
   diagnostico: string | null;
   resultado_final: string | null;
   importe_total: number | null;
@@ -25,7 +28,12 @@ export async function generarOrdenDeReparacion(
   r: ReparacionParaOrden
 ): Promise<{ ordenId: string | null; total: number; error: string | null }> {
   const total = r.importe_total ?? (r.presupuesto_mano_obra || 0) + (r.presupuesto_repuestos || 0);
-  const descripcion = `Servicio técnico — ${r.modelo || 'equipo'}${r.diagnostico ? `: ${r.diagnostico}` : ''}`;
+  // Modelo/capacidad/color/IMEI se cargaron al recibir el equipo — sin esto,
+  // al generar la orden de cobro se pisaba la línea de la boleta (que sí los
+  // tenía desde el ingreso) con una que solo decía "Servicio técnico — modelo".
+  const descripcion = `Servicio técnico — ${r.modelo || 'equipo'}${r.capacidad_gb ? ` ${r.capacidad_gb}GB` : ''}${
+    r.color ? ` ${r.color}` : ''
+  }${r.imei ? ` · IMEI ${r.imei}` : ''}${r.diagnostico ? `: ${r.diagnostico}` : ''}`;
   // Constancia de cómo llegó el equipo (para la boleta), sin frase de "no se
   // garantiza": ver generarTextoCondicionIngreso.
   const notaCondicion = generarTextoCondicionIngreso(r as ChecklistIngreso) || null;

@@ -101,7 +101,7 @@ export default function DetalleProveedor() {
   const [guardandoCompra, setGuardandoCompra] = useState(false);
 
   const cargar = async () => {
-    const [{ data: prov }, { data: comprasData }, { data: dispData }, { data: movData }] = await Promise.all([
+    const [{ data: prov }, { data: comprasData }, { data: dispData }, { data: movData, error: movError }] = await Promise.all([
       supabase.from('proveedores').select('id, nombre, telefono, detalles').eq('id', id).maybeSingle(),
       supabase
         .from('compras_proveedor')
@@ -123,7 +123,15 @@ export default function DetalleProveedor() {
     setProveedor((prov as Proveedor) ?? null);
     setCompras((comprasData as CompraManual[]) ?? []);
     setDispositivos((dispData as DispositivoComprado[]) ?? []);
-    setMovimientos((movData as Movimiento[]) ?? []);
+    // Si esta consulta falla, NO hay que mostrar el saldo como si fuera $0
+    // real (podría en realidad tener una deuda) — mismo criterio que la
+    // cuenta corriente de clientes.
+    if (movError) {
+      setError('No pudimos cargar los movimientos — el saldo de abajo puede no ser real. Recargá la página.');
+      setMovimientos([]);
+    } else {
+      setMovimientos((movData as Movimiento[]) ?? []);
+    }
     setLoading(false);
   };
 
@@ -183,16 +191,20 @@ export default function DetalleProveedor() {
     setGuardandoCta(true);
     setError(null);
     const esPago = accionCta === 'pago';
-    const { error: dbError } = await supabase.from('proveedor_movimientos').insert({
-      proveedor_id: proveedor.id,
-      tipo: esPago ? 'abono' : 'cargo',
-      concepto: esPago ? 'pago' : 'deuda',
-      monto,
-      medio: esPago ? medioCta : null,
-      observacion: obsCta.trim() || null,
-      registrado_por_nombre: actor?.nombre ?? null,
-      registrado_por_foto_url: actor?.fotoUrl ?? null,
-    });
+    const { data: nuevoMov, error: dbError } = await supabase
+      .from('proveedor_movimientos')
+      .insert({
+        proveedor_id: proveedor.id,
+        tipo: esPago ? 'abono' : 'cargo',
+        concepto: esPago ? 'pago' : 'deuda',
+        monto,
+        medio: esPago ? medioCta : null,
+        observacion: obsCta.trim() || null,
+        registrado_por_nombre: actor?.nombre ?? null,
+        registrado_por_foto_url: actor?.fotoUrl ?? null,
+      })
+      .select('id')
+      .single();
     if (dbError) {
       setError('No pudimos guardar el movimiento: ' + dbError.message);
       setGuardandoCta(false);
@@ -203,6 +215,12 @@ export default function DetalleProveedor() {
     setMontoCta('');
     setObsCta('');
     setMedioCta('efectivo');
+    // Se abre directo el comprobante para imprimirlo o mandarlo — es lo que
+    // pidió el usuario: un comprobante del pago/deuda recién generado.
+    if (nuevoMov?.id) {
+      router.push(`/proveedores/${proveedor.id}/comprobante/${nuevoMov.id}`);
+      return;
+    }
     cargar();
   };
 
@@ -515,6 +533,9 @@ export default function DetalleProveedor() {
                   <p className={`text-sm font-medium ${m.tipo === 'cargo' ? 'text-bad' : 'text-good'}`}>
                     {m.tipo === 'cargo' ? '+' : '−'}${Math.round(m.monto).toLocaleString('es-AR')}
                   </p>
+                  <Link href={`/proveedores/${id}/comprobante/${m.id}`} className="text-[11px] text-accent dark:text-dark-accent underline">
+                    Comprobante
+                  </Link>
                   <button onClick={() => anularMovimiento(m.id)} className="text-[11px] text-bad underline">
                     Anular
                   </button>

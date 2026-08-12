@@ -36,6 +36,9 @@ export default function Proveedores() {
 
   // Total que le debés a todos los proveedores (solo saldos positivos).
   const totalPorPagar = useMemo(() => proveedores.reduce((acc, p) => acc + Math.max(0, p.saldo), 0), [proveedores]);
+  // Total a favor: suma de los saldos negativos (proveedores a los que les
+  // pagaste de más), en valor positivo para mostrar.
+  const totalAFavor = useMemo(() => proveedores.reduce((acc, p) => acc + Math.max(0, -p.saldo), 0), [proveedores]);
 
   useEffect(() => {
     if (!puedeVer) {
@@ -78,17 +81,28 @@ export default function Proveedores() {
         <Link href="/" className="text-2xl leading-none">
           &larr;
         </Link>
-        <span className="text-lg font-medium">Proveedores</span>
+        <span className="text-lg font-medium">Proveedores / Plan de ahorro</span>
       </header>
 
       <p className="text-xs text-muted dark:text-dark-text-secondary -mt-2">
-        A quién le comprás stock en lote. Entrá a cada uno para ver las compras y llevar la cuenta de lo que le debés.
+        A quién le comprás stock en lote, o con quién tenés un plan de ahorro. Entrá a cada uno para ver el detalle y llevar
+        la cuenta de lo que le debés (o de tu saldo a favor).
       </p>
 
-      {totalPorPagar > 0 && (
-        <div className="rounded-2xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-4">
-          <p className="text-[11px] uppercase tracking-wide text-muted dark:text-dark-text-secondary">Total por pagar a proveedores</p>
-          <p className="text-2xl font-display font-semibold text-bad">${Math.round(totalPorPagar).toLocaleString('es-AR')}</p>
+      {(totalPorPagar > 0 || totalAFavor > 0) && (
+        <div className={totalPorPagar > 0 && totalAFavor > 0 ? 'grid grid-cols-2 gap-3' : 'flex'}>
+          {totalPorPagar > 0 && (
+            <div className="flex-1 rounded-2xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-4">
+              <p className="text-[11px] uppercase tracking-wide text-muted dark:text-dark-text-secondary">Total por pagar</p>
+              <p className="text-2xl font-display font-semibold text-bad">${Math.round(totalPorPagar).toLocaleString('es-AR')}</p>
+            </div>
+          )}
+          {totalAFavor > 0 && (
+            <div className="flex-1 rounded-2xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-4">
+              <p className="text-[11px] uppercase tracking-wide text-muted dark:text-dark-text-secondary">Saldo a favor</p>
+              <p className="text-2xl font-display font-semibold text-good">${Math.round(totalAFavor).toLocaleString('es-AR')}</p>
+            </div>
+          )}
         </div>
       )}
 

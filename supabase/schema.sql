@@ -2388,3 +2388,10 @@ as $$
 $$;
 
 grant execute on function boleta_publica(uuid) to anon, authenticated;
+
+-- ============================================================
+-- Proveedores / Plan de ahorro: comprobante de pago/deuda, con términos y
+-- condiciones configurables (igual que la declaración de compra).
+-- ============================================================
+alter table negocios add column if not exists texto_declaracion_proveedor text;
+alter table negocios add column if not exists texto_declaracion_proveedor_tamano int not null default 11;
