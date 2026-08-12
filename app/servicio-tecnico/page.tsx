@@ -369,7 +369,14 @@ export default function ServicioTecnico() {
       const { error: itemsError } = await supabase.from('orden_items').insert(
         equiposEfectivos.map((eq) => ({
           orden_id: orden.id,
-          descripcion: `Servicio técnico — ${eq.modelo}`,
+          // El vendedor carga modelo/capacidad/color/IMEI en el formulario de
+          // ingreso, pero antes se perdían: la boleta solo mostraba "Servicio
+          // técnico — {modelo}". Se arma igual que la línea de un dispositivo
+          // vendido (ver agregarDispositivoDelStock en Nueva Orden) para que
+          // toda esa info quede visible en la boleta.
+          descripcion: `Servicio técnico — ${eq.modelo}${eq.capacidad_gb ? ` ${eq.capacidad_gb}GB` : ''}${
+            eq.color ? ` ${eq.color}` : ''
+          }${eq.imei ? ` · IMEI ${eq.imei}` : ''}`,
           cantidad: 1,
           precio_unitario: 0,
           tipo: 'trabajo',

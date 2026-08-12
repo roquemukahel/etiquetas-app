@@ -13,6 +13,7 @@ import { simboloMoneda } from '../../lib/monedas';
 import { sanitizarDecimal } from '../../lib/numeros';
 import Avatar from '../../Avatar';
 import SelectorColorAuto from '../../SelectorColorAuto';
+import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
 
 const ESTADOS = ['pendiente', 'pagado', 'entregado'];
 const FORMAS_PAGO = ['Efectivo', 'Transferencia', 'Tarjeta'];
@@ -66,6 +67,17 @@ type ItemEditable = {
   tipo: string;
   bateria: string;
   esNuevo?: boolean;
+  dispositivoId?: string | null;
+};
+
+type DispositivoStockEdit = {
+  id: string;
+  modelo: string | null;
+  capacidad_gb: number | null;
+  color: string | null;
+  imei: string | null;
+  precio: number | null;
+  salud_bateria: number | null;
 };
 
 // La batería del equipo vendido se guarda como sufijo " · Batería X%" en la
@@ -143,6 +155,18 @@ export default function DetalleOrden() {
   const [anticipoEdit, setAnticipoEdit] = useState('');
   const [impuestoEdit, setImpuestoEdit] = useState('');
   const [itemsEdit, setItemsEdit] = useState<ItemEditable[]>([]);
+  // --- agregar un dispositivo (del stock o cargar nuevo) mientras se edita ---
+  const [agregandoDispositivoEdit, setAgregandoDispositivoEdit] = useState(false);
+  const [modoDispositivoEdit, setModoDispositivoEdit] = useState<'stock' | 'nuevo'>('stock');
+  const [dispositivosStockEdit, setDispositivosStockEdit] = useState<DispositivoStockEdit[]>([]);
+  const [buscarDispositivoEdit, setBuscarDispositivoEdit] = useState('');
+  const [nuevoModeloDispEdit, setNuevoModeloDispEdit] = useState('');
+  const [nuevaCapacidadDispEdit, setNuevaCapacidadDispEdit] = useState<number | null>(null);
+  const [nuevoColorDispEdit, setNuevoColorDispEdit] = useState('');
+  const [nuevoEstadoDispEdit, setNuevoEstadoDispEdit] = useState('usado');
+  const [nuevoImeiDispEdit, setNuevoImeiDispEdit] = useState('');
+  const [nuevoPrecioDispEdit, setNuevoPrecioDispEdit] = useState('');
+  const [cargandoDispositivoEdit, setCargandoDispositivoEdit] = useState(false);
   const [vendedorEdit, setVendedorEdit] = useState('');
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [monedasDisponibles, setMonedasDisponibles] = useState<string[]>([]);
@@ -358,6 +382,15 @@ export default function DetalleOrden() {
     setCanjeMonto('');
     setCanjeDetalles('');
     setAgregandoCanje(false);
+    setAgregandoDispositivoEdit(false);
+    setBuscarDispositivoEdit('');
+    setModoDispositivoEdit('stock');
+    setNuevoModeloDispEdit('');
+    setNuevaCapacidadDispEdit(null);
+    setNuevoColorDispEdit('');
+    setNuevoEstadoDispEdit('usado');
+    setNuevoImeiDispEdit('');
+    setNuevoPrecioDispEdit('');
     setError(null);
     setEditando(true);
   };
@@ -387,6 +420,77 @@ export default function DetalleOrden() {
     ]);
 
   const quitarItemEdit = (itemId: string) => setItemsEdit((items) => items.filter((i) => i.id !== itemId));
+
+  // Dispositivos ya agregados en esta misma edición (para no ofrecerlos de
+  // nuevo en la lista "del stock").
+  const idsDispositivoEnItemsEdit = new Set(itemsEdit.map((i) => i.dispositivoId).filter(Boolean));
+  const dispositivosStockEditFiltrados = dispositivosStockEdit.filter((d) => {
+    if (idsDispositivoEnItemsEdit.has(d.id)) return false;
+    const q = buscarDispositivoEdit.trim().toLowerCase();
+    if (!q) return true;
+    return [d.modelo, d.imei].filter(Boolean).some((x) => x!.toLowerCase().includes(q));
+  });
+
+  const abrirDispositivoEdit = async () => {
+    setAgregandoDispositivoEdit(true);
+    setModoDispositivoEdit('stock');
+    const { data } = await supabase
+      .from('dispositivos')
+      .select('id, modelo, capacidad_gb, color, imei, precio, salud_bateria')
+      .eq('en_stock', true);
+    setDispositivosStockEdit((data as DispositivoStockEdit[]) ?? []);
+  };
+
+  const agregarDispositivoDelStockEdit = (d: DispositivoStockEdit) => {
+    setItemsEdit((items) => [
+      ...items,
+      {
+        id: idTemporal(),
+        descripcion: `${d.modelo || 'Dispositivo'}${d.capacidad_gb ? ` ${d.capacidad_gb}GB` : ''}${
+          d.color ? ` ${d.color}` : ''
+        }${d.imei ? ` · IMEI ${d.imei}` : ''}`,
+        cantidad: '1',
+        precioUnitario: d.precio != null ? String(d.precio) : '',
+        tipo: 'dispositivo',
+        bateria: d.salud_bateria != null ? String(d.salud_bateria) : '',
+        esNuevo: true,
+        dispositivoId: d.id,
+      },
+    ]);
+    setAgregandoDispositivoEdit(false);
+    setBuscarDispositivoEdit('');
+  };
+
+  const agregarDispositivoNuevoEdit = async () => {
+    if (!nuevoModeloDispEdit.trim()) return;
+    setCargandoDispositivoEdit(true);
+    setError(null);
+    const { data, error: dErr } = await supabase
+      .from('dispositivos')
+      .insert({
+        modelo: nuevoModeloDispEdit.trim(),
+        capacidad_gb: nuevaCapacidadDispEdit,
+        color: nuevoColorDispEdit.trim() || null,
+        imei: nuevoImeiDispEdit.trim() || null,
+        precio: nuevoPrecioDispEdit ? Number(nuevoPrecioDispEdit) : null,
+        estado: nuevoEstadoDispEdit,
+        en_stock: true,
+      })
+      .select()
+      .single();
+    setCargandoDispositivoEdit(false);
+    if (dErr || !data) {
+      setError('No pudimos cargar el dispositivo: ' + (dErr?.message || ''));
+      return;
+    }
+    agregarDispositivoDelStockEdit(data as DispositivoStockEdit);
+    setNuevoModeloDispEdit('');
+    setNuevaCapacidadDispEdit(null);
+    setNuevoColorDispEdit('');
+    setNuevoEstadoDispEdit('usado');
+    setNuevoImeiDispEdit('');
+    setNuevoPrecioDispEdit('');
+  };
 
   const agregarCanjeEdit = () => {
     if (!canjeModelo.trim()) return;
@@ -505,9 +609,9 @@ export default function DetalleOrden() {
       })
       .filter(Boolean) as { id: string; antes: unknown; despues: unknown }[];
 
-    // Ítems nuevos (accesorios agregados a una boleta ya hecha): solo los que
-    // tienen descripción cargada. No tocan el stock (es una corrección de la
-    // boleta), se insertan como orden_items sueltos.
+    // Ítems nuevos agregados a una boleta ya hecha: accesorios sueltos (no
+    // tocan el stock) o un dispositivo real (con dispositivoId, del stock o
+    // recién cargado) — a esos sí hay que reservarlos antes de insertar.
     const itemsNuevos = itemsEdit
       .filter((edit) => edit.esNuevo && edit.descripcion.trim())
       .map((edit) => ({
@@ -516,6 +620,7 @@ export default function DetalleOrden() {
         cantidad: Math.max(1, Number(edit.cantidad) || 1),
         precio_unitario: Number(edit.precioUnitario) || 0,
         tipo: edit.tipo || 'producto',
+        dispositivo_id: edit.dispositivoId || null,
       }));
 
     if (
@@ -550,9 +655,43 @@ export default function DetalleOrden() {
       }
     }
 
+    // Los dispositivos agregados durante la edición se reservan ANTES de
+    // insertar los ítems, y solo si seguían en_stock:true en ese momento
+    // (mismo criterio atómico que usa Nueva Orden) — evita vender el mismo
+    // equipo dos veces si otra persona lo vendió mientras se editaba esta boleta.
+    const dispositivoIdsNuevos = itemsNuevos.map((i) => i.dispositivo_id).filter(Boolean) as string[];
+    if (dispositivoIdsNuevos.length > 0) {
+      const { data: reservados, error: reservaError } = await supabase
+        .from('dispositivos')
+        .update({ en_stock: false })
+        .in('id', dispositivoIdsNuevos)
+        .eq('en_stock', true)
+        .select('id');
+      if (reservaError || !reservados || reservados.length !== dispositivoIdsNuevos.length) {
+        if (reservados && reservados.length > 0) {
+          await supabase
+            .from('dispositivos')
+            .update({ en_stock: true })
+            .in('id', reservados.map((r) => r.id));
+        }
+        setError(
+          reservaError
+            ? 'No pudimos reservar los dispositivos agregados: ' + reservaError.message
+            : 'Alguno de los dispositivos que agregaste ya se vendió (quizás desde otra pestaña). Sacalo de la lista y probá de nuevo.'
+        );
+        setGuardando(false);
+        return;
+      }
+    }
+
     if (itemsNuevos.length > 0) {
       const { error: itemsInsError } = await supabase.from('orden_items').insert(itemsNuevos);
       if (itemsInsError) {
+        // Si ya se habían reservado dispositivos arriba, hay que devolverlos
+        // al stock — si no, quedarían reservados sin ninguna boleta real detrás.
+        if (dispositivoIdsNuevos.length > 0) {
+          await supabase.from('dispositivos').update({ en_stock: true }).in('id', dispositivoIdsNuevos);
+        }
         setError('No pudimos agregar un ítem nuevo: ' + itemsInsError.message);
         setGuardando(false);
         return;
@@ -931,12 +1070,125 @@ export default function DetalleOrden() {
             </div>
           ))}
 
-          <button
-            onClick={agregarItemEdit}
-            className="self-start text-xs text-accent dark:text-dark-accent underline"
-          >
-            + Agregar ítem / accesorio
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={agregarItemEdit}
+              className="self-start text-xs text-accent dark:text-dark-accent underline"
+            >
+              + Agregar ítem / accesorio
+            </button>
+            <button
+              onClick={() => (agregandoDispositivoEdit ? setAgregandoDispositivoEdit(false) : abrirDispositivoEdit())}
+              className="self-start text-xs text-accent dark:text-dark-accent underline"
+            >
+              {agregandoDispositivoEdit ? 'Cancelar' : '+ Agregar dispositivo'}
+            </button>
+          </div>
+
+          {agregandoDispositivoEdit && (
+            <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-3 flex flex-col gap-2">
+              <div className="flex items-center gap-2 text-xs">
+                <button
+                  onClick={() => setModoDispositivoEdit('stock')}
+                  className={`flex-1 rounded-lg py-2 font-medium ${
+                    modoDispositivoEdit === 'stock' ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
+                  }`}
+                >
+                  Del stock
+                </button>
+                <button
+                  onClick={() => setModoDispositivoEdit('nuevo')}
+                  className={`flex-1 rounded-lg py-2 font-medium ${
+                    modoDispositivoEdit === 'nuevo' ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
+                  }`}
+                >
+                  Cargar nuevo
+                </button>
+              </div>
+
+              {modoDispositivoEdit === 'stock' ? (
+                <>
+                  <input
+                    value={buscarDispositivoEdit}
+                    onChange={(e) => setBuscarDispositivoEdit(e.target.value)}
+                    placeholder="Buscar por modelo o IMEI..."
+                    className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                  />
+                  <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
+                    {dispositivosStockEditFiltrados.length === 0 && (
+                      <p className="text-xs text-muted dark:text-dark-text-secondary text-center py-2">No hay dispositivos disponibles.</p>
+                    )}
+                    {dispositivosStockEditFiltrados.map((d) => (
+                      <button
+                        key={d.id}
+                        onClick={() => agregarDispositivoDelStockEdit(d)}
+                        className="rounded-lg border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-3 py-2 flex items-center justify-between text-left text-sm gap-2"
+                      >
+                        <span className="min-w-0">
+                          <span className="block truncate">
+                            {d.modelo} {d.capacidad_gb ? `· ${d.capacidad_gb}GB` : ''} {d.color ? `· ${d.color}` : ''}
+                          </span>
+                          {d.imei && (
+                            <span className="block text-xs font-bold font-mono text-ink dark:text-dark-text truncate">{d.imei}</span>
+                          )}
+                        </span>
+                        {d.precio != null && (
+                          <span className="font-medium shrink-0">
+                            {simboloMoneda(orden?.moneda)}
+                            {d.precio.toLocaleString('es-AR')}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  <input
+                    value={nuevoModeloDispEdit}
+                    onChange={(e) => setNuevoModeloDispEdit(e.target.value)}
+                    placeholder="Modelo (ej. iPhone 13)"
+                    className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                  />
+                  <div className="flex gap-2">
+                    {STORAGE_OPTIONS.map((gb) => (
+                      <button
+                        key={gb}
+                        onClick={() => setNuevaCapacidadDispEdit(gb)}
+                        className={`flex-1 rounded-lg py-2 text-xs font-medium ${
+                          nuevaCapacidadDispEdit === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
+                        }`}
+                      >
+                        {gb}GB
+                      </button>
+                    ))}
+                  </div>
+                  <SelectorColorAuto label="Color" modelo={nuevoModeloDispEdit} value={nuevoColorDispEdit} onChange={setNuevoColorDispEdit} />
+                  <SelectorEstadoDispositivo value={nuevoEstadoDispEdit} onChange={setNuevoEstadoDispEdit} />
+                  <input
+                    value={nuevoImeiDispEdit}
+                    onChange={(e) => setNuevoImeiDispEdit(e.target.value)}
+                    placeholder="IMEI"
+                    className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm font-mono"
+                  />
+                  <input
+                    value={nuevoPrecioDispEdit}
+                    onChange={(e) => setNuevoPrecioDispEdit(sanitizarDecimal(e.target.value))}
+                    placeholder="Precio"
+                    inputMode="decimal"
+                    className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                  />
+                  <button
+                    disabled={!nuevoModeloDispEdit.trim() || cargandoDispositivoEdit}
+                    onClick={agregarDispositivoNuevoEdit}
+                    className="w-full rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
+                  >
+                    {cargandoDispositivoEdit ? 'Agregando...' : 'Agregar al carrito'}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-3 flex flex-col gap-2">

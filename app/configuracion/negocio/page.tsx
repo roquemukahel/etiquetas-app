@@ -30,9 +30,11 @@ type Negocio = {
   marcas_stock: string[];
   pais: string;
   texto_declaracion_compra: string | null;
+  texto_declaracion_proveedor: string | null;
   texto_garantia_tamano: number;
   texto_garantia_servicio_tamano: number;
   texto_declaracion_compra_tamano: number;
+  texto_declaracion_proveedor_tamano: number;
   garantia_dias: number | null;
 };
 
@@ -62,7 +64,7 @@ export default function DatosNegocio() {
       const { data: perfil } = await supabase
         .from('perfiles')
         .select(
-          'negocio_id, negocios ( id, nombre, telefono, direccion, eslogan, logo_url, texto_garantia, texto_garantia_servicio, instagram, facebook, tiktok, mostrar_instagram, mostrar_facebook, mostrar_tiktok, moneda, monedas_habilitadas, tipo_cambio, marcas_stock, pais, texto_declaracion_compra, texto_garantia_tamano, texto_garantia_servicio_tamano, texto_declaracion_compra_tamano, garantia_dias )'
+          'negocio_id, negocios ( id, nombre, telefono, direccion, eslogan, logo_url, texto_garantia, texto_garantia_servicio, instagram, facebook, tiktok, mostrar_instagram, mostrar_facebook, mostrar_tiktok, moneda, monedas_habilitadas, tipo_cambio, marcas_stock, pais, texto_declaracion_compra, texto_declaracion_proveedor, texto_garantia_tamano, texto_garantia_servicio_tamano, texto_declaracion_compra_tamano, texto_declaracion_proveedor_tamano, garantia_dias )'
         )
         .eq('id', user.id)
         .single();
@@ -200,9 +202,11 @@ export default function DatosNegocio() {
         marcas_stock: negocio.marcas_stock,
         pais: negocio.pais,
         texto_declaracion_compra: negocio.texto_declaracion_compra?.trim() || null,
+        texto_declaracion_proveedor: negocio.texto_declaracion_proveedor?.trim() || null,
         texto_garantia_tamano: negocio.texto_garantia_tamano,
         texto_garantia_servicio_tamano: negocio.texto_garantia_servicio_tamano,
         texto_declaracion_compra_tamano: negocio.texto_declaracion_compra_tamano,
+        texto_declaracion_proveedor_tamano: negocio.texto_declaracion_proveedor_tamano,
         garantia_dias: negocio.garantia_dias || null,
       })
       .eq('id', negocio.id);
@@ -437,6 +441,15 @@ export default function DatosNegocio() {
           tamano={negocio.texto_declaracion_compra_tamano}
           onChangeTamano={(v) => campoNum('texto_declaracion_compra_tamano', v)}
           placeholder="Declaro que el dispositivo entregado es de mi propiedad, ha sido obtenido de buena fe y que soy responsable de la información brindada."
+        />
+
+        <TextoConTamano
+          label="Términos y condiciones (va en el comprobante de pago/deuda de Proveedores / Plan de ahorro)"
+          valor={negocio.texto_declaracion_proveedor ?? ''}
+          onChange={(v) => campo('texto_declaracion_proveedor', v)}
+          tamano={negocio.texto_declaracion_proveedor_tamano}
+          onChangeTamano={(v) => campoNum('texto_declaracion_proveedor_tamano', v)}
+          placeholder="Ej. condiciones del plan de ahorro, garantía del pago, plazos, etc."
         />
 
         <p className="text-xs text-muted dark:text-dark-text-secondary font-medium mt-2">Redes sociales (opcional)</p>
