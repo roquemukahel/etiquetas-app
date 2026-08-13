@@ -5,6 +5,7 @@ export default function MiniaturaDispositivo({ src, size = 40 }: { src: string |
     <img
       src={src}
       alt=""
+      loading="lazy"
       style={estilo}
       className="rounded-lg object-cover shrink-0 border border-border dark:border-dark-border transition-transform duration-300 ease-out hover:animate-flotarLeve hover:drop-shadow-md"
     />

@@ -1325,7 +1325,12 @@ export default function Stock() {
                         )}
                         {imgColor && (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={imgColor} alt={d.color || ''} className="h-10 w-auto object-contain shrink-0 transition-transform duration-300 ease-out hover:animate-flotarLeve hover:drop-shadow-md" />
+                          <img
+                            src={imgColor}
+                            alt={d.color || ''}
+                            loading="lazy"
+                            className="h-10 w-auto object-contain shrink-0 transition-transform duration-300 ease-out hover:animate-flotarLeve hover:drop-shadow-md"
+                          />
                         )}
                         <div className="flex-1 flex items-center justify-between gap-2 min-w-0">
                           <div className="min-w-0">
@@ -1388,8 +1393,8 @@ export default function Stock() {
                             <button
                               onClick={() => setAccionAbiertaId(accionAbiertaId === d.id ? null : d.id)}
                               disabled={procesando}
-                              aria-label="Más acciones"
-                              className="h-9 w-9 rounded-lg border border-border dark:border-dark-border text-muted dark:text-dark-text-secondary hover:bg-canvas dark:hover:bg-dark-bg flex items-center justify-center disabled:opacity-40"
+                              aria-label={`Más acciones de ${d.modelo || 'este dispositivo'}`}
+                              className="h-10 w-10 rounded-lg border border-border dark:border-dark-border text-muted dark:text-dark-text-secondary hover:bg-canvas dark:hover:bg-dark-bg flex items-center justify-center disabled:opacity-40"
                             >
                               {procesando ? '…' : '···'}
                             </button>
