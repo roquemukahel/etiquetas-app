@@ -63,6 +63,7 @@ export default function Ordenes() {
   const [loading, setLoading] = useState(true);
   const [filtroEstado, setFiltroEstado] = useState('todas');
   const [filtroTipo, setFiltroTipo] = useState<'todas' | 'ventas' | 'servicio'>('todas');
+  const [busqueda, setBusqueda] = useState('');
 
   const cargar = async () => {
     const [{ data: ordenesData }, { data: listasData }] = await Promise.all([
@@ -107,13 +108,23 @@ export default function Ordenes() {
   };
 
   const filtradas = useMemo(() => {
+    const q = busqueda.trim().toLowerCase();
     return ordenes
       .filter((o) => filtroEstado === 'todas' || o.estado === filtroEstado)
       .filter((o) => {
         if (filtroTipo === 'todas') return true;
         return filtroTipo === 'servicio' ? esServicioTecnico(o) : !esServicioTecnico(o);
+      })
+      .filter((o) => {
+        if (!q) return true;
+        const nombreCliente = o.clientes ? `${o.clientes.nombre} ${o.clientes.apellido || ''}`.trim().toLowerCase() : '';
+        // Modelo/IMEI ya viven adentro de la descripción del ítem (ej. "iPhone
+        // 15 128GB Verde · IMEI 359..."), así que buscar en la descripción
+        // también busca por esos datos sin tener que parsearlos aparte.
+        const itemsTexto = o.orden_items.map((i) => i.descripcion.toLowerCase()).join(' ');
+        return nombreCliente.includes(q) || itemsTexto.includes(q);
       });
-  }, [ordenes, filtroEstado, filtroTipo]);
+  }, [ordenes, filtroEstado, filtroTipo, busqueda]);
 
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
@@ -123,6 +134,13 @@ export default function Ordenes() {
         </Link>
         <span className="text-lg font-medium">Órdenes</span>
       </header>
+
+      <input
+        value={busqueda}
+        onChange={(e) => setBusqueda(e.target.value)}
+        placeholder="Buscar por cliente, modelo o IMEI..."
+        className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+      />
 
       <div className="flex items-center gap-2 text-xs overflow-x-auto">
         {TIPOS.map((t) => (
