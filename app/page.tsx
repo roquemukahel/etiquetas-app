@@ -550,28 +550,47 @@ export default async function Home() {
             <p className="text-xs text-muted dark:text-dark-text-secondary">Todavía no hay ventas este mes.</p>
           ) : (
             <div className="flex flex-col gap-3">
-              {masVendidos.map((p) => (
-                <div key={p.nombre} className="flex items-center gap-3">
-                  {p.imagenUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={p.imagenUrl}
-                      alt=""
-                      className="h-10 w-10 rounded-lg object-cover shrink-0 border border-border dark:border-dark-border"
-                    />
-                  ) : (
-                    <div className="h-10 w-10 rounded-lg bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border flex items-center justify-center text-base shrink-0">
-                      📦
+              {masVendidos.map((p, idx) => {
+                const medalla =
+                  idx === 0
+                    ? { emoji: '🥇', grad: 'from-amber-300 to-amber-500' }
+                    : idx === 1
+                    ? { emoji: '🥈', grad: 'from-slate-300 to-slate-400' }
+                    : idx === 2
+                    ? { emoji: '🥉', grad: 'from-orange-300 to-orange-500' }
+                    : null;
+                return (
+                  <div key={p.nombre} className="flex items-center gap-3">
+                    <div className="relative shrink-0">
+                      {p.imagenUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={p.imagenUrl}
+                          alt=""
+                          className="h-10 w-10 rounded-lg object-cover border border-border dark:border-dark-border"
+                        />
+                      ) : (
+                        <div className="h-10 w-10 rounded-lg bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border flex items-center justify-center text-base">
+                          📦
+                        </div>
+                      )}
+                      {medalla && (
+                        <span
+                          className={`absolute -top-1.5 -left-1.5 h-5 w-5 rounded-full bg-gradient-to-b ${medalla.grad} border border-white dark:border-dark-surface shadow flex items-center justify-center text-[11px]`}
+                        >
+                          {medalla.emoji}
+                        </span>
+                      )}
                     </div>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium truncate">{p.nombre}</p>
-                    <p className="text-[11px] text-muted dark:text-dark-text-secondary">
-                      {p.cantidad} unidad{p.cantidad === 1 ? '' : 'es'}
-                    </p>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium truncate">{p.nombre}</p>
+                      <p className="text-[11px] text-muted dark:text-dark-text-secondary">
+                        {p.cantidad} unidad{p.cantidad === 1 ? '' : 'es'}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
