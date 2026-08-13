@@ -138,13 +138,17 @@ export default function Stock() {
 
   // En "Vendidos" las carpetas arrancan cerradas (pueden acumular cientos de
   // unidades del mismo modelo) y se abren una por una al tocarlas. En "En
-  // stock"/"Historial" arrancan abiertas, como siempre. gruposAlternados
-  // guarda qué carpetas se tocaron manualmente, invirtiendo el default de la
-  // vista actual.
-  const [gruposAlternados, setGruposAlternados] = useState<Set<string>>(new Set());
+  // stock"/"Historial" arrancan abiertas, como siempre. `colapsadas` guarda
+  // las EXCEPCIONES al default de la vista actual (tocadas a mano, o por
+  // "Expandir/Contraer todas") — el nombre ya no es "alternadas" porque
+  // ahora también lo escriben las acciones masivas, no solo el toggle
+  // individual de cada carpeta.
+  const [colapsadas, setColapsadas] = useState<Set<string>>(new Set());
+  const [mostrarVacias, setMostrarVacias] = useState(false);
+  const [carpetaMenuAbierta, setCarpetaMenuAbierta] = useState<string | null>(null);
 
   useEffect(() => {
-    setGruposAlternados(new Set());
+    setColapsadas(new Set());
   }, [vista]);
 
   const grupoExpandido = (modelo: string) => {
@@ -152,11 +156,11 @@ export default function Stock() {
     // ir tocando carpeta por carpeta.
     if (busquedaDebounced.trim()) return true;
     const porDefecto = vista !== 'vendidos';
-    return gruposAlternados.has(modelo) ? !porDefecto : porDefecto;
+    return colapsadas.has(modelo) ? !porDefecto : porDefecto;
   };
 
   const toggleGrupo = (modelo: string) => {
-    setGruposAlternados((prev) => {
+    setColapsadas((prev) => {
       const nuevo = new Set(prev);
       if (nuevo.has(modelo)) nuevo.delete(modelo);
       else nuevo.add(modelo);
@@ -164,10 +168,21 @@ export default function Stock() {
     });
   };
 
+  // "Expandir todas"/"Contraer todas": como el default cambia según la
+  // vista, en vez de expandido/contraído "a secas" lo que se guarda son las
+  // excepciones al default — por eso una acción vacía el set y la otra lo
+  // llena con todas las carpetas visibles.
+  const expandirTodas = () => setColapsadas(vista === 'vendidos' ? new Set(grupos.map(([nombre]) => nombre)) : new Set());
+  const contraerTodas = () => setColapsadas(vista === 'vendidos' ? new Set() : new Set(grupos.map(([nombre]) => nombre)));
+
   const [eliminandoCarpeta, setEliminandoCarpeta] = useState<string | null>(null);
 
+  // Elimina TODOS los dispositivos de la carpeta (acción fuerte, ya existía)
+  // — distinta de "eliminar carpeta" del menú, que borra solo el catálogo
+  // vacío y por eso está bloqueada si hay dispositivos adentro.
   const eliminarCarpeta = async (modelo: string, items: Dispositivo[]) => {
     if (items.length === 0 || !puedeEliminar) return;
+    setCarpetaMenuAbierta(null);
     if (
       !confirm(
         `¿Eliminar los ${items.length} dispositivo${items.length === 1 ? '' : 's'} de "${modelo}"? No se puede deshacer.`
@@ -185,6 +200,21 @@ export default function Stock() {
     }
     setEliminandoCarpeta(null);
     cargarDispositivos();
+  };
+
+  // Esta es la acción SEGURA del menú "Eliminar carpeta": solo saca la
+  // carpeta vacía del catálogo (modelos_stock), no toca ningún dispositivo
+  // — por eso solo se ofrece cuando la carpeta no tiene ninguno.
+  const eliminarCarpetaVacia = async (modelo: string) => {
+    if (!puedeEliminar) return;
+    setCarpetaMenuAbierta(null);
+    if (!confirm(`¿Eliminar la carpeta "${modelo}"? No tiene dispositivos, así que no se pierde nada.`)) return;
+    await supabase.from('modelos_stock').delete().eq('nombre', modelo);
+    await registrarAuditoria(supabase, {
+      accion: `eliminó la carpeta vacía "${modelo}" de Stock`,
+      entidad: 'carpeta',
+    });
+    setCarpetas((cs) => cs.filter((c) => c !== modelo));
   };
 
   const cargarProductos = async () => {
@@ -536,6 +566,14 @@ export default function Stock() {
     return ordenado;
   }, [filtrados, carpetas, busquedaDebounced, vista, filtroRapido, imeiExactoModelo]);
 
+  // Carpetas vacías ocultas por defecto (no aportan nada operativo la
+  // mayoría del tiempo) — con una opción para mostrarlas igual.
+  const gruposVacios = useMemo(() => grupos.filter(([, items]) => items.length === 0).length, [grupos]);
+  const gruposVisibles = useMemo(
+    () => (mostrarVacias ? grupos : grupos.filter(([, items]) => items.length > 0)),
+    [grupos, mostrarVacias]
+  );
+
   // Capital invertido en stock: celulares en stock + accesorios (cantidad ×
   // costo/precio). A diferencia de antes, un campo AUSENTE (null) ya no se
   // trata como si fuera $0: un dispositivo sin costo cargado simplemente no
@@ -797,6 +835,7 @@ export default function Stock() {
 
       {menuAbierto && <div className="fixed inset-0 z-20" onClick={() => setMenuAbierto(null)} />}
       {accionAbiertaId && <div className="fixed inset-0 z-20" onClick={() => setAccionAbiertaId(null)} />}
+      {carpetaMenuAbierta && <div className="fixed inset-0 z-20" onClick={() => setCarpetaMenuAbierta(null)} />}
 
       {puedeVerCapital && (
         <div className="rounded-2xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-4">
@@ -1022,8 +1061,28 @@ export default function Stock() {
             </p>
           )}
 
+          {!loading && grupos.length > 0 && (
+            <div className="flex items-center gap-3 text-xs text-muted dark:text-dark-text-secondary">
+              <button onClick={expandirTodas} className="underline decoration-dotted hover:text-ink dark:hover:text-dark-text">
+                Expandir todas
+              </button>
+              <button onClick={contraerTodas} className="underline decoration-dotted hover:text-ink dark:hover:text-dark-text">
+                Contraer todas
+              </button>
+              {gruposVacios > 0 && (
+                <button
+                  onClick={() => setMostrarVacias((v) => !v)}
+                  className="ml-auto underline decoration-dotted hover:text-ink dark:hover:text-dark-text"
+                >
+                  {mostrarVacias ? 'Ocultar' : 'Mostrar'} {gruposVacios} carpeta{gruposVacios === 1 ? '' : 's'} vacía
+                  {gruposVacios === 1 ? '' : 's'}
+                </button>
+              )}
+            </div>
+          )}
+
           <div className="flex flex-col gap-5">
-            {grupos.map(([modelo, items]) => {
+            {gruposVisibles.map(([modelo, items]) => {
               const enStock = conteoEnStockPorModelo.get(modelo) ?? 0;
               const expandido = items.length === 0 || grupoExpandido(modelo);
               return (
@@ -1044,22 +1103,61 @@ export default function Stock() {
                       </span>
                     )}
                   </button>
-                  {puedeAgregarStock && modelo !== 'Sin modelo' && (
-                    <Link
-                      href={`/stock/nuevo?modelo=${encodeURIComponent(modelo)}`}
-                      className="shrink-0 text-xs text-accent dark:text-dark-accent underline"
-                    >
-                      + Agregar
-                    </Link>
-                  )}
-                  {items.length > 0 && puedeEliminar && (
-                    <button
-                      onClick={() => eliminarCarpeta(modelo, items)}
-                      disabled={eliminandoCarpeta === modelo}
-                      className="shrink-0 text-xs text-bad underline disabled:opacity-40"
-                    >
-                      {eliminandoCarpeta === modelo ? 'Eliminando...' : 'Eliminar carpeta'}
-                    </button>
+                  {(puedeAgregarStock || puedeEliminar) && modelo !== 'Sin modelo' && (
+                    <div className="relative shrink-0">
+                      <button
+                        onClick={() => setCarpetaMenuAbierta(carpetaMenuAbierta === modelo ? null : modelo)}
+                        className="h-8 w-8 rounded-lg hover:bg-canvas dark:hover:bg-dark-bg flex items-center justify-center text-muted dark:text-dark-text-secondary"
+                        aria-label={`Más acciones de la carpeta ${modelo}`}
+                      >
+                        ···
+                      </button>
+                      {carpetaMenuAbierta === modelo && (
+                        <div className="absolute right-0 top-full mt-1 w-60 rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-elevated py-1 z-30 flex flex-col text-left">
+                          {puedeAgregarStock && (
+                            <Link
+                              href={`/stock/nuevo?modelo=${encodeURIComponent(modelo)}`}
+                              onClick={() => setCarpetaMenuAbierta(null)}
+                              className="px-3.5 py-2.5 text-sm hover:bg-canvas dark:hover:bg-dark-bg"
+                            >
+                              Agregar dispositivo acá
+                            </Link>
+                          )}
+                          {puedeAgregarStock && (
+                            <Link
+                              href="/stock/carpetas"
+                              onClick={() => setCarpetaMenuAbierta(null)}
+                              className="px-3.5 py-2.5 text-sm hover:bg-canvas dark:hover:bg-dark-bg"
+                            >
+                              Renombrar / administrar
+                            </Link>
+                          )}
+                          {puedeEliminar &&
+                            (items.length === 0 ? (
+                              <button
+                                onClick={() => eliminarCarpetaVacia(modelo)}
+                                className="px-3.5 py-2.5 text-sm text-left text-bad hover:bg-bad/5 border-t border-border dark:border-dark-border mt-1"
+                              >
+                                Eliminar carpeta
+                              </button>
+                            ) : (
+                              <>
+                                <p className="px-3.5 pt-2.5 pb-1 text-xs text-muted dark:text-dark-text-secondary border-t border-border dark:border-dark-border mt-1">
+                                  Tiene {items.length} dispositivo{items.length === 1 ? '' : 's'} — movelos o eliminalos para poder
+                                  borrar la carpeta.
+                                </p>
+                                <button
+                                  onClick={() => eliminarCarpeta(modelo, items)}
+                                  disabled={eliminandoCarpeta === modelo}
+                                  className="px-3.5 py-2.5 text-sm text-left text-bad hover:bg-bad/5 disabled:opacity-40"
+                                >
+                                  {eliminandoCarpeta === modelo ? 'Eliminando...' : `Eliminar los ${items.length} dispositivos`}
+                                </button>
+                              </>
+                            ))}
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
                 {items.length === 0 && (
