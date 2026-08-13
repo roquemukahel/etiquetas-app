@@ -483,6 +483,7 @@ export default function NuevaOrden() {
     if (!nuevoModelo.trim()) return;
     setCargandoDispositivo(true);
     setError(null);
+    const actorDispositivo = getActor();
     const { data, error: dErr } = await supabase
       .from('dispositivos')
       .insert({
@@ -493,6 +494,8 @@ export default function NuevaOrden() {
         precio: nuevoPrecioDispositivo ? Number(nuevoPrecioDispositivo) : null,
         estado: nuevoEstadoDispositivo,
         en_stock: true,
+        agregado_por_nombre: actorDispositivo?.nombre ?? null,
+        agregado_por_foto_url: actorDispositivo?.fotoUrl ?? null,
       })
       .select()
       .single();

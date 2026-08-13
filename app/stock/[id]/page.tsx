@@ -31,6 +31,7 @@ type Dispositivo = {
   detalles: string | null;
   en_stock: boolean;
   garantia_vencimiento: string | null;
+  agregado_por_nombre: string | null;
 };
 
 export default function DetalleDispositivo() {
@@ -224,6 +225,9 @@ export default function DetalleDispositivo() {
         <p className="text-xs text-muted dark:text-dark-text-secondary -mt-2">
           🛡️ Garantía hasta el {new Date(d.garantia_vencimiento + 'T00:00:00').toLocaleDateString('es-AR')}
         </p>
+      )}
+      {d.agregado_por_nombre && (
+        <p className="text-xs text-muted dark:text-dark-text-secondary -mt-2">Agregado por {d.agregado_por_nombre}</p>
       )}
 
       <div className="flex flex-col gap-3">

@@ -46,6 +46,8 @@ type Dispositivo = {
   detalles: string | null;
   en_stock: boolean;
   created_at: string;
+  agregado_por_nombre: string | null;
+  agregado_por_foto_url: string | null;
 };
 
 type Producto = { id: string; nombre: string; precio: number | null; costo: number | null; imagen_url: string | null; cantidad: number };
@@ -802,6 +804,11 @@ export default function Stock() {
                             </p>
                             {d.detalles && (
                               <p className="text-xs text-warn mt-0.5">📝 {d.detalles}</p>
+                            )}
+                            {d.agregado_por_nombre && (
+                              <p className="text-xs text-muted dark:text-dark-text-secondary mt-0.5">
+                                Agregado por {d.agregado_por_nombre}
+                              </p>
                             )}
                           </div>
                           <div className="text-right">

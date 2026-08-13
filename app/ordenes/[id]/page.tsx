@@ -480,6 +480,8 @@ export default function DetalleOrden() {
         precio: nuevoPrecioDispEdit ? Number(nuevoPrecioDispEdit) : null,
         estado: nuevoEstadoDispEdit,
         en_stock: true,
+        agregado_por_nombre: actor?.nombre ?? null,
+        agregado_por_foto_url: actor?.fotoUrl ?? null,
       })
       .select()
       .single();
