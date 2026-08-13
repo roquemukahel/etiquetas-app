@@ -52,6 +52,19 @@ type Dispositivo = {
 
 type Producto = { id: string; nombre: string; precio: number | null; costo: number | null; imagen_url: string | null; cantidad: number };
 
+// Catálogo inicial que se puede cargar con un toque desde "Agregar accesorios
+// por defecto" — se insertan sin precio/costo/cantidad (el dueño los completa
+// después); las fotos viven en /public así no pesan la base de datos.
+const ACCESORIOS_DEFAULT: { nombre: string; imagen: string }[] = [
+  { nombre: 'AirPods Pro', imagen: '/accesorios-default/airpods-pro.jpg' },
+  { nombre: 'AirTag', imagen: '/accesorios-default/airtag.jpg' },
+  { nombre: 'Auriculares con cable (Lightning)', imagen: '/accesorios-default/auriculares-cable.jpg' },
+  { nombre: 'Cargador (cabezal + cable USB-C)', imagen: '/accesorios-default/cargador-cabezal-cable.jpg' },
+  { nombre: 'Cargador de Apple Watch', imagen: '/accesorios-default/cargador-apple-watch.jpg' },
+  { nombre: 'Adaptador de enchufe', imagen: '/accesorios-default/adaptador-enchufe.jpg' },
+  { nombre: 'Protector de cámara', imagen: '/accesorios-default/protector-camara.jpg' },
+];
+
 export default function Stock() {
   const supabase = crearClienteNavegador();
   const actor = useActor();
@@ -77,6 +90,8 @@ export default function Stock() {
   const [guardandoProducto, setGuardandoProducto] = useState(false);
   const [errorProducto, setErrorProducto] = useState<string | null>(null);
   const [editandoCantidad, setEditandoCantidad] = useState<string | null>(null);
+  const [confirmandoDefaults, setConfirmandoDefaults] = useState(false);
+  const [cargandoDefaults, setCargandoDefaults] = useState(false);
   const [valorCantidad, setValorCantidad] = useState('');
   const [valorCosto, setValorCosto] = useState('');
   const [valorPrecio, setValorPrecio] = useState('');
@@ -424,6 +439,37 @@ export default function Stock() {
     setPrecioProducto('');
     setCostoProducto('');
     setGuardandoProducto(false);
+    cargarProductos();
+  };
+
+  const cargarAccesoriosDefault = async () => {
+    if (!puedeAgregarStock) return;
+    setCargandoDefaults(true);
+    setErrorProducto(null);
+    // Si ya se cargaron antes (o el dueño ya tenía un accesorio con ese
+    // nombre), no los duplicamos.
+    const nombresExistentes = new Set(productos.map((p) => p.nombre.trim().toLowerCase()));
+    const aInsertar = ACCESORIOS_DEFAULT.filter((a) => !nombresExistentes.has(a.nombre.toLowerCase()));
+    if (aInsertar.length === 0) {
+      setConfirmandoDefaults(false);
+      setCargandoDefaults(false);
+      return;
+    }
+    const { error: insertError } = await supabase
+      .from('productos')
+      .insert(aInsertar.map((a) => ({ nombre: a.nombre, imagen_url: a.imagen })));
+    if (insertError) {
+      setErrorProducto('No pudimos cargar los accesorios por defecto: ' + insertError.message);
+      setCargandoDefaults(false);
+      return;
+    }
+    await registrarAuditoria(supabase, {
+      accion: `cargó el catálogo de accesorios por defecto (${aInsertar.length} accesorio${aInsertar.length === 1 ? '' : 's'})`,
+      entidad: 'producto',
+      valorNuevo: { accesorios: aInsertar.map((a) => a.nombre) },
+    });
+    setConfirmandoDefaults(false);
+    setCargandoDefaults(false);
     cargarProductos();
   };
 
@@ -847,6 +893,57 @@ export default function Stock() {
           {errorProducto && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{errorProducto}</p>}
 
           {puedeAgregarStock && (
+            <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-4 py-3 flex flex-col gap-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium">Agregar accesorios por defecto</p>
+                  <p className="text-xs text-muted dark:text-dark-text-secondary">
+                    Carga un catálogo inicial: AirPods Pro, AirTag, cargadores, auriculares y protector de cámara.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={confirmandoDefaults}
+                  onClick={() => setConfirmandoDefaults((v) => !v)}
+                  className={`shrink-0 relative h-7 w-12 rounded-full transition-colors ${
+                    confirmandoDefaults ? 'bg-accent dark:bg-dark-accent' : 'bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border'
+                  }`}
+                >
+                  <span
+                    className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                      confirmandoDefaults ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+              {confirmandoDefaults && (
+                <div className="rounded-lg border border-accent/30 dark:border-dark-accent/30 bg-accent-soft dark:bg-dark-accent-soft px-3 py-2.5 flex flex-col gap-2">
+                  <p className="text-xs">
+                    Una vez que actives esta opción, se cargarán accesorios por defecto. ¿Deseás hacerlo?
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      disabled={cargandoDefaults}
+                      onClick={cargarAccesoriosDefault}
+                      className="rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
+                    >
+                      {cargandoDefaults ? 'Cargando…' : 'Sí, cargar'}
+                    </button>
+                    <button
+                      disabled={cargandoDefaults}
+                      onClick={() => setConfirmandoDefaults(false)}
+                      className="rounded-lg border border-border dark:border-dark-border px-3 py-1.5 text-xs font-medium disabled:opacity-40"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {puedeAgregarStock && (
             <div className="flex flex-col gap-2">
               <input
                 value={nombreProducto}
@@ -885,45 +982,46 @@ export default function Stock() {
             <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Todavía no cargaste productos.</p>
           )}
 
-          <div className="flex flex-col gap-2">
-            {productos.map((p) => (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {productos.map((p, i) => (
               <div
                 key={p.id}
-                className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex flex-col gap-2"
+                className="group relative rounded-2xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-3 flex flex-col items-center gap-1.5 text-center overflow-hidden"
               >
-                <div className="flex items-center gap-3">
-                  <label className="shrink-0 cursor-pointer">
+                {p.cantidad === 0 && (
+                  <span className="absolute top-2 left-2 text-[10px] font-semibold text-bad bg-bad/10 rounded-full px-2 py-0.5 z-10">
+                    Sin stock
+                  </span>
+                )}
+                <label className="cursor-pointer pt-1">
+                  <span className="block animate-flotar" style={{ animationDelay: `${(i % 3) * 0.4}s` }}>
                     {p.imagen_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={p.imagen_url} alt={p.nombre} className="h-11 w-11 rounded-lg object-cover border border-border dark:border-dark-border" />
+                      <img
+                        src={p.imagen_url}
+                        alt={p.nombre}
+                        className="h-28 w-28 object-contain drop-shadow-md transition-transform duration-300 ease-out group-hover:animate-vaivenLateral"
+                      />
                     ) : (
-                      <div className="h-11 w-11 rounded-lg bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border flex items-center justify-center text-lg">
+                      <div className="h-28 w-28 rounded-xl bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border flex items-center justify-center text-3xl">
                         📷
                       </div>
                     )}
-                    <input type="file" accept="image/*" className="hidden" onChange={(e) => cambiarImagenProducto(p, e)} />
-                  </label>
-                  <div className="flex-1 flex items-center justify-between gap-2 min-w-0">
-                    <p className="text-sm font-medium">{p.nombre}</p>
-                    <div className="flex items-center gap-3 shrink-0">
-                      <div className="text-right leading-tight">
-                        {p.precio != null && <p className="text-sm">${p.precio.toLocaleString('es-AR')}</p>}
-                        {p.costo != null && (
-                          <p className="text-[11px] text-muted dark:text-dark-text-secondary">costo ${p.costo.toLocaleString('es-AR')}</p>
-                        )}
-                      </div>
-                      {puedeEliminar && (
-                        <button onClick={() => eliminarProducto(p.id)} className="text-xs text-bad underline">
-                          Eliminar
-                        </button>
-                      )}
-                    </div>
-                  </div>
+                  </span>
+                  <input type="file" accept="image/*" className="hidden" onChange={(e) => cambiarImagenProducto(p, e)} />
+                </label>
+
+                <p className="text-sm font-medium leading-tight">{p.nombre}</p>
+                <div className="leading-tight min-h-[2.2em]">
+                  {p.precio != null && <p className="text-sm font-medium">${p.precio.toLocaleString('es-AR')}</p>}
+                  {p.costo != null && (
+                    <p className="text-[11px] text-muted dark:text-dark-text-secondary">costo ${p.costo.toLocaleString('es-AR')}</p>
+                  )}
                 </div>
 
-                <div className="flex items-center justify-between gap-2 pl-14">
-                  {editandoCantidad === p.id ? (
-                    <div className="flex flex-wrap items-center gap-2">
+                {editandoCantidad === p.id ? (
+                  <div className="flex flex-col items-center gap-2 w-full pt-1 border-t border-border dark:border-dark-border mt-1">
+                    <div className="flex flex-wrap items-center justify-center gap-1.5">
                       <label className="flex items-center gap-1 text-xs text-muted dark:text-dark-text-secondary">
                         Costo
                         <input
@@ -931,7 +1029,7 @@ export default function Stock() {
                           onChange={(e) => setValorCosto(sanitizarDecimal(e.target.value))}
                           inputMode="decimal"
                           placeholder="Costo"
-                          className="w-20 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-2 py-1 text-sm"
+                          className="w-16 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-2 py-1 text-sm"
                         />
                       </label>
                       <label className="flex items-center gap-1 text-xs text-muted dark:text-dark-text-secondary">
@@ -941,7 +1039,7 @@ export default function Stock() {
                           onChange={(e) => setValorPrecio(sanitizarDecimal(e.target.value))}
                           inputMode="decimal"
                           placeholder="Precio"
-                          className="w-20 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-2 py-1 text-sm"
+                          className="w-16 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-2 py-1 text-sm"
                         />
                       </label>
                       <label className="flex items-center gap-1 text-xs text-muted dark:text-dark-text-secondary">
@@ -951,22 +1049,24 @@ export default function Stock() {
                           onChange={(e) => setValorCantidad(e.target.value)}
                           inputMode="numeric"
                           autoFocus
-                          className="w-14 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-2 py-1 text-sm"
+                          className="w-12 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-2 py-1 text-sm"
                         />
                       </label>
-                      <button onClick={() => guardarCantidad(p)} className="text-xs text-accent dark:text-dark-accent underline">
-                        Guardar
-                      </button>
                     </div>
-                  ) : (
-                    <button onClick={() => abrirEdicionCantidad(p)} className="text-xs text-muted dark:text-dark-text-secondary underline decoration-dotted">
-                      Stock: <span className="font-medium text-ink dark:text-dark-text">{p.cantidad}</span> unidad{p.cantidad === 1 ? '' : 'es'}
+                    <button onClick={() => guardarCantidad(p)} className="text-xs text-accent dark:text-dark-accent underline">
+                      Guardar
                     </button>
-                  )}
-                  {p.cantidad === 0 && (
-                    <span className="text-[10px] font-semibold text-bad bg-bad/10 rounded-full px-2 py-0.5">Sin stock</span>
-                  )}
-                </div>
+                  </div>
+                ) : (
+                  <button onClick={() => abrirEdicionCantidad(p)} className="text-xs text-muted dark:text-dark-text-secondary underline decoration-dotted">
+                    Stock: <span className="font-medium text-ink dark:text-dark-text">{p.cantidad}</span>
+                  </button>
+                )}
+                {puedeEliminar && (
+                  <button onClick={() => eliminarProducto(p.id)} className="text-xs text-bad underline">
+                    Eliminar
+                  </button>
+                )}
               </div>
             ))}
           </div>
