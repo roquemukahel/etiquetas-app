@@ -11,6 +11,7 @@ import { getActor, useActor } from '../lib/actor';
 import { tienePermiso } from '../lib/permisos';
 import { leerCSV, valorDe, descargarCSV, insertarEnTandas } from '../lib/csv';
 import { obtenerTodasLasFilas } from '../lib/db';
+import { asegurarModelo, normalizarNombreModelo } from '../lib/modelos';
 import { sanitizarDecimal } from '../lib/numeros';
 import MiniaturaDispositivo from '../MiniaturaDispositivo';
 
@@ -42,6 +43,7 @@ type Dispositivo = {
   color: string | null;
   precio: number | null;
   costo: number | null;
+  proveedor: string | null;
   estado: string | null;
   detalles: string | null;
   en_stock: boolean;
@@ -65,11 +67,23 @@ const ACCESORIOS_DEFAULT: { nombre: string; imagen: string }[] = [
   { nombre: 'Protector de cámara', imagen: '/accesorios-default/protector-camara.webp' },
 ];
 
+type FiltroRapido = 'todos' | 'bateria_baja' | 'sellados' | 'por_reponer' | 'sin_precio' | 'sin_costo' | 'incompletos';
+const VISTAS_RAPIDAS: { id: FiltroRapido; label: string }[] = [
+  { id: 'todos', label: 'Todos' },
+  { id: 'bateria_baja', label: 'Batería baja' },
+  { id: 'sellados', label: 'Sellados' },
+  { id: 'por_reponer', label: 'Por reponer' },
+  { id: 'sin_precio', label: 'Sin precio' },
+  { id: 'sin_costo', label: 'Sin costo' },
+  { id: 'incompletos', label: 'Datos incompletos' },
+];
+
 export default function Stock() {
   const supabase = crearClienteNavegador();
   const actor = useActor();
   const puedeEliminar = tienePermiso(actor, 'eliminar');
   const puedeAgregarStock = tienePermiso(actor, 'agregar_stock');
+  const puedeRecibirServicioTecnico = tienePermiso(actor, 'recibir_servicio_tecnico');
   // El capital muestra costos y ganancias (info sensible del dueño): se
   // protege con el mismo permiso que las Estadísticas.
   const puedeVerCapital = tienePermiso(actor, 'ver_estadisticas');
@@ -80,7 +94,17 @@ export default function Stock() {
   const [imagenesCarpetas, setImagenesCarpetas] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState('');
+  // La búsqueda se filtra sobre esta versión "atrasada" del texto (250ms),
+  // no sobre `busqueda` directamente: escribir sigue sintiéndose instantáneo
+  // en el input, pero filtrar y reagrupar cientos de dispositivos no se
+  // recalcula en cada tecla, solo cuando el usuario hace una pausa.
+  const [busquedaDebounced, setBusquedaDebounced] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setBusquedaDebounced(busqueda), 250);
+    return () => clearTimeout(t);
+  }, [busqueda]);
   const [vista, setVista] = useState<'stock' | 'vendidos'>('stock');
+  const [filtroRapido, setFiltroRapido] = useState<FiltroRapido>('todos');
 
   const [productos, setProductos] = useState<Producto[]>([]);
   const [loadingProductos, setLoadingProductos] = useState(true);
@@ -107,28 +131,37 @@ export default function Stock() {
   } | null>(null);
   const inputImportRef = useRef<HTMLInputElement>(null);
 
+  const [menuAbierto, setMenuAbierto] = useState<'agregar' | 'mas' | null>(null);
+
   const [modoSeleccion, setModoSeleccion] = useState(false);
   const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
   const [eliminandoSeleccion, setEliminandoSeleccion] = useState(false);
 
   // En "Vendidos" las carpetas arrancan cerradas (pueden acumular cientos de
   // unidades del mismo modelo) y se abren una por una al tocarlas. En "En
-  // stock"/"Historial" arrancan abiertas, como siempre. gruposAlternados
-  // guarda qué carpetas se tocaron manualmente, invirtiendo el default de la
-  // vista actual.
-  const [gruposAlternados, setGruposAlternados] = useState<Set<string>>(new Set());
+  // stock"/"Historial" arrancan abiertas, como siempre. `colapsadas` guarda
+  // las EXCEPCIONES al default de la vista actual (tocadas a mano, o por
+  // "Expandir/Contraer todas") — el nombre ya no es "alternadas" porque
+  // ahora también lo escriben las acciones masivas, no solo el toggle
+  // individual de cada carpeta.
+  const [colapsadas, setColapsadas] = useState<Set<string>>(new Set());
+  const [mostrarVacias, setMostrarVacias] = useState(false);
+  const [carpetaMenuAbierta, setCarpetaMenuAbierta] = useState<string | null>(null);
 
   useEffect(() => {
-    setGruposAlternados(new Set());
+    setColapsadas(new Set());
   }, [vista]);
 
   const grupoExpandido = (modelo: string) => {
+    // Buscando, siempre expandido: así se ven los resultados sin tener que
+    // ir tocando carpeta por carpeta.
+    if (busquedaDebounced.trim()) return true;
     const porDefecto = vista !== 'vendidos';
-    return gruposAlternados.has(modelo) ? !porDefecto : porDefecto;
+    return colapsadas.has(modelo) ? !porDefecto : porDefecto;
   };
 
   const toggleGrupo = (modelo: string) => {
-    setGruposAlternados((prev) => {
+    setColapsadas((prev) => {
       const nuevo = new Set(prev);
       if (nuevo.has(modelo)) nuevo.delete(modelo);
       else nuevo.add(modelo);
@@ -136,10 +169,21 @@ export default function Stock() {
     });
   };
 
+  // "Expandir todas"/"Contraer todas": como el default cambia según la
+  // vista, en vez de expandido/contraído "a secas" lo que se guarda son las
+  // excepciones al default — por eso una acción vacía el set y la otra lo
+  // llena con todas las carpetas visibles.
+  const expandirTodas = () => setColapsadas(vista === 'vendidos' ? new Set(grupos.map(([nombre]) => nombre)) : new Set());
+  const contraerTodas = () => setColapsadas(vista === 'vendidos' ? new Set() : new Set(grupos.map(([nombre]) => nombre)));
+
   const [eliminandoCarpeta, setEliminandoCarpeta] = useState<string | null>(null);
 
+  // Elimina TODOS los dispositivos de la carpeta (acción fuerte, ya existía)
+  // — distinta de "eliminar carpeta" del menú, que borra solo el catálogo
+  // vacío y por eso está bloqueada si hay dispositivos adentro.
   const eliminarCarpeta = async (modelo: string, items: Dispositivo[]) => {
     if (items.length === 0 || !puedeEliminar) return;
+    setCarpetaMenuAbierta(null);
     if (
       !confirm(
         `¿Eliminar los ${items.length} dispositivo${items.length === 1 ? '' : 's'} de "${modelo}"? No se puede deshacer.`
@@ -157,6 +201,21 @@ export default function Stock() {
     }
     setEliminandoCarpeta(null);
     cargarDispositivos();
+  };
+
+  // Esta es la acción SEGURA del menú "Eliminar carpeta": solo saca la
+  // carpeta vacía del catálogo (modelos_stock), no toca ningún dispositivo
+  // — por eso solo se ofrece cuando la carpeta no tiene ninguno.
+  const eliminarCarpetaVacia = async (modelo: string) => {
+    if (!puedeEliminar) return;
+    setCarpetaMenuAbierta(null);
+    if (!confirm(`¿Eliminar la carpeta "${modelo}"? No tiene dispositivos, así que no se pierde nada.`)) return;
+    await supabase.from('modelos_stock').delete().eq('nombre', modelo);
+    await registrarAuditoria(supabase, {
+      accion: `eliminó la carpeta vacía "${modelo}" de Stock`,
+      entidad: 'carpeta',
+    });
+    setCarpetas((cs) => cs.filter((c) => c !== modelo));
   };
 
   const cargarProductos = async () => {
@@ -314,6 +373,8 @@ export default function Stock() {
   const salirDeSeleccion = () => {
     setModoSeleccion(false);
     setSeleccionados(new Set());
+    setMoviendoCarpeta(false);
+    setCarpetaDestino('');
   };
 
   const eliminarSeleccionados = async () => {
@@ -341,6 +402,130 @@ export default function Stock() {
     cargarDispositivos();
   };
 
+  // Resto de la barra contextual de selección múltiple: marcar stock, mover
+  // de carpeta, exportar. `procesandoSeleccion` es compartido por las tres
+  // (no corren a la vez, alcanza con un solo flag para deshabilitar botones).
+  const [procesandoSeleccion, setProcesandoSeleccion] = useState(false);
+  const [moviendoCarpeta, setMoviendoCarpeta] = useState(false);
+  const [carpetaDestino, setCarpetaDestino] = useState('');
+
+  const marcarStockSeleccionados = async (enStock: boolean) => {
+    if (!puedeAgregarStock) return;
+    const ids = Array.from(seleccionados);
+    if (ids.length === 0) return;
+    setProcesandoSeleccion(true);
+    const { error } = await supabase
+      .from('dispositivos')
+      .update({ en_stock: enStock, ...(enStock ? { en_stock_desde: new Date().toISOString(), alerta_stock_enviada: false } : {}) })
+      .in('id', ids);
+    if (!error) {
+      await registrarAuditoria(supabase, {
+        accion: `marcó ${ids.length} dispositivo${ids.length === 1 ? '' : 's'} como ${enStock ? 'en stock' : 'fuera de stock'} (selección múltiple)`,
+        entidad: 'dispositivo',
+      });
+      salirDeSeleccion();
+      cargarDispositivos();
+    }
+    setProcesandoSeleccion(false);
+  };
+
+  const moverSeleccionadosACarpeta = async () => {
+    if (!puedeAgregarStock) return;
+    const destino = normalizarNombreModelo(carpetaDestino.trim());
+    const ids = Array.from(seleccionados);
+    if (!destino || ids.length === 0) return;
+    setProcesandoSeleccion(true);
+    const { error } = await supabase.from('dispositivos').update({ modelo: destino }).in('id', ids);
+    if (!error) {
+      await asegurarModelo(supabase, destino);
+      await registrarAuditoria(supabase, {
+        accion: `movió ${ids.length} dispositivo${ids.length === 1 ? '' : 's'} a la carpeta "${destino}" (selección múltiple)`,
+        entidad: 'dispositivo',
+      });
+      setMoviendoCarpeta(false);
+      setCarpetaDestino('');
+      salirDeSeleccion();
+      cargarDispositivos();
+    }
+    setProcesandoSeleccion(false);
+  };
+
+  const exportarSeleccionados = () => {
+    const elegidos = dispositivos.filter((d) => seleccionados.has(d.id));
+    descargarCSV(
+      'stock-seleccion-qovento.csv',
+      ['modelo', 'capacidad_gb', 'color', 'imei', 'numero_serie', 'salud_bateria', 'precio', 'costo', 'proveedor', 'estado', 'en_stock', 'created_at'],
+      elegidos
+    );
+  };
+
+  // Acciones rápidas por dispositivo (menú "···" de cada fila) — mismas
+  // operaciones que ya existen en la ficha individual (app/stock/[id]),
+  // solo que accesibles sin tener que entrar. Un solo id de menú abierto a
+  // la vez, y `procesandoAccion` deshabilita los botones mientras corre.
+  const [accionAbiertaId, setAccionAbiertaId] = useState<string | null>(null);
+  const [procesandoAccion, setProcesandoAccion] = useState<string | null>(null);
+
+  const toggleStockDispositivo = async (d: Dispositivo) => {
+    if (!puedeAgregarStock) return;
+    setAccionAbiertaId(null);
+    setProcesandoAccion(d.id);
+    const volvioAStock = !d.en_stock;
+    const { error } = await supabase
+      .from('dispositivos')
+      .update({
+        en_stock: volvioAStock,
+        ...(volvioAStock ? { en_stock_desde: new Date().toISOString(), alerta_stock_enviada: false } : {}),
+      })
+      .eq('id', d.id);
+    if (!error) {
+      await registrarAuditoria(supabase, {
+        accion: `marcó ${d.modelo || 'un dispositivo'}${d.imei ? ` (IMEI ${d.imei})` : ''} como ${volvioAStock ? 'en stock' : 'fuera de stock'}`,
+        entidad: 'dispositivo',
+        entidadId: d.id,
+      });
+      cargarDispositivos();
+    }
+    setProcesandoAccion(null);
+  };
+
+  const derivarDispositivoAServicio = async (d: Dispositivo) => {
+    if (!puedeRecibirServicioTecnico) return;
+    setAccionAbiertaId(null);
+    if (!confirm(`¿Derivar ${d.modelo || 'este dispositivo'} a Servicio Técnico? Sale de Stock y aparece ahí para diagnosticarlo.`)) return;
+    setProcesandoAccion(d.id);
+    const { data: nueva } = await supabase
+      .from('reparaciones')
+      .insert({ modelo: d.modelo, capacidad_gb: d.capacidad_gb, color: d.color, imei: d.imei, estado: 'recibido' })
+      .select('id, numero_orden')
+      .single();
+    await supabase.from('dispositivos').update({ en_stock: false }).eq('id', d.id);
+    await registrarAuditoria(supabase, {
+      accion: `derivó de Stock a Servicio Técnico un dispositivo (${nueva?.numero_orden || ''}, ${d.modelo || 'sin modelo'}${d.imei ? `, IMEI ${d.imei}` : ''})`,
+      entidad: 'reparacion',
+      entidadId: nueva?.id,
+    });
+    setProcesandoAccion(null);
+    cargarDispositivos();
+  };
+
+  const eliminarDispositivo = async (d: Dispositivo) => {
+    if (!puedeEliminar) return;
+    setAccionAbiertaId(null);
+    if (!confirm(`¿Eliminar ${d.modelo || 'este dispositivo'} del historial? No se puede deshacer.`)) return;
+    setProcesandoAccion(d.id);
+    const { error } = await supabase.from('dispositivos').delete().eq('id', d.id);
+    if (!error) {
+      await registrarAuditoria(supabase, {
+        accion: `eliminó el dispositivo ${d.modelo || 'sin modelo'}${d.imei ? ` (IMEI ${d.imei})` : ''} del historial`,
+        entidad: 'dispositivo',
+        entidadId: d.id,
+      });
+      cargarDispositivos();
+    }
+    setProcesandoAccion(null);
+  };
+
   useEffect(() => {
     cargarDispositivos();
     (async () => {
@@ -351,21 +536,73 @@ export default function Stock() {
     cargarProductos();
   }, []);
 
+  // Para la alerta de reposición contamos el stock real de cada modelo,
+  // sin importar qué pestaña (En stock / Historial) esté activa. Se necesita
+  // antes que "filtrados" porque la vista rápida "Por reponer" lo usa.
+  const conteoEnStockPorModelo = useMemo(() => {
+    const mapa = new Map<string, number>();
+    for (const d of dispositivos) {
+      if (!d.en_stock) continue;
+      const clave = d.modelo || 'Sin modelo';
+      mapa.set(clave, (mapa.get(clave) ?? 0) + 1);
+    }
+    return mapa;
+  }, [dispositivos]);
+
+  // Un dispositivo en stock cuenta como "dato incompleto" si le falta algo
+  // relevante para venderlo bien: precio, costo, color o capacidad. Se usa
+  // en la vista rápida y en el indicador financiero de más arriba.
+  const dispositivoIncompleto = (d: Dispositivo) => d.precio == null || d.costo == null || !d.color || !d.capacidad_gb;
+
+  const cumpleFiltroRapido = (d: Dispositivo) => {
+    switch (filtroRapido) {
+      case 'bateria_baja':
+        return d.salud_bateria != null && d.salud_bateria < 80;
+      case 'sellados':
+        return d.estado === 'sellado';
+      case 'por_reponer':
+        return d.en_stock && (conteoEnStockPorModelo.get(d.modelo || 'Sin modelo') ?? 0) < 3;
+      case 'sin_precio':
+        return d.precio == null;
+      case 'sin_costo':
+        return d.costo == null;
+      case 'incompletos':
+        return dispositivoIncompleto(d);
+      default:
+        return true;
+    }
+  };
+
   const filtrados = useMemo(() => {
-    const q = busqueda.trim().toLowerCase();
+    const q = busquedaDebounced.trim().toLowerCase();
+    const qImei = q.replace(/\s+/g, '');
     return dispositivos.filter((d) => {
       if (vista === 'stock' && !d.en_stock) return false;
       if (vista === 'vendidos' && d.en_stock) return false;
+      if (!cumpleFiltroRapido(d)) return false;
       if (!q) return true;
-      return [d.modelo, d.imei, d.numero_serie, d.color]
-        .filter(Boolean)
-        .some((campo) => campo!.toLowerCase().includes(q));
+      // Modelo, serie y color con espacios normales; el IMEI se compara
+      // también sin espacios (así encuentra uno pegado de Ajustes del
+      // iPhone, que a veces lo copia con espacios adentro).
+      const campos = [d.modelo, d.numero_serie, d.color, puedeVerCapital ? d.proveedor : null].filter(Boolean) as string[];
+      if (campos.some((campo) => campo.toLowerCase().includes(q))) return true;
+      if (d.imei && qImei.length >= 3 && d.imei.replace(/\s+/g, '').toLowerCase().includes(qImei)) return true;
+      return false;
     });
-  }, [dispositivos, busqueda, vista]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dispositivos, busquedaDebounced, vista, filtroRapido, conteoEnStockPorModelo, puedeVerCapital]);
+
+  // Si la búsqueda es un IMEI exacto, esa carpeta pasa primera en la lista
+  // — no hace falta buscar entre las demás para encontrar el equipo.
+  const imeiExactoModelo = useMemo(() => {
+    const q = busquedaDebounced.trim().replace(/\s+/g, '');
+    if (q.length < 6) return null;
+    return dispositivos.find((d) => d.imei && d.imei.replace(/\s+/g, '') === q)?.modelo ?? null;
+  }, [dispositivos, busquedaDebounced]);
 
   const grupos = useMemo(() => {
     const mapa = new Map<string, Dispositivo[]>();
-    if (!busqueda.trim() && vista !== 'vendidos') {
+    if (!busquedaDebounced.trim() && filtroRapido === 'todos' && vista !== 'vendidos') {
       for (const nombre of carpetas) mapa.set(nombre, []);
     }
     for (const d of filtrados) {
@@ -379,46 +616,70 @@ export default function Stock() {
     for (const lista of mapa.values()) {
       lista.sort((a, b) => (a.capacidad_gb ?? Infinity) - (b.capacidad_gb ?? Infinity));
     }
-    return Array.from(mapa.entries()).sort(([a], [b]) => a.localeCompare(b));
-  }, [filtrados, carpetas, busqueda, vista]);
-
-  // Para la alerta de reposición contamos el stock real de cada modelo,
-  // sin importar qué pestaña (En stock / Historial) esté activa.
-  const conteoEnStockPorModelo = useMemo(() => {
-    const mapa = new Map<string, number>();
-    for (const d of dispositivos) {
-      if (!d.en_stock) continue;
-      const clave = d.modelo || 'Sin modelo';
-      mapa.set(clave, (mapa.get(clave) ?? 0) + 1);
+    const ordenado = Array.from(mapa.entries()).sort(([a], [b]) => a.localeCompare(b));
+    const clave = imeiExactoModelo || 'Sin modelo';
+    const idx = imeiExactoModelo != null ? ordenado.findIndex(([nombre]) => nombre === clave) : -1;
+    if (idx > 0) {
+      const [grupo] = ordenado.splice(idx, 1);
+      ordenado.unshift(grupo);
     }
-    return mapa;
-  }, [dispositivos]);
+    return ordenado;
+  }, [filtrados, carpetas, busquedaDebounced, vista, filtroRapido, imeiExactoModelo]);
 
-  // Capital invertido en stock: celulares en stock (suma de costos) +
-  // accesorios (costo × cantidad disponible). También el valor de venta y
-  // la ganancia potencial (lo que ganarías si vendés todo lo que tenés).
+  // Carpetas vacías ocultas por defecto (no aportan nada operativo la
+  // mayoría del tiempo) — con una opción para mostrarlas igual.
+  const gruposVacios = useMemo(() => grupos.filter(([, items]) => items.length === 0).length, [grupos]);
+  const gruposVisibles = useMemo(
+    () => (mostrarVacias ? grupos : grupos.filter(([, items]) => items.length > 0)),
+    [grupos, mostrarVacias]
+  );
+
+  // Capital invertido en stock: celulares en stock + accesorios (cantidad ×
+  // costo/precio). A diferencia de antes, un campo AUSENTE (null) ya no se
+  // trata como si fuera $0: un dispositivo sin costo cargado simplemente no
+  // entra en la cuenta de "Invertido", en vez de sumar $0 y hacer parecer
+  // que no costó nada. Cada indicador informa cuántos ítems entraron en el
+  // cálculo, para que la plata mostrada nunca se confunda con "así de bajo
+  // es de verdad".
   const capital = useMemo(() => {
     const enStock = dispositivos.filter((d) => d.en_stock);
-    const costoCel = enStock.reduce((a, d) => a + (d.costo || 0), 0);
-    const ventaCel = enStock.reduce((a, d) => a + (d.precio || 0), 0);
-    const costoAcc = productos.reduce((a, p) => a + (p.costo || 0) * p.cantidad, 0);
-    const ventaAcc = productos.reduce((a, p) => a + (p.precio || 0) * p.cantidad, 0);
     const unidadesAcc = productos.reduce((a, p) => a + p.cantidad, 0);
-    const costo = costoCel + costoAcc;
-    const venta = ventaCel + ventaAcc;
-    // Ganancia SOLO sobre los ítems que tienen costo cargado. Si se hiciera
-    // venta − costo, cada ítem con precio pero sin costo sumaría su precio
-    // entero como "ganancia" y quedaría inflada.
-    const gananciaCel = enStock
-      .filter((d) => d.costo != null)
-      .reduce((a, d) => a + ((d.precio || 0) - (d.costo || 0)), 0);
-    const gananciaAcc = productos
-      .filter((p) => p.costo != null)
-      .reduce((a, p) => a + ((p.precio || 0) - (p.costo || 0)) * p.cantidad, 0);
-    const ganancia = gananciaCel + gananciaAcc;
-    // Cuántos ítems no tienen costo cargado (no cuentan en capital ni ganancia).
-    const sinCosto = enStock.filter((d) => d.costo == null).length + productos.filter((p) => p.costo == null && p.cantidad > 0).length;
-    return { costo, venta, ganancia, unidadesCel: enStock.length, unidadesAcc, sinCosto };
+    const totalItems = enStock.length + unidadesAcc;
+
+    const celConCosto = enStock.filter((d) => d.costo != null);
+    const accConCosto = productos.filter((p) => p.costo != null && p.cantidad > 0);
+    const costo = celConCosto.reduce((a, d) => a + (d.costo || 0), 0) + accConCosto.reduce((a, p) => a + (p.costo || 0) * p.cantidad, 0);
+    const costoCobertura = celConCosto.length + accConCosto.reduce((a, p) => a + p.cantidad, 0);
+
+    const celConPrecio = enStock.filter((d) => d.precio != null);
+    const accConPrecio = productos.filter((p) => p.precio != null && p.cantidad > 0);
+    const venta = celConPrecio.reduce((a, d) => a + (d.precio || 0), 0) + accConPrecio.reduce((a, p) => a + (p.precio || 0) * p.cantidad, 0);
+    const ventaCobertura = celConPrecio.length + accConPrecio.reduce((a, p) => a + p.cantidad, 0);
+
+    // Ganancia SOLO sobre los ítems que tienen costo Y precio a la vez —
+    // nunca restando un costo ausente (eso inflaría la ganancia).
+    const celConAmbos = enStock.filter((d) => d.costo != null && d.precio != null);
+    const accConAmbos = productos.filter((p) => p.costo != null && p.precio != null && p.cantidad > 0);
+    const ganancia =
+      celConAmbos.reduce((a, d) => a + ((d.precio || 0) - (d.costo || 0)), 0) +
+      accConAmbos.reduce((a, p) => a + ((p.precio || 0) - (p.costo || 0)) * p.cantidad, 0);
+    const gananciaCobertura = celConAmbos.length + accConAmbos.reduce((a, p) => a + p.cantidad, 0);
+
+    const incompletos = enStock.filter(dispositivoIncompleto).length;
+
+    return {
+      costo,
+      costoCobertura,
+      venta,
+      ventaCobertura,
+      ganancia,
+      gananciaCobertura,
+      totalItems,
+      incompletos,
+      unidadesCel: enStock.length,
+      unidadesAcc,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dispositivos, productos]);
 
   const agregarProducto = async () => {
@@ -531,136 +792,246 @@ export default function Stock() {
 
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
-      <header className="flex items-center gap-3">
-        <Link href="/" className="text-2xl leading-none">
+      <header className="flex items-start gap-3">
+        <Link href="/" className="text-2xl leading-none shrink-0">
           &larr;
         </Link>
-        <span className="text-lg font-medium mr-auto">Stock</span>
+        <div className="min-w-0 mr-auto">
+          <p className="text-lg font-medium leading-tight">Stock</p>
+          <p className="text-xs text-muted dark:text-dark-text-secondary truncate">
+            {tab === 'celulares'
+              ? vista === 'stock'
+                ? `${capital.unidadesCel} dispositivo${capital.unidadesCel === 1 ? '' : 's'} disponible${capital.unidadesCel === 1 ? '' : 's'}`
+                : `${dispositivos.length - capital.unidadesCel} dispositivo${dispositivos.length - capital.unidadesCel === 1 ? '' : 's'} vendido${dispositivos.length - capital.unidadesCel === 1 ? '' : 's'}`
+              : `${productos.length} accesorio${productos.length === 1 ? '' : 's'} en catálogo`}
+          </p>
+        </div>
+
         {tab === 'celulares' && (
-          <Link href="/stock/carpetas" className="text-xs text-accent dark:text-dark-accent underline">
-            Carpetas
-          </Link>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {puedeAgregarStock && (
+              <div className="relative">
+                <button
+                  onClick={() => setMenuAbierto(menuAbierto === 'agregar' ? null : 'agregar')}
+                  className="rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors px-3 py-2 text-xs font-medium text-white"
+                >
+                  + Agregar
+                </button>
+                {menuAbierto === 'agregar' && (
+                  <div className="absolute right-0 top-full mt-1.5 w-44 rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-elevated py-1 z-30">
+                    <Link
+                      href="/stock/nuevo"
+                      onClick={() => setMenuAbierto(null)}
+                      className="block px-3.5 py-2.5 text-sm hover:bg-canvas dark:hover:bg-dark-bg"
+                    >
+                      Cargar a mano
+                    </Link>
+                    <Link
+                      href="/stock/foto"
+                      onClick={() => setMenuAbierto(null)}
+                      className="block px-3.5 py-2.5 text-sm hover:bg-canvas dark:hover:bg-dark-bg"
+                    >
+                      Cargar con foto
+                    </Link>
+                  </div>
+                )}
+              </div>
+            )}
+            <div className="relative">
+              <button
+                onClick={() => setMenuAbierto(menuAbierto === 'mas' ? null : 'mas')}
+                className="rounded-lg border border-border dark:border-dark-border px-2.5 py-2 text-sm leading-none"
+                aria-label="Más acciones"
+              >
+                ···
+              </button>
+              {menuAbierto === 'mas' && (
+                <div className="absolute right-0 top-full mt-1.5 w-52 rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-elevated py-1 z-30 flex flex-col">
+                  {puedeAgregarStock && (
+                    <label className="px-3.5 py-2.5 text-sm hover:bg-canvas dark:hover:bg-dark-bg cursor-pointer">
+                      {preparando
+                        ? 'Leyendo archivo...'
+                        : importando
+                        ? progresoImport
+                          ? `Importando... ${progresoImport.hechas}/${progresoImport.total}`
+                          : 'Importando...'
+                        : 'Importar CSV'}
+                      <input
+                        ref={inputImportRef}
+                        type="file"
+                        accept=".csv"
+                        className="hidden"
+                        disabled={preparando || importando}
+                        onChange={(e) => {
+                          setMenuAbierto(null);
+                          prepararImportacion(e);
+                        }}
+                      />
+                    </label>
+                  )}
+                  <button
+                    onClick={() => {
+                      setMenuAbierto(null);
+                      exportarDispositivos();
+                    }}
+                    disabled={dispositivos.length === 0}
+                    className="px-3.5 py-2.5 text-sm text-left hover:bg-canvas dark:hover:bg-dark-bg disabled:opacity-40"
+                  >
+                    Exportar CSV
+                  </button>
+                  <Link
+                    href="/stock/carpetas"
+                    onClick={() => setMenuAbierto(null)}
+                    className="px-3.5 py-2.5 text-sm hover:bg-canvas dark:hover:bg-dark-bg"
+                  >
+                    Administrar carpetas
+                  </Link>
+                </div>
+              )}
+            </div>
+          </div>
         )}
       </header>
+
+      {menuAbierto && <div className="fixed inset-0 z-20" onClick={() => setMenuAbierto(null)} />}
+      {accionAbiertaId && <div className="fixed inset-0 z-20" onClick={() => setAccionAbiertaId(null)} />}
+      {carpetaMenuAbierta && <div className="fixed inset-0 z-20" onClick={() => setCarpetaMenuAbierta(null)} />}
 
       {puedeVerCapital && (
         <div className="rounded-2xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted dark:text-dark-text-secondary mb-2">
             Capital en stock
           </p>
-          <div className="grid grid-cols-3 gap-2 text-center">
-            <div>
-              <p className="text-lg font-display font-semibold">${Math.round(capital.costo).toLocaleString('es-AR')}</p>
-              <p className="text-[11px] text-muted dark:text-dark-text-secondary">Invertido (a costo)</p>
-            </div>
-            <div>
-              <p className="text-lg font-display font-semibold">${Math.round(capital.venta).toLocaleString('es-AR')}</p>
-              <p className="text-[11px] text-muted dark:text-dark-text-secondary">Valor de venta</p>
-            </div>
-            <div>
-              <p className="text-lg font-display font-semibold text-good">${Math.round(capital.ganancia).toLocaleString('es-AR')}</p>
-              <p className="text-[11px] text-muted dark:text-dark-text-secondary">Ganancia potencial</p>
-            </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+            <IndicadorCapital
+              etiqueta="Invertido (a costo)"
+              valor={capital.costo}
+              cobertura={capital.costoCobertura}
+              total={capital.totalItems}
+            />
+            <IndicadorCapital
+              etiqueta="Valor de venta"
+              valor={capital.venta}
+              cobertura={capital.ventaCobertura}
+              total={capital.totalItems}
+            />
+            <IndicadorCapital
+              etiqueta="Ganancia potencial"
+              valor={capital.ganancia}
+              cobertura={capital.gananciaCobertura}
+              total={capital.totalItems}
+              tono="text-good"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                setTab('celulares');
+                setVista('stock');
+                setFiltroRapido(filtroRapido === 'incompletos' ? 'todos' : 'incompletos');
+              }}
+              className="flex flex-col items-center justify-center rounded-lg -m-1 p-1 hover:bg-canvas dark:hover:bg-dark-bg transition-colors"
+            >
+              <p className={`text-lg font-display font-semibold ${capital.incompletos > 0 ? 'text-warn' : ''}`}>
+                {capital.incompletos}
+              </p>
+              <p
+                className={`text-[11px] ${
+                  filtroRapido === 'incompletos'
+                    ? 'text-accent dark:text-dark-accent underline decoration-dotted'
+                    : 'text-muted dark:text-dark-text-secondary'
+                }`}
+              >
+                Datos incompletos
+              </p>
+            </button>
           </div>
-          <p className="text-[11px] text-muted dark:text-dark-text-secondary mt-2 text-center">
-            {capital.unidadesCel} celular{capital.unidadesCel === 1 ? '' : 'es'} en stock · {capital.unidadesAcc} accesorio
-            {capital.unidadesAcc === 1 ? '' : 's'}. El capital y la ganancia cuentan solo los ítems con costo cargado
-            {capital.sinCosto > 0 ? ` (${capital.sinCosto} sin costo quedan afuera)` : ''}.
+          <p className="text-[11px] text-muted dark:text-dark-text-secondary mt-2.5 text-center">
+            {capital.unidadesCel} dispositivo{capital.unidadesCel === 1 ? '' : 's'} en stock · {capital.unidadesAcc} accesorio
+            {capital.unidadesAcc === 1 ? '' : 's'}. Cada indicador cuenta solo los ítems con ese dato cargado.
           </p>
         </div>
       )}
 
-      <div className="flex items-center gap-2 text-sm">
+      <div className="flex items-center gap-1 self-start rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface p-1 text-sm">
         <button
           onClick={() => setTab('celulares')}
-          className={`flex-1 rounded-xl py-2 font-medium ${
-            tab === 'celulares' ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
+          className={`rounded-lg px-3 py-1.5 font-medium transition-colors ${
+            tab === 'celulares' ? 'bg-accent dark:bg-dark-accent text-white' : 'text-ink dark:text-dark-text'
           }`}
         >
-          Celulares
+          Dispositivos <span className="opacity-70">{dispositivos.length}</span>
         </button>
         <button
           onClick={() => setTab('accesorios')}
-          className={`flex-1 rounded-xl py-2 font-medium ${
-            tab === 'accesorios' ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
+          className={`rounded-lg px-3 py-1.5 font-medium transition-colors ${
+            tab === 'accesorios' ? 'bg-accent dark:bg-dark-accent text-white' : 'text-ink dark:text-dark-text'
           }`}
         >
-          Accesorios
+          Accesorios <span className="opacity-70">{productos.length}</span>
         </button>
       </div>
 
       {tab === 'celulares' ? (
         <>
-          <input
-            value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
-            placeholder="Buscar por modelo, IMEI, serie, código..."
-            className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
-          />
-
-          <div className="flex items-center gap-2 text-sm">
-            <button
-              onClick={() => setVista('stock')}
-              className={`flex-1 rounded-xl py-2 font-medium ${
-                vista === 'stock' ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
-              }`}
-            >
-              En stock
-            </button>
-            <button
-              onClick={() => setVista('vendidos')}
-              className={`flex-1 rounded-xl py-2 font-medium ${
-                vista === 'vendidos' ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
-              }`}
-            >
-              Vendidos
-            </button>
-          </div>
-
-          {puedeAgregarStock && (
-            <div className="flex gap-2">
-              <Link
-                href="/stock/nuevo"
-                className="flex-1 rounded-2xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium"
-              >
-                + Cargar a mano
-              </Link>
-              <Link
-                href="/stock/foto"
-                className="flex-1 rounded-2xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium"
-              >
-                + Cargar con foto
-              </Link>
+          <div className="sticky top-0 z-10 -mx-6 px-6 py-2.5 bg-canvas dark:bg-dark-bg flex flex-col gap-2.5 border-b border-border/60 dark:border-dark-border/60">
+            <div className="relative">
+              <input
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+                placeholder="Buscar por modelo, IMEI, serie, código, color o proveedor…"
+                className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl pl-4 pr-9 py-3 text-sm"
+              />
+              {busqueda && (
+                <button
+                  onClick={() => setBusqueda('')}
+                  aria-label="Limpiar búsqueda"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 h-6 w-6 rounded-full text-muted dark:text-dark-text-secondary hover:bg-canvas dark:hover:bg-dark-bg flex items-center justify-center"
+                >
+                  ✕
+                </button>
+              )}
             </div>
-          )}
 
-          <div className="flex gap-2">
-            {puedeAgregarStock && (
-              <label className="flex-1 rounded-xl border border-border dark:border-dark-border py-2.5 text-center text-xs font-medium cursor-pointer">
-                {preparando
-                  ? 'Leyendo archivo...'
-                  : importando
-                  ? progresoImport
-                    ? `Importando... ${progresoImport.hechas}/${progresoImport.total}`
-                    : 'Importando...'
-                  : '⬆ Importar CSV'}
-                <input
-                  ref={inputImportRef}
-                  type="file"
-                  accept=".csv"
-                  className="hidden"
-                  disabled={preparando || importando}
-                  onChange={prepararImportacion}
-                />
-              </label>
+            {busquedaDebounced.trim() && (
+              <p className="text-xs text-muted dark:text-dark-text-secondary">
+                {filtrados.length} resultado{filtrados.length === 1 ? '' : 's'}
+              </p>
             )}
-            <button
-              onClick={exportarDispositivos}
-              disabled={dispositivos.length === 0}
-              className="flex-1 rounded-xl border border-border dark:border-dark-border py-2.5 text-center text-xs font-medium disabled:opacity-40"
-            >
-              ⬇ Exportar CSV
-            </button>
+
+            <div className="flex items-center gap-1 self-start rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface p-1 text-sm shrink-0">
+              <button
+                onClick={() => setVista('stock')}
+                className={`rounded-lg px-3 py-1.5 font-medium transition-colors ${
+                  vista === 'stock' ? 'bg-accent dark:bg-dark-accent text-white' : 'text-ink dark:text-dark-text'
+                }`}
+              >
+                En stock <span className="opacity-70">{capital.unidadesCel}</span>
+              </button>
+              <button
+                onClick={() => setVista('vendidos')}
+                className={`rounded-lg px-3 py-1.5 font-medium transition-colors ${
+                  vista === 'vendidos' ? 'bg-accent dark:bg-dark-accent text-white' : 'text-ink dark:text-dark-text'
+                }`}
+              >
+                Vendidos <span className="opacity-70">{dispositivos.length - capital.unidadesCel}</span>
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2 text-xs overflow-x-auto">
+              {VISTAS_RAPIDAS.map((v) => (
+                <button
+                  key={v.id}
+                  onClick={() => setFiltroRapido(v.id)}
+                  className={`shrink-0 rounded-full px-3 py-1.5 font-medium ${
+                    filtroRapido === v.id
+                      ? 'bg-accent dark:bg-dark-accent text-white'
+                      : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
+                  }`}
+                >
+                  {v.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {planImport && puedeAgregarStock && (
@@ -712,23 +1083,88 @@ export default function Stock() {
           )}
 
           {modoSeleccion ? (
-            <div className="sticky top-0 z-10 rounded-xl border border-accent/30 dark:border-dark-accent/30 bg-accent-soft dark:bg-dark-accent-soft px-4 py-2.5 flex items-center justify-between gap-2">
-              <p className="text-sm font-medium">{seleccionados.size} seleccionado{seleccionados.size === 1 ? '' : 's'}</p>
-              <div className="flex items-center gap-2">
+            <div className="sticky top-0 z-10 rounded-xl border border-accent/30 dark:border-dark-accent/30 bg-accent-soft dark:bg-dark-accent-soft px-4 py-3 flex flex-col gap-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-medium">{seleccionados.size} seleccionado{seleccionados.size === 1 ? '' : 's'}</p>
                 <button onClick={salirDeSeleccion} className="text-xs text-muted dark:text-dark-text-secondary underline">
                   Cancelar
                 </button>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                {puedeAgregarStock && (
+                  <>
+                    <button
+                      onClick={() => marcarStockSeleccionados(true)}
+                      disabled={seleccionados.size === 0 || procesandoSeleccion}
+                      className="rounded-lg bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-xs font-medium px-3 py-1.5 disabled:opacity-40"
+                    >
+                      Marcar en stock
+                    </button>
+                    <button
+                      onClick={() => marcarStockSeleccionados(false)}
+                      disabled={seleccionados.size === 0 || procesandoSeleccion}
+                      className="rounded-lg bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-xs font-medium px-3 py-1.5 disabled:opacity-40"
+                    >
+                      Marcar fuera de stock
+                    </button>
+                    <button
+                      onClick={() => setMoviendoCarpeta((v) => !v)}
+                      disabled={seleccionados.size === 0}
+                      className="rounded-lg bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-xs font-medium px-3 py-1.5 disabled:opacity-40"
+                    >
+                      Mover de carpeta
+                    </button>
+                  </>
+                )}
                 <button
-                  onClick={eliminarSeleccionados}
-                  disabled={seleccionados.size === 0 || eliminandoSeleccion}
-                  className="rounded-lg bg-bad text-white text-xs font-medium px-3 py-1.5 disabled:opacity-40"
+                  onClick={exportarSeleccionados}
+                  disabled={seleccionados.size === 0}
+                  className="rounded-lg bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-xs font-medium px-3 py-1.5 disabled:opacity-40"
                 >
-                  {eliminandoSeleccion ? 'Eliminando...' : 'Eliminar'}
+                  Exportar seleccionados
                 </button>
               </div>
+
+              {moviendoCarpeta && (
+                <div className="flex items-center gap-2">
+                  <input
+                    value={carpetaDestino}
+                    onChange={(e) => setCarpetaDestino(e.target.value)}
+                    list="carpetas-mover-seleccion"
+                    placeholder="Carpeta destino (ej. iPhone 13)"
+                    autoFocus
+                    className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                  />
+                  <datalist id="carpetas-mover-seleccion">
+                    {carpetas.map((c) => (
+                      <option key={c} value={c} />
+                    ))}
+                  </datalist>
+                  <button
+                    onClick={moverSeleccionadosACarpeta}
+                    disabled={!carpetaDestino.trim() || procesandoSeleccion}
+                    className="rounded-lg bg-accent dark:bg-dark-accent text-white text-xs font-medium px-3 py-2 disabled:opacity-40 shrink-0"
+                  >
+                    Mover
+                  </button>
+                </div>
+              )}
+
+              {puedeEliminar && (
+                <div className="pt-1.5 border-t border-accent/20 dark:border-dark-accent/20 flex justify-end">
+                  <button
+                    onClick={eliminarSeleccionados}
+                    disabled={seleccionados.size === 0 || eliminandoSeleccion}
+                    className="rounded-lg bg-bad text-white text-xs font-medium px-3 py-1.5 disabled:opacity-40"
+                  >
+                    {eliminandoSeleccion ? 'Eliminando...' : 'Eliminar'}
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
-            puedeEliminar && (
+            (puedeEliminar || puedeAgregarStock) && (
               <button
                 onClick={() => setModoSeleccion(true)}
                 className="self-start text-xs text-accent dark:text-dark-accent underline"
@@ -750,8 +1186,28 @@ export default function Stock() {
             </p>
           )}
 
+          {!loading && grupos.length > 0 && (
+            <div className="flex items-center gap-3 text-xs text-muted dark:text-dark-text-secondary">
+              <button onClick={expandirTodas} className="underline decoration-dotted hover:text-ink dark:hover:text-dark-text">
+                Expandir todas
+              </button>
+              <button onClick={contraerTodas} className="underline decoration-dotted hover:text-ink dark:hover:text-dark-text">
+                Contraer todas
+              </button>
+              {gruposVacios > 0 && (
+                <button
+                  onClick={() => setMostrarVacias((v) => !v)}
+                  className="ml-auto underline decoration-dotted hover:text-ink dark:hover:text-dark-text"
+                >
+                  {mostrarVacias ? 'Ocultar' : 'Mostrar'} {gruposVacios} carpeta{gruposVacios === 1 ? '' : 's'} vacía
+                  {gruposVacios === 1 ? '' : 's'}
+                </button>
+              )}
+            </div>
+          )}
+
           <div className="flex flex-col gap-5">
-            {grupos.map(([modelo, items]) => {
+            {gruposVisibles.map(([modelo, items]) => {
               const enStock = conteoEnStockPorModelo.get(modelo) ?? 0;
               const expandido = items.length === 0 || grupoExpandido(modelo);
               return (
@@ -772,22 +1228,61 @@ export default function Stock() {
                       </span>
                     )}
                   </button>
-                  {puedeAgregarStock && modelo !== 'Sin modelo' && (
-                    <Link
-                      href={`/stock/nuevo?modelo=${encodeURIComponent(modelo)}`}
-                      className="shrink-0 text-xs text-accent dark:text-dark-accent underline"
-                    >
-                      + Agregar
-                    </Link>
-                  )}
-                  {items.length > 0 && puedeEliminar && (
-                    <button
-                      onClick={() => eliminarCarpeta(modelo, items)}
-                      disabled={eliminandoCarpeta === modelo}
-                      className="shrink-0 text-xs text-bad underline disabled:opacity-40"
-                    >
-                      {eliminandoCarpeta === modelo ? 'Eliminando...' : 'Eliminar carpeta'}
-                    </button>
+                  {(puedeAgregarStock || puedeEliminar) && modelo !== 'Sin modelo' && (
+                    <div className="relative shrink-0">
+                      <button
+                        onClick={() => setCarpetaMenuAbierta(carpetaMenuAbierta === modelo ? null : modelo)}
+                        className="h-8 w-8 rounded-lg hover:bg-canvas dark:hover:bg-dark-bg flex items-center justify-center text-muted dark:text-dark-text-secondary"
+                        aria-label={`Más acciones de la carpeta ${modelo}`}
+                      >
+                        ···
+                      </button>
+                      {carpetaMenuAbierta === modelo && (
+                        <div className="absolute right-0 top-full mt-1 w-60 rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-elevated py-1 z-30 flex flex-col text-left">
+                          {puedeAgregarStock && (
+                            <Link
+                              href={`/stock/nuevo?modelo=${encodeURIComponent(modelo)}`}
+                              onClick={() => setCarpetaMenuAbierta(null)}
+                              className="px-3.5 py-2.5 text-sm hover:bg-canvas dark:hover:bg-dark-bg"
+                            >
+                              Agregar dispositivo acá
+                            </Link>
+                          )}
+                          {puedeAgregarStock && (
+                            <Link
+                              href="/stock/carpetas"
+                              onClick={() => setCarpetaMenuAbierta(null)}
+                              className="px-3.5 py-2.5 text-sm hover:bg-canvas dark:hover:bg-dark-bg"
+                            >
+                              Renombrar / administrar
+                            </Link>
+                          )}
+                          {puedeEliminar &&
+                            (items.length === 0 ? (
+                              <button
+                                onClick={() => eliminarCarpetaVacia(modelo)}
+                                className="px-3.5 py-2.5 text-sm text-left text-bad hover:bg-bad/5 border-t border-border dark:border-dark-border mt-1"
+                              >
+                                Eliminar carpeta
+                              </button>
+                            ) : (
+                              <>
+                                <p className="px-3.5 pt-2.5 pb-1 text-xs text-muted dark:text-dark-text-secondary border-t border-border dark:border-dark-border mt-1">
+                                  Tiene {items.length} dispositivo{items.length === 1 ? '' : 's'} — movelos o eliminalos para poder
+                                  borrar la carpeta.
+                                </p>
+                                <button
+                                  onClick={() => eliminarCarpeta(modelo, items)}
+                                  disabled={eliminandoCarpeta === modelo}
+                                  className="px-3.5 py-2.5 text-sm text-left text-bad hover:bg-bad/5 disabled:opacity-40"
+                                >
+                                  {eliminandoCarpeta === modelo ? 'Eliminando...' : `Eliminar los ${items.length} dispositivos`}
+                                </button>
+                              </>
+                            ))}
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
                 {items.length === 0 && (
@@ -798,19 +1293,25 @@ export default function Stock() {
                     const colorHex = hexColorDe(d.color);
                     const sellado = d.estado === 'sellado';
                     const seleccionado = seleccionados.has(d.id);
-                    // Sellado se marca con un borde dorado/negro bien grueso —
-                    // pisa el borde de color normal (que es solo 3px) para que
-                    // salte a la vista entre el resto de la carpeta.
-                    const clases = `rounded-xl px-4 py-3 flex items-center gap-3 w-full text-left ${
-                      sellado
-                        ? 'border-[6px] border-amber-500 dark:border-amber-400 shadow-[0_0_0_2px_#000]'
-                        : `border-[3px] ${colorHex ? '' : 'border-border dark:border-dark-border'}`
-                    } ${
+                    const procesando = procesandoAccion === d.id;
+                    // Franja de color a la izquierda (4px) en vez del borde
+                    // grueso de toda la tarjeta: identifica el color físico
+                    // sin gritar. Si no hay color registrado queda gris
+                    // neutro; con colores muy claros (blanco, etc.) el borde
+                    // derecho de la franja le da contorno para que no se
+                    // pierda contra la tarjeta blanca.
+                    const franjaClase = `absolute left-0 top-0 bottom-0 w-1 ${
+                      colorHex ? 'border-r border-black/10 dark:border-white/10' : 'bg-border dark:bg-dark-border'
+                    }`;
+                    const clases = `relative overflow-hidden rounded-xl pl-3.5 pr-3 py-2.5 flex items-center gap-3 w-full text-left border border-border dark:border-dark-border ${
                       d.en_stock ? 'bg-white dark:bg-dark-surface' : 'bg-white dark:bg-dark-surface opacity-60'
-                    } ${seleccionado ? 'ring-2 ring-accent dark:ring-dark-accent' : ''}`;
+                    } ${sellado ? 'bg-amber-50/70 dark:bg-amber-400/[0.06]' : ''} ${
+                      seleccionado ? 'ring-2 ring-accent dark:ring-dark-accent' : ''
+                    }`;
                     const imgColor = imagenColorDeModelo(d.modelo, d.color);
                     const contenido = (
                       <>
+                        <span className={franjaClase} style={colorHex ? { backgroundColor: colorHex } : undefined} />
                         {modoSeleccion && (
                           <span
                             className={`h-5 w-5 rounded-full border-2 shrink-0 flex items-center justify-center ${
@@ -824,19 +1325,26 @@ export default function Stock() {
                         )}
                         {imgColor && (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={imgColor} alt={d.color || ''} className="h-12 w-auto object-contain shrink-0 transition-transform duration-300 ease-out hover:animate-flotarLeve hover:drop-shadow-md" />
+                          <img
+                            src={imgColor}
+                            alt={d.color || ''}
+                            loading="lazy"
+                            className="h-10 w-auto object-contain shrink-0 transition-transform duration-300 ease-out hover:animate-flotarLeve hover:drop-shadow-md"
+                          />
                         )}
                         <div className="flex-1 flex items-center justify-between gap-2 min-w-0">
-                          <div>
+                          <div className="min-w-0">
                             <p className="text-sm font-medium flex items-center gap-1.5 flex-wrap">
                               <span>
                                 {d.capacidad_gb ? `${d.capacidad_gb} GB` : 'Capacidad s/d'}
-                                {d.color ? ` · ${d.color}` : ''}
-                                {d.salud_bateria != null ? ` · ${d.salud_bateria}%` : ''}
+                                {d.color ? ` · ${d.color}` : ' · Sin color'}
                               </span>
-                              {d.salud_bateria != null && d.salud_bateria < 80 && (
-                                <span className="text-[10px] font-semibold text-warn bg-warn/10 rounded-full px-2 py-0.5">
-                                  ⚠ Batería baja
+                              <span className="text-xs text-muted dark:text-dark-text-secondary font-mono">
+                                {d.imei || 'sin IMEI'}
+                              </span>
+                              {d.salud_bateria != null && (
+                                <span className={d.salud_bateria < 80 ? 'text-[10px] font-semibold text-warn bg-warn/10 rounded-full px-2 py-0.5' : 'text-xs text-muted dark:text-dark-text-secondary'}>
+                                  {d.salud_bateria < 80 ? `⚠ ${d.salud_bateria}% batería` : `${d.salud_bateria}%`}
                                 </span>
                               )}
                               {sellado && (
@@ -845,41 +1353,89 @@ export default function Stock() {
                                 </span>
                               )}
                             </p>
-                            <p className="text-xs text-muted dark:text-dark-text-secondary">
-                              IMEI: <span className="font-bold font-mono text-ink dark:text-dark-text">{d.imei || 'sin IMEI'}</span>
-                            </p>
-                            {d.detalles && (
-                              <p className="text-xs text-warn mt-0.5">📝 {d.detalles}</p>
-                            )}
-                            {d.agregado_por_nombre && (
-                              <p className="text-xs text-muted dark:text-dark-text-secondary mt-0.5">
-                                Agregado por {d.agregado_por_nombre}
+                            {(d.detalles || d.agregado_por_nombre) && (
+                              <p className="text-xs text-muted dark:text-dark-text-secondary truncate">
+                                {d.detalles && <span className="text-warn">📝 {d.detalles}</span>}
+                                {d.detalles && d.agregado_por_nombre && ' · '}
+                                {d.agregado_por_nombre && `Agregado por ${d.agregado_por_nombre}`}
                               </p>
                             )}
                           </div>
-                          <div className="text-right">
-                            {d.precio != null && (
-                              <p className="text-sm font-medium">${d.precio.toLocaleString('es-AR')}</p>
+                          <div className="text-right shrink-0">
+                            <p className="text-sm font-medium">
+                              {d.precio != null ? `$${d.precio.toLocaleString('es-AR')}` : (
+                                <span className="text-muted dark:text-dark-text-secondary font-normal">Sin precio</span>
+                              )}
+                            </p>
+                            {vista === 'vendidos' && (
+                              <p className="text-xs text-muted dark:text-dark-text-secondary">vendido</p>
                             )}
-                            <p className="text-xs text-muted dark:text-dark-text-secondary">{d.en_stock ? 'en stock' : 'fuera de stock'}</p>
                           </div>
                         </div>
                       </>
                     );
 
-                    return modoSeleccion ? (
-                      <button
-                        key={d.id}
-                        onClick={() => toggleSeleccion(d.id)}
-                        style={!sellado && colorHex ? { borderColor: colorHex } : undefined}
-                        className={clases}
-                      >
+                    const fila = modoSeleccion ? (
+                      <button key={`fila-${d.id}`} onClick={() => toggleSeleccion(d.id)} className={clases}>
                         {contenido}
                       </button>
                     ) : (
-                      <Link key={d.id} href={`/stock/${d.id}`} style={!sellado && colorHex ? { borderColor: colorHex } : undefined} className={clases}>
+                      <Link key={`fila-${d.id}`} href={`/stock/${d.id}`} className={clases}>
                         {contenido}
                       </Link>
+                    );
+
+                    return (
+                      <div key={d.id} className="relative flex items-center gap-1">
+                        {fila}
+                        {!modoSeleccion && (
+                          <div className="relative shrink-0">
+                            <button
+                              onClick={() => setAccionAbiertaId(accionAbiertaId === d.id ? null : d.id)}
+                              disabled={procesando}
+                              aria-label={`Más acciones de ${d.modelo || 'este dispositivo'}`}
+                              className="h-10 w-10 rounded-lg border border-border dark:border-dark-border text-muted dark:text-dark-text-secondary hover:bg-canvas dark:hover:bg-dark-bg flex items-center justify-center disabled:opacity-40"
+                            >
+                              {procesando ? '…' : '···'}
+                            </button>
+                            {accionAbiertaId === d.id && (
+                              <div className="absolute right-0 top-full mt-1 w-52 rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-elevated py-1 z-30 flex flex-col">
+                                <Link
+                                  href={`/stock/${d.id}`}
+                                  onClick={() => setAccionAbiertaId(null)}
+                                  className="px-3.5 py-2.5 text-sm hover:bg-canvas dark:hover:bg-dark-bg"
+                                >
+                                  Ver ficha
+                                </Link>
+                                {puedeAgregarStock && (
+                                  <button
+                                    onClick={() => toggleStockDispositivo(d)}
+                                    className="px-3.5 py-2.5 text-sm text-left hover:bg-canvas dark:hover:bg-dark-bg"
+                                  >
+                                    {d.en_stock ? 'Marcar fuera de stock' : 'Volver a stock'}
+                                  </button>
+                                )}
+                                {d.en_stock && puedeRecibirServicioTecnico && (
+                                  <button
+                                    onClick={() => derivarDispositivoAServicio(d)}
+                                    className="px-3.5 py-2.5 text-sm text-left hover:bg-canvas dark:hover:bg-dark-bg"
+                                  >
+                                    Derivar a Servicio Técnico
+                                  </button>
+                                )}
+                                {puedeEliminar && (
+                                  <button
+                                    onClick={() => eliminarDispositivo(d)}
+                                    className="px-3.5 py-2.5 text-sm text-left text-bad hover:bg-bad/5 border-t border-border dark:border-dark-border mt-1"
+                                  >
+                                    Eliminar del historial
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     );
                   })}
                 </div>}
@@ -1073,5 +1629,41 @@ export default function Stock() {
         </>
       )}
     </main>
+  );
+}
+
+// Un valor ausente (nadie cargó costo/precio todavía) NO es lo mismo que
+// "$0" — mostrar $0 hace parecer que el capital realmente vale cero. Si
+// ningún ítem entró en la cuenta, se muestra "Sin calcular"; si entraron
+// algunos pero no todos, se aclara la cobertura para que el número no se
+// lea como si fuera el total real del inventario.
+function IndicadorCapital({
+  etiqueta,
+  valor,
+  cobertura,
+  total,
+  tono,
+}: {
+  etiqueta: string;
+  valor: number;
+  cobertura: number;
+  total: number;
+  tono?: string;
+}) {
+  const sinDatos = cobertura === 0;
+  return (
+    <div>
+      {sinDatos ? (
+        <p className="text-lg font-display font-semibold text-muted dark:text-dark-text-secondary">Sin calcular</p>
+      ) : (
+        <p className={`text-lg font-display font-semibold ${tono ?? ''}`}>${Math.round(valor).toLocaleString('es-AR')}</p>
+      )}
+      <p className="text-[11px] text-muted dark:text-dark-text-secondary">{etiqueta}</p>
+      {!sinDatos && cobertura < total && (
+        <p className="text-[10px] text-muted dark:text-dark-text-secondary">
+          {cobertura} de {total} incluidos
+        </p>
+      )}
+    </div>
   );
 }

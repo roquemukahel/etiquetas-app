@@ -41,6 +41,13 @@ export default function DetalleDispositivo() {
   const actor = useActor();
   const puedeEliminar = tienePermiso(actor, 'eliminar');
   const puedeRecibirServicioTecnico = tienePermiso(actor, 'recibir_servicio_tecnico');
+  // Costo, proveedor y margen son datos sensibles del dueño — mismo permiso
+  // que ya usa la pantalla de Stock para la tarjeta de capital. Esto es
+  // ocultamiento del lado del cliente nada más (no hay una restricción a
+  // nivel de fila/columna en la base para esto todavía); documentado acá
+  // porque el pedido original pide reforzarlo también del lado del
+  // servidor, algo que queda fuera del alcance de este rediseño visual.
+  const puedeVerComercial = tienePermiso(actor, 'ver_estadisticas');
 
   const [d, setD] = useState<Dispositivo | null>(null);
   const [original, setOriginal] = useState<Dispositivo | null>(null);
@@ -52,6 +59,9 @@ export default function DetalleDispositivo() {
   const [derivarAbierto, setDerivarAbierto] = useState(false);
   const [derivarDetalles, setDerivarDetalles] = useState('');
   const [derivando, setDerivando] = useState(false);
+  const [zonaPeligroAbierta, setZonaPeligroAbierta] = useState(false);
+  const [confirmandoEliminar, setConfirmandoEliminar] = useState(false);
+  const [eliminando, setEliminando] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -71,6 +81,28 @@ export default function DetalleDispositivo() {
   }, [id]);
 
   const campo = (k: keyof Dispositivo, valor: any) => setD((prev) => (prev ? { ...prev, [k]: valor } : prev));
+
+  // Objetos chicos y planos (mismos campos siempre, en el mismo orden,
+  // porque `original` es literalmente el punto de partida de `d`) — comparar
+  // el JSON alcanza para saber si hay algo sin guardar, sin tener que
+  // repetir campo por campo.
+  const hayCambios = !!d && !!original && JSON.stringify(d) !== JSON.stringify(original);
+
+  useEffect(() => {
+    const avisar = (e: BeforeUnloadEvent) => {
+      if (!hayCambios) return;
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', avisar);
+    return () => window.removeEventListener('beforeunload', avisar);
+  }, [hayCambios]);
+
+  const volverAtras = (e: React.MouseEvent) => {
+    if (hayCambios && !confirm('Tenés cambios sin guardar. ¿Salir igual?')) {
+      e.preventDefault();
+    }
+  };
 
   const handleGuardar = async () => {
     if (!d || !original) return;
@@ -165,12 +197,12 @@ export default function DetalleDispositivo() {
 
   const handleEliminar = async () => {
     if (!d || !puedeEliminar) return;
-    if (!confirm('¿Eliminar este dispositivo del historial? No se puede deshacer.')) return;
-    setGuardando(true);
+    setEliminando(true);
     const { error: deleteError } = await supabase.from('dispositivos').delete().eq('id', id);
     if (deleteError) {
       setError('No pudimos eliminar: ' + deleteError.message);
-      setGuardando(false);
+      setEliminando(false);
+      setConfirmandoEliminar(false);
       return;
     }
     await registrarAuditoria(supabase, {
@@ -202,157 +234,263 @@ export default function DetalleDispositivo() {
   }
 
   return (
-    <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
+    <main className="flex min-h-screen flex-col px-6 py-6 gap-4 pb-24">
       <header className="flex items-center gap-3">
-        <Link href="/stock" className="text-2xl leading-none">
+        <Link href="/stock" onClick={volverAtras} className="text-2xl leading-none shrink-0">
           &larr;
         </Link>
-        <span className="text-lg font-medium">{d.modelo || 'Dispositivo'}</span>
+        <div className="min-w-0">
+          <p className="text-lg font-medium leading-tight truncate">{d.modelo || 'Dispositivo'}</p>
+          <p className="text-xs text-muted dark:text-dark-text-secondary font-mono truncate">{d.imei || 'sin IMEI'}</p>
+        </div>
+        <div className="ml-auto flex items-center gap-2 shrink-0">
+          <span
+            className={`text-xs font-semibold rounded-full px-2.5 py-1 ${
+              d.en_stock ? 'bg-good/15 text-good' : 'bg-black/5 dark:bg-white/10 text-muted dark:text-dark-text-secondary'
+            }`}
+          >
+            {d.en_stock ? 'Disponible' : 'Fuera de stock'}
+          </span>
+          <button type="button" onClick={() => campo('en_stock', !d.en_stock)} className="text-xs text-accent dark:text-dark-accent underline whitespace-nowrap">
+            Cambiar estado
+          </button>
+        </div>
       </header>
 
       {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
 
-      <button
-        onClick={() => campo('en_stock', !d.en_stock)}
-        className={`w-full rounded-xl py-3 text-sm font-medium ${
-          d.en_stock ? 'bg-good/15 text-good' : 'bg-black/5 text-muted dark:text-dark-text-secondary'
-        }`}
-      >
-        {d.en_stock ? '✓ En stock — tocá para marcar fuera de stock' : 'Fuera de stock — tocá para volver a stock'}
-      </button>
-
-      {d.garantia_vencimiento && (
-        <p className="text-xs text-muted dark:text-dark-text-secondary -mt-2">
-          🛡️ Garantía hasta el {new Date(d.garantia_vencimiento + 'T00:00:00').toLocaleDateString('es-AR')}
-        </p>
-      )}
-      {d.agregado_por_nombre && (
-        <p className="text-xs text-muted dark:text-dark-text-secondary -mt-2">Agregado por {d.agregado_por_nombre}</p>
+      {(d.garantia_vencimiento || d.agregado_por_nombre) && (
+        <div className="flex flex-col gap-0.5">
+          {d.garantia_vencimiento && (
+            <p className="text-xs text-muted dark:text-dark-text-secondary">
+              🛡️ Garantía hasta el {new Date(d.garantia_vencimiento + 'T00:00:00').toLocaleDateString('es-AR')}
+            </p>
+          )}
+          {d.agregado_por_nombre && (
+            <p className="text-xs text-muted dark:text-dark-text-secondary">Agregado por {d.agregado_por_nombre}</p>
+          )}
+        </div>
       )}
 
-      <div className="flex flex-col gap-3">
-        <Campo label="Modelo (carpeta)" valor={d.modelo ?? ''} onChange={(v) => campo('modelo', v)} listaId="carpetas-stock" />
-        <datalist id="carpetas-stock">
-          {carpetas.map((c) => (
-            <option key={c} value={c} />
-          ))}
-        </datalist>
-
-        <div>
-          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Almacenamiento</label>
-          <div className="flex gap-2">
-            {STORAGE_OPTIONS.map((gb) => (
-              <button
-                key={gb}
-                type="button"
-                onClick={() => campo('capacidad_gb', gb)}
-                className={`flex-1 rounded-xl py-2 text-sm font-medium ${
-                  d.capacidad_gb === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
-                }`}
-              >
-                {gb} GB
-              </button>
+      <div className="grid md:grid-cols-2 gap-4">
+        <Seccion titulo="Identificación">
+          <Campo label="Modelo (carpeta)" valor={d.modelo ?? ''} onChange={(v) => campo('modelo', v)} listaId="carpetas-stock" />
+          <datalist id="carpetas-stock">
+            {carpetas.map((c) => (
+              <option key={c} value={c} />
             ))}
+          </datalist>
+          <div className="grid grid-cols-2 gap-3">
+            <Campo label="IMEI" valor={d.imei ?? ''} onChange={(v) => campo('imei', v)} mono />
+            <Campo label="Serie / código (opcional)" valor={d.numero_serie ?? ''} onChange={(v) => campo('numero_serie', v)} mono />
           </div>
-        </div>
+        </Seccion>
 
-        <Campo label="IMEI" valor={d.imei ?? ''} onChange={(v) => campo('imei', v)} mono />
-        <Campo
-          label="Salud de batería (%)"
-          valor={d.salud_bateria?.toString() ?? ''}
-          onChange={(v) => campo('salud_bateria', v ? Number(v) : null)}
-          numerico
-        />
-        <SelectorColorAuto label="Color" modelo={d.modelo} value={d.color ?? ''} onChange={(v) => campo('color', v)} />
-        <Campo
-          label="Precio"
-          valor={d.precio?.toString() ?? ''}
-          onChange={(v) => campo('precio', v ? Number(v) : null)}
-          numerico
-        />
-        <Campo
-          label="Costo (lo que le pagaste al proveedor, opcional)"
-          valor={d.costo?.toString() ?? ''}
-          onChange={(v) => campo('costo', v ? Number(v) : null)}
-          numerico
-        />
-        <Campo label="Proveedor (opcional)" valor={d.proveedor ?? ''} onChange={(v) => campo('proveedor', v)} listaId="proveedores-stock-id" />
-        <datalist id="proveedores-stock-id">
-          {proveedores.map((p) => (
-            <option key={p} value={p} />
-          ))}
-        </datalist>
+        <Seccion titulo="Características">
+          <div>
+            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Almacenamiento</label>
+            <div className="flex gap-2">
+              {STORAGE_OPTIONS.map((gb) => (
+                <button
+                  key={gb}
+                  type="button"
+                  onClick={() => campo('capacidad_gb', gb)}
+                  className={`flex-1 rounded-xl py-2 text-sm font-medium ${
+                    d.capacidad_gb === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
+                  }`}
+                >
+                  {gb} GB
+                </button>
+              ))}
+            </div>
+            {/* Valor libre para equipos que no entran en las 4 capacidades
+               típicas de iPhone (ej. 32GB, o directamente otro tipo de
+               dispositivo) — no fuerza una opción que no corresponda. */}
+            <input
+              value={d.capacidad_gb != null && !STORAGE_OPTIONS.includes(d.capacidad_gb) ? String(d.capacidad_gb) : ''}
+              onChange={(e) => campo('capacidad_gb', e.target.value ? Number(sanitizarDecimal(e.target.value)) : null)}
+              placeholder="Otro valor en GB"
+              inputMode="numeric"
+              className="mt-2 w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-2.5 text-sm"
+            />
+          </div>
 
-        <div>
-          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Detalles del equipo (opcional)</label>
-          <textarea
-            value={d.detalles ?? ''}
-            onChange={(e) => campo('detalles', e.target.value)}
-            rows={2}
-            placeholder="Ej. módulo con detalle, carcasa con un rayón…"
-            className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+          <Campo
+            label="Salud de batería (%)"
+            valor={d.salud_bateria?.toString() ?? ''}
+            onChange={(v) => campo('salud_bateria', v ? Number(v) : null)}
+            numerico
           />
-        </div>
 
-        <SelectorEstadoDispositivo value={d.estado ?? 'usado'} onChange={(v) => campo('estado', v)} />
+          <SelectorColorAuto label="Color" modelo={d.modelo} value={d.color ?? ''} onChange={(v) => campo('color', v)} />
+
+          <SelectorEstadoDispositivo value={d.estado ?? 'usado'} onChange={(v) => campo('estado', v)} />
+        </Seccion>
+
+        <Seccion titulo="Información comercial">
+          {puedeVerComercial ? (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <Campo label="Precio" valor={d.precio?.toString() ?? ''} onChange={(v) => campo('precio', v ? Number(v) : null)} numerico />
+                <Campo
+                  label="Costo (opcional)"
+                  valor={d.costo?.toString() ?? ''}
+                  onChange={(v) => campo('costo', v ? Number(v) : null)}
+                  numerico
+                />
+              </div>
+              <Campo label="Proveedor (opcional)" valor={d.proveedor ?? ''} onChange={(v) => campo('proveedor', v)} listaId="proveedores-stock-id" />
+              <datalist id="proveedores-stock-id">
+                {proveedores.map((p) => (
+                  <option key={p} value={p} />
+                ))}
+              </datalist>
+            </>
+          ) : (
+            <>
+              <Campo label="Precio" valor={d.precio?.toString() ?? ''} onChange={(v) => campo('precio', v ? Number(v) : null)} numerico />
+              <p className="text-xs text-muted dark:text-dark-text-secondary">
+                Costo y proveedor son visibles solo para quienes pueden ver estadísticas.
+              </p>
+            </>
+          )}
+        </Seccion>
+
+        <Seccion titulo="Observaciones y operación">
+          <div>
+            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Detalles del equipo (opcional)</label>
+            <textarea
+              value={d.detalles ?? ''}
+              onChange={(e) => campo('detalles', e.target.value)}
+              rows={2}
+              placeholder="Ej. módulo con detalle, carcasa con un rayón…"
+              className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+            />
+          </div>
+
+          {d.en_stock && puedeRecibirServicioTecnico && (
+            <div className="pt-1 border-t border-border dark:border-dark-border">
+              {!derivarAbierto ? (
+                <button
+                  onClick={() => setDerivarAbierto(true)}
+                  className="mt-3 w-full rounded-xl border border-border dark:border-dark-border py-2.5 text-center text-sm font-medium"
+                >
+                  Derivar a Servicio Técnico
+                </button>
+              ) : (
+                <div className="mt-3 flex flex-col gap-2">
+                  <p className="text-xs font-medium text-muted dark:text-dark-text-secondary">
+                    Este dispositivo va a salir de Stock y va a aparecer en Servicio Técnico.
+                  </p>
+                  <textarea
+                    value={derivarDetalles}
+                    onChange={(e) => setDerivarDetalles(e.target.value)}
+                    placeholder="Detalles (ej. no enciende, pantalla rota)"
+                    rows={2}
+                    className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setDerivarAbierto(false)}
+                      className="flex-1 rounded-lg border border-border dark:border-dark-border py-2 text-sm font-medium"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      disabled={derivando}
+                      onClick={derivarAServicioTecnico}
+                      className="flex-1 rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
+                    >
+                      {derivando ? 'Derivando...' : 'Confirmar'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </Seccion>
       </div>
 
-      {d.en_stock && !derivarAbierto && puedeRecibirServicioTecnico && (
-        <button
-          onClick={() => setDerivarAbierto(true)}
-          className="w-full rounded-2xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium"
-        >
-          Derivar a Servicio Técnico
-        </button>
+      {puedeEliminar && (
+        <div className="rounded-2xl border border-bad/25 dark:border-bad/30 overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setZonaPeligroAbierta((v) => !v)}
+            className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-bad"
+          >
+            Zona de peligro
+            <span className="text-xs">{zonaPeligroAbierta ? '▾' : '▸'}</span>
+          </button>
+          {zonaPeligroAbierta && (
+            <div className="px-4 pb-4 flex flex-col gap-2 border-t border-bad/15 dark:border-bad/20 pt-3">
+              <p className="text-xs text-muted dark:text-dark-text-secondary">
+                Eliminar este dispositivo lo saca para siempre del historial de Stock. No se puede deshacer.
+              </p>
+              <button
+                onClick={() => setConfirmandoEliminar(true)}
+                className="self-start rounded-xl border border-bad/30 px-4 py-2 text-sm font-medium text-bad"
+              >
+                Eliminar del historial
+              </button>
+            </div>
+          )}
+        </div>
       )}
 
-      {derivarAbierto && (
-        <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-3 flex flex-col gap-2">
-          <p className="text-xs font-medium text-muted dark:text-dark-text-secondary">
-            Este dispositivo va a salir de Stock y va a aparecer en Servicio Técnico.
-          </p>
-          <textarea
-            value={derivarDetalles}
-            onChange={(e) => setDerivarDetalles(e.target.value)}
-            placeholder="Detalles (ej. no enciende, pantalla rota)"
-            rows={2}
-            className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
-          />
-          <div className="flex gap-2">
-            <button
-              onClick={() => setDerivarAbierto(false)}
-              className="flex-1 rounded-lg border border-border dark:border-dark-border py-2 text-sm font-medium"
-            >
-              Cancelar
-            </button>
-            <button
-              disabled={derivando}
-              onClick={derivarAServicioTecnico}
-              className="flex-1 rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
-            >
-              {derivando ? 'Derivando...' : 'Confirmar'}
-            </button>
+      {confirmandoEliminar && (
+        <div
+          className="fixed inset-0 z-40 flex items-end sm:items-center justify-center bg-black/40 p-4"
+          onClick={() => !eliminando && setConfirmandoEliminar(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full sm:max-w-sm rounded-2xl bg-white dark:bg-dark-surface shadow-elevated p-5 flex flex-col gap-3"
+          >
+            <p className="text-base font-semibold">¿Eliminar este dispositivo?</p>
+            <p className="text-sm text-muted dark:text-dark-text-secondary">
+              Se borra {d.modelo || 'este equipo'}
+              {d.imei ? ` (IMEI ${d.imei})` : ''} del historial de Stock. Esta acción no se puede deshacer.
+            </p>
+            <div className="flex gap-2 mt-1">
+              <button
+                disabled={eliminando}
+                onClick={() => setConfirmandoEliminar(false)}
+                className="flex-1 rounded-xl border border-border dark:border-dark-border py-2.5 text-sm font-medium disabled:opacity-40"
+              >
+                Cancelar
+              </button>
+              <button
+                disabled={eliminando}
+                onClick={handleEliminar}
+                className="flex-1 rounded-xl bg-bad text-white py-2.5 text-sm font-medium disabled:opacity-40"
+              >
+                {eliminando ? 'Eliminando...' : 'Sí, eliminar'}
+              </button>
+            </div>
           </div>
         </div>
       )}
 
-      <button
-        disabled={guardando}
-        onClick={handleGuardar}
-        className="mt-auto w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
-      >
-        {guardando ? 'Guardando...' : 'Guardar cambios'}
-      </button>
-      {puedeEliminar && (
+      <div className="fixed bottom-0 left-0 right-0 lg:left-64 z-10 bg-white dark:bg-dark-surface border-t border-border dark:border-dark-border px-6 py-3 flex items-center gap-3">
+        {hayCambios && <span className="text-xs text-warn">Cambios sin guardar</span>}
         <button
           disabled={guardando}
-          onClick={handleEliminar}
-          className="w-full rounded-2xl border border-bad/30 py-3 text-center text-sm font-medium text-bad disabled:opacity-40"
+          onClick={handleGuardar}
+          className="ml-auto rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors px-6 py-3 text-sm font-medium text-white disabled:opacity-40"
         >
-          Eliminar del historial
+          {guardando ? 'Guardando...' : 'Guardar cambios'}
         </button>
-      )}
+      </div>
     </main>
+  );
+}
+
+function Seccion({ titulo, children }: { titulo: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-2xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-4 flex flex-col gap-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted dark:text-dark-text-secondary">{titulo}</p>
+      {children}
+    </div>
   );
 }
 
