@@ -89,6 +89,16 @@ export default function Stock() {
   const [tab, setTab] = useState<'celulares' | 'accesorios'>('celulares');
 
   const [dispositivos, setDispositivos] = useState<Dispositivo[]>([]);
+  // "Vendidos" puede tener miles de filas (el historial completo) contra
+  // un puñado "en stock" — traerlas de arranque es exactamente lo que hacía
+  // lenta a esta pantalla. Ahora solo se cargan la primera vez que el
+  // usuario entra a esa pestaña; hasta entonces, los contadores (cuántos
+  // hay en total/vendidos) salen de un count() liviano, no de tener todo
+  // ya en memoria.
+  const [vendidosCargados, setVendidosCargados] = useState(false);
+  const [cargandoVendidos, setCargandoVendidos] = useState(false);
+  const [totalVendidos, setTotalVendidos] = useState(0);
+  const [totalDispositivos, setTotalDispositivos] = useState(0);
   const [carpetas, setCarpetas] = useState<string[]>([]);
   const [imagenesCarpetas, setImagenesCarpetas] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
@@ -240,26 +250,61 @@ export default function Stock() {
   // muestra el nombre), pero al guardarse copiada en CADA dispositivo que
   // esa persona cargó, traerla en un listado de miles de filas multiplica
   // el peso de la respuesta varias veces sin necesidad.
-  const cargarDispositivos = async () => {
-    const data = await obtenerTodasLasFilas<Dispositivo>(
-      supabase,
-      'dispositivos',
-      'id, modelo, capacidad_gb, imei, numero_serie, salud_bateria, color, precio, costo, proveedor, estado, detalles, en_stock, created_at, agregado_por_nombre',
-      [
-        { columna: 'modelo' },
-        { columna: 'created_at', ascending: false },
-      ]
-    );
-    setDispositivos(data);
+  const COLUMNAS_DISPOSITIVO =
+    'id, modelo, capacidad_gb, imei, numero_serie, salud_bateria, color, precio, costo, proveedor, estado, detalles, en_stock, created_at, agregado_por_nombre';
+  const ORDEN_DISPOSITIVO = [{ columna: 'modelo' }, { columna: 'created_at', ascending: false }];
+
+  // "En stock" se trae siempre (es lo chico y lo que se usa a cada rato).
+  // "Vendidos" es el historial completo — puede ser miles de filas — así
+  // que solo se trae si ya se cargó antes (para refrescar después de una
+  // acción) o si se pide explícitamente al entrar a esa pestaña por
+  // primera vez. Los conteos para los contadores de la pantalla salen de
+  // un count() aparte, liviano, independiente de si el detalle ya está en
+  // memoria o no.
+  const cargarDispositivos = async (opts?: { incluirVendidos?: boolean }) => {
+    const incluirVendidos = opts?.incluirVendidos ?? vendidosCargados;
+    const [enStock, vendidos, { count: countVendidos }, { count: countTotal }] = await Promise.all([
+      obtenerTodasLasFilas<Dispositivo>(supabase, 'dispositivos', COLUMNAS_DISPOSITIVO, ORDEN_DISPOSITIVO, (q) =>
+        q.eq('en_stock', true)
+      ),
+      incluirVendidos
+        ? obtenerTodasLasFilas<Dispositivo>(supabase, 'dispositivos', COLUMNAS_DISPOSITIVO, ORDEN_DISPOSITIVO, (q) =>
+            q.eq('en_stock', false)
+          )
+        : Promise.resolve([]),
+      supabase.from('dispositivos').select('id', { count: 'exact', head: true }).eq('en_stock', false),
+      supabase.from('dispositivos').select('id', { count: 'exact', head: true }),
+    ]);
+    setDispositivos([...enStock, ...vendidos]);
+    setVendidosCargados(incluirVendidos);
+    setTotalVendidos(countVendidos ?? 0);
+    setTotalDispositivos(countTotal ?? 0);
     setLoading(false);
   };
 
-  const exportarDispositivos = () => {
+  // Al entrar por primera vez a "Vendidos", recién ahí se trae el historial.
+  useEffect(() => {
+    if (vista === 'vendidos' && !vendidosCargados && !cargandoVendidos) {
+      setCargandoVendidos(true);
+      cargarDispositivos({ incluirVendidos: true }).finally(() => setCargandoVendidos(false));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vista]);
+
+  const [exportandoDispositivos, setExportandoDispositivos] = useState(false);
+  // No exporta lo que ya está en memoria: si "Vendidos" todavía no se
+  // cargó, `dispositivos` solo tiene lo que está en stock, y el CSV
+  // saldría incompleto sin que se note (no hay ningún aviso visual de
+  // que falta el historial). Trae todo fresco al momento de exportar.
+  const exportarDispositivos = async () => {
+    setExportandoDispositivos(true);
+    const todos = await obtenerTodasLasFilas<Dispositivo>(supabase, 'dispositivos', COLUMNAS_DISPOSITIVO, ORDEN_DISPOSITIVO);
     descargarCSV(
       'stock-celulares-qovento.csv',
       ['modelo', 'capacidad_gb', 'color', 'imei', 'numero_serie', 'salud_bateria', 'precio', 'costo', 'proveedor', 'estado', 'en_stock', 'created_at'],
-      dispositivos
+      todos
     );
+    setExportandoDispositivos(false);
   };
 
   const prepararImportacion = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -838,7 +883,7 @@ export default function Stock() {
             {tab === 'celulares'
               ? vista === 'stock'
                 ? `${capital.unidadesCel} dispositivo${capital.unidadesCel === 1 ? '' : 's'} disponible${capital.unidadesCel === 1 ? '' : 's'}`
-                : `${dispositivos.length - capital.unidadesCel} dispositivo${dispositivos.length - capital.unidadesCel === 1 ? '' : 's'} vendido${dispositivos.length - capital.unidadesCel === 1 ? '' : 's'}`
+                : `${totalVendidos} dispositivo${totalVendidos === 1 ? '' : 's'} vendido${totalVendidos === 1 ? '' : 's'}`
               : `${productos.length} accesorio${productos.length === 1 ? '' : 's'} en catálogo`}
           </p>
         </div>
@@ -910,10 +955,10 @@ export default function Stock() {
                       setMenuAbierto(null);
                       exportarDispositivos();
                     }}
-                    disabled={dispositivos.length === 0}
+                    disabled={totalDispositivos === 0 || exportandoDispositivos}
                     className="px-3.5 py-2.5 text-sm text-left hover:bg-canvas dark:hover:bg-dark-bg disabled:opacity-40"
                   >
-                    Exportar CSV
+                    {exportandoDispositivos ? 'Exportando...' : 'Exportar CSV'}
                   </button>
                   <Link
                     href="/stock/carpetas"
@@ -995,7 +1040,7 @@ export default function Stock() {
             tab === 'celulares' ? 'bg-accent dark:bg-dark-accent text-white' : 'text-ink dark:text-dark-text'
           }`}
         >
-          Dispositivos <span className="opacity-70">{dispositivos.length}</span>
+          Dispositivos <span className="opacity-70">{totalDispositivos}</span>
         </button>
         <button
           onClick={() => setTab('accesorios')}
@@ -1049,7 +1094,7 @@ export default function Stock() {
                   vista === 'vendidos' ? 'bg-accent dark:bg-dark-accent text-white' : 'text-ink dark:text-dark-text'
                 }`}
               >
-                Vendidos <span className="opacity-70">{dispositivos.length - capital.unidadesCel}</span>
+                Vendidos <span className="opacity-70">{totalVendidos}</span>
               </button>
             </div>
 
@@ -1210,9 +1255,13 @@ export default function Stock() {
             )
           )}
 
-          {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Cargando...</p>}
+          {(loading || (vista === 'vendidos' && cargandoVendidos)) && (
+            <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">
+              {vista === 'vendidos' && cargandoVendidos ? `Cargando el historial de vendidos${totalVendidos ? ` (${totalVendidos})` : ''}...` : 'Cargando...'}
+            </p>
+          )}
 
-          {!loading && grupos.length === 0 && (
+          {!loading && !(vista === 'vendidos' && cargandoVendidos) && grupos.length === 0 && (
             <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">
               {busqueda
                 ? 'No encontramos nada con esa búsqueda.'
