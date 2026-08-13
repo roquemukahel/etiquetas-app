@@ -82,6 +82,7 @@ export default function Stock() {
   const actor = useActor();
   const puedeEliminar = tienePermiso(actor, 'eliminar');
   const puedeAgregarStock = tienePermiso(actor, 'agregar_stock');
+  const puedeRecibirServicioTecnico = tienePermiso(actor, 'recibir_servicio_tecnico');
   // El capital muestra costos y ganancias (info sensible del dueño): se
   // protege con el mismo permiso que las Estadísticas.
   const puedeVerCapital = tienePermiso(actor, 'ver_estadisticas');
@@ -366,6 +367,73 @@ export default function Stock() {
     setEliminandoSeleccion(false);
     salirDeSeleccion();
     cargarDispositivos();
+  };
+
+  // Acciones rápidas por dispositivo (menú "···" de cada fila) — mismas
+  // operaciones que ya existen en la ficha individual (app/stock/[id]),
+  // solo que accesibles sin tener que entrar. Un solo id de menú abierto a
+  // la vez, y `procesandoAccion` deshabilita los botones mientras corre.
+  const [accionAbiertaId, setAccionAbiertaId] = useState<string | null>(null);
+  const [procesandoAccion, setProcesandoAccion] = useState<string | null>(null);
+
+  const toggleStockDispositivo = async (d: Dispositivo) => {
+    if (!puedeAgregarStock) return;
+    setAccionAbiertaId(null);
+    setProcesandoAccion(d.id);
+    const volvioAStock = !d.en_stock;
+    const { error } = await supabase
+      .from('dispositivos')
+      .update({
+        en_stock: volvioAStock,
+        ...(volvioAStock ? { en_stock_desde: new Date().toISOString(), alerta_stock_enviada: false } : {}),
+      })
+      .eq('id', d.id);
+    if (!error) {
+      await registrarAuditoria(supabase, {
+        accion: `marcó ${d.modelo || 'un dispositivo'}${d.imei ? ` (IMEI ${d.imei})` : ''} como ${volvioAStock ? 'en stock' : 'fuera de stock'}`,
+        entidad: 'dispositivo',
+        entidadId: d.id,
+      });
+      cargarDispositivos();
+    }
+    setProcesandoAccion(null);
+  };
+
+  const derivarDispositivoAServicio = async (d: Dispositivo) => {
+    if (!puedeRecibirServicioTecnico) return;
+    setAccionAbiertaId(null);
+    if (!confirm(`¿Derivar ${d.modelo || 'este dispositivo'} a Servicio Técnico? Sale de Stock y aparece ahí para diagnosticarlo.`)) return;
+    setProcesandoAccion(d.id);
+    const { data: nueva } = await supabase
+      .from('reparaciones')
+      .insert({ modelo: d.modelo, capacidad_gb: d.capacidad_gb, color: d.color, imei: d.imei, estado: 'recibido' })
+      .select('id, numero_orden')
+      .single();
+    await supabase.from('dispositivos').update({ en_stock: false }).eq('id', d.id);
+    await registrarAuditoria(supabase, {
+      accion: `derivó de Stock a Servicio Técnico un dispositivo (${nueva?.numero_orden || ''}, ${d.modelo || 'sin modelo'}${d.imei ? `, IMEI ${d.imei}` : ''})`,
+      entidad: 'reparacion',
+      entidadId: nueva?.id,
+    });
+    setProcesandoAccion(null);
+    cargarDispositivos();
+  };
+
+  const eliminarDispositivo = async (d: Dispositivo) => {
+    if (!puedeEliminar) return;
+    setAccionAbiertaId(null);
+    if (!confirm(`¿Eliminar ${d.modelo || 'este dispositivo'} del historial? No se puede deshacer.`)) return;
+    setProcesandoAccion(d.id);
+    const { error } = await supabase.from('dispositivos').delete().eq('id', d.id);
+    if (!error) {
+      await registrarAuditoria(supabase, {
+        accion: `eliminó el dispositivo ${d.modelo || 'sin modelo'}${d.imei ? ` (IMEI ${d.imei})` : ''} del historial`,
+        entidad: 'dispositivo',
+        entidadId: d.id,
+      });
+      cargarDispositivos();
+    }
+    setProcesandoAccion(null);
   };
 
   useEffect(() => {
@@ -728,6 +796,7 @@ export default function Stock() {
       </header>
 
       {menuAbierto && <div className="fixed inset-0 z-20" onClick={() => setMenuAbierto(null)} />}
+      {accionAbiertaId && <div className="fixed inset-0 z-20" onClick={() => setAccionAbiertaId(null)} />}
 
       {puedeVerCapital && (
         <div className="rounded-2xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-4">
@@ -1001,19 +1070,25 @@ export default function Stock() {
                     const colorHex = hexColorDe(d.color);
                     const sellado = d.estado === 'sellado';
                     const seleccionado = seleccionados.has(d.id);
-                    // Sellado se marca con un borde dorado/negro bien grueso —
-                    // pisa el borde de color normal (que es solo 3px) para que
-                    // salte a la vista entre el resto de la carpeta.
-                    const clases = `rounded-xl px-4 py-3 flex items-center gap-3 w-full text-left ${
-                      sellado
-                        ? 'border-[6px] border-amber-500 dark:border-amber-400 shadow-[0_0_0_2px_#000]'
-                        : `border-[3px] ${colorHex ? '' : 'border-border dark:border-dark-border'}`
-                    } ${
+                    const procesando = procesandoAccion === d.id;
+                    // Franja de color a la izquierda (4px) en vez del borde
+                    // grueso de toda la tarjeta: identifica el color físico
+                    // sin gritar. Si no hay color registrado queda gris
+                    // neutro; con colores muy claros (blanco, etc.) el borde
+                    // derecho de la franja le da contorno para que no se
+                    // pierda contra la tarjeta blanca.
+                    const franjaClase = `absolute left-0 top-0 bottom-0 w-1 ${
+                      colorHex ? 'border-r border-black/10 dark:border-white/10' : 'bg-border dark:bg-dark-border'
+                    }`;
+                    const clases = `relative overflow-hidden rounded-xl pl-3.5 pr-3 py-2.5 flex items-center gap-3 w-full text-left border border-border dark:border-dark-border ${
                       d.en_stock ? 'bg-white dark:bg-dark-surface' : 'bg-white dark:bg-dark-surface opacity-60'
-                    } ${seleccionado ? 'ring-2 ring-accent dark:ring-dark-accent' : ''}`;
+                    } ${sellado ? 'bg-amber-50/70 dark:bg-amber-400/[0.06]' : ''} ${
+                      seleccionado ? 'ring-2 ring-accent dark:ring-dark-accent' : ''
+                    }`;
                     const imgColor = imagenColorDeModelo(d.modelo, d.color);
                     const contenido = (
                       <>
+                        <span className={franjaClase} style={colorHex ? { backgroundColor: colorHex } : undefined} />
                         {modoSeleccion && (
                           <span
                             className={`h-5 w-5 rounded-full border-2 shrink-0 flex items-center justify-center ${
@@ -1027,19 +1102,21 @@ export default function Stock() {
                         )}
                         {imgColor && (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={imgColor} alt={d.color || ''} className="h-12 w-auto object-contain shrink-0 transition-transform duration-300 ease-out hover:animate-flotarLeve hover:drop-shadow-md" />
+                          <img src={imgColor} alt={d.color || ''} className="h-10 w-auto object-contain shrink-0 transition-transform duration-300 ease-out hover:animate-flotarLeve hover:drop-shadow-md" />
                         )}
                         <div className="flex-1 flex items-center justify-between gap-2 min-w-0">
-                          <div>
+                          <div className="min-w-0">
                             <p className="text-sm font-medium flex items-center gap-1.5 flex-wrap">
                               <span>
                                 {d.capacidad_gb ? `${d.capacidad_gb} GB` : 'Capacidad s/d'}
-                                {d.color ? ` · ${d.color}` : ''}
-                                {d.salud_bateria != null ? ` · ${d.salud_bateria}%` : ''}
+                                {d.color ? ` · ${d.color}` : ' · Sin color'}
                               </span>
-                              {d.salud_bateria != null && d.salud_bateria < 80 && (
-                                <span className="text-[10px] font-semibold text-warn bg-warn/10 rounded-full px-2 py-0.5">
-                                  ⚠ Batería baja
+                              <span className="text-xs text-muted dark:text-dark-text-secondary font-mono">
+                                {d.imei || 'sin IMEI'}
+                              </span>
+                              {d.salud_bateria != null && (
+                                <span className={d.salud_bateria < 80 ? 'text-[10px] font-semibold text-warn bg-warn/10 rounded-full px-2 py-0.5' : 'text-xs text-muted dark:text-dark-text-secondary'}>
+                                  {d.salud_bateria < 80 ? `⚠ ${d.salud_bateria}% batería` : `${d.salud_bateria}%`}
                                 </span>
                               )}
                               {sellado && (
@@ -1048,41 +1125,89 @@ export default function Stock() {
                                 </span>
                               )}
                             </p>
-                            <p className="text-xs text-muted dark:text-dark-text-secondary">
-                              IMEI: <span className="font-bold font-mono text-ink dark:text-dark-text">{d.imei || 'sin IMEI'}</span>
-                            </p>
-                            {d.detalles && (
-                              <p className="text-xs text-warn mt-0.5">📝 {d.detalles}</p>
-                            )}
-                            {d.agregado_por_nombre && (
-                              <p className="text-xs text-muted dark:text-dark-text-secondary mt-0.5">
-                                Agregado por {d.agregado_por_nombre}
+                            {(d.detalles || d.agregado_por_nombre) && (
+                              <p className="text-xs text-muted dark:text-dark-text-secondary truncate">
+                                {d.detalles && <span className="text-warn">📝 {d.detalles}</span>}
+                                {d.detalles && d.agregado_por_nombre && ' · '}
+                                {d.agregado_por_nombre && `Agregado por ${d.agregado_por_nombre}`}
                               </p>
                             )}
                           </div>
-                          <div className="text-right">
-                            {d.precio != null && (
-                              <p className="text-sm font-medium">${d.precio.toLocaleString('es-AR')}</p>
+                          <div className="text-right shrink-0">
+                            <p className="text-sm font-medium">
+                              {d.precio != null ? `$${d.precio.toLocaleString('es-AR')}` : (
+                                <span className="text-muted dark:text-dark-text-secondary font-normal">Sin precio</span>
+                              )}
+                            </p>
+                            {vista === 'vendidos' && (
+                              <p className="text-xs text-muted dark:text-dark-text-secondary">vendido</p>
                             )}
-                            <p className="text-xs text-muted dark:text-dark-text-secondary">{d.en_stock ? 'en stock' : 'fuera de stock'}</p>
                           </div>
                         </div>
                       </>
                     );
 
-                    return modoSeleccion ? (
-                      <button
-                        key={d.id}
-                        onClick={() => toggleSeleccion(d.id)}
-                        style={!sellado && colorHex ? { borderColor: colorHex } : undefined}
-                        className={clases}
-                      >
+                    const fila = modoSeleccion ? (
+                      <button key={`fila-${d.id}`} onClick={() => toggleSeleccion(d.id)} className={clases}>
                         {contenido}
                       </button>
                     ) : (
-                      <Link key={d.id} href={`/stock/${d.id}`} style={!sellado && colorHex ? { borderColor: colorHex } : undefined} className={clases}>
+                      <Link key={`fila-${d.id}`} href={`/stock/${d.id}`} className={clases}>
                         {contenido}
                       </Link>
+                    );
+
+                    return (
+                      <div key={d.id} className="relative flex items-center gap-1">
+                        {fila}
+                        {!modoSeleccion && (
+                          <div className="relative shrink-0">
+                            <button
+                              onClick={() => setAccionAbiertaId(accionAbiertaId === d.id ? null : d.id)}
+                              disabled={procesando}
+                              aria-label="Más acciones"
+                              className="h-9 w-9 rounded-lg border border-border dark:border-dark-border text-muted dark:text-dark-text-secondary hover:bg-canvas dark:hover:bg-dark-bg flex items-center justify-center disabled:opacity-40"
+                            >
+                              {procesando ? '…' : '···'}
+                            </button>
+                            {accionAbiertaId === d.id && (
+                              <div className="absolute right-0 top-full mt-1 w-52 rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-elevated py-1 z-30 flex flex-col">
+                                <Link
+                                  href={`/stock/${d.id}`}
+                                  onClick={() => setAccionAbiertaId(null)}
+                                  className="px-3.5 py-2.5 text-sm hover:bg-canvas dark:hover:bg-dark-bg"
+                                >
+                                  Ver ficha
+                                </Link>
+                                {puedeAgregarStock && (
+                                  <button
+                                    onClick={() => toggleStockDispositivo(d)}
+                                    className="px-3.5 py-2.5 text-sm text-left hover:bg-canvas dark:hover:bg-dark-bg"
+                                  >
+                                    {d.en_stock ? 'Marcar fuera de stock' : 'Volver a stock'}
+                                  </button>
+                                )}
+                                {d.en_stock && puedeRecibirServicioTecnico && (
+                                  <button
+                                    onClick={() => derivarDispositivoAServicio(d)}
+                                    className="px-3.5 py-2.5 text-sm text-left hover:bg-canvas dark:hover:bg-dark-bg"
+                                  >
+                                    Derivar a Servicio Técnico
+                                  </button>
+                                )}
+                                {puedeEliminar && (
+                                  <button
+                                    onClick={() => eliminarDispositivo(d)}
+                                    className="px-3.5 py-2.5 text-sm text-left text-bad hover:bg-bad/5 border-t border-border dark:border-dark-border mt-1"
+                                  >
+                                    Eliminar del historial
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     );
                   })}
                 </div>}
