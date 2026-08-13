@@ -1275,26 +1275,32 @@ export default function NuevaOrden() {
             </div>
 
             {modoProducto === 'catalogo' ? (
-              <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-96 overflow-y-auto">
                 {productos.length === 0 && (
-                  <p className="text-xs text-muted dark:text-dark-text-secondary text-center py-2">
+                  <p className="col-span-full text-xs text-muted dark:text-dark-text-secondary text-center py-2">
                     Todavía no cargaste productos en Stock &gt; Accesorios.
                   </p>
                 )}
-                {productos.map((p) => (
+                {productos.map((p, i) => (
                   <button
                     key={p.id}
                     onClick={() => agregarProductoDelCatalogo(p)}
-                    className="rounded-lg border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-3 py-2 flex items-center justify-between gap-2 text-left text-sm"
+                    className="group rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface p-2.5 flex flex-col items-center gap-1 text-center"
                   >
-                    <span className="flex items-center gap-2 min-w-0">
+                    <span className="block animate-flotar" style={{ animationDelay: `${(i % 3) * 0.4}s` }}>
                       {p.imagen_url ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={p.imagen_url} alt="" className="h-8 w-8 object-contain shrink-0" />
-                      ) : null}
-                      <span className="truncate">{p.nombre}</span>
+                        <img
+                          src={p.imagen_url}
+                          alt=""
+                          className="h-16 w-16 object-contain transition-transform duration-300 ease-out group-hover:animate-vaivenLateral"
+                        />
+                      ) : (
+                        <div className="h-16 w-16 rounded-lg bg-canvas dark:bg-dark-bg flex items-center justify-center text-2xl">📦</div>
+                      )}
                     </span>
-                    {p.precio != null && <span className="font-medium shrink-0">{moneda}{p.precio.toLocaleString('es-AR')}</span>}
+                    <span className="text-xs font-medium leading-tight line-clamp-2">{p.nombre}</span>
+                    {p.precio != null && <span className="text-xs font-semibold">{moneda}{p.precio.toLocaleString('es-AR')}</span>}
                   </button>
                 ))}
               </div>

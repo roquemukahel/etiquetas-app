@@ -58,13 +58,13 @@ type Producto = { id: string; nombre: string; precio: number | null; costo: numb
 // por defecto" — se insertan sin precio/costo/cantidad (el dueño los completa
 // después); las fotos viven en /public así no pesan la base de datos.
 const ACCESORIOS_DEFAULT: { nombre: string; imagen: string }[] = [
-  { nombre: 'AirPods Pro', imagen: '/accesorios-default/airpods-pro.jpg' },
-  { nombre: 'AirTag', imagen: '/accesorios-default/airtag.jpg' },
-  { nombre: 'Auriculares con cable (Lightning)', imagen: '/accesorios-default/auriculares-cable.jpg' },
-  { nombre: 'Cargador (cabezal + cable USB-C)', imagen: '/accesorios-default/cargador-cabezal-cable.jpg' },
-  { nombre: 'Cargador de Apple Watch', imagen: '/accesorios-default/cargador-apple-watch.jpg' },
-  { nombre: 'Adaptador de enchufe', imagen: '/accesorios-default/adaptador-enchufe.jpg' },
-  { nombre: 'Protector de cámara', imagen: '/accesorios-default/protector-camara.jpg' },
+  { nombre: 'AirPods Pro', imagen: '/accesorios-default/airpods-pro.webp' },
+  { nombre: 'AirTag', imagen: '/accesorios-default/airtag.webp' },
+  { nombre: 'Auriculares con cable (Lightning)', imagen: '/accesorios-default/auriculares-cable.webp' },
+  { nombre: 'Cargador (cabezal + cable USB-C)', imagen: '/accesorios-default/cargador-cabezal-cable.webp' },
+  { nombre: 'Cargador de Apple Watch', imagen: '/accesorios-default/cargador-apple-watch.webp' },
+  { nombre: 'Adaptador de enchufe', imagen: '/accesorios-default/adaptador-enchufe.webp' },
+  { nombre: 'Protector de cámara', imagen: '/accesorios-default/protector-camara.webp' },
 ];
 
 type FiltroRapido = 'todos' | 'bateria_baja' | 'sellados' | 'por_reponer' | 'sin_precio' | 'sin_costo' | 'incompletos';
