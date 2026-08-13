@@ -2463,3 +2463,16 @@ grant execute on function saldos_planes_ahorro() to authenticated;
 
 alter table negocios add column if not exists texto_declaracion_plan_ahorro text;
 alter table negocios add column if not exists texto_declaracion_plan_ahorro_tamano int not null default 11;
+
+-- El middleware corre en cada página visitada y llamaba negocio_activo() y
+-- negocio_suscripcion_activa() una detrás de la otra — dos viajes de ida y
+-- vuelta en serie por dos preguntas chiquitas. Esta las junta en un solo
+-- viaje, reusando la lógica de las dos funciones existentes (no la duplica).
+create or replace function negocio_estado_acceso()
+returns table (activo boolean, suscripcion_activa boolean)
+language sql
+security definer
+stable
+as $$
+  select negocio_activo() as activo, negocio_suscripcion_activa() as suscripcion_activa
+$$;
