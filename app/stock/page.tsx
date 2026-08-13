@@ -81,6 +81,7 @@ export default function Stock() {
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState('');
   const [vista, setVista] = useState<'stock' | 'vendidos'>('stock');
+  const [filtroRapido, setFiltroRapido] = useState<'todos' | 'incompletos'>('todos');
 
   const [productos, setProductos] = useState<Producto[]>([]);
   const [loadingProductos, setLoadingProductos] = useState(true);
@@ -351,17 +352,24 @@ export default function Stock() {
     cargarProductos();
   }, []);
 
+  // Un dispositivo en stock cuenta como "dato incompleto" si le falta algo
+  // relevante para venderlo bien: precio, costo, color o capacidad. Se usa
+  // acá (para el filtro rápido) y en el indicador financiero de abajo.
+  const dispositivoIncompleto = (d: Dispositivo) => d.precio == null || d.costo == null || !d.color || !d.capacidad_gb;
+
   const filtrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
     return dispositivos.filter((d) => {
       if (vista === 'stock' && !d.en_stock) return false;
       if (vista === 'vendidos' && d.en_stock) return false;
+      if (filtroRapido === 'incompletos' && !dispositivoIncompleto(d)) return false;
       if (!q) return true;
       return [d.modelo, d.imei, d.numero_serie, d.color]
         .filter(Boolean)
         .some((campo) => campo!.toLowerCase().includes(q));
     });
-  }, [dispositivos, busqueda, vista]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dispositivos, busqueda, vista, filtroRapido]);
 
   const grupos = useMemo(() => {
     const mapa = new Map<string, Dispositivo[]>();
@@ -394,31 +402,52 @@ export default function Stock() {
     return mapa;
   }, [dispositivos]);
 
-  // Capital invertido en stock: celulares en stock (suma de costos) +
-  // accesorios (costo × cantidad disponible). También el valor de venta y
-  // la ganancia potencial (lo que ganarías si vendés todo lo que tenés).
+  // Capital invertido en stock: celulares en stock + accesorios (cantidad ×
+  // costo/precio). A diferencia de antes, un campo AUSENTE (null) ya no se
+  // trata como si fuera $0: un dispositivo sin costo cargado simplemente no
+  // entra en la cuenta de "Invertido", en vez de sumar $0 y hacer parecer
+  // que no costó nada. Cada indicador informa cuántos ítems entraron en el
+  // cálculo, para que la plata mostrada nunca se confunda con "así de bajo
+  // es de verdad".
   const capital = useMemo(() => {
     const enStock = dispositivos.filter((d) => d.en_stock);
-    const costoCel = enStock.reduce((a, d) => a + (d.costo || 0), 0);
-    const ventaCel = enStock.reduce((a, d) => a + (d.precio || 0), 0);
-    const costoAcc = productos.reduce((a, p) => a + (p.costo || 0) * p.cantidad, 0);
-    const ventaAcc = productos.reduce((a, p) => a + (p.precio || 0) * p.cantidad, 0);
     const unidadesAcc = productos.reduce((a, p) => a + p.cantidad, 0);
-    const costo = costoCel + costoAcc;
-    const venta = ventaCel + ventaAcc;
-    // Ganancia SOLO sobre los ítems que tienen costo cargado. Si se hiciera
-    // venta − costo, cada ítem con precio pero sin costo sumaría su precio
-    // entero como "ganancia" y quedaría inflada.
-    const gananciaCel = enStock
-      .filter((d) => d.costo != null)
-      .reduce((a, d) => a + ((d.precio || 0) - (d.costo || 0)), 0);
-    const gananciaAcc = productos
-      .filter((p) => p.costo != null)
-      .reduce((a, p) => a + ((p.precio || 0) - (p.costo || 0)) * p.cantidad, 0);
-    const ganancia = gananciaCel + gananciaAcc;
-    // Cuántos ítems no tienen costo cargado (no cuentan en capital ni ganancia).
-    const sinCosto = enStock.filter((d) => d.costo == null).length + productos.filter((p) => p.costo == null && p.cantidad > 0).length;
-    return { costo, venta, ganancia, unidadesCel: enStock.length, unidadesAcc, sinCosto };
+    const totalItems = enStock.length + unidadesAcc;
+
+    const celConCosto = enStock.filter((d) => d.costo != null);
+    const accConCosto = productos.filter((p) => p.costo != null && p.cantidad > 0);
+    const costo = celConCosto.reduce((a, d) => a + (d.costo || 0), 0) + accConCosto.reduce((a, p) => a + (p.costo || 0) * p.cantidad, 0);
+    const costoCobertura = celConCosto.length + accConCosto.reduce((a, p) => a + p.cantidad, 0);
+
+    const celConPrecio = enStock.filter((d) => d.precio != null);
+    const accConPrecio = productos.filter((p) => p.precio != null && p.cantidad > 0);
+    const venta = celConPrecio.reduce((a, d) => a + (d.precio || 0), 0) + accConPrecio.reduce((a, p) => a + (p.precio || 0) * p.cantidad, 0);
+    const ventaCobertura = celConPrecio.length + accConPrecio.reduce((a, p) => a + p.cantidad, 0);
+
+    // Ganancia SOLO sobre los ítems que tienen costo Y precio a la vez —
+    // nunca restando un costo ausente (eso inflaría la ganancia).
+    const celConAmbos = enStock.filter((d) => d.costo != null && d.precio != null);
+    const accConAmbos = productos.filter((p) => p.costo != null && p.precio != null && p.cantidad > 0);
+    const ganancia =
+      celConAmbos.reduce((a, d) => a + ((d.precio || 0) - (d.costo || 0)), 0) +
+      accConAmbos.reduce((a, p) => a + ((p.precio || 0) - (p.costo || 0)) * p.cantidad, 0);
+    const gananciaCobertura = celConAmbos.length + accConAmbos.reduce((a, p) => a + p.cantidad, 0);
+
+    const incompletos = enStock.filter(dispositivoIncompleto).length;
+
+    return {
+      costo,
+      costoCobertura,
+      venta,
+      ventaCobertura,
+      ganancia,
+      gananciaCobertura,
+      totalItems,
+      incompletos,
+      unidadesCel: enStock.length,
+      unidadesAcc,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dispositivos, productos]);
 
   const agregarProducto = async () => {
@@ -548,46 +577,87 @@ export default function Stock() {
           <p className="text-xs font-semibold uppercase tracking-wide text-muted dark:text-dark-text-secondary mb-2">
             Capital en stock
           </p>
-          <div className="grid grid-cols-3 gap-2 text-center">
-            <div>
-              <p className="text-lg font-display font-semibold">${Math.round(capital.costo).toLocaleString('es-AR')}</p>
-              <p className="text-[11px] text-muted dark:text-dark-text-secondary">Invertido (a costo)</p>
-            </div>
-            <div>
-              <p className="text-lg font-display font-semibold">${Math.round(capital.venta).toLocaleString('es-AR')}</p>
-              <p className="text-[11px] text-muted dark:text-dark-text-secondary">Valor de venta</p>
-            </div>
-            <div>
-              <p className="text-lg font-display font-semibold text-good">${Math.round(capital.ganancia).toLocaleString('es-AR')}</p>
-              <p className="text-[11px] text-muted dark:text-dark-text-secondary">Ganancia potencial</p>
-            </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+            <IndicadorCapital
+              etiqueta="Invertido (a costo)"
+              valor={capital.costo}
+              cobertura={capital.costoCobertura}
+              total={capital.totalItems}
+            />
+            <IndicadorCapital
+              etiqueta="Valor de venta"
+              valor={capital.venta}
+              cobertura={capital.ventaCobertura}
+              total={capital.totalItems}
+            />
+            <IndicadorCapital
+              etiqueta="Ganancia potencial"
+              valor={capital.ganancia}
+              cobertura={capital.gananciaCobertura}
+              total={capital.totalItems}
+              tono="text-good"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                setTab('celulares');
+                setVista('stock');
+                setFiltroRapido(filtroRapido === 'incompletos' ? 'todos' : 'incompletos');
+              }}
+              className="flex flex-col items-center justify-center rounded-lg -m-1 p-1 hover:bg-canvas dark:hover:bg-dark-bg transition-colors"
+            >
+              <p className={`text-lg font-display font-semibold ${capital.incompletos > 0 ? 'text-warn' : ''}`}>
+                {capital.incompletos}
+              </p>
+              <p
+                className={`text-[11px] ${
+                  filtroRapido === 'incompletos'
+                    ? 'text-accent dark:text-dark-accent underline decoration-dotted'
+                    : 'text-muted dark:text-dark-text-secondary'
+                }`}
+              >
+                Datos incompletos
+              </p>
+            </button>
           </div>
-          <p className="text-[11px] text-muted dark:text-dark-text-secondary mt-2 text-center">
-            {capital.unidadesCel} celular{capital.unidadesCel === 1 ? '' : 'es'} en stock · {capital.unidadesAcc} accesorio
-            {capital.unidadesAcc === 1 ? '' : 's'}. El capital y la ganancia cuentan solo los ítems con costo cargado
-            {capital.sinCosto > 0 ? ` (${capital.sinCosto} sin costo quedan afuera)` : ''}.
+          <p className="text-[11px] text-muted dark:text-dark-text-secondary mt-2.5 text-center">
+            {capital.unidadesCel} dispositivo{capital.unidadesCel === 1 ? '' : 's'} en stock · {capital.unidadesAcc} accesorio
+            {capital.unidadesAcc === 1 ? '' : 's'}. Cada indicador cuenta solo los ítems con ese dato cargado.
           </p>
         </div>
       )}
 
-      <div className="flex items-center gap-2 text-sm">
+      <div className="flex items-center gap-1 self-start rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface p-1 text-sm">
         <button
           onClick={() => setTab('celulares')}
-          className={`flex-1 rounded-xl py-2 font-medium ${
-            tab === 'celulares' ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
+          className={`rounded-lg px-3 py-1.5 font-medium transition-colors ${
+            tab === 'celulares' ? 'bg-accent dark:bg-dark-accent text-white' : 'text-ink dark:text-dark-text'
           }`}
         >
-          Celulares
+          Dispositivos <span className="opacity-70">{dispositivos.length}</span>
         </button>
         <button
           onClick={() => setTab('accesorios')}
-          className={`flex-1 rounded-xl py-2 font-medium ${
-            tab === 'accesorios' ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
+          className={`rounded-lg px-3 py-1.5 font-medium transition-colors ${
+            tab === 'accesorios' ? 'bg-accent dark:bg-dark-accent text-white' : 'text-ink dark:text-dark-text'
           }`}
         >
-          Accesorios
+          Accesorios <span className="opacity-70">{productos.length}</span>
         </button>
       </div>
+
+      {filtroRapido === 'incompletos' && (
+        <div className="flex items-center gap-2 self-start rounded-full bg-warn/10 text-warn text-xs font-medium pl-3 pr-1 py-1">
+          Con datos incompletos
+          <button
+            onClick={() => setFiltroRapido('todos')}
+            className="h-5 w-5 rounded-full hover:bg-warn/15 flex items-center justify-center"
+            aria-label="Quitar filtro"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {tab === 'celulares' ? (
         <>
@@ -1073,5 +1143,41 @@ export default function Stock() {
         </>
       )}
     </main>
+  );
+}
+
+// Un valor ausente (nadie cargó costo/precio todavía) NO es lo mismo que
+// "$0" — mostrar $0 hace parecer que el capital realmente vale cero. Si
+// ningún ítem entró en la cuenta, se muestra "Sin calcular"; si entraron
+// algunos pero no todos, se aclara la cobertura para que el número no se
+// lea como si fuera el total real del inventario.
+function IndicadorCapital({
+  etiqueta,
+  valor,
+  cobertura,
+  total,
+  tono,
+}: {
+  etiqueta: string;
+  valor: number;
+  cobertura: number;
+  total: number;
+  tono?: string;
+}) {
+  const sinDatos = cobertura === 0;
+  return (
+    <div>
+      {sinDatos ? (
+        <p className="text-lg font-display font-semibold text-muted dark:text-dark-text-secondary">Sin calcular</p>
+      ) : (
+        <p className={`text-lg font-display font-semibold ${tono ?? ''}`}>${Math.round(valor).toLocaleString('es-AR')}</p>
+      )}
+      <p className="text-[11px] text-muted dark:text-dark-text-secondary">{etiqueta}</p>
+      {!sinDatos && cobertura < total && (
+        <p className="text-[10px] text-muted dark:text-dark-text-secondary">
+          {cobertura} de {total} incluidos
+        </p>
+      )}
+    </div>
   );
 }
