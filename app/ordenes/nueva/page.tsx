@@ -292,11 +292,28 @@ export default function NuevaOrden() {
       setComisionesActivas(!!negocio?.comisiones_activas);
     })();
     (async () => {
-      setClientes(await obtenerTodasLasFilas<Cliente>(supabase, 'clientes', '*'));
+      setClientes(
+        await obtenerTodasLasFilas<Cliente>(
+          supabase,
+          'clientes',
+          'id, nombre, apellido, telefono, cta_cte_habilitada, limite_credito, plazo_dias, suspendido'
+        )
+      );
     })();
     (async () => {
-      const { data } = await supabase.from('dispositivos').select('*').eq('en_stock', true);
-      setDispositivosStock((data as Dispositivo[]) ?? []);
+      // OJO: antes esto era un select() sin paginar. PostgREST corta en
+      // 1000 filas por defecto sin avisar — con más de 1000 dispositivos
+      // en stock, los que quedaban afuera de esa primera página eran
+      // directamente invisibles acá (no se podían vender). obtenerTodasLasFilas
+      // pagina hasta traer todo.
+      const data = await obtenerTodasLasFilas<Dispositivo>(
+        supabase,
+        'dispositivos',
+        'id, modelo, capacidad_gb, color, precio, imei, salud_bateria',
+        [],
+        (q) => q.eq('en_stock', true)
+      );
+      setDispositivosStock(data);
     })();
     (async () => {
       const { data } = await supabase.from('productos').select('*').order('nombre');

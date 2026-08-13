@@ -40,8 +40,16 @@ export default function Clientes() {
   const [monedaCodigo, setMonedaCodigo] = useState('ARS');
   const moneda = useMemo(() => simboloMoneda(monedaCodigo), [monedaCodigo]);
 
+  // Columnas explícitas (no "*"): con miles de clientes, traer columnas que
+  // esta pantalla no usa (sobre todo la foto en base64 de quién lo cargó)
+  // multiplica el peso de la respuesta sin necesidad.
   const cargar = async () => {
-    const data = await obtenerTodasLasFilas<Cliente>(supabase, 'clientes', '*', [{ columna: 'nombre' }]);
+    const data = await obtenerTodasLasFilas<Cliente>(
+      supabase,
+      'clientes',
+      'id, nombre, apellido, domicilio, email, telefono, dni',
+      [{ columna: 'nombre' }]
+    );
     setClientes(data);
     setLoading(false);
   };
@@ -182,6 +190,18 @@ export default function Clientes() {
     );
   }, [clientes, busqueda]);
 
+  // Con miles de clientes, pintar TODAS las tarjetas de una es lo que hace
+  // sentir lenta la pantalla (no la consulta en sí) — de a poco entonces,
+  // como una paginación manual. La búsqueda sigue funcionando sobre TODOS
+  // los clientes cargados (filtrados no cambia), solo lo que se renderiza
+  // arranca corto.
+  const PASO_VISIBLES = 150;
+  const [visibles, setVisibles] = useState(PASO_VISIBLES);
+  useEffect(() => {
+    setVisibles(PASO_VISIBLES);
+  }, [busqueda]);
+  const paraRenderizar = useMemo(() => filtrados.slice(0, visibles), [filtrados, visibles]);
+
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
       <header className="flex items-center gap-3">
@@ -261,8 +281,14 @@ export default function Clientes() {
         </p>
       )}
 
+      {!loading && filtrados.length > 0 && (
+        <p className="text-xs text-muted dark:text-dark-text-secondary">
+          Mostrando {paraRenderizar.length} de {filtrados.length}
+        </p>
+      )}
+
       <div className="flex flex-col gap-2">
-        {filtrados.map((c) => {
+        {paraRenderizar.map((c) => {
           const seleccionado = seleccionados.has(c.id);
           const s = saldos.get(c.id);
           const saldoChip =
@@ -320,6 +346,15 @@ export default function Clientes() {
           );
         })}
       </div>
+
+      {visibles < filtrados.length && (
+        <button
+          onClick={() => setVisibles((v) => v + PASO_VISIBLES)}
+          className="w-full rounded-xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium"
+        >
+          Mostrar {Math.min(PASO_VISIBLES, filtrados.length - visibles)} más
+        </button>
+      )}
     </main>
   );
 }

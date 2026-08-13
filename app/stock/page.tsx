@@ -49,7 +49,6 @@ type Dispositivo = {
   en_stock: boolean;
   created_at: string;
   agregado_por_nombre: string | null;
-  agregado_por_foto_url: string | null;
 };
 
 type Producto = { id: string; nombre: string; precio: number | null; costo: number | null; imagen_url: string | null; cantidad: number };
@@ -152,12 +151,20 @@ export default function Stock() {
     setColapsadas(new Set());
   }, [vista]);
 
+  // Con un catálogo chico, todas las carpetas abiertas de entrada es más
+  // cómodo (se ve todo de un vistazo). Pero con miles de dispositivos
+  // (importados de otro sistema, por ejemplo) expandir TODAS las carpetas
+  // de arranque significa renderizar miles de filas antes de que el
+  // usuario pida ver ninguna — ahí arrancan cerradas, igual que "Vendidos"
+  // siempre hizo por la misma razón, y se abren las que hacen falta.
+  const UMBRAL_AUTOEXPANDIR = 300;
+  const expandidoPorDefecto = vista !== 'vendidos' && dispositivos.length <= UMBRAL_AUTOEXPANDIR;
+
   const grupoExpandido = (modelo: string) => {
     // Buscando, siempre expandido: así se ven los resultados sin tener que
     // ir tocando carpeta por carpeta.
     if (busquedaDebounced.trim()) return true;
-    const porDefecto = vista !== 'vendidos';
-    return colapsadas.has(modelo) ? !porDefecto : porDefecto;
+    return colapsadas.has(modelo) ? !expandidoPorDefecto : expandidoPorDefecto;
   };
 
   const toggleGrupo = (modelo: string) => {
@@ -170,11 +177,11 @@ export default function Stock() {
   };
 
   // "Expandir todas"/"Contraer todas": como el default cambia según la
-  // vista, en vez de expandido/contraído "a secas" lo que se guarda son las
-  // excepciones al default — por eso una acción vacía el set y la otra lo
-  // llena con todas las carpetas visibles.
-  const expandirTodas = () => setColapsadas(vista === 'vendidos' ? new Set(grupos.map(([nombre]) => nombre)) : new Set());
-  const contraerTodas = () => setColapsadas(vista === 'vendidos' ? new Set() : new Set(grupos.map(([nombre]) => nombre)));
+  // vista y el tamaño del catálogo, en vez de expandido/contraído "a secas"
+  // lo que se guarda son las excepciones al default — por eso una acción
+  // vacía el set y la otra lo llena con todas las carpetas visibles.
+  const expandirTodas = () => setColapsadas(expandidoPorDefecto ? new Set() : new Set(grupos.map(([nombre]) => nombre)));
+  const contraerTodas = () => setColapsadas(expandidoPorDefecto ? new Set(grupos.map(([nombre]) => nombre)) : new Set());
 
   const [eliminandoCarpeta, setEliminandoCarpeta] = useState<string | null>(null);
 
@@ -210,7 +217,11 @@ export default function Stock() {
     if (!puedeEliminar) return;
     setCarpetaMenuAbierta(null);
     if (!confirm(`¿Eliminar la carpeta "${modelo}"? No tiene dispositivos, así que no se pierde nada.`)) return;
-    await supabase.from('modelos_stock').delete().eq('nombre', modelo);
+    const { error } = await supabase.from('modelos_stock').delete().eq('nombre', modelo);
+    if (error) {
+      alert('No pudimos eliminar la carpeta: ' + error.message);
+      return;
+    }
     await registrarAuditoria(supabase, {
       accion: `eliminó la carpeta vacía "${modelo}" de Stock`,
       entidad: 'carpeta',
@@ -224,11 +235,21 @@ export default function Stock() {
     setLoadingProductos(false);
   };
 
+  // Columnas explícitas (no "*"): "agregado_por_foto_url" es la foto del
+  // vendedor/técnico en base64 — no se usa en esta pantalla (solo se
+  // muestra el nombre), pero al guardarse copiada en CADA dispositivo que
+  // esa persona cargó, traerla en un listado de miles de filas multiplica
+  // el peso de la respuesta varias veces sin necesidad.
   const cargarDispositivos = async () => {
-    const data = await obtenerTodasLasFilas<Dispositivo>(supabase, 'dispositivos', '*', [
-      { columna: 'modelo' },
-      { columna: 'created_at', ascending: false },
-    ]);
+    const data = await obtenerTodasLasFilas<Dispositivo>(
+      supabase,
+      'dispositivos',
+      'id, modelo, capacidad_gb, imei, numero_serie, salud_bateria, color, precio, costo, proveedor, estado, detalles, en_stock, created_at, agregado_por_nombre',
+      [
+        { columna: 'modelo' },
+        { columna: 'created_at', ascending: false },
+      ]
+    );
     setDispositivos(data);
     setLoading(false);
   };
@@ -425,6 +446,8 @@ export default function Stock() {
       });
       salirDeSeleccion();
       cargarDispositivos();
+    } else {
+      alert('No pudimos actualizar los dispositivos seleccionados: ' + error.message);
     }
     setProcesandoSeleccion(false);
   };
@@ -446,6 +469,8 @@ export default function Stock() {
       setCarpetaDestino('');
       salirDeSeleccion();
       cargarDispositivos();
+    } else {
+      alert('No pudimos mover los dispositivos seleccionados: ' + error.message);
     }
     setProcesandoSeleccion(false);
   };
@@ -494,16 +519,27 @@ export default function Stock() {
     setAccionAbiertaId(null);
     if (!confirm(`¿Derivar ${d.modelo || 'este dispositivo'} a Servicio Técnico? Sale de Stock y aparece ahí para diagnosticarlo.`)) return;
     setProcesandoAccion(d.id);
-    const { data: nueva } = await supabase
+    const { data: nueva, error: insertError } = await supabase
       .from('reparaciones')
       .insert({ modelo: d.modelo, capacidad_gb: d.capacidad_gb, color: d.color, imei: d.imei, estado: 'recibido' })
       .select('id, numero_orden')
       .single();
-    await supabase.from('dispositivos').update({ en_stock: false }).eq('id', d.id);
+    // Si esto falla no seguimos: si igual marcáramos el dispositivo fuera de
+    // stock, quedaría "perdido" (ni en Stock ni en Servicio Técnico, sin
+    // ninguna reparación real que lo respalde).
+    if (insertError || !nueva) {
+      alert('No pudimos derivar el dispositivo a Servicio Técnico: ' + (insertError?.message ?? 'error desconocido'));
+      setProcesandoAccion(null);
+      return;
+    }
+    const { error: updateError } = await supabase.from('dispositivos').update({ en_stock: false }).eq('id', d.id);
+    if (updateError) {
+      alert('Se creó la reparación pero no pudimos sacar el dispositivo de Stock: ' + updateError.message);
+    }
     await registrarAuditoria(supabase, {
-      accion: `derivó de Stock a Servicio Técnico un dispositivo (${nueva?.numero_orden || ''}, ${d.modelo || 'sin modelo'}${d.imei ? `, IMEI ${d.imei}` : ''})`,
+      accion: `derivó de Stock a Servicio Técnico un dispositivo (${nueva.numero_orden || ''}, ${d.modelo || 'sin modelo'}${d.imei ? `, IMEI ${d.imei}` : ''})`,
       entidad: 'reparacion',
-      entidadId: nueva?.id,
+      entidadId: nueva.id,
     });
     setProcesandoAccion(null);
     cargarDispositivos();

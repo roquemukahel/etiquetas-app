@@ -7,6 +7,7 @@ import { useActor } from '../lib/actor';
 import { tienePermiso } from '../lib/permisos';
 import { simboloMoneda } from '../lib/monedas';
 import { estadoCuenta, ESTADO_INFO } from '../lib/cuentaCorriente';
+import { obtenerTodasLasFilas } from '../lib/db';
 
 type Cliente = { id: string; nombre: string; apellido: string | null; suspendido: boolean | null };
 type Saldo = { cliente_id: string; saldo: number; vencido: number };
@@ -38,12 +39,16 @@ export default function CuentasPorCobrar() {
       return;
     }
     (async () => {
-      const [{ data: saldosData }, { data: clientesData }, { data: userData }] = await Promise.all([
+      // clientes se trae paginado (no un select() común): con miles de
+      // clientes, un select() común se corta en 1000 filas sin avisar y los
+      // deudores que quedaran afuera de esa página aparecerían como
+      // "Cliente eliminado" sin estarlo de verdad.
+      const [{ data: saldosData }, clientesData, { data: userData }] = await Promise.all([
         supabase.rpc('saldos_cuenta_corriente'),
-        supabase.from('clientes').select('id, nombre, apellido, suspendido'),
+        obtenerTodasLasFilas<Cliente>(supabase, 'clientes', 'id, nombre, apellido, suspendido'),
         supabase.auth.getUser(),
       ]);
-      const clientes = new Map(((clientesData as Cliente[]) ?? []).map((c) => [c.id, c]));
+      const clientes = new Map(clientesData.map((c) => [c.id, c]));
       const armadas: Fila[] = ((saldosData as Saldo[]) ?? [])
         .map((s) => {
           const c = clientes.get(s.cliente_id);

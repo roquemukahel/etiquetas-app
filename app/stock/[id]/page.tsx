@@ -173,7 +173,7 @@ export default function DetalleDispositivo() {
   const derivarAServicioTecnico = async () => {
     if (!d || !puedeRecibirServicioTecnico) return;
     setDerivando(true);
-    const { data: nueva } = await supabase
+    const { data: nueva, error: insertError } = await supabase
       .from('reparaciones')
       .insert({
         modelo: d.modelo,
@@ -185,11 +185,22 @@ export default function DetalleDispositivo() {
       })
       .select('id, numero_orden')
       .single();
-    await supabase.from('dispositivos').update({ en_stock: false }).eq('id', d.id);
+    // Si esto falla no seguimos: si igual marcáramos el dispositivo fuera de
+    // stock, quedaría "perdido" (ni en Stock ni en Servicio Técnico, sin
+    // ninguna reparación real que lo respalde).
+    if (insertError || !nueva) {
+      setError('No pudimos derivar el dispositivo a Servicio Técnico: ' + (insertError?.message ?? 'error desconocido'));
+      setDerivando(false);
+      return;
+    }
+    const { error: updateError } = await supabase.from('dispositivos').update({ en_stock: false }).eq('id', d.id);
+    if (updateError) {
+      setError('Se creó la reparación pero no pudimos sacar el dispositivo de Stock: ' + updateError.message);
+    }
     await registrarAuditoria(supabase, {
-      accion: `derivó de Stock a Servicio Técnico un dispositivo (${nueva?.numero_orden || ''}, ${d.modelo || 'sin modelo'}${d.imei ? `, IMEI ${d.imei}` : ''})`,
+      accion: `derivó de Stock a Servicio Técnico un dispositivo (${nueva.numero_orden || ''}, ${d.modelo || 'sin modelo'}${d.imei ? `, IMEI ${d.imei}` : ''})`,
       entidad: 'reparacion',
-      entidadId: nueva?.id,
+      entidadId: nueva.id,
     });
     router.push('/servicio-tecnico');
     router.refresh();

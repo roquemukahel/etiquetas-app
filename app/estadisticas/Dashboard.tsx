@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../lib/supabase/client';
+import { obtenerTodasLasFilas } from '../lib/db';
 import { simboloMoneda } from '../lib/monedas';
 import { useActor } from '../lib/actor';
 import { tienePermiso } from '../lib/permisos';
@@ -149,51 +150,65 @@ export default function Estadisticas() {
       desde.setFullYear(desde.getFullYear() - 1);
 
       const [
-        { data: perfil },
-        { data: vend },
-        { data: tec },
-        { data: prov },
-        { data: ord },
-        { data: items },
-        { data: rep },
-        { data: ing },
-        { data: compras },
-        { data: comprasManual },
-        { data: pagosData },
-        { data: creditoData },
-        { data: saldosData },
-        { data: stockData },
-        { data: registrosData },
+        [
+          { data: perfil },
+          { data: vend },
+          { data: tec },
+          { data: prov },
+          { data: ord },
+          { data: items },
+          { data: rep },
+          { data: ing },
+          { data: comprasManual },
+          { data: pagosData },
+          { data: creditoData },
+          { data: saldosData },
+        ],
+        // Estas 3 son de "dispositivos" aparte (no en el Promise.all de
+        // arriba): con miles de dispositivos cargados, un select() común se
+        // corta en 1000 filas sin avisar y las estadísticas quedarían mal
+        // (capital de stock, compras del período, ranking de altas, todos
+        // subestimados). obtenerTodasLasFilas pagina hasta traer todo.
+        compras,
+        stockData,
+        registrosData,
       ] = await Promise.all([
-        supabase.from('perfiles').select('negocios ( nombre, moneda )').eq('id', user.id).single(),
-        supabase.from('vendedores').select('id, nombre, foto_url').order('nombre'),
-        supabase.from('tecnicos').select('id, nombre, foto_url').order('nombre'),
-        supabase.from('proveedores').select('id, nombre').order('nombre'),
-        supabase
-          .from('ordenes')
-          .select('id, vendedor_id, cliente_id, total, anticipo, monto_canje, estado, forma_pago, created_at')
-          .gte('created_at', desde.toISOString()),
-        // "costo" se omite a propósito: la columna orden_items.costo todavía no
-        // existe en producción (llega con la fase de costos). Sin esto, el
-        // pedido fallaría y nos quedaríamos sin unidades/ítems. precio_unitario
-        // y cantidad sí existen desde siempre.
-        supabase.from('orden_items').select('orden_id, cantidad, precio_unitario, created_at').gte('created_at', desde.toISOString()),
-        supabase.from('reparaciones').select('tecnico_id, fecha_reparado').not('fecha_reparado', 'is', null).gte('fecha_reparado', desde.toISOString()),
-        supabase
-          .from('reparaciones')
-          .select('cliente_id, fecha_ingreso_servicio')
-          .not('cliente_id', 'is', null)
-          .not('fecha_ingreso_servicio', 'is', null)
-          .gte('fecha_ingreso_servicio', desde.toISOString()),
-        supabase.from('dispositivos').select('proveedor_id, costo, created_at').not('proveedor_id', 'is', null).gte('created_at', desde.toISOString()),
-        supabase.from('compras_proveedor').select('proveedor_id, cantidad, precio_unitario, created_at').gte('created_at', desde.toISOString()),
-        supabase.from('pagos').select('medio, monto, fecha').eq('anulado', false).gte('fecha', desde.toISOString()),
-        supabase.from('cta_cte_movimientos').select('concepto, tipo, monto, fecha').eq('anulado', false).gte('fecha', desde.toISOString()),
-        supabase.rpc('saldos_cuenta_corriente'),
-        supabase.from('dispositivos').select('modelo, precio, costo, en_stock_desde').eq('en_stock', true),
+        Promise.all([
+          supabase.from('perfiles').select('negocios ( nombre, moneda )').eq('id', user.id).single(),
+          supabase.from('vendedores').select('id, nombre, foto_url').order('nombre'),
+          supabase.from('tecnicos').select('id, nombre, foto_url').order('nombre'),
+          supabase.from('proveedores').select('id, nombre').order('nombre'),
+          supabase
+            .from('ordenes')
+            .select('id, vendedor_id, cliente_id, total, anticipo, monto_canje, estado, forma_pago, created_at')
+            .gte('created_at', desde.toISOString()),
+          // "costo" se omite a propósito: la columna orden_items.costo todavía no
+          // existe en producción (llega con la fase de costos). Sin esto, el
+          // pedido fallaría y nos quedaríamos sin unidades/ítems. precio_unitario
+          // y cantidad sí existen desde siempre.
+          supabase.from('orden_items').select('orden_id, cantidad, precio_unitario, created_at').gte('created_at', desde.toISOString()),
+          supabase.from('reparaciones').select('tecnico_id, fecha_reparado').not('fecha_reparado', 'is', null).gte('fecha_reparado', desde.toISOString()),
+          supabase
+            .from('reparaciones')
+            .select('cliente_id, fecha_ingreso_servicio')
+            .not('cliente_id', 'is', null)
+            .not('fecha_ingreso_servicio', 'is', null)
+            .gte('fecha_ingreso_servicio', desde.toISOString()),
+          supabase.from('compras_proveedor').select('proveedor_id, cantidad, precio_unitario, created_at').gte('created_at', desde.toISOString()),
+          supabase.from('pagos').select('medio, monto, fecha').eq('anulado', false).gte('fecha', desde.toISOString()),
+          supabase.from('cta_cte_movimientos').select('concepto, tipo, monto, fecha').eq('anulado', false).gte('fecha', desde.toISOString()),
+          supabase.rpc('saldos_cuenta_corriente'),
+        ]),
+        obtenerTodasLasFilas<DispositivoCompra>(supabase, 'dispositivos', 'proveedor_id, costo, created_at', [], (q) =>
+          q.not('proveedor_id', 'is', null).gte('created_at', desde.toISOString())
+        ),
+        // Foto del inventario de HOY (no depende del período), para capital y stock por modelo.
+        obtenerTodasLasFilas<StockR>(supabase, 'dispositivos', 'modelo, precio, costo, en_stock_desde', [], (q) => q.eq('en_stock', true)),
         // Todas las altas de stock (no solo lo que sigue en stock hoy), para
         // poder rankear quién cargó más equipos en el período.
-        supabase.from('dispositivos').select('agregado_por_nombre, agregado_por_foto_url, created_at').gte('created_at', desde.toISOString()),
+        obtenerTodasLasFilas<RegistroDispositivo>(supabase, 'dispositivos', 'agregado_por_nombre, agregado_por_foto_url, created_at', [], (q) =>
+          q.gte('created_at', desde.toISOString())
+        ),
       ]);
 
       const negocio = (perfil as any)?.negocios;
@@ -206,10 +221,10 @@ export default function Estadisticas() {
       setOrdenItems((items as (ItemR & { created_at: string })[]) ?? []);
       setReparaciones((rep as Reparacion[]) ?? []);
       setIngresosServicio((ing as IngresoServicio[]) ?? []);
-      setComprasProveedor((compras as DispositivoCompra[]) ?? []);
+      setComprasProveedor(compras);
       setComprasManuales((comprasManual as CompraManual[]) ?? []);
-      setStock((stockData as StockR[]) ?? []);
-      setRegistrosDispositivos((registrosData as RegistroDispositivo[]) ?? []);
+      setStock(stockData);
+      setRegistrosDispositivos(registrosData);
       setPagos((pagosData as PagoR[]) ?? []);
       setCredito((creditoData as CreditoR[]) ?? []);
       const saldos = (saldosData as { saldo: number; vencido: number }[]) ?? [];

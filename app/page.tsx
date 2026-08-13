@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { crearClienteServidor } from './lib/supabase/server';
+import { obtenerTodasLasFilas } from './lib/db';
 import BotonSalir from './BotonSalir';
 import QMark from './QMark';
 import BuscadorUniversal from './BuscadorUniversal';
@@ -108,28 +109,34 @@ export default async function Home() {
     en7dias.setDate(en7dias.getDate() + 7);
 
     const [
-      { count: countStock },
-      { count: countPendientes },
-      { count: countClientes },
-      { data: esAdminData },
-      { data: ordenesRecientes },
-      { data: carpetasStock },
-      { data: catalogoProductos },
-      { data: reparacionesRecientes },
-      { data: stockRecienteData },
-      { data: clientesRecientesData },
-      { count: countListosEntregar },
-      { count: countGarantias },
-      { count: countStockQuieto },
-      { count: countServicioLargo },
-      { data: modelosEnStock },
-      { count: countEnCanje },
-      { count: countComprasPendientes },
-      { count: countSinPrecio },
-      { data: auditoriaReciente },
-      { data: vendedoresLista },
-      { data: tecnicosLista },
+      [
+        { count: countStock },
+        { count: countPendientes },
+        { count: countClientes },
+        { data: esAdminData },
+        { data: ordenesRecientes },
+        { data: carpetasStock },
+        { data: catalogoProductos },
+        { data: reparacionesRecientes },
+        { data: stockRecienteData },
+        { data: clientesRecientesData },
+        { count: countListosEntregar },
+        { count: countGarantias },
+        { count: countStockQuieto },
+        { count: countServicioLargo },
+        { count: countEnCanje },
+        { count: countComprasPendientes },
+        { count: countSinPrecio },
+        { data: auditoriaReciente },
+        { data: vendedoresLista },
+        { data: tecnicosLista },
+      ],
+      // Aparte del Promise.all de arriba: un select() común de "dispositivos"
+      // se corta en 1000 filas sin avisar. Con miles de equipos en stock, la
+      // alerta de "por reponer" se quedaría corta sin este paginado.
+      modelosEnStock,
     ] = await Promise.all([
+      Promise.all([
       supabase.from('dispositivos').select('id', { count: 'exact', head: true }).eq('en_stock', true),
       supabase.from('ordenes').select('id', { count: 'exact', head: true }).eq('estado', 'pendiente'),
       supabase.from('clientes').select('id', { count: 'exact', head: true }),
@@ -176,7 +183,6 @@ export default async function Home() {
         .neq('estado', 'entregado')
         .neq('estado', 'cancelado')
         .lte('fecha_ingreso_servicio', hace60dias.toISOString()),
-      supabase.from('dispositivos').select('modelo').eq('en_stock', true),
       supabase.from('canjes').select('id', { count: 'exact', head: true }).eq('estado', 'en_canje').eq('oculto_en_canje', false),
       supabase.from('compras').select('id', { count: 'exact', head: true }).eq('estado', 'pendiente'),
       supabase
@@ -196,6 +202,8 @@ export default async function Home() {
       // nombre con vendedores/técnicos para mostrar el avatar real en el feed.
       supabase.from('vendedores').select('nombre, foto_url'),
       supabase.from('tecnicos').select('nombre, foto_url'),
+      ]),
+      obtenerTodasLasFilas<{ modelo: string | null }>(supabase, 'dispositivos', 'modelo', [], (q) => q.eq('en_stock', true)),
     ]);
     enStock = countStock ?? 0;
     pendientes = countPendientes ?? 0;
@@ -337,7 +345,7 @@ export default async function Home() {
     actividad = candidatos.sort((a, b) => b.fecha.getTime() - a.fecha.getTime()).slice(0, 8);
 
     const conteoModelo = new Map<string, number>();
-    for (const d of (modelosEnStock as { modelo: string | null }[]) ?? []) {
+    for (const d of modelosEnStock) {
       const clave = d.modelo || 'Sin modelo';
       conteoModelo.set(clave, (conteoModelo.get(clave) ?? 0) + 1);
     }

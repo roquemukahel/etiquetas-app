@@ -51,7 +51,7 @@ export default function NuevaCompra() {
 
   useEffect(() => {
     (async () => {
-      setClientes(await obtenerTodasLasFilas<Cliente>(supabase, 'clientes', '*'));
+      setClientes(await obtenerTodasLasFilas<Cliente>(supabase, 'clientes', 'id, nombre, apellido, telefono'));
     })();
     (async () => {
       const { data } = await supabase.from('modelos_stock').select('nombre').order('nombre');
