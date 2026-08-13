@@ -63,6 +63,7 @@ type IngresoServicio = { cliente_id: string | null; fecha_ingreso_servicio: stri
 type DispositivoCompra = { proveedor_id: string | null; costo: number | null; created_at: string };
 type CompraManual = { proveedor_id: string; cantidad: number; precio_unitario: number | null; created_at: string };
 type StockR = { modelo: string | null; precio: number | null; costo: number | null; en_stock_desde: string | null };
+type RegistroDispositivo = { agregado_por_nombre: string | null; agregado_por_foto_url: string | null; created_at: string };
 
 const KEY_OCULTAR = 'qovento:analitica-ocultar-montos';
 
@@ -88,6 +89,7 @@ export default function Estadisticas() {
   const [vistaProveedores, setVistaProveedores] = useState<VistaRanking>('barras');
   const [vistaCompradores, setVistaCompradores] = useState<VistaRanking>('barras');
   const [vistaClientesServicio, setVistaClientesServicio] = useState<VistaRanking>('barras');
+  const [vistaRegistroStock, setVistaRegistroStock] = useState<VistaRanking>('barras');
 
   const [nombreNegocio, setNombreNegocio] = useState('');
   const [vendedores, setVendedores] = useState<Persona[]>([]);
@@ -109,6 +111,8 @@ export default function Estadisticas() {
   const [comprasManuales, setComprasManuales] = useState<CompraManual[]>([]);
   // Stock ACTUAL (foto de hoy, no depende del período): capital, antigüedad, por modelo.
   const [stock, setStock] = useState<StockR[]>([]);
+  // Altas de stock (quién cargó cada equipo), para el ranking por período.
+  const [registrosDispositivos, setRegistrosDispositivos] = useState<RegistroDispositivo[]>([]);
   const [moneda, setMoneda] = useState('$');
   const [loading, setLoading] = useState(true);
   const [actualizado, setActualizado] = useState<Date | null>(null);
@@ -159,6 +163,7 @@ export default function Estadisticas() {
         { data: creditoData },
         { data: saldosData },
         { data: stockData },
+        { data: registrosData },
       ] = await Promise.all([
         supabase.from('perfiles').select('negocios ( nombre, moneda )').eq('id', user.id).single(),
         supabase.from('vendedores').select('id, nombre, foto_url').order('nombre'),
@@ -186,6 +191,9 @@ export default function Estadisticas() {
         supabase.from('cta_cte_movimientos').select('concepto, tipo, monto, fecha').eq('anulado', false).gte('fecha', desde.toISOString()),
         supabase.rpc('saldos_cuenta_corriente'),
         supabase.from('dispositivos').select('modelo, precio, costo, en_stock_desde').eq('en_stock', true),
+        // Todas las altas de stock (no solo lo que sigue en stock hoy), para
+        // poder rankear quién cargó más equipos en el período.
+        supabase.from('dispositivos').select('agregado_por_nombre, agregado_por_foto_url, created_at').gte('created_at', desde.toISOString()),
       ]);
 
       const negocio = (perfil as any)?.negocios;
@@ -201,6 +209,7 @@ export default function Estadisticas() {
       setComprasProveedor((compras as DispositivoCompra[]) ?? []);
       setComprasManuales((comprasManual as CompraManual[]) ?? []);
       setStock((stockData as StockR[]) ?? []);
+      setRegistrosDispositivos((registrosData as RegistroDispositivo[]) ?? []);
       setPagos((pagosData as PagoR[]) ?? []);
       setCredito((creditoData as CreditoR[]) ?? []);
       const saldos = (saldosData as { saldo: number; vencido: number }[]) ?? [];
@@ -412,6 +421,21 @@ export default function Estadisticas() {
       .slice(0, 10);
   }, [stock]);
 
+  // Quién registró más equipos en el stock durante el período elegido.
+  const rankingRegistroStock: Dato[] = useMemo(() => {
+    const mapa = new Map<string, { valor: number; fotoUrl: string | null }>();
+    for (const d of registrosDispositivos.filter((d) => new Date(d.created_at) >= inicio)) {
+      const nombre = d.agregado_por_nombre || 'Sin registrar';
+      const e = mapa.get(nombre) ?? { valor: 0, fotoUrl: null };
+      e.valor += 1;
+      if (!e.fotoUrl && d.agregado_por_foto_url) e.fotoUrl = d.agregado_por_foto_url;
+      mapa.set(nombre, e);
+    }
+    return Array.from(mapa.entries())
+      .map(([nombre, e]) => ({ nombre, valor: e.valor, fotoUrl: e.fotoUrl }))
+      .sort((a, b) => b.valor - a.valor);
+  }, [registrosDispositivos, inicio]);
+
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center">
@@ -550,6 +574,19 @@ export default function Estadisticas() {
             </div>
             <SeccionCard titulo="Stock por modelo" subtitulo="Foto del inventario de hoy (no depende del período).">
               {stockPorModelo.length === 0 ? <EmptyState titulo="Sin equipos en stock" /> : <RankingBarras datos={stockPorModelo} sufijo=" equipo(s)" />}
+            </SeccionCard>
+            <SeccionCard
+              titulo="Quién registró más equipos"
+              subtitulo={`Altas de stock de ${etiquetaPeriodo}.`}
+              accion={<VistaToggle vista={vistaRegistroStock} onVista={setVistaRegistroStock} />}
+            >
+              {rankingRegistroStock.length === 0 ? (
+                <EmptyState titulo="Sin equipos registrados en el período" />
+              ) : vistaRegistroStock === 'barras' ? (
+                <RankingBarras datos={rankingRegistroStock} sufijo=" equipo(s)" />
+              ) : (
+                <RankingTorta datos={rankingRegistroStock} sufijo=" equipo(s)" />
+              )}
             </SeccionCard>
           </>
         );
