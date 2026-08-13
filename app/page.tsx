@@ -67,34 +67,6 @@ export default async function Home() {
   };
 
   if (user) {
-    const { data: perfil } = await supabase
-      .from('perfiles')
-      .select('negocio_id, negocios ( nombre, logo_url, moneda, estado_suscripcion, fecha_fin_prueba )')
-      .eq('id', user.id)
-      .single();
-    // Puede pasar si el registro se cortó justo entre crear la cuenta y
-    // crear el negocio (ver app/registro): sin esto, esta pantalla se
-    // queda mostrando un panel vacío para siempre, sin forma de arreglarlo.
-    // No aplica a un super_admin sin negocio propio (usa /admin, no esta
-    // pantalla) — se lo deja pasar para no bloquearlo a él por error.
-    if (!perfil) {
-      const { data: esAdminSinNegocio } = await supabase.rpc('es_admin');
-      if (!esAdminSinNegocio) {
-        redirect('/registro');
-      }
-    }
-    const negocio = (perfil as any)?.negocios;
-    if (negocio?.nombre) nombreNegocio = negocio.nombre;
-    if (negocio?.logo_url) logoUrl = negocio.logo_url;
-    if (negocio?.moneda) moneda = simboloMoneda(negocio.moneda);
-    if (negocio?.estado_suscripcion === 'trialing' && negocio?.fecha_fin_prueba) {
-      diasDePrueba = Math.max(
-        0,
-        Math.ceil((new Date(negocio.fecha_fin_prueba).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
-      );
-    }
-    suscripcionActiva = negocio?.estado_suscripcion === 'active';
-
     const inicioMes = new Date();
     inicioMes.setDate(1);
     inicioMes.setHours(0, 0, 0, 0);
@@ -108,7 +80,13 @@ export default async function Home() {
     const en7dias = new Date();
     en7dias.setDate(en7dias.getDate() + 7);
 
+    // El perfil (nombre del negocio, logo, moneda, estado de suscripción) se
+    // pedía ANTES de arrancar el resto — un viaje de ida y vuelta entero
+    // esperado en serie por algo que, en el caso normal, no bloquea a
+    // ninguna otra consulta (todas las demás ya filtran por negocio solas,
+    // vía RLS). Ahora se pide en paralelo con todo lo demás.
     const [
+      { data: perfil },
       [
         { count: countStock },
         { count: countPendientes },
@@ -136,6 +114,11 @@ export default async function Home() {
       // alerta de "por reponer" se quedaría corta sin este paginado.
       modelosEnStock,
     ] = await Promise.all([
+      supabase
+        .from('perfiles')
+        .select('negocio_id, negocios ( nombre, logo_url, moneda, estado_suscripcion, fecha_fin_prueba )')
+        .eq('id', user.id)
+        .single(),
       Promise.all([
       supabase.from('dispositivos').select('id', { count: 'exact', head: true }).eq('en_stock', true),
       supabase.from('ordenes').select('id', { count: 'exact', head: true }).eq('estado', 'pendiente'),
@@ -205,6 +188,35 @@ export default async function Home() {
       ]),
       obtenerTodasLasFilas<{ modelo: string | null }>(supabase, 'dispositivos', 'modelo', [], (q) => q.eq('en_stock', true)),
     ]);
+
+    // Puede pasar si el registro se cortó justo entre crear la cuenta y
+    // crear el negocio (ver app/registro): sin esto, esta pantalla se
+    // queda mostrando un panel vacío para siempre, sin forma de arreglarlo.
+    // No aplica a un super_admin sin negocio propio (usa /admin, no esta
+    // pantalla) — se lo deja pasar para no bloquearlo a él por error. Se
+    // chequea ACÁ (después de haber pedido todo en paralelo) en vez de
+    // antes: en el caso normal (perfil sí existe, la enorme mayoría de las
+    // veces) no hace falta esperar a saberlo para arrancar el resto: si
+    // hiciera falta redirigir, las demás consultas ya en vuelo simplemente
+    // se descartan sin usarse.
+    if (!perfil) {
+      const { data: esAdminSinNegocio } = await supabase.rpc('es_admin');
+      if (!esAdminSinNegocio) {
+        redirect('/registro');
+      }
+    }
+    const negocio = (perfil as any)?.negocios;
+    if (negocio?.nombre) nombreNegocio = negocio.nombre;
+    if (negocio?.logo_url) logoUrl = negocio.logo_url;
+    if (negocio?.moneda) moneda = simboloMoneda(negocio.moneda);
+    if (negocio?.estado_suscripcion === 'trialing' && negocio?.fecha_fin_prueba) {
+      diasDePrueba = Math.max(
+        0,
+        Math.ceil((new Date(negocio.fecha_fin_prueba).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+      );
+    }
+    suscripcionActiva = negocio?.estado_suscripcion === 'active';
+
     enStock = countStock ?? 0;
     pendientes = countPendientes ?? 0;
     totalClientes = countClientes ?? 0;
