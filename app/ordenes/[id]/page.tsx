@@ -286,10 +286,18 @@ export default function DetalleOrden() {
     // Checklist de ingreso que cargó el vendedor → se copia a la reparación
     // para que el técnico lo reciba ya cargado (no recarga nada).
     const ci = (orden.checklist_ingreso ?? {}) as any;
+    // Esta MISMA orden cobra la reparación (ítem de trabajo que ya tiene el
+    // precio que le cobró el vendedor al recibir el equipo). Sin esto, al
+    // terminar la reparación "generar orden de cobro" creaba una boleta
+    // nueva y desconectada — el precio quedaba en $0 y el IMEI/diagnóstico
+    // nunca llegaban a la boleta que el cliente realmente ve.
+    const itemTrabajo = orden.orden_items.find((i) => i.tipo === 'trabajo');
     const { data: nueva } = await supabase
       .from('reparaciones')
       .insert({
         orden_origen_id: orden.id,
+        orden_cobro_id: orden.id,
+        orden_item_id: itemTrabajo?.id ?? null,
         cliente_id: orden.cliente_id,
         modelo: derivarModelo.trim(),
         capacidad_gb: derivarCapacidad,

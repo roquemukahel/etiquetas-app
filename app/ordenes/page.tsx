@@ -59,13 +59,14 @@ export default function Ordenes() {
   const puedeVender = tienePermiso(actor, 'vender');
   const [ordenes, setOrdenes] = useState<Orden[]>([]);
   const [reparacionesListas, setReparacionesListas] = useState<ReparacionLista[]>([]);
+  const [reparacionesCanceladas, setReparacionesCanceladas] = useState<ReparacionLista[]>([]);
   const [generando, setGenerando] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [filtroEstado, setFiltroEstado] = useState('todas');
   const [filtroTipo, setFiltroTipo] = useState<'todas' | 'ventas' | 'servicio'>('todas');
 
   const cargar = async () => {
-    const [{ data: ordenesData }, { data: listasData }] = await Promise.all([
+    const [{ data: ordenesData }, { data: listasData }, { data: canceladasData }] = await Promise.all([
       supabase
         .from('ordenes')
         .select('*, clientes ( nombre, apellido ), orden_items ( descripcion, tipo )')
@@ -77,9 +78,19 @@ export default function Ordenes() {
         .eq('estado', 'listo_para_entregar')
         .not('cliente_id', 'is', null)
         .order('fecha_reparado', { ascending: true }),
+      // Reparaciones sin solución (con cliente) que igual necesitan una boleta
+      // para devolver el equipo — mismo criterio que las listas para cobrar,
+      // solo que acá el importe suele ser 0 (no se pudo arreglar).
+      supabase
+        .from('reparaciones')
+        .select('*, clientes ( nombre, apellido )')
+        .eq('estado', 'cancelado')
+        .not('cliente_id', 'is', null)
+        .order('estado_actualizado_at', { ascending: true }),
     ]);
     setOrdenes((ordenesData as any) ?? []);
     setReparacionesListas((listasData as any) ?? []);
+    setReparacionesCanceladas((canceladasData as any) ?? []);
     setLoading(false);
   };
 
@@ -89,7 +100,7 @@ export default function Ordenes() {
 
   const generarBoleta = async (r: ReparacionLista) => {
     if (!puedeVender || generando) return;
-    if (!confirm(`¿Generar la boleta de ${r.modelo || 'este equipo'}? Se cobra el importe de la reparación.`)) return;
+    if (!confirm(`¿Generar la boleta de ${r.modelo || 'este equipo'}?`)) return;
     setGenerando(r.id);
     const { ordenId, total, error } = await generarOrdenDeReparacion(supabase, r as any);
     if (error || !ordenId) {
@@ -198,6 +209,49 @@ export default function Ordenes() {
                     disabled={generando === r.id}
                     onClick={() => generarBoleta(r)}
                     className="rounded-lg bg-good hover:opacity-90 transition-opacity px-3 py-2 text-xs font-medium text-white disabled:opacity-40 whitespace-nowrap"
+                  >
+                    {generando === r.id ? 'Generando…' : 'Generar boleta'}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </section>
+      )}
+
+      {puedeVender && reparacionesCanceladas.length > 0 && (
+        <section className="rounded-2xl border border-bad/40 bg-bad/5 p-3 flex flex-col gap-2">
+          <p className="text-sm font-medium text-bad">
+            ✕ Cancelados sin solución · para devolver ({reparacionesCanceladas.length})
+          </p>
+          {reparacionesCanceladas.map((r) => {
+            const importe = r.importe_total ?? (r.presupuesto_mano_obra || 0) + (r.presupuesto_repuestos || 0);
+            return (
+              <div
+                key={r.id}
+                className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-3 py-2.5 flex items-center justify-between gap-2"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">
+                    {r.modelo || 'Equipo'}
+                    {r.numero_orden && <span className="text-xs text-muted dark:text-dark-text-secondary"> · {r.numero_orden}</span>}
+                  </p>
+                  <p className="text-xs text-muted dark:text-dark-text-secondary truncate">
+                    {r.clientes ? `${r.clientes.nombre} ${r.clientes.apellido || ''}`.trim() : 'Sin cliente'}
+                    {importe > 0 && ` · $${importe.toLocaleString('es-AR')}`}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Link
+                    href={`/servicio-tecnico/${r.id}`}
+                    className="text-xs text-accent dark:text-dark-accent underline whitespace-nowrap"
+                  >
+                    Ver ficha
+                  </Link>
+                  <button
+                    disabled={generando === r.id}
+                    onClick={() => generarBoleta(r)}
+                    className="rounded-lg bg-bad hover:opacity-90 transition-opacity px-3 py-2 text-xs font-medium text-white disabled:opacity-40 whitespace-nowrap"
                   >
                     {generando === r.id ? 'Generando…' : 'Generar boleta'}
                   </button>

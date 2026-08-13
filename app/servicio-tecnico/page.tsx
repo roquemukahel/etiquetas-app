@@ -339,6 +339,7 @@ export default function ServicioTecnico() {
     // equipos en el mismo ingreso, todos comparten esta única orden/boleta
     // (un ítem por equipo) en vez de generar una boleta por cada uno.
     let ordenId: string | null = null;
+    let itemIdPorIndice: { id: string }[] = [];
     if (clienteId) {
       // Con más de un equipo hay que aclarar a cuál corresponde cada
       // condición de ingreso — si no, la nota mezclaría "Funciona: ..." de
@@ -366,33 +367,42 @@ export default function ServicioTecnico() {
         return;
       }
       ordenId = orden.id;
-      const { error: itemsError } = await supabase.from('orden_items').insert(
-        equiposEfectivos.map((eq) => ({
-          orden_id: orden.id,
-          // El vendedor carga modelo/capacidad/color/IMEI en el formulario de
-          // ingreso, pero antes se perdían: la boleta solo mostraba "Servicio
-          // técnico — {modelo}". Se arma igual que la línea de un dispositivo
-          // vendido (ver agregarDispositivoDelStock en Nueva Orden) para que
-          // toda esa info quede visible en la boleta.
-          descripcion: `Servicio técnico — ${eq.modelo}${eq.capacidad_gb ? ` ${eq.capacidad_gb}GB` : ''}${
-            eq.color ? ` ${eq.color}` : ''
-          }${eq.imei ? ` · IMEI ${eq.imei}` : ''}`,
-          cantidad: 1,
-          precio_unitario: 0,
-          tipo: 'trabajo',
-        }))
-      );
+      const { data: itemsCreados, error: itemsError } = await supabase
+        .from('orden_items')
+        .insert(
+          equiposEfectivos.map((eq) => ({
+            orden_id: orden.id,
+            // El vendedor carga modelo/capacidad/color/IMEI en el formulario de
+            // ingreso, pero antes se perdían: la boleta solo mostraba "Servicio
+            // técnico — {modelo}". Se arma igual que la línea de un dispositivo
+            // vendido (ver agregarDispositivoDelStock en Nueva Orden) para que
+            // toda esa info quede visible en la boleta.
+            descripcion: `Servicio técnico — ${eq.modelo}${eq.capacidad_gb ? ` ${eq.capacidad_gb}GB` : ''}${
+              eq.color ? ` ${eq.color}` : ''
+            }${eq.imei ? ` · IMEI ${eq.imei}` : ''}`,
+            cantidad: 1,
+            precio_unitario: 0,
+            tipo: 'trabajo',
+          }))
+        )
+        .select('id');
       if (itemsError) {
         setErrorNuevo('No pudimos terminar de armar la boleta: ' + itemsError.message);
         setGuardandoNuevo(false);
         return;
       }
+      // Postgres devuelve las filas de un insert múltiple en el mismo orden en
+      // que se insertaron, así que itemsCreados[i] es el ítem de equiposEfectivos[i].
+      // Se guarda para que, cuando ESTE equipo puntual termine la reparación,
+      // "generar orden de cobro" sepa cuál línea de la boleta actualizar (y no
+      // la de otro equipo recibido en el mismo ingreso).
+      itemIdPorIndice = (itemsCreados as { id: string }[] | null) ?? [];
     }
 
     const { data: creadas, error: repError } = await supabase
       .from('reparaciones')
       .insert(
-        equiposEfectivos.map((eq) => ({
+        equiposEfectivos.map((eq, i) => ({
           modelo: eq.modelo,
           capacidad_gb: eq.capacidad_gb,
           color: eq.color || null,
@@ -403,6 +413,7 @@ export default function ServicioTecnico() {
           cliente_id: clienteId,
           tecnico_id: asignadoTecnicoId || null,
           orden_cobro_id: ordenId,
+          orden_item_id: itemIdPorIndice[i]?.id ?? null,
           ...eq.checklist,
         }))
       )

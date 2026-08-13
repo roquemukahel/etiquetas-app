@@ -686,76 +686,10 @@ export default function FichaReparacion() {
         )}
       </Seccion>
 
-      {/* Recepción / checklist */}
-      <Seccion titulo="Recepción">
-        {editando ? (
-          <div className="flex flex-col gap-2">
-            <Campo label="Falla declarada por el cliente" valor={f.falla_declarada} onChange={(v) => setFm((p) => ({ ...p, falla_declarada: v }))} textarea />
-            <Campo label="Estado estético" valor={f.estado_estetico} onChange={(v) => setFm((p) => ({ ...p, estado_estetico: v }))} />
-            <CheckTri label="Enciende" valor={f.enciende} onChange={(v) => setFm((p) => ({ ...p, enciende: v }))} />
-            {ITEMS_CHECKLIST_INGRESO.map((item) => {
-              const deshabilitado = CAMPOS_DEPENDEN_MODULO.includes(item.campo) && f.modulo_ok === false;
-              return (
-                <CheckTri
-                  key={item.campo}
-                  label={item.label}
-                  disabled={deshabilitado}
-                  valor={deshabilitado ? null : f[item.campo]}
-                  onChange={(v) => setFm((p) => ({ ...p, [item.campo]: v }))}
-                />
-              );
-            })}
-            <CheckTri label="Humedad / manipulación" valor={f.humedad} onChange={(v) => setFm((p) => ({ ...p, humedad: v }))} invertido />
-            <Campo
-              label="Excepción adicional a la garantía (opcional)"
-              valor={f.garantia_excepcion_manual}
-              onChange={(v) => setFm((p) => ({ ...p, garantia_excepcion_manual: v }))}
-              textarea
-            />
-            <p className="text-[10px] text-muted dark:text-dark-text-secondary -mt-1">
-              Para excluir algo que hoy funciona pero quedó en duda (ej.: "por golpe fuerte, no garantizamos Face ID").
-              Lo que ya marcaste como falla arriba se excluye solo, no hace falta repetirlo acá.
-            </p>
-            <label className="flex items-center gap-2 text-sm cursor-pointer mt-1">
-              <input
-                type="checkbox"
-                checked={f.garantia_condiciones_aceptadas}
-                onChange={(e) => setFm((p) => ({ ...p, garantia_condiciones_aceptadas: e.target.checked }))}
-                className="h-4 w-4 accent-ink"
-              />
-              El cliente aceptó las condiciones de garantía y diagnóstico
-            </label>
-            <TextoCondicionGenerado datos={f as any} />
-          </div>
-        ) : (
-          <div className="text-sm flex flex-col gap-1">
-            {r.falla_declarada && (
-              <p>
-                <span className="text-muted dark:text-dark-text-secondary">Falla declarada: </span>
-                {r.falla_declarada}
-              </p>
-            )}
-            {r.estado_estetico && (
-              <p>
-                <span className="text-muted dark:text-dark-text-secondary">Estado estético: </span>
-                {r.estado_estetico}
-              </p>
-            )}
-            <p className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted dark:text-dark-text-secondary">
-              {itemChecklist('Enciende', r.enciende)}
-              {ITEMS_CHECKLIST_INGRESO.map((item) => itemChecklist(item.label, (r as any)[item.campo]))}
-              {/* Reparaciones cargadas antes de este cambio: si nunca se usó la checklist nueva, mostramos la vieja para no perder ese historial. */}
-              {r.camara_frontal_ok == null && r.camara_trasera_ok == null && itemChecklist('Cámaras', r.camaras_ok)}
-              {r.boton_power_ok == null && r.boton_volumen_ok == null && itemChecklist('Botones', r.botones_ok)}
-              {r.humedad != null && <span>{r.humedad ? '⚠️ Con humedad/manipulación' : '✅ Sin humedad'}</span>}
-            </p>
-            {r.garantia_condiciones_aceptadas && <p className="text-xs text-good">✓ Cliente aceptó condiciones de garantía</p>}
-            <TextoCondicionGenerado datos={r as any} />
-          </div>
-        )}
-      </Seccion>
-
-      {/* Diagnóstico */}
+      {/* Diagnóstico y presupuesto: arriba de todo (justo después de
+          Identificación), no debajo del checklist de Recepción que puede ser
+          largo — el técnico lo tiene que llenar seguido y no debería tener
+          que scrollear tanto para llegar. */}
       <Seccion titulo="Diagnóstico y presupuesto">
         {editando ? (
           <div className="flex flex-col gap-2">
@@ -841,6 +775,75 @@ export default function FichaReparacion() {
             {r.observaciones_internas && (
               <p className="text-xs text-muted dark:text-dark-text-secondary italic">Nota interna: {r.observaciones_internas}</p>
             )}
+          </div>
+        )}
+      </Seccion>
+
+      {/* Recepción / checklist */}
+      <Seccion titulo="Recepción">
+        {editando ? (
+          <div className="flex flex-col gap-2">
+            <Campo label="Falla declarada por el cliente" valor={f.falla_declarada} onChange={(v) => setFm((p) => ({ ...p, falla_declarada: v }))} textarea />
+            <Campo label="Estado estético" valor={f.estado_estetico} onChange={(v) => setFm((p) => ({ ...p, estado_estetico: v }))} />
+            <CheckTri label="Enciende" valor={f.enciende} onChange={(v) => setFm((p) => ({ ...p, enciende: v }))} />
+            {ITEMS_CHECKLIST_INGRESO.map((item) => {
+              const deshabilitado = CAMPOS_DEPENDEN_MODULO.includes(item.campo) && f.modulo_ok === false;
+              return (
+                <CheckTri
+                  key={item.campo}
+                  label={item.label}
+                  disabled={deshabilitado}
+                  valor={deshabilitado ? null : f[item.campo]}
+                  onChange={(v) => setFm((p) => ({ ...p, [item.campo]: v }))}
+                />
+              );
+            })}
+            <CheckTri label="Humedad / manipulación" valor={f.humedad} onChange={(v) => setFm((p) => ({ ...p, humedad: v }))} invertido />
+            <Campo
+              label="Excepción adicional a la garantía (opcional)"
+              valor={f.garantia_excepcion_manual}
+              onChange={(v) => setFm((p) => ({ ...p, garantia_excepcion_manual: v }))}
+              textarea
+            />
+            <p className="text-[10px] text-muted dark:text-dark-text-secondary -mt-1">
+              Para excluir algo que hoy funciona pero quedó en duda (ej.: "por golpe fuerte, no garantizamos Face ID").
+              Lo que ya marcaste como falla arriba se excluye solo, no hace falta repetirlo acá.
+            </p>
+            <label className="flex items-center gap-2 text-sm cursor-pointer mt-1">
+              <input
+                type="checkbox"
+                checked={f.garantia_condiciones_aceptadas}
+                onChange={(e) => setFm((p) => ({ ...p, garantia_condiciones_aceptadas: e.target.checked }))}
+                className="h-4 w-4 accent-ink"
+              />
+              El cliente aceptó las condiciones de garantía y diagnóstico
+            </label>
+            <TextoCondicionGenerado datos={f as any} />
+          </div>
+        ) : (
+          <div className="text-sm flex flex-col gap-1">
+            {r.falla_declarada && (
+              <p>
+                <span className="text-muted dark:text-dark-text-secondary">Falla declarada: </span>
+                {r.falla_declarada}
+              </p>
+            )}
+            {r.estado_estetico && (
+              <p>
+                <span className="text-muted dark:text-dark-text-secondary">Estado estético: </span>
+                {r.estado_estetico}
+              </p>
+            )}
+            <p className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted dark:text-dark-text-secondary">
+              {itemChecklist('Enciende', r.enciende)}
+              {ITEMS_CHECKLIST_INGRESO.map((item) => itemChecklist(item.label, (r as any)[item.campo]))}
+              {/* Reparaciones cargadas antes de este cambio: si nunca se usó la checklist nueva, mostramos la vieja para no perder ese historial. */}
+              {r.camara_frontal_ok == null && r.camara_trasera_ok == null && itemChecklist('Cámaras', r.camaras_ok)}
+              {r.boton_power_ok == null && r.boton_volumen_ok == null && itemChecklist('Botones', r.botones_ok)}
+              {r.humedad != null && <span>{r.humedad ? '⚠️ Con humedad/manipulación' : '✅ Sin humedad'}</span>}
+            </p>
+            {r.garantia_condiciones_aceptadas && <p className="text-xs text-good">✓ Cliente aceptó condiciones de garantía</p>}
+            <TextoCondicionGenerado datos={r as any} />
           </div>
         )}
       </Seccion>
