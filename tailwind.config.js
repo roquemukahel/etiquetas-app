@@ -47,10 +47,18 @@ module.exports = {
           '0%, 100%': { transform: 'translateY(0) scale(1.08)' },
           '50%': { transform: 'translateY(-3px) scale(1.08)' },
         },
+        // Vaivén lateral para el hover de las tarjetas de accesorios: un
+        // balanceo de lado a lado que llama la atención sin tapar la imagen.
+        vaivenLateral: {
+          '0%, 100%': { transform: 'translateX(0) rotate(0deg)' },
+          '25%': { transform: 'translateX(-5px) rotate(-4deg)' },
+          '75%': { transform: 'translateX(5px) rotate(4deg)' },
+        },
       },
       animation: {
         flotar: 'flotar 3.2s ease-in-out infinite',
         flotarLeve: 'flotarLeve 2.2s ease-in-out infinite',
+        vaivenLateral: 'vaivenLateral 0.5s ease-in-out infinite',
       },
     },
   },

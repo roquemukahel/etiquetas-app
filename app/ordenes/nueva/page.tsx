@@ -50,7 +50,7 @@ type Cliente = {
 };
 
 type Vendedor = { id: string; nombre: string };
-type Producto = { id: string; nombre: string; precio: number | null };
+type Producto = { id: string; nombre: string; precio: number | null; imagen_url: string | null };
 type Trabajo = { id: string; nombre: string; precio: number | null; imagen_url: string | null };
 
 type CanjeCarrito = {
@@ -1285,10 +1285,16 @@ export default function NuevaOrden() {
                   <button
                     key={p.id}
                     onClick={() => agregarProductoDelCatalogo(p)}
-                    className="rounded-lg border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-3 py-2 flex items-center justify-between text-left text-sm"
+                    className="rounded-lg border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-3 py-2 flex items-center justify-between gap-2 text-left text-sm"
                   >
-                    <span>{p.nombre}</span>
-                    {p.precio != null && <span className="font-medium">{moneda}{p.precio.toLocaleString('es-AR')}</span>}
+                    <span className="flex items-center gap-2 min-w-0">
+                      {p.imagen_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={p.imagen_url} alt="" className="h-8 w-8 object-contain shrink-0" />
+                      ) : null}
+                      <span className="truncate">{p.nombre}</span>
+                    </span>
+                    {p.precio != null && <span className="font-medium shrink-0">{moneda}{p.precio.toLocaleString('es-AR')}</span>}
                   </button>
                 ))}
               </div>
