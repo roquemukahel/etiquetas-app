@@ -42,6 +42,7 @@ type Dispositivo = {
   color: string | null;
   precio: number | null;
   costo: number | null;
+  proveedor: string | null;
   estado: string | null;
   detalles: string | null;
   en_stock: boolean;
@@ -65,6 +66,17 @@ const ACCESORIOS_DEFAULT: { nombre: string; imagen: string }[] = [
   { nombre: 'Protector de cámara', imagen: '/accesorios-default/protector-camara.jpg' },
 ];
 
+type FiltroRapido = 'todos' | 'bateria_baja' | 'sellados' | 'por_reponer' | 'sin_precio' | 'sin_costo' | 'incompletos';
+const VISTAS_RAPIDAS: { id: FiltroRapido; label: string }[] = [
+  { id: 'todos', label: 'Todos' },
+  { id: 'bateria_baja', label: 'Batería baja' },
+  { id: 'sellados', label: 'Sellados' },
+  { id: 'por_reponer', label: 'Por reponer' },
+  { id: 'sin_precio', label: 'Sin precio' },
+  { id: 'sin_costo', label: 'Sin costo' },
+  { id: 'incompletos', label: 'Datos incompletos' },
+];
+
 export default function Stock() {
   const supabase = crearClienteNavegador();
   const actor = useActor();
@@ -80,8 +92,17 @@ export default function Stock() {
   const [imagenesCarpetas, setImagenesCarpetas] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState('');
+  // La búsqueda se filtra sobre esta versión "atrasada" del texto (250ms),
+  // no sobre `busqueda` directamente: escribir sigue sintiéndose instantáneo
+  // en el input, pero filtrar y reagrupar cientos de dispositivos no se
+  // recalcula en cada tecla, solo cuando el usuario hace una pausa.
+  const [busquedaDebounced, setBusquedaDebounced] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setBusquedaDebounced(busqueda), 250);
+    return () => clearTimeout(t);
+  }, [busqueda]);
   const [vista, setVista] = useState<'stock' | 'vendidos'>('stock');
-  const [filtroRapido, setFiltroRapido] = useState<'todos' | 'incompletos'>('todos');
+  const [filtroRapido, setFiltroRapido] = useState<FiltroRapido>('todos');
 
   const [productos, setProductos] = useState<Producto[]>([]);
   const [loadingProductos, setLoadingProductos] = useState(true);
@@ -108,6 +129,8 @@ export default function Stock() {
   } | null>(null);
   const inputImportRef = useRef<HTMLInputElement>(null);
 
+  const [menuAbierto, setMenuAbierto] = useState<'agregar' | 'mas' | null>(null);
+
   const [modoSeleccion, setModoSeleccion] = useState(false);
   const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
   const [eliminandoSeleccion, setEliminandoSeleccion] = useState(false);
@@ -124,6 +147,9 @@ export default function Stock() {
   }, [vista]);
 
   const grupoExpandido = (modelo: string) => {
+    // Buscando, siempre expandido: así se ven los resultados sin tener que
+    // ir tocando carpeta por carpeta.
+    if (busquedaDebounced.trim()) return true;
     const porDefecto = vista !== 'vendidos';
     return gruposAlternados.has(modelo) ? !porDefecto : porDefecto;
   };
@@ -352,28 +378,73 @@ export default function Stock() {
     cargarProductos();
   }, []);
 
+  // Para la alerta de reposición contamos el stock real de cada modelo,
+  // sin importar qué pestaña (En stock / Historial) esté activa. Se necesita
+  // antes que "filtrados" porque la vista rápida "Por reponer" lo usa.
+  const conteoEnStockPorModelo = useMemo(() => {
+    const mapa = new Map<string, number>();
+    for (const d of dispositivos) {
+      if (!d.en_stock) continue;
+      const clave = d.modelo || 'Sin modelo';
+      mapa.set(clave, (mapa.get(clave) ?? 0) + 1);
+    }
+    return mapa;
+  }, [dispositivos]);
+
   // Un dispositivo en stock cuenta como "dato incompleto" si le falta algo
   // relevante para venderlo bien: precio, costo, color o capacidad. Se usa
-  // acá (para el filtro rápido) y en el indicador financiero de abajo.
+  // en la vista rápida y en el indicador financiero de más arriba.
   const dispositivoIncompleto = (d: Dispositivo) => d.precio == null || d.costo == null || !d.color || !d.capacidad_gb;
 
+  const cumpleFiltroRapido = (d: Dispositivo) => {
+    switch (filtroRapido) {
+      case 'bateria_baja':
+        return d.salud_bateria != null && d.salud_bateria < 80;
+      case 'sellados':
+        return d.estado === 'sellado';
+      case 'por_reponer':
+        return d.en_stock && (conteoEnStockPorModelo.get(d.modelo || 'Sin modelo') ?? 0) < 3;
+      case 'sin_precio':
+        return d.precio == null;
+      case 'sin_costo':
+        return d.costo == null;
+      case 'incompletos':
+        return dispositivoIncompleto(d);
+      default:
+        return true;
+    }
+  };
+
   const filtrados = useMemo(() => {
-    const q = busqueda.trim().toLowerCase();
+    const q = busquedaDebounced.trim().toLowerCase();
+    const qImei = q.replace(/\s+/g, '');
     return dispositivos.filter((d) => {
       if (vista === 'stock' && !d.en_stock) return false;
       if (vista === 'vendidos' && d.en_stock) return false;
-      if (filtroRapido === 'incompletos' && !dispositivoIncompleto(d)) return false;
+      if (!cumpleFiltroRapido(d)) return false;
       if (!q) return true;
-      return [d.modelo, d.imei, d.numero_serie, d.color]
-        .filter(Boolean)
-        .some((campo) => campo!.toLowerCase().includes(q));
+      // Modelo, serie y color con espacios normales; el IMEI se compara
+      // también sin espacios (así encuentra uno pegado de Ajustes del
+      // iPhone, que a veces lo copia con espacios adentro).
+      const campos = [d.modelo, d.numero_serie, d.color, puedeVerCapital ? d.proveedor : null].filter(Boolean) as string[];
+      if (campos.some((campo) => campo.toLowerCase().includes(q))) return true;
+      if (d.imei && qImei.length >= 3 && d.imei.replace(/\s+/g, '').toLowerCase().includes(qImei)) return true;
+      return false;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dispositivos, busqueda, vista, filtroRapido]);
+  }, [dispositivos, busquedaDebounced, vista, filtroRapido, conteoEnStockPorModelo, puedeVerCapital]);
+
+  // Si la búsqueda es un IMEI exacto, esa carpeta pasa primera en la lista
+  // — no hace falta buscar entre las demás para encontrar el equipo.
+  const imeiExactoModelo = useMemo(() => {
+    const q = busquedaDebounced.trim().replace(/\s+/g, '');
+    if (q.length < 6) return null;
+    return dispositivos.find((d) => d.imei && d.imei.replace(/\s+/g, '') === q)?.modelo ?? null;
+  }, [dispositivos, busquedaDebounced]);
 
   const grupos = useMemo(() => {
     const mapa = new Map<string, Dispositivo[]>();
-    if (!busqueda.trim() && vista !== 'vendidos') {
+    if (!busquedaDebounced.trim() && filtroRapido === 'todos' && vista !== 'vendidos') {
       for (const nombre of carpetas) mapa.set(nombre, []);
     }
     for (const d of filtrados) {
@@ -387,20 +458,15 @@ export default function Stock() {
     for (const lista of mapa.values()) {
       lista.sort((a, b) => (a.capacidad_gb ?? Infinity) - (b.capacidad_gb ?? Infinity));
     }
-    return Array.from(mapa.entries()).sort(([a], [b]) => a.localeCompare(b));
-  }, [filtrados, carpetas, busqueda, vista]);
-
-  // Para la alerta de reposición contamos el stock real de cada modelo,
-  // sin importar qué pestaña (En stock / Historial) esté activa.
-  const conteoEnStockPorModelo = useMemo(() => {
-    const mapa = new Map<string, number>();
-    for (const d of dispositivos) {
-      if (!d.en_stock) continue;
-      const clave = d.modelo || 'Sin modelo';
-      mapa.set(clave, (mapa.get(clave) ?? 0) + 1);
+    const ordenado = Array.from(mapa.entries()).sort(([a], [b]) => a.localeCompare(b));
+    const clave = imeiExactoModelo || 'Sin modelo';
+    const idx = imeiExactoModelo != null ? ordenado.findIndex(([nombre]) => nombre === clave) : -1;
+    if (idx > 0) {
+      const [grupo] = ordenado.splice(idx, 1);
+      ordenado.unshift(grupo);
     }
-    return mapa;
-  }, [dispositivos]);
+    return ordenado;
+  }, [filtrados, carpetas, busquedaDebounced, vista, filtroRapido, imeiExactoModelo]);
 
   // Capital invertido en stock: celulares en stock + accesorios (cantidad ×
   // costo/precio). A diferencia de antes, un campo AUSENTE (null) ya no se
@@ -560,17 +626,108 @@ export default function Stock() {
 
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
-      <header className="flex items-center gap-3">
-        <Link href="/" className="text-2xl leading-none">
+      <header className="flex items-start gap-3">
+        <Link href="/" className="text-2xl leading-none shrink-0">
           &larr;
         </Link>
-        <span className="text-lg font-medium mr-auto">Stock</span>
+        <div className="min-w-0 mr-auto">
+          <p className="text-lg font-medium leading-tight">Stock</p>
+          <p className="text-xs text-muted dark:text-dark-text-secondary truncate">
+            {tab === 'celulares'
+              ? vista === 'stock'
+                ? `${capital.unidadesCel} dispositivo${capital.unidadesCel === 1 ? '' : 's'} disponible${capital.unidadesCel === 1 ? '' : 's'}`
+                : `${dispositivos.length - capital.unidadesCel} dispositivo${dispositivos.length - capital.unidadesCel === 1 ? '' : 's'} vendido${dispositivos.length - capital.unidadesCel === 1 ? '' : 's'}`
+              : `${productos.length} accesorio${productos.length === 1 ? '' : 's'} en catálogo`}
+          </p>
+        </div>
+
         {tab === 'celulares' && (
-          <Link href="/stock/carpetas" className="text-xs text-accent dark:text-dark-accent underline">
-            Carpetas
-          </Link>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {puedeAgregarStock && (
+              <div className="relative">
+                <button
+                  onClick={() => setMenuAbierto(menuAbierto === 'agregar' ? null : 'agregar')}
+                  className="rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors px-3 py-2 text-xs font-medium text-white"
+                >
+                  + Agregar
+                </button>
+                {menuAbierto === 'agregar' && (
+                  <div className="absolute right-0 top-full mt-1.5 w-44 rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-elevated py-1 z-30">
+                    <Link
+                      href="/stock/nuevo"
+                      onClick={() => setMenuAbierto(null)}
+                      className="block px-3.5 py-2.5 text-sm hover:bg-canvas dark:hover:bg-dark-bg"
+                    >
+                      Cargar a mano
+                    </Link>
+                    <Link
+                      href="/stock/foto"
+                      onClick={() => setMenuAbierto(null)}
+                      className="block px-3.5 py-2.5 text-sm hover:bg-canvas dark:hover:bg-dark-bg"
+                    >
+                      Cargar con foto
+                    </Link>
+                  </div>
+                )}
+              </div>
+            )}
+            <div className="relative">
+              <button
+                onClick={() => setMenuAbierto(menuAbierto === 'mas' ? null : 'mas')}
+                className="rounded-lg border border-border dark:border-dark-border px-2.5 py-2 text-sm leading-none"
+                aria-label="Más acciones"
+              >
+                ···
+              </button>
+              {menuAbierto === 'mas' && (
+                <div className="absolute right-0 top-full mt-1.5 w-52 rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-elevated py-1 z-30 flex flex-col">
+                  {puedeAgregarStock && (
+                    <label className="px-3.5 py-2.5 text-sm hover:bg-canvas dark:hover:bg-dark-bg cursor-pointer">
+                      {preparando
+                        ? 'Leyendo archivo...'
+                        : importando
+                        ? progresoImport
+                          ? `Importando... ${progresoImport.hechas}/${progresoImport.total}`
+                          : 'Importando...'
+                        : 'Importar CSV'}
+                      <input
+                        ref={inputImportRef}
+                        type="file"
+                        accept=".csv"
+                        className="hidden"
+                        disabled={preparando || importando}
+                        onChange={(e) => {
+                          setMenuAbierto(null);
+                          prepararImportacion(e);
+                        }}
+                      />
+                    </label>
+                  )}
+                  <button
+                    onClick={() => {
+                      setMenuAbierto(null);
+                      exportarDispositivos();
+                    }}
+                    disabled={dispositivos.length === 0}
+                    className="px-3.5 py-2.5 text-sm text-left hover:bg-canvas dark:hover:bg-dark-bg disabled:opacity-40"
+                  >
+                    Exportar CSV
+                  </button>
+                  <Link
+                    href="/stock/carpetas"
+                    onClick={() => setMenuAbierto(null)}
+                    className="px-3.5 py-2.5 text-sm hover:bg-canvas dark:hover:bg-dark-bg"
+                  >
+                    Administrar carpetas
+                  </Link>
+                </div>
+              )}
+            </div>
+          </div>
         )}
       </header>
+
+      {menuAbierto && <div className="fixed inset-0 z-20" onClick={() => setMenuAbierto(null)} />}
 
       {puedeVerCapital && (
         <div className="rounded-2xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-4">
@@ -646,91 +803,67 @@ export default function Stock() {
         </button>
       </div>
 
-      {filtroRapido === 'incompletos' && (
-        <div className="flex items-center gap-2 self-start rounded-full bg-warn/10 text-warn text-xs font-medium pl-3 pr-1 py-1">
-          Con datos incompletos
-          <button
-            onClick={() => setFiltroRapido('todos')}
-            className="h-5 w-5 rounded-full hover:bg-warn/15 flex items-center justify-center"
-            aria-label="Quitar filtro"
-          >
-            ✕
-          </button>
-        </div>
-      )}
-
       {tab === 'celulares' ? (
         <>
-          <input
-            value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
-            placeholder="Buscar por modelo, IMEI, serie, código..."
-            className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
-          />
-
-          <div className="flex items-center gap-2 text-sm">
-            <button
-              onClick={() => setVista('stock')}
-              className={`flex-1 rounded-xl py-2 font-medium ${
-                vista === 'stock' ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
-              }`}
-            >
-              En stock
-            </button>
-            <button
-              onClick={() => setVista('vendidos')}
-              className={`flex-1 rounded-xl py-2 font-medium ${
-                vista === 'vendidos' ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
-              }`}
-            >
-              Vendidos
-            </button>
-          </div>
-
-          {puedeAgregarStock && (
-            <div className="flex gap-2">
-              <Link
-                href="/stock/nuevo"
-                className="flex-1 rounded-2xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium"
-              >
-                + Cargar a mano
-              </Link>
-              <Link
-                href="/stock/foto"
-                className="flex-1 rounded-2xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium"
-              >
-                + Cargar con foto
-              </Link>
+          <div className="sticky top-0 z-10 -mx-6 px-6 py-2.5 bg-canvas dark:bg-dark-bg flex flex-col gap-2.5 border-b border-border/60 dark:border-dark-border/60">
+            <div className="relative">
+              <input
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+                placeholder="Buscar por modelo, IMEI, serie, código, color o proveedor…"
+                className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl pl-4 pr-9 py-3 text-sm"
+              />
+              {busqueda && (
+                <button
+                  onClick={() => setBusqueda('')}
+                  aria-label="Limpiar búsqueda"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 h-6 w-6 rounded-full text-muted dark:text-dark-text-secondary hover:bg-canvas dark:hover:bg-dark-bg flex items-center justify-center"
+                >
+                  ✕
+                </button>
+              )}
             </div>
-          )}
 
-          <div className="flex gap-2">
-            {puedeAgregarStock && (
-              <label className="flex-1 rounded-xl border border-border dark:border-dark-border py-2.5 text-center text-xs font-medium cursor-pointer">
-                {preparando
-                  ? 'Leyendo archivo...'
-                  : importando
-                  ? progresoImport
-                    ? `Importando... ${progresoImport.hechas}/${progresoImport.total}`
-                    : 'Importando...'
-                  : '⬆ Importar CSV'}
-                <input
-                  ref={inputImportRef}
-                  type="file"
-                  accept=".csv"
-                  className="hidden"
-                  disabled={preparando || importando}
-                  onChange={prepararImportacion}
-                />
-              </label>
+            {busquedaDebounced.trim() && (
+              <p className="text-xs text-muted dark:text-dark-text-secondary">
+                {filtrados.length} resultado{filtrados.length === 1 ? '' : 's'}
+              </p>
             )}
-            <button
-              onClick={exportarDispositivos}
-              disabled={dispositivos.length === 0}
-              className="flex-1 rounded-xl border border-border dark:border-dark-border py-2.5 text-center text-xs font-medium disabled:opacity-40"
-            >
-              ⬇ Exportar CSV
-            </button>
+
+            <div className="flex items-center gap-1 self-start rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface p-1 text-sm shrink-0">
+              <button
+                onClick={() => setVista('stock')}
+                className={`rounded-lg px-3 py-1.5 font-medium transition-colors ${
+                  vista === 'stock' ? 'bg-accent dark:bg-dark-accent text-white' : 'text-ink dark:text-dark-text'
+                }`}
+              >
+                En stock <span className="opacity-70">{capital.unidadesCel}</span>
+              </button>
+              <button
+                onClick={() => setVista('vendidos')}
+                className={`rounded-lg px-3 py-1.5 font-medium transition-colors ${
+                  vista === 'vendidos' ? 'bg-accent dark:bg-dark-accent text-white' : 'text-ink dark:text-dark-text'
+                }`}
+              >
+                Vendidos <span className="opacity-70">{dispositivos.length - capital.unidadesCel}</span>
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2 text-xs overflow-x-auto">
+              {VISTAS_RAPIDAS.map((v) => (
+                <button
+                  key={v.id}
+                  onClick={() => setFiltroRapido(v.id)}
+                  className={`shrink-0 rounded-full px-3 py-1.5 font-medium ${
+                    filtroRapido === v.id
+                      ? 'bg-accent dark:bg-dark-accent text-white'
+                      : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
+                  }`}
+                >
+                  {v.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {planImport && puedeAgregarStock && (
