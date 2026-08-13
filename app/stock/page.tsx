@@ -11,6 +11,7 @@ import { getActor, useActor } from '../lib/actor';
 import { tienePermiso } from '../lib/permisos';
 import { leerCSV, valorDe, descargarCSV, insertarEnTandas } from '../lib/csv';
 import { obtenerTodasLasFilas } from '../lib/db';
+import { asegurarModelo, normalizarNombreModelo } from '../lib/modelos';
 import { sanitizarDecimal } from '../lib/numeros';
 import MiniaturaDispositivo from '../MiniaturaDispositivo';
 
@@ -372,6 +373,8 @@ export default function Stock() {
   const salirDeSeleccion = () => {
     setModoSeleccion(false);
     setSeleccionados(new Set());
+    setMoviendoCarpeta(false);
+    setCarpetaDestino('');
   };
 
   const eliminarSeleccionados = async () => {
@@ -397,6 +400,63 @@ export default function Stock() {
     setEliminandoSeleccion(false);
     salirDeSeleccion();
     cargarDispositivos();
+  };
+
+  // Resto de la barra contextual de selección múltiple: marcar stock, mover
+  // de carpeta, exportar. `procesandoSeleccion` es compartido por las tres
+  // (no corren a la vez, alcanza con un solo flag para deshabilitar botones).
+  const [procesandoSeleccion, setProcesandoSeleccion] = useState(false);
+  const [moviendoCarpeta, setMoviendoCarpeta] = useState(false);
+  const [carpetaDestino, setCarpetaDestino] = useState('');
+
+  const marcarStockSeleccionados = async (enStock: boolean) => {
+    if (!puedeAgregarStock) return;
+    const ids = Array.from(seleccionados);
+    if (ids.length === 0) return;
+    setProcesandoSeleccion(true);
+    const { error } = await supabase
+      .from('dispositivos')
+      .update({ en_stock: enStock, ...(enStock ? { en_stock_desde: new Date().toISOString(), alerta_stock_enviada: false } : {}) })
+      .in('id', ids);
+    if (!error) {
+      await registrarAuditoria(supabase, {
+        accion: `marcó ${ids.length} dispositivo${ids.length === 1 ? '' : 's'} como ${enStock ? 'en stock' : 'fuera de stock'} (selección múltiple)`,
+        entidad: 'dispositivo',
+      });
+      salirDeSeleccion();
+      cargarDispositivos();
+    }
+    setProcesandoSeleccion(false);
+  };
+
+  const moverSeleccionadosACarpeta = async () => {
+    if (!puedeAgregarStock) return;
+    const destino = normalizarNombreModelo(carpetaDestino.trim());
+    const ids = Array.from(seleccionados);
+    if (!destino || ids.length === 0) return;
+    setProcesandoSeleccion(true);
+    const { error } = await supabase.from('dispositivos').update({ modelo: destino }).in('id', ids);
+    if (!error) {
+      await asegurarModelo(supabase, destino);
+      await registrarAuditoria(supabase, {
+        accion: `movió ${ids.length} dispositivo${ids.length === 1 ? '' : 's'} a la carpeta "${destino}" (selección múltiple)`,
+        entidad: 'dispositivo',
+      });
+      setMoviendoCarpeta(false);
+      setCarpetaDestino('');
+      salirDeSeleccion();
+      cargarDispositivos();
+    }
+    setProcesandoSeleccion(false);
+  };
+
+  const exportarSeleccionados = () => {
+    const elegidos = dispositivos.filter((d) => seleccionados.has(d.id));
+    descargarCSV(
+      'stock-seleccion-qovento.csv',
+      ['modelo', 'capacidad_gb', 'color', 'imei', 'numero_serie', 'salud_bateria', 'precio', 'costo', 'proveedor', 'estado', 'en_stock', 'created_at'],
+      elegidos
+    );
   };
 
   // Acciones rápidas por dispositivo (menú "···" de cada fila) — mismas
@@ -1023,23 +1083,88 @@ export default function Stock() {
           )}
 
           {modoSeleccion ? (
-            <div className="sticky top-0 z-10 rounded-xl border border-accent/30 dark:border-dark-accent/30 bg-accent-soft dark:bg-dark-accent-soft px-4 py-2.5 flex items-center justify-between gap-2">
-              <p className="text-sm font-medium">{seleccionados.size} seleccionado{seleccionados.size === 1 ? '' : 's'}</p>
-              <div className="flex items-center gap-2">
+            <div className="sticky top-0 z-10 rounded-xl border border-accent/30 dark:border-dark-accent/30 bg-accent-soft dark:bg-dark-accent-soft px-4 py-3 flex flex-col gap-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-medium">{seleccionados.size} seleccionado{seleccionados.size === 1 ? '' : 's'}</p>
                 <button onClick={salirDeSeleccion} className="text-xs text-muted dark:text-dark-text-secondary underline">
                   Cancelar
                 </button>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                {puedeAgregarStock && (
+                  <>
+                    <button
+                      onClick={() => marcarStockSeleccionados(true)}
+                      disabled={seleccionados.size === 0 || procesandoSeleccion}
+                      className="rounded-lg bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-xs font-medium px-3 py-1.5 disabled:opacity-40"
+                    >
+                      Marcar en stock
+                    </button>
+                    <button
+                      onClick={() => marcarStockSeleccionados(false)}
+                      disabled={seleccionados.size === 0 || procesandoSeleccion}
+                      className="rounded-lg bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-xs font-medium px-3 py-1.5 disabled:opacity-40"
+                    >
+                      Marcar fuera de stock
+                    </button>
+                    <button
+                      onClick={() => setMoviendoCarpeta((v) => !v)}
+                      disabled={seleccionados.size === 0}
+                      className="rounded-lg bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-xs font-medium px-3 py-1.5 disabled:opacity-40"
+                    >
+                      Mover de carpeta
+                    </button>
+                  </>
+                )}
                 <button
-                  onClick={eliminarSeleccionados}
-                  disabled={seleccionados.size === 0 || eliminandoSeleccion}
-                  className="rounded-lg bg-bad text-white text-xs font-medium px-3 py-1.5 disabled:opacity-40"
+                  onClick={exportarSeleccionados}
+                  disabled={seleccionados.size === 0}
+                  className="rounded-lg bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-xs font-medium px-3 py-1.5 disabled:opacity-40"
                 >
-                  {eliminandoSeleccion ? 'Eliminando...' : 'Eliminar'}
+                  Exportar seleccionados
                 </button>
               </div>
+
+              {moviendoCarpeta && (
+                <div className="flex items-center gap-2">
+                  <input
+                    value={carpetaDestino}
+                    onChange={(e) => setCarpetaDestino(e.target.value)}
+                    list="carpetas-mover-seleccion"
+                    placeholder="Carpeta destino (ej. iPhone 13)"
+                    autoFocus
+                    className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                  />
+                  <datalist id="carpetas-mover-seleccion">
+                    {carpetas.map((c) => (
+                      <option key={c} value={c} />
+                    ))}
+                  </datalist>
+                  <button
+                    onClick={moverSeleccionadosACarpeta}
+                    disabled={!carpetaDestino.trim() || procesandoSeleccion}
+                    className="rounded-lg bg-accent dark:bg-dark-accent text-white text-xs font-medium px-3 py-2 disabled:opacity-40 shrink-0"
+                  >
+                    Mover
+                  </button>
+                </div>
+              )}
+
+              {puedeEliminar && (
+                <div className="pt-1.5 border-t border-accent/20 dark:border-dark-accent/20 flex justify-end">
+                  <button
+                    onClick={eliminarSeleccionados}
+                    disabled={seleccionados.size === 0 || eliminandoSeleccion}
+                    className="rounded-lg bg-bad text-white text-xs font-medium px-3 py-1.5 disabled:opacity-40"
+                  >
+                    {eliminandoSeleccion ? 'Eliminando...' : 'Eliminar'}
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
-            puedeEliminar && (
+            (puedeEliminar || puedeAgregarStock) && (
               <button
                 onClick={() => setModoSeleccion(true)}
                 className="self-start text-xs text-accent dark:text-dark-accent underline"
