@@ -19,6 +19,12 @@ type Orden = {
   orden_items: { descripcion: string; tipo: string }[];
 };
 
+// Plan canje del dispositivo que el cliente entregó como parte de pago —
+// vive en su propia tabla (no en orden_items), así que sin esto una orden
+// solo se podía encontrar buscando el equipo que se LLEVÓ, nunca el que
+// dejó a cambio.
+type CanjeOrden = { orden_id: string | null; modelo: string | null; imei: string | null; color: string | null };
+
 // Reparaciones que el técnico ya marcó "listo para entregar" y todavía no se
 // cobraron: el vendedor genera la boleta desde acá. Traemos todos los campos
 // (select *) porque son poquitas filas y el helper necesita el checklist para
@@ -58,6 +64,7 @@ export default function Ordenes() {
   const actor = useActor();
   const puedeVender = tienePermiso(actor, 'vender');
   const [ordenes, setOrdenes] = useState<Orden[]>([]);
+  const [canjes, setCanjes] = useState<CanjeOrden[]>([]);
   const [reparacionesListas, setReparacionesListas] = useState<ReparacionLista[]>([]);
   const [generando, setGenerando] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -66,7 +73,7 @@ export default function Ordenes() {
   const [busqueda, setBusqueda] = useState('');
 
   const cargar = async () => {
-    const [{ data: ordenesData }, { data: listasData }] = await Promise.all([
+    const [{ data: ordenesData }, { data: listasData }, { data: canjesData }] = await Promise.all([
       supabase
         .from('ordenes')
         .select('*, clientes ( nombre, apellido ), orden_items ( descripcion, tipo )')
@@ -78,9 +85,13 @@ export default function Ordenes() {
         .eq('estado', 'listo_para_entregar')
         .not('cliente_id', 'is', null)
         .order('fecha_reparado', { ascending: true }),
+      // Plan canje de cada orden, para poder buscar por el equipo que el
+      // cliente entregó (no solo por el que se llevó).
+      supabase.from('canjes').select('orden_id, modelo, imei, color').not('orden_id', 'is', null),
     ]);
     setOrdenes((ordenesData as any) ?? []);
     setReparacionesListas((listasData as any) ?? []);
+    setCanjes((canjesData as CanjeOrden[]) ?? []);
     setLoading(false);
   };
 
@@ -107,6 +118,17 @@ export default function Ordenes() {
     router.push(`/ordenes/${ordenId}`);
   };
 
+  const canjesPorOrden = useMemo(() => {
+    const mapa = new Map<string, CanjeOrden[]>();
+    for (const c of canjes) {
+      if (!c.orden_id) continue;
+      const arr = mapa.get(c.orden_id) ?? [];
+      arr.push(c);
+      mapa.set(c.orden_id, arr);
+    }
+    return mapa;
+  }, [canjes]);
+
   const filtradas = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
     return ordenes
@@ -122,9 +144,17 @@ export default function Ordenes() {
         // 15 128GB Verde · IMEI 359..."), así que buscar en la descripción
         // también busca por esos datos sin tener que parsearlos aparte.
         const itemsTexto = o.orden_items.map((i) => i.descripcion.toLowerCase()).join(' ');
-        return nombreCliente.includes(q) || itemsTexto.includes(q);
+        // El dispositivo que el cliente ENTREGÓ como plan canje vive aparte
+        // (tabla canjes), no en orden_items — sin esto, una orden con canje
+        // solo se podía encontrar buscando el equipo que se llevó, nunca el
+        // que dejó a cambio.
+        const canjesTexto = (canjesPorOrden.get(o.id) ?? [])
+          .map((c) => [c.modelo, c.imei, c.color].filter(Boolean).join(' '))
+          .join(' ')
+          .toLowerCase();
+        return nombreCliente.includes(q) || itemsTexto.includes(q) || canjesTexto.includes(q);
       });
-  }, [ordenes, filtroEstado, filtroTipo, busqueda]);
+  }, [ordenes, filtroEstado, filtroTipo, busqueda, canjesPorOrden]);
 
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
@@ -138,7 +168,7 @@ export default function Ordenes() {
       <input
         value={busqueda}
         onChange={(e) => setBusqueda(e.target.value)}
-        placeholder="Buscar por cliente, modelo o IMEI..."
+        placeholder="Buscar por cliente, modelo, IMEI o plan canje..."
         className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
       />
 
@@ -254,6 +284,11 @@ export default function Ordenes() {
               <p className="text-xs text-muted dark:text-dark-text-secondary">
                 {o.clientes ? `${o.clientes.nombre} ${o.clientes.apellido || ''}` : 'Sin cliente'}
               </p>
+              {(canjesPorOrden.get(o.id) ?? []).length > 0 && (
+                <p className="text-[11px] text-accent dark:text-dark-accent mt-0.5">
+                  🔄 Canje: {(canjesPorOrden.get(o.id) ?? []).map((c) => c.modelo || 'equipo').join(', ')}
+                </p>
+              )}
             </div>
             <div className="text-right">
               {o.total != null && <p className="text-sm font-medium">${o.total.toLocaleString('es-AR')}</p>}
