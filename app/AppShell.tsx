@@ -39,6 +39,7 @@ const NAV = [
   { href: '/plan-ahorro', label: 'Plan de ahorro', icono: 'ahorro' },
   { href: '/estadisticas', label: 'Estadísticas', icono: 'estadisticas' },
   { href: '/configuracion', label: 'Configuración', icono: 'configuracion' },
+  { href: '/configuracion/soporte', label: 'Soporte', icono: 'soporte' },
 ];
 
 export default function AppShell({ children }: { children: React.ReactNode }) {

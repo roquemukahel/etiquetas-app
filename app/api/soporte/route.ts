@@ -5,9 +5,11 @@ const EMAIL_DESTINO = 'qovento@gmail.com';
 
 export async function POST(req: NextRequest) {
   try {
-    const { nombre, apellido, contacto, mensaje } = await req.json();
+    const { nombre, apellido, email, telefono, mensaje } = await req.json();
 
-    if (!nombre?.trim() || !mensaje?.trim()) {
+    const emailLimpio = (email ?? '').trim();
+    const emailValido = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailLimpio);
+    if (!nombre?.trim() || !emailValido || !mensaje?.trim()) {
       return NextResponse.json({ error: 'Faltan datos' }, { status: 400 });
     }
 
@@ -17,8 +19,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No configurado' }, { status: 500 });
     }
 
-    const contactoLimpio = (contacto ?? '').trim();
-    const contactoEsEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactoLimpio);
+    const telefonoLimpio = (telefono ?? '').trim();
 
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -29,9 +30,9 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({
         from: 'Qovento Soporte <onboarding@resend.dev>',
         to: EMAIL_DESTINO,
-        ...(contactoEsEmail ? { reply_to: contactoLimpio } : {}),
+        reply_to: emailLimpio,
         subject: `Nuevo mensaje de soporte — ${nombre} ${apellido || ''}`.trim(),
-        text: `Nombre: ${nombre} ${apellido || ''}\nContacto: ${contactoLimpio || 'no dejó'}\n\nMensaje:\n${mensaje}`,
+        text: `Nombre: ${nombre} ${apellido || ''}\nEmail: ${emailLimpio}\nTeléfono: ${telefonoLimpio || 'no dejó'}\n\nMensaje:\n${mensaje}`,
       }),
     });
 

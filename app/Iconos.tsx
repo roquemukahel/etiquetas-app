@@ -114,4 +114,11 @@ export const ICONOS: Record<string, React.ReactNode> = {
       <path d="M7 18v1.5M11 18v1.5" />
     </IconoBase>
   ),
+  soporte: (
+    <IconoBase>
+      <path d="M4 12a8 8 0 1 1 3.2 6.4L4 20l1.2-3.5A7.96 7.96 0 0 1 4 12Z" />
+      <path d="M12 8.5a2 2 0 0 1 2 2c0 1.3-2 1.6-2 3" />
+      <circle cx="12" cy="15.8" r="0.6" fill="currentColor" stroke="none" />
+    </IconoBase>
+  ),
 };

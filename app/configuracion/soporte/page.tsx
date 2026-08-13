@@ -6,13 +6,15 @@ import Link from 'next/link';
 export default function Soporte() {
   const [nombre, setNombre] = useState('');
   const [apellido, setApellido] = useState('');
-  const [contacto, setContacto] = useState('');
+  const [email, setEmail] = useState('');
+  const [telefono, setTelefono] = useState('');
   const [mensaje, setMensaje] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [enviado, setEnviado] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const puedeEnviar = nombre.trim().length > 0 && mensaje.trim().length > 0;
+  const emailValido = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const puedeEnviar = nombre.trim().length > 0 && emailValido && mensaje.trim().length > 0;
 
   const handleEnviar = async () => {
     if (!puedeEnviar) return;
@@ -22,7 +24,7 @@ export default function Soporte() {
       const res = await fetch('/api/soporte', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nombre, apellido, contacto, mensaje }),
+        body: JSON.stringify({ nombre, apellido, email, telefono, mensaje }),
       });
       if (!res.ok) throw new Error();
       setEnviado(true);
@@ -41,8 +43,8 @@ export default function Soporte() {
         <p className="text-sm text-muted dark:text-dark-text-secondary max-w-xs">
           Recibimos tu mensaje y te vamos a responder a la brevedad.
         </p>
-        <Link href="/configuracion" className="text-sm text-accent dark:text-dark-accent underline">
-          Volver a Configuración
+        <Link href="/" className="text-sm text-accent dark:text-dark-accent underline">
+          Volver al inicio
         </Link>
       </main>
     );
@@ -51,7 +53,7 @@ export default function Soporte() {
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
       <header className="flex items-center gap-3">
-        <Link href="/configuracion" className="text-2xl leading-none">
+        <Link href="/" className="text-2xl leading-none">
           &larr;
         </Link>
         <span className="text-lg font-medium">Soporte</span>
@@ -66,7 +68,20 @@ export default function Soporte() {
       <div className="flex flex-col gap-3">
         <Campo label="Nombre" valor={nombre} onChange={setNombre} />
         <Campo label="Apellido" valor={apellido} onChange={setApellido} />
-        <Campo label="Email o teléfono de contacto (opcional)" valor={contacto} onChange={setContacto} />
+        <div>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Email</label>
+          <input
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            type="email"
+            placeholder="tu@email.com"
+            className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+          />
+          {email.trim().length > 0 && !emailValido && (
+            <p className="text-xs text-bad mt-1">Ese email no parece válido.</p>
+          )}
+        </div>
+        <Campo label="Teléfono (opcional)" valor={telefono} onChange={setTelefono} />
         <div>
           <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Mensaje</label>
           <textarea
