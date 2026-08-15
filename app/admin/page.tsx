@@ -22,6 +22,9 @@ type Negocio = {
   fecha_fin_prueba: string | null;
   plan: string | null;
   acceso_manual_hasta: string | null;
+  ultimo_pago_at: string | null;
+  ultimo_pago_monto: number | null;
+  ultimo_pago_moneda: string | null;
   usuarios: Usuario[];
 };
 
@@ -44,6 +47,34 @@ function diasInactivo(iso: string) {
   return Math.floor((Date.now() - new Date(iso).getTime()) / (1000 * 60 * 60 * 24));
 }
 
+// Positivo = faltan N días. Negativo = ya venció hace N días.
+function diasHasta(iso: string) {
+  return Math.ceil((new Date(iso).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+}
+
+// Un solo vencimiento por negocio para mostrar de un vistazo: mientras está
+// en prueba, lo que importa es cuándo termina el trial; una vez pagando, lo
+// que importa es hasta cuándo tiene acceso otorgado (acceso_manual_hasta —
+// null ahí significa que nunca se le puso un plazo, ej. Lemon Squeezy
+// gestiona la renovación sola, así que no hay nada que mostrar como
+// "vence en X" para esos casos).
+function vencimientoDe(n: Negocio): { fecha: string; dias: number } | null {
+  if (n.estado_suscripcion === 'trialing' && n.fecha_fin_prueba) {
+    return { fecha: n.fecha_fin_prueba, dias: diasHasta(n.fecha_fin_prueba) };
+  }
+  if (n.acceso_manual_hasta) {
+    return { fecha: n.acceso_manual_hasta, dias: diasHasta(n.acceso_manual_hasta) };
+  }
+  return null;
+}
+
+function colorVencimiento(dias: number) {
+  if (dias < 0) return 'text-bad font-semibold';
+  if (dias <= 2) return 'text-bad font-medium';
+  if (dias <= 7) return 'text-warn font-medium';
+  return 'text-muted dark:text-dark-text-secondary';
+}
+
 export default function AdminPanel() {
   const supabase = crearClienteNavegador();
   const [autorizado, setAutorizado] = useState<boolean | null>(null);
@@ -51,6 +82,7 @@ export default function AdminPanel() {
   const [comprobantes, setComprobantes] = useState<Comprobante[]>([]);
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState('');
+  const [soloPorVencer, setSoloPorVencer] = useState(false);
   const [procesando, setProcesando] = useState<string | null>(null);
   const [expandido, setExpandido] = useState<string | null>(null);
 
@@ -192,7 +224,18 @@ export default function AdminPanel() {
     cargar();
   };
 
-  const filtrados = negocios.filter((n) => n.nombre.toLowerCase().includes(busqueda.trim().toLowerCase()));
+  const filtrados = negocios
+    .filter((n) => n.nombre.toLowerCase().includes(busqueda.trim().toLowerCase()))
+    .filter((n) => {
+      if (!soloPorVencer) return true;
+      const v = vencimientoDe(n);
+      return v != null && v.dias <= 7;
+    });
+
+  const porVencerCount = negocios.filter((n) => {
+    const v = vencimientoDe(n);
+    return v != null && v.dias <= 7;
+  }).length;
 
   if (autorizado === null || loading) {
     return (
@@ -396,10 +439,20 @@ export default function AdminPanel() {
         className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
       />
 
+      <button
+        onClick={() => setSoloPorVencer((v) => !v)}
+        className={`self-start rounded-full px-3 py-1.5 text-xs font-medium border ${
+          soloPorVencer ? 'bg-warn text-white border-warn' : 'border-border dark:border-dark-border text-muted dark:text-dark-text-secondary'
+        }`}
+      >
+        ⏳ Por vencer en ≤7 días {porVencerCount > 0 ? `(${porVencerCount})` : ''}
+      </button>
+
       <div className="flex flex-col gap-2">
         {filtrados.map((n) => {
           const inactivoHaceDias = diasInactivo(n.ultima_actividad);
           const pocaActividad = inactivoHaceDias > 30;
+          const venc = vencimientoDe(n);
           return (
             <div key={n.id} className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex flex-col gap-2">
               <button onClick={() => toggleExpandir(n)} className="flex items-center justify-between text-left">
@@ -424,10 +477,24 @@ export default function AdminPanel() {
                   <p className="text-xs text-muted dark:text-dark-text-secondary">
                     {n.estado_suscripcion}
                     {n.plan ? ` · ${n.plan}` : ''}
-                    {n.estado_suscripcion === 'trialing' && n.fecha_fin_prueba
-                      ? ` · prueba hasta ${formatearFecha(n.fecha_fin_prueba)}`
-                      : ''}
-                    {n.acceso_manual_hasta ? ` · acceso manual hasta ${formatearFecha(n.acceso_manual_hasta)}` : ''}
+                  </p>
+                  <p className={`text-xs ${venc ? colorVencimiento(venc.dias) : 'text-muted dark:text-dark-text-secondary'}`}>
+                    {venc == null
+                      ? n.estado_suscripcion === 'trialing'
+                        ? 'Sin fecha de fin de prueba'
+                        : 'Sin vencimiento (Lemon Squeezy o acceso indefinido)'
+                      : venc.dias < 0
+                        ? `⚠ Vencido hace ${Math.abs(venc.dias)} día${Math.abs(venc.dias) === 1 ? '' : 's'} (${formatearFecha(venc.fecha)})`
+                        : venc.dias === 0
+                          ? `Vence hoy (${formatearFecha(venc.fecha)})`
+                          : `Vence en ${venc.dias} día${venc.dias === 1 ? '' : 's'} (${formatearFecha(venc.fecha)})`}
+                  </p>
+                  <p className="text-xs text-muted dark:text-dark-text-secondary">
+                    {n.ultimo_pago_at
+                      ? `Último pago: hace ${diasInactivo(n.ultimo_pago_at)} día${diasInactivo(n.ultimo_pago_at) === 1 ? '' : 's'} (${formatearFecha(n.ultimo_pago_at)})${
+                          n.ultimo_pago_monto != null ? ` · ${n.ultimo_pago_monto} ${n.ultimo_pago_moneda ?? ''}`.trim() : ''
+                        }`
+                      : 'Sin pagos registrados'}
                   </p>
                 </div>
                 <div className="text-right">
