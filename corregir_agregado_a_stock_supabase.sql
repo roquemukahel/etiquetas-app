@@ -1,0 +1,14 @@
+-- Corrige un falso positivo del backfill de agregado_a_stock_supabase.sql.
+-- Ese backfill marcaba una reparación como "ya agregada al Stock" si su IMEI
+-- coincidía con CUALQUIER dispositivo ya existente en Stock — pero con datos
+-- de prueba (IMEIs cortos/repetidos tipo "223121321"), esa coincidencia
+-- puede ser pura casualidad, no que ese equipo realmente haya salido de esa
+-- reparación. El resultado: el botón "Agregar al Stock" desaparecía para
+-- siempre en un equipo que en los hechos NUNCA se agregó.
+--
+-- Esta corrección da marcha atrás a esa marca para TODOS (vuelve a false),
+-- confiando en cambio en el aviso de "ya existe un dispositivo con este
+-- IMEI, ¿agregarlo igual?" que ya se muestra al tocar el botón — ese chequeo
+-- es exacto (mismo IMEI, en el momento real del click) y no depende de una
+-- suposición hecha una sola vez en el backfill.
+update reparaciones set agregado_a_stock = false where agregado_a_stock = true;
