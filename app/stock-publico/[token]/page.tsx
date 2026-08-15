@@ -38,7 +38,7 @@ export default function StockPublico() {
 
   if (loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center">
+      <main className="flex min-h-screen items-center justify-center bg-canvas">
         <p className="text-sm text-muted">Cargando...</p>
       </main>
     );
@@ -46,7 +46,7 @@ export default function StockPublico() {
 
   if (!datos) {
     return (
-      <main className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
+      <main className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center bg-canvas">
         <p className="text-2xl">🔍</p>
         <p className="text-sm text-muted">
           No encontramos este stock. Puede que el link esté mal o que el local haya desactivado esta página.
@@ -65,9 +65,15 @@ export default function StockPublico() {
     porModelo.get(clave)!.push(m);
   }
 
+  // bg-canvas/text-ink fijos (sin variantes dark:) en TODO este componente a
+  // propósito: es una página PÚBLICA que ve cualquier cliente con el link, no
+  // tiene por qué heredar el modo oscuro de la cuenta del negocio que la
+  // generó. Eso era justo el bug reportado: si quien mira el link tiene una
+  // sesión propia en modo oscuro, el texto (claro, pensado para fondo oscuro)
+  // quedaba prácticamente invisible sobre las tarjetas blancas de acá.
   return (
-    <main className="flex min-h-screen flex-col items-center px-6 py-10 gap-6">
-      <div className="w-full max-w-xl flex flex-col gap-6">
+    <main className="flex min-h-screen flex-col items-center px-6 py-10 gap-6 bg-canvas">
+      <div className="w-full max-w-xl flex flex-col gap-6 text-ink">
         <div className="flex flex-col items-center gap-2 text-center">
           {datos.logo_url && (
             // eslint-disable-next-line @next/next/no-img-element
