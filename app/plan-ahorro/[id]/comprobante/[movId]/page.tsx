@@ -6,6 +6,8 @@ import { useParams } from 'next/navigation';
 import { crearClienteNavegador } from '../../../../lib/supabase/client';
 import { ESLOGAN } from '../../../../lib/eslogan';
 import EtiquetaSeccion from '../../../../EtiquetaSeccion';
+import { armarLinkWhatsApp, mensajeComprobantePlanAhorro } from '../../../../lib/whatsapp';
+import { codigoLlamada } from '../../../../lib/paises';
 
 type Movimiento = {
   id: string;
@@ -15,6 +17,7 @@ type Movimiento = {
   fecha: string;
   registrado_por_nombre: string | null;
   anulado: boolean;
+  token_publico: string;
 };
 
 type Plan = {
@@ -58,6 +61,7 @@ export default function ComprobantePlanAhorro() {
   const [negocio, setNegocio] = useState<Negocio | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [codigoPais, setCodigoPais] = useState('54');
 
   useEffect(() => {
     (async () => {
@@ -65,7 +69,7 @@ export default function ComprobantePlanAhorro() {
         supabase.from('planes_ahorro').select('id, modelo, capacidad_gb, color, monto_objetivo, clientes ( nombre, apellido, telefono )').eq('id', id).maybeSingle(),
         supabase
           .from('plan_ahorro_movimientos')
-          .select('id, monto, medio, observacion, fecha, registrado_por_nombre, anulado')
+          .select('id, monto, medio, observacion, fecha, registrado_por_nombre, anulado, token_publico')
           .eq('id', movId)
           .single(),
         supabase.from('plan_ahorro_movimientos').select('monto').eq('plan_id', id).eq('anulado', false),
@@ -83,11 +87,12 @@ export default function ComprobantePlanAhorro() {
         const { data: perfil } = await supabase
           .from('perfiles')
           .select(
-            'negocios ( nombre, telefono, direccion, eslogan, logo_url, texto_declaracion_plan_ahorro, texto_declaracion_plan_ahorro_tamano )'
+            'negocios ( nombre, telefono, direccion, eslogan, logo_url, texto_declaracion_plan_ahorro, texto_declaracion_plan_ahorro_tamano, pais )'
           )
           .eq('id', user.id)
           .single();
         setNegocio((perfil as any)?.negocios ?? null);
+        setCodigoPais(codigoLlamada((perfil as any)?.negocios?.pais));
       }
       setLoading(false);
     })();
@@ -117,6 +122,19 @@ export default function ComprobantePlanAhorro() {
   const completo = totalPagado >= plan.monto_objetivo;
   const clienteNombre = plan.clientes ? `${plan.clientes.nombre} ${plan.clientes.apellido || ''}`.trim() : '';
 
+  const linkWhatsApp = plan.clientes?.telefono
+    ? armarLinkWhatsApp(
+        plan.clientes.telefono,
+        mensajeComprobantePlanAhorro(
+          clienteNombre || 'estimado/a',
+          `$${Math.round(movimiento.monto).toLocaleString('es-AR')}`,
+          plan.modelo || 'tu equipo',
+          `${typeof window !== 'undefined' ? window.location.origin : ''}/comprobante-plan-ahorro/${movimiento.token_publico}`
+        ),
+        codigoPais
+      )
+    : null;
+
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4 print:p-0 print:gap-0">
       <header className="no-print flex items-center gap-3 flex-wrap">
@@ -124,6 +142,16 @@ export default function ComprobantePlanAhorro() {
           &larr;
         </Link>
         <span className="text-lg font-display font-semibold mr-auto">Comprobante de pago</span>
+        {linkWhatsApp && (
+          <a
+            href={linkWhatsApp}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-lg border border-good/30 text-good bg-white dark:bg-dark-surface px-3 py-2 text-xs font-medium hover:bg-good/10 transition-colors"
+          >
+            Enviar por WhatsApp
+          </a>
+        )}
         <button
           onClick={() => window.print()}
           className="rounded-lg border border-border dark:border-dark-border bg-white dark:bg-dark-surface text-ink dark:text-dark-text px-3 py-2 text-xs font-medium hover:bg-canvas dark:hover:bg-dark-bg transition-colors"
