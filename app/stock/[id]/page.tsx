@@ -32,6 +32,7 @@ type Dispositivo = {
   en_stock: boolean;
   garantia_vencimiento: string | null;
   agregado_por_nombre: string | null;
+  mostrar_en_stock_publico: boolean;
 };
 
 export default function DetalleDispositivo() {
@@ -127,6 +128,13 @@ export default function DetalleDispositivo() {
         proveedor_id: proveedorId,
         detalles: d.detalles?.trim() || null,
         estado: d.estado,
+        // Condicional a propósito (como en_stock arriba): si todavía no se
+        // corrió la migración de Stock público, esta columna no existe —
+        // mandarla igual rompería TODO el guardado de la ficha, no solo
+        // este campo.
+        ...(d.mostrar_en_stock_publico !== original.mostrar_en_stock_publico
+          ? { mostrar_en_stock_publico: d.mostrar_en_stock_publico }
+          : {}),
         // Solo se toca en_stock si esta pantalla lo cambió a propósito
         // (tocando el botón de abajo). Si no, se deja como está en la
         // base: si alguien lo vendió desde Órdenes mientras esta pantalla
@@ -378,6 +386,16 @@ export default function DetalleDispositivo() {
               className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
             />
           </div>
+
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={d.mostrar_en_stock_publico ?? true}
+              onChange={(e) => campo('mostrar_en_stock_publico', e.target.checked)}
+              className="h-5 w-5 accent-ink"
+            />
+            <span className="text-sm">Mostrar en el stock público (si está activado en Configuración)</span>
+          </label>
 
           {d.en_stock && puedeRecibirServicioTecnico && (
             <div className="pt-1 border-t border-border dark:border-dark-border">
