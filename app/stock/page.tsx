@@ -58,13 +58,20 @@ type Producto = { id: string; nombre: string; precio: number | null; costo: numb
 // por defecto" — se insertan sin precio/costo/cantidad (el dueño los completa
 // después); las fotos viven en /public así no pesan la base de datos.
 const ACCESORIOS_DEFAULT: { nombre: string; imagen: string }[] = [
-  { nombre: 'AirPods Pro', imagen: '/accesorios-default/airpods-pro.webp' },
+  // La foto vieja de "AirPods Pro" (genérica) en realidad era la Pro 3 —
+  // ahora quedan separados porque no son el mismo accesorio.
+  { nombre: 'AirPods Pro 2', imagen: '/accesorios-default/airpods-pro-2.webp' },
+  { nombre: 'AirPods Pro 3', imagen: '/accesorios-default/airpods-pro-3.webp' },
   { nombre: 'AirTag', imagen: '/accesorios-default/airtag.webp' },
   { nombre: 'Auriculares con cable (Lightning)', imagen: '/accesorios-default/auriculares-cable.webp' },
   { nombre: 'Cargador (cabezal + cable USB-C)', imagen: '/accesorios-default/cargador-cabezal-cable.webp' },
+  { nombre: 'Cabezal 20W', imagen: '/accesorios-default/cabezal-20w.webp' },
+  { nombre: 'Cable USB-C a Lightning', imagen: '/accesorios-default/cable-usb-c-lightning.webp' },
   { nombre: 'Cargador de Apple Watch', imagen: '/accesorios-default/cargador-apple-watch.webp' },
   { nombre: 'Adaptador de enchufe', imagen: '/accesorios-default/adaptador-enchufe.webp' },
   { nombre: 'Protector de cámara', imagen: '/accesorios-default/protector-camara.webp' },
+  { nombre: 'Funda transparente', imagen: '/accesorios-default/funda-transparente.webp' },
+  { nombre: 'Funda MagSafe', imagen: '/accesorios-default/funda-magsafe.webp' },
 ];
 
 type FiltroRapido = 'todos' | 'bateria_baja' | 'sellados' | 'por_reponer' | 'sin_precio' | 'sin_costo' | 'incompletos';
