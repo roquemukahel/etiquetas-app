@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { registrarAuditoria } from '../../lib/auditoria';
+import { compararModelosPorSalida } from '../../lib/catalogosMarcas';
 
 type Carpeta = { id: string; nombre: string; imagen_url: string | null };
 
@@ -18,8 +19,12 @@ export default function Carpetas() {
   const [error, setError] = useState<string | null>(null);
 
   const cargar = async () => {
-    const { data } = await supabase.from('modelos_stock').select('*').order('nombre');
-    setCarpetas((data as Carpeta[]) ?? []);
+    const { data } = await supabase.from('modelos_stock').select('*');
+    // Mismo orden cronológico que usa la lista principal de Stock (ver
+    // app/stock/page.tsx), para no mostrar acá un orden distinto al que el
+    // vendedor ya está acostumbrado a buscar.
+    const ordenadas = ((data as Carpeta[]) ?? []).sort((a, b) => compararModelosPorSalida(a.nombre, b.nombre));
+    setCarpetas(ordenadas);
     setLoading(false);
   };
 

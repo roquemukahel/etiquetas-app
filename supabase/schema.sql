@@ -1374,6 +1374,7 @@ create table if not exists reparaciones (
 
   fecha_ingreso_servicio timestamptz not null default now(),
   fecha_reparado timestamptz,
+  agregado_a_stock boolean not null default false, -- si ya se pasó (equipo propio) al Stock
   created_at timestamptz not null default now()
 );
 

@@ -9,16 +9,25 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-const EXTRACTION_PROMPT = `Estás viendo una captura de pantalla de "Información" o "Acerca de" de un iPhone (Ajustes > General > Información).
-Extraé estos datos si están visibles. Si un dato no aparece en la imagen, poné null (no inventes valores).
+const EXTRACTION_PROMPT = `Estás viendo una foto tomada por un vendedor de celulares para cargar rápido un dispositivo al stock. Puede ser cualquiera de estas cosas:
+(a) una captura de pantalla de "Información" de un iPhone (Ajustes > General > Información);
+(b) una etiqueta impresa pegada al dispositivo o a su bolsa (etiqueta de grading/reacondicionado), con datos como modelo, almacenamiento, color abreviado, porcentaje de batería, código de barras e IMEI;
+(c) la CAJA de un iPhone sellado (a estrenar): de frente se ve el modelo y el color impresos en la caja; de atrás se ve el código de barras, el IMEI/número de serie y la capacidad.
+
+Extraé todos los datos que puedas identificar CON CONFIANZA. Si una etiqueta abrevia el color (ej. "Grphte", "MidnGrn", "Strlt"), expandilo a su nombre completo en español (ej. "Grafito", "Verde noche", "Blanco estrella"). Si un dato no aparece en la imagen o no estás seguro, poné null — nunca inventes ni adivines un valor.
+
+Si es una foto de la CAJA de un equipo sellado (a estrenar, con film plástico, sin uso), marcá "sellado": true. En ese caso casi nunca hay un % de batería impreso — dejá "salud_bateria" en null (la app asume 100% para un sellado).
 
 Respondé ÚNICAMENTE con un objeto JSON, sin texto adicional, con esta forma exacta:
 {
   "modelo": string | null,
   "capacidad_gb": number | null,
+  "color": string | null,
   "imei": string | null,
+  "salud_bateria": number | null,
   "numero_serie": string | null,
-  "version_ios": string | null
+  "version_ios": string | null,
+  "sellado": boolean
 }`;
 
 export async function POST(req: NextRequest) {
@@ -61,9 +70,12 @@ export async function POST(req: NextRequest) {
       data = {
         modelo: null,
         capacidad_gb: null,
+        color: null,
         imei: null,
+        salud_bateria: null,
         numero_serie: null,
         version_ios: null,
+        sellado: false,
       };
     }
 

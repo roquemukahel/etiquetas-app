@@ -88,6 +88,7 @@ type Reparacion = {
   token_seguimiento: string;
   fecha_ingreso_servicio: string;
   fecha_reparado: string | null;
+  agregado_a_stock: boolean;
   clientes: { nombre: string; apellido: string | null; telefono: string | null } | null;
 };
 
@@ -110,6 +111,11 @@ export default function FichaReparacion() {
   const supabase = crearClienteNavegador();
   const actor = useActor();
   const puedeGestionar = tienePermiso(actor, 'gestionar_servicio_tecnico');
+  // El agregado a Stock es una actividad distinta de "gestionar la reparación":
+  // un técnico puede tener permiso para trabajar la reparación pero no para
+  // agregar al Stock (esa tarea suele quedar en manos de otra persona, p.ej.
+  // el administrador), así que se chequea con su propio permiso.
+  const puedeAgregarStock = tienePermiso(actor, 'agregar_stock');
 
   const [r, setR] = useState<Reparacion | null>(null);
   const [tecnicos, setTecnicos] = useState<Tecnico[]>([]);
@@ -123,6 +129,7 @@ export default function FichaReparacion() {
   const [notaTexto, setNotaTexto] = useState('');
   const [codigoPais, setCodigoPais] = useState('54');
   const [avisoWhatsApp, setAvisoWhatsApp] = useState<{ link: string; nombre: string } | null>(null);
+  const [avisoAgregarStock, setAvisoAgregarStock] = useState(false);
 
   const [f, setFm] = useState<Record<string, any>>({});
 
@@ -346,7 +353,14 @@ export default function FichaReparacion() {
     if (!r || !puedeGestionar) return;
     setGuardando(true);
     const cambios: any = { estado: nuevoEstado, estado_actualizado_at: new Date().toISOString() };
-    if (nuevoEstado === 'listo_para_entregar' && !r.fecha_reparado) cambios.fecha_reparado = new Date().toISOString();
+    // "Listo para entregar" y "Entregado" cuentan igual como trabajo
+    // terminado del técnico en Estadísticas (ambos se rankean por
+    // fecha_reparado) — algunos arreglos pasan directo a "Entregado" sin
+    // pasar por "Listo para entregar" (ej. un trabajo rápido), y antes de
+    // este chequeo esos quedaban sin fecha_reparado y no sumaban al técnico.
+    if ((nuevoEstado === 'listo_para_entregar' || nuevoEstado === 'entregado') && !r.fecha_reparado) {
+      cambios.fecha_reparado = new Date().toISOString();
+    }
     await supabase.from('reparaciones').update(cambios).eq('id', r.id);
 
     // La orden vinculada (creada al recibir el equipo, ver agregarEquipo)
@@ -385,6 +399,13 @@ export default function FichaReparacion() {
       const nombre = nombreCliente || 'estimado/a';
       const mensaje = mensajeListoServicio(nombre, r.modelo || 'equipo', url);
       setAvisoWhatsApp({ link: armarLinkWhatsApp(r.clientes.telefono, mensaje, codigoPais), nombre });
+    }
+
+    // Equipo propio (sin cliente) que se marca "Entregado" directo desde el
+    // selector de estado, salteando el botón "Agregar al Stock": preguntamos
+    // igual, para no perder el paso. Solo a quien tiene permiso de Stock.
+    if (nuevoEstado === 'entregado' && !r.cliente_id && !r.agregado_a_stock && puedeAgregarStock) {
+      setAvisoAgregarStock(true);
     }
 
     setGuardando(false);
@@ -448,7 +469,7 @@ export default function FichaReparacion() {
   };
 
   const agregarAlStockFicha = async () => {
-    if (!r || !puedeGestionar) return;
+    if (!r || !puedeAgregarStock) return;
     const actor = getActor();
     if (!actor) {
       setError(MENSAJE_ACTOR_REQUERIDO);
@@ -460,6 +481,7 @@ export default function FichaReparacion() {
     }
     if (!confirm('¿Pasar este equipo al Stock como dispositivo disponible para vender?')) return;
     setGuardando(true);
+    setAvisoAgregarStock(false);
     await supabase.from('dispositivos').insert({
       modelo: r.modelo,
       capacidad_gb: r.capacidad_gb,
@@ -471,7 +493,15 @@ export default function FichaReparacion() {
       agregado_por_foto_url: actor?.fotoUrl ?? null,
     });
     await asegurarModelo(supabase, r.modelo);
-    await supabase.from('reparaciones').update({ estado: 'entregado', estado_actualizado_at: new Date().toISOString() }).eq('id', r.id);
+    await supabase
+      .from('reparaciones')
+      .update({
+        estado: 'entregado',
+        estado_actualizado_at: new Date().toISOString(),
+        agregado_a_stock: true,
+        fecha_reparado: r.fecha_reparado ?? new Date().toISOString(),
+      })
+      .eq('id', r.id);
     await registrarAuditoria(supabase, {
       accion: `agregó al Stock un equipo propio reparado en Servicio Técnico (${r.numero_orden || ''}, ${r.modelo || 'sin modelo'}${r.imei ? `, IMEI ${r.imei}` : ''})`,
       entidad: 'reparacion',
@@ -487,7 +517,12 @@ export default function FichaReparacion() {
     setGuardando(true);
     await supabase
       .from('reparaciones')
-      .update({ estado: 'entregado', fecha_entrega: new Date().toISOString(), estado_actualizado_at: new Date().toISOString() })
+      .update({
+        estado: 'entregado',
+        fecha_entrega: new Date().toISOString(),
+        estado_actualizado_at: new Date().toISOString(),
+        fecha_reparado: r.fecha_reparado ?? new Date().toISOString(),
+      })
       .eq('id', r.id);
     // Se entregó sin pasar por "Generar orden de cobro" (ej. reparación
     // gratis) — la orden vinculada queda en $0, pero se marca entregada
@@ -964,25 +999,43 @@ export default function FichaReparacion() {
             </Seccion>
           )}
 
-          {!r.orden_cobro_id && r.estado === 'listo_para_entregar' && puedeGestionar && (
-            r.cliente_id ? (
+          {/* Equipo del cliente sin orden de cobro todavía: tanto en "Listo para
+              entregar" como en "Entregado" (si se saltó el paso, ej. desde el
+              selector de estado) sigue pudiendo generarse la boleta. */}
+          {!r.orden_cobro_id &&
+            puedeGestionar &&
+            r.cliente_id &&
+            (r.estado === 'listo_para_entregar' || r.estado === 'entregado') && (
               <div className="flex gap-2">
-                <button
-                  disabled={guardando}
-                  onClick={marcarEntregadoClienteFicha}
-                  className="flex-1 rounded-2xl bg-good hover:opacity-90 transition-opacity py-3 text-center text-sm font-medium text-white disabled:opacity-40"
-                >
-                  Marcar entregado al cliente
-                </button>
+                {r.estado === 'listo_para_entregar' && (
+                  <button
+                    disabled={guardando}
+                    onClick={marcarEntregadoClienteFicha}
+                    className="flex-1 rounded-2xl bg-good hover:opacity-90 transition-opacity py-3 text-center text-sm font-medium text-white disabled:opacity-40"
+                  >
+                    Marcar entregado al cliente
+                  </button>
+                )}
                 <button
                   disabled={guardando}
                   onClick={generarOrdenCobro}
-                  className="flex-1 rounded-2xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium disabled:opacity-40"
+                  className={`rounded-2xl py-3 text-center text-sm font-medium disabled:opacity-40 ${
+                    r.estado === 'listo_para_entregar'
+                      ? 'flex-1 border border-border dark:border-dark-border'
+                      : 'w-full bg-good hover:opacity-90 transition-opacity text-white'
+                  }`}
                 >
                   Generar orden de cobro
                 </button>
               </div>
-            ) : (
+            )}
+
+          {/* Equipo propio (sin cliente): "Agregar al Stock" queda disponible
+              tanto en "Listo para entregar" como en "Entregado" (antes
+              desaparecía al marcar entregado, aunque nunca se hubiera
+              agregado) — y solo para quien tiene permiso de Stock. */}
+          {!r.cliente_id && (r.estado === 'listo_para_entregar' || r.estado === 'entregado') && !r.agregado_a_stock && (
+            puedeAgregarStock ? (
               <button
                 disabled={guardando}
                 onClick={agregarAlStockFicha}
@@ -990,7 +1043,37 @@ export default function FichaReparacion() {
               >
                 Agregar al Stock
               </button>
+            ) : (
+              r.estado === 'entregado' && (
+                <p className="text-xs text-muted dark:text-dark-text-secondary text-center">
+                  Entregado — el agregado al Stock lo hace quien tiene ese permiso.
+                </p>
+              )
             )
+          )}
+          {!r.cliente_id && r.agregado_a_stock && (
+            <p className="text-xs text-good text-center">✅ Ya se agregó al Stock</p>
+          )}
+
+          {avisoAgregarStock && (
+            <div className="rounded-xl border border-good/30 bg-good/10 p-3 flex flex-col gap-2">
+              <p className="text-sm">¿Agregamos este equipo al Stock ahora?</p>
+              <div className="flex gap-2">
+                <button
+                  disabled={guardando}
+                  onClick={agregarAlStockFicha}
+                  className="flex-1 rounded-lg bg-good text-white text-center py-2 text-sm font-medium disabled:opacity-40"
+                >
+                  Agregar al Stock
+                </button>
+                <button
+                  onClick={() => setAvisoAgregarStock(false)}
+                  className="rounded-lg border border-border dark:border-dark-border px-3 py-2 text-sm font-medium"
+                >
+                  Ahora no
+                </button>
+              </div>
+            </div>
           )}
 
           {r.orden_cobro_id && (

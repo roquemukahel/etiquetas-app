@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { asegurarModelo, sugerirCarpetas } from '../../lib/modelos';
 import { asegurarProveedor } from '../../lib/proveedores';
@@ -29,7 +28,6 @@ function fileToBase64(file: File): Promise<string> {
 }
 
 export default function StockPorFoto() {
-  const router = useRouter();
   const supabase = crearClienteNavegador();
   const actorActual = useActor();
   const puedeAgregarStock = tienePermiso(actorActual, 'agregar_stock');
@@ -50,6 +48,8 @@ export default function StockPorFoto() {
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [leyendoFoto, setLeyendoFoto] = useState(false);
+  const [fotosLeidas, setFotosLeidas] = useState(0);
+  const [guardadoOk, setGuardadoOk] = useState(false);
 
   const [modelo, setModelo] = useState('');
   const [capacidad, setCapacidad] = useState<number | null>(null);
@@ -72,11 +72,17 @@ export default function StockPorFoto() {
     dictar(onResultado, () => setCampoDictando(null));
   };
 
+  // Se puede llamar más de una vez (ej. una foto del frente de la caja y
+  // después otra de atrás): cada resultado se COMBINA con lo ya cargado, sin
+  // pisar un campo que la foto anterior ya completó con un valor mejor.
   const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setPhotoFile(file);
-    setPhotoPreview(URL.createObjectURL(file));
+    setPhotoPreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(file);
+    });
     setLeyendoFoto(true);
     setError(null);
     try {
@@ -88,9 +94,24 @@ export default function StockPorFoto() {
       });
       if (!res.ok) throw new Error('fallo la extraccion');
       const { data } = await res.json();
-      if (data?.imei) setImei(data.imei);
+      if (data?.modelo) setModelo((prev) => prev || data.modelo);
+      if (data?.capacidad_gb) setCapacidad((prev) => prev ?? data.capacidad_gb);
+      if (data?.color) setColor((prev) => prev || data.color);
+      if (data?.imei) setImei((prev) => prev || data.imei);
+      if (data?.salud_bateria != null) setBateria((prev) => prev || String(data.salud_bateria));
+      // Caja sellada (a estrenar): casi nunca trae % de batería impreso —
+      // asumimos 100% y marcamos el estado como nuevo, para no obligar a
+      // completarlo a mano en el caso más común.
+      if (data?.sellado) {
+        setBateria((prev) => prev || '100');
+        setEstado((prev) => (prev === 'usado' ? 'sellado' : prev));
+      }
+      setFotosLeidas((n) => n + 1);
+      if (!data?.modelo && !data?.capacidad_gb && !data?.imei && !data?.color && data?.salud_bateria == null) {
+        setError('No pudimos leer datos de esta foto. Podés completar los campos a mano.');
+      }
     } catch {
-      setError('No pudimos leer el IMEI de la foto. Podés escribirlo a mano.');
+      setError('No pudimos leer la foto. Podés completar los campos a mano.');
     } finally {
       setLeyendoFoto(false);
     }
@@ -104,6 +125,14 @@ export default function StockPorFoto() {
     if (!actor) {
       setError(MENSAJE_ACTOR_REQUERIDO);
       return;
+    }
+    const imeiLimpio = limpiarImei(imei);
+    if (imeiLimpio) {
+      const { data: existente } = await supabase.from('dispositivos').select('id').eq('imei', imeiLimpio).maybeSingle();
+      // Con carga por foto es fácil escanear el mismo equipo dos veces sin
+      // querer (ej. sacarle otra foto pensando que era el siguiente) — se
+      // avisa antes de duplicarlo en Stock, igual que en Servicio Técnico.
+      if (existente && !confirm(`Ya hay un dispositivo en Stock con el IMEI ${imeiLimpio}. ¿Agregarlo igual?`)) return;
     }
     setGuardando(true);
     setError(null);
@@ -133,8 +162,27 @@ export default function StockPorFoto() {
 
     await asegurarModelo(supabase, modelo);
 
-    router.push('/stock');
-    router.refresh();
+    // Antes redirigía a Stock después de cada carga — con varios equipos
+    // seguidos (que es el caso de uso de "Cargar con foto") obligaba a
+    // volver a entrar a esta pantalla por cada uno. Ahora se limpia el
+    // formulario y se queda acá, lista para sacarle la foto al siguiente.
+    setPhotoFile(null);
+    setPhotoPreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setFotosLeidas(0);
+    setModelo('');
+    setCapacidad(null);
+    setImei('');
+    setBateria('');
+    setColor('');
+    setPrecio('');
+    setCosto('');
+    setEstado('usado');
+    setGuardando(false);
+    setGuardadoOk(true);
+    setTimeout(() => setGuardadoOk(false), 3000);
   };
 
   return (
@@ -143,9 +191,15 @@ export default function StockPorFoto() {
         <Link href="/stock" className="text-2xl leading-none">
           &larr;
         </Link>
-        <span className="text-lg font-medium">Cargar con foto</span>
+        <span className="text-lg font-medium mr-auto">Cargar con foto</span>
+        <Link href="/stock" className="text-xs text-accent dark:text-dark-accent underline">
+          Ir al Stock
+        </Link>
       </header>
 
+      {guardadoOk && (
+        <p className="text-sm text-good bg-good/10 rounded-lg px-3 py-2">✓ Agregado al stock. Ya podés cargar el siguiente.</p>
+      )}
       {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
       {!puedeAgregarStock && (
         <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">No tenés permiso para agregar dispositivos al stock.</p>
@@ -157,9 +211,13 @@ export default function StockPorFoto() {
           {photoPreview ? '✓' : '📷'}
         </div>
         <div className="flex-1">
-          <p className="text-sm font-medium">Info del dispositivo (IMEI)</p>
+          <p className="text-sm font-medium">Info del dispositivo</p>
           <p className="text-xs text-muted dark:text-dark-text-secondary">
-            {leyendoFoto ? 'Leyendo IMEI...' : photoPreview ? 'foto cargada' : 'tocá para sacar foto'}
+            {leyendoFoto
+              ? 'Leyendo la foto...'
+              : fotosLeidas > 0
+              ? `${fotosLeidas} foto${fotosLeidas > 1 ? 's' : ''} leída${fotosLeidas > 1 ? 's' : ''} — tocá para sacar otra (ej. la parte de atrás)`
+              : 'tocá para sacar foto de la etiqueta, pantalla o caja'}
           </p>
         </div>
       </label>

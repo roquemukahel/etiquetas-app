@@ -12,6 +12,7 @@ import { tienePermiso } from '../lib/permisos';
 import { leerCSV, valorDe, descargarCSV, insertarEnTandas } from '../lib/csv';
 import { obtenerTodasLasFilas } from '../lib/db';
 import { asegurarModelo, normalizarNombreModelo } from '../lib/modelos';
+import { compararModelosPorSalida } from '../lib/catalogosMarcas';
 import { sanitizarDecimal } from '../lib/numeros';
 import MiniaturaDispositivo from '../MiniaturaDispositivo';
 
@@ -697,7 +698,7 @@ export default function Stock() {
     for (const lista of mapa.values()) {
       lista.sort((a, b) => (a.capacidad_gb ?? Infinity) - (b.capacidad_gb ?? Infinity));
     }
-    const ordenado = Array.from(mapa.entries()).sort(([a], [b]) => a.localeCompare(b));
+    const ordenado = Array.from(mapa.entries()).sort(([a], [b]) => compararModelosPorSalida(a, b));
     const clave = imeiExactoModelo || 'Sin modelo';
     const idx = imeiExactoModelo != null ? ordenado.findIndex(([nombre]) => nombre === clave) : -1;
     if (idx > 0) {

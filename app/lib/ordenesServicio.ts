@@ -17,6 +17,7 @@ export type ReparacionParaOrden = {
   presupuesto_repuestos: number | null;
   forma_pago: string | null;
   orden_cobro_id: string | null;
+  fecha_reparado: string | null;
 } & Partial<ChecklistIngreso>;
 
 // Arma (o actualiza, si ya existía desde que se recibió el equipo) la orden de
@@ -104,6 +105,10 @@ export async function generarOrdenDeReparacion(
       estado: 'entregado',
       fecha_entrega: new Date().toISOString(),
       estado_actualizado_at: new Date().toISOString(),
+      // Si se saltó "Listo para entregar" (o esta reparación es de antes de
+      // ese chequeo) no tiene fecha_reparado — sin esto no sumaba al ranking
+      // de técnicos en Estadísticas pese a ser trabajo terminado.
+      fecha_reparado: r.fecha_reparado ?? new Date().toISOString(),
     })
     .eq('id', r.id);
   if (repError) return { ordenId, total, error: 'La orden se generó pero no pudimos actualizar la reparación: ' + repError.message };

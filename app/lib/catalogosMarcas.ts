@@ -176,3 +176,34 @@ export const CATALOGO_MODELOS: Record<string, string[]> = {
 export function normalizarNombreModelo(nombre: string) {
   return nombre.trim().toLowerCase().replace(/\s+/g, ' ');
 }
+
+// Orden cronológico de salida de cada modelo, según su posición en el
+// catálogo de arriba (que ya está cargado en orden de lanzamiento). Se
+// concatenan las tres marcas con catálogo en el mismo orden que
+// MARCAS_DISPONIBLES — alcanza con que cada lista interna esté bien
+// ordenada, no hace falta que iPhone/Samsung/Xiaomi queden intercalados
+// entre sí por fecha real.
+const ORDEN_MODELOS: Map<string, number> = (() => {
+  const mapa = new Map<string, number>();
+  let i = 0;
+  for (const marca of ['iphone', 'samsung', 'xiaomi']) {
+    for (const nombre of CATALOGO_MODELOS[marca]) {
+      mapa.set(normalizarNombreModelo(nombre), i++);
+    }
+  }
+  return mapa;
+})();
+
+// Compara dos nombres de carpeta por orden cronológico de salida en vez de
+// alfabético — así "iPhone 7" no queda al final de la lista solo porque
+// como texto "7" ordena después que "1" (iPhone 11, 12, 13...). Los nombres
+// que no están en el catálogo (marcas sin catálogo, o carpetas escritas a
+// mano) van al final, ordenados entre sí alfabéticamente.
+export function compararModelosPorSalida(a: string, b: string): number {
+  const ra = ORDEN_MODELOS.get(normalizarNombreModelo(a));
+  const rb = ORDEN_MODELOS.get(normalizarNombreModelo(b));
+  if (ra != null && rb != null) return ra - rb;
+  if (ra != null) return -1;
+  if (rb != null) return 1;
+  return a.localeCompare(b);
+}

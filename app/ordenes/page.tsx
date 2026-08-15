@@ -40,6 +40,7 @@ type ReparacionLista = {
   presupuesto_repuestos: number | null;
   cliente_id: string | null;
   orden_cobro_id: string | null;
+  fecha_reparado: string | null;
   clientes: { nombre: string; apellido: string | null } | null;
 };
 
