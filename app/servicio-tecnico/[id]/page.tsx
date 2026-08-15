@@ -20,6 +20,7 @@ import {
 } from '../../lib/reparaciones';
 import { generarOrdenDeReparacion } from '../../lib/ordenesServicio';
 import { sanitizarDecimal } from '../../lib/numeros';
+import { comprimirImagen } from '../../lib/comprimirImagen';
 import SelectorColorAuto from '../../SelectorColorAuto';
 import Avatar from '../../Avatar';
 import CheckTri from '../../CheckTri';
@@ -100,6 +101,14 @@ type Evento = {
   created_at: string;
 };
 
+type Evidencia = {
+  id: string;
+  foto_url: string | null;
+  nota: string | null;
+  actor_nombre: string | null;
+  created_at: string;
+};
+
 function fmt(iso: string | null) {
   if (!iso) return null;
   return new Date(iso).toLocaleString('es-AR');
@@ -121,6 +130,10 @@ export default function FichaReparacion() {
   const [tecnicos, setTecnicos] = useState<Tecnico[]>([]);
   const [trabajos, setTrabajos] = useState<Trabajo[]>([]);
   const [eventos, setEventos] = useState<Evento[]>([]);
+  const [evidencias, setEvidencias] = useState<Evidencia[]>([]);
+  const [notaEvidencia, setNotaEvidencia] = useState('');
+  const [fotoEvidenciaBase64, setFotoEvidenciaBase64] = useState<string | null>(null);
+  const [subiendoEvidencia, setSubiendoEvidencia] = useState(false);
   const [loading, setLoading] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -142,7 +155,7 @@ export default function FichaReparacion() {
     setR(data as any);
     setLoading(false);
 
-    const [{ data: aud }, { data: evs }] = await Promise.all([
+    const [{ data: aud }, { data: evs }, { data: evids }] = await Promise.all([
       supabase
         .from('auditoria')
         .select('id, accion, actor_nombre, created_at')
@@ -154,7 +167,13 @@ export default function FichaReparacion() {
         .select('id, tipo, texto, actor_nombre, created_at')
         .eq('reparacion_id', id)
         .order('created_at', { ascending: false }),
+      supabase
+        .from('reparaciones_evidencias')
+        .select('id, foto_url, nota, actor_nombre, created_at')
+        .eq('reparacion_id', id)
+        .order('created_at', { ascending: false }),
     ]);
+    setEvidencias((evids as Evidencia[]) ?? []);
     const deAuditoria: Evento[] = (aud ?? []).map((a: any) => ({
       id: `a-${a.id}`,
       tipo: 'sistema',
@@ -423,6 +442,36 @@ export default function FichaReparacion() {
       actor_tipo: actor?.tipo ?? null,
     });
     setNotaTexto('');
+    cargar();
+  };
+
+  const elegirFotoEvidencia = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setFotoEvidenciaBase64(await comprimirImagen(file));
+    } catch {
+      setError('No pudimos leer la foto.');
+    }
+  };
+
+  const agregarEvidencia = async () => {
+    if (!r || (!fotoEvidenciaBase64 && !notaEvidencia.trim())) return;
+    const actor = getActor();
+    setSubiendoEvidencia(true);
+    const { error: insError } = await supabase.from('reparaciones_evidencias').insert({
+      reparacion_id: r.id,
+      foto_url: fotoEvidenciaBase64,
+      nota: notaEvidencia.trim() || null,
+      actor_nombre: actor?.nombre ?? null,
+    });
+    setSubiendoEvidencia(false);
+    if (insError) {
+      setError('No pudimos guardar la evidencia: ' + insError.message);
+      return;
+    }
+    setNotaEvidencia('');
+    setFotoEvidenciaBase64(null);
     cargar();
   };
 
@@ -1084,6 +1133,56 @@ export default function FichaReparacion() {
               Ver orden de cobro
             </Link>
           )}
+
+          <Seccion titulo="Evidencia para el cliente">
+            <p className="text-xs text-muted dark:text-dark-text-secondary -mt-1 mb-2">
+              Fotos y notas que el cliente ve en /seguimiento (ej. daños encontrados al abrir el equipo).
+            </p>
+            <div className="flex flex-col gap-2 mb-3">
+              {fotoEvidenciaBase64 && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={fotoEvidenciaBase64} alt="" className="h-32 w-32 object-cover rounded-lg border border-border dark:border-dark-border self-start" />
+              )}
+              <label className="self-start rounded-lg border border-border dark:border-dark-border px-3 py-2 text-xs font-medium cursor-pointer">
+                {fotoEvidenciaBase64 ? '📷 Cambiar foto' : '📷 Sacar/elegir foto (opcional)'}
+                <input type="file" accept="image/*" capture="environment" className="hidden" onChange={elegirFotoEvidencia} />
+              </label>
+              <textarea
+                value={notaEvidencia}
+                onChange={(e) => setNotaEvidencia(e.target.value)}
+                placeholder="Ej: al abrir el equipo encontramos el módulo roto y faltaban 3 tornillos"
+                rows={2}
+                className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+              />
+              <button
+                disabled={subiendoEvidencia || (!fotoEvidenciaBase64 && !notaEvidencia.trim())}
+                onClick={agregarEvidencia}
+                className="self-start rounded-lg bg-accent dark:bg-dark-accent text-white px-4 py-2 text-xs font-medium disabled:opacity-40"
+              >
+                {subiendoEvidencia ? 'Guardando...' : 'Agregar evidencia'}
+              </button>
+            </div>
+
+            {evidencias.length > 0 && (
+              <div className="flex flex-col gap-2">
+                {evidencias.map((e) => (
+                  <div key={e.id} className="rounded-lg bg-canvas dark:bg-dark-bg p-2.5 flex gap-2.5">
+                    {e.foto_url && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={e.foto_url} alt="" className="h-16 w-16 object-cover rounded-lg shrink-0" />
+                    )}
+                    <div className="min-w-0">
+                      {e.nota && <p className="text-xs whitespace-pre-wrap">{e.nota}</p>}
+                      <p className="text-[10px] text-muted dark:text-dark-text-secondary">
+                        {e.actor_nombre ? `${e.actor_nombre} · ` : ''}
+                        {fmt(e.created_at)}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Seccion>
 
           <Seccion titulo="Historial">
             <div className="flex flex-col gap-2 mb-2">

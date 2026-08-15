@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 
+type Evidencia = { id: string; foto_url: string | null; nota: string | null; created_at: string };
+
 type Seguimiento = {
   numero_orden: string | null;
   modelo: string | null;
@@ -17,6 +19,7 @@ type Seguimiento = {
   nombre_cliente: string | null;
   nombre_negocio: string | null;
   logo_negocio: string | null;
+  evidencias: Evidencia[];
 };
 
 const ESTADOS: Record<string, { titulo: string; desc: string; emoji: string }> = {
@@ -67,12 +70,33 @@ export default function Seguimiento() {
   const supabase = crearClienteNavegador();
   const [datos, setDatos] = useState<Seguimiento | null>(null);
   const [loading, setLoading] = useState(true);
+  const [hayNovedadesNuevas, setHayNovedadesNuevas] = useState(false);
 
   useEffect(() => {
     (async () => {
       const { data } = await supabase.rpc('seguimiento_publico', { token });
-      setDatos((data as Seguimiento[])?.[0] ?? null);
+      const d = (data as Seguimiento[])?.[0] ?? null;
+      setDatos(d);
       setLoading(false);
+
+      // "Novedad nueva" = quedó al menos una evidencia sin ver desde la
+      // última vez que este mismo navegador abrió este link — no hay
+      // notificación push real (no hay esa infraestructura en la app), pero
+      // así se destaca lo nuevo cada vez que el cliente vuelve a entrar.
+      if (d && d.evidencias && d.evidencias.length > 0) {
+        const clave = `seguimiento-visto-${token}`;
+        let ultimaVista: string | null = null;
+        try {
+          ultimaVista = localStorage.getItem(clave);
+        } catch {}
+        const ultimaEvidencia = d.evidencias[d.evidencias.length - 1].created_at;
+        if (!ultimaVista || new Date(ultimaEvidencia) > new Date(ultimaVista)) {
+          setHayNovedadesNuevas(true);
+        }
+        try {
+          localStorage.setItem(clave, ultimaEvidencia);
+        } catch {}
+      }
     })();
   }, [token]);
 
@@ -143,6 +167,31 @@ export default function Seguimiento() {
           )}
         </div>
       </div>
+
+      {(datos.evidencias?.length ?? 0) > 0 && (
+        <div className="w-full max-w-xs flex flex-col gap-2">
+          {hayNovedadesNuevas && (
+            <p className="text-xs font-medium text-accent dark:text-dark-accent text-center">🔔 Hay novedades nuevas</p>
+          )}
+          <p className="text-xs font-semibold text-muted dark:text-dark-text-secondary uppercase tracking-wide">
+            Novedades del técnico
+          </p>
+          {[...datos.evidencias].reverse().map((e) => (
+            <div key={e.id} className="rounded-xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-3 flex gap-2.5">
+              {e.foto_url && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={e.foto_url} alt="" className="h-16 w-16 object-cover rounded-lg shrink-0" />
+              )}
+              <div className="min-w-0">
+                {e.nota && <p className="text-sm whitespace-pre-wrap">{e.nota}</p>}
+                <p className="text-[10px] text-muted dark:text-dark-text-secondary mt-0.5">
+                  {new Date(e.created_at).toLocaleString('es-AR')}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <p className="text-xs text-muted dark:text-dark-text-secondary mt-auto">con Qovento</p>
     </main>
