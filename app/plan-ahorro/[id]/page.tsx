@@ -21,6 +21,7 @@ type Plan = {
   monto_objetivo: number;
   detalles: string | null;
   estado: string;
+  dispositivo_id: string | null;
   clientes: { nombre: string; apellido: string | null; telefono: string | null } | null;
 };
 
@@ -164,6 +165,76 @@ export default function DetallePlanAhorro() {
     });
     setProcesando(false);
     cargar();
+  };
+
+  // Para una seña (plan con un dispositivo puntual reservado): "entregar"
+  // no es solo cambiar el estado del plan, es una venta de verdad — genera
+  // la orden de cobro (misma tabla que usa el resto de Órdenes) y saca el
+  // equipo de Stock, todo junto.
+  const confirmarEntregaSena = async () => {
+    if (!plan || !plan.dispositivo_id || procesando) return;
+    const aviso = completo
+      ? '¿Confirmar la entrega y generar la venta de este equipo?'
+      : `Todavía le faltan $${Math.round(falta).toLocaleString('es-AR')} para completar el objetivo. ¿Generar la venta igual?`;
+    if (!confirm(aviso)) return;
+
+    setProcesando(true);
+    setError(null);
+
+    const { data: disp, error: dispError } = await supabase
+      .from('dispositivos')
+      .select('modelo, capacidad_gb, color, imei, en_stock')
+      .eq('id', plan.dispositivo_id)
+      .single();
+    if (dispError || !disp) {
+      setError('No pudimos encontrar el dispositivo reservado.');
+      setProcesando(false);
+      return;
+    }
+    if (!disp.en_stock) {
+      setError('Este equipo ya no figura en Stock (puede que ya se haya vendido o dado de baja).');
+      setProcesando(false);
+      return;
+    }
+
+    const descripcion = `${disp.modelo || 'Equipo'}${disp.capacidad_gb ? ` ${disp.capacidad_gb}GB` : ''}${disp.color ? ` ${disp.color}` : ''}${disp.imei ? ` · IMEI ${disp.imei}` : ''}`;
+
+    const { data: orden, error: ordenError } = await supabase
+      .from('ordenes')
+      .insert({
+        cliente_id: plan.cliente_id,
+        dispositivo_id: plan.dispositivo_id,
+        total: plan.monto_objetivo,
+        estado: 'pagado',
+        forma_pago: 'Plan de ahorro / seña',
+      })
+      .select()
+      .single();
+    if (ordenError || !orden) {
+      setError('No pudimos generar la venta: ' + (ordenError?.message || ''));
+      setProcesando(false);
+      return;
+    }
+    await supabase.from('orden_items').insert({
+      orden_id: orden.id,
+      dispositivo_id: plan.dispositivo_id,
+      descripcion,
+      cantidad: 1,
+      precio_unitario: plan.monto_objetivo,
+      tipo: 'dispositivo',
+    });
+    await supabase.from('dispositivos').update({ en_stock: false }).eq('id', plan.dispositivo_id);
+    await supabase.from('planes_ahorro').update({ estado: 'completado' }).eq('id', plan.id);
+
+    await registrarAuditoria(supabase, {
+      accion: `entregó el equipo señado a ${nombreCliente(plan)} y generó la venta (${descripcion})`,
+      entidad: 'plan_ahorro',
+      entidadId: plan.id,
+      valorNuevo: { orden_id: orden.id },
+    });
+
+    setProcesando(false);
+    router.push(`/ordenes/${orden.id}`);
   };
 
   const abrirEdicion = () => {
@@ -347,6 +418,11 @@ export default function DetallePlanAhorro() {
         </div>
       ) : (
         <div className="rounded-xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border px-4 py-3 text-sm flex flex-col gap-1">
+          {plan.dispositivo_id && (
+            <span className="self-start text-[10px] font-semibold text-accent dark:text-dark-accent bg-accent-soft dark:bg-dark-accent-soft rounded-full px-2 py-0.5">
+              📱 SEÑA — equipo reservado
+            </span>
+          )}
           <p className="font-medium">
             {plan.modelo || 'Sin modelo'}
             {plan.capacidad_gb ? ` · ${plan.capacidad_gb}GB` : ''}
@@ -387,11 +463,11 @@ export default function DetallePlanAhorro() {
               {registrandoPago ? 'Cancelar' : '+ Registrar pago'}
             </button>
             <button
-              onClick={() => cambiarEstado('completado')}
+              onClick={() => (plan.dispositivo_id ? confirmarEntregaSena() : cambiarEstado('completado'))}
               disabled={procesando}
               className="flex-1 rounded-xl border border-border dark:border-dark-border py-2 text-sm font-medium disabled:opacity-40"
             >
-              Entregar equipo
+              {plan.dispositivo_id ? 'Entregar y generar venta' : 'Entregar equipo'}
             </button>
           </div>
         )}

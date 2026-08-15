@@ -17,6 +17,15 @@ type Cliente = {
   telefono: string | null;
 };
 
+type DispositivoStock = {
+  id: string;
+  modelo: string | null;
+  capacidad_gb: number | null;
+  color: string | null;
+  imei: string | null;
+  precio: number | null;
+};
+
 export default function NuevoPlanAhorro() {
   const router = useRouter();
   const supabase = crearClienteNavegador();
@@ -38,6 +47,15 @@ export default function NuevoPlanAhorro() {
   const [montoObjetivo, setMontoObjetivo] = useState('');
   const [detalles, setDetalles] = useState('');
 
+  // Señar: en vez de ahorrar para "algún modelo, algún día", se reserva un
+  // equipo PUNTUAL que ya está en Stock — mismo plan de ahorro por debajo,
+  // solo que con dispositivo_id apuntando a ese equipo.
+  const [esSena, setEsSena] = useState(false);
+  const [dispositivosStock, setDispositivosStock] = useState<DispositivoStock[]>([]);
+  const [reservados, setReservados] = useState<Set<string>>(new Set());
+  const [buscarDispositivo, setBuscarDispositivo] = useState('');
+  const [dispositivoElegido, setDispositivoElegido] = useState<DispositivoStock | null>(null);
+
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
 
@@ -49,7 +67,38 @@ export default function NuevoPlanAhorro() {
       const { data } = await supabase.from('modelos_stock').select('nombre').order('nombre');
       setCarpetas((data ?? []).map((m) => m.nombre));
     })();
+    (async () => {
+      const [{ data: disp }, { data: planes }] = await Promise.all([
+        supabase.from('dispositivos').select('id, modelo, capacidad_gb, color, imei, precio').eq('en_stock', true).order('modelo'),
+        // Un equipo ya señado por otro plan activo no debería poder volver a
+        // señarse — si no, dos clientes podrían terminar reservando el mismo.
+        supabase.from('planes_ahorro').select('dispositivo_id').not('dispositivo_id', 'is', null).not('estado', 'in', '(completado,cancelado)'),
+      ]);
+      setDispositivosStock((disp as DispositivoStock[]) ?? []);
+      setReservados(new Set(((planes ?? []) as { dispositivo_id: string }[]).map((p) => p.dispositivo_id)));
+    })();
   }, []);
+
+  const dispositivosDisponibles = useMemo(
+    () => dispositivosStock.filter((d) => !reservados.has(d.id)),
+    [dispositivosStock, reservados]
+  );
+
+  const dispositivosFiltrados = useMemo(() => {
+    const q = buscarDispositivo.trim().toLowerCase();
+    if (!q) return dispositivosDisponibles;
+    return dispositivosDisponibles.filter((d) =>
+      [d.modelo, d.color, d.imei].filter(Boolean).some((x) => x!.toLowerCase().includes(q))
+    );
+  }, [dispositivosDisponibles, buscarDispositivo]);
+
+  const elegirDispositivo = (d: DispositivoStock) => {
+    setDispositivoElegido(d);
+    setModelo(d.modelo || '');
+    setCapacidad(d.capacidad_gb);
+    setColor(d.color || '');
+    if (d.precio != null) setMontoObjetivo(String(d.precio));
+  };
 
   const clientesFiltrados = useMemo(() => {
     const q = buscarCliente.trim().toLowerCase();
@@ -69,7 +118,8 @@ export default function NuevoPlanAhorro() {
     setStep('plan');
   };
 
-  const puedeConfirmar = montoObjetivo.trim().length > 0 && Number(montoObjetivo) > 0;
+  const puedeConfirmar =
+    montoObjetivo.trim().length > 0 && Number(montoObjetivo) > 0 && (!esSena || !!dispositivoElegido);
 
   const handleConfirmar = async () => {
     if (!puedeConfirmar) return;
@@ -77,6 +127,20 @@ export default function NuevoPlanAhorro() {
     setError(null);
 
     try {
+      // Chequeo de último momento: alguien pudo haber señado este mismo
+      // equipo (u otra persona lo pudo vender) mientras esta pantalla
+      // estaba abierta.
+      if (esSena && dispositivoElegido) {
+        const { data: actual } = await supabase
+          .from('dispositivos')
+          .select('en_stock')
+          .eq('id', dispositivoElegido.id)
+          .single();
+        if (!actual?.en_stock) {
+          throw new Error('Este equipo ya no está disponible en Stock — puede que se haya vendido o señado recién. Elegí otro.');
+        }
+      }
+
       let clienteId = clienteElegido?.id;
       if (modoCliente === 'nuevo') {
         const { data, error: cErr } = await supabase
@@ -101,6 +165,7 @@ export default function NuevoPlanAhorro() {
           color: color.trim() || null,
           monto_objetivo: Number(montoObjetivo),
           detalles: detalles.trim() || null,
+          dispositivo_id: esSena ? dispositivoElegido?.id ?? null : null,
         })
         .select()
         .single();
@@ -223,44 +288,121 @@ export default function NuevoPlanAhorro() {
         {modoCliente === 'existente' ? `${clienteElegido?.nombre} ${clienteElegido?.apellido || ''}` : nuevoNombre}
       </div>
 
+      <div className="flex items-center gap-2 text-sm">
+        <button
+          onClick={() => {
+            setEsSena(false);
+            setDispositivoElegido(null);
+          }}
+          className={`flex-1 rounded-xl py-2 font-medium ${
+            !esSena ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
+          }`}
+        >
+          Ahorro (modelo a definir)
+        </button>
+        <button
+          onClick={() => setEsSena(true)}
+          className={`flex-1 rounded-xl py-2 font-medium ${
+            esSena ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
+          }`}
+        >
+          Señar un equipo del Stock
+        </button>
+      </div>
+
       <div className="flex flex-col gap-3">
-        <div>
-          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Modelo deseado (opcional)</label>
-          <input
-            value={modelo}
-            onChange={(e) => setModelo(e.target.value)}
-            placeholder="iPhone 13"
-            list="carpetas-stock-plan-ahorro"
-            className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
-          />
-          <datalist id="carpetas-stock-plan-ahorro">
-            {carpetas.map((c) => (
-              <option key={c} value={c} />
-            ))}
-          </datalist>
-        </div>
-
-        <div>
-          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Almacenamiento</label>
-          <div className="flex gap-2">
-            {STORAGE_OPTIONS.map((gb) => (
-              <button
-                key={gb}
-                onClick={() => setCapacidad(capacidad === gb ? null : gb)}
-                className={`flex-1 rounded-xl py-2 text-sm font-medium ${
-                  capacidad === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
-                }`}
-              >
-                {gb} GB
-              </button>
-            ))}
+        {esSena ? (
+          <div>
+            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">
+              Equipo a reservar (queda apartado hasta que se complete la venta)
+            </label>
+            {dispositivoElegido ? (
+              <div className="rounded-xl border border-accent/40 dark:border-dark-accent/40 bg-accent-soft dark:bg-dark-accent-soft px-4 py-3 flex items-center justify-between gap-2">
+                <p className="text-sm font-medium">
+                  {dispositivoElegido.modelo}
+                  {dispositivoElegido.capacidad_gb ? ` · ${dispositivoElegido.capacidad_gb}GB` : ''}
+                  {dispositivoElegido.color ? ` · ${dispositivoElegido.color}` : ''}
+                  {dispositivoElegido.imei ? ` · IMEI ${dispositivoElegido.imei}` : ''}
+                </p>
+                <button onClick={() => setDispositivoElegido(null)} className="text-xs text-accent dark:text-dark-accent underline shrink-0">
+                  Cambiar
+                </button>
+              </div>
+            ) : (
+              <>
+                <input
+                  value={buscarDispositivo}
+                  onChange={(e) => setBuscarDispositivo(e.target.value)}
+                  placeholder="Buscar por modelo, color o IMEI..."
+                  className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+                />
+                <div className="flex flex-col gap-2 mt-2 max-h-64 overflow-y-auto">
+                  {dispositivosFiltrados.length === 0 && (
+                    <p className="text-xs text-muted dark:text-dark-text-secondary text-center py-2">
+                      No hay equipos en Stock disponibles con esa búsqueda.
+                    </p>
+                  )}
+                  {dispositivosFiltrados.map((d) => (
+                    <button
+                      key={d.id}
+                      onClick={() => elegirDispositivo(d)}
+                      className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-3 py-2.5 text-left text-sm flex items-center justify-between gap-2"
+                    >
+                      <span>
+                        {d.modelo}
+                        {d.capacidad_gb ? ` · ${d.capacidad_gb}GB` : ''}
+                        {d.color ? ` · ${d.color}` : ''}
+                      </span>
+                      {d.precio != null && <span className="text-xs text-muted dark:text-dark-text-secondary shrink-0">${d.precio.toLocaleString('es-AR')}</span>}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
-        </div>
+        ) : (
+          <>
+            <div>
+              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Modelo deseado (opcional)</label>
+              <input
+                value={modelo}
+                onChange={(e) => setModelo(e.target.value)}
+                placeholder="iPhone 13"
+                list="carpetas-stock-plan-ahorro"
+                className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+              />
+              <datalist id="carpetas-stock-plan-ahorro">
+                {carpetas.map((c) => (
+                  <option key={c} value={c} />
+                ))}
+              </datalist>
+            </div>
 
-        <SelectorColorAuto label="Color (opcional)" modelo={modelo} value={color} onChange={setColor} />
+            <div>
+              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Almacenamiento</label>
+              <div className="flex gap-2">
+                {STORAGE_OPTIONS.map((gb) => (
+                  <button
+                    key={gb}
+                    onClick={() => setCapacidad(capacidad === gb ? null : gb)}
+                    className={`flex-1 rounded-xl py-2 text-sm font-medium ${
+                      capacidad === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
+                    }`}
+                  >
+                    {gb} GB
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <SelectorColorAuto label="Color (opcional)" modelo={modelo} value={color} onChange={setColor} />
+          </>
+        )}
 
         <div>
-          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Monto objetivo</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">
+            {esSena ? 'Monto a cobrar por el equipo' : 'Monto objetivo'}
+          </label>
           <input
             value={montoObjetivo}
             onChange={(e) => setMontoObjetivo(sanitizarDecimal(e.target.value))}

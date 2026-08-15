@@ -14,6 +14,7 @@ type Plan = {
   monto_objetivo: number;
   estado: string;
   pagado: number;
+  dispositivo_id: string | null;
   clientes: { nombre: string; apellido: string | null } | null;
 };
 
@@ -36,7 +37,7 @@ export default function PlanAhorro() {
     const [{ data }, { data: saldosData }] = await Promise.all([
       supabase
         .from('planes_ahorro')
-        .select('id, modelo, capacidad_gb, color, monto_objetivo, estado, clientes ( nombre, apellido )')
+        .select('id, modelo, capacidad_gb, color, monto_objetivo, estado, dispositivo_id, clientes ( nombre, apellido )')
         .order('created_at', { ascending: false }),
       supabase.rpc('saldos_planes_ahorro'),
     ]);
@@ -137,7 +138,14 @@ export default function PlanAhorro() {
             >
               <div className="flex items-center justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="text-sm font-medium truncate">{nombreCliente}</p>
+                  <p className="text-sm font-medium truncate">
+                    {nombreCliente}
+                    {p.dispositivo_id && (
+                      <span className="ml-1.5 text-[9px] font-semibold text-accent dark:text-dark-accent bg-accent-soft dark:bg-dark-accent-soft rounded-full px-1.5 py-0.5 align-middle">
+                        SEÑA
+                      </span>
+                    )}
+                  </p>
                   <p className="text-xs text-muted dark:text-dark-text-secondary truncate">
                     {p.modelo || 'Sin modelo'}
                     {p.capacidad_gb ? ` · ${p.capacidad_gb}GB` : ''}
