@@ -94,15 +94,25 @@ export async function middleware(request: NextRequest) {
   }
 
   if (user && !esPublica) {
-    const { data: activo } = await supabase.rpc('negocio_activo');
-    if (activo === false) {
+    // Antes eran dos llamadas RPC en fila (negocio_activo, luego
+    // negocio_suscripcion_activa) — dos viajes de ida y vuelta a la base,
+    // en SERIE, en cada página que se visita. negocio_estado_acceso()
+    // junta las dos respuestas en un solo viaje (ver
+    // negocio_estado_acceso_supabase.sql). Si por lo que sea la función
+    // todavía no existe (no se corrió el SQL) esto no tira error: falla
+    // "abierto" — igual que fallaba cada RPC suelta antes — así que no
+    // bloquea a nadie, simplemente no protege esas dos pantallas hasta
+    // correr el SQL.
+    const { data: estadoAcceso } = (await supabase.rpc('negocio_estado_acceso').single()) as {
+      data: { activo: boolean; suscripcion_activa: boolean } | null;
+    };
+    if (estadoAcceso?.activo === false) {
       const url = request.nextUrl.clone();
       url.pathname = '/cuenta-desactivada';
       return NextResponse.redirect(url);
     }
 
-    const { data: suscripcionActiva } = await supabase.rpc('negocio_suscripcion_activa');
-    if (suscripcionActiva === false) {
+    if (estadoAcceso?.suscripcion_activa === false) {
       const url = request.nextUrl.clone();
       url.pathname = '/suscripcion-vencida';
       return NextResponse.redirect(url);
