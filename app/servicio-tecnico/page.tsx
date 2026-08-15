@@ -82,6 +82,7 @@ type Reparacion = {
   presupuesto_repuestos: number | null;
   importe_total: number | null;
   orden_cobro_id: string | null;
+  agregado_a_stock: boolean;
   clientes: { nombre: string; apellido: string | null; telefono: string | null } | null;
 };
 
@@ -110,6 +111,10 @@ export default function ServicioTecnico() {
   const puedeRecibir = tienePermiso(actor, 'recibir_servicio_tecnico');
   const puedeGestionar = tienePermiso(actor, 'gestionar_servicio_tecnico');
   const puedeEliminarReparacion = tienePermiso(actor, 'eliminar');
+  // Igual que en la ficha individual: agregar al Stock es una actividad
+  // distinta de "gestionar la reparación" — puede quedar en manos de otra
+  // persona (ver app/servicio-tecnico/[id]/page.tsx).
+  const puedeAgregarStock = tienePermiso(actor, 'agregar_stock');
   const [reparaciones, setReparaciones] = useState<Reparacion[]>([]);
   const [tecnicos, setTecnicos] = useState<Tecnico[]>([]);
   const [loading, setLoading] = useState(true);
@@ -118,6 +123,22 @@ export default function ServicioTecnico() {
   const [busqueda, setBusqueda] = useState('');
   const [filtroTecnico, setFiltroTecnico] = useState('');
   const [soloDemorados, setSoloDemorados] = useState(false);
+  // Orden temporal de toda la sección (lista, en poder del técnico e
+  // historial) — por defecto más recientes primero. Se guarda por navegador
+  // para no tener que elegirlo de nuevo cada vez que se entra.
+  const [orden, setOrden] = useState<'recientes' | 'antiguos'>('recientes');
+  useEffect(() => {
+    try {
+      const guardado = localStorage.getItem('servicioTecnicoOrden');
+      if (guardado === 'recientes' || guardado === 'antiguos') setOrden(guardado);
+    } catch {}
+  }, []);
+  const cambiarOrden = (v: 'recientes' | 'antiguos') => {
+    setOrden(v);
+    try {
+      localStorage.setItem('servicioTecnicoOrden', v);
+    } catch {}
+  };
   const [guardando, setGuardando] = useState<string | null>(null);
   const [menuAbierto, setMenuAbierto] = useState<string | null>(null);
   const [tecnicoSeleccionado, setTecnicoSeleccionado] = useState<string | null>(null);
@@ -152,6 +173,7 @@ export default function ServicioTecnico() {
   const [avisoWhatsApp, setAvisoWhatsApp] = useState<{ link: string; nombre: string; tipo: 'agregado' | 'reparado' } | null>(
     null
   );
+  const [avisoAgregarStockPara, setAvisoAgregarStockPara] = useState<Reparacion | null>(null);
   const [imagenesCarpetas, setImagenesCarpetas] = useState<Map<string, string>>(new Map());
   const [codigoPais, setCodigoPais] = useState('54');
 
@@ -159,7 +181,7 @@ export default function ServicioTecnico() {
     const { data } = await supabase
       .from('reparaciones')
       .select(
-        'id, numero_orden, modelo, capacidad_gb, color, imei, falla_declarada, diagnostico, ubicacion_fisica, tecnico_id, estado, prioridad, trabajos_realizados, fecha_ingreso_servicio, fecha_estimada, fecha_reparado, fecha_entrega, garantia_dias, estado_actualizado_at, cliente_id, token_seguimiento, en_poder_tecnico, presupuesto_mano_obra, presupuesto_repuestos, importe_total, orden_cobro_id, clientes ( nombre, apellido, telefono )'
+        'id, numero_orden, modelo, capacidad_gb, color, imei, falla_declarada, diagnostico, ubicacion_fisica, tecnico_id, estado, prioridad, trabajos_realizados, fecha_ingreso_servicio, fecha_estimada, fecha_reparado, fecha_entrega, garantia_dias, estado_actualizado_at, cliente_id, token_seguimiento, en_poder_tecnico, presupuesto_mano_obra, presupuesto_repuestos, importe_total, orden_cobro_id, agregado_a_stock, clientes ( nombre, apellido, telefono )'
       )
       .order('fecha_ingreso_servicio', { ascending: false });
     setReparaciones((data as any) ?? []);
@@ -213,10 +235,20 @@ export default function ServicioTecnico() {
     return false;
   };
 
+  // Base ordenada por fecha de ingreso según el toggle de arriba — de acá
+  // derivan la lista principal, "en poder del técnico" y el historial, para
+  // que las tres respeten el mismo orden en vez de cada una el suyo.
+  const reparacionesOrdenadas = useMemo(() => {
+    const signo = orden === 'recientes' ? -1 : 1;
+    return [...reparaciones].sort(
+      (a, b) => signo * (new Date(a.fecha_ingreso_servicio).getTime() - new Date(b.fecha_ingreso_servicio).getTime())
+    );
+  }, [reparaciones, orden]);
+
   const filtrados = useMemo(() => {
     const estadosGrupo = estadosDeGrupo(grupo);
     const q = busqueda.trim().toLowerCase();
-    return reparaciones.filter((r) => {
+    return reparacionesOrdenadas.filter((r) => {
       if (!estadosGrupo.includes(r.estado as any)) return false;
       if (filtroTecnico && r.tecnico_id !== filtroTecnico) return false;
       if (soloDemorados && !esDemorado(r)) return false;
@@ -232,7 +264,7 @@ export default function ServicioTecnico() {
       }
       return true;
     });
-  }, [reparaciones, grupo, filtroTecnico, soloDemorados, busqueda]);
+  }, [reparacionesOrdenadas, grupo, filtroTecnico, soloDemorados, busqueda]);
 
   const contadores = useMemo(
     () => ({
@@ -247,13 +279,13 @@ export default function ServicioTecnico() {
   const [alertasAbiertas, setAlertasAbiertas] = useState(false);
 
   const historialTecnico = useMemo(
-    () => reparaciones.filter((r) => r.estado === 'entregado' && r.tecnico_id === tecnicoSeleccionado),
-    [reparaciones, tecnicoSeleccionado]
+    () => reparacionesOrdenadas.filter((r) => r.estado === 'entregado' && r.tecnico_id === tecnicoSeleccionado),
+    [reparacionesOrdenadas, tecnicoSeleccionado]
   );
 
   const equiposEnPoder = useMemo(
-    () => reparaciones.filter((r) => r.tecnico_id === tecnicoSeleccionado && r.en_poder_tecnico && !FINALIZADOS.includes(r.estado)),
-    [reparaciones, tecnicoSeleccionado]
+    () => reparacionesOrdenadas.filter((r) => r.tecnico_id === tecnicoSeleccionado && r.en_poder_tecnico && !FINALIZADOS.includes(r.estado)),
+    [reparacionesOrdenadas, tecnicoSeleccionado]
   );
 
   const datosChecklistNuevo = (): ChecklistIngreso => ({
@@ -505,7 +537,12 @@ export default function ServicioTecnico() {
     }
     setGuardando(r.id);
     const cambios: any = { estado: nuevoEstado, estado_actualizado_at: new Date().toISOString() };
-    if (nuevoEstado === 'listo_para_entregar' && !r.fecha_reparado) cambios.fecha_reparado = new Date().toISOString();
+    // "Listo para entregar" y "Entregado" cuentan igual como trabajo
+    // terminado del técnico en Estadísticas — ver misma nota en
+    // app/servicio-tecnico/[id]/page.tsx.
+    if ((nuevoEstado === 'listo_para_entregar' || nuevoEstado === 'entregado') && !r.fecha_reparado) {
+      cambios.fecha_reparado = new Date().toISOString();
+    }
     await supabase.from('reparaciones').update(cambios).eq('id', r.id);
     await registrarAuditoria(supabase, {
       accion: `cambió el estado de la reparación ${r.numero_orden || ''} (${r.modelo || 'sin modelo'}) de "${infoEstado(r.estado).label}" a "${infoEstado(nuevoEstado).label}"`,
@@ -522,12 +559,19 @@ export default function ServicioTecnico() {
       setAvisoWhatsApp({ link: armarLinkWhatsApp(r.clientes.telefono, mensaje, codigoPais), nombre, tipo: 'reparado' });
     }
 
+    // Equipo propio marcado "Entregado" directo desde el selector de estado,
+    // salteando el botón "Agregar al Stock" — igual que en la ficha
+    // individual, preguntamos para no perder el paso.
+    if (nuevoEstado === 'entregado' && !r.cliente_id && !r.agregado_a_stock && puedeAgregarStock) {
+      setAvisoAgregarStockPara(r);
+    }
+
     setGuardando(null);
     cargar();
   };
 
   const agregarAlStock = async (r: Reparacion) => {
-    if (guardando || !puedeGestionar) return;
+    if (guardando || !puedeAgregarStock) return;
     const actor = getActor();
     if (!actor) {
       alert(MENSAJE_ACTOR_REQUERIDO);
@@ -539,6 +583,7 @@ export default function ServicioTecnico() {
     }
     if (!confirm('¿Pasar este equipo al Stock como dispositivo disponible para vender?')) return;
     setGuardando(r.id);
+    setAvisoAgregarStockPara(null);
     await supabase.from('dispositivos').insert({
       modelo: r.modelo,
       capacidad_gb: r.capacidad_gb,
@@ -550,7 +595,15 @@ export default function ServicioTecnico() {
       agregado_por_foto_url: actor?.fotoUrl ?? null,
     });
     await asegurarModelo(supabase, r.modelo);
-    await supabase.from('reparaciones').update({ estado: 'entregado', estado_actualizado_at: new Date().toISOString() }).eq('id', r.id);
+    await supabase
+      .from('reparaciones')
+      .update({
+        estado: 'entregado',
+        estado_actualizado_at: new Date().toISOString(),
+        agregado_a_stock: true,
+        fecha_reparado: r.fecha_reparado ?? new Date().toISOString(),
+      })
+      .eq('id', r.id);
     await registrarAuditoria(supabase, {
       accion: `agregó al Stock un equipo propio reparado en Servicio Técnico (${r.numero_orden || ''}, ${r.modelo || 'sin modelo'}${r.imei ? `, IMEI ${r.imei}` : ''})`,
       entidad: 'reparacion',
@@ -566,7 +619,12 @@ export default function ServicioTecnico() {
     setGuardando(r.id);
     await supabase
       .from('reparaciones')
-      .update({ estado: 'entregado', fecha_entrega: new Date().toISOString(), estado_actualizado_at: new Date().toISOString() })
+      .update({
+        estado: 'entregado',
+        fecha_entrega: new Date().toISOString(),
+        estado_actualizado_at: new Date().toISOString(),
+        fecha_reparado: r.fecha_reparado ?? new Date().toISOString(),
+      })
       .eq('id', r.id);
     await registrarAuditoria(supabase, {
       accion: `marcó como entregado al cliente un equipo reparado en Servicio Técnico (${r.numero_orden || ''}, ${r.modelo || 'sin modelo'}${r.imei ? `, IMEI ${r.imei}` : ''})`,
@@ -629,6 +687,15 @@ export default function ServicioTecnico() {
           &larr;
         </Link>
         <span className="text-lg font-medium mr-auto">Servicio Técnico</span>
+        <select
+          value={orden}
+          onChange={(e) => cambiarOrden(e.target.value as 'recientes' | 'antiguos')}
+          aria-label="Ordenar por"
+          className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-1.5 text-xs"
+        >
+          <option value="recientes">Más recientes</option>
+          <option value="antiguos">Más antiguos</option>
+        </select>
         <Link href="/servicio-tecnico/repuestos" className="text-xs text-accent dark:text-dark-accent underline">
           Proveedores
         </Link>
@@ -860,6 +927,29 @@ export default function ServicioTecnico() {
         </div>
       )}
 
+      {avisoAgregarStockPara && (
+        <div className="rounded-xl border border-good/30 bg-good/10 p-3 flex flex-col gap-2">
+          <p className="text-sm">
+            ¿Agregamos <strong>{avisoAgregarStockPara.modelo || 'este equipo'}</strong> al Stock ahora?
+          </p>
+          <div className="flex gap-2">
+            <button
+              disabled={!!guardando}
+              onClick={() => agregarAlStock(avisoAgregarStockPara)}
+              className="flex-1 rounded-lg bg-good text-white text-center py-2 text-sm font-medium disabled:opacity-40"
+            >
+              Agregar al Stock
+            </button>
+            <button
+              onClick={() => setAvisoAgregarStockPara(null)}
+              className="rounded-lg border border-border dark:border-dark-border px-3 py-2 text-sm font-medium"
+            >
+              Ahora no
+            </button>
+          </div>
+        </div>
+      )}
+
       {tab === 'tecnicos' ? (
         tecnicoSeleccionado ? (
           <>
@@ -918,6 +1008,7 @@ export default function ServicioTecnico() {
                       onAgregarAlStock={agregarAlStock}
                       onEntregadoCliente={marcarEntregadoCliente}
                       imagenesCarpetas={imagenesCarpetas}
+                      puedeAgregarStock={puedeAgregarStock}
                       extra={
                         <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
                           <input
@@ -1111,6 +1202,7 @@ export default function ServicioTecnico() {
                 onAgregarAlStock={agregarAlStock}
                 onEntregadoCliente={marcarEntregadoCliente}
                 imagenesCarpetas={imagenesCarpetas}
+                puedeAgregarStock={puedeAgregarStock}
               />
             ))}
           </div>
@@ -1135,6 +1227,7 @@ function TarjetaReparacion({
   onAgregarAlStock,
   onEntregadoCliente,
   imagenesCarpetas,
+  puedeAgregarStock,
   extra,
 }: {
   r: Reparacion;
@@ -1151,6 +1244,7 @@ function TarjetaReparacion({
   onAgregarAlStock: (r: Reparacion) => void;
   onEntregadoCliente: (r: Reparacion) => void;
   imagenesCarpetas: Map<string, string>;
+  puedeAgregarStock: boolean;
   extra?: React.ReactNode;
 }) {
   const est = infoEstado(r.estado);
@@ -1237,19 +1331,44 @@ function TarjetaReparacion({
 
       {extra}
 
-      {(r.estado === 'listo_para_entregar' || r.estado === 'cancelado') && (
-        <button
-          disabled={guardando === r.id}
-          onClick={() => (r.cliente_id ? onEntregadoCliente(r) : onAgregarAlStock(r))}
-          className="rounded-lg bg-good hover:opacity-90 transition-opacity py-2 text-center text-xs font-medium text-white disabled:opacity-40"
-        >
-          {r.cliente_id ? '✓ Marcar entregado al cliente' : '✓ Agregar al Stock'}
-        </button>
+      {r.cliente_id ? (
+        (r.estado === 'listo_para_entregar' || r.estado === 'cancelado') && (
+          <button
+            disabled={guardando === r.id}
+            onClick={() => onEntregadoCliente(r)}
+            className="rounded-lg bg-good hover:opacity-90 transition-opacity py-2 text-center text-xs font-medium text-white disabled:opacity-40"
+          >
+            ✓ Marcar entregado al cliente
+          </button>
+        )
+      ) : (
+        // Equipo propio: "Agregar al Stock" sigue disponible tanto en "Listo
+        // para entregar" como en "Entregado"/"Cancelado" mientras no se haya
+        // agregado todavía — antes desaparecía al marcar entregado aunque
+        // nunca se hubiera agregado. Gateado al permiso de Stock, no al de
+        // gestionar servicio técnico.
+        (r.estado === 'listo_para_entregar' || r.estado === 'entregado' || r.estado === 'cancelado') &&
+        !r.agregado_a_stock &&
+        (puedeAgregarStock ? (
+          <button
+            disabled={guardando === r.id}
+            onClick={() => onAgregarAlStock(r)}
+            className="rounded-lg bg-good hover:opacity-90 transition-opacity py-2 text-center text-xs font-medium text-white disabled:opacity-40"
+          >
+            ✓ Agregar al Stock
+          </button>
+        ) : (
+          r.estado === 'entregado' && (
+            <div className="rounded-lg bg-muted/10 py-2 text-center text-xs font-medium text-muted dark:text-dark-text-secondary">
+              Entregado
+            </div>
+          )
+        ))
       )}
 
-      {r.estado === 'entregado' && (
+      {r.estado === 'entregado' && (r.cliente_id || r.agregado_a_stock) && (
         <div className="rounded-lg bg-muted/10 py-2 text-center text-xs font-medium text-muted dark:text-dark-text-secondary">
-          {r.cliente_id ? '✓ Entregado al cliente' : '✓ En stock'}
+          {r.cliente_id ? '✓ Entregado al cliente' : '✓ Ya está en Stock'}
         </div>
       )}
 
