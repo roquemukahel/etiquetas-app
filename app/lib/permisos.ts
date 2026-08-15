@@ -16,6 +16,11 @@ export type Permiso =
   // acceso a alguien sin acceso completo.
   | 'auditoria'
   | 'gestionar_usuarios'
+  // Exportar y ELIMINAR en bloque (clientes o dispositivos) queda con la
+  // misma restricción dura que auditoria/gestionar_usuarios — un borrado
+  // masivo e irreversible de toda la base amerita el mismo nivel que ver
+  // quién hizo qué, no un permiso delegable como los demás.
+  | 'exportar_eliminar_datos'
   | 'ver_proveedores'
   | 'ver_plan_ahorro'
   // Comisiones: gestionar (planes, aprobar, liquidar, pagar, ajustar) queda
@@ -47,7 +52,7 @@ export function tienePermiso(actor: Actor | null, permiso: Permiso): boolean {
   // este cambio no existía la distinción, así que un vendedor con acceso
   // completo pero sin ser administrador ahora pierde estas dos, algo que
   // no pasaba con ninguno de los otros permisos).
-  if (permiso === 'auditoria' || permiso === 'gestionar_usuarios') return false;
+  if (permiso === 'auditoria' || permiso === 'gestionar_usuarios' || permiso === 'exportar_eliminar_datos') return false;
   if (actor.permisos.accesoCompleto) return true;
   switch (permiso) {
     case 'vender':

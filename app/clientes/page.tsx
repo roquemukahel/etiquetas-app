@@ -6,6 +6,7 @@ import { crearClienteNavegador } from '../lib/supabase/client';
 import { leerCSV, valorDe, descargarCSV, insertarEnTandas } from '../lib/csv';
 import { obtenerTodasLasFilas } from '../lib/db';
 import { registrarAuditoria } from '../lib/auditoria';
+import { eliminarEnBloque } from '../lib/eliminarEnBloque';
 import { getActor, useActor } from '../lib/actor';
 import { tienePermiso } from '../lib/permisos';
 import { simboloMoneda } from '../lib/monedas';
@@ -164,20 +165,25 @@ export default function Clientes() {
     setEliminandoSeleccion(true);
     const aEliminar = clientes.filter((c) => seleccionados.has(c.id));
 
-    const { error } = await supabase.from('clientes').delete().in('id', ids);
-    if (!error) {
-      for (const c of aEliminar) {
-        await registrarAuditoria(supabase, {
-          accion: `eliminó al cliente ${c.nombre} ${c.apellido || ''}`.trim().replace(/\s+/g, ' '),
-          entidad: 'cliente',
-          entidadId: c.id,
-        });
-      }
+    const { eliminados, bloqueados } = await eliminarEnBloque(supabase, 'clientes', ids);
+    const eliminadosSet = new Set(eliminados);
+    for (const c of aEliminar) {
+      if (!eliminadosSet.has(c.id)) continue;
+      await registrarAuditoria(supabase, {
+        accion: `eliminó al cliente ${c.nombre} ${c.apellido || ''}`.trim().replace(/\s+/g, ' '),
+        entidad: 'cliente',
+        entidadId: c.id,
+      });
     }
 
     setEliminandoSeleccion(false);
     salirDeSeleccion();
     cargar();
+    if (bloqueados.length > 0) {
+      alert(
+        `Se eliminaron ${eliminados.length} de ${ids.length}. ${bloqueados.length} no se pudieron eliminar porque tienen ventas u otro historial vinculado.`
+      );
+    }
   };
 
   const filtrados = useMemo(() => {

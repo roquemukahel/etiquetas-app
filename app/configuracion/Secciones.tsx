@@ -21,6 +21,12 @@ const SECCIONES: Seccion[] = [
   { href: '/configuracion/suscripcion', titulo: 'Suscripción', desc: 'Estado del pago y plan de Qovento' },
   { href: '/configuracion/soporte', titulo: 'Soporte', desc: 'Reportá un problema o dejanos un mensaje' },
   { href: '/configuracion/auditoria', titulo: 'Auditoría', desc: 'Quién hizo qué y cuándo', permiso: 'auditoria' },
+  {
+    href: '/configuracion/exportar-datos',
+    titulo: 'Exportar y eliminar datos',
+    desc: 'Descargar en CSV y, si hace falta, borrar en bloque',
+    permiso: 'exportar_eliminar_datos',
+  },
 ];
 
 export default function Secciones() {
