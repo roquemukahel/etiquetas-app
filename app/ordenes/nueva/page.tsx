@@ -162,6 +162,14 @@ export default function NuevaOrden() {
   const [nuevoTelefono, setNuevoTelefono] = useState('');
   const [nuevoDomicilio, setNuevoDomicilio] = useState('');
   const [nuevoDni, setNuevoDni] = useState('');
+  // Habilitar cuenta corriente sin salir de la venta — antes había que ir a
+  // la ficha del cliente, habilitarla ahí, y volver a Nueva Orden. Es la
+  // financiación "propia" del local (a diferencia de las cuotas con interés
+  // fijo de más abajo): un límite y un plazo que decide el vendedor.
+  const [habilitandoCta, setHabilitandoCta] = useState(false);
+  const [limiteCtaInline, setLimiteCtaInline] = useState('');
+  const [plazoCtaInline, setPlazoCtaInline] = useState('30');
+  const [guardandoCtaInline, setGuardandoCtaInline] = useState(false);
 
   // --- carrito ---
   const [carrito, setCarrito] = useState<ItemCarrito[]>([]);
@@ -444,6 +452,25 @@ export default function NuevaOrden() {
   useEffect(() => {
     if (!ctaCteDisponible && medioSimple === CUENTA_CORRIENTE) setMedioSimple('efectivo');
   }, [ctaCteDisponible, medioSimple]);
+
+  const habilitarCtaCteInline = async () => {
+    if (!clienteElegido || !puedeVender) return;
+    setGuardandoCtaInline(true);
+    const cambios = {
+      cta_cte_habilitada: true,
+      limite_credito: limiteCtaInline ? Number(limiteCtaInline) : null,
+      plazo_dias: plazoCtaInline ? Number(plazoCtaInline) : null,
+    };
+    const { error } = await supabase.from('clientes').update(cambios).eq('id', clienteElegido.id);
+    setGuardandoCtaInline(false);
+    if (error) {
+      alert('No pudimos habilitar la cuenta corriente: ' + error.message);
+      return;
+    }
+    setClienteElegido((prev) => (prev ? { ...prev, ...cambios } : prev));
+    setClientes((prev) => prev.map((c) => (c.id === clienteElegido.id ? { ...c, ...cambios } : c)));
+    setHabilitandoCta(false);
+  };
 
   // Cuánto de esta venta queda como deuda en la cuenta corriente.
   const montoCuentaCorriente = useMemo(() => {
@@ -1844,13 +1871,64 @@ export default function NuevaOrden() {
         )}
 
         {clienteElegido && !ctaCteDisponible && (
-          <p className="text-[10px] text-muted dark:text-dark-text-secondary">
-            {saldoClienteError
-              ? 'No pudimos confirmar el saldo de este cliente, así que por las dudas no se puede vender a cuenta corriente ahora. Probá de nuevo en un momento.'
-              : clienteElegido.suspendido
-                ? 'Este cliente está suspendido para cuenta corriente.'
-                : 'Para venderle a cuenta corriente (fiado), primero habilitá su cuenta corriente desde la ficha del cliente.'}
-          </p>
+          <div className="flex flex-col gap-1.5">
+            <p className="text-[10px] text-muted dark:text-dark-text-secondary">
+              {saldoClienteError
+                ? 'No pudimos confirmar el saldo de este cliente, así que por las dudas no se puede vender a cuenta corriente ahora. Probá de nuevo en un momento.'
+                : clienteElegido.suspendido
+                  ? 'Este cliente está suspendido para cuenta corriente.'
+                  : 'Este cliente todavía no tiene cuenta corriente (financiación propia del local) habilitada.'}
+            </p>
+            {!saldoClienteError && !clienteElegido.suspendido && puedeVender && (
+              habilitandoCta ? (
+                <div className="rounded-lg bg-canvas dark:bg-dark-bg p-2.5 flex flex-col gap-2">
+                  <div className="flex gap-2">
+                    <label className="flex-1 flex flex-col gap-0.5">
+                      <span className="text-[10px] text-muted dark:text-dark-text-secondary">Límite de crédito (opcional)</span>
+                      <input
+                        value={limiteCtaInline}
+                        onChange={(e) => setLimiteCtaInline(sanitizarDecimal(e.target.value))}
+                        inputMode="decimal"
+                        placeholder="Sin límite"
+                        className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-1.5 text-xs"
+                      />
+                    </label>
+                    <label className="flex-1 flex flex-col gap-0.5">
+                      <span className="text-[10px] text-muted dark:text-dark-text-secondary">Plazo (días)</span>
+                      <input
+                        value={plazoCtaInline}
+                        onChange={(e) => setPlazoCtaInline(e.target.value.replace(/\D/g, ''))}
+                        inputMode="numeric"
+                        className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-1.5 text-xs"
+                      />
+                    </label>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      disabled={guardandoCtaInline}
+                      onClick={habilitarCtaCteInline}
+                      className="flex-1 rounded-lg bg-accent dark:bg-dark-accent text-white py-1.5 text-xs font-medium disabled:opacity-40"
+                    >
+                      {guardandoCtaInline ? 'Habilitando...' : 'Habilitar y usar en esta venta'}
+                    </button>
+                    <button
+                      onClick={() => setHabilitandoCta(false)}
+                      className="rounded-lg border border-border dark:border-dark-border px-3 py-1.5 text-xs font-medium"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setHabilitandoCta(true)}
+                  className="self-start text-[11px] text-accent dark:text-dark-accent underline"
+                >
+                  Habilitar cuenta corriente para este cliente
+                </button>
+              )
+            )}
+          </div>
         )}
       </div>
 
