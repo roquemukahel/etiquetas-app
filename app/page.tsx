@@ -15,6 +15,7 @@ import BienvenidaQovi from './BienvenidaQovi';
 import AccesosRapidos, { MetricasAccesos } from './inicio/AccesosRapidos';
 import IlustracionModulo from './inicio/IlustracionesModulos';
 import OjoResumenFinanciero from './OjoResumenFinanciero';
+import ProductosMasVendidos from './ProductosMasVendidos';
 
 export default async function Home() {
   const supabase = crearClienteServidor();
@@ -37,7 +38,8 @@ export default async function Home() {
   let ventasMes = 0;
   let deltaPct: number | null = null;
   let dias: { label: string; valor: number }[] = [];
-  let masVendidos: { nombre: string; cantidad: number; imagenUrl: string | null }[] = [];
+  let masVendidosTelefonos: { nombre: string; cantidad: number; imagenUrl: string | null }[] = [];
+  let masVendidosAccesorios: { nombre: string; cantidad: number; imagenUrl: string | null }[] = [];
   let deltaVentasPct: number | null = null;
   let ticketPromedio = 0;
   let deltaTicketPct: number | null = null;
@@ -252,23 +254,37 @@ export default async function Home() {
     for (const p of (catalogoProductos as { nombre: string; imagen_url: string | null }[]) ?? []) {
       if (p.imagen_url) mapaImagenesProductos.set(p.nombre, p.imagen_url);
     }
-    const conteoItems = new Map<string, number>();
+    // Separados en dos rankings (teléfonos vs. accesorios) en vez de uno solo
+    // mezclado: con un local que vende sobre todo fundas/vidrios/cables, esos
+    // accesorios (que se venden en mucho mayor volumen) tapaban por completo
+    // a los teléfonos en el top 5 único que había antes. Los ítems de tipo
+    // 'trabajo' (servicio técnico) no son "productos" — quedan afuera de
+    // ambos rankings.
+    const conteoTelefonos = new Map<string, number>();
+    const conteoAccesorios = new Map<string, number>();
     for (const o of cobradas.filter((o: any) => new Date(o.created_at) >= inicioMes)) {
       for (const item of (o as any).orden_items ?? []) {
-        // El IMEI hace única a cada descripción de dispositivo — lo sacamos
-        // para agrupar por modelo/capacidad/color, no por unidad individual.
-        const clave = item.tipo === 'dispositivo' ? item.descripcion.split(' · IMEI')[0] : item.descripcion;
-        conteoItems.set(clave, (conteoItems.get(clave) ?? 0) + item.cantidad);
+        if (item.tipo === 'dispositivo') {
+          // El IMEI hace única a cada descripción de dispositivo — lo sacamos
+          // para agrupar por modelo/capacidad/color, no por unidad individual.
+          const clave = item.descripcion.split(' · IMEI')[0];
+          conteoTelefonos.set(clave, (conteoTelefonos.get(clave) ?? 0) + item.cantidad);
+        } else if (item.tipo === 'producto') {
+          conteoAccesorios.set(item.descripcion, (conteoAccesorios.get(item.descripcion) ?? 0) + item.cantidad);
+        }
       }
     }
-    masVendidos = Array.from(conteoItems.entries())
-      .map(([nombre, cantidad]) => ({
-        nombre,
-        cantidad,
-        imagenUrl: mapaImagenesProductos.get(nombre) ?? imagenParaDescripcion(nombre, mapaImagenesCarpetas),
-      }))
-      .sort((a, b) => b.cantidad - a.cantidad)
-      .slice(0, 5);
+    const armarRanking = (conteo: Map<string, number>) =>
+      Array.from(conteo.entries())
+        .map(([nombre, cantidad]) => ({
+          nombre,
+          cantidad,
+          imagenUrl: mapaImagenesProductos.get(nombre) ?? imagenParaDescripcion(nombre, mapaImagenesCarpetas),
+        }))
+        .sort((a, b) => b.cantidad - a.cantidad)
+        .slice(0, 5);
+    masVendidosTelefonos = armarRanking(conteoTelefonos);
+    masVendidosAccesorios = armarRanking(conteoAccesorios);
 
     const candidatos: {
       tipo: 'venta' | 'reparacion' | 'stock' | 'cliente' | 'eliminacion' | 'ajuste';
@@ -564,56 +580,7 @@ export default async function Home() {
           <span className="text-xs text-white/50 group-hover:text-white/70">Ver estadísticas completas &rarr;</span>
         </Link>
 
-        <div className="qv-card rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-elevated p-5 flex flex-col gap-3">
-          <p className="text-sm font-semibold tracking-tight">Productos más vendidos</p>
-          {masVendidos.length === 0 ? (
-            <p className="text-xs text-muted dark:text-dark-text-secondary">Todavía no hay ventas este mes.</p>
-          ) : (
-            <div className="flex flex-col gap-3">
-              {masVendidos.map((p, idx) => {
-                const medalla =
-                  idx === 0
-                    ? { emoji: '🥇', grad: 'from-amber-300 to-amber-500' }
-                    : idx === 1
-                    ? { emoji: '🥈', grad: 'from-slate-300 to-slate-400' }
-                    : idx === 2
-                    ? { emoji: '🥉', grad: 'from-orange-300 to-orange-500' }
-                    : null;
-                return (
-                  <div key={p.nombre} className="flex items-center gap-3">
-                    <div className="relative shrink-0">
-                      {p.imagenUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={p.imagenUrl}
-                          alt=""
-                          className="h-10 w-10 rounded-lg object-cover border border-border dark:border-dark-border"
-                        />
-                      ) : (
-                        <div className="h-10 w-10 rounded-lg bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border flex items-center justify-center text-base">
-                          📦
-                        </div>
-                      )}
-                      {medalla && (
-                        <span
-                          className={`absolute -top-1.5 -left-1.5 h-5 w-5 rounded-full bg-gradient-to-b ${medalla.grad} border border-white dark:border-dark-surface shadow flex items-center justify-center text-[11px]`}
-                        >
-                          {medalla.emoji}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium truncate">{p.nombre}</p>
-                      <p className="text-[11px] text-muted dark:text-dark-text-secondary">
-                        {p.cantidad} unidad{p.cantidad === 1 ? '' : 'es'}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+        <ProductosMasVendidos telefonos={masVendidosTelefonos} accesorios={masVendidosAccesorios} />
       </div>
 
       <div className="grid grid-cols-3 gap-3 animate-fade-in-up" style={{ animationDelay: '180ms' }}>
