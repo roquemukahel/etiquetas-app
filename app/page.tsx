@@ -16,6 +16,7 @@ import AccesosRapidos, { MetricasAccesos } from './inicio/AccesosRapidos';
 import IlustracionModulo from './inicio/IlustracionesModulos';
 import OjoResumenFinanciero from './OjoResumenFinanciero';
 import ProductosMasVendidos from './ProductosMasVendidos';
+import AvisoPruebaPorVencer from './AvisoPruebaPorVencer';
 
 export default async function Home() {
   const supabase = crearClienteServidor();
@@ -451,6 +452,8 @@ export default async function Home() {
   return (
     <main className="flex min-h-screen flex-col px-6 py-8 gap-6 max-w-2xl lg:max-w-[1180px] mx-auto w-full">
       <BienvenidaQovi />
+
+      <AvisoPruebaPorVencer diasDePrueba={diasDePrueba} />
 
       {diasDePrueba != null && (
         <Link
