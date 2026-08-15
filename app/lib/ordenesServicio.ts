@@ -26,8 +26,14 @@ export type ReparacionParaOrden = {
 // de Órdenes — una sola fuente de verdad para no duplicar boletas ni divergir.
 export async function generarOrdenDeReparacion(
   supabase: any,
-  r: ReparacionParaOrden
+  r: ReparacionParaOrden,
+  // false para una reparación "Cancelado / sin solución" a la que igual se
+  // le genera una boleta (ej. costo de diagnóstico) — no tiene sentido que
+  // eso la pase a "Entregado": el equipo sigue sin repararse, solo se está
+  // cobrando (o dejando constancia con $0) el diagnóstico.
+  opciones: { marcarEntregado?: boolean } = {}
 ): Promise<{ ordenId: string | null; total: number; error: string | null }> {
+  const marcarEntregado = opciones.marcarEntregado ?? true;
   const total = r.importe_total ?? (r.presupuesto_mano_obra || 0) + (r.presupuesto_repuestos || 0);
   // Modelo/capacidad/color/IMEI se cargaron al recibir el equipo — sin esto,
   // al generar la orden de cobro se pisaba la línea de la boleta (que sí los
@@ -98,19 +104,18 @@ export async function generarOrdenDeReparacion(
     });
   }
 
-  const { error: repError } = await supabase
-    .from('reparaciones')
-    .update({
-      orden_cobro_id: ordenId,
-      estado: 'entregado',
-      fecha_entrega: new Date().toISOString(),
-      estado_actualizado_at: new Date().toISOString(),
-      // Si se saltó "Listo para entregar" (o esta reparación es de antes de
-      // ese chequeo) no tiene fecha_reparado — sin esto no sumaba al ranking
-      // de técnicos en Estadísticas pese a ser trabajo terminado.
-      fecha_reparado: r.fecha_reparado ?? new Date().toISOString(),
-    })
-    .eq('id', r.id);
+  const cambiosReparacion: Record<string, unknown> = {
+    orden_cobro_id: ordenId,
+    fecha_entrega: new Date().toISOString(),
+    estado_actualizado_at: new Date().toISOString(),
+    // Si se saltó "Listo para entregar" (o esta reparación es de antes de
+    // ese chequeo) no tiene fecha_reparado — sin esto no sumaba al ranking
+    // de técnicos en Estadísticas pese a ser trabajo terminado.
+    fecha_reparado: r.fecha_reparado ?? new Date().toISOString(),
+  };
+  if (marcarEntregado) cambiosReparacion.estado = 'entregado';
+
+  const { error: repError } = await supabase.from('reparaciones').update(cambiosReparacion).eq('id', r.id);
   if (repError) return { ordenId, total, error: 'La orden se generó pero no pudimos actualizar la reparación: ' + repError.message };
 
   return { ordenId, total, error: null };
