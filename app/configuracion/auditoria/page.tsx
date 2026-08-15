@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { useActor } from '../../lib/actor';
@@ -31,6 +31,13 @@ export default function Auditoria() {
   const puedeVerAuditoria = tienePermiso(actor, 'auditoria');
   const [registros, setRegistros] = useState<Registro[]>([]);
   const [loading, setLoading] = useState(true);
+  const [busqueda, setBusqueda] = useState('');
+  const [busquedaDebounced, setBusquedaDebounced] = useState('');
+
+  useEffect(() => {
+    const t = setTimeout(() => setBusquedaDebounced(busqueda), 250);
+    return () => clearTimeout(t);
+  }, [busqueda]);
 
   useEffect(() => {
     if (!puedeVerAuditoria) {
@@ -42,12 +49,27 @@ export default function Auditoria() {
         .from('auditoria')
         .select('id, actor_nombre, actor_tipo, accion, entidad, created_at')
         .order('created_at', { ascending: false })
-        .limit(200);
+        // Antes traía solo los últimos 200 — con mucho movimiento, buscar
+        // algo de hace unos días quedaba directamente afuera. 2000 filas de
+        // texto es un pedido liviano (nada de fotos ni base64 de por medio).
+        .limit(2000);
       setRegistros((data as Registro[]) ?? []);
       setLoading(false);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [puedeVerAuditoria]);
+
+  const filtrados = useMemo(() => {
+    const q = busquedaDebounced.trim().toLowerCase();
+    if (!q) return registros;
+    return registros.filter(
+      (r) =>
+        r.accion?.toLowerCase().includes(q) ||
+        r.actor_nombre?.toLowerCase().includes(q) ||
+        r.actor_tipo?.toLowerCase().includes(q) ||
+        r.entidad?.toLowerCase().includes(q)
+    );
+  }, [registros, busquedaDebounced]);
 
   if (!puedeVerAuditoria) {
     return (
@@ -74,15 +96,27 @@ export default function Auditoria() {
         borrar desde la app.
       </p>
 
+      <input
+        value={busqueda}
+        onChange={(e) => setBusqueda(e.target.value)}
+        placeholder="Buscar por persona, acción o entidad..."
+        className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+      />
+
       {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Cargando...</p>}
       {!loading && registros.length === 0 && (
         <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">
           Todavía no hay acciones registradas.
         </p>
       )}
+      {!loading && registros.length > 0 && filtrados.length === 0 && (
+        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">
+          Ninguna acción coincide con «{busqueda}».
+        </p>
+      )}
 
       <div className="flex flex-col gap-2">
-        {registros.map((r) => (
+        {filtrados.map((r) => (
           <div
             key={r.id}
             className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex flex-col gap-0.5"
