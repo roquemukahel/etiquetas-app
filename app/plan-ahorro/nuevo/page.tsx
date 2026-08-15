@@ -348,10 +348,18 @@ export default function NuevoPlanAhorro() {
                       onClick={() => elegirDispositivo(d)}
                       className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-3 py-2.5 text-left text-sm flex items-center justify-between gap-2"
                     >
-                      <span>
-                        {d.modelo}
-                        {d.capacidad_gb ? ` · ${d.capacidad_gb}GB` : ''}
-                        {d.color ? ` · ${d.color}` : ''}
+                      <span className="min-w-0">
+                        <span className="block">
+                          {d.modelo}
+                          {d.capacidad_gb ? ` · ${d.capacidad_gb}GB` : ''}
+                          {d.color ? ` · ${d.color}` : ''}
+                        </span>
+                        {/* Sin esto, dos unidades del mismo modelo/color eran
+                            indistinguibles en la lista — no había forma de
+                            saber cuál es cuál. */}
+                        {d.imei && (
+                          <span className="block text-xs text-muted dark:text-dark-text-secondary font-mono">IMEI {d.imei}</span>
+                        )}
                       </span>
                       {d.precio != null && <span className="text-xs text-muted dark:text-dark-text-secondary shrink-0">${d.precio.toLocaleString('es-AR')}</span>}
                     </button>

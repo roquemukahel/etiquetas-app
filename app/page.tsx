@@ -8,6 +8,7 @@ import BuscadorUniversal from './BuscadorUniversal';
 import LandingPublica from './LandingPublica';
 import { simboloMoneda } from './lib/monedas';
 import { imagenParaDescripcion } from './lib/carpetas';
+import { imagenColorDeModelo } from './lib/coloresModelo';
 import { COLOR_ICONO } from './Iconos';
 import NumeroAnimado from './NumeroAnimado';
 import Avatar from './Avatar';
@@ -130,7 +131,7 @@ export default async function Home() {
       supabase
         .from('ordenes')
         .select(
-          'total, estado, created_at, vendedores ( nombre, foto_url ), clientes ( nombre, apellido ), orden_items ( descripcion, cantidad, tipo )'
+          'total, estado, created_at, vendedores ( nombre, foto_url ), clientes ( nombre, apellido ), orden_items ( descripcion, cantidad, tipo, dispositivos ( modelo, color ) )'
         )
         .gte('created_at', inicioMesPasado.toISOString()),
       supabase.from('modelos_stock').select('nombre, imagen_url'),
@@ -262,6 +263,12 @@ export default async function Home() {
     // 'trabajo' (servicio técnico) no son "productos" — quedan afuera de
     // ambos rankings.
     const conteoTelefonos = new Map<string, number>();
+    // Modelo/color reales del dispositivo vendido (via orden_items.dispositivo_id),
+    // para poder mostrar su foto de verdad con imagenColorDeModelo — antes acá
+    // solo se probaba la foto de la CARPETA (imagenParaDescripcion), que
+    // depende de que el dueño le haya cargado una foto a mano a esa carpeta;
+    // sin eso, un modelo bien vendido igual aparecía con el ícono genérico.
+    const telefonoInfo = new Map<string, { modelo: string | null; color: string | null }>();
     const conteoAccesorios = new Map<string, number>();
     for (const o of cobradas.filter((o: any) => new Date(o.created_at) >= inicioMes)) {
       for (const item of (o as any).orden_items ?? []) {
@@ -270,22 +277,33 @@ export default async function Home() {
           // para agrupar por modelo/capacidad/color, no por unidad individual.
           const clave = item.descripcion.split(' · IMEI')[0];
           conteoTelefonos.set(clave, (conteoTelefonos.get(clave) ?? 0) + item.cantidad);
+          if (!telefonoInfo.has(clave)) {
+            telefonoInfo.set(clave, { modelo: item.dispositivos?.modelo ?? null, color: item.dispositivos?.color ?? null });
+          }
         } else if (item.tipo === 'producto') {
           conteoAccesorios.set(item.descripcion, (conteoAccesorios.get(item.descripcion) ?? 0) + item.cantidad);
         }
       }
     }
-    const armarRanking = (conteo: Map<string, number>) =>
-      Array.from(conteo.entries())
-        .map(([nombre, cantidad]) => ({
-          nombre,
-          cantidad,
-          imagenUrl: mapaImagenesProductos.get(nombre) ?? imagenParaDescripcion(nombre, mapaImagenesCarpetas),
-        }))
-        .sort((a, b) => b.cantidad - a.cantidad)
-        .slice(0, 5);
-    masVendidosTelefonos = armarRanking(conteoTelefonos);
-    masVendidosAccesorios = armarRanking(conteoAccesorios);
+    masVendidosTelefonos = Array.from(conteoTelefonos.entries())
+      .map(([nombre, cantidad]) => {
+        const inf = telefonoInfo.get(nombre);
+        const imagenUrl =
+          (inf ? imagenColorDeModelo(inf.modelo, inf.color) : null) ??
+          mapaImagenesProductos.get(nombre) ??
+          imagenParaDescripcion(nombre, mapaImagenesCarpetas);
+        return { nombre, cantidad, imagenUrl };
+      })
+      .sort((a, b) => b.cantidad - a.cantidad)
+      .slice(0, 5);
+    masVendidosAccesorios = Array.from(conteoAccesorios.entries())
+      .map(([nombre, cantidad]) => ({
+        nombre,
+        cantidad,
+        imagenUrl: mapaImagenesProductos.get(nombre) ?? imagenParaDescripcion(nombre, mapaImagenesCarpetas),
+      }))
+      .sort((a, b) => b.cantidad - a.cantidad)
+      .slice(0, 5);
 
     const candidatos: {
       tipo: 'venta' | 'reparacion' | 'stock' | 'cliente' | 'eliminacion' | 'ajuste';

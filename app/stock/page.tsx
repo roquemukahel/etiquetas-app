@@ -1547,7 +1547,8 @@ export default function Stock() {
                 <div>
                   <p className="text-sm font-medium">Agregar accesorios por defecto</p>
                   <p className="text-xs text-muted dark:text-dark-text-secondary">
-                    Carga un catálogo inicial: AirPods Pro, AirTag, cargadores, auriculares y protector de cámara.
+                    Carga un catálogo inicial: AirPods Pro 2/3, AirTag, cargadores, cables, auriculares, fundas y
+                    protector de cámara. Si ya cargaste algunos antes, solo agrega los que todavía te falten.
                   </p>
                 </div>
                 <button

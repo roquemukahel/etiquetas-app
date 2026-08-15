@@ -470,6 +470,9 @@ export default function NuevaOrden() {
     setClienteElegido((prev) => (prev ? { ...prev, ...cambios } : prev));
     setClientes((prev) => prev.map((c) => (c.id === clienteElegido.id ? { ...c, ...cambios } : c)));
     setHabilitandoCta(false);
+    // La queda seleccionada de una — si no, había que habilitarla y ENCIMA
+    // acordarse de tocar el botón que recién apareció.
+    if (!pagoMixto) setMedioSimple(CUENTA_CORRIENTE);
   };
 
   // Cuánto de esta venta queda como deuda en la cuenta corriente.
@@ -1776,6 +1779,23 @@ export default function NuevaOrden() {
                 📒 Cuenta corriente
               </button>
             )}
+            {/* Antes esto era solo un link de texto chico más abajo, separado
+                de los demás medios de pago — quedaba invisible al lado de
+                los botones grandes de arriba. Ahora es un botón más en la
+                misma fila, aunque todavía no esté habilitada para este
+                cliente (con otro estilo, para que se note la diferencia). */}
+            {!ctaCteDisponible && clienteElegido && !clienteElegido.suspendido && !saldoClienteError && puedeVender && (
+              <button
+                onClick={() => setHabilitandoCta((v) => !v)}
+                className={`rounded-xl px-3 py-2 text-sm font-medium border border-dashed ${
+                  habilitandoCta
+                    ? 'border-accent dark:border-dark-accent text-accent dark:text-dark-accent bg-accent-soft dark:bg-dark-accent-soft'
+                    : 'border-border dark:border-dark-border text-muted dark:text-dark-text-secondary'
+                }`}
+              >
+                📒 Cuenta corriente (habilitar)
+              </button>
+            )}
           </div>
         ) : (
           <div className="flex flex-col gap-2">
@@ -1811,6 +1831,17 @@ export default function NuevaOrden() {
             >
               + Agregar medio
             </button>
+            {/* En modo mixto, cuenta corriente solo aparece en el <select> de
+                cada línea si ya está habilitada — acá va el mismo disparador
+                del modo simple para poder habilitarla sin cambiar de modo. */}
+            {!ctaCteDisponible && clienteElegido && !clienteElegido.suspendido && !saldoClienteError && puedeVender && (
+              <button
+                onClick={() => setHabilitandoCta((v) => !v)}
+                className="self-start text-xs text-accent dark:text-dark-accent underline"
+              >
+                📒 Habilitar cuenta corriente para este cliente
+              </button>
+            )}
             <div className="flex items-center justify-between text-xs">
               <span className="text-muted dark:text-dark-text-secondary">Asignado</span>
               <span className={asignacionOk ? 'text-good font-medium' : 'text-warn font-medium'}>
@@ -1870,64 +1901,56 @@ export default function NuevaOrden() {
           </div>
         )}
 
-        {clienteElegido && !ctaCteDisponible && (
-          <div className="flex flex-col gap-1.5">
+        {clienteElegido && !ctaCteDisponible && (saldoClienteError || clienteElegido.suspendido) && (
+          <p className="text-[10px] text-muted dark:text-dark-text-secondary">
+            {saldoClienteError
+              ? 'No pudimos confirmar el saldo de este cliente, así que por las dudas no se puede vender a cuenta corriente ahora. Probá de nuevo en un momento.'
+              : 'Este cliente está suspendido para cuenta corriente.'}
+          </p>
+        )}
+
+        {habilitandoCta && !ctaCteDisponible && (
+          <div className="rounded-lg bg-canvas dark:bg-dark-bg p-2.5 flex flex-col gap-2">
             <p className="text-[10px] text-muted dark:text-dark-text-secondary">
-              {saldoClienteError
-                ? 'No pudimos confirmar el saldo de este cliente, así que por las dudas no se puede vender a cuenta corriente ahora. Probá de nuevo en un momento.'
-                : clienteElegido.suspendido
-                  ? 'Este cliente está suspendido para cuenta corriente.'
-                  : 'Este cliente todavía no tiene cuenta corriente (financiación propia del local) habilitada.'}
+              Cuenta corriente = la financiación propia del local (fiado, sin interés fijo) — distinta de las cuotas de
+              arriba. Se habilita para este cliente y queda usada en esta misma venta.
             </p>
-            {!saldoClienteError && !clienteElegido.suspendido && puedeVender && (
-              habilitandoCta ? (
-                <div className="rounded-lg bg-canvas dark:bg-dark-bg p-2.5 flex flex-col gap-2">
-                  <div className="flex gap-2">
-                    <label className="flex-1 flex flex-col gap-0.5">
-                      <span className="text-[10px] text-muted dark:text-dark-text-secondary">Límite de crédito (opcional)</span>
-                      <input
-                        value={limiteCtaInline}
-                        onChange={(e) => setLimiteCtaInline(sanitizarDecimal(e.target.value))}
-                        inputMode="decimal"
-                        placeholder="Sin límite"
-                        className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-1.5 text-xs"
-                      />
-                    </label>
-                    <label className="flex-1 flex flex-col gap-0.5">
-                      <span className="text-[10px] text-muted dark:text-dark-text-secondary">Plazo (días)</span>
-                      <input
-                        value={plazoCtaInline}
-                        onChange={(e) => setPlazoCtaInline(e.target.value.replace(/\D/g, ''))}
-                        inputMode="numeric"
-                        className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-1.5 text-xs"
-                      />
-                    </label>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      disabled={guardandoCtaInline}
-                      onClick={habilitarCtaCteInline}
-                      className="flex-1 rounded-lg bg-accent dark:bg-dark-accent text-white py-1.5 text-xs font-medium disabled:opacity-40"
-                    >
-                      {guardandoCtaInline ? 'Habilitando...' : 'Habilitar y usar en esta venta'}
-                    </button>
-                    <button
-                      onClick={() => setHabilitandoCta(false)}
-                      className="rounded-lg border border-border dark:border-dark-border px-3 py-1.5 text-xs font-medium"
-                    >
-                      Cancelar
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <button
-                  onClick={() => setHabilitandoCta(true)}
-                  className="self-start text-[11px] text-accent dark:text-dark-accent underline"
-                >
-                  Habilitar cuenta corriente para este cliente
-                </button>
-              )
-            )}
+            <div className="flex gap-2">
+              <label className="flex-1 flex flex-col gap-0.5">
+                <span className="text-[10px] text-muted dark:text-dark-text-secondary">Límite de crédito (opcional)</span>
+                <input
+                  value={limiteCtaInline}
+                  onChange={(e) => setLimiteCtaInline(sanitizarDecimal(e.target.value))}
+                  inputMode="decimal"
+                  placeholder="Sin límite"
+                  className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-1.5 text-xs"
+                />
+              </label>
+              <label className="flex-1 flex flex-col gap-0.5">
+                <span className="text-[10px] text-muted dark:text-dark-text-secondary">Plazo (días)</span>
+                <input
+                  value={plazoCtaInline}
+                  onChange={(e) => setPlazoCtaInline(e.target.value.replace(/\D/g, ''))}
+                  inputMode="numeric"
+                  className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-1.5 text-xs"
+                />
+              </label>
+            </div>
+            <div className="flex gap-2">
+              <button
+                disabled={guardandoCtaInline}
+                onClick={habilitarCtaCteInline}
+                className="flex-1 rounded-lg bg-accent dark:bg-dark-accent text-white py-1.5 text-xs font-medium disabled:opacity-40"
+              >
+                {guardandoCtaInline ? 'Habilitando...' : 'Habilitar y usar en esta venta'}
+              </button>
+              <button
+                onClick={() => setHabilitandoCta(false)}
+                className="rounded-lg border border-border dark:border-dark-border px-3 py-1.5 text-xs font-medium"
+              >
+                Cancelar
+              </button>
+            </div>
           </div>
         )}
       </div>

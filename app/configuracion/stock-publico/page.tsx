@@ -13,6 +13,7 @@ export default function StockPublicoConfig() {
   const [loading, setLoading] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [copiado, setCopiado] = useState(false);
+  const [errorCarga, setErrorCarga] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -20,11 +21,15 @@ export default function StockPublicoConfig() {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) return;
-      const { data: perfil } = await supabase
+      const { data: perfil, error } = await supabase
         .from('perfiles')
         .select('negocios ( id, stock_publico_activo, token_stock_publico )')
         .eq('id', user.id)
         .single();
+      // El error más común acá es "la columna no existe" — falta correr
+      // stock_publico_supabase.sql. Mostramos el mensaje real de Supabase en
+      // vez de un genérico, para no tener que adivinar la próxima vez.
+      if (error) setErrorCarga(error.message);
       setNegocio((perfil as any)?.negocios ?? null);
       setLoading(false);
     })();
@@ -59,6 +64,13 @@ export default function StockPublicoConfig() {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
         <p className="text-sm text-muted dark:text-dark-text-secondary">No pudimos cargar la configuración.</p>
+        {errorCarga && (
+          <p className="text-xs text-bad bg-bad/10 rounded-lg px-3 py-2 max-w-sm break-words">
+            {errorCarga.includes('column') || errorCarga.includes('does not exist')
+              ? 'Parece que falta correr la migración SQL de Stock público (stock_publico_supabase.sql).'
+              : errorCarga}
+          </p>
+        )}
         <Link href="/configuracion" className="text-sm text-accent dark:text-dark-accent underline">
           Volver
         </Link>
