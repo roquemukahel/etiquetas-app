@@ -109,6 +109,16 @@ type Evidencia = {
   created_at: string;
 };
 
+type RepuestoStock = { id: string; nombre: string; cantidad_stock: number; costo_unitario: number | null };
+type RepuestoUsado = {
+  id: string;
+  repuesto_id: string | null;
+  nombre_repuesto: string;
+  cantidad: number;
+  costo_unitario: number | null;
+  created_at: string;
+};
+
 function fmt(iso: string | null) {
   if (!iso) return null;
   return new Date(iso).toLocaleString('es-AR');
@@ -134,6 +144,12 @@ export default function FichaReparacion() {
   const [notaEvidencia, setNotaEvidencia] = useState('');
   const [fotoEvidenciaBase64, setFotoEvidenciaBase64] = useState<string | null>(null);
   const [subiendoEvidencia, setSubiendoEvidencia] = useState(false);
+  const [repuestosStock, setRepuestosStock] = useState<RepuestoStock[]>([]);
+  const [repuestosUsados, setRepuestosUsados] = useState<RepuestoUsado[]>([]);
+  const [buscarRepuesto, setBuscarRepuesto] = useState('');
+  const [repuestoElegido, setRepuestoElegido] = useState<RepuestoStock | null>(null);
+  const [cantidadRepuesto, setCantidadRepuesto] = useState('1');
+  const [guardandoRepuesto, setGuardandoRepuesto] = useState(false);
   const [loading, setLoading] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -155,7 +171,7 @@ export default function FichaReparacion() {
     setR(data as any);
     setLoading(false);
 
-    const [{ data: aud }, { data: evs }, { data: evids }] = await Promise.all([
+    const [{ data: aud }, { data: evs }, { data: evids }, { data: repUsados }] = await Promise.all([
       supabase
         .from('auditoria')
         .select('id, accion, actor_nombre, created_at')
@@ -172,8 +188,14 @@ export default function FichaReparacion() {
         .select('id, foto_url, nota, actor_nombre, created_at')
         .eq('reparacion_id', id)
         .order('created_at', { ascending: false }),
+      supabase
+        .from('reparaciones_repuestos')
+        .select('id, repuesto_id, nombre_repuesto, cantidad, costo_unitario, created_at')
+        .eq('reparacion_id', id)
+        .order('created_at', { ascending: false }),
     ]);
     setEvidencias((evids as Evidencia[]) ?? []);
+    setRepuestosUsados((repUsados as RepuestoUsado[]) ?? []);
     const deAuditoria: Evento[] = (aud ?? []).map((a: any) => ({
       id: `a-${a.id}`,
       tipo: 'sistema',
@@ -200,6 +222,10 @@ export default function FichaReparacion() {
     (async () => {
       const { data } = await supabase.from('trabajos').select('id, nombre, imagen_url').order('nombre');
       setTrabajos((data as Trabajo[]) ?? []);
+    })();
+    (async () => {
+      const { data } = await supabase.from('repuestos').select('id, nombre, cantidad_stock, costo_unitario').order('nombre');
+      setRepuestosStock((data as RepuestoStock[]) ?? []);
     })();
     (async () => {
       const {
@@ -473,6 +499,85 @@ export default function FichaReparacion() {
     setNotaEvidencia('');
     setFotoEvidenciaBase64(null);
     cargar();
+  };
+
+  const repuestosFiltrados = repuestosStock.filter(
+    (rp) => rp.cantidad_stock > 0 && rp.nombre.toLowerCase().includes(buscarRepuesto.trim().toLowerCase())
+  );
+
+  const agregarRepuestoUsado = async () => {
+    if (!r || !repuestoElegido || !puedeGestionar) return;
+    const cantidad = Number(cantidadRepuesto) || 0;
+    if (cantidad <= 0) return;
+    if (
+      cantidad > repuestoElegido.cantidad_stock &&
+      !confirm(
+        `Solo quedan ${repuestoElegido.cantidad_stock} de "${repuestoElegido.nombre}" en stock. ¿Usar ${cantidad} igual? El stock va a quedar en negativo.`
+      )
+    ) {
+      return;
+    }
+    setGuardandoRepuesto(true);
+    const actor = getActor();
+    const { error: insError } = await supabase.from('reparaciones_repuestos').insert({
+      reparacion_id: r.id,
+      repuesto_id: repuestoElegido.id,
+      nombre_repuesto: repuestoElegido.nombre,
+      cantidad,
+      costo_unitario: repuestoElegido.costo_unitario,
+      actor_nombre: actor?.nombre ?? null,
+    });
+    if (insError) {
+      setError('No pudimos guardar el repuesto: ' + insError.message);
+      setGuardandoRepuesto(false);
+      return;
+    }
+    await supabase
+      .from('repuestos')
+      .update({ cantidad_stock: repuestoElegido.cantidad_stock - cantidad })
+      .eq('id', repuestoElegido.id);
+    await registrarAuditoria(supabase, {
+      accion: `usó ${cantidad} de "${repuestoElegido.nombre}" en la reparación ${r.numero_orden || ''}`,
+      entidad: 'reparacion',
+      entidadId: r.id,
+    });
+    setRepuestoElegido(null);
+    setBuscarRepuesto('');
+    setCantidadRepuesto('1');
+    setGuardandoRepuesto(false);
+    cargar();
+    (async () => {
+      const { data } = await supabase.from('repuestos').select('id, nombre, cantidad_stock, costo_unitario').order('nombre');
+      setRepuestosStock((data as RepuestoStock[]) ?? []);
+    })();
+  };
+
+  const quitarRepuestoUsado = async (ru: RepuestoUsado) => {
+    if (!puedeGestionar) return;
+    if (!confirm(`¿Quitar "${ru.nombre_repuesto}" de esta reparación? Vuelve a sumarse al stock.`)) return;
+    await supabase.from('reparaciones_repuestos').delete().eq('id', ru.id);
+    // Si el repuesto sigue existiendo en el catálogo, se le devuelve la
+    // cantidad al stock — si se borró del catálogo (repuesto_id null), no hay
+    // a qué devolverle nada.
+    if (ru.repuesto_id) {
+      const { data: actual } = await supabase.from('repuestos').select('cantidad_stock').eq('id', ru.repuesto_id).maybeSingle();
+      if (actual) {
+        await supabase
+          .from('repuestos')
+          .update({ cantidad_stock: actual.cantidad_stock + ru.cantidad })
+          .eq('id', ru.repuesto_id);
+      }
+    }
+    await registrarAuditoria(supabase, {
+      accion: `quitó "${ru.nombre_repuesto}" de una reparación (se devolvió al stock)`,
+      entidad: 'reparacion',
+      entidadId: id,
+    });
+    cargar();
+    (async () => {
+      const { data } = await supabase.from('repuestos').select('id, nombre, cantidad_stock, costo_unitario').order('nombre');
+      setRepuestosStock((data as RepuestoStock[]) ?? []);
+    })();
   };
 
   const enviarWhatsApp = async (tipo: 'recibido' | 'presupuesto' | 'repuesto' | 'listo') => {
@@ -1012,6 +1117,119 @@ export default function FichaReparacion() {
                 <span className="text-muted dark:text-dark-text-secondary">Entregado: </span>
                 {fmt(r.fecha_entrega)}
               </p>
+            )}
+          </div>
+        )}
+      </Seccion>
+
+      <Seccion titulo="Repuestos usados (del stock)">
+        <p className="text-xs text-muted dark:text-dark-text-secondary -mt-1 mb-2">
+          Distinto del "Repuestos ($)" de arriba (eso es lo presupuestado al cliente) — acá se descuenta stock real y
+          queda el costo de verdad, para calcular la ganancia de esta reparación.
+        </p>
+
+        {repuestosUsados.length > 0 && (
+          <div className="flex flex-col gap-1.5 mb-3">
+            {repuestosUsados.map((ru) => (
+              <div key={ru.id} className="flex items-center justify-between gap-2 rounded-lg bg-canvas dark:bg-dark-bg px-3 py-2 text-sm">
+                <span className="min-w-0 truncate">
+                  {ru.cantidad}× {ru.nombre_repuesto}
+                </span>
+                <span className="flex items-center gap-2 shrink-0">
+                  <span className="text-muted dark:text-dark-text-secondary">
+                    {ru.costo_unitario != null ? `$${(ru.costo_unitario * ru.cantidad).toLocaleString('es-AR')}` : 'sin costo'}
+                  </span>
+                  {puedeGestionar && (
+                    <button onClick={() => quitarRepuestoUsado(ru)} className="text-xs text-bad underline">
+                      Quitar
+                    </button>
+                  )}
+                </span>
+              </div>
+            ))}
+            {(() => {
+              const costoTotal = repuestosUsados.reduce((acc, ru) => acc + (ru.costo_unitario ?? 0) * ru.cantidad, 0);
+              const hayFaltantes = repuestosUsados.some((ru) => ru.costo_unitario == null);
+              const presupuestoSuma = (r.presupuesto_mano_obra || 0) + (r.presupuesto_repuestos || 0);
+              const cobrado = r.importe_total ?? (presupuestoSuma > 0 ? presupuestoSuma : null);
+              return (
+                <div className="flex flex-col gap-0.5 pt-1 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-muted dark:text-dark-text-secondary">Costo repuestos {hayFaltantes && '(parcial)'}</span>
+                    <span className="font-medium">${costoTotal.toLocaleString('es-AR')}</span>
+                  </div>
+                  {cobrado != null && (
+                    <div className="flex justify-between">
+                      <span className="text-muted dark:text-dark-text-secondary">Margen (cobrado − repuestos)</span>
+                      <span className={`font-medium ${cobrado - costoTotal >= 0 ? 'text-good' : 'text-bad'}`}>
+                        ${(cobrado - costoTotal).toLocaleString('es-AR')}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
+        {puedeGestionar && (
+          <div className="flex flex-col gap-2">
+            {repuestoElegido ? (
+              <div className="rounded-lg border border-accent/40 dark:border-dark-accent/40 bg-accent-soft dark:bg-dark-accent-soft px-3 py-2 flex items-center justify-between gap-2">
+                <span className="text-sm truncate">{repuestoElegido.nombre}</span>
+                <button onClick={() => setRepuestoElegido(null)} className="text-xs text-accent dark:text-dark-accent underline shrink-0">
+                  Cambiar
+                </button>
+              </div>
+            ) : (
+              <>
+                <input
+                  value={buscarRepuesto}
+                  onChange={(e) => setBuscarRepuesto(e.target.value)}
+                  placeholder="Buscar repuesto en stock..."
+                  className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                />
+                {buscarRepuesto && (
+                  <div className="flex flex-col gap-1 max-h-40 overflow-y-auto">
+                    {repuestosFiltrados.length === 0 && (
+                      <p className="text-xs text-muted dark:text-dark-text-secondary px-1">
+                        Sin resultados con stock disponible.{' '}
+                        <Link href="/servicio-tecnico/stock" className="underline">
+                          Cargar en Stock de repuestos
+                        </Link>
+                      </p>
+                    )}
+                    {repuestosFiltrados.map((rp) => (
+                      <button
+                        key={rp.id}
+                        onClick={() => setRepuestoElegido(rp)}
+                        className="rounded-lg border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-3 py-2 text-left text-xs flex items-center justify-between gap-2"
+                      >
+                        <span>{rp.nombre}</span>
+                        <span className="text-muted dark:text-dark-text-secondary shrink-0">Stock: {rp.cantidad_stock}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+            {repuestoElegido && (
+              <div className="flex gap-2">
+                <input
+                  value={cantidadRepuesto}
+                  onChange={(e) => setCantidadRepuesto(e.target.value.replace(/[^\d]/g, ''))}
+                  inputMode="numeric"
+                  placeholder="Cantidad"
+                  className="w-24 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                />
+                <button
+                  disabled={guardandoRepuesto || !cantidadRepuesto}
+                  onClick={agregarRepuestoUsado}
+                  className="flex-1 rounded-lg bg-accent dark:bg-dark-accent text-white py-2 text-sm font-medium disabled:opacity-40"
+                >
+                  {guardandoRepuesto ? 'Guardando...' : 'Usar en esta reparación'}
+                </button>
+              </div>
             )}
           </div>
         )}

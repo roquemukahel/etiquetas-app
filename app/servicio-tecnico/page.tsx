@@ -696,6 +696,9 @@ export default function ServicioTecnico() {
           <option value="recientes">Más recientes</option>
           <option value="antiguos">Más antiguos</option>
         </select>
+        <Link href="/servicio-tecnico/stock" className="text-xs text-accent dark:text-dark-accent underline">
+          Stock
+        </Link>
         <Link href="/servicio-tecnico/repuestos" className="text-xs text-accent dark:text-dark-accent underline">
           Proveedores
         </Link>
