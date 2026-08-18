@@ -5,12 +5,47 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { crearClienteNavegador } from '../../../lib/supabase/client';
 import { registrarAuditoria } from '../../../lib/auditoria';
+import { getActor } from '../../../lib/actor';
 import { simboloMoneda } from '../../../lib/monedas';
 import { sanitizarDecimal } from '../../../lib/numeros';
+import { codigoLlamada } from '../../../lib/paises';
+import { armarLinkWhatsApp, mensajeConsultaProveedor } from '../../../lib/whatsapp';
+import { extraerStockInsuficiente } from '../../../lib/repuestos';
+import Modal from '../../../Modal';
 
 type Proveedor = { id: string; nombre: string; telefono: string | null };
 type Repuesto = { id: string; nombre: string };
-type Precio = { id: string; repuesto_id: string; proveedor_id: string; precio: number };
+type Precio = {
+  id: string;
+  repuesto_id: string;
+  proveedor_id: string;
+  precio: number;
+  actualizado_at: string;
+  disponible: boolean;
+  tiempo_entrega_dias: number | null;
+  garantia_dias: number | null;
+  observaciones: string | null;
+};
+
+type FormState = {
+  nombre: string;
+  precio: string;
+  disponible: boolean;
+  tiempo_entrega_dias: string;
+  garantia_dias: string;
+  observaciones: string;
+};
+
+const FORM_VACIO: FormState = { nombre: '', precio: '', disponible: true, tiempo_entrega_dias: '', garantia_dias: '', observaciones: '' };
+
+function antiguedad(iso: string): string {
+  const dias = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+  if (dias <= 0) return 'hoy';
+  if (dias === 1) return 'hace 1 día';
+  if (dias < 30) return `hace ${dias} días`;
+  const meses = Math.floor(dias / 30);
+  return `hace ${meses} mes${meses === 1 ? '' : 'es'}`;
+}
 
 export default function ProveedorRepuestos() {
   const { id } = useParams<{ id: string }>();
@@ -20,21 +55,26 @@ export default function ProveedorRepuestos() {
   const [repuestos, setRepuestos] = useState<Repuesto[]>([]);
   const [precios, setPrecios] = useState<Precio[]>([]);
   const [moneda, setMoneda] = useState('$');
+  const [codigoPais, setCodigoPais] = useState('54');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const [nombreNuevo, setNombreNuevo] = useState('');
-  const [precioNuevo, setPrecioNuevo] = useState('');
-  const [guardandoNuevo, setGuardandoNuevo] = useState(false);
+  const [modalAbierto, setModalAbierto] = useState(false);
+  const [editandoId, setEditandoId] = useState<string | null>(null);
+  const [form, setForm] = useState<FormState>(FORM_VACIO);
+  const [guardando, setGuardando] = useState(false);
 
-  const [editando, setEditando] = useState<string | null>(null);
-  const [valorEditado, setValorEditado] = useState('');
-  const [guardandoEdicion, setGuardandoEdicion] = useState(false);
+  const [agregandoStockPara, setAgregandoStockPara] = useState<Precio | null>(null);
+  const [cantidadAStock, setCantidadAStock] = useState('1');
+  const [guardandoStock, setGuardandoStock] = useState(false);
 
   const cargar = async () => {
     const [{ data: prov }, { data: rep }, { data: pre }] = await Promise.all([
       supabase.from('proveedores_repuestos').select('id, nombre, telefono').eq('id', id).single(),
       supabase.from('repuestos').select('id, nombre').order('nombre'),
-      supabase.from('repuestos_precios').select('id, repuesto_id, proveedor_id, precio'),
+      supabase
+        .from('repuestos_precios')
+        .select('id, repuesto_id, proveedor_id, precio, actualizado_at, disponible, tiempo_entrega_dias, garantia_dias, observaciones'),
     ]);
     setProveedor((prov as Proveedor) ?? null);
     setRepuestos((rep as Repuesto[]) ?? []);
@@ -49,9 +89,10 @@ export default function ProveedorRepuestos() {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) return;
-      const { data: perfil } = await supabase.from('perfiles').select('negocios ( moneda )').eq('id', user.id).single();
+      const { data: perfil } = await supabase.from('perfiles').select('negocios ( moneda, pais )').eq('id', user.id).single();
       const codigo = (perfil as any)?.negocios?.moneda;
       if (codigo) setMoneda(simboloMoneda(codigo));
+      setCodigoPais(codigoLlamada((perfil as any)?.negocios?.pais));
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
@@ -74,6 +115,7 @@ export default function ProveedorRepuestos() {
   const minimoPorRepuesto = useMemo(() => {
     const mapa = new Map<string, number>();
     for (const p of precios) {
+      if (!p.disponible) continue;
       const actual = mapa.get(p.repuesto_id);
       if (actual === undefined || p.precio < actual) mapa.set(p.repuesto_id, p.precio);
     }
@@ -88,51 +130,83 @@ export default function ProveedorRepuestos() {
     [precios, id, repuestos]
   );
 
-  const agregarPrecio = async () => {
-    if (!nombreNuevo.trim() || !precioNuevo) return;
-    setGuardandoNuevo(true);
-
-    let repuestoId = repuestos.find((r) => r.nombre.toLowerCase() === nombreNuevo.trim().toLowerCase())?.id;
-    if (!repuestoId) {
-      const { data: nuevoRepuesto } = await supabase
-        .from('repuestos')
-        .insert({ nombre: nombreNuevo.trim() })
-        .select('id')
-        .single();
-      repuestoId = nuevoRepuesto?.id;
-    }
-    if (!repuestoId) {
-      setGuardandoNuevo(false);
-      return;
-    }
-
-    await supabase
-      .from('repuestos_precios')
-      .upsert(
-        { repuesto_id: repuestoId, proveedor_id: id, precio: Number(precioNuevo), actualizado_at: new Date().toISOString() },
-        { onConflict: 'repuesto_id,proveedor_id' }
-      );
-
-    setNombreNuevo('');
-    setPrecioNuevo('');
-    setGuardandoNuevo(false);
-    cargar();
+  const abrirNuevo = () => {
+    setEditandoId(null);
+    setForm(FORM_VACIO);
+    setError(null);
+    setModalAbierto(true);
   };
 
   const abrirEdicion = (p: Precio) => {
-    setEditando(p.id);
-    setValorEditado(String(p.precio));
+    setEditandoId(p.id);
+    setForm({
+      nombre: nombreRepuestoDe(p.repuesto_id),
+      precio: String(p.precio),
+      disponible: p.disponible,
+      tiempo_entrega_dias: p.tiempo_entrega_dias != null ? String(p.tiempo_entrega_dias) : '',
+      garantia_dias: p.garantia_dias != null ? String(p.garantia_dias) : '',
+      observaciones: p.observaciones ?? '',
+    });
+    setError(null);
+    setModalAbierto(true);
   };
 
-  const guardarEdicion = async (p: Precio) => {
-    if (!valorEditado) return;
-    setGuardandoEdicion(true);
-    await supabase
-      .from('repuestos_precios')
-      .update({ precio: Number(valorEditado), actualizado_at: new Date().toISOString() })
-      .eq('id', p.id);
-    setEditando(null);
-    setGuardandoEdicion(false);
+  const guardar = async () => {
+    if (!form.nombre.trim() || !form.precio) return;
+    setGuardando(true);
+    setError(null);
+
+    const camposComunes = {
+      disponible: form.disponible,
+      tiempo_entrega_dias: form.tiempo_entrega_dias ? Number(form.tiempo_entrega_dias) : null,
+      garantia_dias: form.garantia_dias ? Number(form.garantia_dias) : null,
+      observaciones: form.observaciones.trim() || null,
+    };
+
+    if (editandoId) {
+      const { error: updError } = await supabase
+        .from('repuestos_precios')
+        .update({ precio: Number(form.precio), actualizado_at: new Date().toISOString(), ...camposComunes })
+        .eq('id', editandoId);
+      if (updError) {
+        setError('No pudimos guardar: ' + updError.message);
+        setGuardando(false);
+        return;
+      }
+      setGuardando(false);
+      setModalAbierto(false);
+      cargar();
+      return;
+    }
+
+    let repuestoId = repuestos.find((r) => r.nombre.toLowerCase() === form.nombre.trim().toLowerCase())?.id;
+    if (!repuestoId) {
+      const { data: nuevoRepuesto } = await supabase.from('repuestos').insert({ nombre: form.nombre.trim() }).select('id').single();
+      repuestoId = nuevoRepuesto?.id;
+    }
+    if (!repuestoId) {
+      setGuardando(false);
+      return;
+    }
+
+    const { error: upsertError } = await supabase.from('repuestos_precios').upsert(
+      {
+        repuesto_id: repuestoId,
+        proveedor_id: id,
+        precio: Number(form.precio),
+        actualizado_at: new Date().toISOString(),
+        ...camposComunes,
+      },
+      { onConflict: 'repuesto_id,proveedor_id' }
+    );
+    if (upsertError) {
+      setError('No pudimos guardar: ' + upsertError.message);
+      setGuardando(false);
+      return;
+    }
+
+    setGuardando(false);
+    setModalAbierto(false);
     cargar();
   };
 
@@ -147,6 +221,37 @@ export default function ProveedorRepuestos() {
       valorAnterior: precio ? { repuesto_id: precio.repuesto_id, precio: precio.precio } : null,
     });
     cargar();
+  };
+
+  const confirmarAgregarStock = async () => {
+    if (!agregandoStockPara || !proveedor) return;
+    const cantidad = Number(cantidadAStock) || 0;
+    if (cantidad <= 0) return;
+    setGuardandoStock(true);
+    setError(null);
+    const actor = getActor();
+    const { error: rpcError } = await supabase.rpc('repuesto_registrar_movimiento', {
+      p_repuesto_id: agregandoStockPara.repuesto_id,
+      p_tipo: 'entrada',
+      p_cantidad: cantidad,
+      p_costo_unitario: agregandoStockPara.precio,
+      p_motivo: `Compra a ${proveedor.nombre}`,
+      p_actor_nombre: actor?.nombre ?? null,
+    });
+    if (rpcError) {
+      const stockActual = extraerStockInsuficiente(rpcError.message);
+      setError(stockActual != null ? 'No pudimos registrar la entrada.' : 'No pudimos registrar la entrada: ' + rpcError.message);
+      setGuardandoStock(false);
+      return;
+    }
+    await registrarAuditoria(supabase, {
+      accion: `agregó ${cantidad} de "${nombreRepuestoDe(agregandoStockPara.repuesto_id)}" al stock, comprado a ${proveedor.nombre}`,
+      entidad: 'repuesto',
+      entidadId: agregandoStockPara.repuesto_id,
+    });
+    setAgregandoStockPara(null);
+    setCantidadAStock('1');
+    setGuardandoStock(false);
   };
 
   if (loading) {
@@ -178,10 +283,22 @@ export default function ProveedorRepuestos() {
           <p className="text-lg font-medium truncate">{proveedor.nombre}</p>
           {proveedor.telefono && <p className="text-xs text-muted dark:text-dark-text-secondary">{proveedor.telefono}</p>}
         </div>
+        {proveedor.telefono && (
+          <a
+            href={armarLinkWhatsApp(proveedor.telefono, mensajeConsultaProveedor('un repuesto'), codigoPais)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="shrink-0 rounded-lg border border-good/30 text-good px-3 py-1.5 text-xs font-medium"
+          >
+            WhatsApp
+          </a>
+        )}
         <button onClick={eliminarProveedor} className="text-xs text-bad underline shrink-0">
-          Eliminar proveedor
+          Eliminar
         </button>
       </header>
+
+      {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
 
       {preciosDeEsteProveedor.length === 0 && (
         <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-4">
@@ -191,90 +308,179 @@ export default function ProveedorRepuestos() {
 
       <div className="flex flex-col gap-2">
         {preciosDeEsteProveedor.map((p) => {
-          const esMejorPrecio = minimoPorRepuesto.get(p.repuesto_id) === p.precio;
+          const esMejorPrecio = p.disponible && minimoPorRepuesto.get(p.repuesto_id) === p.precio;
           return (
             <div
               key={p.id}
-              className={`rounded-xl border px-4 py-3 flex items-center justify-between gap-2 ${
-                esMejorPrecio
-                  ? 'bg-good/10 border-good/30'
-                  : 'bg-white dark:bg-dark-surface border-border dark:border-dark-border shadow-card'
-              }`}
+              className={`rounded-xl border px-4 py-3 flex flex-col gap-1.5 ${
+                esMejorPrecio ? 'bg-good/10 border-good/30' : 'bg-white dark:bg-dark-surface border-border dark:border-dark-border shadow-card'
+              } ${!p.disponible ? 'opacity-60' : ''}`}
             >
-              <span className="flex items-center gap-2 min-w-0">
-                {esMejorPrecio && <span className="text-xs shrink-0">✅</span>}
-                <span className="text-sm truncate">{nombreRepuestoDe(p.repuesto_id)}</span>
-              </span>
-
-              {editando === p.id ? (
-                <span className="flex items-center gap-1.5 shrink-0">
-                  <input
-                    value={valorEditado}
-                    onChange={(e) => setValorEditado(e.target.value)}
-                    inputMode="numeric"
-                    autoFocus
-                    className="w-20 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-2 py-1 text-sm"
-                  />
-                  <button
-                    disabled={guardandoEdicion}
-                    onClick={() => guardarEdicion(p)}
-                    className="text-xs text-accent dark:text-dark-accent underline"
-                  >
-                    Guardar
-                  </button>
+              <div className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-2 min-w-0">
+                  {esMejorPrecio && <span className="text-xs shrink-0">✅</span>}
+                  <span className="text-sm truncate">{nombreRepuestoDe(p.repuesto_id)}</span>
+                  {!p.disponible && (
+                    <span className="text-[10px] font-semibold text-bad bg-bad/10 rounded-full px-2 py-0.5 shrink-0">Sin stock</span>
+                  )}
                 </span>
-              ) : (
-                <span className="flex items-center gap-3 shrink-0">
-                  <button
-                    onClick={() => abrirEdicion(p)}
-                    className={`font-medium tabular-nums underline decoration-dotted underline-offset-4 ${
-                      esMejorPrecio ? 'text-good' : ''
-                    }`}
-                  >
-                    {moneda}
-                    {p.precio.toLocaleString('es-AR')}
-                  </button>
-                  <button onClick={() => eliminarPrecio(p.id)} className="text-xs text-bad underline">
-                    Eliminar
-                  </button>
-                </span>
-              )}
+                <button
+                  onClick={() => abrirEdicion(p)}
+                  className={`font-medium tabular-nums underline decoration-dotted underline-offset-4 shrink-0 ${esMejorPrecio ? 'text-good' : ''}`}
+                >
+                  {moneda}
+                  {p.precio.toLocaleString('es-AR')}
+                </button>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap text-[11px] text-muted dark:text-dark-text-secondary">
+                <span>Actualizado {antiguedad(p.actualizado_at)}</span>
+                {p.tiempo_entrega_dias != null && <span>· entrega en {p.tiempo_entrega_dias}d</span>}
+                {p.garantia_dias != null && <span>· garantía {p.garantia_dias}d</span>}
+              </div>
+              {p.observaciones && <p className="text-[11px] text-muted dark:text-dark-text-secondary">{p.observaciones}</p>}
+              <div className="flex items-center gap-3 mt-0.5">
+                <button
+                  onClick={() => {
+                    setAgregandoStockPara(p);
+                    setCantidadAStock('1');
+                  }}
+                  className="text-xs text-accent dark:text-dark-accent underline"
+                >
+                  + Agregar a stock
+                </button>
+                <button onClick={() => eliminarPrecio(p.id)} className="text-xs text-bad underline">
+                  Eliminar
+                </button>
+              </div>
             </div>
           );
         })}
       </div>
 
-      <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-3 flex flex-col gap-2">
-        <p className="text-xs font-medium text-muted dark:text-dark-text-secondary">Agregar repuesto</p>
-        <div className="flex gap-2">
-          <input
-            value={nombreNuevo}
-            onChange={(e) => setNombreNuevo(e.target.value)}
-            placeholder="Nombre (ej. Batería iPhone 13)"
-            list="catalogo-repuestos"
-            className="flex-1 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
-          />
-          <datalist id="catalogo-repuestos">
-            {repuestos.map((r) => (
-              <option key={r.id} value={r.nombre} />
-            ))}
-          </datalist>
-          <input
-            value={precioNuevo}
-            onChange={(e) => setPrecioNuevo(sanitizarDecimal(e.target.value))}
-            placeholder="Precio"
-            inputMode="decimal"
-            className="w-24 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
-          />
-        </div>
-        <button
-          disabled={!nombreNuevo.trim() || !precioNuevo || guardandoNuevo}
-          onClick={agregarPrecio}
-          className="rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
-        >
-          + Agregar
-        </button>
-      </div>
+      <button
+        onClick={abrirNuevo}
+        className="rounded-xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2.5 text-sm font-medium text-white"
+      >
+        + Agregar repuesto
+      </button>
+
+      {modalAbierto && (
+        <Modal titulo={editandoId ? 'Editar precio' : 'Agregar repuesto'} onClose={() => setModalAbierto(false)}>
+          {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
+          <div className="flex flex-col gap-3">
+            <div>
+              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Repuesto</label>
+              <input
+                value={form.nombre}
+                onChange={(e) => setForm((f) => ({ ...f, nombre: e.target.value }))}
+                placeholder="Ej. Batería iPhone 13"
+                list="catalogo-repuestos"
+                disabled={!!editandoId}
+                autoFocus
+                className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm disabled:opacity-60"
+              />
+              <datalist id="catalogo-repuestos">
+                {repuestos.map((r) => (
+                  <option key={r.id} value={r.nombre} />
+                ))}
+              </datalist>
+            </div>
+            <div>
+              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Precio</label>
+              <input
+                value={form.precio}
+                onChange={(e) => setForm((f) => ({ ...f, precio: sanitizarDecimal(e.target.value) }))}
+                inputMode="decimal"
+                className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Tiempo de entrega (días)</label>
+                <input
+                  value={form.tiempo_entrega_dias}
+                  onChange={(e) => setForm((f) => ({ ...f, tiempo_entrega_dias: e.target.value.replace(/\D/g, '') }))}
+                  inputMode="numeric"
+                  className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Garantía (días)</label>
+                <input
+                  value={form.garantia_dias}
+                  onChange={(e) => setForm((f) => ({ ...f, garantia_dias: e.target.value.replace(/\D/g, '') }))}
+                  inputMode="numeric"
+                  className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.disponible}
+                onChange={(e) => setForm((f) => ({ ...f, disponible: e.target.checked }))}
+                className="h-4 w-4 accent-ink"
+              />
+              Disponible ahora
+            </label>
+            <div>
+              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Observaciones</label>
+              <textarea
+                value={form.observaciones}
+                onChange={(e) => setForm((f) => ({ ...f, observaciones: e.target.value }))}
+                rows={2}
+                className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => setModalAbierto(false)} className="flex-1 rounded-xl border border-border dark:border-dark-border py-2.5 text-sm font-medium">
+              Cancelar
+            </button>
+            <button
+              disabled={!form.nombre.trim() || !form.precio || guardando}
+              onClick={guardar}
+              className="flex-1 rounded-xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2.5 text-sm font-medium text-white disabled:opacity-40"
+            >
+              {guardando ? 'Guardando...' : 'Guardar'}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {agregandoStockPara && (
+        <Modal titulo="Agregar a stock" onClose={() => setAgregandoStockPara(null)} maxWidth="max-w-sm">
+          <p className="text-sm">
+            {nombreRepuestoDe(agregandoStockPara.repuesto_id)} — {moneda}
+            {agregandoStockPara.precio.toLocaleString('es-AR')} c/u
+          </p>
+          <div>
+            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Cantidad comprada</label>
+            <input
+              value={cantidadAStock}
+              onChange={(e) => setCantidadAStock(e.target.value.replace(/\D/g, ''))}
+              inputMode="numeric"
+              autoFocus
+              className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+            />
+          </div>
+          <p className="text-[11px] text-muted dark:text-dark-text-secondary">
+            Se suma al stock físico del repuesto con este costo por unidad, y queda en el historial de movimientos.
+          </p>
+          <div className="flex gap-2">
+            <button onClick={() => setAgregandoStockPara(null)} className="flex-1 rounded-xl border border-border dark:border-dark-border py-2.5 text-sm font-medium">
+              Cancelar
+            </button>
+            <button
+              disabled={!cantidadAStock || guardandoStock}
+              onClick={confirmarAgregarStock}
+              className="flex-1 rounded-xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2.5 text-sm font-medium text-white disabled:opacity-40"
+            >
+              {guardandoStock ? 'Guardando...' : 'Confirmar'}
+            </button>
+          </div>
+        </Modal>
+      )}
     </main>
   );
 }

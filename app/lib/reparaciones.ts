@@ -10,15 +10,25 @@ export type EstadoReparacion =
 
 export type GrupoEstado = 'pendientes' | 'en_proceso' | 'en_espera' | 'listos';
 
-export const ESTADOS_REPARACION: { id: EstadoReparacion; label: string; grupo: GrupoEstado; color: string }[] = [
-  { id: 'recibido', label: 'Recibido', grupo: 'pendientes', color: 'bg-accent/15 text-accent' },
-  { id: 'esperando_diagnostico', label: 'Esperando diagnóstico', grupo: 'pendientes', color: 'bg-accent/15 text-accent' },
-  { id: 'esperando_aprobacion', label: 'Esperando aprobación', grupo: 'en_espera', color: 'bg-warn/15 text-warn' },
-  { id: 'esperando_repuesto', label: 'Esperando repuesto', grupo: 'en_espera', color: 'bg-warn/15 text-warn' },
-  { id: 'en_reparacion', label: 'En reparación', grupo: 'en_proceso', color: 'bg-warn/15 text-warn' },
-  { id: 'listo_para_entregar', label: 'Listo para entregar', grupo: 'listos', color: 'bg-good/15 text-good' },
-  { id: 'entregado', label: 'Entregado', grupo: 'listos', color: 'bg-muted/15 text-muted' },
-  { id: 'cancelado', label: 'Cancelado / sin solución', grupo: 'listos', color: 'bg-bad/15 text-bad' },
+// "color" es la clase bg/text para el badge; "acento" es el token plano
+// (para bordes/puntos/franjas laterales); "icono" acompaña siempre al color
+// para que el estado nunca se comunique solo por color (accesibilidad).
+export const ESTADOS_REPARACION: {
+  id: EstadoReparacion;
+  label: string;
+  grupo: GrupoEstado;
+  color: string;
+  acento: string;
+  icono: string;
+}[] = [
+  { id: 'recibido', label: 'Recibido', grupo: 'pendientes', color: 'bg-accent/15 text-accent', acento: 'accent', icono: '📥' },
+  { id: 'esperando_diagnostico', label: 'Esperando diagnóstico', grupo: 'pendientes', color: 'bg-diag/15 text-diag', acento: 'diag', icono: '🔍' },
+  { id: 'esperando_aprobacion', label: 'Esperando aprobación', grupo: 'en_espera', color: 'bg-warn/15 text-warn', acento: 'warn', icono: '📋' },
+  { id: 'esperando_repuesto', label: 'Esperando repuesto', grupo: 'en_espera', color: 'bg-warn/15 text-warn', acento: 'warn', icono: '📦' },
+  { id: 'en_reparacion', label: 'En reparación', grupo: 'en_proceso', color: 'bg-repar/15 text-repar', acento: 'repar', icono: '🔧' },
+  { id: 'listo_para_entregar', label: 'Listo para entregar', grupo: 'listos', color: 'bg-good/15 text-good', acento: 'good', icono: '✅' },
+  { id: 'entregado', label: 'Entregado', grupo: 'listos', color: 'bg-muted/15 text-muted', acento: 'muted', icono: '🤝' },
+  { id: 'cancelado', label: 'Cancelado / sin solución', grupo: 'listos', color: 'bg-bad/15 text-bad', acento: 'bad', icono: '⛔' },
 ];
 
 export const GRUPOS_ESTADO: { id: GrupoEstado; label: string }[] = [
@@ -137,9 +147,42 @@ export function estadosDeGrupo(grupo: GrupoEstado) {
   return ESTADOS_REPARACION.filter((e) => e.grupo === grupo).map((e) => e.id);
 }
 
-const FINALIZADOS = ['entregado', 'cancelado'];
+// Exportado para que Mi banco y Técnicos (que necesitan "demorada" fuera de
+// la página principal de Reparaciones) usen el mismo criterio en vez de
+// reimplementarlo.
+export const FINALIZADOS = ['entregado', 'cancelado'];
 const HORA = 3600 * 1000;
 const DIA = 24 * HORA;
+export const DIAS_DEMORA = 5;
+
+export function esDemorado(r: { estado: string; fecha_ingreso_servicio: string; fecha_estimada: string | null }): boolean {
+  if (FINALIZADOS.includes(r.estado)) return false;
+  const dias = (Date.now() - new Date(r.fecha_ingreso_servicio).getTime()) / DIA;
+  if (dias > DIAS_DEMORA) return true;
+  if (r.fecha_estimada && new Date(r.fecha_estimada) < new Date()) return true;
+  return false;
+}
+
+export function formatearFecha(iso: string | null): string | null {
+  if (!iso) return null;
+  return new Date(iso).toLocaleDateString('es-AR');
+}
+
+export function esHoy(iso: string | null): boolean {
+  if (!iso) return false;
+  return new Date(iso).toDateString() === new Date().toDateString();
+}
+
+export function hace(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime();
+  const min = Math.floor(ms / 60000);
+  if (min < 1) return 'recién';
+  if (min < 60) return `hace ${min} min`;
+  const horas = Math.floor(min / 60);
+  if (horas < 24) return `hace ${horas}h`;
+  const dias = Math.floor(horas / 24);
+  return `hace ${dias}d`;
+}
 
 export type ReparacionParaAlerta = {
   id: string;

@@ -15,6 +15,12 @@ module.exports = {
         good: '#16A34A',
         warn: '#D97706',
         bad: '#DC2626',
+        // Diagnóstico (violeta) y en reparación (celeste): mismos criterios
+        // que good/warn/bad — un solo hex fijo que ya funciona en ambos
+        // modos porque se usa siempre como fondo translúcido (bg-diag/15)
+        // sobre la superficie de la tarjeta, nunca como fondo sólido.
+        diag: '#7C3AED',
+        repar: '#0284C7',
 
         'dark-bg': '#0B1220',
         'dark-surface': '#111827',

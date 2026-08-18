@@ -332,7 +332,7 @@ export default function NuevaOrden() {
       setVendedores((data as Vendedor[]) ?? []);
     })();
     (async () => {
-      const { data } = await supabase.from('trabajos').select('*').order('nombre');
+      const { data } = await supabase.from('trabajos').select('*').eq('activo', true).order('nombre');
       setTrabajos((data as Trabajo[]) ?? []);
     })();
     (async () => {

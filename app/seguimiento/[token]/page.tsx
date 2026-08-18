@@ -20,6 +20,11 @@ type Seguimiento = {
   nombre_negocio: string | null;
   logo_negocio: string | null;
   evidencias: Evidencia[];
+  diagnostico: string | null;
+  presupuesto_mano_obra: number | null;
+  presupuesto_repuestos: number | null;
+  presupuesto_estado: string | null;
+  presupuesto_respondido_at: string | null;
 };
 
 const ESTADOS: Record<string, { titulo: string; desc: string; emoji: string }> = {
@@ -35,7 +40,7 @@ const ESTADOS: Record<string, { titulo: string; desc: string; emoji: string }> =
   },
   esperando_aprobacion: {
     titulo: 'Esperando tu aprobación',
-    desc: 'Ya armamos el presupuesto. Contactanos para aprobarlo y arrancamos con la reparación.',
+    desc: 'Ya armamos el presupuesto. Lo podés aprobar o rechazar acá abajo.',
     emoji: '📋',
   },
   esperando_repuesto: {
@@ -71,13 +76,33 @@ export default function Seguimiento() {
   const [datos, setDatos] = useState<Seguimiento | null>(null);
   const [loading, setLoading] = useState(true);
   const [hayNovedadesNuevas, setHayNovedadesNuevas] = useState(false);
+  const [respondiendo, setRespondiendo] = useState(false);
+  const [errorRespuesta, setErrorRespuesta] = useState<string | null>(null);
+
+  const cargarDatos = async () => {
+    const { data } = await supabase.rpc('seguimiento_publico', { token });
+    const d = (data as Seguimiento[])?.[0] ?? null;
+    setDatos(d);
+    setLoading(false);
+    return d;
+  };
+
+  const responderPresupuesto = async (aprobar: boolean) => {
+    setRespondiendo(true);
+    setErrorRespuesta(null);
+    const { error } = await supabase.rpc('reparacion_responder_presupuesto', { p_token: token, p_aprobar: aprobar });
+    if (error) {
+      setErrorRespuesta('No pudimos registrar tu respuesta. Probá de nuevo o contactanos directamente.');
+      setRespondiendo(false);
+      return;
+    }
+    await cargarDatos();
+    setRespondiendo(false);
+  };
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase.rpc('seguimiento_publico', { token });
-      const d = (data as Seguimiento[])?.[0] ?? null;
-      setDatos(d);
-      setLoading(false);
+      const d = await cargarDatos();
 
       // "Novedad nueva" = quedó al menos una evidencia sin ver desde la
       // última vez que este mismo navegador abrió este link — no hay
@@ -167,6 +192,44 @@ export default function Seguimiento() {
           )}
         </div>
       </div>
+
+      {(datos.presupuesto_mano_obra != null || datos.presupuesto_repuestos != null) && (
+        <div className="w-full max-w-xs rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-5 flex flex-col gap-3">
+          <p className="text-sm font-semibold text-center">Presupuesto</p>
+          {datos.diagnostico && <p className="text-xs text-muted dark:text-dark-text-secondary">{datos.diagnostico}</p>}
+          <p className="text-2xl font-display font-semibold text-center">
+            ${((datos.presupuesto_mano_obra || 0) + (datos.presupuesto_repuestos || 0)).toLocaleString('es-AR')}
+          </p>
+
+          {datos.presupuesto_estado === 'aprobado' && (
+            <p className="text-sm text-good text-center">✅ Aprobaste este presupuesto{datos.presupuesto_respondido_at ? ` el ${new Date(datos.presupuesto_respondido_at).toLocaleDateString('es-AR')}` : ''}.</p>
+          )}
+          {datos.presupuesto_estado === 'rechazado' && (
+            <p className="text-sm text-bad text-center">Rechazaste este presupuesto. Contactanos si querés que lo revisemos.</p>
+          )}
+          {(datos.presupuesto_estado == null || datos.presupuesto_estado === 'enviado') && (
+            <>
+              {errorRespuesta && <p className="text-xs text-bad text-center">{errorRespuesta}</p>}
+              <div className="flex gap-2">
+                <button
+                  disabled={respondiendo}
+                  onClick={() => responderPresupuesto(true)}
+                  className="flex-1 rounded-xl bg-good text-white py-2.5 text-sm font-medium disabled:opacity-40"
+                >
+                  Aprobar
+                </button>
+                <button
+                  disabled={respondiendo}
+                  onClick={() => responderPresupuesto(false)}
+                  className="flex-1 rounded-xl border border-bad/40 text-bad py-2.5 text-sm font-medium disabled:opacity-40"
+                >
+                  Rechazar
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {(datos.evidencias?.length ?? 0) > 0 && (
         <div className="w-full max-w-xs flex flex-col gap-2">

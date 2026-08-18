@@ -2312,6 +2312,12 @@ grant execute on function saldos_proveedores() to authenticated;
 -- ============================================================
 alter table reparaciones add column if not exists senal_ok boolean;
 alter table reparaciones add column if not exists boton_silencio_ok boolean;
+
+-- Checklist de ingreso: pin de carga y carga MagSafe. Ver
+-- checklist_pin_magsafe_supabase.sql.
+alter table reparaciones add column if not exists pin_carga_ok boolean;
+alter table reparaciones add column if not exists carga_magsafe_ok boolean;
+
 alter table ordenes add column if not exists checklist_ingreso jsonb;
 alter table ordenes add column if not exists aclaraciones_tecnico text;
 
@@ -2733,3 +2739,64 @@ alter table reparaciones_repuestos enable row level security;
 create policy "reparaciones_repuestos de mi negocio" on reparaciones_repuestos
   for all using (negocio_id = negocio_actual())
   with check (negocio_id = negocio_actual());
+
+-- ============================================================
+-- Servicio Técnico PRO — Fase 5: repuestos con reservas y movimientos
+-- atómicos. Ver repuestos_reservas_movimientos_supabase.sql, que es el
+-- patch real a correr contra Supabase (tablas repuestos_movimientos /
+-- repuestos_reservas + funciones repuesto_consumir /
+-- repuesto_quitar_consumo / repuesto_registrar_movimiento /
+-- repuesto_reservar / repuesto_liberar_reserva /
+-- repuesto_confirmar_reserva). Esas funciones reemplazan el
+-- lee-modifica-escribe que hacía el cliente sobre cantidad_stock (tenía
+-- una condición de carrera real) por un "select ... for update" que
+-- serializa consumos simultáneos del mismo repuesto.
+-- ============================================================
+alter table repuestos add column if not exists cantidad_reservada integer not null default 0;
+alter table repuestos add column if not exists categoria text;
+alter table repuestos add column if not exists compatibilidad text;
+alter table repuestos add column if not exists calidad text;
+alter table repuestos add column if not exists sku text;
+alter table repuestos add column if not exists codigo_barras text;
+alter table repuestos add column if not exists ubicacion_fisica text;
+alter table repuestos add column if not exists proveedor_id uuid references proveedores_repuestos(id) on delete set null;
+alter table repuestos add column if not exists imagen_url text;
+alter table repuestos add column if not exists stock_minimo integer;
+alter table repuestos add column if not exists garantia_dias integer;
+alter table repuestos add column if not exists observaciones text;
+alter table repuestos_precios add column if not exists disponible boolean not null default true;
+alter table repuestos_precios add column if not exists tiempo_entrega_dias integer;
+alter table repuestos_precios add column if not exists garantia_dias integer;
+alter table repuestos_precios add column if not exists observaciones text;
+
+-- ============================================================
+-- Servicio Técnico PRO — Fase 4: catálogo de servicios ilustrado.
+-- Columnas aditivas sobre `trabajos` (ver servicios_catalogo_pro_supabase.sql,
+-- que es el patch real a correr contra Supabase). `activo=false` es
+-- "archivar" — nunca se borra un servicio ya usado en una reparación.
+-- ============================================================
+alter table trabajos add column if not exists categoria text;
+alter table trabajos add column if not exists descripcion_interna text;
+alter table trabajos add column if not exists duracion_estimada_min integer;
+alter table trabajos add column if not exists garantia_dias integer;
+alter table trabajos add column if not exists compatibilidad text;
+alter table trabajos add column if not exists repuesto_sugerido_id uuid references repuestos(id) on delete set null;
+alter table trabajos add column if not exists checklist_tecnico text[];
+alter table trabajos add column if not exists instrucciones_internas text;
+alter table trabajos add column if not exists activo boolean not null default true;
+alter table trabajos add column if not exists orden_visualizacion integer not null default 0;
+
+-- ============================================================
+-- Servicio Técnico PRO — Fase 6: aprobación digital de presupuesto.
+-- Ver presupuesto_aprobacion_digital_supabase.sql, que es el patch real
+-- a correr contra Supabase (columnas aditivas sobre `reparaciones` +
+-- reemplaza seguimiento_publico para sumar los campos de presupuesto +
+-- función pública reparacion_responder_presupuesto, que el cliente usa
+-- desde /seguimiento/[token] para aprobar o rechazar sin login).
+-- ============================================================
+alter table reparaciones add column if not exists presupuesto_estado text;
+alter table reparaciones add column if not exists presupuesto_enviado_at timestamptz;
+alter table reparaciones add column if not exists presupuesto_medio text;
+alter table reparaciones add column if not exists presupuesto_respondido_at timestamptz;
+alter table reparaciones add column if not exists presupuesto_importe_aceptado numeric;
+alter table reparaciones add column if not exists presupuesto_texto_aceptado text;
