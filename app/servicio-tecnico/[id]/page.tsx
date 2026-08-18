@@ -19,6 +19,7 @@ import {
   CAMPOS_DEPENDEN_MODULO,
 } from '../../lib/reparaciones';
 import { generarOrdenDeReparacion } from '../../lib/ordenesServicio';
+import { extraerStockInsuficiente } from '../../lib/repuestos';
 import { sanitizarDecimal } from '../../lib/numeros';
 import { comprimirImagen } from '../../lib/comprimirImagen';
 import SelectorColorAuto from '../../SelectorColorAuto';
@@ -505,37 +506,49 @@ export default function FichaReparacion() {
     (rp) => rp.cantidad_stock > 0 && rp.nombre.toLowerCase().includes(buscarRepuesto.trim().toLowerCase())
   );
 
+  // Consumir un repuesto pasa por la función repuesto_consumir (RPC) en vez
+  // de leer/escribir cantidad_stock desde acá: esa función bloquea la fila
+  // del repuesto mientras dura la operación, así que dos consumos
+  // simultáneos del mismo repuesto (ej. dos técnicos a la vez) se serializan
+  // en vez de pisarse — antes esto leía el stock, restaba en JS y escribía
+  // el resultado, una condición de carrera real. El mensaje
+  // "STOCK_INSUFICIENTE:<n>" que tira la función si no forzamos es lo que
+  // permite mantener el mismo cartel de confirmación de siempre.
   const agregarRepuestoUsado = async () => {
     if (!r || !repuestoElegido || !puedeGestionar) return;
     const cantidad = Number(cantidadRepuesto) || 0;
     if (cantidad <= 0) return;
-    if (
-      cantidad > repuestoElegido.cantidad_stock &&
-      !confirm(
-        `Solo quedan ${repuestoElegido.cantidad_stock} de "${repuestoElegido.nombre}" en stock. ¿Usar ${cantidad} igual? El stock va a quedar en negativo.`
-      )
-    ) {
-      return;
-    }
     setGuardandoRepuesto(true);
     const actor = getActor();
-    const { error: insError } = await supabase.from('reparaciones_repuestos').insert({
-      reparacion_id: r.id,
-      repuesto_id: repuestoElegido.id,
-      nombre_repuesto: repuestoElegido.nombre,
-      cantidad,
-      costo_unitario: repuestoElegido.costo_unitario,
-      actor_nombre: actor?.nombre ?? null,
-    });
-    if (insError) {
-      setError('No pudimos guardar el repuesto: ' + insError.message);
-      setGuardandoRepuesto(false);
-      return;
+    const intentar = async (forzar: boolean) =>
+      supabase.rpc('repuesto_consumir', {
+        p_repuesto_id: repuestoElegido.id,
+        p_reparacion_id: r.id,
+        p_cantidad: cantidad,
+        p_actor_nombre: actor?.nombre ?? null,
+        p_forzar: forzar,
+      });
+
+    let { error: rpcError } = await intentar(false);
+    if (rpcError) {
+      const stockActual = extraerStockInsuficiente(rpcError.message);
+      if (
+        stockActual == null ||
+        !confirm(
+          `Solo quedan ${stockActual} de "${repuestoElegido.nombre}" en stock. ¿Usar ${cantidad} igual? El stock va a quedar en negativo.`
+        )
+      ) {
+        setGuardandoRepuesto(false);
+        return;
+      }
+      ({ error: rpcError } = await intentar(true));
+      if (rpcError) {
+        setError('No pudimos guardar el repuesto: ' + rpcError.message);
+        setGuardandoRepuesto(false);
+        return;
+      }
     }
-    await supabase
-      .from('repuestos')
-      .update({ cantidad_stock: repuestoElegido.cantidad_stock - cantidad })
-      .eq('id', repuestoElegido.id);
+
     await registrarAuditoria(supabase, {
       accion: `usó ${cantidad} de "${repuestoElegido.nombre}" en la reparación ${r.numero_orden || ''}`,
       entidad: 'reparacion',
@@ -555,18 +568,14 @@ export default function FichaReparacion() {
   const quitarRepuestoUsado = async (ru: RepuestoUsado) => {
     if (!puedeGestionar) return;
     if (!confirm(`¿Quitar "${ru.nombre_repuesto}" de esta reparación? Vuelve a sumarse al stock.`)) return;
-    await supabase.from('reparaciones_repuestos').delete().eq('id', ru.id);
-    // Si el repuesto sigue existiendo en el catálogo, se le devuelve la
-    // cantidad al stock — si se borró del catálogo (repuesto_id null), no hay
-    // a qué devolverle nada.
-    if (ru.repuesto_id) {
-      const { data: actual } = await supabase.from('repuestos').select('cantidad_stock').eq('id', ru.repuesto_id).maybeSingle();
-      if (actual) {
-        await supabase
-          .from('repuestos')
-          .update({ cantidad_stock: actual.cantidad_stock + ru.cantidad })
-          .eq('id', ru.repuesto_id);
-      }
+    const actor = getActor();
+    const { error: rpcError } = await supabase.rpc('repuesto_quitar_consumo', {
+      p_reparacion_repuesto_id: ru.id,
+      p_actor_nombre: actor?.nombre ?? null,
+    });
+    if (rpcError) {
+      setError('No pudimos quitar el repuesto: ' + rpcError.message);
+      return;
     }
     await registrarAuditoria(supabase, {
       accion: `quitó "${ru.nombre_repuesto}" de una reparación (se devolvió al stock)`,

@@ -2741,6 +2741,35 @@ create policy "reparaciones_repuestos de mi negocio" on reparaciones_repuestos
   with check (negocio_id = negocio_actual());
 
 -- ============================================================
+-- Servicio Técnico PRO — Fase 5: repuestos con reservas y movimientos
+-- atómicos. Ver repuestos_reservas_movimientos_supabase.sql, que es el
+-- patch real a correr contra Supabase (tablas repuestos_movimientos /
+-- repuestos_reservas + funciones repuesto_consumir /
+-- repuesto_quitar_consumo / repuesto_registrar_movimiento /
+-- repuesto_reservar / repuesto_liberar_reserva /
+-- repuesto_confirmar_reserva). Esas funciones reemplazan el
+-- lee-modifica-escribe que hacía el cliente sobre cantidad_stock (tenía
+-- una condición de carrera real) por un "select ... for update" que
+-- serializa consumos simultáneos del mismo repuesto.
+-- ============================================================
+alter table repuestos add column if not exists cantidad_reservada integer not null default 0;
+alter table repuestos add column if not exists categoria text;
+alter table repuestos add column if not exists compatibilidad text;
+alter table repuestos add column if not exists calidad text;
+alter table repuestos add column if not exists sku text;
+alter table repuestos add column if not exists codigo_barras text;
+alter table repuestos add column if not exists ubicacion_fisica text;
+alter table repuestos add column if not exists proveedor_id uuid references proveedores_repuestos(id) on delete set null;
+alter table repuestos add column if not exists imagen_url text;
+alter table repuestos add column if not exists stock_minimo integer;
+alter table repuestos add column if not exists garantia_dias integer;
+alter table repuestos add column if not exists observaciones text;
+alter table repuestos_precios add column if not exists disponible boolean not null default true;
+alter table repuestos_precios add column if not exists tiempo_entrega_dias integer;
+alter table repuestos_precios add column if not exists garantia_dias integer;
+alter table repuestos_precios add column if not exists observaciones text;
+
+-- ============================================================
 -- Servicio Técnico PRO — Fase 4: catálogo de servicios ilustrado.
 -- Columnas aditivas sobre `trabajos` (ver servicios_catalogo_pro_supabase.sql,
 -- que es el patch real a correr contra Supabase). `activo=false` es
