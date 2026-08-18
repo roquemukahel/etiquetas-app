@@ -43,6 +43,7 @@ export async function cambiarEstadoReparacion(
   nuevoEstado: string
 ): Promise<'aplicado' | 'cancelado'> {
   let overrideControlCalidad = false;
+  let controlesFaltantes: string[] = [];
   if (nuevoEstado === 'listo_para_entregar') {
     const faltantes = await controlesDeCalidadFaltantes(supabase, r);
     if (faltantes.length > 0) {
@@ -55,6 +56,7 @@ export async function cambiarEstadoReparacion(
         return 'cancelado';
       }
       overrideControlCalidad = true;
+      controlesFaltantes = faltantes;
     }
   }
 
@@ -85,7 +87,7 @@ export async function cambiarEstadoReparacion(
 
   await registrarAuditoria(supabase, {
     accion: `cambió el estado de la reparación ${r.numero_orden || ''} (${r.modelo || 'sin modelo'}) de "${infoEstado(r.estado).label}" a "${infoEstado(nuevoEstado).label}"${
-      overrideControlCalidad ? ' (con controles de calidad pendientes)' : ''
+      overrideControlCalidad ? ` (con controles de calidad pendientes: ${controlesFaltantes.join(', ')})` : ''
     }`,
     entidad: 'reparacion',
     entidadId: r.id,

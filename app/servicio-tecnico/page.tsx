@@ -10,6 +10,7 @@ import { codigoLlamada } from '../lib/paises';
 import { obtenerImagenesCarpetas } from '../lib/carpetas';
 import { registrarAuditoria } from '../lib/auditoria';
 import { cambiarEstadoReparacion } from '../lib/estadoReparacion';
+import { liberarRepuestosDeReparaciones } from '../lib/repuestos';
 import { getActor, useActor, MENSAJE_ACTOR_REQUERIDO } from '../lib/actor';
 import { tienePermiso } from '../lib/permisos';
 import { obtenerTodasLasFilas } from '../lib/db';
@@ -699,18 +700,16 @@ export default function ServicioTecnico() {
     // Borrar la reparación de una no alcanza: reparaciones_repuestos y
     // repuestos_reservas se borran en cascada, pero eso NO le devuelve nada
     // al stock — hay que liberar/devolver primero por las mismas RPC que usa
-    // el resto del módulo, si no el stock queda mal para siempre (la fila
-    // que necesitarían esas RPC para deshacer el movimiento ya no existiría).
+    // el resto del módulo. Si CUALQUIER liberación falla, se aborta el
+    // borrado en vez de seguir igual — si no, la reparación se iría en
+    // cascada con parte del stock sin devolver y sin ninguna fila que
+    // permita corregirlo después.
     const actorActual = getActor();
-    const [{ data: consumos }, { data: reservas }] = await Promise.all([
-      supabase.from('reparaciones_repuestos').select('id').eq('reparacion_id', r.id),
-      supabase.from('repuestos_reservas').select('id').eq('reparacion_id', r.id).eq('estado', 'activa'),
-    ]);
-    for (const c of consumos ?? []) {
-      await supabase.rpc('repuesto_quitar_consumo', { p_reparacion_repuesto_id: c.id, p_actor_nombre: actorActual?.nombre ?? null });
-    }
-    for (const res of reservas ?? []) {
-      await supabase.rpc('repuesto_liberar_reserva', { p_reserva_id: res.id, p_actor_nombre: actorActual?.nombre ?? null });
+    const liberacion = await liberarRepuestosDeReparaciones(supabase, [r.id], actorActual?.nombre ?? null);
+    if (!liberacion.ok) {
+      alert('No pudimos liberar los repuestos de esta reparación, así que no se eliminó: ' + liberacion.error);
+      setGuardando(null);
+      return;
     }
     await supabase.from('reparaciones').delete().eq('id', r.id);
     await registrarAuditoria(supabase, {

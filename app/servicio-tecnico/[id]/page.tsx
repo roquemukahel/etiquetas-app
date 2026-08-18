@@ -317,6 +317,12 @@ export default function FichaReparacion() {
   // Garantías y retrabajos (sección 21): reparaciones anteriores del MISMO
   // equipo (mismo IMEI), para poder clasificar este ingreso. Se busca recién
   // cuando ya sabemos el IMEI de esta reparación, no en el efecto de arriba.
+  // Depende también de r?.id (no solo r?.imei): al navegar entre dos
+  // reparaciones vinculadas por garantía (mismo IMEI) desde la tarjeta de
+  // "Garantías y retrabajos", el imei no cambia, así que si solo dependiera
+  // de imei el efecto no se volvería a ejecutar y quedarían datos de la
+  // reparación anterior (incluyendo el filtro .neq('id', r.id) con el id
+  // viejo).
   useEffect(() => {
     if (!r?.imei) {
       setReparacionesRelacionadas([]);
@@ -335,7 +341,7 @@ export default function FichaReparacion() {
       setReparacionRelacionadaElegida(r.reparacion_relacionada_id ?? relacionadas[0]?.id ?? null);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [r?.imei]);
+  }, [r?.imei, r?.id]);
 
   const nombreCliente = r?.clientes ? `${r.clientes.nombre} ${r.clientes.apellido || ''}`.trim() : null;
   const nombreTecnico = (tid: string | null) => tecnicos.find((t) => t.id === tid)?.nombre;
