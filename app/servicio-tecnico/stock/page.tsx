@@ -512,7 +512,7 @@ export default function StockRepuestos() {
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
       <header className="flex items-start gap-3">
-        <Link href="/servicio-tecnico" className="text-2xl leading-none mt-0.5">
+        <Link href="/servicio-tecnico" aria-label="Volver" className="text-2xl leading-none mt-0.5">
           &larr;
         </Link>
         <div className="mr-auto">

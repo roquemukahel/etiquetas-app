@@ -9,17 +9,19 @@ import { armarLinkWhatsApp, mensajeSeguimientoServicio, mensajeListoServicio } f
 import { codigoLlamada } from '../lib/paises';
 import { obtenerImagenesCarpetas } from '../lib/carpetas';
 import { registrarAuditoria } from '../lib/auditoria';
+import { cambiarEstadoReparacion } from '../lib/estadoReparacion';
+import { liberarRepuestosDeReparaciones } from '../lib/repuestos';
 import { getActor, useActor, MENSAJE_ACTOR_REQUERIDO } from '../lib/actor';
 import { tienePermiso } from '../lib/permisos';
 import { obtenerTodasLasFilas } from '../lib/db';
 import {
-  infoEstado,
   calcularAlertas,
   esHoy,
   ITEMS_CHECKLIST_INGRESO,
   CAMPOS_DEPENDEN_MODULO,
   generarTextoCondicionIngreso,
   ChecklistIngreso,
+  RepuestoParaAlerta,
 } from '../lib/reparaciones';
 import Avatar from '../Avatar';
 import SelectorColorAuto from '../SelectorColorAuto';
@@ -193,6 +195,10 @@ export default function ServicioTecnico() {
       setClientes(await obtenerTodasLasFilas<Cliente>(supabase, 'clientes', 'id, nombre, apellido, telefono', [{ columna: 'nombre' }]));
     })();
     (async () => {
+      const { data } = await supabase.from('repuestos').select('id, nombre, cantidad_stock, cantidad_reservada, stock_minimo');
+      setRepuestosParaAlertas((data as RepuestoParaAlerta[]) ?? []);
+    })();
+    (async () => {
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -296,7 +302,34 @@ export default function ServicioTecnico() {
     return Date.now() - new Date(iso).getTime() <= dias * 86400000;
   };
 
-  const alertas = useMemo(() => calcularAlertas(reparaciones), [reparaciones]);
+  const [repuestosParaAlertas, setRepuestosParaAlertas] = useState<RepuestoParaAlerta[]>([]);
+  // "Descartar" una alerta la oculta en este navegador (sección 22: poder
+  // marcarla como resuelta) — no hay una tabla de alertas en la base (son
+  // calculadas, no filas propias), así que el descarte queda local; si la
+  // causa sigue vigente más adelante (ej. sigue sin técnico varios días
+  // después), vuelve a aparecer con una key distinta.
+  const [alertasDescartadas, setAlertasDescartadas] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    try {
+      const guardado = localStorage.getItem('servicioTecnicoAlertasDescartadas');
+      if (guardado) setAlertasDescartadas(new Set(JSON.parse(guardado)));
+    } catch {}
+  }, []);
+  const descartarAlerta = (key: string) => {
+    setAlertasDescartadas((prev) => {
+      const next = new Set(prev);
+      next.add(key);
+      try {
+        localStorage.setItem('servicioTecnicoAlertasDescartadas', JSON.stringify(Array.from(next)));
+      } catch {}
+      return next;
+    });
+  };
+  const alertasKey = (a: { tipo: string; id: string; categoria: string }) => `${a.tipo}:${a.id}:${a.categoria}`;
+  const alertas = useMemo(
+    () => calcularAlertas(reparaciones, repuestosParaAlertas).filter((a) => !alertasDescartadas.has(alertasKey(a))),
+    [reparaciones, repuestosParaAlertas, alertasDescartadas]
+  );
   const [alertasAbiertas, setAlertasAbiertas] = useState(false);
 
   const historialTecnico = useMemo(
@@ -557,21 +590,11 @@ export default function ServicioTecnico() {
       return;
     }
     setGuardando(r.id);
-    const cambios: any = { estado: nuevoEstado, estado_actualizado_at: new Date().toISOString() };
-    // "Listo para entregar" y "Entregado" cuentan igual como trabajo
-    // terminado del técnico en Estadísticas — ver misma nota en
-    // app/servicio-tecnico/[id]/page.tsx.
-    if ((nuevoEstado === 'listo_para_entregar' || nuevoEstado === 'entregado') && !r.fecha_reparado) {
-      cambios.fecha_reparado = new Date().toISOString();
+    const resultado = await cambiarEstadoReparacion(supabase, r, nuevoEstado);
+    if (resultado === 'cancelado') {
+      setGuardando(null);
+      return;
     }
-    await supabase.from('reparaciones').update(cambios).eq('id', r.id);
-    await registrarAuditoria(supabase, {
-      accion: `cambió el estado de la reparación ${r.numero_orden || ''} (${r.modelo || 'sin modelo'}) de "${infoEstado(r.estado).label}" a "${infoEstado(nuevoEstado).label}"`,
-      entidad: 'reparacion',
-      entidadId: r.id,
-      valorAnterior: { estado: r.estado },
-      valorNuevo: { estado: nuevoEstado },
-    });
 
     if (nuevoEstado === 'listo_para_entregar' && r.cliente_id && r.clientes?.telefono && r.token_seguimiento) {
       const url = `${window.location.origin}/seguimiento/${r.token_seguimiento}`;
@@ -674,6 +697,20 @@ export default function ServicioTecnico() {
     if (!confirm('¿Eliminar definitivamente esta reparación? Esta acción no se puede deshacer y borra todo su historial.')) return;
     setGuardando(r.id);
     setMenuAbierto(null);
+    // Borrar la reparación de una no alcanza: reparaciones_repuestos y
+    // repuestos_reservas se borran en cascada, pero eso NO le devuelve nada
+    // al stock — hay que liberar/devolver primero por las mismas RPC que usa
+    // el resto del módulo. Si CUALQUIER liberación falla, se aborta el
+    // borrado en vez de seguir igual — si no, la reparación se iría en
+    // cascada con parte del stock sin devolver y sin ninguna fila que
+    // permita corregirlo después.
+    const actorActual = getActor();
+    const liberacion = await liberarRepuestosDeReparaciones(supabase, [r.id], actorActual?.nombre ?? null);
+    if (!liberacion.ok) {
+      alert('No pudimos liberar los repuestos de esta reparación, así que no se eliminó: ' + liberacion.error);
+      setGuardando(null);
+      return;
+    }
     await supabase.from('reparaciones').delete().eq('id', r.id);
     await registrarAuditoria(supabase, {
       accion: `eliminó definitivamente una reparación (${r.numero_orden || ''}, ${r.modelo || 'sin modelo'}${r.imei ? `, IMEI ${r.imei}` : ''})`,
@@ -706,7 +743,7 @@ export default function ServicioTecnico() {
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
       <header className="flex items-start gap-3">
-        <Link href="/" className="text-2xl leading-none mt-0.5">
+        <Link href="/" aria-label="Volver al inicio" className="text-2xl leading-none mt-0.5">
           &larr;
         </Link>
         <div className="mr-auto">
@@ -1250,14 +1287,18 @@ export default function ServicioTecnico() {
               {alertasAbiertas && (
                 <div className="flex flex-col border-t border-warn/20">
                   {alertas.map((a) => (
-                    <Link
-                      key={a.id}
-                      href={`/servicio-tecnico/${a.id}`}
-                      className="flex items-center gap-2 px-4 py-2 text-xs hover:bg-white/40 dark:hover:bg-black/10"
-                    >
+                    <div key={alertasKey(a)} className="flex items-center gap-2 px-4 py-2 text-xs hover:bg-white/40 dark:hover:bg-black/10">
                       <span className={`h-2 w-2 rounded-full shrink-0 ${a.color === 'bad' ? 'bg-bad' : 'bg-warn'}`} />
-                      {a.texto}
-                    </Link>
+                      <Link href={a.tipo === 'repuesto' ? '/servicio-tecnico/stock' : `/servicio-tecnico/${a.id}`} className="flex-1 min-w-0 truncate">
+                        {a.texto}
+                      </Link>
+                      <button
+                        onClick={() => descartarAlerta(alertasKey(a))}
+                        className="shrink-0 text-muted dark:text-dark-text-secondary hover:text-ink dark:hover:text-dark-text underline"
+                      >
+                        Descartar
+                      </button>
+                    </div>
                   ))}
                 </div>
               )}

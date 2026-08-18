@@ -12,6 +12,7 @@ import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import { simboloMoneda } from '../../lib/monedas';
 import { sanitizarDecimal } from '../../lib/numeros';
+import { liberarRepuestosDeReparaciones } from '../../lib/repuestos';
 import Avatar from '../../Avatar';
 import SelectorColorAuto from '../../SelectorColorAuto';
 import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
@@ -865,16 +866,28 @@ export default function DetalleOrden() {
       await revertirComisionesOrden(supabase, id, 'Venta cancelada', null);
     } catch {}
     // Si esta orden derivó un equipo a Servicio Técnico, se borra también la
-    // reparación para que desaparezca de ahí (pedido del usuario). Se hace
-    // ANTES de borrar la orden: si el FK fuera "set null", después no se la
-    // podría encontrar por orden_origen_id. reparaciones_eventos se va en
-    // cascada. No rompe la eliminación de la orden si esto falla.
+    // reparación para que desaparezca de ahí (pedido del usuario). Antes de
+    // borrarla hay que devolver al stock lo que tuviera consumido/reservado
+    // (repuestos_reservas y reparaciones_repuestos se van en cascada, pero
+    // eso no le devuelve nada al repuesto) — igual que en eliminarDefinitivo
+    // de Servicio Técnico. Es best-effort: si falla, no bloquea la
+    // cancelación de la orden (pedido del usuario), pero se dice en la
+    // auditoría en vez de quedar en silencio.
+    let liberacionError: string | null = null;
+    if (reparacionesDerivadasIds.length > 0) {
+      const liberacion = await liberarRepuestosDeReparaciones(supabase, reparacionesDerivadasIds, actor?.nombre ?? null);
+      if (!liberacion.ok) liberacionError = liberacion.error;
+    }
+    // Se hace ANTES de borrar la orden: si el FK fuera "set null", después no
+    // se la podría encontrar por orden_origen_id. reparaciones_eventos se va
+    // en cascada. No rompe la eliminación de la orden si esto falla.
     await supabase.from('reparaciones').delete().eq('orden_origen_id', id);
     if (yaDerivado) {
       const clienteRep = orden.clientes ? `${orden.clientes.nombre} ${orden.clientes.apellido || ''}`.trim() : 'sin cliente';
       const cuenta = reparacionesDerivadasIds.length;
+      const avisoLiberacion = liberacionError ? ` (no se pudieron liberar los repuestos: ${liberacionError})` : '';
       await registrarAuditoria(supabase, {
-        accion: `eliminó ${cuenta === 1 ? 'la reparación derivada' : `${cuenta} reparaciones derivadas`} de una orden (${clienteRep})`,
+        accion: `eliminó ${cuenta === 1 ? 'la reparación derivada' : `${cuenta} reparaciones derivadas`} de una orden (${clienteRep})${avisoLiberacion}`,
         entidad: 'reparacion',
         entidadId: reparacionesDerivadasIds[0] ?? undefined,
         valorAnterior: { orden_origen_id: id, reparaciones: reparacionesDerivadasIds },

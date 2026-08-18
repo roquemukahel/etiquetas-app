@@ -622,6 +622,14 @@ export default function Estadisticas() {
                 {rankingClientesServicio.length === 0 ? <EmptyState titulo="Sin ingresos de servicio" /> : vistaClientesServicio === 'barras' ? <RankingBarras datos={rankingClientesServicio} sufijo=" equipo(s)" /> : <RankingTorta datos={rankingClientesServicio} sufijo=" equipo(s)" />}
               </SeccionCard>
             </div>
+            <SeccionCard titulo="¿Buscás más profundidad?" subtitulo="Facturación, márgenes, reincidencia, embudo de estados, stock crítico y más, filtrable por técnico y período.">
+              <Link
+                href="/servicio-tecnico/metricas"
+                className="self-start rounded-xl bg-accent dark:bg-dark-accent text-white text-sm font-medium px-4 py-2 hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors inline-block"
+              >
+                Ver Métricas de Servicio Técnico →
+              </Link>
+            </SeccionCard>
           </>
         );
 

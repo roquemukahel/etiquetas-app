@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 
-export type SeccionServicioTecnico = 'reparaciones' | 'mibanco' | 'tecnicos' | 'repuestos' | 'servicios' | 'proveedores';
+export type SeccionServicioTecnico = 'reparaciones' | 'mibanco' | 'tecnicos' | 'repuestos' | 'servicios' | 'proveedores' | 'metricas';
 
 // Navegación interna unificada de Servicio Técnico, para reemplazar los
 // links sueltos y subrayados que había antes arriba a la derecha.
@@ -22,6 +22,7 @@ const ITEMS: { key: SeccionServicioTecnico; icono: string; label: string; href: 
   { key: 'repuestos', icono: '🔩', label: 'Repuestos', href: '/servicio-tecnico/stock' },
   { key: 'servicios', icono: '🗂️', label: 'Servicios', href: '/servicio-tecnico/trabajos' },
   { key: 'proveedores', icono: '🏷️', label: 'Proveedores', href: '/servicio-tecnico/repuestos' },
+  { key: 'metricas', icono: '📊', label: 'Métricas', href: '/servicio-tecnico/metricas' },
 ];
 
 export default function ServicioTecnicoTabs({

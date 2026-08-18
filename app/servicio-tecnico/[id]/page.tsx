@@ -14,12 +14,14 @@ import { codigoLlamada } from '../../lib/paises';
 import {
   ESTADOS_REPARACION,
   PRIORIDADES,
-  infoEstado,
   ITEMS_CHECKLIST_INGRESO,
   CAMPOS_DEPENDEN_MODULO,
   esDemorado,
   hace,
+  CHECKLIST_CALIDAD_GENERICO,
+  TIPOS_INGRESO,
 } from '../../lib/reparaciones';
+import { cambiarEstadoReparacion } from '../../lib/estadoReparacion';
 import { generarOrdenDeReparacion } from '../../lib/ordenesServicio';
 import { extraerStockInsuficiente } from '../../lib/repuestos';
 import { sanitizarDecimal } from '../../lib/numeros';
@@ -29,12 +31,13 @@ import Avatar from '../../Avatar';
 import CheckTri from '../../CheckTri';
 import TextoCondicionGenerado from '../../TextoCondicionGenerado';
 import EstadoBadge from '../../EstadoBadge';
+import ControlCalidad, { ControlCalidadItem } from '../ControlCalidad';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 const ACCESORIOS_OPCIONES = ['Funda', 'Cargador', 'SIM', 'Bandeja SIM'];
 const FORMAS_PAGO = ['Efectivo', 'Transferencia', 'Tarjeta'];
 
-type Tab = 'resumen' | 'recepcion' | 'diagnostico' | 'presupuesto' | 'servicios' | 'evidencias' | 'comunicacion' | 'historial';
+type Tab = 'resumen' | 'recepcion' | 'diagnostico' | 'presupuesto' | 'servicios' | 'control' | 'evidencias' | 'comunicacion' | 'historial';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'resumen', label: 'Resumen' },
@@ -42,6 +45,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'diagnostico', label: 'Diagnóstico' },
   { id: 'presupuesto', label: 'Presupuesto' },
   { id: 'servicios', label: 'Servicios y repuestos' },
+  { id: 'control', label: 'Control de calidad' },
   { id: 'evidencias', label: 'Evidencias' },
   { id: 'comunicacion', label: 'Comunicación' },
   { id: 'historial', label: 'Historial' },
@@ -69,7 +73,17 @@ const ACCION_SIGUIENTE: Record<string, { label: string; estado: string } | undef
 };
 
 type Tecnico = { id: string; nombre: string; foto_url: string | null };
-type Trabajo = { id: string; nombre: string; imagen_url: string | null };
+type Trabajo = { id: string; nombre: string; imagen_url: string | null; checklist_tecnico: string[] | null };
+type ReparacionRelacionada = {
+  id: string;
+  numero_orden: string | null;
+  fecha_ingreso_servicio: string;
+  fecha_entrega: string | null;
+  garantia_dias: number | null;
+  trabajos_realizados: string[] | null;
+  tecnico_id: string | null;
+  estado: string;
+};
 
 type Reparacion = {
   id: string;
@@ -118,6 +132,9 @@ type Reparacion = {
   presupuesto_respondido_at: string | null;
   presupuesto_importe_aceptado: number | null;
   presupuesto_texto_aceptado: string | null;
+  control_calidad_override: boolean;
+  tipo_ingreso: string | null;
+  reparacion_relacionada_id: string | null;
   fecha_estimada: string | null;
   observaciones_internas: string | null;
   estado: string;
@@ -205,6 +222,15 @@ export default function FichaReparacion() {
   const [avisoAgregarStock, setAvisoAgregarStock] = useState(false);
   const [tab, setTab] = useState<Tab>('resumen');
   const [linkCopiado, setLinkCopiado] = useState(false);
+  const [controlCalidad, setControlCalidad] = useState<ControlCalidadItem[]>([]);
+  const [reparacionesRelacionadas, setReparacionesRelacionadas] = useState<ReparacionRelacionada[]>([]);
+  const [guardandoClasificacion, setGuardandoClasificacion] = useState(false);
+  // Con más de una reparación anterior del mismo equipo, hay que elegir a
+  // cuál se vincula el retrabajo/garantía — antes siempre se enganchaba a
+  // la más reciente sin importar cuál tocara el técnico, lo cual podía
+  // vincular mal (ej. un retrabajo que en realidad es sobre un arreglo de
+  // hace 3 ingresos, no el último).
+  const [reparacionRelacionadaElegida, setReparacionRelacionadaElegida] = useState<string | null>(null);
 
   const [f, setFm] = useState<Record<string, any>>({});
 
@@ -217,7 +243,7 @@ export default function FichaReparacion() {
     setR(data as any);
     setLoading(false);
 
-    const [{ data: aud }, { data: evs }, { data: evids }, { data: repUsados }] = await Promise.all([
+    const [{ data: aud }, { data: evs }, { data: evids }, { data: repUsados }, { data: cc }] = await Promise.all([
       supabase
         .from('auditoria')
         .select('id, accion, actor_nombre, created_at')
@@ -239,9 +265,14 @@ export default function FichaReparacion() {
         .select('id, repuesto_id, nombre_repuesto, cantidad, costo_unitario, created_at')
         .eq('reparacion_id', id)
         .order('created_at', { ascending: false }),
+      supabase
+        .from('reparaciones_control_calidad')
+        .select('id, item, resultado, observacion, foto_url, actor_nombre, created_at')
+        .eq('reparacion_id', id),
     ]);
     setEvidencias((evids as Evidencia[]) ?? []);
     setRepuestosUsados((repUsados as RepuestoUsado[]) ?? []);
+    setControlCalidad((cc as ControlCalidadItem[]) ?? []);
     const deAuditoria: Evento[] = (aud ?? []).map((a: any) => ({
       id: `a-${a.id}`,
       tipo: 'sistema',
@@ -266,7 +297,7 @@ export default function FichaReparacion() {
       setTecnicos((data as Tecnico[]) ?? []);
     })();
     (async () => {
-      const { data } = await supabase.from('trabajos').select('id, nombre, imagen_url').eq('activo', true).order('nombre');
+      const { data } = await supabase.from('trabajos').select('id, nombre, imagen_url, checklist_tecnico').eq('activo', true).order('nombre');
       setTrabajos((data as Trabajo[]) ?? []);
     })();
     (async () => {
@@ -283,6 +314,35 @@ export default function FichaReparacion() {
     })();
   }, [id]);
 
+  // Garantías y retrabajos (sección 21): reparaciones anteriores del MISMO
+  // equipo (mismo IMEI), para poder clasificar este ingreso. Se busca recién
+  // cuando ya sabemos el IMEI de esta reparación, no en el efecto de arriba.
+  // Depende también de r?.id (no solo r?.imei): al navegar entre dos
+  // reparaciones vinculadas por garantía (mismo IMEI) desde la tarjeta de
+  // "Garantías y retrabajos", el imei no cambia, así que si solo dependiera
+  // de imei el efecto no se volvería a ejecutar y quedarían datos de la
+  // reparación anterior (incluyendo el filtro .neq('id', r.id) con el id
+  // viejo).
+  useEffect(() => {
+    if (!r?.imei) {
+      setReparacionesRelacionadas([]);
+      return;
+    }
+    (async () => {
+      const { data } = await supabase
+        .from('reparaciones')
+        .select('id, numero_orden, fecha_ingreso_servicio, fecha_entrega, garantia_dias, trabajos_realizados, tecnico_id, estado')
+        .eq('imei', r.imei)
+        .neq('id', r.id)
+        .order('fecha_ingreso_servicio', { ascending: false })
+        .limit(5);
+      const relacionadas = (data as ReparacionRelacionada[]) ?? [];
+      setReparacionesRelacionadas(relacionadas);
+      setReparacionRelacionadaElegida(r.reparacion_relacionada_id ?? relacionadas[0]?.id ?? null);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [r?.imei, r?.id]);
+
   const nombreCliente = r?.clientes ? `${r.clientes.nombre} ${r.clientes.apellido || ''}`.trim() : null;
   const nombreTecnico = (tid: string | null) => tecnicos.find((t) => t.id === tid)?.nombre;
   const fotoTecnico = (tid: string | null) => tecnicos.find((t) => t.id === tid)?.foto_url ?? null;
@@ -295,6 +355,23 @@ export default function FichaReparacion() {
   const presupuestoSuma = r ? (r.presupuesto_mano_obra || 0) + (r.presupuesto_repuestos || 0) : 0;
   const cobrado = r ? r.importe_total ?? (presupuestoSuma > 0 ? presupuestoSuma : null) : null;
   const margen = cobrado != null ? cobrado - costoRepuestosTotal : null;
+
+  // Checklist de control de calidad aplicable a esta reparación (sección
+  // 17): unión de checklist_tecnico de los servicios realizados (Fase 4,
+  // "el administrador puede definir qué controles son obligatorios según el
+  // servicio"). Si ninguno de los servicios tiene un checklist propio
+  // cargado, se usa el genérico por defecto — nunca se deja sin controlar
+  // por falta de configuración.
+  const checklistAplicable = useMemo(() => {
+    if (!r) return [];
+    const deServicios = new Set<string>();
+    for (const nombre of r.trabajos_realizados ?? []) {
+      const trabajo = trabajos.find((t) => t.nombre === nombre);
+      for (const item of trabajo?.checklist_tecnico ?? []) deServicios.add(item);
+    }
+    return deServicios.size > 0 ? Array.from(deServicios) : CHECKLIST_CALIDAD_GENERICO;
+  }, [r, trabajos]);
+  const controlesFaltantes = checklistAplicable.filter((item) => !controlCalidad.some((c) => c.item === item));
 
   const demorado = r ? esDemorado(r) : false;
   // Si el cliente (o alguien manualmente) ya aprobó el presupuesto, la
@@ -480,47 +557,11 @@ export default function FichaReparacion() {
   const cambiarEstado = async (nuevoEstado: string) => {
     if (!r || !puedeGestionar) return;
     setGuardando(true);
-    const cambios: any = { estado: nuevoEstado, estado_actualizado_at: new Date().toISOString() };
-    // "Listo para entregar" y "Entregado" cuentan igual como trabajo
-    // terminado del técnico en Estadísticas (ambos se rankean por
-    // fecha_reparado) — algunos arreglos pasan directo a "Entregado" sin
-    // pasar por "Listo para entregar" (ej. un trabajo rápido), y antes de
-    // este chequeo esos quedaban sin fecha_reparado y no sumaban al técnico.
-    if ((nuevoEstado === 'listo_para_entregar' || nuevoEstado === 'entregado') && !r.fecha_reparado) {
-      cambios.fecha_reparado = new Date().toISOString();
+    const resultado = await cambiarEstadoReparacion(supabase, r, nuevoEstado);
+    if (resultado === 'cancelado') {
+      setGuardando(false);
+      return;
     }
-    await supabase.from('reparaciones').update(cambios).eq('id', r.id);
-
-    // La orden vinculada (creada al recibir el equipo, ver agregarEquipo)
-    // se borra al cancelar SOLO si sigue en $0 y pendiente — es decir, si
-    // nunca se llegó a cobrar. Si ya tiene un total cargado o está pagada
-    // o entregada, es plata real y no se toca aunque después la marquen
-    // como cancelada. La referencia en reparaciones se limpia sola
-    // (orden_cobro_id tiene "on delete set null") cuando sí se borra.
-    if (nuevoEstado === 'cancelado' && r.orden_cobro_id) {
-      const { data: ordenVinculada } = await supabase
-        .from('ordenes')
-        .select('estado, total')
-        .eq('id', r.orden_cobro_id)
-        .maybeSingle();
-      if (ordenVinculada && ordenVinculada.estado === 'pendiente' && !ordenVinculada.total) {
-        await supabase.from('ordenes').delete().eq('id', r.orden_cobro_id);
-        await registrarAuditoria(supabase, {
-          accion: `eliminó la orden de cobro vacía de una reparación cancelada (${r.numero_orden || ''})`,
-          entidad: 'orden',
-          entidadId: r.orden_cobro_id,
-          valorAnterior: { estado: ordenVinculada.estado, total: ordenVinculada.total },
-        });
-      }
-    }
-
-    await registrarAuditoria(supabase, {
-      accion: `cambió el estado de la reparación ${r.numero_orden || ''} de "${infoEstado(r.estado).label}" a "${infoEstado(nuevoEstado).label}"`,
-      entidad: 'reparacion',
-      entidadId: r.id,
-      valorAnterior: { estado: r.estado },
-      valorNuevo: { estado: nuevoEstado },
-    });
 
     if (nuevoEstado === 'listo_para_entregar' && r.cliente_id && r.clientes?.telefono && r.token_seguimiento) {
       const url = `${window.location.origin}/seguimiento/${r.token_seguimiento}`;
@@ -732,6 +773,33 @@ export default function FichaReparacion() {
     cargar();
   };
 
+  // Un presupuesto rechazado quedaba sin salida: el portal público bloquea
+  // una segunda respuesta y los botones manuales solo aparecen mientras no
+  // hay una respuesta terminal — así que si el taller quiere ofrecer un
+  // precio revisado después de un rechazo, primero hay que reabrirlo.
+  const reabrirPresupuesto = async () => {
+    if (!r || !puedeGestionar) return;
+    if (!confirm('¿Reabrir este presupuesto para pedirle una nueva respuesta al cliente?')) return;
+    setGuardando(true);
+    const actorActual = getActor();
+    const { error: rpcError } = await supabase.rpc('reparacion_reabrir_presupuesto', {
+      p_reparacion_id: r.id,
+      p_actor_nombre: actorActual?.nombre ?? null,
+    });
+    if (rpcError) {
+      setError('No pudimos reabrir el presupuesto: ' + rpcError.message);
+      setGuardando(false);
+      return;
+    }
+    await registrarAuditoria(supabase, {
+      accion: `reabrió el presupuesto de la reparación ${r.numero_orden || ''} para una nueva respuesta`,
+      entidad: 'reparacion',
+      entidadId: r.id,
+    });
+    setGuardando(false);
+    cargar();
+  };
+
   const generarOrdenCobro = async () => {
     if (!r || !puedeGestionar) return;
     if (!confirm('¿Generar la orden de cobro con el importe de esta reparación?')) return;
@@ -838,6 +906,74 @@ export default function FichaReparacion() {
     }
   };
 
+  // Un solo registro por ítem (unique en reparacion_id+item): re-marcar un
+  // ítem hace upsert en vez de acumular filas viejas.
+  const guardarItemControlCalidad = async (item: string, resultado: string, observacion: string | null, fotoUrl: string | null) => {
+    if (!r || !puedeGestionar) return;
+    const actorActual = getActor();
+    const { error: upsertError } = await supabase.from('reparaciones_control_calidad').upsert(
+      {
+        reparacion_id: r.id,
+        item,
+        resultado,
+        observacion,
+        foto_url: fotoUrl,
+        actor_nombre: actorActual?.nombre ?? null,
+      },
+      { onConflict: 'reparacion_id,item' }
+    );
+    if (upsertError) {
+      setError('No pudimos guardar el control: ' + upsertError.message);
+      return;
+    }
+    const { data } = await supabase
+      .from('reparaciones_control_calidad')
+      .select('id, item, resultado, observacion, foto_url, actor_nombre, created_at')
+      .eq('reparacion_id', r.id);
+    const actualizado = (data as ControlCalidadItem[]) ?? [];
+    setControlCalidad(actualizado);
+    // Si esto era lo último que faltaba, el aviso de "se entregó con
+    // controles pendientes" deja de tener sentido — se limpia solo en vez
+    // de quedar una advertencia vieja para siempre en una reparación que ya
+    // se terminó de controlar.
+    if (r.control_calidad_override && checklistAplicable.every((it) => actualizado.some((c) => c.item === it))) {
+      await supabase.from('reparaciones').update({ control_calidad_override: false }).eq('id', r.id);
+      cargar();
+    }
+  };
+
+  const reparacionRelacionadaLabel = (rr: ReparacionRelacionada) => {
+    const vencida = rr.fecha_entrega && rr.garantia_dias ? Date.now() > new Date(rr.fecha_entrega).getTime() + rr.garantia_dias * 86400000 : null;
+    return {
+      titulo: `${rr.numero_orden ?? ''} — ${rr.trabajos_realizados?.join(', ') || 'sin trabajos registrados'}`,
+      garantiaTexto:
+        rr.fecha_entrega == null
+          ? 'todavía no se entregó'
+          : rr.garantia_dias == null
+            ? 'sin garantía cargada'
+            : vencida
+              ? 'garantía vencida'
+              : 'dentro de garantía',
+      vencida,
+    };
+  };
+
+  const guardarClasificacionIngreso = async (tipo: string, relacionadaId: string | null) => {
+    if (!r || !puedeGestionar) return;
+    setGuardandoClasificacion(true);
+    await supabase.from('reparaciones').update({ tipo_ingreso: tipo, reparacion_relacionada_id: relacionadaId }).eq('id', r.id);
+    const relacionada = reparacionesRelacionadas.find((rr) => rr.id === relacionadaId);
+    await registrarAuditoria(supabase, {
+      accion: `clasificó la reparación ${r.numero_orden || ''} como "${TIPOS_INGRESO.find((t) => t.id === tipo)?.label ?? tipo}"${
+        relacionada ? ` (vinculada a ${relacionada.numero_orden || 'una reparación anterior'})` : ''
+      }`,
+      entidad: 'reparacion',
+      entidadId: r.id,
+    });
+    setGuardandoClasificacion(false);
+    cargar();
+  };
+
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center">
@@ -863,7 +999,7 @@ export default function FichaReparacion() {
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
       {/* Encabezado persistente */}
       <header className="flex items-start gap-3">
-        <Link href="/servicio-tecnico" className="text-2xl leading-none mt-0.5">
+        <Link href="/servicio-tecnico" aria-label="Volver" className="text-2xl leading-none mt-0.5">
           &larr;
         </Link>
         <div className="min-w-0 mr-auto">
@@ -1014,6 +1150,7 @@ export default function FichaReparacion() {
           </nav>
 
           {tab === 'resumen' && (
+            <>
             <Seccion titulo="Identificación">
               {editando ? (
                 <div className="flex flex-col gap-2">
@@ -1102,6 +1239,71 @@ export default function FichaReparacion() {
                 </div>
               )}
             </Seccion>
+
+            {reparacionesRelacionadas.length > 0 && (
+              <Seccion titulo="Garantías y retrabajos">
+                <p className="text-xs text-muted dark:text-dark-text-secondary -mt-1 mb-1">
+                  Este equipo (mismo IMEI) ya pasó antes por el taller:
+                </p>
+                <div className="flex flex-col gap-1.5 mb-2">
+                  {reparacionesRelacionadas.map((rr) => {
+                    const info = reparacionRelacionadaLabel(rr);
+                    const elegida = reparacionRelacionadaElegida === rr.id;
+                    return (
+                      <div
+                        key={rr.id}
+                        className={`rounded-lg px-3 py-2 text-xs flex items-center gap-2 border ${
+                          elegida ? 'border-accent/40 dark:border-dark-accent/40 bg-accent-soft dark:bg-dark-accent-soft' : 'border-transparent bg-canvas dark:bg-dark-bg'
+                        }`}
+                      >
+                        {reparacionesRelacionadas.length > 1 && puedeGestionar && (
+                          <input
+                            type="radio"
+                            name="reparacion-relacionada"
+                            checked={elegida}
+                            onChange={() => setReparacionRelacionadaElegida(rr.id)}
+                            aria-label={`Vincular a ${info.titulo}`}
+                            className="shrink-0 accent-ink"
+                          />
+                        )}
+                        <Link href={`/servicio-tecnico/${rr.id}`} className="min-w-0 flex-1 truncate hover:underline">
+                          {info.titulo}
+                        </Link>
+                        <span className={`shrink-0 ${info.vencida ? 'text-bad' : 'text-muted dark:text-dark-text-secondary'}`}>
+                          {info.garantiaTexto}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+                {puedeGestionar && (
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs text-muted dark:text-dark-text-secondary">
+                      ¿Cómo clasificamos este ingreso{reparacionesRelacionadas.length > 1 ? ', respecto de la reparación marcada arriba' : ''}?
+                    </label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {TIPOS_INGRESO.map((t) => (
+                        <button
+                          key={t.id}
+                          disabled={guardandoClasificacion}
+                          onClick={() => guardarClasificacionIngreso(t.id, reparacionRelacionadaElegida)}
+                          className={`rounded-lg px-3 py-1.5 text-xs font-medium disabled:opacity-40 ${
+                            r.tipo_ingreso === t.id ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
+                          }`}
+                        >
+                          {t.label}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-[10px] text-muted dark:text-dark-text-secondary">
+                      No reutiliza el margen ni el costo de la reparación anterior — esta reparación calcula el suyo
+                      propio siempre.
+                    </p>
+                  </div>
+                )}
+              </Seccion>
+            )}
+            </>
           )}
 
           {tab === 'recepcion' && (
@@ -1291,6 +1493,11 @@ export default function FichaReparacion() {
                           Respondido {fmt(r.presupuesto_respondido_at)} · vía {r.presupuesto_medio === 'portal' ? 'link de seguimiento' : r.presupuesto_medio === 'whatsapp' ? 'WhatsApp' : 'registro manual'}
                         </p>
                       )}
+                      {r.presupuesto_importe_aceptado != null && (
+                        <p className="text-[11px] text-muted dark:text-dark-text-secondary">
+                          Importe que se aceptó: ${r.presupuesto_importe_aceptado.toLocaleString('es-AR')} (queda fijo aunque el presupuesto cambie después)
+                        </p>
+                      )}
                       {r.presupuesto_estado !== 'aprobado' && r.presupuesto_estado !== 'rechazado' && puedeGestionar && (
                         <div className="flex gap-2 mt-1">
                           <button
@@ -1308,6 +1515,11 @@ export default function FichaReparacion() {
                             Registrar rechazo
                           </button>
                         </div>
+                      )}
+                      {r.presupuesto_estado === 'rechazado' && puedeGestionar && (
+                        <button disabled={guardando} onClick={reabrirPresupuesto} className="rounded-lg border border-border dark:border-dark-border py-1.5 text-xs font-medium mt-1 disabled:opacity-40">
+                          Reabrir para pedir una nueva respuesta
+                        </button>
                       )}
                     </div>
                   )}
@@ -1508,6 +1720,25 @@ export default function FichaReparacion() {
                 )}
               </Seccion>
             </>
+          )}
+
+          {tab === 'control' && (
+            <Seccion titulo="Control de calidad">
+              <p className="text-xs text-muted dark:text-dark-text-secondary -mt-1 mb-1">
+                {checklistAplicable === CHECKLIST_CALIDAD_GENERICO
+                  ? 'Checklist genérico (ninguno de los servicios realizados tiene uno propio cargado).'
+                  : 'Checklist tomado de los servicios realizados en esta reparación.'}
+              </p>
+              {r.control_calidad_override && (
+                <p className="text-xs text-warn mb-1">⚠️ Se marcó "Listo para entregar" con controles pendientes (override registrado en el historial).</p>
+              )}
+              <ControlCalidad
+                checklist={checklistAplicable}
+                registros={controlCalidad}
+                onGuardar={guardarItemControlCalidad}
+                soloLectura={!puedeGestionar}
+              />
+            </Seccion>
           )}
 
           {tab === 'evidencias' &&
@@ -1713,6 +1944,20 @@ export default function FichaReparacion() {
               </span>
             </div>
           </div>
+
+          <button
+            onClick={() => setTab('control')}
+            className={`rounded-xl border px-3 py-2.5 text-left text-xs flex items-center justify-between gap-2 ${
+              controlesFaltantes.length === 0
+                ? 'border-good/30 bg-good/10 text-good'
+                : 'border-warn/30 bg-warn/10 text-warn'
+            }`}
+          >
+            <span className="font-medium">🔍 Control de calidad</span>
+            <span>
+              {checklistAplicable.length - controlesFaltantes.length}/{checklistAplicable.length}
+            </span>
+          </button>
 
           {r.cliente_id && r.token_seguimiento && (
             <button

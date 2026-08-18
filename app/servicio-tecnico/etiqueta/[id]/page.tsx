@@ -138,7 +138,7 @@ export default function EtiquetaServicioTecnico() {
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-5 items-center">
       <header className="w-full flex items-center gap-3">
-        <Link href="/servicio-tecnico" className="text-2xl leading-none">
+        <Link href="/servicio-tecnico" aria-label="Volver" className="text-2xl leading-none">
           &larr;
         </Link>
         <span className="text-lg font-medium">Etiqueta del equipo</span>

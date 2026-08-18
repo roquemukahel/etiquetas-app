@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { crearClienteNavegador } from '../../../lib/supabase/client';
 import { registrarAuditoria } from '../../../lib/auditoria';
-import { getActor } from '../../../lib/actor';
+import { getActor, useActor } from '../../../lib/actor';
+import { tienePermiso } from '../../../lib/permisos';
 import { simboloMoneda } from '../../../lib/monedas';
 import { sanitizarDecimal } from '../../../lib/numeros';
 import { codigoLlamada } from '../../../lib/paises';
@@ -50,6 +51,13 @@ function antiguedad(iso: string): string {
 export default function ProveedorRepuestos() {
   const { id } = useParams<{ id: string }>();
   const supabase = crearClienteNavegador();
+  const actor = useActor();
+  const puedeGestionar = tienePermiso(actor, 'gestionar_servicio_tecnico');
+  const puedeEliminar = tienePermiso(actor, 'eliminar');
+  // Convertir una oferta en entrada de stock es una acción de inventario —
+  // mismo permiso que ya usa Repuestos (agregar_stock), no el de gestionar
+  // el catálogo de proveedores.
+  const puedeAgregarStock = tienePermiso(actor, 'agregar_stock');
 
   const [proveedor, setProveedor] = useState<Proveedor | null>(null);
   const [repuestos, setRepuestos] = useState<Repuesto[]>([]);
@@ -98,7 +106,7 @@ export default function ProveedorRepuestos() {
   }, [id]);
 
   const eliminarProveedor = async () => {
-    if (!proveedor) return;
+    if (!proveedor || !puedeEliminar) return;
     if (!confirm(`¿Eliminar a "${proveedor.nombre}"? También se van a borrar los precios que tenga cargados.`)) return;
     await supabase.from('proveedores_repuestos').delete().eq('id', proveedor.id);
     await registrarAuditoria(supabase, {
@@ -131,6 +139,7 @@ export default function ProveedorRepuestos() {
   );
 
   const abrirNuevo = () => {
+    if (!puedeGestionar) return;
     setEditandoId(null);
     setForm(FORM_VACIO);
     setError(null);
@@ -138,6 +147,7 @@ export default function ProveedorRepuestos() {
   };
 
   const abrirEdicion = (p: Precio) => {
+    if (!puedeGestionar) return;
     setEditandoId(p.id);
     setForm({
       nombre: nombreRepuestoDe(p.repuesto_id),
@@ -152,7 +162,7 @@ export default function ProveedorRepuestos() {
   };
 
   const guardar = async () => {
-    if (!form.nombre.trim() || !form.precio) return;
+    if (!form.nombre.trim() || !form.precio || !puedeGestionar) return;
     setGuardando(true);
     setError(null);
 
@@ -173,6 +183,11 @@ export default function ProveedorRepuestos() {
         setGuardando(false);
         return;
       }
+      await registrarAuditoria(supabase, {
+        accion: `actualizó el precio de "${form.nombre}" para ${proveedor?.nombre ?? 'un proveedor'}`,
+        entidad: 'repuesto_precio',
+        entidadId: editandoId,
+      });
       setGuardando(false);
       setModalAbierto(false);
       cargar();
@@ -189,21 +204,30 @@ export default function ProveedorRepuestos() {
       return;
     }
 
-    const { error: upsertError } = await supabase.from('repuestos_precios').upsert(
-      {
-        repuesto_id: repuestoId,
-        proveedor_id: id,
-        precio: Number(form.precio),
-        actualizado_at: new Date().toISOString(),
-        ...camposComunes,
-      },
-      { onConflict: 'repuesto_id,proveedor_id' }
-    );
+    const { data: precioNuevo, error: upsertError } = await supabase
+      .from('repuestos_precios')
+      .upsert(
+        {
+          repuesto_id: repuestoId,
+          proveedor_id: id,
+          precio: Number(form.precio),
+          actualizado_at: new Date().toISOString(),
+          ...camposComunes,
+        },
+        { onConflict: 'repuesto_id,proveedor_id' }
+      )
+      .select('id')
+      .single();
     if (upsertError) {
       setError('No pudimos guardar: ' + upsertError.message);
       setGuardando(false);
       return;
     }
+    await registrarAuditoria(supabase, {
+      accion: `cargó el precio de "${form.nombre.trim()}" para ${proveedor?.nombre ?? 'un proveedor'}`,
+      entidad: 'repuesto_precio',
+      entidadId: precioNuevo?.id,
+    });
 
     setGuardando(false);
     setModalAbierto(false);
@@ -211,6 +235,7 @@ export default function ProveedorRepuestos() {
   };
 
   const eliminarPrecio = async (precioId: string) => {
+    if (!puedeGestionar) return;
     if (!confirm('¿Eliminar este repuesto de la lista de este proveedor?')) return;
     const precio = precios.find((p) => p.id === precioId);
     await supabase.from('repuestos_precios').delete().eq('id', precioId);
@@ -224,7 +249,7 @@ export default function ProveedorRepuestos() {
   };
 
   const confirmarAgregarStock = async () => {
-    if (!agregandoStockPara || !proveedor) return;
+    if (!agregandoStockPara || !proveedor || !puedeAgregarStock) return;
     const cantidad = Number(cantidadAStock) || 0;
     if (cantidad <= 0) return;
     setGuardandoStock(true);
@@ -276,7 +301,7 @@ export default function ProveedorRepuestos() {
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
       <header className="flex items-center gap-3">
-        <Link href="/servicio-tecnico/repuestos" className="text-2xl leading-none">
+        <Link href="/servicio-tecnico/repuestos" aria-label="Volver" className="text-2xl leading-none">
           &larr;
         </Link>
         <div className="min-w-0 mr-auto">
@@ -293,9 +318,11 @@ export default function ProveedorRepuestos() {
             WhatsApp
           </a>
         )}
-        <button onClick={eliminarProveedor} className="text-xs text-bad underline shrink-0">
-          Eliminar
-        </button>
+        {puedeEliminar && (
+          <button onClick={eliminarProveedor} className="text-xs text-bad underline shrink-0">
+            Eliminar
+          </button>
+        )}
       </header>
 
       {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
@@ -324,13 +351,20 @@ export default function ProveedorRepuestos() {
                     <span className="text-[10px] font-semibold text-bad bg-bad/10 rounded-full px-2 py-0.5 shrink-0">Sin stock</span>
                   )}
                 </span>
-                <button
-                  onClick={() => abrirEdicion(p)}
-                  className={`font-medium tabular-nums underline decoration-dotted underline-offset-4 shrink-0 ${esMejorPrecio ? 'text-good' : ''}`}
-                >
-                  {moneda}
-                  {p.precio.toLocaleString('es-AR')}
-                </button>
+                {puedeGestionar ? (
+                  <button
+                    onClick={() => abrirEdicion(p)}
+                    className={`font-medium tabular-nums underline decoration-dotted underline-offset-4 shrink-0 ${esMejorPrecio ? 'text-good' : ''}`}
+                  >
+                    {moneda}
+                    {p.precio.toLocaleString('es-AR')}
+                  </button>
+                ) : (
+                  <span className={`font-medium tabular-nums shrink-0 ${esMejorPrecio ? 'text-good' : ''}`}>
+                    {moneda}
+                    {p.precio.toLocaleString('es-AR')}
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-2 flex-wrap text-[11px] text-muted dark:text-dark-text-secondary">
                 <span>Actualizado {antiguedad(p.actualizado_at)}</span>
@@ -338,31 +372,39 @@ export default function ProveedorRepuestos() {
                 {p.garantia_dias != null && <span>· garantía {p.garantia_dias}d</span>}
               </div>
               {p.observaciones && <p className="text-[11px] text-muted dark:text-dark-text-secondary">{p.observaciones}</p>}
-              <div className="flex items-center gap-3 mt-0.5">
-                <button
-                  onClick={() => {
-                    setAgregandoStockPara(p);
-                    setCantidadAStock('1');
-                  }}
-                  className="text-xs text-accent dark:text-dark-accent underline"
-                >
-                  + Agregar a stock
-                </button>
-                <button onClick={() => eliminarPrecio(p.id)} className="text-xs text-bad underline">
-                  Eliminar
-                </button>
-              </div>
+              {(puedeAgregarStock || puedeGestionar) && (
+                <div className="flex items-center gap-3 mt-0.5">
+                  {puedeAgregarStock && (
+                    <button
+                      onClick={() => {
+                        setAgregandoStockPara(p);
+                        setCantidadAStock('1');
+                      }}
+                      className="text-xs text-accent dark:text-dark-accent underline"
+                    >
+                      + Agregar a stock
+                    </button>
+                  )}
+                  {puedeGestionar && (
+                    <button onClick={() => eliminarPrecio(p.id)} className="text-xs text-bad underline">
+                      Eliminar
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           );
         })}
       </div>
 
-      <button
-        onClick={abrirNuevo}
-        className="rounded-xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2.5 text-sm font-medium text-white"
-      >
-        + Agregar repuesto
-      </button>
+      {puedeGestionar && (
+        <button
+          onClick={abrirNuevo}
+          className="rounded-xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2.5 text-sm font-medium text-white"
+        >
+          + Agregar repuesto
+        </button>
+      )}
 
       {modalAbierto && (
         <Modal titulo={editandoId ? 'Editar precio' : 'Agregar repuesto'} onClose={() => setModalAbierto(false)}>

@@ -137,6 +137,9 @@ export default function TarjetaReparacion({
         <div className="relative shrink-0">
           <button
             onClick={() => setMenuAbierto(menuAbierto === r.id ? null : r.id)}
+            aria-label="Más acciones"
+            aria-haspopup="true"
+            aria-expanded={menuAbierto === r.id}
             className="text-lg leading-none px-1 text-muted dark:text-dark-text-secondary"
           >
             ⋯
