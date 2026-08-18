@@ -2739,3 +2739,20 @@ alter table reparaciones_repuestos enable row level security;
 create policy "reparaciones_repuestos de mi negocio" on reparaciones_repuestos
   for all using (negocio_id = negocio_actual())
   with check (negocio_id = negocio_actual());
+
+-- ============================================================
+-- Servicio Técnico PRO — Fase 4: catálogo de servicios ilustrado.
+-- Columnas aditivas sobre `trabajos` (ver servicios_catalogo_pro_supabase.sql,
+-- que es el patch real a correr contra Supabase). `activo=false` es
+-- "archivar" — nunca se borra un servicio ya usado en una reparación.
+-- ============================================================
+alter table trabajos add column if not exists categoria text;
+alter table trabajos add column if not exists descripcion_interna text;
+alter table trabajos add column if not exists duracion_estimada_min integer;
+alter table trabajos add column if not exists garantia_dias integer;
+alter table trabajos add column if not exists compatibilidad text;
+alter table trabajos add column if not exists repuesto_sugerido_id uuid references repuestos(id) on delete set null;
+alter table trabajos add column if not exists checklist_tecnico text[];
+alter table trabajos add column if not exists instrucciones_internas text;
+alter table trabajos add column if not exists activo boolean not null default true;
+alter table trabajos add column if not exists orden_visualizacion integer not null default 0;
