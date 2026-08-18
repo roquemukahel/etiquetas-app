@@ -15,11 +15,8 @@ import { tienePermiso } from '../lib/permisos';
 import { obtenerTodasLasFilas } from '../lib/db';
 import {
   ESTADOS_REPARACION,
-  GRUPOS_ESTADO,
   PRIORIDADES,
   infoEstado,
-  estadosDeGrupo,
-  GrupoEstado,
   calcularAlertas,
   ITEMS_CHECKLIST_INGRESO,
   CAMPOS_DEPENDEN_MODULO,
@@ -35,6 +32,20 @@ import ServicioTecnicoTabs from '../ServicioTecnicoTabs';
 import EstadoBadge, { FranjaEstado } from '../EstadoBadge';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
+
+// Franja lateral semántica de la tarjeta: mismos hex que tailwind.config.js
+// (accent/diag/warn/repar/good/muted/bad). Con inline style porque son
+// colores dinámicos por estado — una clase Tailwind armada en runtime no
+// sobrevive el purge de producción.
+const COLOR_ACENTO: Record<string, string> = {
+  accent: '#355CDE',
+  diag: '#7C3AED',
+  warn: '#D97706',
+  repar: '#0284C7',
+  good: '#16A34A',
+  muted: '#475569',
+  bad: '#DC2626',
+};
 
 function idTemporal() {
   return Math.random().toString(36).slice(2);
@@ -133,10 +144,20 @@ export default function ServicioTecnico() {
     const url = t === 'tecnicos' ? '/servicio-tecnico?tab=tecnicos' : '/servicio-tecnico';
     window.history.replaceState(null, '', url);
   };
-  const [grupo, setGrupo] = useState<GrupoEstado>('pendientes');
+  // Indicador operativo elegido (fila clickeable arriba de la lista). Por
+  // defecto "activas" para no arrancar mostrando entregados/cancelados
+  // viejos mezclados con lo que sí necesita atención hoy.
+  const [filtroIndicador, setFiltroIndicador] = useState<'activas' | 'demoradas' | 'aprobacion' | 'repuesto' | 'listas' | null>('activas');
   const [busqueda, setBusqueda] = useState('');
+  // Debounce de 250ms: la búsqueda filtra en memoria (no dispara consultas
+  // nuevas), pero igual se separa el valor "en vivo" del input del valor que
+  // realmente filtra para que escribir se sienta fluido en listas grandes.
+  const [busquedaDebounced, setBusquedaDebounced] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setBusquedaDebounced(busqueda), 250);
+    return () => clearTimeout(t);
+  }, [busqueda]);
   const [filtroTecnico, setFiltroTecnico] = useState('');
-  const [soloDemorados, setSoloDemorados] = useState(false);
   // Orden temporal de toda la sección (lista, en poder del técnico e
   // historial) — por defecto más recientes primero. Se guarda por navegador
   // para no tener que elegirlo de nuevo cada vez que se entra.
@@ -260,12 +281,14 @@ export default function ServicioTecnico() {
   }, [reparaciones, orden]);
 
   const filtrados = useMemo(() => {
-    const estadosGrupo = estadosDeGrupo(grupo);
-    const q = busqueda.trim().toLowerCase();
+    const q = busquedaDebounced.trim().toLowerCase();
     return reparacionesOrdenadas.filter((r) => {
-      if (!estadosGrupo.includes(r.estado as any)) return false;
+      if (filtroIndicador === 'activas' && FINALIZADOS.includes(r.estado)) return false;
+      if (filtroIndicador === 'demoradas' && !esDemorado(r)) return false;
+      if (filtroIndicador === 'aprobacion' && r.estado !== 'esperando_aprobacion') return false;
+      if (filtroIndicador === 'repuesto' && r.estado !== 'esperando_repuesto') return false;
+      if (filtroIndicador === 'listas' && r.estado !== 'listo_para_entregar') return false;
       if (filtroTecnico && r.tecnico_id !== filtroTecnico) return false;
-      if (soloDemorados && !esDemorado(r)) return false;
       if (q) {
         const nombreCliente = r.clientes ? `${r.clientes.nombre} ${r.clientes.apellido || ''}`.trim().toLowerCase() : '';
         const coincide =
@@ -278,16 +301,26 @@ export default function ServicioTecnico() {
       }
       return true;
     });
-  }, [reparacionesOrdenadas, grupo, filtroTecnico, soloDemorados, busqueda]);
+  }, [reparacionesOrdenadas, filtroIndicador, filtroTecnico, busquedaDebounced]);
 
-  const contadores = useMemo(
-    () => ({
-      sinAsignar: reparaciones.filter((r) => !r.tecnico_id && !FINALIZADOS.includes(r.estado)).length,
-      esperandoRepuesto: reparaciones.filter((r) => r.estado === 'esperando_repuesto').length,
-      listos: reparaciones.filter((r) => r.estado === 'listo_para_entregar').length,
-    }),
-    [reparaciones]
-  );
+  const hayFiltrosActivos = filtroIndicador !== null || filtroTecnico !== '' || busqueda.trim() !== '';
+  const limpiarFiltros = () => {
+    setFiltroIndicador(null);
+    setFiltroTecnico('');
+    setBusqueda('');
+  };
+
+  const indicadores = useMemo(() => {
+    const activas = reparaciones.filter((r) => !FINALIZADOS.includes(r.estado));
+    return {
+      activas: activas.length,
+      demoradas: activas.filter(esDemorado).length,
+      aprobacion: reparaciones.filter((r) => r.estado === 'esperando_aprobacion').length,
+      repuesto: reparaciones.filter((r) => r.estado === 'esperando_repuesto').length,
+      listas: reparaciones.filter((r) => r.estado === 'listo_para_entregar').length,
+      sinAsignar: activas.filter((r) => !r.tecnico_id).length,
+    };
+  }, [reparaciones]);
 
   const alertas = useMemo(() => calcularAlertas(reparaciones), [reparaciones]);
   const [alertasAbiertas, setAlertasAbiertas] = useState(false);
@@ -1130,17 +1163,54 @@ export default function ServicioTecnico() {
             </div>
           )}
 
+          {/* Resumen operativo: indicadores clickeables con datos reales,
+              icono + color (nunca solo color) y su propio filtro. */}
+          <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5 text-xs">
+            {(
+              [
+                { id: 'activas', icono: '🛠️', label: 'Activas', valor: indicadores.activas, acento: 'accent' },
+                { id: 'demoradas', icono: '⏰', label: 'Demoradas', valor: indicadores.demoradas, acento: 'bad' },
+                { id: 'aprobacion', icono: '📋', label: 'Esperando aprobación', valor: indicadores.aprobacion, acento: 'warn' },
+                { id: 'repuesto', icono: '📦', label: 'Esperando repuesto', valor: indicadores.repuesto, acento: 'warn' },
+                { id: 'listas', icono: '✅', label: 'Listas', valor: indicadores.listas, acento: 'good' },
+              ] as const
+            ).map((ind) => {
+              const activo = filtroIndicador === ind.id;
+              const colorTexto =
+                ind.acento === 'bad' ? 'text-bad' : ind.acento === 'warn' ? 'text-warn' : ind.acento === 'good' ? 'text-good' : 'text-accent dark:text-dark-accent';
+              return (
+                <button
+                  key={ind.id}
+                  onClick={() => setFiltroIndicador(activo ? null : ind.id)}
+                  aria-pressed={activo}
+                  className={`rounded-xl border px-2.5 py-2 flex flex-col items-start gap-0.5 text-left transition-colors ${
+                    activo
+                      ? 'border-accent dark:border-dark-accent bg-accent-soft dark:bg-dark-accent-soft'
+                      : 'border-border dark:border-dark-border bg-white dark:bg-dark-surface hover:border-accent/40 dark:hover:border-dark-accent/40'
+                  }`}
+                >
+                  <span className={`text-base font-semibold ${colorTexto}`}>
+                    <span aria-hidden="true">{ind.icono}</span> {ind.valor}
+                  </span>
+                  <span className="text-muted dark:text-dark-text-secondary leading-tight">{ind.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
           <div className="flex flex-col gap-2">
             <input
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
               placeholder="Buscar por orden, cliente, IMEI o teléfono..."
+              aria-label="Buscar por orden, cliente, IMEI o teléfono"
               className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
             />
             <div className="flex gap-2">
               <select
                 value={filtroTecnico}
                 onChange={(e) => setFiltroTecnico(e.target.value)}
+                aria-label="Filtrar por técnico"
                 className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
               >
                 <option value="">Todos los técnicos</option>
@@ -1150,42 +1220,53 @@ export default function ServicioTecnico() {
                   </option>
                 ))}
               </select>
-              <button
-                onClick={() => setSoloDemorados((v) => !v)}
-                className={`shrink-0 rounded-lg px-3 py-2 text-xs font-medium border ${
-                  soloDemorados ? 'bg-bad text-white border-bad' : 'border-border dark:border-dark-border'
-                }`}
-              >
-                Solo demorados
-              </button>
+              {hayFiltrosActivos && (
+                <button
+                  onClick={limpiarFiltros}
+                  className="shrink-0 rounded-lg px-3 py-2 text-xs font-medium border border-border dark:border-dark-border"
+                >
+                  Limpiar filtros
+                </button>
+              )}
             </div>
-          </div>
-
-          <div className="flex gap-2 text-xs">
-            <span className="rounded-full bg-canvas dark:bg-dark-bg px-3 py-1 font-medium">Sin asignar {contadores.sinAsignar}</span>
-            <span className="rounded-full bg-canvas dark:bg-dark-bg px-3 py-1 font-medium">Esperando repuesto {contadores.esperandoRepuesto}</span>
-            <span className="rounded-full bg-canvas dark:bg-dark-bg px-3 py-1 font-medium">Listos {contadores.listos}</span>
-          </div>
-
-          <div className="flex items-center gap-1.5 text-xs overflow-x-auto pb-1">
-            {GRUPOS_ESTADO.map((g) => (
-              <button
-                key={g.id}
-                onClick={() => setGrupo(g.id)}
-                className={`shrink-0 rounded-xl px-3 py-2 font-medium ${
-                  grupo === g.id ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
-                }`}
-              >
-                {g.label}
-              </button>
-            ))}
+            {indicadores.sinAsignar > 0 && (
+              <p className="text-xs text-muted dark:text-dark-text-secondary">
+                {indicadores.sinAsignar} reparación{indicadores.sinAsignar === 1 ? '' : 'es'} activa{indicadores.sinAsignar === 1 ? '' : 's'} sin técnico
+                asignado.
+              </p>
+            )}
           </div>
 
           {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Cargando...</p>}
           {!loading && filtrados.length === 0 && (
-            <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">
-              No hay reparaciones en este filtro.
-            </p>
+            <div className="flex flex-col items-center gap-3 text-center py-8">
+              <p className="text-sm text-muted dark:text-dark-text-secondary">
+                {!hayFiltrosActivos
+                  ? 'Todavía no recibiste ningún equipo.'
+                  : filtroIndicador === 'demoradas'
+                  ? 'No hay reparaciones demoradas. Todo el taller está al día. 🎉'
+                  : filtroIndicador === 'aprobacion'
+                  ? 'Ninguna reparación está esperando aprobación del cliente.'
+                  : filtroIndicador === 'repuesto'
+                  ? 'Ninguna reparación está esperando un repuesto.'
+                  : filtroIndicador === 'listas'
+                  ? 'No hay equipos listos para entregar todavía.'
+                  : 'No hay reparaciones en este filtro.'}
+              </p>
+              {hayFiltrosActivos && (
+                <button onClick={limpiarFiltros} className="text-xs text-accent dark:text-dark-accent underline">
+                  Limpiar filtros
+                </button>
+              )}
+              {!hayFiltrosActivos && puedeRecibir && (
+                <button
+                  onClick={() => setPanelNuevo(true)}
+                  className="rounded-xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors px-4 py-2 text-sm font-medium text-white"
+                >
+                  + Recibir equipo
+                </button>
+              )}
+            </div>
           )}
 
           <div className="flex flex-col gap-2">
@@ -1259,7 +1340,10 @@ function TarjetaReparacion({
   const nombreCliente = r.clientes ? `${r.clientes.nombre} ${r.clientes.apellido || ''}`.trim() : null;
 
   return (
-    <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex flex-col gap-2">
+    <div
+      style={{ borderLeftColor: COLOR_ACENTO[est.acento] || COLOR_ACENTO.muted, borderLeftWidth: 3 }}
+      className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex flex-col gap-2"
+    >
       <div className="flex items-start gap-3">
         <MiniaturaDispositivo src={imagenColorDeModelo(r.modelo, r.color) ?? imagenPorNombreExacto(r.modelo, imagenesCarpetas)} />
         <div className="min-w-0 flex-1">
@@ -1321,7 +1405,7 @@ function TarjetaReparacion({
       {r.falla_declarada && <p className="text-xs text-muted dark:text-dark-text-secondary">{r.falla_declarada}</p>}
 
       <div className="flex items-center gap-2 flex-wrap text-xs">
-        <span className={`rounded-full px-2 py-0.5 font-medium ${est.color}`}>{est.label}</span>
+        <EstadoBadge estado={r.estado} />
         {r.prioridad !== 'normal' && (
           <span className={`font-medium ${PRIORIDADES.find((p) => p.id === r.prioridad)?.color}`}>
             {PRIORIDADES.find((p) => p.id === r.prioridad)?.label}
