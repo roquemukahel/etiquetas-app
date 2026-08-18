@@ -31,3 +31,7 @@ export function mensajeEsperandoRepuesto(nombreCliente: string, modelo: string, 
 export function mensajeComprobantePlanAhorro(nombreCliente: string, monto: string, modelo: string, urlComprobante: string) {
   return `Hola ${nombreCliente}! Te confirmamos tu pago de ${monto} para el plan de ahorro de ${modelo}. Acá tenés tu comprobante: ${urlComprobante}`;
 }
+
+export function mensajeConsultaProveedor(nombreRepuesto: string) {
+  return `Hola! Te consulto por precio y disponibilidad de: ${nombreRepuesto}`;
+}
