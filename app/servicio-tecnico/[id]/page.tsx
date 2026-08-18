@@ -112,6 +112,12 @@ type Reparacion = {
   trabajo_recomendado: string | null;
   presupuesto_mano_obra: number | null;
   presupuesto_repuestos: number | null;
+  presupuesto_estado: string | null;
+  presupuesto_enviado_at: string | null;
+  presupuesto_medio: string | null;
+  presupuesto_respondido_at: string | null;
+  presupuesto_importe_aceptado: number | null;
+  presupuesto_texto_aceptado: string | null;
   fecha_estimada: string | null;
   observaciones_internas: string | null;
   estado: string;
@@ -291,7 +297,16 @@ export default function FichaReparacion() {
   const margen = cobrado != null ? cobrado - costoRepuestosTotal : null;
 
   const demorado = r ? esDemorado(r) : false;
-  const accionSiguiente = r ? ACCION_SIGUIENTE[r.estado] : undefined;
+  // Si el cliente (o alguien manualmente) ya aprobó el presupuesto, la
+  // próxima acción real es arrancar la reparación, no repetir "enviar
+  // presupuesto" — sustituye el mapeo genérico de ACCION_SIGUIENTE para
+  // ese caso puntual.
+  const accionSiguiente =
+    r?.estado === 'esperando_aprobacion' && r.presupuesto_estado === 'aprobado'
+      ? { label: 'Iniciar reparación', estado: 'en_reparacion' }
+      : r
+        ? ACCION_SIGUIENTE[r.estado]
+        : undefined;
 
   const abrirEdicion = () => {
     if (!r) return;
@@ -424,7 +439,16 @@ export default function FichaReparacion() {
       return;
     }
 
-    const { error: updateError } = await supabase.from('reparaciones').update(nuevo).eq('id', r.id);
+    // Un presupuesto ya aprobado nunca se pisa en silencio: si cambian los
+    // montos después de la aprobación, se invalida (vuelve a "sin
+    // responder") en vez de dejar una aprobación vieja pegada a un importe
+    // que ya no es el que el cliente vio.
+    const payloadFinal: Record<string, unknown> = { ...nuevo };
+    if ((cambios.presupuesto_mano_obra || cambios.presupuesto_repuestos) && r.presupuesto_estado === 'aprobado') {
+      payloadFinal.presupuesto_estado = null;
+    }
+
+    const { error: updateError } = await supabase.from('reparaciones').update(payloadFinal).eq('id', r.id);
     if (updateError) {
       setError('No pudimos guardar los cambios: ' + updateError.message);
       setGuardando(false);
@@ -655,7 +679,45 @@ export default function FichaReparacion() {
     if (tipo === 'listo') mensaje = mensajeListoServicio(nombre, modelo, url);
 
     await supabase.from('reparaciones_eventos').insert({ reparacion_id: r.id, tipo: 'mensaje_cliente', texto: mensaje });
+    // Enviar el presupuesto por WhatsApp deja constancia de cuándo y por qué
+    // medio se avisó — no reescribe nada si el cliente ya respondió (evita
+    // que reenviar el mismo mensaje borre una aprobación/rechazo ya
+    // registrado).
+    if (tipo === 'presupuesto' && !r.presupuesto_estado) {
+      await supabase
+        .from('reparaciones')
+        .update({ presupuesto_estado: 'enviado', presupuesto_enviado_at: new Date().toISOString(), presupuesto_medio: 'whatsapp' })
+        .eq('id', r.id);
+    }
     window.open(armarLinkWhatsApp(r.clientes.telefono, mensaje, codigoPais), '_blank');
+    cargar();
+  };
+
+  // Aprobación/rechazo registrados a mano (ej. el cliente avisó por teléfono
+  // o en persona) — mismo resultado trazable que si lo hiciera desde el
+  // portal público, pero con medio='manual' y quedando quién lo cargó en
+  // auditoría.
+  const registrarRespuestaPresupuestoManual = async (aprobar: boolean) => {
+    if (!r || !puedeGestionar) return;
+    if (!confirm(aprobar ? '¿Registrar que el cliente aprobó este presupuesto?' : '¿Registrar que el cliente rechazó este presupuesto?')) return;
+    setGuardando(true);
+    const total = (r.presupuesto_mano_obra || 0) + (r.presupuesto_repuestos || 0);
+    await supabase
+      .from('reparaciones')
+      .update({
+        presupuesto_estado: aprobar ? 'aprobado' : 'rechazado',
+        presupuesto_medio: 'manual',
+        presupuesto_respondido_at: new Date().toISOString(),
+        presupuesto_importe_aceptado: total,
+        presupuesto_texto_aceptado: r.diagnostico,
+      })
+      .eq('id', r.id);
+    await registrarAuditoria(supabase, {
+      accion: `registró que el cliente ${aprobar ? 'aprobó' : 'rechazó'} el presupuesto de la reparación ${r.numero_orden || ''} (registrado manualmente)`,
+      entidad: 'reparacion',
+      entidadId: r.id,
+    });
+    setGuardando(false);
     cargar();
   };
 
@@ -1188,7 +1250,7 @@ export default function FichaReparacion() {
                   <Campo label="Repuestos ($)" valor={f.presupuesto_repuestos} onChange={(v) => setFm((p) => ({ ...p, presupuesto_repuestos: v }))} numerico />
                 </div>
               ) : (
-                <div className="text-sm flex flex-col gap-1">
+                <div className="text-sm flex flex-col gap-2">
                   {r.presupuesto_mano_obra != null || r.presupuesto_repuestos != null ? (
                     <p>
                       <span className="text-muted dark:text-dark-text-secondary">Total presupuestado: </span>$
@@ -1201,8 +1263,42 @@ export default function FichaReparacion() {
                   ) : (
                     <p className="text-xs text-muted dark:text-dark-text-secondary">Todavía no se cargó un presupuesto.</p>
                   )}
-                  {r.estado === 'esperando_aprobacion' && (
-                    <p className="text-xs text-warn">📋 Esperando que el cliente lo apruebe o rechace.</p>
+
+                  {(r.presupuesto_mano_obra != null || r.presupuesto_repuestos != null) && (
+                    <div className="rounded-lg bg-canvas dark:bg-dark-bg p-2.5 flex flex-col gap-1.5">
+                      <p className="text-xs font-medium flex items-center gap-1.5">
+                        {r.presupuesto_estado === 'aprobado' && <span className="text-good">✅ Aprobado</span>}
+                        {r.presupuesto_estado === 'rechazado' && <span className="text-bad">✖️ Rechazado</span>}
+                        {r.presupuesto_estado === 'enviado' && <span className="text-warn">📤 Enviado, sin responder</span>}
+                        {!r.presupuesto_estado && <span className="text-muted dark:text-dark-text-secondary">Sin enviar</span>}
+                      </p>
+                      {r.presupuesto_enviado_at && (
+                        <p className="text-[11px] text-muted dark:text-dark-text-secondary">Enviado {fmt(r.presupuesto_enviado_at)}</p>
+                      )}
+                      {r.presupuesto_respondido_at && (
+                        <p className="text-[11px] text-muted dark:text-dark-text-secondary">
+                          Respondido {fmt(r.presupuesto_respondido_at)} · vía {r.presupuesto_medio === 'portal' ? 'link de seguimiento' : r.presupuesto_medio === 'whatsapp' ? 'WhatsApp' : 'registro manual'}
+                        </p>
+                      )}
+                      {r.presupuesto_estado !== 'aprobado' && r.presupuesto_estado !== 'rechazado' && puedeGestionar && (
+                        <div className="flex gap-2 mt-1">
+                          <button
+                            disabled={guardando}
+                            onClick={() => registrarRespuestaPresupuestoManual(true)}
+                            className="flex-1 rounded-lg bg-good text-white py-1.5 text-xs font-medium disabled:opacity-40"
+                          >
+                            Registrar aprobación
+                          </button>
+                          <button
+                            disabled={guardando}
+                            onClick={() => registrarRespuestaPresupuestoManual(false)}
+                            className="flex-1 rounded-lg border border-bad/40 text-bad py-1.5 text-xs font-medium disabled:opacity-40"
+                          >
+                            Registrar rechazo
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
               )}

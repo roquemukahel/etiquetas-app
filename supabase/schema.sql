@@ -2785,3 +2785,18 @@ alter table trabajos add column if not exists checklist_tecnico text[];
 alter table trabajos add column if not exists instrucciones_internas text;
 alter table trabajos add column if not exists activo boolean not null default true;
 alter table trabajos add column if not exists orden_visualizacion integer not null default 0;
+
+-- ============================================================
+-- Servicio Técnico PRO — Fase 6: aprobación digital de presupuesto.
+-- Ver presupuesto_aprobacion_digital_supabase.sql, que es el patch real
+-- a correr contra Supabase (columnas aditivas sobre `reparaciones` +
+-- reemplaza seguimiento_publico para sumar los campos de presupuesto +
+-- función pública reparacion_responder_presupuesto, que el cliente usa
+-- desde /seguimiento/[token] para aprobar o rechazar sin login).
+-- ============================================================
+alter table reparaciones add column if not exists presupuesto_estado text;
+alter table reparaciones add column if not exists presupuesto_enviado_at timestamptz;
+alter table reparaciones add column if not exists presupuesto_medio text;
+alter table reparaciones add column if not exists presupuesto_respondido_at timestamptz;
+alter table reparaciones add column if not exists presupuesto_importe_aceptado numeric;
+alter table reparaciones add column if not exists presupuesto_texto_aceptado text;
