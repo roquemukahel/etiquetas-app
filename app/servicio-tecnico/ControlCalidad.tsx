@@ -74,8 +74,8 @@ export default function ControlCalidad({
         const fotoActual = fotosNuevas[item] ?? reg?.foto_url ?? null;
         return (
           <div key={item} className="border-b border-border dark:border-dark-border py-2 flex flex-col gap-1.5 last:border-0">
-            <div className="flex items-center gap-2">
-              <span className="flex-1 text-sm">{item}</span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="basis-full sm:basis-0 sm:flex-1 min-w-0 text-sm">{item}</span>
               {fotoActual && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={fotoActual} alt="" className="h-8 w-8 rounded object-cover shrink-0" />

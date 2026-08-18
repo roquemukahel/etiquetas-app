@@ -9,11 +9,11 @@ import { armarLinkWhatsApp, mensajeSeguimientoServicio, mensajeListoServicio } f
 import { codigoLlamada } from '../lib/paises';
 import { obtenerImagenesCarpetas } from '../lib/carpetas';
 import { registrarAuditoria } from '../lib/auditoria';
+import { cambiarEstadoReparacion } from '../lib/estadoReparacion';
 import { getActor, useActor, MENSAJE_ACTOR_REQUERIDO } from '../lib/actor';
 import { tienePermiso } from '../lib/permisos';
 import { obtenerTodasLasFilas } from '../lib/db';
 import {
-  infoEstado,
   calcularAlertas,
   esHoy,
   ITEMS_CHECKLIST_INGRESO,
@@ -589,21 +589,11 @@ export default function ServicioTecnico() {
       return;
     }
     setGuardando(r.id);
-    const cambios: any = { estado: nuevoEstado, estado_actualizado_at: new Date().toISOString() };
-    // "Listo para entregar" y "Entregado" cuentan igual como trabajo
-    // terminado del técnico en Estadísticas — ver misma nota en
-    // app/servicio-tecnico/[id]/page.tsx.
-    if ((nuevoEstado === 'listo_para_entregar' || nuevoEstado === 'entregado') && !r.fecha_reparado) {
-      cambios.fecha_reparado = new Date().toISOString();
+    const resultado = await cambiarEstadoReparacion(supabase, r, nuevoEstado);
+    if (resultado === 'cancelado') {
+      setGuardando(null);
+      return;
     }
-    await supabase.from('reparaciones').update(cambios).eq('id', r.id);
-    await registrarAuditoria(supabase, {
-      accion: `cambió el estado de la reparación ${r.numero_orden || ''} (${r.modelo || 'sin modelo'}) de "${infoEstado(r.estado).label}" a "${infoEstado(nuevoEstado).label}"`,
-      entidad: 'reparacion',
-      entidadId: r.id,
-      valorAnterior: { estado: r.estado },
-      valorNuevo: { estado: nuevoEstado },
-    });
 
     if (nuevoEstado === 'listo_para_entregar' && r.cliente_id && r.clientes?.telefono && r.token_seguimiento) {
       const url = `${window.location.origin}/seguimiento/${r.token_seguimiento}`;
@@ -706,6 +696,22 @@ export default function ServicioTecnico() {
     if (!confirm('¿Eliminar definitivamente esta reparación? Esta acción no se puede deshacer y borra todo su historial.')) return;
     setGuardando(r.id);
     setMenuAbierto(null);
+    // Borrar la reparación de una no alcanza: reparaciones_repuestos y
+    // repuestos_reservas se borran en cascada, pero eso NO le devuelve nada
+    // al stock — hay que liberar/devolver primero por las mismas RPC que usa
+    // el resto del módulo, si no el stock queda mal para siempre (la fila
+    // que necesitarían esas RPC para deshacer el movimiento ya no existiría).
+    const actorActual = getActor();
+    const [{ data: consumos }, { data: reservas }] = await Promise.all([
+      supabase.from('reparaciones_repuestos').select('id').eq('reparacion_id', r.id),
+      supabase.from('repuestos_reservas').select('id').eq('reparacion_id', r.id).eq('estado', 'activa'),
+    ]);
+    for (const c of consumos ?? []) {
+      await supabase.rpc('repuesto_quitar_consumo', { p_reparacion_repuesto_id: c.id, p_actor_nombre: actorActual?.nombre ?? null });
+    }
+    for (const res of reservas ?? []) {
+      await supabase.rpc('repuesto_liberar_reserva', { p_reserva_id: res.id, p_actor_nombre: actorActual?.nombre ?? null });
+    }
     await supabase.from('reparaciones').delete().eq('id', r.id);
     await registrarAuditoria(supabase, {
       accion: `eliminó definitivamente una reparación (${r.numero_orden || ''}, ${r.modelo || 'sin modelo'}${r.imei ? `, IMEI ${r.imei}` : ''})`,
@@ -738,7 +744,7 @@ export default function ServicioTecnico() {
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
       <header className="flex items-start gap-3">
-        <Link href="/" className="text-2xl leading-none mt-0.5">
+        <Link href="/" aria-label="Volver al inicio" className="text-2xl leading-none mt-0.5">
           &larr;
         </Link>
         <div className="mr-auto">

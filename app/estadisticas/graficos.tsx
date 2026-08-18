@@ -145,9 +145,14 @@ export function EvolucionBarras({ datos, moneda }: { datos: { label: string; val
       {datos.map((d, i) => (
         <div
           key={i}
-          className="flex-1 min-w-0 flex flex-col items-center gap-1 h-full justify-end relative"
+          tabIndex={0}
+          role="img"
+          aria-label={`${d.label}: ${moneda}${Math.round(d.valor).toLocaleString('es-AR')}`}
+          className="flex-1 min-w-0 flex flex-col items-center gap-1 h-full justify-end relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent dark:focus-visible:ring-dark-accent rounded-sm"
           onMouseEnter={() => setHover(i)}
           onMouseLeave={() => setHover(null)}
+          onFocus={() => setHover(i)}
+          onBlur={() => setHover(null)}
           onClick={() => setHover(hover === i ? null : i)}
         >
           {hover === i && (

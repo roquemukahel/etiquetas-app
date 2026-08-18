@@ -165,7 +165,7 @@ export default function MiBanco({
         </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-1.5 text-xs">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-xs">
         {INDICADORES.map((ind) => {
           const activo = filtro === ind.id;
           return (

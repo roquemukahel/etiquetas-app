@@ -14,7 +14,6 @@ import { codigoLlamada } from '../../lib/paises';
 import {
   ESTADOS_REPARACION,
   PRIORIDADES,
-  infoEstado,
   ITEMS_CHECKLIST_INGRESO,
   CAMPOS_DEPENDEN_MODULO,
   esDemorado,
@@ -22,6 +21,7 @@ import {
   CHECKLIST_CALIDAD_GENERICO,
   TIPOS_INGRESO,
 } from '../../lib/reparaciones';
+import { cambiarEstadoReparacion } from '../../lib/estadoReparacion';
 import { generarOrdenDeReparacion } from '../../lib/ordenesServicio';
 import { extraerStockInsuficiente } from '../../lib/repuestos';
 import { sanitizarDecimal } from '../../lib/numeros';
@@ -550,67 +550,12 @@ export default function FichaReparacion() {
 
   const cambiarEstado = async (nuevoEstado: string) => {
     if (!r || !puedeGestionar) return;
-    // No se puede marcar "listo para entregar" con controles de calidad
-    // obligatorios sin hacer (sección 17) — salvo que alguien con permiso
-    // decida pasarlo igual, y ahí queda registrado como excepción (auditado
-    // + control_calidad_override), nunca en silencio.
-    let overrideControlCalidad = false;
-    if (nuevoEstado === 'listo_para_entregar' && controlesFaltantes.length > 0) {
-      const plural = controlesFaltantes.length === 1 ? '' : 's';
-      if (
-        !confirm(
-          `Faltan ${controlesFaltantes.length} control${plural} de calidad obligatorio${plural} (${controlesFaltantes.join(', ')}). ¿Marcar como listo igual? Va a quedar registrado como excepción.`
-        )
-      ) {
-        return;
-      }
-      overrideControlCalidad = true;
-    }
     setGuardando(true);
-    const cambios: any = { estado: nuevoEstado, estado_actualizado_at: new Date().toISOString() };
-    if (overrideControlCalidad) cambios.control_calidad_override = true;
-    // "Listo para entregar" y "Entregado" cuentan igual como trabajo
-    // terminado del técnico en Estadísticas (ambos se rankean por
-    // fecha_reparado) — algunos arreglos pasan directo a "Entregado" sin
-    // pasar por "Listo para entregar" (ej. un trabajo rápido), y antes de
-    // este chequeo esos quedaban sin fecha_reparado y no sumaban al técnico.
-    if ((nuevoEstado === 'listo_para_entregar' || nuevoEstado === 'entregado') && !r.fecha_reparado) {
-      cambios.fecha_reparado = new Date().toISOString();
+    const resultado = await cambiarEstadoReparacion(supabase, r, nuevoEstado);
+    if (resultado === 'cancelado') {
+      setGuardando(false);
+      return;
     }
-    await supabase.from('reparaciones').update(cambios).eq('id', r.id);
-
-    // La orden vinculada (creada al recibir el equipo, ver agregarEquipo)
-    // se borra al cancelar SOLO si sigue en $0 y pendiente — es decir, si
-    // nunca se llegó a cobrar. Si ya tiene un total cargado o está pagada
-    // o entregada, es plata real y no se toca aunque después la marquen
-    // como cancelada. La referencia en reparaciones se limpia sola
-    // (orden_cobro_id tiene "on delete set null") cuando sí se borra.
-    if (nuevoEstado === 'cancelado' && r.orden_cobro_id) {
-      const { data: ordenVinculada } = await supabase
-        .from('ordenes')
-        .select('estado, total')
-        .eq('id', r.orden_cobro_id)
-        .maybeSingle();
-      if (ordenVinculada && ordenVinculada.estado === 'pendiente' && !ordenVinculada.total) {
-        await supabase.from('ordenes').delete().eq('id', r.orden_cobro_id);
-        await registrarAuditoria(supabase, {
-          accion: `eliminó la orden de cobro vacía de una reparación cancelada (${r.numero_orden || ''})`,
-          entidad: 'orden',
-          entidadId: r.orden_cobro_id,
-          valorAnterior: { estado: ordenVinculada.estado, total: ordenVinculada.total },
-        });
-      }
-    }
-
-    await registrarAuditoria(supabase, {
-      accion: `cambió el estado de la reparación ${r.numero_orden || ''} de "${infoEstado(r.estado).label}" a "${infoEstado(nuevoEstado).label}"${
-        overrideControlCalidad ? ` (con controles de calidad pendientes: ${controlesFaltantes.join(', ')})` : ''
-      }`,
-      entidad: 'reparacion',
-      entidadId: r.id,
-      valorAnterior: { estado: r.estado },
-      valorNuevo: { estado: nuevoEstado },
-    });
 
     if (nuevoEstado === 'listo_para_entregar' && r.cliente_id && r.clientes?.telefono && r.token_seguimiento) {
       const url = `${window.location.origin}/seguimiento/${r.token_seguimiento}`;
@@ -822,6 +767,33 @@ export default function FichaReparacion() {
     cargar();
   };
 
+  // Un presupuesto rechazado quedaba sin salida: el portal público bloquea
+  // una segunda respuesta y los botones manuales solo aparecen mientras no
+  // hay una respuesta terminal — así que si el taller quiere ofrecer un
+  // precio revisado después de un rechazo, primero hay que reabrirlo.
+  const reabrirPresupuesto = async () => {
+    if (!r || !puedeGestionar) return;
+    if (!confirm('¿Reabrir este presupuesto para pedirle una nueva respuesta al cliente?')) return;
+    setGuardando(true);
+    const actorActual = getActor();
+    const { error: rpcError } = await supabase.rpc('reparacion_reabrir_presupuesto', {
+      p_reparacion_id: r.id,
+      p_actor_nombre: actorActual?.nombre ?? null,
+    });
+    if (rpcError) {
+      setError('No pudimos reabrir el presupuesto: ' + rpcError.message);
+      setGuardando(false);
+      return;
+    }
+    await registrarAuditoria(supabase, {
+      accion: `reabrió el presupuesto de la reparación ${r.numero_orden || ''} para una nueva respuesta`,
+      entidad: 'reparacion',
+      entidadId: r.id,
+    });
+    setGuardando(false);
+    cargar();
+  };
+
   const generarOrdenCobro = async () => {
     if (!r || !puedeGestionar) return;
     if (!confirm('¿Generar la orden de cobro con el importe de esta reparación?')) return;
@@ -1021,7 +993,7 @@ export default function FichaReparacion() {
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
       {/* Encabezado persistente */}
       <header className="flex items-start gap-3">
-        <Link href="/servicio-tecnico" className="text-2xl leading-none mt-0.5">
+        <Link href="/servicio-tecnico" aria-label="Volver" className="text-2xl leading-none mt-0.5">
           &larr;
         </Link>
         <div className="min-w-0 mr-auto">
@@ -1515,6 +1487,11 @@ export default function FichaReparacion() {
                           Respondido {fmt(r.presupuesto_respondido_at)} · vía {r.presupuesto_medio === 'portal' ? 'link de seguimiento' : r.presupuesto_medio === 'whatsapp' ? 'WhatsApp' : 'registro manual'}
                         </p>
                       )}
+                      {r.presupuesto_importe_aceptado != null && (
+                        <p className="text-[11px] text-muted dark:text-dark-text-secondary">
+                          Importe que se aceptó: ${r.presupuesto_importe_aceptado.toLocaleString('es-AR')} (queda fijo aunque el presupuesto cambie después)
+                        </p>
+                      )}
                       {r.presupuesto_estado !== 'aprobado' && r.presupuesto_estado !== 'rechazado' && puedeGestionar && (
                         <div className="flex gap-2 mt-1">
                           <button
@@ -1532,6 +1509,11 @@ export default function FichaReparacion() {
                             Registrar rechazo
                           </button>
                         </div>
+                      )}
+                      {r.presupuesto_estado === 'rechazado' && puedeGestionar && (
+                        <button disabled={guardando} onClick={reabrirPresupuesto} className="rounded-lg border border-border dark:border-dark-border py-1.5 text-xs font-medium mt-1 disabled:opacity-40">
+                          Reabrir para pedir una nueva respuesta
+                        </button>
                       )}
                     </div>
                   )}

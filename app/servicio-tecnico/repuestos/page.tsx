@@ -4,6 +4,9 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { simboloMoneda } from '../../lib/monedas';
+import { useActor } from '../../lib/actor';
+import { tienePermiso } from '../../lib/permisos';
+import { registrarAuditoria } from '../../lib/auditoria';
 import ServicioTecnicoTabs from '../../ServicioTecnicoTabs';
 
 type Proveedor = { id: string; nombre: string; telefono: string | null };
@@ -21,6 +24,8 @@ function antiguedad(iso: string): string {
 
 export default function Repuestos() {
   const supabase = crearClienteNavegador();
+  const actor = useActor();
+  const puedeGestionar = tienePermiso(actor, 'gestionar_servicio_tecnico');
 
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [repuestos, setRepuestos] = useState<Repuesto[]>([]);
@@ -60,11 +65,18 @@ export default function Repuestos() {
   }, []);
 
   const agregarProveedor = async () => {
-    if (!nombreProveedor.trim()) return;
+    if (!nombreProveedor.trim() || !puedeGestionar) return;
     setGuardandoProveedor(true);
-    await supabase
+    const { data: nuevo } = await supabase
       .from('proveedores_repuestos')
-      .insert({ nombre: nombreProveedor.trim(), telefono: telefonoProveedor.trim() || null });
+      .insert({ nombre: nombreProveedor.trim(), telefono: telefonoProveedor.trim() || null })
+      .select('id')
+      .single();
+    await registrarAuditoria(supabase, {
+      accion: `agregó el proveedor de repuestos "${nombreProveedor.trim()}"`,
+      entidad: 'repuesto_proveedor',
+      entidadId: nuevo?.id,
+    });
     setNombreProveedor('');
     setTelefonoProveedor('');
     setGuardandoProveedor(false);
@@ -107,7 +119,7 @@ export default function Repuestos() {
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
       <header className="flex items-center gap-3">
-        <Link href="/servicio-tecnico" className="text-2xl leading-none">
+        <Link href="/servicio-tecnico" aria-label="Volver" className="text-2xl leading-none">
           &larr;
         </Link>
         <span className="text-lg font-medium">Proveedores</span>
@@ -160,29 +172,31 @@ export default function Repuestos() {
             ))}
           </div>
 
-          <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-3 flex flex-col gap-2">
-            <div className="flex gap-2">
-              <input
-                value={nombreProveedor}
-                onChange={(e) => setNombreProveedor(e.target.value)}
-                placeholder="Nombre del proveedor"
-                className="flex-1 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
-              />
-              <input
-                value={telefonoProveedor}
-                onChange={(e) => setTelefonoProveedor(e.target.value)}
-                placeholder="Teléfono (opcional)"
-                className="w-32 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
-              />
+          {puedeGestionar && (
+            <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-3 flex flex-col gap-2">
+              <div className="flex gap-2">
+                <input
+                  value={nombreProveedor}
+                  onChange={(e) => setNombreProveedor(e.target.value)}
+                  placeholder="Nombre del proveedor"
+                  className="flex-1 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                />
+                <input
+                  value={telefonoProveedor}
+                  onChange={(e) => setTelefonoProveedor(e.target.value)}
+                  placeholder="Teléfono (opcional)"
+                  className="w-32 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <button
+                disabled={!nombreProveedor.trim() || guardandoProveedor}
+                onClick={agregarProveedor}
+                className="rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
+              >
+                + Agregar proveedor
+              </button>
             </div>
-            <button
-              disabled={!nombreProveedor.trim() || guardandoProveedor}
-              onClick={agregarProveedor}
-              className="rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
-            >
-              + Agregar proveedor
-            </button>
-          </div>
+          )}
         </>
       ) : (
         <>

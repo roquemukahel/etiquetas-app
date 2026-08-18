@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { registrarAuditoria } from '../../lib/auditoria';
 import { sanitizarDecimal } from '../../lib/numeros';
+import { useActor } from '../../lib/actor';
+import { tienePermiso } from '../../lib/permisos';
 import ServicioTecnicoTabs from '../../ServicioTecnicoTabs';
 import Modal from '../../Modal';
 
@@ -87,6 +89,13 @@ const FORM_VACIO: FormState = {
 
 export default function Servicios() {
   const supabase = crearClienteNavegador();
+  const actor = useActor();
+  const puedeGestionar = tienePermiso(actor, 'gestionar_servicio_tecnico');
+  // "Eliminar definitivamente" usa el mismo permiso más estricto que ya
+  // protege el borrado duro de reparaciones (distinto de "gestionar" —
+  // alguien puede tener permiso para administrar el catálogo sin tener
+  // permiso para borrar en bloque).
+  const puedeEliminar = tienePermiso(actor, 'eliminar');
   const [trabajos, setTrabajos] = useState<Trabajo[]>([]);
   const [repuestos, setRepuestos] = useState<RepuestoOpcion[]>([]);
   const [loading, setLoading] = useState(true);
@@ -135,6 +144,7 @@ export default function Servicios() {
   const nombreRepuesto = (id: string | null) => (id ? repuestos.find((r) => r.id === id)?.nombre : undefined);
 
   const abrirNuevo = () => {
+    if (!puedeGestionar) return;
     setEditandoId(null);
     setForm(FORM_VACIO);
     setError(null);
@@ -142,6 +152,7 @@ export default function Servicios() {
   };
 
   const abrirEdicion = (t: Trabajo) => {
+    if (!puedeGestionar) return;
     setEditandoId(t.id);
     setForm({
       nombre: t.nombre,
@@ -170,7 +181,7 @@ export default function Servicios() {
   };
 
   const guardar = async () => {
-    if (!form.nombre.trim()) return;
+    if (!form.nombre.trim() || !puedeGestionar) return;
     setGuardando(true);
     setError(null);
     const payload = {
@@ -223,6 +234,7 @@ export default function Servicios() {
   };
 
   const duplicar = async (t: Trabajo) => {
+    if (!puedeGestionar) return;
     setMenuAbierto(null);
     const { data: nuevo, error: insError } = await supabase
       .from('trabajos')
@@ -253,6 +265,7 @@ export default function Servicios() {
   // "Archivar" en vez de eliminar es la vía normal para retirar un servicio
   // del catálogo: nunca borra nada que ya se haya usado en una reparación.
   const archivar = async (t: Trabajo, activo: boolean) => {
+    if (!puedeGestionar) return;
     setMenuAbierto(null);
     await supabase.from('trabajos').update({ activo }).eq('id', t.id);
     await registrarAuditoria(supabase, {
@@ -264,6 +277,7 @@ export default function Servicios() {
   };
 
   const eliminar = async (t: Trabajo) => {
+    if (!puedeEliminar) return;
     setMenuAbierto(null);
     if (
       !confirm(
@@ -282,6 +296,7 @@ export default function Servicios() {
   };
 
   const cargarTrabajosDefault = async () => {
+    if (!puedeGestionar) return;
     setCargandoDefaults(true);
     setError(null);
     // Si ya se cargaron antes (o el dueño ya tenía un servicio con ese
@@ -321,7 +336,7 @@ export default function Servicios() {
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
       <header className="flex items-start gap-3">
-        <Link href="/servicio-tecnico" className="text-2xl leading-none mt-0.5">
+        <Link href="/servicio-tecnico" aria-label="Volver" className="text-2xl leading-none mt-0.5">
           &larr;
         </Link>
         <div className="mr-auto">
@@ -330,19 +345,26 @@ export default function Servicios() {
             Catálogo de arreglos: precio, duración, garantía y repuesto sugerido
           </p>
         </div>
-        <button
-          onClick={abrirNuevo}
-          className="shrink-0 rounded-xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors px-4 py-2.5 text-sm font-medium text-white"
-        >
-          + Nuevo servicio
-        </button>
+        {puedeGestionar && (
+          <button
+            onClick={abrirNuevo}
+            className="shrink-0 rounded-xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors px-4 py-2.5 text-sm font-medium text-white"
+          >
+            + Nuevo servicio
+          </button>
+        )}
       </header>
 
       <ServicioTecnicoTabs active="servicios" />
 
       {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
+      {!puedeGestionar && (
+        <p className="text-xs text-muted dark:text-dark-text-secondary text-center">
+          No tenés permiso para gestionar Servicio Técnico — solo podés ver el catálogo.
+        </p>
+      )}
 
-      {trabajos.length === 0 && !loading && (
+      {trabajos.length === 0 && !loading && puedeGestionar && (
         <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-4 py-3 flex flex-col gap-3">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -472,6 +494,7 @@ export default function Servicios() {
             <div className="p-3 flex flex-col gap-1.5 flex-1">
               <div className="flex items-start justify-between gap-2">
                 <p className="text-sm font-medium leading-tight">{t.nombre}</p>
+                {(puedeGestionar || puedeEliminar) && (
                 <div className="relative shrink-0">
                   <button
                     onClick={() => setMenuAbierto(menuAbierto === t.id ? null : t.id)}
@@ -482,21 +505,30 @@ export default function Servicios() {
                   </button>
                   {menuAbierto === t.id && (
                     <div className="absolute right-0 top-6 z-10 w-44 rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-elevated flex flex-col overflow-hidden">
+                      {puedeGestionar && (
                       <button onClick={() => abrirEdicion(t)} className="px-3 py-2 text-xs text-left hover:bg-canvas dark:hover:bg-dark-bg">
                         ✏️ Editar
                       </button>
+                      )}
+                      {puedeGestionar && (
                       <button onClick={() => duplicar(t)} className="px-3 py-2 text-xs text-left hover:bg-canvas dark:hover:bg-dark-bg">
                         ⧉ Duplicar
                       </button>
+                      )}
+                      {puedeGestionar && (
                       <button onClick={() => archivar(t, !t.activo)} className="px-3 py-2 text-xs text-left hover:bg-canvas dark:hover:bg-dark-bg">
                         {t.activo ? '📦 Archivar' : '↩ Reactivar'}
                       </button>
+                      )}
+                      {puedeEliminar && (
                       <button onClick={() => eliminar(t)} className="px-3 py-2 text-xs text-left text-bad hover:bg-bad/10">
                         Eliminar definitivamente
                       </button>
+                      )}
                     </div>
                   )}
                 </div>
+                )}
               </div>
 
               {t.categoria && (

@@ -2827,3 +2827,13 @@ create policy "reparaciones_control_calidad de mi negocio" on reparaciones_contr
 alter table reparaciones add column if not exists control_calidad_override boolean not null default false;
 alter table reparaciones add column if not exists tipo_ingreso text;
 alter table reparaciones add column if not exists reparacion_relacionada_id uuid references reparaciones(id) on delete set null;
+
+-- ============================================================
+-- Servicio Técnico PRO — Fase 8 (QA final). Ver qa_fase8_supabase.sql,
+-- que es el patch real a correr: endurece repuesto_consumir/
+-- repuesto_reservar para verificar que la reparación sea del mismo
+-- negocio que el repuesto (antes solo se validaba el repuesto por
+-- RLS), y agrega reparacion_reabrir_presupuesto (permite volver a
+-- pedirle respuesta al cliente después de un rechazo, que antes no
+-- tenía salida).
+-- ============================================================
