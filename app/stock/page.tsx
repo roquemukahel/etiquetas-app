@@ -72,6 +72,11 @@ const ACCESORIOS_DEFAULT: { nombre: string; imagen: string }[] = [
   { nombre: 'Protector de cámara', imagen: '/accesorios-default/protector-camara.webp' },
   { nombre: 'Funda transparente', imagen: '/accesorios-default/funda-transparente.webp' },
   { nombre: 'Funda MagSafe', imagen: '/accesorios-default/funda-magsafe.webp' },
+  { nombre: 'Joystick PS5 (DualSense)', imagen: '/accesorios-default/joystick-ps5.webp' },
+  { nombre: 'Parlante JBL Xtreme', imagen: '/accesorios-default/parlante-jbl-xtreme.webp' },
+  { nombre: 'Parlante JBL Clip', imagen: '/accesorios-default/parlante-jbl-clip.webp' },
+  { nombre: 'Consola PS5', imagen: '/accesorios-default/ps5-consola.webp' },
+  { nombre: 'Vidrio templado', imagen: '/accesorios-default/templado-vidrio.webp' },
 ];
 
 type FiltroRapido = 'todos' | 'bateria_baja' | 'sellados' | 'por_reponer' | 'sin_precio' | 'sin_costo' | 'incompletos';

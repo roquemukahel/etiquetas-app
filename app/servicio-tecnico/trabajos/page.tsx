@@ -8,6 +8,18 @@ import { sanitizarDecimal } from '../../lib/numeros';
 
 type Trabajo = { id: string; nombre: string; precio: number | null; imagen_url: string | null };
 
+// Catálogo inicial que se puede cargar con un toque desde "Agregar trabajos
+// por defecto" — se insertan sin precio (el dueño lo completa después); las
+// fotos viven en /public así no pesan la base de datos.
+const TRABAJOS_DEFAULT: { nombre: string; imagen: string }[] = [
+  { nombre: 'Cambio de batería', imagen: '/trabajos-default/cambio-bateria.webp' },
+  { nombre: 'Cambio de flex de carga', imagen: '/trabajos-default/cambio-flex-carga.webp' },
+  { nombre: 'Cambio de cámara trasera', imagen: '/trabajos-default/cambio-camara-trasera.webp' },
+  { nombre: 'Cambio de módulo', imagen: '/trabajos-default/cambio-modulo.webp' },
+  { nombre: 'Cambio de tapa', imagen: '/trabajos-default/cambio-tapa.webp' },
+  { nombre: 'Limpieza de pin de carga', imagen: '/trabajos-default/limpieza-pin-carga.webp' },
+];
+
 export default function Trabajos() {
   const supabase = crearClienteNavegador();
   const [trabajos, setTrabajos] = useState<Trabajo[]>([]);
@@ -16,6 +28,8 @@ export default function Trabajos() {
   const [precio, setPrecio] = useState('');
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmandoDefaults, setConfirmandoDefaults] = useState(false);
+  const [cargandoDefaults, setCargandoDefaults] = useState(false);
 
   const cargar = async () => {
     const { data } = await supabase.from('trabajos').select('*').order('nombre');
@@ -58,6 +72,36 @@ export default function Trabajos() {
     cargar();
   };
 
+  const cargarTrabajosDefault = async () => {
+    setCargandoDefaults(true);
+    setError(null);
+    // Si ya se cargaron antes (o el dueño ya tenía un trabajo con ese
+    // nombre), no los duplicamos.
+    const nombresExistentes = new Set(trabajos.map((t) => t.nombre.trim().toLowerCase()));
+    const aInsertar = TRABAJOS_DEFAULT.filter((t) => !nombresExistentes.has(t.nombre.toLowerCase()));
+    if (aInsertar.length === 0) {
+      setConfirmandoDefaults(false);
+      setCargandoDefaults(false);
+      return;
+    }
+    const { error: insertError } = await supabase
+      .from('trabajos')
+      .insert(aInsertar.map((t) => ({ nombre: t.nombre, imagen_url: t.imagen })));
+    if (insertError) {
+      setError('No pudimos cargar los trabajos por defecto: ' + insertError.message);
+      setCargandoDefaults(false);
+      return;
+    }
+    await registrarAuditoria(supabase, {
+      accion: `cargó el catálogo de trabajos por defecto (${aInsertar.length} trabajo${aInsertar.length === 1 ? '' : 's'})`,
+      entidad: 'trabajo',
+      valorNuevo: { trabajos: aInsertar.map((t) => t.nombre) },
+    });
+    setConfirmandoDefaults(false);
+    setCargandoDefaults(false);
+    cargar();
+  };
+
   const cambiarImagen = (t: Trabajo, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -80,6 +124,54 @@ export default function Trabajos() {
       </header>
 
       {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
+
+      <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-4 py-3 flex flex-col gap-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium">Agregar trabajos por defecto</p>
+            <p className="text-xs text-muted dark:text-dark-text-secondary">
+              Carga un catálogo inicial con imagen: cambio de batería, flex de carga, cámara trasera, módulo, tapa y
+              limpieza de pin de carga. Si ya cargaste algunos antes, solo agrega los que todavía te falten.
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={confirmandoDefaults}
+            onClick={() => setConfirmandoDefaults((v) => !v)}
+            className={`shrink-0 relative h-7 w-12 rounded-full transition-colors ${
+              confirmandoDefaults ? 'bg-accent dark:bg-dark-accent' : 'bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border'
+            }`}
+          >
+            <span
+              className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                confirmandoDefaults ? 'translate-x-6' : 'translate-x-1'
+              }`}
+            />
+          </button>
+        </div>
+        {confirmandoDefaults && (
+          <div className="rounded-lg border border-accent/30 dark:border-dark-accent/30 bg-accent-soft dark:bg-dark-accent-soft px-3 py-2.5 flex flex-col gap-2">
+            <p className="text-xs">Una vez que actives esta opción, se cargarán trabajos por defecto. ¿Deseás hacerlo?</p>
+            <div className="flex gap-2">
+              <button
+                disabled={cargandoDefaults}
+                onClick={cargarTrabajosDefault}
+                className="rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
+              >
+                {cargandoDefaults ? 'Cargando…' : 'Sí, cargar'}
+              </button>
+              <button
+                disabled={cargandoDefaults}
+                onClick={() => setConfirmandoDefaults(false)}
+                className="rounded-lg border border-border dark:border-dark-border px-3 py-1.5 text-xs font-medium disabled:opacity-40"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
 
       <div className="flex flex-col gap-2">
         <div className="flex gap-2">

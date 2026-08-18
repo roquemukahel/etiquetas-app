@@ -1471,23 +1471,32 @@ export default function NuevaOrden() {
             </div>
 
             {modoTrabajo === 'catalogo' ? (
-              <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-96 overflow-y-auto">
                 {trabajos.length === 0 && (
-                  <p className="text-xs text-muted dark:text-dark-text-secondary text-center py-2">
+                  <p className="col-span-full text-xs text-muted dark:text-dark-text-secondary text-center py-2">
                     Todavía no cargaste trabajos en Servicio Técnico.
                   </p>
                 )}
-                {trabajos.map((t) => (
+                {trabajos.map((t, i) => (
                   <button
                     key={t.id}
                     onClick={() => agregarTrabajoDelCatalogo(t)}
-                    className="rounded-lg border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-3 py-2 flex items-center justify-between text-left text-sm gap-2"
+                    className="group rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface p-2.5 flex flex-col items-center gap-1 text-center"
                   >
-                    <span className="flex items-center gap-2 min-w-0">
-                      <MiniaturaDispositivo src={t.imagen_url} size={28} />
-                      <span className="truncate">{t.nombre}</span>
+                    <span className="block animate-flotar" style={{ animationDelay: `${(i % 3) * 0.4}s` }}>
+                      {t.imagen_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={t.imagen_url}
+                          alt=""
+                          className="h-16 w-16 object-contain transition-transform duration-300 ease-out group-hover:animate-vaivenLateral"
+                        />
+                      ) : (
+                        <div className="h-16 w-16 rounded-lg bg-canvas dark:bg-dark-bg flex items-center justify-center text-2xl">🔧</div>
+                      )}
                     </span>
-                    {t.precio != null && <span className="font-medium shrink-0">{moneda}{t.precio.toLocaleString('es-AR')}</span>}
+                    <span className="text-xs font-medium leading-tight line-clamp-2">{t.nombre}</span>
+                    {t.precio != null && <span className="text-xs font-semibold">{moneda}{t.precio.toLocaleString('es-AR')}</span>}
                   </button>
                 ))}
               </div>
