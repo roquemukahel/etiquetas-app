@@ -266,7 +266,7 @@ export default function FichaReparacion() {
       setTecnicos((data as Tecnico[]) ?? []);
     })();
     (async () => {
-      const { data } = await supabase.from('trabajos').select('id, nombre, imagen_url').order('nombre');
+      const { data } = await supabase.from('trabajos').select('id, nombre, imagen_url').eq('activo', true).order('nombre');
       setTrabajos((data as Trabajo[]) ?? []);
     })();
     (async () => {
@@ -442,10 +442,15 @@ export default function FichaReparacion() {
     // Un presupuesto ya aprobado nunca se pisa en silencio: si cambian los
     // montos después de la aprobación, se invalida (vuelve a "sin
     // responder") en vez de dejar una aprobación vieja pegada a un importe
-    // que ya no es el que el cliente vio.
+    // que ya no es el que el cliente vio. Se suma a "cambios" (no solo al
+    // payload) para que quede explícito en la auditoría — si no, el log
+    // solo mostraría el cambio de precio y no diría por qué se perdió la
+    // aprobación.
     const payloadFinal: Record<string, unknown> = { ...nuevo };
-    if ((cambios.presupuesto_mano_obra || cambios.presupuesto_repuestos) && r.presupuesto_estado === 'aprobado') {
+    const invalidaAprobacion = (cambios.presupuesto_mano_obra || cambios.presupuesto_repuestos) && r.presupuesto_estado === 'aprobado';
+    if (invalidaAprobacion) {
       payloadFinal.presupuesto_estado = null;
+      cambios.presupuesto_estado = { antes: r.presupuesto_estado, despues: null };
     }
 
     const { error: updateError } = await supabase.from('reparaciones').update(payloadFinal).eq('id', r.id);
@@ -456,7 +461,9 @@ export default function FichaReparacion() {
     }
 
     await registrarAuditoria(supabase, {
-      accion: `editó la reparación ${r.numero_orden || ''} (${nuevo.modelo || 'sin modelo'})`,
+      accion: `editó la reparación ${r.numero_orden || ''} (${nuevo.modelo || 'sin modelo'})${
+        invalidaAprobacion ? ' — se invalidó la aprobación del presupuesto por el cambio de monto' : ''
+      }`,
       entidad: 'reparacion',
       entidadId: r.id,
       valorAnterior: Object.fromEntries(Object.entries(cambios).map(([k, v]) => [k, v.antes])),

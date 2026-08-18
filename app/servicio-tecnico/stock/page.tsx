@@ -464,7 +464,10 @@ export default function StockRepuestos() {
   const registrarMovimiento = async () => {
     if (!repuestoDetalle || !puedeGestionar) return;
     const cantidadIngresada = Number(movCantidad) || 0;
-    if (cantidadIngresada === 0) return;
+    if (cantidadIngresada === 0) {
+      setError('Ingresá una cantidad válida distinta de cero.');
+      return;
+    }
     // Rotura/pérdida/transferencia siempre restan; entrada/devolución/
     // corrección positiva suman; ajuste usa el signo tal cual lo escriben
     // (permite tanto sumar como restar un conteo físico).
@@ -1031,7 +1034,7 @@ export default function StockRepuestos() {
                   <div className="flex gap-2">
                     <input
                       value={movCantidad}
-                      onChange={(e) => setMovCantidad(e.target.value.replace(/[^\d-]/g, ''))}
+                      onChange={(e) => setMovCantidad(e.target.value.replace(/[^\d-]/g, '').replace(/(?!^)-/g, ''))}
                       placeholder={movTipo === 'ajuste' ? 'Cantidad (+/-)' : 'Cantidad'}
                       inputMode="numeric"
                       className="flex-1 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
