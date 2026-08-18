@@ -173,6 +173,17 @@ export function esHoy(iso: string | null): boolean {
   return new Date(iso).toDateString() === new Date().toDateString();
 }
 
+export function hace(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime();
+  const min = Math.floor(ms / 60000);
+  if (min < 1) return 'recién';
+  if (min < 60) return `hace ${min} min`;
+  const horas = Math.floor(min / 60);
+  if (horas < 24) return `hace ${horas}h`;
+  const dias = Math.floor(horas / 24);
+  return `hace ${dias}d`;
+}
+
 export type ReparacionParaAlerta = {
   id: string;
   numero_orden: string | null;

@@ -17,6 +17,8 @@ import {
   infoEstado,
   ITEMS_CHECKLIST_INGRESO,
   CAMPOS_DEPENDEN_MODULO,
+  esDemorado,
+  hace,
 } from '../../lib/reparaciones';
 import { generarOrdenDeReparacion } from '../../lib/ordenesServicio';
 import { extraerStockInsuficiente } from '../../lib/repuestos';
@@ -26,10 +28,45 @@ import SelectorColorAuto from '../../SelectorColorAuto';
 import Avatar from '../../Avatar';
 import CheckTri from '../../CheckTri';
 import TextoCondicionGenerado from '../../TextoCondicionGenerado';
+import EstadoBadge from '../../EstadoBadge';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 const ACCESORIOS_OPCIONES = ['Funda', 'Cargador', 'SIM', 'Bandeja SIM'];
 const FORMAS_PAGO = ['Efectivo', 'Transferencia', 'Tarjeta'];
+
+type Tab = 'resumen' | 'recepcion' | 'diagnostico' | 'presupuesto' | 'servicios' | 'evidencias' | 'comunicacion' | 'historial';
+
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'resumen', label: 'Resumen' },
+  { id: 'recepcion', label: 'Recepción' },
+  { id: 'diagnostico', label: 'Diagnóstico' },
+  { id: 'presupuesto', label: 'Presupuesto' },
+  { id: 'servicios', label: 'Servicios y repuestos' },
+  { id: 'evidencias', label: 'Evidencias' },
+  { id: 'comunicacion', label: 'Comunicación' },
+  { id: 'historial', label: 'Historial' },
+];
+
+// Línea de progreso del encabezado: presentación derivada del estado actual
+// (no un historial real de tránsito por cada etapa), para que se entienda
+// el avance de un vistazo — sección 15 del rediseño. "Control de calidad"
+// se suma acá el día que exista de verdad un checklist antes de entregar;
+// hasta entonces no se muestra una etapa que no representa nada real.
+const ETAPAS_PROGRESO: { label: string; estados: string[] }[] = [
+  { label: 'Recepción', estados: ['recibido'] },
+  { label: 'Diagnóstico', estados: ['esperando_diagnostico'] },
+  { label: 'Aprobación', estados: ['esperando_aprobacion'] },
+  { label: 'Reparación', estados: ['en_reparacion', 'esperando_repuesto'] },
+  { label: 'Entrega', estados: ['listo_para_entregar', 'entregado'] },
+];
+
+// Próxima acción del panel lateral: solo para estados donde el técnico
+// tiene algo concreto para avanzar — mismo criterio que Mi banco (Fase 3).
+const ACCION_SIGUIENTE: Record<string, { label: string; estado: string } | undefined> = {
+  recibido: { label: 'Iniciar diagnóstico', estado: 'esperando_diagnostico' },
+  esperando_diagnostico: { label: 'Enviar presupuesto', estado: 'esperando_aprobacion' },
+  en_reparacion: { label: 'Marcar listo para entregar', estado: 'listo_para_entregar' },
+};
 
 type Tecnico = { id: string; nombre: string; foto_url: string | null };
 type Trabajo = { id: string; nombre: string; imagen_url: string | null };
@@ -160,6 +197,8 @@ export default function FichaReparacion() {
   const [codigoPais, setCodigoPais] = useState('54');
   const [avisoWhatsApp, setAvisoWhatsApp] = useState<{ link: string; nombre: string } | null>(null);
   const [avisoAgregarStock, setAvisoAgregarStock] = useState(false);
+  const [tab, setTab] = useState<Tab>('resumen');
+  const [linkCopiado, setLinkCopiado] = useState(false);
 
   const [f, setFm] = useState<Record<string, any>>({});
 
@@ -241,6 +280,18 @@ export default function FichaReparacion() {
   const nombreCliente = r?.clientes ? `${r.clientes.nombre} ${r.clientes.apellido || ''}`.trim() : null;
   const nombreTecnico = (tid: string | null) => tecnicos.find((t) => t.id === tid)?.nombre;
   const fotoTecnico = (tid: string | null) => tecnicos.find((t) => t.id === tid)?.foto_url ?? null;
+
+  // Costo histórico de repuestos y margen — mismo cálculo que antes, ahora
+  // levantado para poder mostrarlo también en el panel lateral fijo, no
+  // solo adentro de la pestaña de Servicios y repuestos.
+  const costoRepuestosTotal = repuestosUsados.reduce((acc, ru) => acc + (ru.costo_unitario ?? 0) * ru.cantidad, 0);
+  const hayCostosFaltantes = repuestosUsados.some((ru) => ru.costo_unitario == null);
+  const presupuestoSuma = r ? (r.presupuesto_mano_obra || 0) + (r.presupuesto_repuestos || 0) : 0;
+  const cobrado = r ? r.importe_total ?? (presupuestoSuma > 0 ? presupuestoSuma : null) : null;
+  const margen = cobrado != null ? cobrado - costoRepuestosTotal : null;
+
+  const demorado = r ? esDemorado(r) : false;
+  const accionSiguiente = r ? ACCION_SIGUIENTE[r.estado] : undefined;
 
   const abrirEdicion = () => {
     if (!r) return;
@@ -702,6 +753,18 @@ export default function FichaReparacion() {
     cargar();
   };
 
+  const copiarLinkSeguimiento = async () => {
+    if (!r?.token_seguimiento) return;
+    const url = `${window.location.origin}/seguimiento/${r.token_seguimiento}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setLinkCopiado(true);
+      setTimeout(() => setLinkCopiado(false), 2000);
+    } catch {
+      setError('No pudimos copiar el link — copialo manualmente: ' + url);
+    }
+  };
+
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center">
@@ -721,34 +784,41 @@ export default function FichaReparacion() {
     );
   }
 
-  const est = infoEstado(r.estado);
+  const etapaActualIdx = ETAPAS_PROGRESO.findIndex((e) => e.estados.includes(r.estado));
 
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
-      <header className="flex items-center gap-3">
-        <Link href="/servicio-tecnico" className="text-2xl leading-none">
+      {/* Encabezado persistente */}
+      <header className="flex items-start gap-3">
+        <Link href="/servicio-tecnico" className="text-2xl leading-none mt-0.5">
           &larr;
         </Link>
-        <span className="text-lg font-medium mr-auto">{r.numero_orden}</span>
-        <Link href={`/servicio-tecnico/etiqueta/${r.id}`} className="text-xs text-accent dark:text-dark-accent underline">
+        <div className="min-w-0 mr-auto">
+          <p className="text-lg font-medium leading-tight truncate">
+            {r.numero_orden} · {r.modelo}
+            {r.capacidad_gb ? ` · ${r.capacidad_gb}GB` : ''}
+          </p>
+          <p className="text-xs text-muted dark:text-dark-text-secondary flex items-center gap-1.5 flex-wrap">
+            {nombreCliente ? `👤 ${nombreCliente}` : '🏬 Equipo propio del local'}
+            <span>· Ingresó {hace(r.fecha_ingreso_servicio)}</span>
+            {demorado && <span className="text-bad font-medium">· Demorada</span>}
+          </p>
+        </div>
+        <Link href={`/servicio-tecnico/etiqueta/${r.id}`} className="text-xs text-accent dark:text-dark-accent underline shrink-0">
           🏷️ Etiqueta
         </Link>
         {puedeGestionar && (
-          <button onClick={() => (editando ? setEditando(false) : abrirEdicion())} className="text-xs text-accent dark:text-dark-accent underline">
+          <button
+            onClick={() => (editando ? setEditando(false) : abrirEdicion())}
+            className="text-xs text-accent dark:text-dark-accent underline shrink-0"
+          >
             {editando ? 'Cancelar' : 'Editar'}
           </button>
         )}
       </header>
 
-      {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
-      {!puedeGestionar && (
-        <p className="text-xs text-muted dark:text-dark-text-secondary text-center">
-          No tenés permiso para gestionar Servicio Técnico — solo podés ver esta ficha.
-        </p>
-      )}
-
       <div className="flex items-center gap-3 flex-wrap">
-        <span className={`rounded-full px-3 py-1 text-xs font-medium ${est.color}`}>{est.label}</span>
+        <EstadoBadge estado={r.estado} />
         <select
           value={r.estado}
           disabled={guardando || !puedeGestionar}
@@ -767,7 +837,56 @@ export default function FichaReparacion() {
             {nombreTecnico(r.tecnico_id)}
           </span>
         )}
+        {r.prioridad !== 'normal' && (
+          <span className={`text-xs font-medium ${PRIORIDADES.find((p) => p.id === r.prioridad)?.color}`}>
+            {PRIORIDADES.find((p) => p.id === r.prioridad)?.label}
+          </span>
+        )}
+        {r.fecha_estimada && (
+          <span className="text-xs text-muted dark:text-dark-text-secondary">
+            Prometida: {new Date(r.fecha_estimada + 'T00:00:00').toLocaleDateString('es-AR')}
+          </span>
+        )}
       </div>
+
+      {/* Línea de progreso — presentación derivada del estado actual, no
+          aplica a reparaciones canceladas/sin solución. */}
+      {r.estado !== 'cancelado' && etapaActualIdx !== -1 && (
+        <div className="flex items-center" aria-hidden="true">
+          {ETAPAS_PROGRESO.map((etapa, idx) => {
+            const completada = idx < etapaActualIdx || r.estado === 'entregado';
+            const activa = idx === etapaActualIdx && r.estado !== 'entregado';
+            return (
+              <div key={etapa.label} className="flex items-center flex-1 last:flex-none">
+                <div className="flex flex-col items-center gap-1 shrink-0">
+                  <div
+                    className={`h-2.5 w-2.5 rounded-full ${
+                      completada || activa ? 'bg-accent dark:bg-dark-accent' : 'bg-border dark:bg-dark-border'
+                    } ${activa ? 'ring-4 ring-accent/20 dark:ring-dark-accent/20' : ''}`}
+                  />
+                  <span
+                    className={`text-[10px] whitespace-nowrap ${
+                      completada || activa ? 'text-ink dark:text-dark-text font-medium' : 'text-muted dark:text-dark-text-secondary'
+                    }`}
+                  >
+                    {etapa.label}
+                  </span>
+                </div>
+                {idx < ETAPAS_PROGRESO.length - 1 && (
+                  <div className={`h-0.5 flex-1 mx-1 ${idx < etapaActualIdx ? 'bg-accent dark:bg-dark-accent' : 'bg-border dark:bg-dark-border'}`} />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
+      {!puedeGestionar && (
+        <p className="text-xs text-muted dark:text-dark-text-secondary text-center">
+          No tenés permiso para gestionar Servicio Técnico — solo podés ver esta ficha.
+        </p>
+      )}
 
       {avisoWhatsApp && (
         <div className="rounded-xl border border-good/30 bg-good/10 p-3 flex flex-col gap-2">
@@ -794,656 +913,798 @@ export default function FichaReparacion() {
         </div>
       )}
 
-      {/* Identificación */}
-      <Seccion titulo="Identificación">
-        {editando ? (
-          <div className="flex flex-col gap-2">
-            <Campo label="Modelo" valor={f.modelo} onChange={(v) => setFm((p) => ({ ...p, modelo: v }))} />
-            <div className="flex gap-2">
-              {STORAGE_OPTIONS.map((gb) => (
+      {/* Contenido principal (pestañas) + panel lateral fijo */}
+      <div className="flex flex-col lg:flex-row gap-4 items-start">
+        <div className="min-w-0 flex-1 flex flex-col gap-3 w-full">
+          <nav
+            aria-label="Secciones de la reparación"
+            className="flex gap-1 overflow-x-auto -mx-6 px-6 lg:mx-0 lg:px-0 border-b border-border dark:border-dark-border"
+          >
+            {TABS.map((t) => {
+              const activo = tab === t.id;
+              return (
                 <button
-                  key={gb}
-                  onClick={() => setFm((p) => ({ ...p, capacidad_gb: gb }))}
-                  className={`flex-1 rounded-lg py-2 text-xs font-medium ${
-                    f.capacidad_gb === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
+                  key={t.id}
+                  type="button"
+                  onClick={() => setTab(t.id)}
+                  aria-current={activo ? 'page' : undefined}
+                  className={`shrink-0 px-3 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                    activo
+                      ? 'border-accent dark:border-dark-accent text-accent dark:text-dark-accent'
+                      : 'border-transparent text-muted dark:text-dark-text-secondary hover:text-ink dark:hover:text-dark-text'
                   }`}
                 >
-                  {gb}GB
+                  {t.label}
                 </button>
-              ))}
-            </div>
-            <SelectorColorAuto modelo={f.modelo} value={f.color} onChange={(v) => setFm((p) => ({ ...p, color: v }))} />
-            <Campo label="IMEI" valor={f.imei} onChange={(v) => setFm((p) => ({ ...p, imei: v }))} mono />
-            <Campo label="Código de desbloqueo (opcional)" valor={f.codigo_desbloqueo} onChange={(v) => setFm((p) => ({ ...p, codigo_desbloqueo: v }))} />
-            <Campo label="Ubicación física (ej. Estante A-3)" valor={f.ubicacion_fisica} onChange={(v) => setFm((p) => ({ ...p, ubicacion_fisica: v }))} />
-            <div>
-              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Accesorios entregados</label>
-              <div className="flex flex-wrap gap-2">
-                {ACCESORIOS_OPCIONES.map((a) => (
-                  <button
-                    key={a}
-                    onClick={() => toggleAccesorio(a)}
-                    className={`rounded-lg px-3 py-1.5 text-xs font-medium ${
-                      f.accesorios.includes(a) ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
-                    }`}
-                  >
-                    {a}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="text-sm flex flex-col gap-1">
-            <p className="text-xs">
-              {r.cliente_id ? (
-                <span className="text-accent dark:text-dark-accent">👤 Equipo de un cliente</span>
-              ) : (
-                <span className="text-muted dark:text-dark-text-secondary">🏬 Equipo propio del local</span>
-              )}
-            </p>
-            {nombreCliente && (
-              <p>
-                <span className="text-muted dark:text-dark-text-secondary">Cliente: </span>
-                {nombreCliente} {r.clientes?.telefono ? `· ${r.clientes.telefono}` : ''}
-              </p>
-            )}
-            <p>
-              <span className="text-muted dark:text-dark-text-secondary">Equipo: </span>
-              {r.modelo}
-              {r.capacidad_gb ? ` · ${r.capacidad_gb}GB` : ''}
-              {r.color ? ` · ${r.color}` : ''}
-            </p>
-            {r.imei && (
-              <p>
-                <span className="text-muted dark:text-dark-text-secondary">IMEI: </span>
-                <span className="font-mono font-bold">{r.imei}</span>
-              </p>
-            )}
-            {r.codigo_desbloqueo && (
-              <p className="flex items-center gap-2">
-                <span className="text-muted dark:text-dark-text-secondary">Código de desbloqueo: </span>
-                <span className="font-mono">{codigoVisible ? r.codigo_desbloqueo : '••••••'}</span>
-                <button onClick={() => setCodigoVisible((v) => !v)} className="text-xs text-accent dark:text-dark-accent underline">
-                  {codigoVisible ? 'ocultar' : 'mostrar'}
-                </button>
-              </p>
-            )}
-            {r.accesorios?.length > 0 && (
-              <p>
-                <span className="text-muted dark:text-dark-text-secondary">Accesorios: </span>
-                {r.accesorios.join(', ')}
-              </p>
-            )}
-            {r.ubicacion_fisica && (
-              <p>
-                <span className="text-muted dark:text-dark-text-secondary">Ubicación: </span>📍 {r.ubicacion_fisica}
-              </p>
-            )}
-          </div>
-        )}
-      </Seccion>
-
-      {/* Recepción / checklist */}
-      <Seccion titulo="Recepción">
-        {editando ? (
-          <div className="flex flex-col gap-2">
-            <Campo label="Falla declarada por el cliente" valor={f.falla_declarada} onChange={(v) => setFm((p) => ({ ...p, falla_declarada: v }))} textarea />
-            <Campo label="Estado estético" valor={f.estado_estetico} onChange={(v) => setFm((p) => ({ ...p, estado_estetico: v }))} />
-            <CheckTri label="Enciende" valor={f.enciende} onChange={(v) => setFm((p) => ({ ...p, enciende: v }))} />
-            {ITEMS_CHECKLIST_INGRESO.map((item) => {
-              const deshabilitado = CAMPOS_DEPENDEN_MODULO.includes(item.campo) && f.modulo_ok === false;
-              return (
-                <CheckTri
-                  key={item.campo}
-                  label={item.label}
-                  disabled={deshabilitado}
-                  valor={deshabilitado ? null : f[item.campo]}
-                  onChange={(v) => setFm((p) => ({ ...p, [item.campo]: v }))}
-                />
               );
             })}
-            <CheckTri label="Humedad / manipulación" valor={f.humedad} onChange={(v) => setFm((p) => ({ ...p, humedad: v }))} invertido />
-            <Campo
-              label="Excepción adicional a la garantía (opcional)"
-              valor={f.garantia_excepcion_manual}
-              onChange={(v) => setFm((p) => ({ ...p, garantia_excepcion_manual: v }))}
-              textarea
-            />
-            <p className="text-[10px] text-muted dark:text-dark-text-secondary -mt-1">
-              Para excluir algo que hoy funciona pero quedó en duda (ej.: "por golpe fuerte, no garantizamos Face ID").
-              Lo que ya marcaste como falla arriba se excluye solo, no hace falta repetirlo acá.
-            </p>
-            <label className="flex items-center gap-2 text-sm cursor-pointer mt-1">
-              <input
-                type="checkbox"
-                checked={f.garantia_condiciones_aceptadas}
-                onChange={(e) => setFm((p) => ({ ...p, garantia_condiciones_aceptadas: e.target.checked }))}
-                className="h-4 w-4 accent-ink"
-              />
-              El cliente aceptó las condiciones de garantía y diagnóstico
-            </label>
-            <TextoCondicionGenerado datos={f as any} />
-          </div>
-        ) : (
-          <div className="text-sm flex flex-col gap-1">
-            {r.falla_declarada && (
-              <p>
-                <span className="text-muted dark:text-dark-text-secondary">Falla declarada: </span>
-                {r.falla_declarada}
-              </p>
-            )}
-            {r.estado_estetico && (
-              <p>
-                <span className="text-muted dark:text-dark-text-secondary">Estado estético: </span>
-                {r.estado_estetico}
-              </p>
-            )}
-            <p className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted dark:text-dark-text-secondary">
-              {itemChecklist('Enciende', r.enciende)}
-              {ITEMS_CHECKLIST_INGRESO.map((item) => itemChecklist(item.label, (r as any)[item.campo]))}
-              {/* Reparaciones cargadas antes de este cambio: si nunca se usó la checklist nueva, mostramos la vieja para no perder ese historial. */}
-              {r.camara_frontal_ok == null && r.camara_trasera_ok == null && itemChecklist('Cámaras', r.camaras_ok)}
-              {r.boton_power_ok == null && r.boton_volumen_ok == null && itemChecklist('Botones', r.botones_ok)}
-              {r.humedad != null && <span>{r.humedad ? '⚠️ Con humedad/manipulación' : '✅ Sin humedad'}</span>}
-            </p>
-            {r.garantia_condiciones_aceptadas && <p className="text-xs text-good">✓ Cliente aceptó condiciones de garantía</p>}
-            <TextoCondicionGenerado datos={r as any} />
-          </div>
-        )}
-      </Seccion>
+          </nav>
 
-      {/* Diagnóstico */}
-      <Seccion titulo="Diagnóstico y presupuesto">
-        {editando ? (
-          <div className="flex flex-col gap-2">
-            <Campo label="Diagnóstico técnico" valor={f.diagnostico} onChange={(v) => setFm((p) => ({ ...p, diagnostico: v }))} textarea />
-            <div>
-              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Técnico asignado</label>
-              <select
-                value={f.tecnico_id}
-                onChange={(e) => setFm((p) => ({ ...p, tecnico_id: e.target.value }))}
-                className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
-              >
-                <option value="">Sin asignar</option>
-                {tecnicos.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.nombre}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Prioridad</label>
-              <div className="flex gap-2">
-                {PRIORIDADES.map((p) => (
-                  <button
-                    key={p.id}
-                    onClick={() => setFm((prev) => ({ ...prev, prioridad: p.id }))}
-                    className={`flex-1 rounded-lg py-2 text-xs font-medium ${
-                      f.prioridad === p.id ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
-                    }`}
-                  >
-                    {p.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <Campo label="Trabajo recomendado" valor={f.trabajo_recomendado} onChange={(v) => setFm((p) => ({ ...p, trabajo_recomendado: v }))} textarea />
-            <div className="flex gap-2">
-              <Campo label="Mano de obra ($)" valor={f.presupuesto_mano_obra} onChange={(v) => setFm((p) => ({ ...p, presupuesto_mano_obra: v }))} numerico />
-              <Campo label="Repuestos ($)" valor={f.presupuesto_repuestos} onChange={(v) => setFm((p) => ({ ...p, presupuesto_repuestos: v }))} numerico />
-            </div>
-            <div>
-              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Fecha estimada de entrega</label>
-              <input
-                type="date"
-                value={f.fecha_estimada}
-                onChange={(e) => setFm((p) => ({ ...p, fecha_estimada: e.target.value }))}
-                className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
-              />
-            </div>
-            <Campo label="Observaciones internas (no las ve el cliente)" valor={f.observaciones_internas} onChange={(v) => setFm((p) => ({ ...p, observaciones_internas: v }))} textarea />
-          </div>
-        ) : (
-          <div className="text-sm flex flex-col gap-1">
-            {r.diagnostico && (
-              <p>
-                <span className="text-muted dark:text-dark-text-secondary">Diagnóstico: </span>
-                {r.diagnostico}
-              </p>
-            )}
-            {r.trabajo_recomendado && (
-              <p>
-                <span className="text-muted dark:text-dark-text-secondary">Trabajo recomendado: </span>
-                {r.trabajo_recomendado}
-              </p>
-            )}
-            {(r.presupuesto_mano_obra != null || r.presupuesto_repuestos != null) && (
-              <p>
-                <span className="text-muted dark:text-dark-text-secondary">Presupuesto: </span>$
-                {((r.presupuesto_mano_obra || 0) + (r.presupuesto_repuestos || 0)).toLocaleString('es-AR')}
-                {' '}
-                <span className="text-xs text-muted dark:text-dark-text-secondary">
-                  (mano de obra ${(r.presupuesto_mano_obra || 0).toLocaleString('es-AR')} + repuestos $
-                  {(r.presupuesto_repuestos || 0).toLocaleString('es-AR')})
-                </span>
-              </p>
-            )}
-            {r.fecha_estimada && (
-              <p>
-                <span className="text-muted dark:text-dark-text-secondary">Fecha estimada: </span>
-                {new Date(r.fecha_estimada + 'T00:00:00').toLocaleDateString('es-AR')}
-              </p>
-            )}
-            {r.observaciones_internas && (
-              <p className="text-xs text-muted dark:text-dark-text-secondary italic">Nota interna: {r.observaciones_internas}</p>
-            )}
-          </div>
-        )}
-      </Seccion>
-
-      {/* Reparación y entrega */}
-      <Seccion titulo="Reparación y entrega">
-        {editando ? (
-          <div className="flex flex-col gap-2">
-            <div>
-              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Trabajos realizados</label>
-              <div className="flex flex-wrap gap-2">
-                {trabajos.map((t) => (
-                  <button
-                    key={t.id}
-                    onClick={() => toggleTrabajo(t.nombre)}
-                    className={`rounded-lg px-3 py-1.5 text-xs font-medium ${
-                      f.trabajos_realizados.includes(t.nombre) ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
-                    }`}
-                  >
-                    {t.nombre}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <Campo label="Repuestos utilizados" valor={f.repuestos_utilizados} onChange={(v) => setFm((p) => ({ ...p, repuestos_utilizados: v }))} textarea />
-            <Campo label="Resultado final / pruebas" valor={f.resultado_final} onChange={(v) => setFm((p) => ({ ...p, resultado_final: v }))} textarea />
-            <Campo label="Importe total ($)" valor={f.importe_total} onChange={(v) => setFm((p) => ({ ...p, importe_total: v }))} numerico />
-            <div>
-              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Forma de pago</label>
-              <div className="flex gap-2">
-                {FORMAS_PAGO.map((fp) => (
-                  <button
-                    key={fp}
-                    onClick={() => setFm((p) => ({ ...p, forma_pago: fp }))}
-                    className={`flex-1 rounded-lg py-2 text-xs font-medium ${
-                      f.forma_pago === fp ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
-                    }`}
-                  >
-                    {fp}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <Campo label="Garantía de la reparación (días)" valor={f.garantia_dias} onChange={(v) => setFm((p) => ({ ...p, garantia_dias: v }))} numerico />
-          </div>
-        ) : (
-          <div className="text-sm flex flex-col gap-1">
-            {r.trabajos_realizados?.length > 0 && (
-              <p>
-                <span className="text-muted dark:text-dark-text-secondary">Trabajos realizados: </span>
-                {r.trabajos_realizados.join(', ')}
-              </p>
-            )}
-            {r.repuestos_utilizados && (
-              <p>
-                <span className="text-muted dark:text-dark-text-secondary">Repuestos utilizados: </span>
-                {r.repuestos_utilizados}
-              </p>
-            )}
-            {r.resultado_final && (
-              <p>
-                <span className="text-muted dark:text-dark-text-secondary">Resultado: </span>
-                {r.resultado_final}
-              </p>
-            )}
-            {r.importe_total != null && (
-              <p>
-                <span className="text-muted dark:text-dark-text-secondary">Importe total: </span>${r.importe_total.toLocaleString('es-AR')}
-              </p>
-            )}
-            {r.forma_pago && (
-              <p>
-                <span className="text-muted dark:text-dark-text-secondary">Forma de pago: </span>
-                {r.forma_pago}
-              </p>
-            )}
-            {r.garantia_dias != null && (
-              <p>
-                <span className="text-muted dark:text-dark-text-secondary">Garantía: </span>
-                {r.garantia_dias} días
-              </p>
-            )}
-            {r.fecha_entrega && (
-              <p>
-                <span className="text-muted dark:text-dark-text-secondary">Entregado: </span>
-                {fmt(r.fecha_entrega)}
-              </p>
-            )}
-          </div>
-        )}
-      </Seccion>
-
-      <Seccion titulo="Repuestos usados (del stock)">
-        <p className="text-xs text-muted dark:text-dark-text-secondary -mt-1 mb-2">
-          Distinto del "Repuestos ($)" de arriba (eso es lo presupuestado al cliente) — acá se descuenta stock real y
-          queda el costo de verdad, para calcular la ganancia de esta reparación.
-        </p>
-
-        {repuestosUsados.length > 0 && (
-          <div className="flex flex-col gap-1.5 mb-3">
-            {repuestosUsados.map((ru) => (
-              <div key={ru.id} className="flex items-center justify-between gap-2 rounded-lg bg-canvas dark:bg-dark-bg px-3 py-2 text-sm">
-                <span className="min-w-0 truncate">
-                  {ru.cantidad}× {ru.nombre_repuesto}
-                </span>
-                <span className="flex items-center gap-2 shrink-0">
-                  <span className="text-muted dark:text-dark-text-secondary">
-                    {ru.costo_unitario != null ? `$${(ru.costo_unitario * ru.cantidad).toLocaleString('es-AR')}` : 'sin costo'}
-                  </span>
-                  {puedeGestionar && (
-                    <button onClick={() => quitarRepuestoUsado(ru)} className="text-xs text-bad underline">
-                      Quitar
-                    </button>
-                  )}
-                </span>
-              </div>
-            ))}
-            {(() => {
-              const costoTotal = repuestosUsados.reduce((acc, ru) => acc + (ru.costo_unitario ?? 0) * ru.cantidad, 0);
-              const hayFaltantes = repuestosUsados.some((ru) => ru.costo_unitario == null);
-              const presupuestoSuma = (r.presupuesto_mano_obra || 0) + (r.presupuesto_repuestos || 0);
-              const cobrado = r.importe_total ?? (presupuestoSuma > 0 ? presupuestoSuma : null);
-              return (
-                <div className="flex flex-col gap-0.5 pt-1 text-xs">
-                  <div className="flex justify-between">
-                    <span className="text-muted dark:text-dark-text-secondary">Costo repuestos {hayFaltantes && '(parcial)'}</span>
-                    <span className="font-medium">${costoTotal.toLocaleString('es-AR')}</span>
-                  </div>
-                  {cobrado != null && (
-                    <div className="flex justify-between">
-                      <span className="text-muted dark:text-dark-text-secondary">Margen (cobrado − repuestos)</span>
-                      <span className={`font-medium ${cobrado - costoTotal >= 0 ? 'text-good' : 'text-bad'}`}>
-                        ${(cobrado - costoTotal).toLocaleString('es-AR')}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-          </div>
-        )}
-
-        {puedeGestionar && (
-          <div className="flex flex-col gap-2">
-            {repuestoElegido ? (
-              <div className="rounded-lg border border-accent/40 dark:border-dark-accent/40 bg-accent-soft dark:bg-dark-accent-soft px-3 py-2 flex items-center justify-between gap-2">
-                <span className="text-sm truncate">{repuestoElegido.nombre}</span>
-                <button onClick={() => setRepuestoElegido(null)} className="text-xs text-accent dark:text-dark-accent underline shrink-0">
-                  Cambiar
-                </button>
-              </div>
-            ) : (
-              <>
-                <input
-                  value={buscarRepuesto}
-                  onChange={(e) => setBuscarRepuesto(e.target.value)}
-                  placeholder="Buscar repuesto en stock..."
-                  className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
-                />
-                {buscarRepuesto && (
-                  <div className="flex flex-col gap-1 max-h-40 overflow-y-auto">
-                    {repuestosFiltrados.length === 0 && (
-                      <p className="text-xs text-muted dark:text-dark-text-secondary px-1">
-                        Sin resultados con stock disponible.{' '}
-                        <Link href="/servicio-tecnico/stock" className="underline">
-                          Cargar en Stock de repuestos
-                        </Link>
-                      </p>
-                    )}
-                    {repuestosFiltrados.map((rp) => (
+          {tab === 'resumen' && (
+            <Seccion titulo="Identificación">
+              {editando ? (
+                <div className="flex flex-col gap-2">
+                  <Campo label="Modelo" valor={f.modelo} onChange={(v) => setFm((p) => ({ ...p, modelo: v }))} />
+                  <div className="flex gap-2">
+                    {STORAGE_OPTIONS.map((gb) => (
                       <button
-                        key={rp.id}
-                        onClick={() => setRepuestoElegido(rp)}
-                        className="rounded-lg border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-3 py-2 text-left text-xs flex items-center justify-between gap-2"
+                        key={gb}
+                        onClick={() => setFm((p) => ({ ...p, capacidad_gb: gb }))}
+                        className={`flex-1 rounded-lg py-2 text-xs font-medium ${
+                          f.capacidad_gb === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
+                        }`}
                       >
-                        <span>{rp.nombre}</span>
-                        <span className="text-muted dark:text-dark-text-secondary shrink-0">Stock: {rp.cantidad_stock}</span>
+                        {gb}GB
                       </button>
                     ))}
+                  </div>
+                  <SelectorColorAuto modelo={f.modelo} value={f.color} onChange={(v) => setFm((p) => ({ ...p, color: v }))} />
+                  <Campo label="IMEI" valor={f.imei} onChange={(v) => setFm((p) => ({ ...p, imei: v }))} mono />
+                  <Campo label="Código de desbloqueo (opcional)" valor={f.codigo_desbloqueo} onChange={(v) => setFm((p) => ({ ...p, codigo_desbloqueo: v }))} />
+                  <Campo label="Ubicación física (ej. Estante A-3)" valor={f.ubicacion_fisica} onChange={(v) => setFm((p) => ({ ...p, ubicacion_fisica: v }))} />
+                  <div>
+                    <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Accesorios entregados</label>
+                    <div className="flex flex-wrap gap-2">
+                      {ACCESORIOS_OPCIONES.map((a) => (
+                        <button
+                          key={a}
+                          onClick={() => toggleAccesorio(a)}
+                          className={`rounded-lg px-3 py-1.5 text-xs font-medium ${
+                            f.accesorios.includes(a) ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
+                          }`}
+                        >
+                          {a}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-sm flex flex-col gap-1">
+                  <p className="text-xs">
+                    {r.cliente_id ? (
+                      <span className="text-accent dark:text-dark-accent">👤 Equipo de un cliente</span>
+                    ) : (
+                      <span className="text-muted dark:text-dark-text-secondary">🏬 Equipo propio del local</span>
+                    )}
+                  </p>
+                  {nombreCliente && (
+                    <p>
+                      <span className="text-muted dark:text-dark-text-secondary">Cliente: </span>
+                      {nombreCliente} {r.clientes?.telefono ? `· ${r.clientes.telefono}` : ''}
+                    </p>
+                  )}
+                  <p>
+                    <span className="text-muted dark:text-dark-text-secondary">Equipo: </span>
+                    {r.modelo}
+                    {r.capacidad_gb ? ` · ${r.capacidad_gb}GB` : ''}
+                    {r.color ? ` · ${r.color}` : ''}
+                  </p>
+                  {r.imei && (
+                    <p>
+                      <span className="text-muted dark:text-dark-text-secondary">IMEI: </span>
+                      <span className="font-mono font-bold">{r.imei}</span>
+                    </p>
+                  )}
+                  {r.codigo_desbloqueo && (
+                    <p className="flex items-center gap-2">
+                      <span className="text-muted dark:text-dark-text-secondary">Código de desbloqueo: </span>
+                      <span className="font-mono">{codigoVisible ? r.codigo_desbloqueo : '••••••'}</span>
+                      <button onClick={() => setCodigoVisible((v) => !v)} className="text-xs text-accent dark:text-dark-accent underline">
+                        {codigoVisible ? 'ocultar' : 'mostrar'}
+                      </button>
+                    </p>
+                  )}
+                  {r.accesorios?.length > 0 && (
+                    <p>
+                      <span className="text-muted dark:text-dark-text-secondary">Accesorios: </span>
+                      {r.accesorios.join(', ')}
+                    </p>
+                  )}
+                  {r.ubicacion_fisica && (
+                    <p>
+                      <span className="text-muted dark:text-dark-text-secondary">Ubicación: </span>📍 {r.ubicacion_fisica}
+                    </p>
+                  )}
+                </div>
+              )}
+            </Seccion>
+          )}
+
+          {tab === 'recepcion' && (
+            <Seccion titulo="Recepción">
+              {editando ? (
+                <div className="flex flex-col gap-2">
+                  <Campo label="Falla declarada por el cliente" valor={f.falla_declarada} onChange={(v) => setFm((p) => ({ ...p, falla_declarada: v }))} textarea />
+                  <Campo label="Estado estético" valor={f.estado_estetico} onChange={(v) => setFm((p) => ({ ...p, estado_estetico: v }))} />
+                  <CheckTri label="Enciende" valor={f.enciende} onChange={(v) => setFm((p) => ({ ...p, enciende: v }))} />
+                  {ITEMS_CHECKLIST_INGRESO.map((item) => {
+                    const deshabilitado = CAMPOS_DEPENDEN_MODULO.includes(item.campo) && f.modulo_ok === false;
+                    return (
+                      <CheckTri
+                        key={item.campo}
+                        label={item.label}
+                        disabled={deshabilitado}
+                        valor={deshabilitado ? null : f[item.campo]}
+                        onChange={(v) => setFm((p) => ({ ...p, [item.campo]: v }))}
+                      />
+                    );
+                  })}
+                  <CheckTri label="Humedad / manipulación" valor={f.humedad} onChange={(v) => setFm((p) => ({ ...p, humedad: v }))} invertido />
+                  <Campo
+                    label="Excepción adicional a la garantía (opcional)"
+                    valor={f.garantia_excepcion_manual}
+                    onChange={(v) => setFm((p) => ({ ...p, garantia_excepcion_manual: v }))}
+                    textarea
+                  />
+                  <p className="text-[10px] text-muted dark:text-dark-text-secondary -mt-1">
+                    Para excluir algo que hoy funciona pero quedó en duda (ej.: "por golpe fuerte, no garantizamos Face ID").
+                    Lo que ya marcaste como falla arriba se excluye solo, no hace falta repetirlo acá.
+                  </p>
+                  <label className="flex items-center gap-2 text-sm cursor-pointer mt-1">
+                    <input
+                      type="checkbox"
+                      checked={f.garantia_condiciones_aceptadas}
+                      onChange={(e) => setFm((p) => ({ ...p, garantia_condiciones_aceptadas: e.target.checked }))}
+                      className="h-4 w-4 accent-ink"
+                    />
+                    El cliente aceptó las condiciones de garantía y diagnóstico
+                  </label>
+                  <TextoCondicionGenerado datos={f as any} />
+                </div>
+              ) : (
+                <div className="text-sm flex flex-col gap-1">
+                  {r.falla_declarada && (
+                    <p>
+                      <span className="text-muted dark:text-dark-text-secondary">Falla declarada: </span>
+                      {r.falla_declarada}
+                    </p>
+                  )}
+                  {r.estado_estetico && (
+                    <p>
+                      <span className="text-muted dark:text-dark-text-secondary">Estado estético: </span>
+                      {r.estado_estetico}
+                    </p>
+                  )}
+                  <p className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted dark:text-dark-text-secondary">
+                    {itemChecklist('Enciende', r.enciende)}
+                    {ITEMS_CHECKLIST_INGRESO.map((item) => itemChecklist(item.label, (r as any)[item.campo]))}
+                    {/* Reparaciones cargadas antes de este cambio: si nunca se usó la checklist nueva, mostramos la vieja para no perder ese historial. */}
+                    {r.camara_frontal_ok == null && r.camara_trasera_ok == null && itemChecklist('Cámaras', r.camaras_ok)}
+                    {r.boton_power_ok == null && r.boton_volumen_ok == null && itemChecklist('Botones', r.botones_ok)}
+                    {r.humedad != null && <span>{r.humedad ? '⚠️ Con humedad/manipulación' : '✅ Sin humedad'}</span>}
+                  </p>
+                  {r.garantia_condiciones_aceptadas && <p className="text-xs text-good">✓ Cliente aceptó condiciones de garantía</p>}
+                  <TextoCondicionGenerado datos={r as any} />
+                </div>
+              )}
+            </Seccion>
+          )}
+
+          {tab === 'diagnostico' && (
+            <Seccion titulo="Diagnóstico">
+              {editando ? (
+                <div className="flex flex-col gap-2">
+                  <Campo label="Diagnóstico técnico" valor={f.diagnostico} onChange={(v) => setFm((p) => ({ ...p, diagnostico: v }))} textarea />
+                  <div>
+                    <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Técnico asignado</label>
+                    <select
+                      value={f.tecnico_id}
+                      onChange={(e) => setFm((p) => ({ ...p, tecnico_id: e.target.value }))}
+                      className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                    >
+                      <option value="">Sin asignar</option>
+                      {tecnicos.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.nombre}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Prioridad</label>
+                    <div className="flex gap-2">
+                      {PRIORIDADES.map((p) => (
+                        <button
+                          key={p.id}
+                          onClick={() => setFm((prev) => ({ ...prev, prioridad: p.id }))}
+                          className={`flex-1 rounded-lg py-2 text-xs font-medium ${
+                            f.prioridad === p.id ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
+                          }`}
+                        >
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <Campo label="Trabajo recomendado" valor={f.trabajo_recomendado} onChange={(v) => setFm((p) => ({ ...p, trabajo_recomendado: v }))} textarea />
+                  <div>
+                    <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Fecha estimada de entrega</label>
+                    <input
+                      type="date"
+                      value={f.fecha_estimada}
+                      onChange={(e) => setFm((p) => ({ ...p, fecha_estimada: e.target.value }))}
+                      className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+                    />
+                  </div>
+                  <Campo label="Observaciones internas (no las ve el cliente)" valor={f.observaciones_internas} onChange={(v) => setFm((p) => ({ ...p, observaciones_internas: v }))} textarea />
+                </div>
+              ) : (
+                <div className="text-sm flex flex-col gap-1">
+                  {r.diagnostico && (
+                    <p>
+                      <span className="text-muted dark:text-dark-text-secondary">Diagnóstico: </span>
+                      {r.diagnostico}
+                    </p>
+                  )}
+                  {r.trabajo_recomendado && (
+                    <p>
+                      <span className="text-muted dark:text-dark-text-secondary">Trabajo recomendado: </span>
+                      {r.trabajo_recomendado}
+                    </p>
+                  )}
+                  {r.fecha_estimada && (
+                    <p>
+                      <span className="text-muted dark:text-dark-text-secondary">Fecha estimada: </span>
+                      {new Date(r.fecha_estimada + 'T00:00:00').toLocaleDateString('es-AR')}
+                    </p>
+                  )}
+                  {r.observaciones_internas && (
+                    <p className="text-xs text-muted dark:text-dark-text-secondary italic">Nota interna: {r.observaciones_internas}</p>
+                  )}
+                  {!r.diagnostico && !r.trabajo_recomendado && (
+                    <p className="text-xs text-muted dark:text-dark-text-secondary">Todavía no se cargó un diagnóstico.</p>
+                  )}
+                </div>
+              )}
+            </Seccion>
+          )}
+
+          {tab === 'presupuesto' && (
+            <Seccion titulo="Presupuesto">
+              {editando ? (
+                <div className="flex gap-2">
+                  <Campo label="Mano de obra ($)" valor={f.presupuesto_mano_obra} onChange={(v) => setFm((p) => ({ ...p, presupuesto_mano_obra: v }))} numerico />
+                  <Campo label="Repuestos ($)" valor={f.presupuesto_repuestos} onChange={(v) => setFm((p) => ({ ...p, presupuesto_repuestos: v }))} numerico />
+                </div>
+              ) : (
+                <div className="text-sm flex flex-col gap-1">
+                  {r.presupuesto_mano_obra != null || r.presupuesto_repuestos != null ? (
+                    <p>
+                      <span className="text-muted dark:text-dark-text-secondary">Total presupuestado: </span>$
+                      {((r.presupuesto_mano_obra || 0) + (r.presupuesto_repuestos || 0)).toLocaleString('es-AR')}{' '}
+                      <span className="text-xs text-muted dark:text-dark-text-secondary">
+                        (mano de obra ${(r.presupuesto_mano_obra || 0).toLocaleString('es-AR')} + repuestos $
+                        {(r.presupuesto_repuestos || 0).toLocaleString('es-AR')})
+                      </span>
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted dark:text-dark-text-secondary">Todavía no se cargó un presupuesto.</p>
+                  )}
+                  {r.estado === 'esperando_aprobacion' && (
+                    <p className="text-xs text-warn">📋 Esperando que el cliente lo apruebe o rechace.</p>
+                  )}
+                </div>
+              )}
+            </Seccion>
+          )}
+
+          {tab === 'servicios' && (
+            <>
+              <Seccion titulo="Trabajo realizado">
+                {editando ? (
+                  <div className="flex flex-col gap-2">
+                    <div>
+                      <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Servicios realizados</label>
+                      <div className="flex flex-wrap gap-2">
+                        {trabajos.map((t) => (
+                          <button
+                            key={t.id}
+                            onClick={() => toggleTrabajo(t.nombre)}
+                            className={`rounded-lg px-3 py-1.5 text-xs font-medium ${
+                              f.trabajos_realizados.includes(t.nombre) ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
+                            }`}
+                          >
+                            {t.nombre}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <Campo label="Repuestos utilizados (nota libre)" valor={f.repuestos_utilizados} onChange={(v) => setFm((p) => ({ ...p, repuestos_utilizados: v }))} textarea />
+                    <Campo label="Resultado final / pruebas" valor={f.resultado_final} onChange={(v) => setFm((p) => ({ ...p, resultado_final: v }))} textarea />
+                    <Campo label="Importe total ($)" valor={f.importe_total} onChange={(v) => setFm((p) => ({ ...p, importe_total: v }))} numerico />
+                    <div>
+                      <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Forma de pago</label>
+                      <div className="flex gap-2">
+                        {FORMAS_PAGO.map((fp) => (
+                          <button
+                            key={fp}
+                            onClick={() => setFm((p) => ({ ...p, forma_pago: fp }))}
+                            className={`flex-1 rounded-lg py-2 text-xs font-medium ${
+                              f.forma_pago === fp ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
+                            }`}
+                          >
+                            {fp}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <Campo label="Garantía de la reparación (días)" valor={f.garantia_dias} onChange={(v) => setFm((p) => ({ ...p, garantia_dias: v }))} numerico />
+                  </div>
+                ) : (
+                  <div className="text-sm flex flex-col gap-1">
+                    {r.trabajos_realizados?.length > 0 && (
+                      <p>
+                        <span className="text-muted dark:text-dark-text-secondary">Trabajos realizados: </span>
+                        {r.trabajos_realizados.join(', ')}
+                      </p>
+                    )}
+                    {r.repuestos_utilizados && (
+                      <p>
+                        <span className="text-muted dark:text-dark-text-secondary">Nota de repuestos: </span>
+                        {r.repuestos_utilizados}
+                      </p>
+                    )}
+                    {r.resultado_final && (
+                      <p>
+                        <span className="text-muted dark:text-dark-text-secondary">Resultado: </span>
+                        {r.resultado_final}
+                      </p>
+                    )}
+                    {r.importe_total != null && (
+                      <p>
+                        <span className="text-muted dark:text-dark-text-secondary">Importe total: </span>${r.importe_total.toLocaleString('es-AR')}
+                      </p>
+                    )}
+                    {r.forma_pago && (
+                      <p>
+                        <span className="text-muted dark:text-dark-text-secondary">Forma de pago: </span>
+                        {r.forma_pago}
+                      </p>
+                    )}
+                    {r.garantia_dias != null && (
+                      <p>
+                        <span className="text-muted dark:text-dark-text-secondary">Garantía: </span>
+                        {r.garantia_dias} días
+                      </p>
+                    )}
+                    {r.fecha_entrega && (
+                      <p>
+                        <span className="text-muted dark:text-dark-text-secondary">Entregado: </span>
+                        {fmt(r.fecha_entrega)}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </Seccion>
+
+              <Seccion titulo="Repuestos usados (del stock)">
+                <p className="text-xs text-muted dark:text-dark-text-secondary -mt-1 mb-2">
+                  Distinto de la nota de arriba: acá se descuenta stock real y queda el costo de verdad, para calcular
+                  la ganancia de esta reparación.
+                </p>
+
+                {repuestosUsados.length > 0 && (
+                  <div className="flex flex-col gap-1.5 mb-3">
+                    {repuestosUsados.map((ru) => (
+                      <div key={ru.id} className="flex items-center justify-between gap-2 rounded-lg bg-canvas dark:bg-dark-bg px-3 py-2 text-sm">
+                        <span className="min-w-0 truncate">
+                          {ru.cantidad}× {ru.nombre_repuesto}
+                        </span>
+                        <span className="flex items-center gap-2 shrink-0">
+                          <span className="text-muted dark:text-dark-text-secondary">
+                            {ru.costo_unitario != null ? `$${(ru.costo_unitario * ru.cantidad).toLocaleString('es-AR')}` : 'sin costo'}
+                          </span>
+                          {puedeGestionar && (
+                            <button onClick={() => quitarRepuestoUsado(ru)} className="text-xs text-bad underline">
+                              Quitar
+                            </button>
+                          )}
+                        </span>
+                      </div>
+                    ))}
+                    <div className="flex flex-col gap-0.5 pt-1 text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-muted dark:text-dark-text-secondary">Costo repuestos {hayCostosFaltantes && '(parcial)'}</span>
+                        <span className="font-medium">${costoRepuestosTotal.toLocaleString('es-AR')}</span>
+                      </div>
+                      {margen != null && (
+                        <div className="flex justify-between">
+                          <span className="text-muted dark:text-dark-text-secondary">Margen (cobrado − repuestos)</span>
+                          <span className={`font-medium ${margen >= 0 ? 'text-good' : 'text-bad'}`}>${margen.toLocaleString('es-AR')}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {puedeGestionar && (
+                  <div className="flex flex-col gap-2">
+                    {repuestoElegido ? (
+                      <div className="rounded-lg border border-accent/40 dark:border-dark-accent/40 bg-accent-soft dark:bg-dark-accent-soft px-3 py-2 flex items-center justify-between gap-2">
+                        <span className="text-sm truncate">{repuestoElegido.nombre}</span>
+                        <button onClick={() => setRepuestoElegido(null)} className="text-xs text-accent dark:text-dark-accent underline shrink-0">
+                          Cambiar
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <input
+                          value={buscarRepuesto}
+                          onChange={(e) => setBuscarRepuesto(e.target.value)}
+                          placeholder="Buscar repuesto en stock..."
+                          className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                        />
+                        {buscarRepuesto && (
+                          <div className="flex flex-col gap-1 max-h-40 overflow-y-auto">
+                            {repuestosFiltrados.length === 0 && (
+                              <p className="text-xs text-muted dark:text-dark-text-secondary px-1">
+                                Sin resultados con stock disponible.{' '}
+                                <Link href="/servicio-tecnico/stock" className="underline">
+                                  Cargar en Stock de repuestos
+                                </Link>
+                              </p>
+                            )}
+                            {repuestosFiltrados.map((rp) => (
+                              <button
+                                key={rp.id}
+                                onClick={() => setRepuestoElegido(rp)}
+                                className="rounded-lg border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-3 py-2 text-left text-xs flex items-center justify-between gap-2"
+                              >
+                                <span>{rp.nombre}</span>
+                                <span className="text-muted dark:text-dark-text-secondary shrink-0">Stock: {rp.cantidad_stock}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    )}
+                    {repuestoElegido && (
+                      <div className="flex gap-2">
+                        <input
+                          value={cantidadRepuesto}
+                          onChange={(e) => setCantidadRepuesto(e.target.value.replace(/[^\d]/g, ''))}
+                          inputMode="numeric"
+                          placeholder="Cantidad"
+                          className="w-24 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                        />
+                        <button
+                          disabled={guardandoRepuesto || !cantidadRepuesto}
+                          onClick={agregarRepuestoUsado}
+                          className="flex-1 rounded-lg bg-accent dark:bg-dark-accent text-white py-2 text-sm font-medium disabled:opacity-40"
+                        >
+                          {guardandoRepuesto ? 'Guardando...' : 'Usar en esta reparación'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </Seccion>
+            </>
+          )}
+
+          {tab === 'evidencias' &&
+            (editando ? (
+              <p className="text-xs text-muted dark:text-dark-text-secondary text-center py-6">Guardá o cancelá la edición para usar esta sección.</p>
+            ) : (
+              <Seccion titulo="Evidencia para el cliente">
+                <p className="text-xs text-muted dark:text-dark-text-secondary -mt-1 mb-2">
+                  Fotos y notas que el cliente ve en /seguimiento (ej. daños encontrados al abrir el equipo).
+                </p>
+                <div className="flex flex-col gap-2 mb-3">
+                  {fotoEvidenciaBase64 && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={fotoEvidenciaBase64} alt="" className="h-32 w-32 object-cover rounded-lg border border-border dark:border-dark-border self-start" />
+                  )}
+                  <label className="self-start rounded-lg border border-border dark:border-dark-border px-3 py-2 text-xs font-medium cursor-pointer">
+                    {fotoEvidenciaBase64 ? '📷 Cambiar foto' : '📷 Sacar/elegir foto (opcional)'}
+                    <input type="file" accept="image/*" capture="environment" className="hidden" onChange={elegirFotoEvidencia} />
+                  </label>
+                  <textarea
+                    value={notaEvidencia}
+                    onChange={(e) => setNotaEvidencia(e.target.value)}
+                    placeholder="Ej: al abrir el equipo encontramos el módulo roto y faltaban 3 tornillos"
+                    rows={2}
+                    className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                  />
+                  <button
+                    disabled={subiendoEvidencia || (!fotoEvidenciaBase64 && !notaEvidencia.trim())}
+                    onClick={agregarEvidencia}
+                    className="self-start rounded-lg bg-accent dark:bg-dark-accent text-white px-4 py-2 text-xs font-medium disabled:opacity-40"
+                  >
+                    {subiendoEvidencia ? 'Guardando...' : 'Agregar evidencia'}
+                  </button>
+                </div>
+
+                {evidencias.length > 0 && (
+                  <div className="flex flex-col gap-2">
+                    {evidencias.map((e) => (
+                      <div key={e.id} className="rounded-lg bg-canvas dark:bg-dark-bg p-2.5 flex gap-2.5">
+                        {e.foto_url && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={e.foto_url} alt="" className="h-16 w-16 object-cover rounded-lg shrink-0" />
+                        )}
+                        <div className="min-w-0">
+                          {e.nota && <p className="text-xs whitespace-pre-wrap">{e.nota}</p>}
+                          <p className="text-[10px] text-muted dark:text-dark-text-secondary">
+                            {e.actor_nombre ? `${e.actor_nombre} · ` : ''}
+                            {fmt(e.created_at)}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Seccion>
+            ))}
+
+          {tab === 'comunicacion' &&
+            (editando ? (
+              <p className="text-xs text-muted dark:text-dark-text-secondary text-center py-6">Guardá o cancelá la edición para usar esta sección.</p>
+            ) : (
+              <Seccion titulo="Comunicación">
+                {r.cliente_id && r.clientes?.telefono ? (
+                  <>
+                    <p className="text-xs text-muted dark:text-dark-text-secondary -mt-1 mb-1">
+                      Genera el mensaje y abre WhatsApp — no confirma que el cliente lo haya recibido, solo que se abrió para enviarlo.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <button onClick={() => enviarWhatsApp('recibido')} className="rounded-lg border border-good/30 text-good px-3 py-1.5 text-xs font-medium">
+                        Recibimos tu equipo
+                      </button>
+                      <button onClick={() => enviarWhatsApp('presupuesto')} className="rounded-lg border border-good/30 text-good px-3 py-1.5 text-xs font-medium">
+                        Presupuesto
+                      </button>
+                      <button onClick={() => enviarWhatsApp('repuesto')} className="rounded-lg border border-good/30 text-good px-3 py-1.5 text-xs font-medium">
+                        Esperando repuesto
+                      </button>
+                      <button onClick={() => enviarWhatsApp('listo')} className="rounded-lg border border-good/30 text-good px-3 py-1.5 text-xs font-medium">
+                        Ya está listo
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-xs text-muted dark:text-dark-text-secondary">
+                    {r.cliente_id ? 'Este cliente no tiene teléfono cargado.' : 'Equipo propio del local — sin cliente para contactar.'}
+                  </p>
+                )}
+                <div className="flex flex-col gap-1.5 mt-3">
+                  {eventos
+                    .filter((ev) => ev.tipo === 'mensaje_cliente')
+                    .map((ev) => (
+                      <div key={ev.id} className="text-xs flex gap-2">
+                        <span className="shrink-0">💬</span>
+                        <div className="min-w-0">
+                          <p className="text-ink dark:text-dark-text">{ev.texto}</p>
+                          <p className="text-muted dark:text-dark-text-secondary">
+                            {ev.actor_nombre ? `${ev.actor_nombre} · ` : ''}
+                            {fmt(ev.created_at)}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  {eventos.filter((ev) => ev.tipo === 'mensaje_cliente').length === 0 && (
+                    <p className="text-xs text-muted dark:text-dark-text-secondary">Todavía no se envió ningún mensaje.</p>
+                  )}
+                </div>
+              </Seccion>
+            ))}
+
+          {tab === 'historial' &&
+            (editando ? (
+              <p className="text-xs text-muted dark:text-dark-text-secondary text-center py-6">Guardá o cancelá la edición para usar esta sección.</p>
+            ) : (
+              <Seccion titulo="Historial">
+                <div className="flex flex-col gap-2 mb-2">
+                  <textarea
+                    value={notaTexto}
+                    onChange={(e) => setNotaTexto(e.target.value)}
+                    placeholder="Agregar nota interna (solo la ve el personal)..."
+                    rows={2}
+                    className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                  />
+                  <button
+                    disabled={!notaTexto.trim()}
+                    onClick={agregarNota}
+                    className="self-start rounded-lg bg-accent dark:bg-dark-accent text-white px-3 py-1.5 text-xs font-medium disabled:opacity-40"
+                  >
+                    Agregar nota
+                  </button>
+                </div>
+                <div className="flex flex-col gap-2">
+                  {eventos.map((ev) => (
+                    <div key={ev.id} className="text-xs flex gap-2">
+                      <span className="shrink-0">{ev.tipo === 'nota_interna' ? '📝' : ev.tipo === 'mensaje_cliente' ? '💬' : '⚙️'}</span>
+                      <div className="min-w-0">
+                        <p className="text-ink dark:text-dark-text">{ev.texto}</p>
+                        <p className="text-muted dark:text-dark-text-secondary">
+                          {ev.actor_nombre ? `${ev.actor_nombre} · ` : ''}
+                          {fmt(ev.created_at)}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Seccion>
+            ))}
+        </div>
+
+        {/* Panel lateral fijo */}
+        <aside className="w-full lg:w-72 shrink-0 flex flex-col gap-3">
+          <div className="rounded-xl border border-accent/30 dark:border-dark-accent/30 bg-accent-soft/40 dark:bg-dark-accent-soft/40 p-3 flex flex-col gap-1.5">
+            <p className="text-xs font-semibold text-accent dark:text-dark-accent">🎯 Próxima acción</p>
+            {accionSiguiente ? (
+              <button
+                disabled={guardando || !puedeGestionar}
+                onClick={() => cambiarEstado(accionSiguiente.estado)}
+                className="rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
+              >
+                {accionSiguiente.label}
+              </button>
+            ) : (
+              <p className="text-xs text-muted dark:text-dark-text-secondary">
+                {r.estado === 'esperando_aprobacion' && 'Esperando aprobación del cliente.'}
+                {r.estado === 'esperando_repuesto' && 'Esperando que llegue un repuesto.'}
+                {r.estado === 'listo_para_entregar' && 'Lista para entregar — usá las acciones de abajo.'}
+                {r.estado === 'entregado' && 'Ya se entregó al cliente.'}
+                {r.estado === 'cancelado' && 'Cancelada / sin solución.'}
+              </p>
+            )}
+          </div>
+
+          <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-3 flex flex-col gap-1.5 text-xs">
+            {(r.presupuesto_mano_obra != null || r.presupuesto_repuestos != null) && (
+              <div className="flex justify-between">
+                <span className="text-muted dark:text-dark-text-secondary">Presupuestado</span>
+                <span className="font-medium">${presupuestoSuma.toLocaleString('es-AR')}</span>
+              </div>
+            )}
+            {r.importe_total != null && (
+              <div className="flex justify-between">
+                <span className="text-muted dark:text-dark-text-secondary">Cobrado</span>
+                <span className="font-medium">${r.importe_total.toLocaleString('es-AR')}</span>
+              </div>
+            )}
+            {puedeGestionar && repuestosUsados.length > 0 && (
+              <>
+                <div className="flex justify-between">
+                  <span className="text-muted dark:text-dark-text-secondary">Costo repuestos</span>
+                  <span className="font-medium">${costoRepuestosTotal.toLocaleString('es-AR')}</span>
+                </div>
+                {margen != null && (
+                  <div className="flex justify-between">
+                    <span className="text-muted dark:text-dark-text-secondary">Margen</span>
+                    <span className={`font-medium ${margen >= 0 ? 'text-good' : 'text-bad'}`}>${margen.toLocaleString('es-AR')}</span>
                   </div>
                 )}
               </>
             )}
-            {repuestoElegido && (
-              <div className="flex gap-2">
-                <input
-                  value={cantidadRepuesto}
-                  onChange={(e) => setCantidadRepuesto(e.target.value.replace(/[^\d]/g, ''))}
-                  inputMode="numeric"
-                  placeholder="Cantidad"
-                  className="w-24 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
-                />
-                <button
-                  disabled={guardandoRepuesto || !cantidadRepuesto}
-                  onClick={agregarRepuestoUsado}
-                  className="flex-1 rounded-lg bg-accent dark:bg-dark-accent text-white py-2 text-sm font-medium disabled:opacity-40"
-                >
-                  {guardandoRepuesto ? 'Guardando...' : 'Usar en esta reparación'}
-                </button>
-              </div>
-            )}
+            <div className="flex justify-between">
+              <span className="text-muted dark:text-dark-text-secondary">Pago</span>
+              <span className="font-medium">
+                {r.orden_cobro_id ? '✓ Con orden de cobro' : r.importe_total != null ? '✓ Cobrado' : 'Pendiente'}
+              </span>
+            </div>
           </div>
-        )}
-      </Seccion>
+
+          {r.cliente_id && r.token_seguimiento && (
+            <button
+              onClick={copiarLinkSeguimiento}
+              className="rounded-xl border border-border dark:border-dark-border py-2.5 text-center text-xs font-medium"
+            >
+              {linkCopiado ? '✓ Copiado' : '🔗 Copiar link de seguimiento'}
+            </button>
+          )}
+          <Link href={`/servicio-tecnico/etiqueta/${r.id}`} className="rounded-xl border border-border dark:border-dark-border py-2.5 text-center text-xs font-medium">
+            🏷️ Imprimir etiqueta
+          </Link>
+
+          {!editando && (
+            <>
+              {!r.orden_cobro_id &&
+                puedeGestionar &&
+                r.cliente_id &&
+                (r.estado === 'listo_para_entregar' || r.estado === 'entregado') && (
+                  <div className="flex flex-col gap-2">
+                    {r.estado === 'listo_para_entregar' && (
+                      <button
+                        disabled={guardando}
+                        onClick={marcarEntregadoClienteFicha}
+                        className="rounded-xl bg-good hover:opacity-90 transition-opacity py-2.5 text-center text-xs font-medium text-white disabled:opacity-40"
+                      >
+                        Marcar entregado al cliente
+                      </button>
+                    )}
+                    <button
+                      disabled={guardando}
+                      onClick={generarOrdenCobro}
+                      className={`rounded-xl py-2.5 text-center text-xs font-medium disabled:opacity-40 ${
+                        r.estado === 'listo_para_entregar' ? 'border border-border dark:border-dark-border' : 'bg-good hover:opacity-90 transition-opacity text-white'
+                      }`}
+                    >
+                      Generar orden de cobro
+                    </button>
+                  </div>
+                )}
+
+              {!r.cliente_id && (r.estado === 'listo_para_entregar' || r.estado === 'entregado') && !r.agregado_a_stock && (
+                puedeAgregarStock ? (
+                  <button
+                    disabled={guardando}
+                    onClick={agregarAlStockFicha}
+                    className="rounded-xl bg-good hover:opacity-90 transition-opacity py-2.5 text-center text-xs font-medium text-white disabled:opacity-40"
+                  >
+                    Agregar al Stock
+                  </button>
+                ) : (
+                  r.estado === 'entregado' && (
+                    <p className="text-xs text-muted dark:text-dark-text-secondary text-center">
+                      Entregado — el agregado al Stock lo hace quien tiene ese permiso.
+                    </p>
+                  )
+                )
+              )}
+              {!r.cliente_id && r.agregado_a_stock && <p className="text-xs text-good text-center">✅ Ya se agregó al Stock</p>}
+
+              {avisoAgregarStock && (
+                <div className="rounded-xl border border-good/30 bg-good/10 p-3 flex flex-col gap-2">
+                  <p className="text-xs">¿Agregamos este equipo al Stock ahora?</p>
+                  <div className="flex gap-2">
+                    <button
+                      disabled={guardando}
+                      onClick={agregarAlStockFicha}
+                      className="flex-1 rounded-lg bg-good text-white text-center py-2 text-xs font-medium disabled:opacity-40"
+                    >
+                      Agregar al Stock
+                    </button>
+                    <button
+                      onClick={() => setAvisoAgregarStock(false)}
+                      className="rounded-lg border border-border dark:border-dark-border px-3 py-2 text-xs font-medium"
+                    >
+                      Ahora no
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {r.orden_cobro_id && (
+                <Link href={`/ordenes/${r.orden_cobro_id}`} className="rounded-xl border border-border dark:border-dark-border py-2.5 text-center text-xs font-medium">
+                  Ver orden de cobro
+                </Link>
+              )}
+            </>
+          )}
+        </aside>
+      </div>
 
       {editando && (
         <button
           disabled={guardando}
           onClick={guardar}
-          className="w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
+          className="w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40 sticky bottom-4"
         >
           {guardando ? 'Guardando...' : 'Guardar cambios'}
         </button>
-      )}
-
-      {!editando && (
-        <>
-          {r.cliente_id && r.clientes?.telefono && (
-            <Seccion titulo="WhatsApp al cliente">
-              <div className="flex flex-wrap gap-2">
-                <button onClick={() => enviarWhatsApp('recibido')} className="rounded-lg border border-good/30 text-good px-3 py-1.5 text-xs font-medium">
-                  Recibimos tu equipo
-                </button>
-                <button onClick={() => enviarWhatsApp('presupuesto')} className="rounded-lg border border-good/30 text-good px-3 py-1.5 text-xs font-medium">
-                  Presupuesto
-                </button>
-                <button onClick={() => enviarWhatsApp('repuesto')} className="rounded-lg border border-good/30 text-good px-3 py-1.5 text-xs font-medium">
-                  Esperando repuesto
-                </button>
-                <button onClick={() => enviarWhatsApp('listo')} className="rounded-lg border border-good/30 text-good px-3 py-1.5 text-xs font-medium">
-                  Ya está listo
-                </button>
-              </div>
-            </Seccion>
-          )}
-
-          {/* Equipo del cliente sin orden de cobro todavía: tanto en "Listo para
-              entregar" como en "Entregado" (si se saltó el paso, ej. desde el
-              selector de estado) sigue pudiendo generarse la boleta. */}
-          {!r.orden_cobro_id &&
-            puedeGestionar &&
-            r.cliente_id &&
-            (r.estado === 'listo_para_entregar' || r.estado === 'entregado') && (
-              <div className="flex gap-2">
-                {r.estado === 'listo_para_entregar' && (
-                  <button
-                    disabled={guardando}
-                    onClick={marcarEntregadoClienteFicha}
-                    className="flex-1 rounded-2xl bg-good hover:opacity-90 transition-opacity py-3 text-center text-sm font-medium text-white disabled:opacity-40"
-                  >
-                    Marcar entregado al cliente
-                  </button>
-                )}
-                <button
-                  disabled={guardando}
-                  onClick={generarOrdenCobro}
-                  className={`rounded-2xl py-3 text-center text-sm font-medium disabled:opacity-40 ${
-                    r.estado === 'listo_para_entregar'
-                      ? 'flex-1 border border-border dark:border-dark-border'
-                      : 'w-full bg-good hover:opacity-90 transition-opacity text-white'
-                  }`}
-                >
-                  Generar orden de cobro
-                </button>
-              </div>
-            )}
-
-          {/* Equipo propio (sin cliente): "Agregar al Stock" queda disponible
-              tanto en "Listo para entregar" como en "Entregado" (antes
-              desaparecía al marcar entregado, aunque nunca se hubiera
-              agregado) — y solo para quien tiene permiso de Stock. */}
-          {!r.cliente_id && (r.estado === 'listo_para_entregar' || r.estado === 'entregado') && !r.agregado_a_stock && (
-            puedeAgregarStock ? (
-              <button
-                disabled={guardando}
-                onClick={agregarAlStockFicha}
-                className="w-full rounded-2xl bg-good hover:opacity-90 transition-opacity py-3 text-center text-sm font-medium text-white disabled:opacity-40"
-              >
-                Agregar al Stock
-              </button>
-            ) : (
-              r.estado === 'entregado' && (
-                <p className="text-xs text-muted dark:text-dark-text-secondary text-center">
-                  Entregado — el agregado al Stock lo hace quien tiene ese permiso.
-                </p>
-              )
-            )
-          )}
-          {!r.cliente_id && r.agregado_a_stock && (
-            <p className="text-xs text-good text-center">✅ Ya se agregó al Stock</p>
-          )}
-
-          {avisoAgregarStock && (
-            <div className="rounded-xl border border-good/30 bg-good/10 p-3 flex flex-col gap-2">
-              <p className="text-sm">¿Agregamos este equipo al Stock ahora?</p>
-              <div className="flex gap-2">
-                <button
-                  disabled={guardando}
-                  onClick={agregarAlStockFicha}
-                  className="flex-1 rounded-lg bg-good text-white text-center py-2 text-sm font-medium disabled:opacity-40"
-                >
-                  Agregar al Stock
-                </button>
-                <button
-                  onClick={() => setAvisoAgregarStock(false)}
-                  className="rounded-lg border border-border dark:border-dark-border px-3 py-2 text-sm font-medium"
-                >
-                  Ahora no
-                </button>
-              </div>
-            </div>
-          )}
-
-          {r.orden_cobro_id && (
-            <Link
-              href={`/ordenes/${r.orden_cobro_id}`}
-              className="w-full rounded-2xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium"
-            >
-              Ver orden de cobro
-            </Link>
-          )}
-
-          <Seccion titulo="Evidencia para el cliente">
-            <p className="text-xs text-muted dark:text-dark-text-secondary -mt-1 mb-2">
-              Fotos y notas que el cliente ve en /seguimiento (ej. daños encontrados al abrir el equipo).
-            </p>
-            <div className="flex flex-col gap-2 mb-3">
-              {fotoEvidenciaBase64 && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={fotoEvidenciaBase64} alt="" className="h-32 w-32 object-cover rounded-lg border border-border dark:border-dark-border self-start" />
-              )}
-              <label className="self-start rounded-lg border border-border dark:border-dark-border px-3 py-2 text-xs font-medium cursor-pointer">
-                {fotoEvidenciaBase64 ? '📷 Cambiar foto' : '📷 Sacar/elegir foto (opcional)'}
-                <input type="file" accept="image/*" capture="environment" className="hidden" onChange={elegirFotoEvidencia} />
-              </label>
-              <textarea
-                value={notaEvidencia}
-                onChange={(e) => setNotaEvidencia(e.target.value)}
-                placeholder="Ej: al abrir el equipo encontramos el módulo roto y faltaban 3 tornillos"
-                rows={2}
-                className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
-              />
-              <button
-                disabled={subiendoEvidencia || (!fotoEvidenciaBase64 && !notaEvidencia.trim())}
-                onClick={agregarEvidencia}
-                className="self-start rounded-lg bg-accent dark:bg-dark-accent text-white px-4 py-2 text-xs font-medium disabled:opacity-40"
-              >
-                {subiendoEvidencia ? 'Guardando...' : 'Agregar evidencia'}
-              </button>
-            </div>
-
-            {evidencias.length > 0 && (
-              <div className="flex flex-col gap-2">
-                {evidencias.map((e) => (
-                  <div key={e.id} className="rounded-lg bg-canvas dark:bg-dark-bg p-2.5 flex gap-2.5">
-                    {e.foto_url && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={e.foto_url} alt="" className="h-16 w-16 object-cover rounded-lg shrink-0" />
-                    )}
-                    <div className="min-w-0">
-                      {e.nota && <p className="text-xs whitespace-pre-wrap">{e.nota}</p>}
-                      <p className="text-[10px] text-muted dark:text-dark-text-secondary">
-                        {e.actor_nombre ? `${e.actor_nombre} · ` : ''}
-                        {fmt(e.created_at)}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Seccion>
-
-          <Seccion titulo="Historial">
-            <div className="flex flex-col gap-2 mb-2">
-              <textarea
-                value={notaTexto}
-                onChange={(e) => setNotaTexto(e.target.value)}
-                placeholder="Agregar nota interna (solo la ve el personal)..."
-                rows={2}
-                className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
-              />
-              <button
-                disabled={!notaTexto.trim()}
-                onClick={agregarNota}
-                className="self-start rounded-lg bg-accent dark:bg-dark-accent text-white px-3 py-1.5 text-xs font-medium disabled:opacity-40"
-              >
-                Agregar nota
-              </button>
-            </div>
-            <div className="flex flex-col gap-2">
-              {eventos.map((ev) => (
-                <div key={ev.id} className="text-xs flex gap-2">
-                  <span className="shrink-0">{ev.tipo === 'nota_interna' ? '📝' : ev.tipo === 'mensaje_cliente' ? '💬' : '⚙️'}</span>
-                  <div className="min-w-0">
-                    <p className="text-ink dark:text-dark-text">{ev.texto}</p>
-                    <p className="text-muted dark:text-dark-text-secondary">
-                      {ev.actor_nombre ? `${ev.actor_nombre} · ` : ''}
-                      {fmt(ev.created_at)}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Seccion>
-        </>
       )}
     </main>
   );
@@ -1499,4 +1760,3 @@ function Campo({
     </div>
   );
 }
-
