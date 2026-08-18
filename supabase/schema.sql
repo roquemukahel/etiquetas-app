@@ -2312,6 +2312,12 @@ grant execute on function saldos_proveedores() to authenticated;
 -- ============================================================
 alter table reparaciones add column if not exists senal_ok boolean;
 alter table reparaciones add column if not exists boton_silencio_ok boolean;
+
+-- Checklist de ingreso: pin de carga y carga MagSafe. Ver
+-- checklist_pin_magsafe_supabase.sql.
+alter table reparaciones add column if not exists pin_carga_ok boolean;
+alter table reparaciones add column if not exists carga_magsafe_ok boolean;
+
 alter table ordenes add column if not exists checklist_ingreso jsonb;
 alter table ordenes add column if not exists aclaraciones_tecnico text;
 

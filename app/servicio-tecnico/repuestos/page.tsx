@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../../lib/supabase/client';
+import ServicioTecnicoTabs from '../../ServicioTecnicoTabs';
 
 type Proveedor = { id: string; nombre: string; telefono: string | null };
 
@@ -54,6 +55,8 @@ export default function Repuestos() {
         </Link>
         <span className="text-lg font-medium">Proveedores</span>
       </header>
+
+      <ServicioTecnicoTabs active="proveedores" />
 
       <p className="text-xs text-muted dark:text-dark-text-secondary -mt-2">
         Entrá a cada proveedor para cargar los repuestos y precios que maneja.

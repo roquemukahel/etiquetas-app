@@ -8,6 +8,7 @@ import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import { simboloMoneda } from '../../lib/monedas';
 import { sanitizarDecimal } from '../../lib/numeros';
+import ServicioTecnicoTabs from '../../ServicioTecnicoTabs';
 
 type Repuesto = { id: string; nombre: string; cantidad_stock: number; costo_unitario: number | null };
 
@@ -156,6 +157,8 @@ export default function StockRepuestos() {
         </Link>
         <span className="text-lg font-medium">Stock de repuestos</span>
       </header>
+
+      <ServicioTecnicoTabs active="repuestos" />
 
       <p className="text-xs text-muted dark:text-dark-text-secondary -mt-2">
         Baterías, pantallas, entradas de carga y demás — cuánto tenés y cuánto te costó, para poder cargarlo en cada

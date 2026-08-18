@@ -31,6 +31,8 @@ import Avatar from '../Avatar';
 import SelectorColorAuto from '../SelectorColorAuto';
 import CheckTri from '../CheckTri';
 import TextoCondicionGenerado from '../TextoCondicionGenerado';
+import ServicioTecnicoTabs from '../ServicioTecnicoTabs';
+import EstadoBadge, { FranjaEstado } from '../EstadoBadge';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 
@@ -119,6 +121,18 @@ export default function ServicioTecnico() {
   const [tecnicos, setTecnicos] = useState<Tecnico[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'lista' | 'tecnicos'>('lista');
+  // Se lee de window (no useSearchParams) para no depender de un Suspense
+  // boundary — mismo criterio que app/stock/nuevo/page.tsx. Permite llegar
+  // directo a /servicio-tecnico?tab=tecnicos desde otra página del módulo.
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get('tab');
+    if (t === 'tecnicos') setTab('tecnicos');
+  }, []);
+  const cambiarTab = (t: 'lista' | 'tecnicos') => {
+    setTab(t);
+    const url = t === 'tecnicos' ? '/servicio-tecnico?tab=tecnicos' : '/servicio-tecnico';
+    window.history.replaceState(null, '', url);
+  };
   const [grupo, setGrupo] = useState<GrupoEstado>('pendientes');
   const [busqueda, setBusqueda] = useState('');
   const [filtroTecnico, setFiltroTecnico] = useState('');
@@ -682,70 +696,57 @@ export default function ServicioTecnico() {
 
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
-      <header className="flex items-center gap-3">
-        <Link href="/" className="text-2xl leading-none">
+      <header className="flex items-start gap-3">
+        <Link href="/" className="text-2xl leading-none mt-0.5">
           &larr;
         </Link>
-        <span className="text-lg font-medium mr-auto">Servicio Técnico</span>
-        <select
-          value={orden}
-          onChange={(e) => cambiarOrden(e.target.value as 'recientes' | 'antiguos')}
-          aria-label="Ordenar por"
-          className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-1.5 text-xs"
-        >
-          <option value="recientes">Más recientes</option>
-          <option value="antiguos">Más antiguos</option>
-        </select>
-        <Link href="/servicio-tecnico/stock" className="text-xs text-accent dark:text-dark-accent underline">
-          Stock
-        </Link>
-        <Link href="/servicio-tecnico/repuestos" className="text-xs text-accent dark:text-dark-accent underline">
-          Proveedores
-        </Link>
-        <Link href="/servicio-tecnico/trabajos" className="text-xs text-accent dark:text-dark-accent underline">
-          Trabajos
-        </Link>
+        <div className="mr-auto">
+          <h1 className="text-lg font-medium leading-tight">Servicio Técnico</h1>
+          <p className="text-xs text-muted dark:text-dark-text-secondary">
+            Gestioná reparaciones, técnicos, repuestos y rentabilidad desde un solo lugar
+          </p>
+        </div>
+        {puedeRecibir && (
+          <button
+            onClick={() => {
+              if (!panelNuevo && tab === 'tecnicos' && tecnicoSeleccionado) setAsignadoTecnicoId(tecnicoSeleccionado);
+              setPanelNuevo((v) => !v);
+            }}
+            className="shrink-0 rounded-xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors px-4 py-2.5 text-sm font-medium text-white"
+          >
+            {panelNuevo ? 'Cancelar' : '+ Recibir equipo'}
+          </button>
+        )}
       </header>
 
-      <div className="flex items-center gap-2 text-sm">
-        <button
-          onClick={() => setTab('lista')}
-          className={`flex-1 rounded-xl py-2 font-medium ${
-            tab === 'lista' ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
-          }`}
-        >
-          Reparaciones
-        </button>
-        <button
-          onClick={() => {
-            setTab('tecnicos');
-            setTecnicoSeleccionado(null);
-          }}
-          className={`flex-1 rounded-xl py-2 font-medium ${
-            tab === 'tecnicos' ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
-          }`}
-        >
-          Técnicos
-        </button>
-      </div>
+      <ServicioTecnicoTabs
+        active={tab === 'tecnicos' ? 'tecnicos' : 'reparaciones'}
+        onSelectReparaciones={() => cambiarTab('lista')}
+        onSelectTecnicos={() => {
+          cambiarTab('tecnicos');
+          setTecnicoSeleccionado(null);
+        }}
+      />
+
+      {!puedeRecibir && (
+        <p className="text-xs text-muted dark:text-dark-text-secondary text-center">
+          No tenés permiso para recibir equipos de Servicio Técnico.
+        </p>
+      )}
 
       {(tab === 'lista' || (tab === 'tecnicos' && tecnicoSeleccionado)) && (
         <>
-          {puedeRecibir ? (
-            <button
-              onClick={() => {
-                if (!panelNuevo && tab === 'tecnicos' && tecnicoSeleccionado) setAsignadoTecnicoId(tecnicoSeleccionado);
-                setPanelNuevo((v) => !v);
-              }}
-              className="w-full rounded-xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium"
+          <div className="flex items-center justify-end">
+            <select
+              value={orden}
+              onChange={(e) => cambiarOrden(e.target.value as 'recientes' | 'antiguos')}
+              aria-label="Ordenar por"
+              className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-1.5 text-xs"
             >
-              {panelNuevo ? 'Cancelar' : '+ Recibir equipo'}
-            </button>
-          ) : (
-            <p className="text-xs text-muted dark:text-dark-text-secondary text-center">
-              No tenés permiso para recibir equipos de Servicio Técnico.
-            </p>
-          )}
+              <option value="recientes">Más recientes</option>
+              <option value="antiguos">Más antiguos</option>
+            </select>
+          </div>
 
           {panelNuevo && (
             <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-3 flex flex-col gap-2">

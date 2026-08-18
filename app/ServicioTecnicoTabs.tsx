@@ -1,0 +1,72 @@
+'use client';
+
+import Link from 'next/link';
+
+export type SeccionServicioTecnico = 'reparaciones' | 'tecnicos' | 'repuestos' | 'servicios' | 'proveedores';
+
+// Navegación interna unificada de Servicio Técnico, para reemplazar los
+// links sueltos y subrayados que había antes arriba a la derecha.
+//
+// "Reparaciones" y "Técnicos" son botones (no <Link>) SOLO cuando se usan
+// dentro de la propia página /servicio-tecnico: ahí comparten estado y datos
+// ya cargados (misma lista de reparaciones/técnicos, mismos handlers de
+// asignar/cambiar estado/WhatsApp), así que cambiar de uno a otro es
+// instantáneo y no duplica la carga. Si no se pasa el handler correspondiente,
+// esos mismos ítems se comportan como <Link> normal hacia /servicio-tecnico
+// (para navegar ahí desde Repuestos, Servicios o Proveedores).
+const ITEMS: { key: SeccionServicioTecnico; icono: string; label: string; href: string }[] = [
+  { key: 'reparaciones', icono: '🛠️', label: 'Reparaciones', href: '/servicio-tecnico' },
+  { key: 'tecnicos', icono: '👥', label: 'Técnicos', href: '/servicio-tecnico?tab=tecnicos' },
+  { key: 'repuestos', icono: '🔩', label: 'Repuestos', href: '/servicio-tecnico/stock' },
+  { key: 'servicios', icono: '🗂️', label: 'Servicios', href: '/servicio-tecnico/trabajos' },
+  { key: 'proveedores', icono: '🏷️', label: 'Proveedores', href: '/servicio-tecnico/repuestos' },
+];
+
+export default function ServicioTecnicoTabs({
+  active,
+  onSelectReparaciones,
+  onSelectTecnicos,
+}: {
+  active: SeccionServicioTecnico;
+  onSelectReparaciones?: () => void;
+  onSelectTecnicos?: () => void;
+}) {
+  const handlers: Partial<Record<SeccionServicioTecnico, () => void>> = {
+    reparaciones: onSelectReparaciones,
+    tecnicos: onSelectTecnicos,
+  };
+  return (
+    <nav
+      aria-label="Secciones de Servicio Técnico"
+      className="flex gap-1 overflow-x-auto -mx-6 px-6 sm:mx-0 sm:px-0 border-b border-border dark:border-dark-border"
+    >
+      {ITEMS.map((t) => {
+        const activo = t.key === active;
+        const claseComun = `shrink-0 flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent dark:focus-visible:ring-dark-accent rounded-t-md ${
+          activo
+            ? 'border-accent dark:border-dark-accent text-accent dark:text-dark-accent'
+            : 'border-transparent text-muted dark:text-dark-text-secondary hover:text-ink dark:hover:text-dark-text hover:border-border dark:hover:border-dark-border'
+        }`;
+        const handler = handlers[t.key];
+        const contenido = (
+          <>
+            <span aria-hidden="true">{t.icono}</span>
+            {t.label}
+          </>
+        );
+        if (handler) {
+          return (
+            <button key={t.key} type="button" aria-current={activo ? 'page' : undefined} onClick={handler} className={claseComun}>
+              {contenido}
+            </button>
+          );
+        }
+        return (
+          <Link key={t.key} href={t.href} aria-current={activo ? 'page' : undefined} className={claseComun}>
+            {contenido}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}

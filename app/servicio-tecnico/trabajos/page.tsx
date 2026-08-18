@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { registrarAuditoria } from '../../lib/auditoria';
 import { sanitizarDecimal } from '../../lib/numeros';
+import ServicioTecnicoTabs from '../../ServicioTecnicoTabs';
 
 type Trabajo = { id: string; nombre: string; precio: number | null; imagen_url: string | null };
 
@@ -120,8 +121,10 @@ export default function Trabajos() {
         <Link href="/servicio-tecnico" className="text-2xl leading-none">
           &larr;
         </Link>
-        <span className="text-lg font-medium">Trabajos</span>
+        <span className="text-lg font-medium">Servicios</span>
       </header>
+
+      <ServicioTecnicoTabs active="servicios" />
 
       {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
 
