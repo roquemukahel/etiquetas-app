@@ -18,17 +18,26 @@ export default function Modal({
   maxWidth?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  // onClose casi siempre se pasa como función inline (ej. "() =>
+  // setModalAbierto(false)"), así que cambia de identidad en cada
+  // render del padre — si el efecto de abajo dependiera de [onClose],
+  // se re-ejecutaría en cada tecleo de cualquier input del formulario y
+  // volvería a robarle el foco al campo que se está escribiendo (el
+  // ref.current?.focus() apunta al contenedor del modal, no al input).
+  // Guardarlo en un ref evita eso sin usar una versión vieja de onClose.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
-  // Foco al abrir y cierre con Escape — accesibilidad básica de modal
-  // (sección 27 del rediseño de Servicio Técnico).
+  // Foco al abrir (una sola vez) y cierre con Escape — accesibilidad
+  // básica de modal (sección 27 del rediseño de Servicio Técnico).
   useEffect(() => {
     ref.current?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') onCloseRef.current();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, []);
 
   return (
     <div
