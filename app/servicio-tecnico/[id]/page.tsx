@@ -541,7 +541,8 @@ export default function FichaReparacion() {
   };
 
   const agregarNota = async () => {
-    if (!r || !notaTexto.trim()) return;
+    if (!r || !notaTexto.trim() || guardando) return;
+    setGuardando(true);
     const actor = getActor();
     await supabase.from('reparaciones_eventos').insert({
       reparacion_id: r.id,
@@ -551,6 +552,7 @@ export default function FichaReparacion() {
       actor_tipo: actor?.tipo ?? null,
     });
     setNotaTexto('');
+    setGuardando(false);
     cargar();
   };
 
@@ -672,7 +674,8 @@ export default function FichaReparacion() {
   };
 
   const enviarWhatsApp = async (tipo: 'recibido' | 'presupuesto' | 'repuesto' | 'listo') => {
-    if (!r || !r.clientes?.telefono) return;
+    if (!r || !r.clientes?.telefono || guardando) return;
+    setGuardando(true);
     const url = `${window.location.origin}/seguimiento/${r.token_seguimiento}`;
     const nombre = nombreCliente || 'estimado/a';
     const modelo = r.modelo || 'equipo';
@@ -697,6 +700,7 @@ export default function FichaReparacion() {
         .eq('id', r.id);
     }
     window.open(armarLinkWhatsApp(r.clientes.telefono, mensaje, codigoPais), '_blank');
+    setGuardando(false);
     cargar();
   };
 
@@ -1572,16 +1576,16 @@ export default function FichaReparacion() {
                       Genera el mensaje y abre WhatsApp — no confirma que el cliente lo haya recibido, solo que se abrió para enviarlo.
                     </p>
                     <div className="flex flex-wrap gap-2">
-                      <button onClick={() => enviarWhatsApp('recibido')} className="rounded-lg border border-good/30 text-good px-3 py-1.5 text-xs font-medium">
+                      <button disabled={guardando} onClick={() => enviarWhatsApp('recibido')} className="rounded-lg border border-good/30 text-good px-3 py-1.5 text-xs font-medium disabled:opacity-40">
                         Recibimos tu equipo
                       </button>
-                      <button onClick={() => enviarWhatsApp('presupuesto')} className="rounded-lg border border-good/30 text-good px-3 py-1.5 text-xs font-medium">
+                      <button disabled={guardando} onClick={() => enviarWhatsApp('presupuesto')} className="rounded-lg border border-good/30 text-good px-3 py-1.5 text-xs font-medium disabled:opacity-40">
                         Presupuesto
                       </button>
-                      <button onClick={() => enviarWhatsApp('repuesto')} className="rounded-lg border border-good/30 text-good px-3 py-1.5 text-xs font-medium">
+                      <button disabled={guardando} onClick={() => enviarWhatsApp('repuesto')} className="rounded-lg border border-good/30 text-good px-3 py-1.5 text-xs font-medium disabled:opacity-40">
                         Esperando repuesto
                       </button>
-                      <button onClick={() => enviarWhatsApp('listo')} className="rounded-lg border border-good/30 text-good px-3 py-1.5 text-xs font-medium">
+                      <button disabled={guardando} onClick={() => enviarWhatsApp('listo')} className="rounded-lg border border-good/30 text-good px-3 py-1.5 text-xs font-medium disabled:opacity-40">
                         Ya está listo
                       </button>
                     </div>
@@ -1627,7 +1631,7 @@ export default function FichaReparacion() {
                     className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                   />
                   <button
-                    disabled={!notaTexto.trim()}
+                    disabled={!notaTexto.trim() || guardando}
                     onClick={agregarNota}
                     className="self-start rounded-lg bg-accent dark:bg-dark-accent text-white px-3 py-1.5 text-xs font-medium disabled:opacity-40"
                   >

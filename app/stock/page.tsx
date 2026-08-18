@@ -136,8 +136,6 @@ export default function Stock() {
   const [guardandoProducto, setGuardandoProducto] = useState(false);
   const [errorProducto, setErrorProducto] = useState<string | null>(null);
   const [editandoCantidad, setEditandoCantidad] = useState<string | null>(null);
-  const [confirmandoDefaults, setConfirmandoDefaults] = useState(false);
-  const [cargandoDefaults, setCargandoDefaults] = useState(false);
   const [valorCantidad, setValorCantidad] = useState('');
   const [valorCosto, setValorCosto] = useState('');
   const [valorPrecio, setValorPrecio] = useState('');
@@ -627,7 +625,33 @@ export default function Stock() {
       setCarpetas((data ?? []).map((m) => m.nombre));
     })();
     (async () => setImagenesCarpetas(await obtenerImagenesCarpetas(supabase)))();
-    cargarProductos();
+    (async () => {
+      const data = await obtenerTodasLasFilas<Producto>(supabase, 'productos', '*', [{ columna: 'nombre' }]);
+      // Catálogo de accesorios todavía vacío: se carga el set inicial acá
+      // mismo, sin pedirle a nadie que active nada — a diferencia de
+      // Servicios/Trabajos (que sí quedan como catálogo manual porque cada
+      // taller ofrece arreglos distintos), estos accesorios genéricos
+      // (AirPods, cargadores, fundas, etc.) le sirven a cualquier negocio
+      // desde el primer momento.
+      if (data.length === 0 && puedeAgregarStock) {
+        const { error: insertError } = await supabase
+          .from('productos')
+          .insert(ACCESORIOS_DEFAULT.map((a) => ({ nombre: a.nombre, imagen_url: a.imagen })));
+        if (!insertError) {
+          await registrarAuditoria(supabase, {
+            accion: `cargó el catálogo de accesorios por defecto (${ACCESORIOS_DEFAULT.length} accesorios)`,
+            entidad: 'producto',
+            valorNuevo: { accesorios: ACCESORIOS_DEFAULT.map((a) => a.nombre) },
+          });
+          setProductos(await obtenerTodasLasFilas<Producto>(supabase, 'productos', '*', [{ columna: 'nombre' }]));
+          setLoadingProductos(false);
+          return;
+        }
+      }
+      setProductos(data);
+      setLoadingProductos(false);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Para la alerta de reposición contamos el stock real de cada modelo,
@@ -794,37 +818,6 @@ export default function Stock() {
     setPrecioProducto('');
     setCostoProducto('');
     setGuardandoProducto(false);
-    cargarProductos();
-  };
-
-  const cargarAccesoriosDefault = async () => {
-    if (!puedeAgregarStock) return;
-    setCargandoDefaults(true);
-    setErrorProducto(null);
-    // Si ya se cargaron antes (o el dueño ya tenía un accesorio con ese
-    // nombre), no los duplicamos.
-    const nombresExistentes = new Set(productos.map((p) => p.nombre.trim().toLowerCase()));
-    const aInsertar = ACCESORIOS_DEFAULT.filter((a) => !nombresExistentes.has(a.nombre.toLowerCase()));
-    if (aInsertar.length === 0) {
-      setConfirmandoDefaults(false);
-      setCargandoDefaults(false);
-      return;
-    }
-    const { error: insertError } = await supabase
-      .from('productos')
-      .insert(aInsertar.map((a) => ({ nombre: a.nombre, imagen_url: a.imagen })));
-    if (insertError) {
-      setErrorProducto('No pudimos cargar los accesorios por defecto: ' + insertError.message);
-      setCargandoDefaults(false);
-      return;
-    }
-    await registrarAuditoria(supabase, {
-      accion: `cargó el catálogo de accesorios por defecto (${aInsertar.length} accesorio${aInsertar.length === 1 ? '' : 's'})`,
-      entidad: 'producto',
-      valorNuevo: { accesorios: aInsertar.map((a) => a.nombre) },
-    });
-    setConfirmandoDefaults(false);
-    setCargandoDefaults(false);
     cargarProductos();
   };
 
@@ -1545,58 +1538,6 @@ export default function Stock() {
       ) : (
         <>
           {errorProducto && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{errorProducto}</p>}
-
-          {puedeAgregarStock && (
-            <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-4 py-3 flex flex-col gap-3">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-medium">Agregar accesorios por defecto</p>
-                  <p className="text-xs text-muted dark:text-dark-text-secondary">
-                    Carga un catálogo inicial: AirPods Pro 2/3, AirTag, cargadores, cables, auriculares, fundas y
-                    protector de cámara. Si ya cargaste algunos antes, solo agrega los que todavía te falten.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={confirmandoDefaults}
-                  onClick={() => setConfirmandoDefaults((v) => !v)}
-                  className={`shrink-0 relative h-7 w-12 rounded-full transition-colors ${
-                    confirmandoDefaults ? 'bg-accent dark:bg-dark-accent' : 'bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border'
-                  }`}
-                >
-                  <span
-                    className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-                      confirmandoDefaults ? 'translate-x-6' : 'translate-x-1'
-                    }`}
-                  />
-                </button>
-              </div>
-              {confirmandoDefaults && (
-                <div className="rounded-lg border border-accent/30 dark:border-dark-accent/30 bg-accent-soft dark:bg-dark-accent-soft px-3 py-2.5 flex flex-col gap-2">
-                  <p className="text-xs">
-                    Una vez que actives esta opción, se cargarán accesorios por defecto. ¿Deseás hacerlo?
-                  </p>
-                  <div className="flex gap-2">
-                    <button
-                      disabled={cargandoDefaults}
-                      onClick={cargarAccesoriosDefault}
-                      className="rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
-                    >
-                      {cargandoDefaults ? 'Cargando…' : 'Sí, cargar'}
-                    </button>
-                    <button
-                      disabled={cargandoDefaults}
-                      onClick={() => setConfirmandoDefaults(false)}
-                      className="rounded-lg border border-border dark:border-dark-border px-3 py-1.5 text-xs font-medium disabled:opacity-40"
-                    >
-                      Cancelar
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
 
           {puedeAgregarStock && (
             <div className="flex flex-col gap-2">

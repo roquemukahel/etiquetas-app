@@ -686,7 +686,8 @@ export default function ServicioTecnico() {
   };
 
   const enviarWhatsApp = async (r: Reparacion) => {
-    if (!r.cliente_id || !r.clientes?.telefono || !r.token_seguimiento) return;
+    if (!r.cliente_id || !r.clientes?.telefono || !r.token_seguimiento || guardando) return;
+    setGuardando(r.id);
     const url = `${window.location.origin}/seguimiento/${r.token_seguimiento}`;
     const nombre = `${r.clientes.nombre} ${r.clientes.apellido || ''}`.trim();
     const mensaje =
@@ -699,6 +700,7 @@ export default function ServicioTecnico() {
       texto: mensaje,
     });
     window.open(armarLinkWhatsApp(r.clientes.telefono, mensaje, codigoPais), '_blank');
+    setGuardando(null);
   };
 
   return (
