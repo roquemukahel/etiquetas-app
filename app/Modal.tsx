@@ -29,9 +29,16 @@ export default function Modal({
   onCloseRef.current = onClose;
 
   // Foco al abrir (una sola vez) y cierre con Escape — accesibilidad
-  // básica de modal (sección 27 del rediseño de Servicio Técnico).
+  // básica de modal (sección 27 del rediseño de Servicio Técnico). Si
+  // algún campo del formulario ya tiene autoFocus (Servicios, Repuestos,
+  // Proveedores lo usan en su primer campo), ese autoFocus se aplica
+  // durante el commit de React, ANTES de que corra este efecto — así que
+  // solo enfocamos el contenedor cuando ningún campo hijo ya se quedó
+  // con el foco, para no pisarlo.
   useEffect(() => {
-    ref.current?.focus();
+    if (ref.current && !ref.current.contains(document.activeElement)) {
+      ref.current.focus();
+    }
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onCloseRef.current();
     };
