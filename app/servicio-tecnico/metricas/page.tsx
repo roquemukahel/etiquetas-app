@@ -146,6 +146,9 @@ export default function MetricasServicioTecnico() {
           <h1 className="text-lg font-medium leading-tight">Métricas</h1>
           <p className="text-xs text-muted dark:text-dark-text-secondary">Rendimiento real del taller — nada estimado, todo sale de datos cargados</p>
         </div>
+        <Link href="/estadisticas" className="text-xs text-accent dark:text-dark-accent underline shrink-0 self-center">
+          Estadísticas generales →
+        </Link>
       </header>
 
       <ServicioTecnicoTabs active="metricas" />

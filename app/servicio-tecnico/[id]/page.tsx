@@ -225,6 +225,12 @@ export default function FichaReparacion() {
   const [controlCalidad, setControlCalidad] = useState<ControlCalidadItem[]>([]);
   const [reparacionesRelacionadas, setReparacionesRelacionadas] = useState<ReparacionRelacionada[]>([]);
   const [guardandoClasificacion, setGuardandoClasificacion] = useState(false);
+  // Con más de una reparación anterior del mismo equipo, hay que elegir a
+  // cuál se vincula el retrabajo/garantía — antes siempre se enganchaba a
+  // la más reciente sin importar cuál tocara el técnico, lo cual podía
+  // vincular mal (ej. un retrabajo que en realidad es sobre un arreglo de
+  // hace 3 ingresos, no el último).
+  const [reparacionRelacionadaElegida, setReparacionRelacionadaElegida] = useState<string | null>(null);
 
   const [f, setFm] = useState<Record<string, any>>({});
 
@@ -324,7 +330,9 @@ export default function FichaReparacion() {
         .neq('id', r.id)
         .order('fecha_ingreso_servicio', { ascending: false })
         .limit(5);
-      setReparacionesRelacionadas((data as ReparacionRelacionada[]) ?? []);
+      const relacionadas = (data as ReparacionRelacionada[]) ?? [];
+      setReparacionesRelacionadas(relacionadas);
+      setReparacionRelacionadaElegida(r.reparacion_relacionada_id ?? relacionadas[0]?.id ?? null);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [r?.imei]);
@@ -944,7 +952,16 @@ export default function FichaReparacion() {
       .from('reparaciones_control_calidad')
       .select('id, item, resultado, observacion, foto_url, actor_nombre, created_at')
       .eq('reparacion_id', r.id);
-    setControlCalidad((data as ControlCalidadItem[]) ?? []);
+    const actualizado = (data as ControlCalidadItem[]) ?? [];
+    setControlCalidad(actualizado);
+    // Si esto era lo último que faltaba, el aviso de "se entregó con
+    // controles pendientes" deja de tener sentido — se limpia solo en vez
+    // de quedar una advertencia vieja para siempre en una reparación que ya
+    // se terminó de controlar.
+    if (r.control_calidad_override && checklistAplicable.every((it) => actualizado.some((c) => c.item === it))) {
+      await supabase.from('reparaciones').update({ control_calidad_override: false }).eq('id', r.id);
+      cargar();
+    }
   };
 
   const reparacionRelacionadaLabel = (rr: ReparacionRelacionada) => {
@@ -1253,29 +1270,45 @@ export default function FichaReparacion() {
                 <div className="flex flex-col gap-1.5 mb-2">
                   {reparacionesRelacionadas.map((rr) => {
                     const info = reparacionRelacionadaLabel(rr);
+                    const elegida = reparacionRelacionadaElegida === rr.id;
                     return (
-                      <Link
+                      <div
                         key={rr.id}
-                        href={`/servicio-tecnico/${rr.id}`}
-                        className="rounded-lg bg-canvas dark:bg-dark-bg px-3 py-2 text-xs flex items-center justify-between gap-2 hover:border-accent/40 border border-transparent"
+                        className={`rounded-lg px-3 py-2 text-xs flex items-center gap-2 border ${
+                          elegida ? 'border-accent/40 dark:border-dark-accent/40 bg-accent-soft dark:bg-dark-accent-soft' : 'border-transparent bg-canvas dark:bg-dark-bg'
+                        }`}
                       >
-                        <span className="min-w-0 truncate">{info.titulo}</span>
+                        {reparacionesRelacionadas.length > 1 && puedeGestionar && (
+                          <input
+                            type="radio"
+                            name="reparacion-relacionada"
+                            checked={elegida}
+                            onChange={() => setReparacionRelacionadaElegida(rr.id)}
+                            aria-label={`Vincular a ${info.titulo}`}
+                            className="shrink-0 accent-ink"
+                          />
+                        )}
+                        <Link href={`/servicio-tecnico/${rr.id}`} className="min-w-0 flex-1 truncate hover:underline">
+                          {info.titulo}
+                        </Link>
                         <span className={`shrink-0 ${info.vencida ? 'text-bad' : 'text-muted dark:text-dark-text-secondary'}`}>
                           {info.garantiaTexto}
                         </span>
-                      </Link>
+                      </div>
                     );
                   })}
                 </div>
                 {puedeGestionar && (
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-xs text-muted dark:text-dark-text-secondary">¿Cómo clasificamos este ingreso?</label>
+                    <label className="text-xs text-muted dark:text-dark-text-secondary">
+                      ¿Cómo clasificamos este ingreso{reparacionesRelacionadas.length > 1 ? ', respecto de la reparación marcada arriba' : ''}?
+                    </label>
                     <div className="flex flex-wrap gap-1.5">
                       {TIPOS_INGRESO.map((t) => (
                         <button
                           key={t.id}
                           disabled={guardandoClasificacion}
-                          onClick={() => guardarClasificacionIngreso(t.id, reparacionesRelacionadas[0]?.id ?? null)}
+                          onClick={() => guardarClasificacionIngreso(t.id, reparacionRelacionadaElegida)}
                           className={`rounded-lg px-3 py-1.5 text-xs font-medium disabled:opacity-40 ${
                             r.tipo_ingreso === t.id ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                           }`}
