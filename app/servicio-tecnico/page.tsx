@@ -7,45 +7,29 @@ import { asegurarModelo } from '../lib/modelos';
 import { limpiarImei } from '../lib/imei';
 import { armarLinkWhatsApp, mensajeSeguimientoServicio, mensajeListoServicio } from '../lib/whatsapp';
 import { codigoLlamada } from '../lib/paises';
-import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../lib/carpetas';
-import { imagenColorDeModelo } from '../lib/coloresModelo';
+import { obtenerImagenesCarpetas } from '../lib/carpetas';
 import { registrarAuditoria } from '../lib/auditoria';
 import { getActor, useActor, MENSAJE_ACTOR_REQUERIDO } from '../lib/actor';
 import { tienePermiso } from '../lib/permisos';
 import { obtenerTodasLasFilas } from '../lib/db';
 import {
-  ESTADOS_REPARACION,
-  PRIORIDADES,
   infoEstado,
   calcularAlertas,
+  esHoy,
   ITEMS_CHECKLIST_INGRESO,
   CAMPOS_DEPENDEN_MODULO,
   generarTextoCondicionIngreso,
   ChecklistIngreso,
 } from '../lib/reparaciones';
-import MiniaturaDispositivo from '../MiniaturaDispositivo';
 import Avatar from '../Avatar';
 import SelectorColorAuto from '../SelectorColorAuto';
 import CheckTri from '../CheckTri';
 import TextoCondicionGenerado from '../TextoCondicionGenerado';
 import ServicioTecnicoTabs from '../ServicioTecnicoTabs';
-import EstadoBadge, { FranjaEstado } from '../EstadoBadge';
+import TarjetaReparacion, { Reparacion, Tecnico } from './TarjetaReparacion';
+import MiBanco from './MiBanco';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
-
-// Franja lateral semántica de la tarjeta: mismos hex que tailwind.config.js
-// (accent/diag/warn/repar/good/muted/bad). Con inline style porque son
-// colores dinámicos por estado — una clase Tailwind armada en runtime no
-// sobrevive el purge de producción.
-const COLOR_ACENTO: Record<string, string> = {
-  accent: '#355CDE',
-  diag: '#7C3AED',
-  warn: '#D97706',
-  repar: '#0284C7',
-  good: '#16A34A',
-  muted: '#475569',
-  bad: '#DC2626',
-};
 
 function idTemporal() {
   return Math.random().toString(36).slice(2);
@@ -65,54 +49,11 @@ type EquipoIngreso = {
   checklist: ChecklistIngreso;
 };
 
-type Tecnico = { id: string; nombre: string; foto_url: string | null };
 type Cliente = { id: string; nombre: string; apellido: string | null; telefono: string | null };
-
-type Reparacion = {
-  id: string;
-  numero_orden: string | null;
-  modelo: string | null;
-  capacidad_gb: number | null;
-  color: string | null;
-  imei: string | null;
-  falla_declarada: string | null;
-  diagnostico: string | null;
-  ubicacion_fisica: string | null;
-  tecnico_id: string | null;
-  estado: string;
-  prioridad: string;
-  trabajos_realizados: string[] | null;
-  fecha_ingreso_servicio: string;
-  fecha_estimada: string | null;
-  fecha_reparado: string | null;
-  fecha_entrega: string | null;
-  garantia_dias: number | null;
-  estado_actualizado_at: string;
-  cliente_id: string | null;
-  token_seguimiento: string | null;
-  en_poder_tecnico: boolean;
-  presupuesto_mano_obra: number | null;
-  presupuesto_repuestos: number | null;
-  importe_total: number | null;
-  orden_cobro_id: string | null;
-  agregado_a_stock: boolean;
-  clientes: { nombre: string; apellido: string | null; telefono: string | null } | null;
-};
 
 function formatearFecha(iso: string | null) {
   if (!iso) return null;
   return new Date(iso).toLocaleDateString('es-AR');
-}
-
-function hace(iso: string) {
-  const ms = Date.now() - new Date(iso).getTime();
-  const min = Math.floor(ms / 60000);
-  if (min < 1) return 'recién';
-  if (min < 60) return `hace ${min} min`;
-  const horas = Math.floor(min / 60);
-  if (horas < 24) return `hace ${horas}h`;
-  const dias = Math.floor(horas / 24);
-  return `hace ${dias}d`;
 }
 
 const FINALIZADOS = ['entregado', 'cancelado'];
@@ -128,20 +69,27 @@ export default function ServicioTecnico() {
   // distinta de "gestionar la reparación" — puede quedar en manos de otra
   // persona (ver app/servicio-tecnico/[id]/page.tsx).
   const puedeAgregarStock = tienePermiso(actor, 'agregar_stock');
+  // Métricas comparativas entre técnicos (carga relativa, tiempo promedio)
+  // quedan reservadas a quien puede ver Estadísticas — mismo permiso que ya
+  // existe para el resto de la app, en vez de inventar uno nuevo solo para
+  // esto.
+  const puedeVerEstadisticas = tienePermiso(actor, 'ver_estadisticas');
   const [reparaciones, setReparaciones] = useState<Reparacion[]>([]);
   const [tecnicos, setTecnicos] = useState<Tecnico[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'lista' | 'tecnicos'>('lista');
+  const [tab, setTab] = useState<'lista' | 'mibanco' | 'tecnicos'>('lista');
   // Se lee de window (no useSearchParams) para no depender de un Suspense
   // boundary — mismo criterio que app/stock/nuevo/page.tsx. Permite llegar
-  // directo a /servicio-tecnico?tab=tecnicos desde otra página del módulo.
+  // directo a /servicio-tecnico?tab=tecnicos o ?tab=mibanco desde otra
+  // página del módulo.
   useEffect(() => {
     const t = new URLSearchParams(window.location.search).get('tab');
     if (t === 'tecnicos') setTab('tecnicos');
+    if (t === 'mibanco') setTab('mibanco');
   }, []);
-  const cambiarTab = (t: 'lista' | 'tecnicos') => {
+  const cambiarTab = (t: 'lista' | 'mibanco' | 'tecnicos') => {
     setTab(t);
-    const url = t === 'tecnicos' ? '/servicio-tecnico?tab=tecnicos' : '/servicio-tecnico';
+    const url = t === 'lista' ? '/servicio-tecnico' : `/servicio-tecnico?tab=${t}`;
     window.history.replaceState(null, '', url);
   };
   // Indicador operativo elegido (fila clickeable arriba de la lista). Por
@@ -177,7 +125,14 @@ export default function ServicioTecnico() {
   const [guardando, setGuardando] = useState<string | null>(null);
   const [menuAbierto, setMenuAbierto] = useState<string | null>(null);
   const [tecnicoSeleccionado, setTecnicoSeleccionado] = useState<string | null>(null);
-  const [vistaTecnico, setVistaTecnico] = useState<'en_poder' | 'historial'>('en_poder');
+  // "banco" es la vista por defecto al entrar al detalle de un técnico: es
+  // la más útil (prioriza qué atender primero), "en_poder"/"historial"
+  // siguen disponibles para quien prefiera esas vistas más simples.
+  const [vistaTecnico, setVistaTecnico] = useState<'banco' | 'en_poder' | 'historial'>('banco');
+  // Período para "completadas" y "tiempo promedio" en la lista de técnicos
+  // — comparar toda la vida del taller de una no sirve para ver quién está
+  // sobrecargado hoy.
+  const [periodoTecnicos, setPeriodoTecnicos] = useState<'hoy' | '7d' | '30d' | 'todo'>('7d');
   const [asignadoTecnicoId, setAsignadoTecnicoId] = useState('');
 
   const [carpetasStock, setCarpetasStock] = useState<string[]>([]);
@@ -321,6 +276,25 @@ export default function ServicioTecnico() {
       sinAsignar: activas.filter((r) => !r.tecnico_id).length,
     };
   }, [reparaciones]);
+
+  // Denominador para la barra de carga relativa entre técnicos (Fase 3) —
+  // el que más reparaciones activas tiene marca el 100%.
+  const maxActivasTecnicos = useMemo(() => {
+    let max = 0;
+    for (const t of tecnicos) {
+      const n = reparaciones.filter((r) => r.tecnico_id === t.id && !FINALIZADOS.includes(r.estado)).length;
+      if (n > max) max = n;
+    }
+    return max;
+  }, [tecnicos, reparaciones]);
+
+  const dentroPeriodoTecnicos = (iso: string | null) => {
+    if (!iso) return false;
+    if (periodoTecnicos === 'todo') return true;
+    if (periodoTecnicos === 'hoy') return esHoy(iso);
+    const dias = periodoTecnicos === '7d' ? 7 : 30;
+    return Date.now() - new Date(iso).getTime() <= dias * 86400000;
+  };
 
   const alertas = useMemo(() => calcularAlertas(reparaciones), [reparaciones]);
   const [alertasAbiertas, setAlertasAbiertas] = useState(false);
@@ -753,8 +727,10 @@ export default function ServicioTecnico() {
       </header>
 
       <ServicioTecnicoTabs
-        active={tab === 'tecnicos' ? 'tecnicos' : 'reparaciones'}
+        active={tab === 'tecnicos' ? 'tecnicos' : tab === 'mibanco' ? 'mibanco' : 'reparaciones'}
+        mostrarMiBanco={actor?.tipo === 'tecnico'}
         onSelectReparaciones={() => cambiarTab('lista')}
+        onSelectMiBanco={() => cambiarTab('mibanco')}
         onSelectTecnicos={() => {
           cambiarTab('tecnicos');
           setTecnicoSeleccionado(null);
@@ -768,19 +744,21 @@ export default function ServicioTecnico() {
       )}
 
       {(tab === 'lista' || (tab === 'tecnicos' && tecnicoSeleccionado)) && (
-        <>
-          <div className="flex items-center justify-end">
-            <select
-              value={orden}
-              onChange={(e) => cambiarOrden(e.target.value as 'recientes' | 'antiguos')}
-              aria-label="Ordenar por"
-              className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-1.5 text-xs"
-            >
-              <option value="recientes">Más recientes</option>
-              <option value="antiguos">Más antiguos</option>
-            </select>
-          </div>
+        <div className="flex items-center justify-end">
+          <select
+            value={orden}
+            onChange={(e) => cambiarOrden(e.target.value as 'recientes' | 'antiguos')}
+            aria-label="Ordenar por"
+            className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-1.5 text-xs"
+          >
+            <option value="recientes">Más recientes</option>
+            <option value="antiguos">Más antiguos</option>
+          </select>
+        </div>
+      )}
 
+      {(tab === 'lista' || tab === 'mibanco' || (tab === 'tecnicos' && tecnicoSeleccionado)) && (
+        <>
           {panelNuevo && (
             <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-3 flex flex-col gap-2">
               {errorNuevo && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{errorNuevo}</p>}
@@ -987,6 +965,32 @@ export default function ServicioTecnico() {
         </div>
       )}
 
+      {tab === 'mibanco' &&
+        (actor?.tipo === 'tecnico' ? (
+          <MiBanco
+            tecnicoId={actor.id}
+            nombreTecnico={nombreTecnico}
+            fotoTecnico={fotoTecnico}
+            reparaciones={reparaciones}
+            tecnicos={tecnicos}
+            guardando={guardando}
+            menuAbierto={menuAbierto}
+            setMenuAbierto={setMenuAbierto}
+            onAsignarTecnico={asignarTecnico}
+            onCambiarEstado={cambiarEstado}
+            onWhatsApp={enviarWhatsApp}
+            onArchivar={archivarCancelar}
+            onEliminar={eliminarDefinitivo}
+            onAgregarAlStock={agregarAlStock}
+            onEntregadoCliente={marcarEntregadoCliente}
+            imagenesCarpetas={imagenesCarpetas}
+            puedeAgregarStock={puedeAgregarStock}
+            esPropio
+          />
+        ) : (
+          <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{MENSAJE_ACTOR_REQUERIDO}</p>
+        ))}
+
       {tab === 'tecnicos' ? (
         tecnicoSeleccionado ? (
           <>
@@ -1002,6 +1006,14 @@ export default function ServicioTecnico() {
             </p>
 
             <div className="flex items-center gap-2 text-sm">
+              <button
+                onClick={() => setVistaTecnico('banco')}
+                className={`flex-1 rounded-xl py-2 font-medium ${
+                  vistaTecnico === 'banco' ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
+                }`}
+              >
+                Banco
+              </button>
               <button
                 onClick={() => setVistaTecnico('en_poder')}
                 className={`flex-1 rounded-xl py-2 font-medium ${
@@ -1019,6 +1031,29 @@ export default function ServicioTecnico() {
                 Historial
               </button>
             </div>
+
+            {vistaTecnico === 'banco' && (
+              <MiBanco
+                tecnicoId={tecnicoSeleccionado}
+                nombreTecnico={nombreTecnico}
+                fotoTecnico={fotoTecnico}
+                reparaciones={reparaciones}
+                tecnicos={tecnicos}
+                guardando={guardando}
+                menuAbierto={menuAbierto}
+                setMenuAbierto={setMenuAbierto}
+                onAsignarTecnico={asignarTecnico}
+                onCambiarEstado={cambiarEstado}
+                onWhatsApp={enviarWhatsApp}
+                onArchivar={archivarCancelar}
+                onEliminar={eliminarDefinitivo}
+                onAgregarAlStock={agregarAlStock}
+                onEntregadoCliente={marcarEntregadoCliente}
+                imagenesCarpetas={imagenesCarpetas}
+                puedeAgregarStock={puedeAgregarStock}
+                esPropio={actor?.tipo === 'tecnico' && actor.id === tecnicoSeleccionado}
+              />
+            )}
 
             {vistaTecnico === 'en_poder' && (
               <>
@@ -1103,32 +1138,96 @@ export default function ServicioTecnico() {
                 </Link>
               </p>
             )}
+            {tecnicos.length > 0 && (
+              <div className="flex items-center justify-end gap-2 text-xs">
+                <label htmlFor="periodo-tecnicos" className="text-muted dark:text-dark-text-secondary">
+                  Completadas y promedio de:
+                </label>
+                <select
+                  id="periodo-tecnicos"
+                  value={periodoTecnicos}
+                  onChange={(e) => setPeriodoTecnicos(e.target.value as 'hoy' | '7d' | '30d' | 'todo')}
+                  className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-1.5"
+                >
+                  <option value="hoy">Hoy</option>
+                  <option value="7d">Últimos 7 días</option>
+                  <option value="30d">Últimos 30 días</option>
+                  <option value="todo">Todo</option>
+                </select>
+              </div>
+            )}
             <div className="flex flex-col gap-2">
               {tecnicos.map((t) => {
-                const entregadas = reparaciones.filter((r) => r.estado === 'entregado' && r.tecnico_id === t.id).length;
-                const enPoder = reparaciones.filter((r) => r.tecnico_id === t.id && r.en_poder_tecnico && !FINALIZADOS.includes(r.estado)).length;
-                const enCurso = reparaciones.filter((r) => r.tecnico_id === t.id && r.estado === 'en_reparacion').length;
-                const demoradas = reparaciones.filter((r) => r.tecnico_id === t.id && esDemorado(r)).length;
+                const propias = reparaciones.filter((r) => r.tecnico_id === t.id);
+                const activasArr = propias.filter((r) => !FINALIZADOS.includes(r.estado));
+                const enCurso = activasArr.filter((r) => r.estado === 'en_reparacion').length;
+                const demoradas = activasArr.filter(esDemorado).length;
+                const esperandoDiagnostico = activasArr.filter((r) => r.estado === 'recibido' || r.estado === 'esperando_diagnostico').length;
+                const listasHoy = propias.filter((r) => r.estado === 'listo_para_entregar' && esHoy(r.fecha_reparado)).length;
+                const completadasPeriodo = propias.filter((r) => r.estado === 'entregado' && dentroPeriodoTecnicos(r.fecha_reparado));
+                const tiempoPromedioDias =
+                  completadasPeriodo.length > 0
+                    ? completadasPeriodo.reduce(
+                        (acc, r) => acc + (new Date(r.fecha_reparado as string).getTime() - new Date(r.fecha_ingreso_servicio).getTime()),
+                        0
+                      ) /
+                      completadasPeriodo.length /
+                      86400000
+                    : null;
+                const ocupado = activasArr.length > 0;
+                const cargaPct = maxActivasTecnicos > 0 ? Math.round((activasArr.length / maxActivasTecnicos) * 100) : 0;
                 return (
                   <button
                     key={t.id}
                     onClick={() => {
                       setTecnicoSeleccionado(t.id);
-                      setVistaTecnico('en_poder');
+                      setVistaTecnico('banco');
                     }}
-                    className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex items-center justify-between text-left"
+                    className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex flex-col gap-2 text-left"
                   >
-                    <span className="flex items-center gap-2.5">
-                      <Avatar src={t.foto_url} nombre={t.nombre} size={60} />
-                      <p className="text-sm font-medium">{t.nombre}</p>
-                    </span>
-                    <span className="text-right">
-                      <p className="text-xs font-medium">{enPoder} en su poder{enCurso > 0 ? ` · ${enCurso} en curso` : ''}</p>
-                      <p className="text-xs text-muted dark:text-dark-text-secondary">
-                        {entregadas} entregada{entregadas === 1 ? '' : 's'}
-                        {demoradas > 0 ? ` · ${demoradas} demorada${demoradas === 1 ? '' : 's'}` : ''}
-                      </p>
-                    </span>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="flex items-center gap-2.5 min-w-0">
+                        <Avatar src={t.foto_url} nombre={t.nombre} size={52} />
+                        <span className="min-w-0">
+                          <p className="text-sm font-medium truncate">{t.nombre}</p>
+                          <span className={`inline-flex items-center gap-1 text-xs font-medium ${ocupado ? 'text-warn' : 'text-good'}`}>
+                            <span aria-hidden="true">{ocupado ? '🟠' : '🟢'}</span>
+                            {ocupado ? 'Ocupado' : 'Disponible'}
+                          </span>
+                        </span>
+                      </span>
+                      <span className="text-right shrink-0">
+                        <p className="text-xs font-medium">
+                          {activasArr.length} activa{activasArr.length === 1 ? '' : 's'}
+                        </p>
+                        {demoradas > 0 && (
+                          <p className="text-xs text-bad font-medium">
+                            {demoradas} demorada{demoradas === 1 ? '' : 's'}
+                          </p>
+                        )}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-1.5 text-xs text-muted dark:text-dark-text-secondary">
+                      <span>🔍 {esperandoDiagnostico} diagnóstico</span>
+                      <span>🔧 {enCurso} en curso</span>
+                      <span>✅ {listasHoy} listas hoy</span>
+                    </div>
+
+                    {/* Carga relativa y tiempo promedio: comparan técnicos entre
+                        sí, así que quedan reservados a quien puede ver
+                        Estadísticas (sección 10 del rediseño). */}
+                    {puedeVerEstadisticas && (
+                      <div className="flex flex-col gap-1">
+                        <div className="h-1.5 rounded-full bg-canvas dark:bg-dark-bg overflow-hidden" aria-hidden="true">
+                          <div className="h-full bg-accent dark:bg-dark-accent" style={{ width: `${cargaPct}%` }} />
+                        </div>
+                        <p className="text-xs text-muted dark:text-dark-text-secondary">
+                          {completadasPeriodo.length} completada{completadasPeriodo.length === 1 ? '' : 's'} en el período
+                          {tiempoPromedioDias != null ? ` · promedio ${tiempoPromedioDias.toFixed(1)} días` : ''}
+                        </p>
+                      </div>
+                    )}
                   </button>
                 );
               })}
@@ -1294,217 +1393,5 @@ export default function ServicioTecnico() {
         </>
       )}
     </main>
-  );
-}
-
-function TarjetaReparacion({
-  r,
-  nombreTecnico,
-  guardando,
-  menuAbierto,
-  setMenuAbierto,
-  tecnicos,
-  onAsignarTecnico,
-  onCambiarEstado,
-  onWhatsApp,
-  onArchivar,
-  onEliminar,
-  onAgregarAlStock,
-  onEntregadoCliente,
-  imagenesCarpetas,
-  puedeAgregarStock,
-  extra,
-}: {
-  r: Reparacion;
-  nombreTecnico: (id: string | null) => string | undefined;
-  guardando: string | null;
-  menuAbierto: string | null;
-  setMenuAbierto: (id: string | null) => void;
-  tecnicos: Tecnico[];
-  onAsignarTecnico: (id: string, tecnicoId: string) => void;
-  onCambiarEstado: (r: Reparacion, estado: string) => void;
-  onWhatsApp: (r: Reparacion) => void;
-  onArchivar: (r: Reparacion) => void;
-  onEliminar: (r: Reparacion) => void;
-  onAgregarAlStock: (r: Reparacion) => void;
-  onEntregadoCliente: (r: Reparacion) => void;
-  imagenesCarpetas: Map<string, string>;
-  puedeAgregarStock: boolean;
-  extra?: React.ReactNode;
-}) {
-  const est = infoEstado(r.estado);
-  const presupuesto =
-    r.presupuesto_mano_obra != null || r.presupuesto_repuestos != null
-      ? `$${((r.presupuesto_mano_obra || 0) + (r.presupuesto_repuestos || 0)).toLocaleString('es-AR')}`
-      : 'pendiente';
-  const nombreCliente = r.clientes ? `${r.clientes.nombre} ${r.clientes.apellido || ''}`.trim() : null;
-
-  return (
-    <div
-      style={{ borderLeftColor: COLOR_ACENTO[est.acento] || COLOR_ACENTO.muted, borderLeftWidth: 3 }}
-      className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex flex-col gap-2"
-    >
-      <div className="flex items-start gap-3">
-        <MiniaturaDispositivo src={imagenColorDeModelo(r.modelo, r.color) ?? imagenPorNombreExacto(r.modelo, imagenesCarpetas)} />
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium truncate">
-            {r.numero_orden} · {r.modelo}
-            {r.capacidad_gb ? ` · ${r.capacidad_gb}GB` : ''}
-            {r.color ? ` · ${r.color}` : ''}
-          </p>
-          <p className="text-xs text-muted dark:text-dark-text-secondary truncate">
-            {nombreTecnico(r.tecnico_id) || 'Sin técnico'}
-            {nombreCliente ? ` · ${nombreCliente}` : ''}
-          </p>
-          {r.imei && (
-            <p className="text-xs text-muted dark:text-dark-text-secondary">
-              IMEI: <span className="font-bold font-mono text-ink dark:text-dark-text">{r.imei}</span>
-            </p>
-          )}
-        </div>
-        <div className="relative shrink-0">
-          <button
-            onClick={() => setMenuAbierto(menuAbierto === r.id ? null : r.id)}
-            className="text-lg leading-none px-1 text-muted dark:text-dark-text-secondary"
-          >
-            ⋯
-          </button>
-          {menuAbierto === r.id && (
-            <div className="absolute right-0 top-6 z-10 w-44 rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-elevated flex flex-col overflow-hidden">
-              <Link
-                href={`/servicio-tecnico/etiqueta/${r.id}`}
-                className="px-3 py-2 text-xs text-left hover:bg-canvas dark:hover:bg-dark-bg"
-              >
-                🏷️ Imprimir etiqueta
-              </Link>
-              <button
-                onClick={() => onArchivar(r)}
-                className="px-3 py-2 text-xs text-left hover:bg-canvas dark:hover:bg-dark-bg"
-              >
-                Cancelar / archivar
-              </button>
-              <button
-                onClick={() => onEliminar(r)}
-                className="px-3 py-2 text-xs text-left text-bad hover:bg-bad/10"
-              >
-                Eliminar definitivamente
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-
-      <p className="text-xs">
-        {r.cliente_id ? (
-          <span className="text-accent dark:text-dark-accent">👤 Cliente</span>
-        ) : (
-          <span className="text-muted dark:text-dark-text-secondary">🏬 Propio del local</span>
-        )}
-      </p>
-
-      {r.falla_declarada && <p className="text-xs text-muted dark:text-dark-text-secondary">{r.falla_declarada}</p>}
-
-      <div className="flex items-center gap-2 flex-wrap text-xs">
-        <EstadoBadge estado={r.estado} />
-        {r.prioridad !== 'normal' && (
-          <span className={`font-medium ${PRIORIDADES.find((p) => p.id === r.prioridad)?.color}`}>
-            {PRIORIDADES.find((p) => p.id === r.prioridad)?.label}
-          </span>
-        )}
-        {r.ubicacion_fisica && <span className="text-muted dark:text-dark-text-secondary">📍 {r.ubicacion_fisica}</span>}
-        <span className="text-muted dark:text-dark-text-secondary">Ingresó {hace(r.fecha_ingreso_servicio)}</span>
-      </div>
-
-      <p className="text-xs text-muted dark:text-dark-text-secondary">Presupuesto: {presupuesto}</p>
-
-      {extra}
-
-      {r.cliente_id ? (
-        (r.estado === 'listo_para_entregar' || r.estado === 'cancelado') && (
-          <button
-            disabled={guardando === r.id}
-            onClick={() => onEntregadoCliente(r)}
-            className="rounded-lg bg-good hover:opacity-90 transition-opacity py-2 text-center text-xs font-medium text-white disabled:opacity-40"
-          >
-            ✓ Marcar entregado al cliente
-          </button>
-        )
-      ) : (
-        // Equipo propio: "Agregar al Stock" sigue disponible tanto en "Listo
-        // para entregar" como en "Entregado"/"Cancelado" mientras no se haya
-        // agregado todavía — antes desaparecía al marcar entregado aunque
-        // nunca se hubiera agregado. Gateado al permiso de Stock, no al de
-        // gestionar servicio técnico.
-        (r.estado === 'listo_para_entregar' || r.estado === 'entregado' || r.estado === 'cancelado') &&
-        !r.agregado_a_stock &&
-        (puedeAgregarStock ? (
-          <button
-            disabled={guardando === r.id}
-            onClick={() => onAgregarAlStock(r)}
-            className="rounded-lg bg-good hover:opacity-90 transition-opacity py-2 text-center text-xs font-medium text-white disabled:opacity-40"
-          >
-            ✓ Agregar al Stock
-          </button>
-        ) : (
-          r.estado === 'entregado' && (
-            <div className="rounded-lg bg-muted/10 py-2 text-center text-xs font-medium text-muted dark:text-dark-text-secondary">
-              Entregado
-            </div>
-          )
-        ))
-      )}
-
-      {r.estado === 'entregado' && (r.cliente_id || r.agregado_a_stock) && (
-        <div className="rounded-lg bg-muted/10 py-2 text-center text-xs font-medium text-muted dark:text-dark-text-secondary">
-          {r.cliente_id ? '✓ Entregado al cliente' : '✓ Ya está en Stock'}
-        </div>
-      )}
-
-      <div className="flex gap-2">
-        <Link
-          href={`/servicio-tecnico/${r.id}`}
-          className="flex-1 rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-center text-xs font-medium text-white"
-        >
-          Abrir ficha
-        </Link>
-        {r.cliente_id && (
-          <button
-            disabled={guardando === r.id}
-            onClick={() => onWhatsApp(r)}
-            className="rounded-lg border border-good/30 text-good px-3 py-2 text-xs font-medium disabled:opacity-40"
-          >
-            WhatsApp
-          </button>
-        )}
-      </div>
-
-      <div className="grid grid-cols-2 gap-2">
-        <select
-          value={r.tecnico_id ?? ''}
-          disabled={guardando === r.id}
-          onChange={(ev) => onAsignarTecnico(r.id, ev.target.value)}
-          className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-2 text-xs disabled:opacity-40"
-        >
-          <option value="">Sin asignar</option>
-          {tecnicos.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.nombre}
-            </option>
-          ))}
-        </select>
-        <select
-          value={r.estado}
-          disabled={guardando === r.id}
-          onChange={(ev) => onCambiarEstado(r, ev.target.value)}
-          className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-2 text-xs disabled:opacity-40"
-        >
-          {ESTADOS_REPARACION.map((e) => (
-            <option key={e.id} value={e.id}>
-              {e.label}
-            </option>
-          ))}
-        </select>
-      </div>
-    </div>
   );
 }

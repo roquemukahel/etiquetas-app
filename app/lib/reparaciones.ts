@@ -147,9 +147,31 @@ export function estadosDeGrupo(grupo: GrupoEstado) {
   return ESTADOS_REPARACION.filter((e) => e.grupo === grupo).map((e) => e.id);
 }
 
-const FINALIZADOS = ['entregado', 'cancelado'];
+// Exportado para que Mi banco y Técnicos (que necesitan "demorada" fuera de
+// la página principal de Reparaciones) usen el mismo criterio en vez de
+// reimplementarlo.
+export const FINALIZADOS = ['entregado', 'cancelado'];
 const HORA = 3600 * 1000;
 const DIA = 24 * HORA;
+export const DIAS_DEMORA = 5;
+
+export function esDemorado(r: { estado: string; fecha_ingreso_servicio: string; fecha_estimada: string | null }): boolean {
+  if (FINALIZADOS.includes(r.estado)) return false;
+  const dias = (Date.now() - new Date(r.fecha_ingreso_servicio).getTime()) / DIA;
+  if (dias > DIAS_DEMORA) return true;
+  if (r.fecha_estimada && new Date(r.fecha_estimada) < new Date()) return true;
+  return false;
+}
+
+export function formatearFecha(iso: string | null): string | null {
+  if (!iso) return null;
+  return new Date(iso).toLocaleDateString('es-AR');
+}
+
+export function esHoy(iso: string | null): boolean {
+  if (!iso) return false;
+  return new Date(iso).toDateString() === new Date().toDateString();
+}
 
 export type ReparacionParaAlerta = {
   id: string;
