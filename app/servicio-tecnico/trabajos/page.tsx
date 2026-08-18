@@ -47,9 +47,10 @@ const CATEGORIAS = [
   'Otros',
 ];
 
-// Catálogo inicial que se puede cargar con un toque desde "Agregar servicios
-// por defecto" — se insertan sin precio (el dueño lo completa después); las
-// fotos viven en /public así no pesan la base de datos.
+// Catálogo inicial que se carga solo apenas el catálogo de servicios está
+// vacío (mismo criterio que ACCESORIOS_DEFAULT en app/stock/page.tsx) — se
+// insertan sin precio (el dueño lo completa después); las fotos viven en
+// /public así no pesan la base de datos.
 const TRABAJOS_DEFAULT: { nombre: string; imagen: string; categoria: string }[] = [
   { nombre: 'Cambio de batería', imagen: '/trabajos-default/cambio-bateria.webp', categoria: 'Batería y energía' },
   { nombre: 'Cambio de flex de carga', imagen: '/trabajos-default/cambio-flex-carga.webp', categoria: 'Carga y conectividad' },
@@ -102,8 +103,6 @@ export default function Servicios() {
   const [busqueda, setBusqueda] = useState('');
   const [filtroCategoria, setFiltroCategoria] = useState('');
   const [verArchivados, setVerArchivados] = useState(false);
-  const [confirmandoDefaults, setConfirmandoDefaults] = useState(false);
-  const [cargandoDefaults, setCargandoDefaults] = useState(false);
   const [menuAbierto, setMenuAbierto] = useState<string | null>(null);
 
   const [modalAbierto, setModalAbierto] = useState(false);
@@ -114,7 +113,24 @@ export default function Servicios() {
 
   const cargar = async () => {
     const { data } = await supabase.from('trabajos').select('*').order('orden_visualizacion').order('nombre');
-    setTrabajos((data as Trabajo[]) ?? []);
+    let lista = (data as Trabajo[]) ?? [];
+    // Catálogo todavía vacío: se carga el set inicial acá mismo, sin
+    // pedirle a nadie que active nada (ver comentario de TRABAJOS_DEFAULT).
+    if (lista.length === 0 && puedeGestionar) {
+      const { error: insertError } = await supabase
+        .from('trabajos')
+        .insert(TRABAJOS_DEFAULT.map((t) => ({ nombre: t.nombre, imagen_url: t.imagen, categoria: t.categoria })));
+      if (!insertError) {
+        await registrarAuditoria(supabase, {
+          accion: `cargó el catálogo de servicios por defecto (${TRABAJOS_DEFAULT.length} servicios)`,
+          entidad: 'trabajo',
+          valorNuevo: { trabajos: TRABAJOS_DEFAULT.map((t) => t.nombre) },
+        });
+        const { data: dataNueva } = await supabase.from('trabajos').select('*').order('orden_visualizacion').order('nombre');
+        lista = (dataNueva as Trabajo[]) ?? [];
+      }
+    }
+    setTrabajos(lista);
     setLoading(false);
   };
 
@@ -295,37 +311,6 @@ export default function Servicios() {
     cargar();
   };
 
-  const cargarTrabajosDefault = async () => {
-    if (!puedeGestionar) return;
-    setCargandoDefaults(true);
-    setError(null);
-    // Si ya se cargaron antes (o el dueño ya tenía un servicio con ese
-    // nombre), no los duplicamos.
-    const nombresExistentes = new Set(trabajos.map((t) => t.nombre.trim().toLowerCase()));
-    const aInsertar = TRABAJOS_DEFAULT.filter((t) => !nombresExistentes.has(t.nombre.toLowerCase()));
-    if (aInsertar.length === 0) {
-      setConfirmandoDefaults(false);
-      setCargandoDefaults(false);
-      return;
-    }
-    const { error: insertError } = await supabase
-      .from('trabajos')
-      .insert(aInsertar.map((t) => ({ nombre: t.nombre, imagen_url: t.imagen, categoria: t.categoria })));
-    if (insertError) {
-      setError('No pudimos cargar los servicios por defecto: ' + insertError.message);
-      setCargandoDefaults(false);
-      return;
-    }
-    await registrarAuditoria(supabase, {
-      accion: `cargó el catálogo de servicios por defecto (${aInsertar.length} servicio${aInsertar.length === 1 ? '' : 's'})`,
-      entidad: 'trabajo',
-      valorNuevo: { trabajos: aInsertar.map((t) => t.nombre) },
-    });
-    setConfirmandoDefaults(false);
-    setCargandoDefaults(false);
-    cargar();
-  };
-
   const hayFiltrosActivos = busqueda.trim() !== '' || filtroCategoria !== '' || verArchivados;
   const limpiarFiltros = () => {
     setBusqueda('');
@@ -363,55 +348,8 @@ export default function Servicios() {
           No tenés permiso para gestionar Servicio Técnico — solo podés ver el catálogo.
         </p>
       )}
-
-      {trabajos.length === 0 && !loading && puedeGestionar && (
-        <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-4 py-3 flex flex-col gap-3">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-medium">Agregar servicios por defecto</p>
-              <p className="text-xs text-muted dark:text-dark-text-secondary">
-                Carga un catálogo inicial con imagen: cambio de batería, flex de carga, cámara trasera, módulo, tapa y
-                limpieza de pin de carga.
-              </p>
-            </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={confirmandoDefaults}
-              onClick={() => setConfirmandoDefaults((v) => !v)}
-              className={`shrink-0 relative h-7 w-12 rounded-full transition-colors ${
-                confirmandoDefaults ? 'bg-accent dark:bg-dark-accent' : 'bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border'
-              }`}
-            >
-              <span
-                className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-                  confirmandoDefaults ? 'translate-x-6' : 'translate-x-1'
-                }`}
-              />
-            </button>
-          </div>
-          {confirmandoDefaults && (
-            <div className="rounded-lg border border-accent/30 dark:border-dark-accent/30 bg-accent-soft dark:bg-dark-accent-soft px-3 py-2.5 flex flex-col gap-2">
-              <p className="text-xs">Una vez que actives esta opción, se cargarán servicios por defecto. ¿Deseás hacerlo?</p>
-              <div className="flex gap-2">
-                <button
-                  disabled={cargandoDefaults}
-                  onClick={cargarTrabajosDefault}
-                  className="rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
-                >
-                  {cargandoDefaults ? 'Cargando…' : 'Sí, cargar'}
-                </button>
-                <button
-                  disabled={cargandoDefaults}
-                  onClick={() => setConfirmandoDefaults(false)}
-                  className="rounded-lg border border-border dark:border-dark-border px-3 py-1.5 text-xs font-medium disabled:opacity-40"
-                >
-                  Cancelar
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
+      {!loading && trabajos.length === 0 && (
+        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Todavía no cargaste servicios.</p>
       )}
 
       {trabajos.length > 0 && (

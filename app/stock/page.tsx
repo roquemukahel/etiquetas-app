@@ -648,6 +648,23 @@ export default function Stock() {
           return;
         }
       }
+      // Accesorios que ya existían de antes de que tuvieran foto en el
+      // catálogo por defecto (ej. se habían cargado a mano con el mismo
+      // nombre, o el ítem se agregó a ACCESORIOS_DEFAULT después): si el
+      // nombre coincide con uno del catálogo pero le falta la imagen, se la
+      // completa sola en vez de dejarlo con el ícono genérico para siempre.
+      if (data.length > 0 && puedeAgregarStock) {
+        const porNombre = new Map(ACCESORIOS_DEFAULT.map((a) => [a.nombre.trim().toLowerCase(), a.imagen]));
+        const sinFoto = data.filter((p) => !p.imagen_url && porNombre.has(p.nombre.trim().toLowerCase()));
+        if (sinFoto.length > 0) {
+          await Promise.all(
+            sinFoto.map((p) => supabase.from('productos').update({ imagen_url: porNombre.get(p.nombre.trim().toLowerCase()) }).eq('id', p.id))
+          );
+          setProductos(await obtenerTodasLasFilas<Producto>(supabase, 'productos', '*', [{ columna: 'nombre' }]));
+          setLoadingProductos(false);
+          return;
+        }
+      }
       setProductos(data);
       setLoadingProductos(false);
     })();
@@ -1578,28 +1595,28 @@ export default function Stock() {
             <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Todavía no cargaste productos.</p>
           )}
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
             {productos.map((p, i) => (
               <div
                 key={p.id}
-                className="group relative rounded-2xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-3 flex flex-col items-center gap-1.5 text-center overflow-hidden"
+                className="group relative rounded-2xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-2 flex flex-col items-center gap-1.5 text-center overflow-hidden"
               >
                 {p.cantidad === 0 && (
                   <span className="absolute top-2 left-2 text-[10px] font-semibold text-bad bg-bad/10 rounded-full px-2 py-0.5 z-10">
                     Sin stock
                   </span>
                 )}
-                <label className="cursor-pointer pt-1">
-                  <span className="block animate-flotar" style={{ animationDelay: `${(i % 3) * 0.4}s` }}>
+                <label className="cursor-pointer pt-1 w-full">
+                  <span className="block w-full aspect-square animate-flotar" style={{ animationDelay: `${(i % 3) * 0.4}s` }}>
                     {p.imagen_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={p.imagen_url}
                         alt={p.nombre}
-                        className="h-28 w-28 object-contain drop-shadow-md transition-transform duration-300 ease-out group-hover:animate-vaivenLateral"
+                        className="h-full w-full object-contain drop-shadow-md transition-transform duration-300 ease-out group-hover:animate-vaivenLateral"
                       />
                     ) : (
-                      <div className="h-28 w-28 rounded-xl bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border flex items-center justify-center text-3xl">
+                      <div className="h-full w-full rounded-xl bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border flex items-center justify-center text-3xl">
                         📷
                       </div>
                     )}

@@ -27,6 +27,7 @@ import Avatar from '../Avatar';
 import SelectorColorAuto from '../SelectorColorAuto';
 import CheckTri from '../CheckTri';
 import TextoCondicionGenerado from '../TextoCondicionGenerado';
+import CatalogoCard from '../CatalogoCard';
 import ServicioTecnicoTabs from '../ServicioTecnicoTabs';
 import TarjetaReparacion, { Reparacion, Tecnico } from './TarjetaReparacion';
 import MiBanco from './MiBanco';
@@ -49,7 +50,10 @@ type EquipoIngreso = {
   falla: string;
   ubicacion: string;
   checklist: ChecklistIngreso;
+  trabajos: string[];
 };
+
+type TrabajoCatalogo = { id: string; nombre: string; precio: number | null; imagen_url: string | null };
 
 type Cliente = { id: string; nombre: string; apellido: string | null; telefono: string | null };
 
@@ -158,6 +162,12 @@ export default function ServicioTecnico() {
   const [nuevoChecklist, setNuevoChecklist] = useState<Record<string, boolean | null>>({});
   const [nuevaHumedad, setNuevaHumedad] = useState<boolean | null>(null);
   const [nuevaExcepcionGarantia, setNuevaExcepcionGarantia] = useState('');
+  // Arreglo(s) que se sabe de entrada que se le van a hacer al equipo (ej.
+  // "cambio de batería") — opcional: muchas veces recién se sabe después del
+  // diagnóstico. Selección múltiple porque un mismo ingreso puede necesitar
+  // más de un arreglo (ej. batería + módulo).
+  const [nuevosTrabajos, setNuevosTrabajos] = useState<string[]>([]);
+  const [catalogoTrabajos, setCatalogoTrabajos] = useState<TrabajoCatalogo[]>([]);
 
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [clienteInput, setClienteInput] = useState('');
@@ -197,6 +207,10 @@ export default function ServicioTecnico() {
     (async () => {
       const { data } = await supabase.from('repuestos').select('id, nombre, cantidad_stock, cantidad_reservada, stock_minimo');
       setRepuestosParaAlertas((data as RepuestoParaAlerta[]) ?? []);
+    })();
+    (async () => {
+      const { data } = await supabase.from('trabajos').select('id, nombre, precio, imagen_url').eq('activo', true).order('nombre');
+      setCatalogoTrabajos((data as TrabajoCatalogo[]) ?? []);
     })();
     (async () => {
       const {
@@ -377,6 +391,7 @@ export default function ServicioTecnico() {
         falla: nuevaFalla.trim(),
         ubicacion: nuevaUbicacion.trim(),
         checklist: datosChecklistNuevo(),
+        trabajos: nuevosTrabajos,
       }
     : null;
   const equiposEfectivos: EquipoIngreso[] = equipoEnProgreso ? [...equiposAgregados, equipoEnProgreso] : equiposAgregados;
@@ -395,7 +410,11 @@ export default function ServicioTecnico() {
     setNuevoChecklist({});
     setNuevaHumedad(null);
     setNuevaExcepcionGarantia('');
+    setNuevosTrabajos([]);
   };
+
+  const toggleNuevoTrabajo = (nombre: string) =>
+    setNuevosTrabajos((prev) => (prev.includes(nombre) ? prev.filter((n) => n !== nombre) : [...prev, nombre]));
 
   const quitarEquipoAgregado = (tempId: string) => setEquiposAgregados((eqs) => eqs.filter((e) => e.tempId !== tempId));
 
@@ -459,12 +478,18 @@ export default function ServicioTecnico() {
           // ingreso, pero antes se perdían: la boleta solo mostraba "Servicio
           // técnico — {modelo}". Se arma igual que la línea de un dispositivo
           // vendido (ver agregarDispositivoDelStock en Nueva Orden) para que
-          // toda esa info quede visible en la boleta.
+          // toda esa info quede visible en la boleta. Si ya se sabe qué
+          // arreglo(s) se le van a hacer (catálogo elegido acá mismo), se
+          // suman al texto y su precio se usa como precio de la línea — igual
+          // que al agregar un trabajo del catálogo desde Nueva Orden.
           descripcion: `Servicio técnico — ${eq.modelo}${eq.capacidad_gb ? ` ${eq.capacidad_gb}GB` : ''}${
             eq.color ? ` ${eq.color}` : ''
-          }${eq.imei ? ` · IMEI ${eq.imei}` : ''}`,
+          }${eq.imei ? ` · IMEI ${eq.imei}` : ''}${eq.trabajos.length > 0 ? ` (${eq.trabajos.join(', ')})` : ''}`,
           cantidad: 1,
-          precio_unitario: 0,
+          precio_unitario: eq.trabajos.reduce(
+            (suma, nombre) => suma + (catalogoTrabajos.find((t) => t.nombre === nombre)?.precio ?? 0),
+            0
+          ),
           tipo: 'trabajo',
         }))
       );
@@ -485,6 +510,7 @@ export default function ServicioTecnico() {
           imei: limpiarImei(eq.imei),
           falla_declarada: eq.falla || null,
           ubicacion_fisica: eq.ubicacion || null,
+          trabajos_realizados: eq.trabajos.length > 0 ? eq.trabajos : null,
           estado: 'recibido',
           cliente_id: clienteId,
           tecnico_id: asignadoTecnicoId || null,
@@ -541,6 +567,7 @@ export default function ServicioTecnico() {
     setNuevoChecklist({});
     setNuevaHumedad(null);
     setNuevaExcepcionGarantia('');
+    setNuevosTrabajos([]);
     setPanelNuevo(false);
     setGuardandoNuevo(false);
     cargar();
@@ -886,6 +913,32 @@ export default function ServicioTecnico() {
                 className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
               />
               <TextoCondicionGenerado datos={datosChecklistNuevo()} />
+
+              <div className="flex flex-col gap-2 border-t border-border dark:border-dark-border pt-3 mt-1">
+                <p className="text-xs font-medium text-muted dark:text-dark-text-secondary">
+                  ¿Ya se sabe qué arreglo se le va a hacer? (opcional — se puede dejar para después del diagnóstico)
+                </p>
+                {catalogoTrabajos.length === 0 ? (
+                  <p className="text-xs text-muted dark:text-dark-text-secondary">
+                    Todavía no cargaste servicios en Servicio Técnico &gt; Servicios.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 max-h-96 overflow-y-auto">
+                    {catalogoTrabajos.map((t, i) => (
+                      <CatalogoCard
+                        key={t.id}
+                        nombre={t.nombre}
+                        imagenUrl={t.imagen_url}
+                        precio={t.precio}
+                        emoji="🔧"
+                        animIndex={i}
+                        seleccionado={nuevosTrabajos.includes(t.nombre)}
+                        onClick={() => toggleNuevoTrabajo(t.nombre)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
 
               <input
                 value={nuevaUbicacion}
