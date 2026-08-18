@@ -20,6 +20,7 @@ import {
   CAMPOS_DEPENDEN_MODULO,
   generarTextoCondicionIngreso,
   ChecklistIngreso,
+  RepuestoParaAlerta,
 } from '../lib/reparaciones';
 import Avatar from '../Avatar';
 import SelectorColorAuto from '../SelectorColorAuto';
@@ -193,6 +194,10 @@ export default function ServicioTecnico() {
       setClientes(await obtenerTodasLasFilas<Cliente>(supabase, 'clientes', 'id, nombre, apellido, telefono', [{ columna: 'nombre' }]));
     })();
     (async () => {
+      const { data } = await supabase.from('repuestos').select('id, nombre, cantidad_stock, cantidad_reservada, stock_minimo');
+      setRepuestosParaAlertas((data as RepuestoParaAlerta[]) ?? []);
+    })();
+    (async () => {
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -296,7 +301,34 @@ export default function ServicioTecnico() {
     return Date.now() - new Date(iso).getTime() <= dias * 86400000;
   };
 
-  const alertas = useMemo(() => calcularAlertas(reparaciones), [reparaciones]);
+  const [repuestosParaAlertas, setRepuestosParaAlertas] = useState<RepuestoParaAlerta[]>([]);
+  // "Descartar" una alerta la oculta en este navegador (sección 22: poder
+  // marcarla como resuelta) — no hay una tabla de alertas en la base (son
+  // calculadas, no filas propias), así que el descarte queda local; si la
+  // causa sigue vigente más adelante (ej. sigue sin técnico varios días
+  // después), vuelve a aparecer con una key distinta.
+  const [alertasDescartadas, setAlertasDescartadas] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    try {
+      const guardado = localStorage.getItem('servicioTecnicoAlertasDescartadas');
+      if (guardado) setAlertasDescartadas(new Set(JSON.parse(guardado)));
+    } catch {}
+  }, []);
+  const descartarAlerta = (key: string) => {
+    setAlertasDescartadas((prev) => {
+      const next = new Set(prev);
+      next.add(key);
+      try {
+        localStorage.setItem('servicioTecnicoAlertasDescartadas', JSON.stringify(Array.from(next)));
+      } catch {}
+      return next;
+    });
+  };
+  const alertasKey = (a: { tipo: string; id: string; categoria: string }) => `${a.tipo}:${a.id}:${a.categoria}`;
+  const alertas = useMemo(
+    () => calcularAlertas(reparaciones, repuestosParaAlertas).filter((a) => !alertasDescartadas.has(alertasKey(a))),
+    [reparaciones, repuestosParaAlertas, alertasDescartadas]
+  );
   const [alertasAbiertas, setAlertasAbiertas] = useState(false);
 
   const historialTecnico = useMemo(
@@ -1250,14 +1282,18 @@ export default function ServicioTecnico() {
               {alertasAbiertas && (
                 <div className="flex flex-col border-t border-warn/20">
                   {alertas.map((a) => (
-                    <Link
-                      key={a.id}
-                      href={`/servicio-tecnico/${a.id}`}
-                      className="flex items-center gap-2 px-4 py-2 text-xs hover:bg-white/40 dark:hover:bg-black/10"
-                    >
+                    <div key={alertasKey(a)} className="flex items-center gap-2 px-4 py-2 text-xs hover:bg-white/40 dark:hover:bg-black/10">
                       <span className={`h-2 w-2 rounded-full shrink-0 ${a.color === 'bad' ? 'bg-bad' : 'bg-warn'}`} />
-                      {a.texto}
-                    </Link>
+                      <Link href={a.tipo === 'repuesto' ? '/servicio-tecnico/stock' : `/servicio-tecnico/${a.id}`} className="flex-1 min-w-0 truncate">
+                        {a.texto}
+                      </Link>
+                      <button
+                        onClick={() => descartarAlerta(alertasKey(a))}
+                        className="shrink-0 text-muted dark:text-dark-text-secondary hover:text-ink dark:hover:text-dark-text underline"
+                      >
+                        Descartar
+                      </button>
+                    </div>
                   ))}
                 </div>
               )}

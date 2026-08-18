@@ -233,11 +233,38 @@ export type ReparacionParaAlerta = {
   garantia_dias: number | null;
 };
 
-export type Alerta = { id: string; texto: string; color: 'bad' | 'warn' };
+export type CategoriaAlerta =
+  | 'fecha_vencida'
+  | 'lista_sin_retirar'
+  | 'sin_tecnico'
+  | 'diagnostico_demorado'
+  | 'esperando_aprobacion'
+  | 'esperando_repuesto'
+  | 'garantia_por_vencer'
+  | 'sin_actualizaciones'
+  | 'stock_bajo'
+  | 'sin_stock';
+
+// "tipo" distingue a qué entidad apunta el link de la alerta ('reparacion'
+// → /servicio-tecnico/{id}, 'repuesto' → no tiene ficha propia, va a
+// /servicio-tecnico/stock). "antiguedadMs" es para poder ordenar/mostrar
+// "hace X" sin recalcular la resta en cada lugar que use la alerta.
+export type Alerta = {
+  id: string;
+  tipo: 'reparacion' | 'repuesto';
+  categoria: CategoriaAlerta;
+  texto: string;
+  color: 'bad' | 'warn';
+  antiguedadMs: number;
+};
+
+export type RepuestoParaAlerta = { id: string; nombre: string; cantidad_stock: number; cantidad_reservada: number; stock_minimo: number | null };
 
 // Una alerta por reparación como mucho (la más urgente), para no
-// saturar la lista con varias líneas del mismo equipo.
-export function calcularAlertas(reparaciones: ReparacionParaAlerta[]): Alerta[] {
+// saturar la lista con varias líneas del mismo equipo. `repuestos` es
+// opcional para no romper a quien ya llamaba calcularAlertas(reparaciones)
+// sin ese segundo argumento (Fase 1/2, ya en producción).
+export function calcularAlertas(reparaciones: ReparacionParaAlerta[], repuestos: RepuestoParaAlerta[] = []): Alerta[] {
   const ahora = Date.now();
   const alertas: Alerta[] = [];
 
@@ -245,38 +272,53 @@ export function calcularAlertas(reparaciones: ReparacionParaAlerta[]): Alerta[] 
     const titulo = `${r.numero_orden || ''} ${r.modelo || 'equipo'}`.trim();
     const activa = !FINALIZADOS.includes(r.estado);
     const msEnEstado = ahora - new Date(r.estado_actualizado_at).getTime();
+    const push = (categoria: CategoriaAlerta, texto: string, color: 'bad' | 'warn', antiguedadMs: number) =>
+      alertas.push({ id: r.id, tipo: 'reparacion', categoria, texto: `${titulo} — ${texto}`, color, antiguedadMs });
 
     if (activa && r.fecha_estimada && new Date(r.fecha_estimada + 'T00:00:00').getTime() < ahora) {
-      alertas.push({ id: r.id, texto: `${titulo} — fecha prometida vencida`, color: 'bad' });
+      push('fecha_vencida', 'fecha prometida vencida', 'bad', ahora - new Date(r.fecha_estimada + 'T00:00:00').getTime());
       continue;
     }
     if (r.estado === 'listo_para_entregar' && msEnEstado > 7 * DIA) {
-      alertas.push({ id: r.id, texto: `${titulo} — listo hace más de 7 días sin retirar`, color: 'bad' });
+      push('lista_sin_retirar', 'listo hace más de 7 días sin retirar', 'bad', msEnEstado);
       continue;
     }
     if (activa && !r.tecnico_id && ahora - new Date(r.fecha_ingreso_servicio).getTime() > 24 * HORA) {
-      alertas.push({ id: r.id, texto: `${titulo} — sin técnico asignado hace más de 24 horas`, color: 'warn' });
+      push('sin_tecnico', 'sin técnico asignado hace más de 24 horas', 'warn', ahora - new Date(r.fecha_ingreso_servicio).getTime());
+      continue;
+    }
+    if (r.estado === 'esperando_diagnostico' && msEnEstado > 48 * HORA) {
+      push('diagnostico_demorado', 'esperando diagnóstico hace más de 48 horas', 'warn', msEnEstado);
       continue;
     }
     if (r.estado === 'esperando_aprobacion' && msEnEstado > 48 * HORA) {
-      alertas.push({ id: r.id, texto: `${titulo} — presupuesto sin responder hace más de 48 horas`, color: 'warn' });
+      push('esperando_aprobacion', 'presupuesto sin responder hace más de 48 horas', 'warn', msEnEstado);
       continue;
     }
     if (r.estado === 'esperando_repuesto' && msEnEstado > 3 * DIA) {
-      alertas.push({ id: r.id, texto: `${titulo} — esperando un repuesto hace más de 3 días`, color: 'warn' });
+      push('esperando_repuesto', 'esperando un repuesto hace más de 3 días', 'warn', msEnEstado);
       continue;
     }
     if (r.estado === 'entregado' && r.fecha_entrega && r.garantia_dias) {
       const vencimiento = new Date(r.fecha_entrega).getTime() + r.garantia_dias * DIA;
       if (vencimiento > ahora && vencimiento - ahora < 7 * DIA) {
-        alertas.push({ id: r.id, texto: `${titulo} — la garantía vence esta semana`, color: 'warn' });
+        push('garantia_por_vencer', 'la garantía vence esta semana', 'warn', ahora - new Date(r.fecha_entrega).getTime());
         continue;
       }
     }
     if (activa && msEnEstado > 10 * DIA) {
-      alertas.push({ id: r.id, texto: `${titulo} — sin actualizaciones hace más de 10 días`, color: 'warn' });
+      push('sin_actualizaciones', 'sin actualizaciones hace más de 10 días', 'warn', msEnEstado);
     }
   }
 
-  return alertas.sort((a, b) => (a.color === b.color ? 0 : a.color === 'bad' ? -1 : 1));
+  for (const rp of repuestos) {
+    const disponible = rp.cantidad_stock - rp.cantidad_reservada;
+    if (disponible <= 0) {
+      alertas.push({ id: rp.id, tipo: 'repuesto', categoria: 'sin_stock', texto: `${rp.nombre} — sin stock disponible`, color: 'bad', antiguedadMs: 0 });
+    } else if (rp.stock_minimo != null && disponible <= rp.stock_minimo) {
+      alertas.push({ id: rp.id, tipo: 'repuesto', categoria: 'stock_bajo', texto: `${rp.nombre} — quedan ${disponible} (mínimo ${rp.stock_minimo})`, color: 'warn', antiguedadMs: 0 });
+    }
+  }
+
+  return alertas.sort((a, b) => (a.color === b.color ? b.antiguedadMs - a.antiguedadMs : a.color === 'bad' ? -1 : 1));
 }
