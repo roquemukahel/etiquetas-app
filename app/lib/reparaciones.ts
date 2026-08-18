@@ -173,6 +173,42 @@ export function esHoy(iso: string | null): boolean {
   return new Date(iso).toDateString() === new Date().toDateString();
 }
 
+// Checklist genérico de control de calidad (sección 17) para cuando
+// ninguno de los servicios realizados tiene su propio checklist_tecnico
+// cargado (Fase 4) — mismo listado de ejemplo del rediseño.
+export const CHECKLIST_CALIDAD_GENERICO: string[] = [
+  'Encendido',
+  'Pantalla',
+  'Táctil',
+  'Brillo',
+  'Face ID / Touch ID',
+  'Cámara frontal',
+  'Cámaras traseras',
+  'Micrófono superior',
+  'Micrófono inferior',
+  'Altavoces',
+  'Auricular',
+  'Conector de carga',
+  'Carga inalámbrica',
+  'Señal',
+  'Wi-Fi',
+  'Bluetooth',
+  'Botones',
+  'Sensor de proximidad',
+  'Estado de batería',
+  'Tornillos',
+  'Sellado',
+  'Limpieza final',
+  'Estado estético',
+];
+
+export const TIPOS_INGRESO: { id: string; label: string }[] = [
+  { id: 'nueva', label: 'Reparación nueva' },
+  { id: 'garantia', label: 'Garantía' },
+  { id: 'retrabajo', label: 'Retrabajo' },
+  { id: 'reincidencia_no_cubierta', label: 'Reincidencia no cubierta' },
+];
+
 export function hace(iso: string): string {
   const ms = Date.now() - new Date(iso).getTime();
   const min = Math.floor(ms / 60000);

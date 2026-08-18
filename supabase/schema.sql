@@ -2800,3 +2800,30 @@ alter table reparaciones add column if not exists presupuesto_medio text;
 alter table reparaciones add column if not exists presupuesto_respondido_at timestamptz;
 alter table reparaciones add column if not exists presupuesto_importe_aceptado numeric;
 alter table reparaciones add column if not exists presupuesto_texto_aceptado text;
+
+-- ============================================================
+-- Servicio Técnico PRO — Fase 6: control de calidad + garantías y
+-- retrabajos. Ver control_calidad_garantias_supabase.sql (patch real:
+-- tabla reparaciones_control_calidad + columnas aditivas).
+-- ============================================================
+create table if not exists reparaciones_control_calidad (
+  id uuid primary key default gen_random_uuid(),
+  negocio_id uuid not null references negocios(id) on delete cascade default negocio_actual(),
+  reparacion_id uuid not null references reparaciones(id) on delete cascade,
+  item text not null,
+  resultado text not null,
+  observacion text,
+  foto_url text,
+  actor_nombre text,
+  created_at timestamptz not null default now(),
+  unique (reparacion_id, item)
+);
+
+alter table reparaciones_control_calidad enable row level security;
+create policy "reparaciones_control_calidad de mi negocio" on reparaciones_control_calidad
+  for all using (negocio_id = negocio_actual())
+  with check (negocio_id = negocio_actual());
+
+alter table reparaciones add column if not exists control_calidad_override boolean not null default false;
+alter table reparaciones add column if not exists tipo_ingreso text;
+alter table reparaciones add column if not exists reparacion_relacionada_id uuid references reparaciones(id) on delete set null;
