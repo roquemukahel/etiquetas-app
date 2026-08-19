@@ -389,8 +389,17 @@ $$;
 --    (bind params reales, cero riesgo de inyección); lo único que entra
 --    por %I/%s es el nombre de columna de orden, y ese sale de un CASE
 --    fijo (v_campo), nunca del texto que mandó el cliente directo.
+--
+--    Se dropea antes de crearla: reemplazarla varias veces seguidas con
+--    "create or replace" (mientras se ajustaba durante el desarrollo)
+--    dejó en un momento la firma de columnas de salida desincronizada
+--    del cuerpo real, y Postgres tiraba "structure of query does not
+--    match function result type" en cada llamada. drop + create
+--    garantiza que no quede nada pisado de una versión anterior.
 -- ============================================================
-create or replace function admin_negocios_directorio(
+drop function if exists admin_negocios_directorio(text, text, text, text, text, int, int);
+
+create function admin_negocios_directorio(
   p_busqueda text default null,
   p_vista text default 'todos',
   p_plan text default null,
