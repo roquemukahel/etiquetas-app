@@ -39,6 +39,12 @@ type Comprobante = {
   created_at: string;
 };
 
+type ComprobanteHistorial = Comprobante & {
+  estado: string;
+  nota_admin: string | null;
+  revisado_at: string | null;
+};
+
 function formatearFecha(iso: string) {
   return new Date(iso).toLocaleDateString('es-AR');
 }
@@ -96,6 +102,9 @@ export default function AdminPanel() {
   const [editDias, setEditDias] = useState('');
   const [editSinVencimiento, setEditSinVencimiento] = useState(false);
 
+  const [historialPorNegocio, setHistorialPorNegocio] = useState<Record<string, ComprobanteHistorial[]>>({});
+  const [cargandoHistorial, setCargandoHistorial] = useState<string | null>(null);
+
   const [negocioAEliminar, setNegocioAEliminar] = useState<Negocio | null>(null);
   const [confirmNombre, setConfirmNombre] = useState('');
   const [errorEliminar, setErrorEliminar] = useState<string | null>(null);
@@ -137,6 +146,16 @@ export default function AdminPanel() {
     setEditPlan(n.plan ?? '');
     setEditDias('');
     setEditSinVencimiento(false);
+    // Se pide solo al expandir (no para los N negocios de la lista de una)
+    // y se cachea por negocio — cada aprobación/rechazo nuevo lo refresca
+    // solo si se vuelve a expandir.
+    if (!historialPorNegocio[n.id]) {
+      setCargandoHistorial(n.id);
+      supabase.rpc('admin_listar_comprobantes', { negocio_id_param: n.id }).then(({ data }) => {
+        setHistorialPorNegocio((prev) => ({ ...prev, [n.id]: (data as ComprobanteHistorial[]) ?? [] }));
+        setCargandoHistorial(null);
+      });
+    }
   };
 
   const eliminarUsuario = async (n: Negocio, u: Usuario) => {
@@ -204,6 +223,15 @@ export default function AdminPanel() {
     setPlanAprobar('mensual');
   };
 
+  // Saca del caché el historial de ese negocio para que, si se vuelve a
+  // expandir, se pida de nuevo en vez de mostrar el comprobante todavía
+  // como "pendiente" (el caché se llenó antes de esta aprobación/rechazo).
+  const invalidarHistorial = (negocioId: string) =>
+    setHistorialPorNegocio((prev) => {
+      const { [negocioId]: _omit, ...resto } = prev;
+      return resto;
+    });
+
   const confirmarAprobar = async (c: Comprobante) => {
     setProcesando(c.id);
     await supabase.rpc('admin_aprobar_pago', {
@@ -213,6 +241,7 @@ export default function AdminPanel() {
     });
     setProcesando(null);
     setAprobandoId(null);
+    invalidarHistorial(c.negocio_id);
     cargar();
   };
 
@@ -221,6 +250,7 @@ export default function AdminPanel() {
     setProcesando(c.id);
     await supabase.rpc('admin_rechazar_pago', { comprobante_id: c.id, motivo: motivo || null });
     setProcesando(null);
+    invalidarHistorial(c.negocio_id);
     cargar();
   };
 
@@ -527,6 +557,54 @@ export default function AdminPanel() {
                         </div>
                       ))
                     )}
+                  </div>
+
+                  <div className="flex flex-col gap-2 border-t border-border dark:border-dark-border pt-3">
+                    <p className="text-xs font-medium text-muted dark:text-dark-text-secondary">Historial de comprobantes</p>
+                    {cargandoHistorial === n.id && (
+                      <p className="text-xs text-muted dark:text-dark-text-secondary">Cargando...</p>
+                    )}
+                    {cargandoHistorial !== n.id && (historialPorNegocio[n.id]?.length ?? 0) === 0 && (
+                      <p className="text-xs text-muted dark:text-dark-text-secondary">Este negocio todavía no mandó ningún comprobante.</p>
+                    )}
+                    {(historialPorNegocio[n.id] ?? []).map((c) => (
+                      <div
+                        key={c.id}
+                        className="rounded-lg bg-white dark:bg-dark-surface border border-border dark:border-dark-border p-2 flex flex-col gap-1"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-xs font-medium">
+                            {c.monto} {c.moneda}
+                            {c.referencia && <span className="text-muted dark:text-dark-text-secondary"> · ref: {c.referencia}</span>}
+                          </p>
+                          <span
+                            className={`text-[10px] font-semibold rounded px-1.5 py-0.5 ${
+                              c.estado === 'aprobado'
+                                ? 'text-good bg-good/10'
+                                : c.estado === 'rechazado'
+                                  ? 'text-bad bg-bad/10'
+                                  : 'text-warn bg-warn/10'
+                            }`}
+                          >
+                            {c.estado}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-muted dark:text-dark-text-secondary">
+                          Enviado {formatearFecha(c.created_at)}
+                          {c.revisado_at ? ` · revisado ${formatearFecha(c.revisado_at)}` : ''}
+                        </p>
+                        {c.nota_admin && <p className="text-[10px] text-muted dark:text-dark-text-secondary">Motivo: {c.nota_admin}</p>}
+                        {c.comprobante_imagen && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={c.comprobante_imagen}
+                            alt="Comprobante"
+                            onClick={() => setImagenAmpliada(c.comprobante_imagen)}
+                            className="max-h-24 rounded-lg border border-border dark:border-dark-border cursor-pointer self-start"
+                          />
+                        )}
+                      </div>
+                    ))}
                   </div>
 
                   <div className="flex flex-col gap-2 border-t border-border dark:border-dark-border pt-3">
