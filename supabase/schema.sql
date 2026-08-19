@@ -3342,8 +3342,8 @@ begin
         (select count(*) from ordenes o where o.negocio_id = n.id) as cantidad_ordenes,
         greatest(
           n.created_at,
-          coalesce((select max(created_at) from ordenes o where o.negocio_id = n.id), n.created_at),
-          coalesce((select max(created_at) from dispositivos d where d.negocio_id = n.id), n.created_at)
+          coalesce((select max(o.created_at) from ordenes o where o.negocio_id = n.id), n.created_at),
+          coalesce((select max(d.created_at) from dispositivos d where d.negocio_id = n.id), n.created_at)
         ) as ultima_actividad,
         up.revisado_at as ultimo_pago_at,
         up.monto as ultimo_pago_monto,
@@ -3440,8 +3440,8 @@ begin
       (select count(*) from reparaciones r where r.negocio_id = n.id and r.created_at >= now() - interval '30 days'),
       greatest(
         n.created_at,
-        coalesce((select max(created_at) from ordenes o where o.negocio_id = n.id), n.created_at),
-        coalesce((select max(created_at) from dispositivos d where d.negocio_id = n.id), n.created_at)
+        coalesce((select max(o.created_at) from ordenes o where o.negocio_id = n.id), n.created_at),
+        coalesce((select max(d.created_at) from dispositivos d where d.negocio_id = n.id), n.created_at)
       ),
       coalesce((
         select jsonb_agg(jsonb_build_object(
