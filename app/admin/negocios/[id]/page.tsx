@@ -130,9 +130,17 @@ export default function AdminNegocioDetalle() {
   const [detalle, setDetalle] = useState<Detalle | null>(null);
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
+  const [errorCarga, setErrorCarga] = useState<string | null>(null);
 
   const cargar = async () => {
-    const { data } = await supabase.rpc('admin_negocio_detalle', { negocio_id_param: id });
+    const { data, error } = await supabase.rpc('admin_negocio_detalle', { negocio_id_param: id });
+    if (error) {
+      setErrorCarga(error.message);
+      setDetalle(null);
+      setCargando(false);
+      return;
+    }
+    setErrorCarga(null);
     const fila = (data as Detalle[])?.[0] ?? null;
     setDetalle(fila);
     setCargando(false);
@@ -160,6 +168,10 @@ export default function AdminNegocioDetalle() {
         <Skeleton className="h-40" />
       </div>
     );
+  }
+
+  if (errorCarga) {
+    return <EmptyState titulo="No pudimos cargar el negocio" texto={errorCarga} icono="—" />;
   }
 
   if (!detalle) {
@@ -328,7 +340,8 @@ function TabNotas({ negocioId, supabase }: { negocioId: string; supabase: any })
   const [guardando, setGuardando] = useState(false);
 
   const cargar = async () => {
-    const { data } = await supabase.rpc('admin_listar_notas', { negocio_id_param: negocioId });
+    const { data, error } = await supabase.rpc('admin_listar_notas', { negocio_id_param: negocioId });
+    if (error) console.error('admin_listar_notas:', error);
     setNotas((data as Nota[]) ?? []);
     setCargando(false);
   };
@@ -420,7 +433,8 @@ function TabAuditoria({ negocioId, supabase }: { negocioId: string; supabase: an
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase.rpc('admin_auditoria_listar', { p_negocio_id: negocioId, p_pagina: 1, p_por_pagina: 50 });
+      const { data, error } = await supabase.rpc('admin_auditoria_listar', { p_negocio_id: negocioId, p_pagina: 1, p_por_pagina: 50 });
+      if (error) console.error('admin_auditoria_listar:', error);
       setFilas((data as Auditoria[]) ?? []);
       setCargando(false);
     })();
@@ -462,7 +476,8 @@ function TabSuscripcion({ detalle, onGuardado, supabase }: { detalle: Detalle; o
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase.rpc('admin_listar_comprobantes', { negocio_id_param: detalle.id });
+      const { data, error } = await supabase.rpc('admin_listar_comprobantes', { negocio_id_param: detalle.id });
+      if (error) console.error('admin_listar_comprobantes:', error);
       setComprobantes((data as Comprobante[]) ?? []);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps

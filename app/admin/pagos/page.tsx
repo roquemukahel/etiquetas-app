@@ -51,7 +51,8 @@ export default function AdminPagos() {
 
   const cargar = useCallback(async () => {
     setCargando(true);
-    const { data } = await supabase.rpc('admin_pagos_listar', { p_estado: estado || null, p_pagina: pagina, p_por_pagina: porPagina });
+    const { data, error } = await supabase.rpc('admin_pagos_listar', { p_estado: estado || null, p_pagina: pagina, p_por_pagina: porPagina });
+    if (error) console.error('admin_pagos_listar:', error);
     const filas = (data as Pago[]) ?? [];
     setPagos(filas);
     setTotalCount(filas[0]?.total_count ?? 0);

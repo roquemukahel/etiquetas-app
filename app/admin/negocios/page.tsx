@@ -152,7 +152,9 @@ export default function AdminNegocios() {
       p_pagina: filtros.pagina,
       p_por_pagina: filtros.porPagina,
     });
-    if (!error) {
+    if (error) {
+      console.error('admin_negocios_directorio:', error);
+    } else {
       const filasData = (data as Fila[]) ?? [];
       setFilas(filasData);
       setTotalCount(filasData[0]?.total_count ?? 0);

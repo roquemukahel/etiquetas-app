@@ -32,7 +32,8 @@ export default function AdminAuditoria() {
 
   const cargar = useCallback(async () => {
     setCargando(true);
-    const { data } = await supabase.rpc('admin_auditoria_listar', { p_negocio_id: null, p_pagina: pagina, p_por_pagina: porPagina });
+    const { data, error } = await supabase.rpc('admin_auditoria_listar', { p_negocio_id: null, p_pagina: pagina, p_por_pagina: porPagina });
+    if (error) console.error('admin_auditoria_listar:', error);
     const f = (data as Fila[]) ?? [];
     setFilas(f);
     setTotalCount(f[0]?.total_count ?? 0);

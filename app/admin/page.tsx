@@ -64,12 +64,17 @@ export default function AdminResumen() {
     (async () => {
       const desdeIso = rango.desde.toISOString();
       const hastaIso = rango.hasta.toISOString();
-      const [{ data: m }, { data: ev }, { data: uso }] = await Promise.all([
+      const [
+        { data: m, error: errM },
+        { data: ev, error: errEv },
+        { data: uso, error: errUso },
+      ] = await Promise.all([
         supabase.rpc('admin_resumen_metricas', { p_desde: desdeIso, p_hasta: hastaIso }),
         supabase.rpc('admin_evolucion_registros', { p_desde: desdeIso, p_hasta: hastaIso }),
         supabase.rpc('admin_uso_por_modulo', { p_desde: desdeIso, p_hasta: hastaIso }),
       ]);
       if (cancelado) return;
+      if (errM || errEv || errUso) console.error('admin resumen:', errM ?? errEv ?? errUso);
       setMetricas((m as Metricas) ?? null);
       setEvolucion((ev as { dia: string; cantidad: number }[]) ?? []);
       setUsoPorModulo((uso as Record<string, number>) ?? null);
@@ -83,11 +88,16 @@ export default function AdminResumen() {
 
   useEffect(() => {
     (async () => {
-      const [{ data: al }, { data: dp }, { data: emb }] = await Promise.all([
+      const [
+        { data: al, error: errAl },
+        { data: dp, error: errDp },
+        { data: emb, error: errEmb },
+      ] = await Promise.all([
         supabase.rpc('admin_alertas'),
         supabase.rpc('admin_distribucion_planes'),
         supabase.rpc('admin_embudo'),
       ]);
+      if (errAl || errDp || errEmb) console.error('admin resumen (alertas/planes/embudo):', errAl ?? errDp ?? errEmb);
       setAlertas((al as Alerta[]) ?? []);
       setDistribucionPlanes((dp as { plan: string; cantidad: number }[]) ?? []);
       setEmbudo((emb as Record<string, number>) ?? null);
