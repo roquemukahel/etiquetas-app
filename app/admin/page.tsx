@@ -55,6 +55,7 @@ export default function AdminResumen() {
   const [usoPorModulo, setUsoPorModulo] = useState<Record<string, number> | null>(null);
   const [embudo, setEmbudo] = useState<Record<string, number> | null>(null);
   const [cargando, setCargando] = useState(true);
+  const [errorCarga, setErrorCarga] = useState<string | null>(null);
 
   const rango = useMemo(() => rangoDePeriodo(periodo, desdePersonalizado, hastaPersonalizado), [periodo, desdePersonalizado, hastaPersonalizado]);
 
@@ -74,7 +75,13 @@ export default function AdminResumen() {
         supabase.rpc('admin_uso_por_modulo', { p_desde: desdeIso, p_hasta: hastaIso }),
       ]);
       if (cancelado) return;
-      if (errM || errEv || errUso) console.error('admin resumen:', errM ?? errEv ?? errUso);
+      const errorPrincipal = errM ?? errEv ?? errUso;
+      if (errorPrincipal) {
+        console.error('admin resumen:', errorPrincipal);
+        setErrorCarga(errorPrincipal.message);
+      } else {
+        setErrorCarga(null);
+      }
       setMetricas((m as Metricas) ?? null);
       setEvolucion((ev as { dia: string; cantidad: number }[]) ?? []);
       setUsoPorModulo((uso as Record<string, number>) ?? null);
@@ -132,6 +139,12 @@ export default function AdminResumen() {
           }}
         />
       </header>
+
+      {errorCarga && (
+        <div className="rounded-xl border border-bad/30 bg-bad/10 px-4 py-3 text-sm text-bad">
+          No pudimos cargar las métricas: {errorCarga}
+        </div>
+      )}
 
       {/* Centro de alertas */}
       <SeccionCard

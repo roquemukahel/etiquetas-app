@@ -48,11 +48,20 @@ export default function AdminPagos() {
   const [diasAprobar, setDiasAprobar] = useState('30');
   const [planAprobar, setPlanAprobar] = useState('mensual');
   const [imagenAmpliada, setImagenAmpliada] = useState<string | null>(null);
+  const [errorCarga, setErrorCarga] = useState<string | null>(null);
 
   const cargar = useCallback(async () => {
     setCargando(true);
     const { data, error } = await supabase.rpc('admin_pagos_listar', { p_estado: estado || null, p_pagina: pagina, p_por_pagina: porPagina });
-    if (error) console.error('admin_pagos_listar:', error);
+    if (error) {
+      console.error('admin_pagos_listar:', error);
+      setErrorCarga(error.message);
+      setPagos([]);
+      setTotalCount(0);
+      setCargando(false);
+      return;
+    }
+    setErrorCarga(null);
     const filas = (data as Pago[]) ?? [];
     setPagos(filas);
     setTotalCount(filas[0]?.total_count ?? 0);
@@ -72,8 +81,16 @@ export default function AdminPagos() {
 
   const confirmarAprobar = async (p: Pago) => {
     setProcesando(p.id);
-    await supabase.rpc('admin_aprobar_pago', { comprobante_id: p.id, dias: diasAprobar.trim() === '' ? 30 : Number(diasAprobar), nuevo_plan: planAprobar });
+    const { error } = await supabase.rpc('admin_aprobar_pago', {
+      comprobante_id: p.id,
+      dias: diasAprobar.trim() === '' ? 30 : Number(diasAprobar),
+      nuevo_plan: planAprobar,
+    });
     setProcesando(null);
+    if (error) {
+      alert('No se pudo aprobar el pago:\n' + error.message);
+      return;
+    }
     setAprobandoId(null);
     cargar();
   };
@@ -81,8 +98,12 @@ export default function AdminPagos() {
   const rechazar = async (p: Pago) => {
     const motivo = prompt('¿Por qué se rechaza? (se lo puede volver a intentar)') ?? '';
     setProcesando(p.id);
-    await supabase.rpc('admin_rechazar_pago', { comprobante_id: p.id, motivo: motivo || null });
+    const { error } = await supabase.rpc('admin_rechazar_pago', { comprobante_id: p.id, motivo: motivo || null });
     setProcesando(null);
+    if (error) {
+      alert('No se pudo rechazar el pago:\n' + error.message);
+      return;
+    }
     cargar();
   };
 
@@ -118,6 +139,8 @@ export default function AdminPagos() {
             <Skeleton key={i} className="h-24" />
           ))}
         </div>
+      ) : errorCarga ? (
+        <EmptyState titulo="No pudimos cargar los pagos" texto={errorCarga} icono="—" />
       ) : pagos.length === 0 ? (
         <EmptyState titulo="Sin comprobantes" texto="No hay pagos que coincidan con este filtro." icono="—" />
       ) : (
@@ -145,7 +168,7 @@ export default function AdminPagos() {
                 </p>
                 {p.nota_admin && <p className="text-xs text-dark-text-secondary">Motivo: {p.nota_admin}</p>}
                 {p.comprobante_imagen && (
-                  <button type="button" onClick={() => setImagenAmpliada(p.comprobante_imagen)} className="self-start relative">
+                  <button type="button" onClick={() => setImagenAmpliada(p.comprobante_imagen)} className="self-start relative" aria-label="Ampliar comprobante">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={p.comprobante_imagen} alt="Comprobante" className="max-h-28 rounded-lg border border-dark-border" />
                     <span className="absolute bottom-1 right-1 bg-black/60 rounded p-0.5">
@@ -222,7 +245,13 @@ export default function AdminPagos() {
       )}
 
       <div className="flex items-center justify-center gap-2 text-xs text-dark-text-secondary">
-        <button type="button" disabled={pagina <= 1} onClick={() => setPagina((p) => p - 1)} className="p-1.5 rounded-lg border border-dark-border disabled:opacity-30">
+        <button
+          type="button"
+          disabled={pagina <= 1}
+          onClick={() => setPagina((p) => p - 1)}
+          className="p-1.5 rounded-lg border border-dark-border disabled:opacity-30"
+          aria-label="Página anterior"
+        >
           <ChevronLeft className="h-4 w-4" />
         </button>
         <span>
@@ -233,6 +262,7 @@ export default function AdminPagos() {
           disabled={pagina >= totalPaginas}
           onClick={() => setPagina((p) => p + 1)}
           className="p-1.5 rounded-lg border border-dark-border disabled:opacity-30"
+          aria-label="Página siguiente"
         >
           <ChevronRight className="h-4 w-4" />
         </button>

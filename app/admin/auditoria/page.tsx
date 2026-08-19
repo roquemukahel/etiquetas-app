@@ -29,11 +29,20 @@ export default function AdminAuditoria() {
   const [filas, setFilas] = useState<Fila[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [cargando, setCargando] = useState(true);
+  const [errorCarga, setErrorCarga] = useState<string | null>(null);
 
   const cargar = useCallback(async () => {
     setCargando(true);
     const { data, error } = await supabase.rpc('admin_auditoria_listar', { p_negocio_id: null, p_pagina: pagina, p_por_pagina: porPagina });
-    if (error) console.error('admin_auditoria_listar:', error);
+    if (error) {
+      console.error('admin_auditoria_listar:', error);
+      setErrorCarga(error.message);
+      setFilas([]);
+      setTotalCount(0);
+      setCargando(false);
+      return;
+    }
+    setErrorCarga(null);
     const f = (data as Fila[]) ?? [];
     setFilas(f);
     setTotalCount(f[0]?.total_count ?? 0);
@@ -61,6 +70,8 @@ export default function AdminAuditoria() {
               <Skeleton key={i} className="h-12" />
             ))}
           </div>
+        ) : errorCarga ? (
+          <EmptyState titulo="No pudimos cargar la auditoría" texto={errorCarga} icono="—" />
         ) : filas.length === 0 ? (
           <EmptyState titulo="Todavía no hay acciones registradas" icono="—" />
         ) : (
@@ -87,7 +98,13 @@ export default function AdminAuditoria() {
       </div>
 
       <div className="flex items-center justify-center gap-2 text-xs text-dark-text-secondary">
-        <button type="button" disabled={pagina <= 1} onClick={() => setPagina((p) => p - 1)} className="p-1.5 rounded-lg border border-dark-border disabled:opacity-30">
+        <button
+          type="button"
+          disabled={pagina <= 1}
+          onClick={() => setPagina((p) => p - 1)}
+          className="p-1.5 rounded-lg border border-dark-border disabled:opacity-30"
+          aria-label="Página anterior"
+        >
           <ChevronLeft className="h-4 w-4" />
         </button>
         <span>
@@ -98,6 +115,7 @@ export default function AdminAuditoria() {
           disabled={pagina >= totalPaginas}
           onClick={() => setPagina((p) => p + 1)}
           className="p-1.5 rounded-lg border border-dark-border disabled:opacity-30"
+          aria-label="Página siguiente"
         >
           <ChevronRight className="h-4 w-4" />
         </button>

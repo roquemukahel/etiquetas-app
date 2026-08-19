@@ -176,11 +176,19 @@ returns void
 language plpgsql
 security definer
 as $$
+declare
+  v_negocio_id uuid;
+  v_texto text;
 begin
   if not es_admin() then
     raise exception 'No autorizado';
   end if;
+  select negocio_id, texto into v_negocio_id, v_texto from negocios_notas_admin where id = nota_id_param;
   delete from negocios_notas_admin where id = nota_id_param;
+  if v_negocio_id is not null then
+    perform admin_registrar_accion(v_negocio_id, 'eliminó una nota administrativa', 'nota', nota_id_param,
+      jsonb_build_object('texto', v_texto), null, null);
+  end if;
 end;
 $$;
 

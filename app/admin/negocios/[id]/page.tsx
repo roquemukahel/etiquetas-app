@@ -153,11 +153,14 @@ export default function AdminNegocioDetalle() {
 
   const toggleActivo = async () => {
     if (!detalle) return;
-    const accion = detalle.activo ? 'suspender' : 'reactivar';
     if (!confirm(`¿${detalle.activo ? 'Suspender' : 'Reactivar'} el acceso de "${detalle.nombre}"?`)) return;
     setGuardando(true);
-    await supabase.rpc('admin_set_negocio_activo', { negocio_id_param: detalle.id, nuevo_estado: !detalle.activo });
+    const { error } = await supabase.rpc('admin_set_negocio_activo', { negocio_id_param: detalle.id, nuevo_estado: !detalle.activo });
     setGuardando(false);
+    if (error) {
+      alert('No se pudo cambiar el acceso:\n' + error.message);
+      return;
+    }
     cargar();
   };
 
@@ -353,16 +356,28 @@ function TabNotas({ negocioId, supabase }: { negocioId: string; supabase: any })
   const agregar = async () => {
     if (!texto.trim()) return;
     setGuardando(true);
-    await supabase.rpc('admin_agregar_nota', { negocio_id_param: negocioId, texto_param: texto.trim(), etiqueta_param: etiqueta || null });
+    const { error } = await supabase.rpc('admin_agregar_nota', {
+      negocio_id_param: negocioId,
+      texto_param: texto.trim(),
+      etiqueta_param: etiqueta || null,
+    });
+    setGuardando(false);
+    if (error) {
+      alert('No se pudo agregar la nota:\n' + error.message);
+      return;
+    }
     setTexto('');
     setEtiqueta('');
-    setGuardando(false);
     cargar();
   };
 
   const eliminar = async (notaId: string) => {
     if (!confirm('¿Eliminar esta nota?')) return;
-    await supabase.rpc('admin_eliminar_nota', { nota_id_param: notaId });
+    const { error } = await supabase.rpc('admin_eliminar_nota', { nota_id_param: notaId });
+    if (error) {
+      alert('No se pudo eliminar la nota:\n' + error.message);
+      return;
+    }
     cargar();
   };
 
@@ -506,7 +521,7 @@ function TabSuscripcion({ detalle, onGuardado, supabase }: { detalle: Detalle; o
       return;
     }
     setGuardando(true);
-    await supabase.rpc('admin_actualizar_suscripcion', {
+    const { error } = await supabase.rpc('admin_actualizar_suscripcion', {
       neg_id: detalle.id,
       nuevo_estado: estado !== detalle.estado_suscripcion ? estado : null,
       nueva_fecha_fin_prueba: finPrueba && finPrueba !== aInputDate(detalle.fecha_fin_prueba) ? new Date(finPrueba + 'T12:00:00').toISOString() : null,
@@ -519,6 +534,10 @@ function TabSuscripcion({ detalle, onGuardado, supabase }: { detalle: Detalle; o
       p_motivo: motivo.trim(),
     });
     setGuardando(false);
+    if (error) {
+      alert('No se pudo guardar la suscripción:\n' + error.message);
+      return;
+    }
     setMotivo('');
     onGuardado();
   };

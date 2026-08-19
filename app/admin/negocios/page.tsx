@@ -180,7 +180,7 @@ export default function AdminNegocios() {
 
   const exportarCsv = async () => {
     setExportando(true);
-    const { data } = await supabase.rpc('admin_negocios_directorio', {
+    const { data, error } = await supabase.rpc('admin_negocios_directorio', {
       p_busqueda: filtros.q || null,
       p_vista: filtros.vista,
       p_plan: filtros.plan || null,
@@ -189,6 +189,11 @@ export default function AdminNegocios() {
       p_pagina: 1,
       p_por_pagina: Math.min(totalCount || 5000, 5000),
     });
+    if (error) {
+      alert('No se pudo exportar el CSV:\n' + error.message);
+      setExportando(false);
+      return;
+    }
     const filasExport = (data as Fila[]) ?? [];
     const csv = Papa.unparse(
       filasExport.map((f) => ({
