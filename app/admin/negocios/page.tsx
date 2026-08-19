@@ -99,6 +99,7 @@ export default function AdminNegocios() {
   const [totalCount, setTotalCount] = useState(0);
   const [cargando, setCargando] = useState(true);
   const [exportando, setExportando] = useState(false);
+  const [errorCarga, setErrorCarga] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -154,7 +155,11 @@ export default function AdminNegocios() {
     });
     if (error) {
       console.error('admin_negocios_directorio:', error);
+      setErrorCarga(error.message);
+      setFilas([]);
+      setTotalCount(0);
     } else {
+      setErrorCarga(null);
       const filasData = (data as Fila[]) ?? [];
       setFilas(filasData);
       setTotalCount(filasData[0]?.total_count ?? 0);
@@ -280,6 +285,12 @@ export default function AdminNegocios() {
                     </td>
                   </tr>
                 ))
+              ) : errorCarga ? (
+                <tr>
+                  <td colSpan={COLUMNAS.length}>
+                    <EmptyState titulo="No pudimos cargar los negocios" texto={errorCarga} icono="—" />
+                  </td>
+                </tr>
               ) : filas.length === 0 ? (
                 <tr>
                   <td colSpan={COLUMNAS.length}>
