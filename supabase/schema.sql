@@ -3344,7 +3344,7 @@ begin
       select
         n.id, n.nombre, n.activo, n.estado_suscripcion, n.plan,
         n.fecha_fin_prueba, n.acceso_manual_hasta, n.created_at,
-        (select u.email from perfiles p join auth.users u on u.id = p.id
+        (select u.email::text from perfiles p join auth.users u on u.id = p.id
            where p.negocio_id = n.id order by p.created_at asc limit 1) as propietario_email,
         (select count(*) from perfiles p where p.negocio_id = n.id) as cantidad_usuarios,
         (select count(*) from dispositivos d where d.negocio_id = n.id) as cantidad_dispositivos,
