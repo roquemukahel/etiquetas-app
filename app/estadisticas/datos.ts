@@ -50,52 +50,82 @@ export function montoVenta(o: OrdenR): number {
 }
 
 // ---------- Rango del período + su equivalente anterior ----------
-export function rangoDe(periodo: Periodo, ahora: Date): Rango {
-  const fin = new Date(ahora);
+//
+// "fechaReferencia" ancla QUÉ tramo se mira (por defecto, "ahora" — el
+// período actual, como siempre). Si se navega a un período que ya cerró
+// (ej. "la semana pasada"), el rango pasa a ser el tramo COMPLETO (lunes a
+// domingo, 1 al último día del mes, etc.) en vez de "desde el inicio hasta
+// ahora" — no tendría sentido cortar una semana ya terminada a la mitad. Si
+// el período elegido resulta ser el actual (contiene a "ahora"), se sigue
+// comportando exactamente como antes: tramo parcial hasta este momento,
+// comparado con el mismo tramo parcial del período anterior.
+export function rangoDe(periodo: Periodo, ahora: Date, fechaReferencia: Date = ahora): Rango {
   let inicio: Date;
+  let finCerrado: Date;
   let inicioPrev: Date;
-  let finPrev: Date;
+  let finPrevCerrado: Date;
+  let finPrevParcial: Date;
   let bucket: Rango['bucket'] = 'dia';
 
   if (periodo === 'hoy') {
-    inicio = new Date(ahora);
+    inicio = new Date(fechaReferencia);
     inicio.setHours(0, 0, 0, 0);
-    // Ayer, hasta la misma hora.
+    finCerrado = new Date(inicio);
+    finCerrado.setHours(23, 59, 59, 999);
     inicioPrev = new Date(inicio);
     inicioPrev.setDate(inicioPrev.getDate() - 1);
-    finPrev = new Date(fin);
-    finPrev.setDate(finPrev.getDate() - 1);
+    finPrevCerrado = new Date(inicioPrev);
+    finPrevCerrado.setHours(23, 59, 59, 999);
+    // Ayer, hasta la misma hora (si el día elegido es hoy).
+    finPrevParcial = new Date(ahora);
+    finPrevParcial.setDate(finPrevParcial.getDate() - 1);
     bucket = 'hora';
   } else if (periodo === 'semana') {
-    // Semana calendario (lunes → hoy), no "últimos 7 días": con "Mes"/"Año"
-    // ya se entiende como "desde el inicio del período hasta hoy", pero acá
-    // antes era una ventana móvil de 7 días — confundía (ej. un martes
+    // Semana calendario (lunes → domingo), no "últimos 7 días": con
+    // "Mes"/"Año" ya se entiende como "desde el inicio del período", pero
+    // acá antes era una ventana móvil de 7 días — confundía (ej. un martes
     // sumaba también el fin de semana pasado, dando un total inflado que
     // parecía de "la semana" cuando en realidad eran 6 días de la anterior).
-    const diaSemana = ahora.getDay(); // 0 = domingo … 6 = sábado
+    const diaSemana = fechaReferencia.getDay(); // 0 = domingo … 6 = sábado
     const diasDesdeLunes = diaSemana === 0 ? 6 : diaSemana - 1;
-    inicio = new Date(ahora);
+    inicio = new Date(fechaReferencia);
     inicio.setDate(inicio.getDate() - diasDesdeLunes);
     inicio.setHours(0, 0, 0, 0);
+    finCerrado = new Date(inicio);
+    finCerrado.setDate(finCerrado.getDate() + 6);
+    finCerrado.setHours(23, 59, 59, 999);
     // Mismo tramo (lunes → el mismo día de la semana) de la semana anterior.
     inicioPrev = new Date(inicio);
     inicioPrev.setDate(inicioPrev.getDate() - 7);
-    finPrev = new Date(fin);
-    finPrev.setDate(finPrev.getDate() - 7);
+    finPrevCerrado = new Date(finCerrado);
+    finPrevCerrado.setDate(finPrevCerrado.getDate() - 7);
+    finPrevParcial = new Date(ahora);
+    finPrevParcial.setDate(finPrevParcial.getDate() - 7);
     bucket = 'dia';
   } else if (periodo === 'mes') {
-    inicio = new Date(ahora.getFullYear(), ahora.getMonth(), 1, 0, 0, 0, 0);
+    inicio = new Date(fechaReferencia.getFullYear(), fechaReferencia.getMonth(), 1, 0, 0, 0, 0);
+    finCerrado = new Date(fechaReferencia.getFullYear(), fechaReferencia.getMonth() + 1, 0, 23, 59, 59, 999);
+    inicioPrev = new Date(fechaReferencia.getFullYear(), fechaReferencia.getMonth() - 1, 1, 0, 0, 0, 0);
+    finPrevCerrado = new Date(fechaReferencia.getFullYear(), fechaReferencia.getMonth(), 0, 23, 59, 59, 999);
     // Mismos días del mes anterior (1 → mismo día de hoy).
-    inicioPrev = new Date(ahora.getFullYear(), ahora.getMonth() - 1, 1, 0, 0, 0, 0);
-    finPrev = new Date(ahora.getFullYear(), ahora.getMonth() - 1, ahora.getDate(), fin.getHours(), fin.getMinutes(), 59, 999);
+    finPrevParcial = new Date(fechaReferencia.getFullYear(), fechaReferencia.getMonth() - 1, ahora.getDate(), ahora.getHours(), ahora.getMinutes(), 59, 999);
     bucket = 'dia';
   } else {
-    // año: 1 de enero → hoy; comparado con el mismo tramo del año pasado.
-    inicio = new Date(ahora.getFullYear(), 0, 1, 0, 0, 0, 0);
-    inicioPrev = new Date(ahora.getFullYear() - 1, 0, 1, 0, 0, 0, 0);
-    finPrev = new Date(ahora.getFullYear() - 1, ahora.getMonth(), ahora.getDate(), 23, 59, 59, 999);
+    // año: 1 de enero → 31 de diciembre; comparado con el mismo tramo del año pasado.
+    inicio = new Date(fechaReferencia.getFullYear(), 0, 1, 0, 0, 0, 0);
+    finCerrado = new Date(fechaReferencia.getFullYear(), 11, 31, 23, 59, 59, 999);
+    inicioPrev = new Date(fechaReferencia.getFullYear() - 1, 0, 1, 0, 0, 0, 0);
+    finPrevCerrado = new Date(fechaReferencia.getFullYear() - 1, 11, 31, 23, 59, 59, 999);
+    finPrevParcial = new Date(fechaReferencia.getFullYear() - 1, ahora.getMonth(), ahora.getDate(), 23, 59, 59, 999);
     bucket = 'mes';
   }
+
+  // El período elegido es "el actual" si contiene el instante real de
+  // "ahora" — recién ahí tiene sentido cortarlo parcialmente en vez de
+  // usar el tramo cerrado completo.
+  const esPeriodoActual = ahora.getTime() >= inicio.getTime() && ahora.getTime() <= finCerrado.getTime();
+  const fin = esPeriodoActual ? new Date(ahora) : finCerrado;
+  const finPrev = esPeriodoActual ? finPrevParcial : finPrevCerrado;
 
   return { periodo, inicio, fin, inicioPrev, finPrev, bucket };
 }

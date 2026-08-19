@@ -56,6 +56,36 @@ const ETIQUETA_PERIODO_ANT: Record<Periodo, string> = {
   anio: 'el año anterior',
 };
 
+// Fecha en formato yyyy-mm-dd para el <input type="date">, usando los
+// componentes LOCALES (no toISOString(), que es UTC y puede correr un día
+// para atrás/adelante según la hora y el huso horario).
+function aFechaInput(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const dia = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${dia}`;
+}
+
+// Texto legible del tramo exacto que se está mirando (para saber, al
+// navegar, si es "la semana del 11 al 17" o cuál específicamente).
+function etiquetaTramo(periodo: Periodo, rango: { inicio: Date; fin: Date }): string {
+  if (periodo === 'hoy') {
+    return rango.inicio.toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' });
+  }
+  if (periodo === 'semana') {
+    const finSemana = new Date(rango.inicio);
+    finSemana.setDate(finSemana.getDate() + 6);
+    const mismoMes = rango.inicio.getMonth() === finSemana.getMonth();
+    const desde = rango.inicio.toLocaleDateString('es-AR', mismoMes ? { day: 'numeric' } : { day: 'numeric', month: 'short' });
+    const hasta = finSemana.toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' });
+    return `${desde} al ${hasta}`;
+  }
+  if (periodo === 'mes') {
+    return rango.inicio.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' });
+  }
+  return String(rango.inicio.getFullYear());
+}
+
 type Persona = { id: string; nombre: string; foto_url: string | null };
 type Cliente = { id: string; nombre: string; apellido: string | null };
 type Proveedor = { id: string; nombre: string };
@@ -80,6 +110,11 @@ export default function Estadisticas() {
 
   const [tab, setTab] = useState<Tab>('resumen');
   const [periodo, setPeriodo] = useState<Periodo>('mes');
+  // Qué día/semana/mes/año específico se está mirando — por defecto el
+  // actual (arranca en "ahora", se actualiza junto con él más abajo).
+  // Cambiar de período (chip Hoy/Semana/Mes/Año) vuelve siempre al tramo
+  // actual, no arrastra "hace 3 semanas" al cambiar a Año sin que se note.
+  const [fechaReferencia, setFechaReferencia] = useState<Date>(new Date());
   const [comparar, setComparar] = useState(true);
   const [ocultarMontos, setOcultarMontos] = useState(false);
   const [metricaChart, setMetricaChart] = useState<MetricaSerie>('ventas');
@@ -260,7 +295,29 @@ export default function Estadisticas() {
   }, []);
 
   const ahora = useMemo(() => new Date(), [actualizado]);
-  const rango = useMemo(() => rangoDe(periodo, ahora), [periodo, ahora]);
+  const rango = useMemo(() => rangoDe(periodo, ahora, fechaReferencia), [periodo, ahora, fechaReferencia]);
+  // rangoDe deja fin === ahora exactamente cuando el tramo elegido es el
+  // actual (parcial); si ya cerró, fin queda fijo en el final de ese tramo.
+  const esPeriodoActual = rango.fin.getTime() === ahora.getTime();
+
+  // Cambiar de chip (Hoy/Semana/Mes/Año) vuelve siempre al tramo actual —
+  // si no, uno podía quedar viendo "la semana pasada" y al tocar "Mes" se
+  // encontraba mirando el mes pasado sin haberlo pedido.
+  const cambiarPeriodo = (p: Periodo) => {
+    setPeriodo(p);
+    setFechaReferencia(new Date());
+  };
+
+  // Mueve la fecha de referencia un tramo hacia atrás o adelante, según el
+  // período elegido (un día, una semana, un mes o un año).
+  const navegarPeriodo = (direccion: -1 | 1) => {
+    const nueva = new Date(fechaReferencia);
+    if (periodo === 'hoy') nueva.setDate(nueva.getDate() + direccion);
+    else if (periodo === 'semana') nueva.setDate(nueva.getDate() + direccion * 7);
+    else if (periodo === 'mes') nueva.setMonth(nueva.getMonth() + direccion);
+    else nueva.setFullYear(nueva.getFullYear() + direccion);
+    setFechaReferencia(nueva);
+  };
 
   const itemsPorOrden = useMemo(() => {
     const mapa = new Map<string, ItemR[]>();
@@ -479,7 +536,14 @@ export default function Estadisticas() {
     ...(puedeVerCostos ? ([{ key: 'ganancia', label: 'Ganancia' }] as const) : []),
   ];
 
+  // "esta semana"/"el mes anterior" son para el botón "Volver a..." y el
+  // checkbox de comparación (frases relativas, siempre correctas). Para
+  // describir QUÉ se está mirando en cada gráfico/sección se usa el tramo
+  // exacto (ej. "11 al 17 de agosto"), que si no cambiaría de nombre al
+  // navegar a un período pasado pero seguiría diciendo "esta semana".
   const etiquetaPeriodo = ETIQUETA_PERIODO[periodo];
+  const etiquetaTramoActual = etiquetaTramo(periodo, rango);
+  const etiquetaTramoAnterior = etiquetaTramo(periodo, { inicio: rango.inicioPrev, fin: rango.finPrev });
   const graficoOculto = (
     <EmptyState icono="🙈" titulo="Montos ocultos" texto="Tocá 'Mostrar montos' arriba para ver el gráfico." />
   );
@@ -487,12 +551,50 @@ export default function Estadisticas() {
   // Filtros de período + comparación (aplican a todas las pestañas salvo Stock,
   // que es una foto del inventario de hoy).
   const filtros = (
-    <div className="flex flex-wrap items-center justify-between gap-3">
-      <SegmentedChips valor={periodo} opciones={PERIODOS} onChange={setPeriodo} />
-      <label className="flex items-center gap-2 text-xs text-muted dark:text-dark-text-secondary cursor-pointer">
-        <input type="checkbox" checked={comparar} onChange={(e) => setComparar(e.target.checked)} className="h-4 w-4 accent-ink" />
-        Comparar con {ETIQUETA_PERIODO_ANT[periodo]}
-      </label>
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <SegmentedChips valor={periodo} opciones={PERIODOS} onChange={cambiarPeriodo} />
+        <label className="flex items-center gap-2 text-xs text-muted dark:text-dark-text-secondary cursor-pointer">
+          <input type="checkbox" checked={comparar} onChange={(e) => setComparar(e.target.checked)} className="h-4 w-4 accent-ink" />
+          Comparar con {ETIQUETA_PERIODO_ANT[periodo]}
+        </label>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => navegarPeriodo(-1)}
+          aria-label="Tramo anterior"
+          className="rounded-lg border border-border dark:border-dark-border px-2.5 py-1 text-sm hover:bg-canvas dark:hover:bg-dark-bg"
+        >
+          ‹
+        </button>
+        <span className="text-sm font-medium capitalize">{etiquetaTramo(periodo, rango)}</span>
+        <button
+          type="button"
+          onClick={() => navegarPeriodo(1)}
+          disabled={esPeriodoActual}
+          aria-label="Tramo siguiente"
+          className="rounded-lg border border-border dark:border-dark-border px-2.5 py-1 text-sm hover:bg-canvas dark:hover:bg-dark-bg disabled:opacity-30 disabled:hover:bg-transparent"
+        >
+          ›
+        </button>
+        {!esPeriodoActual && (
+          <button
+            type="button"
+            onClick={() => setFechaReferencia(new Date())}
+            className="text-xs text-accent dark:text-dark-accent underline"
+          >
+            Volver a {etiquetaPeriodo}
+          </button>
+        )}
+        <input
+          type="date"
+          value={aFechaInput(fechaReferencia)}
+          onChange={(e) => e.target.value && setFechaReferencia(new Date(e.target.value + 'T12:00:00'))}
+          aria-label="Elegir una fecha específica"
+          className="ml-auto bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-1 text-xs"
+        />
+      </div>
     </div>
   );
 
@@ -513,7 +615,7 @@ export default function Estadisticas() {
                 {!ocultarMontos && actualB.ventas > 0 && <span className="text-[11px] text-muted dark:text-dark-text-secondary">{Math.round(pctFiado * 100)}% de las ventas</span>}
               </StatCard>
             </div>
-            <SeccionCard titulo="Evolución de ventas" subtitulo={comparar ? `Línea llena: ${etiquetaPeriodo}. Punteada: ${ETIQUETA_PERIODO_ANT[periodo]}.` : undefined} accion={<SegmentedChips size="sm" valor={metricaChart} opciones={metricasChart} onChange={setMetricaChart} />}>
+            <SeccionCard titulo="Evolución de ventas" subtitulo={comparar ? `Línea llena: ${etiquetaTramoActual}. Punteada: ${etiquetaTramoAnterior}.` : undefined} accion={<SegmentedChips size="sm" valor={metricaChart} opciones={metricasChart} onChange={setMetricaChart} />}>
               {ocultarMontos ? graficoOculto : <LineAreaChart puntos={serie} moneda={moneda} compararActivo={comparar} />}
             </SeccionCard>
             <div className="grid md:grid-cols-2 gap-4">
@@ -535,7 +637,7 @@ export default function Estadisticas() {
               <StatCard etiqueta="Medios de pago" valor={cajaPorMedio.length.toLocaleString('es-AR')} tooltip="Cantidad de formas de pago distintas usadas en el período." />
               <StatCard etiqueta="Vendido a crédito" valor={m(actualB.credito)} tooltip="Lo que se sumó a cuentas corrientes en el período (todavía no entró a la caja)." moneda={moneda} tono={actualB.credito > 0 ? 'text-warn' : undefined} sensible oculto={ocultarMontos} />
             </div>
-            <SeccionCard titulo="Evolución del dinero ingresado" subtitulo={comparar ? `Línea llena: ${etiquetaPeriodo}. Punteada: ${ETIQUETA_PERIODO_ANT[periodo]}.` : undefined}>
+            <SeccionCard titulo="Evolución del dinero ingresado" subtitulo={comparar ? `Línea llena: ${etiquetaTramoActual}. Punteada: ${etiquetaTramoAnterior}.` : undefined}>
               {ocultarMontos ? graficoOculto : <LineAreaChart puntos={serieIngresado} moneda={moneda} compararActivo={comparar} />}
             </SeccionCard>
             <SeccionCard titulo="Caja por medio de pago" accion={<VistaToggle vista={vistaFormaPago} onVista={setVistaFormaPago} />}>
@@ -592,7 +694,7 @@ export default function Estadisticas() {
             </SeccionCard>
             <SeccionCard
               titulo="Quién registró más equipos"
-              subtitulo={`Altas de stock de ${etiquetaPeriodo}.`}
+              subtitulo={`Altas de stock de ${etiquetaTramoActual}.`}
               accion={<VistaToggle vista={vistaRegistroStock} onVista={setVistaRegistroStock} />}
             >
               {rankingRegistroStock.length === 0 ? (
@@ -655,7 +757,7 @@ export default function Estadisticas() {
       case 'equipo':
         return (
           <>
-            <SeccionCard titulo="Rendimiento por vendedor" subtitulo={`Ventas de ${etiquetaPeriodo}.`}>
+            <SeccionCard titulo="Rendimiento por vendedor" subtitulo={`Ventas de ${etiquetaTramoActual}.`}>
               {tablaVendedores.length === 0 ? (
                 <EmptyState titulo="Sin ventas en el período" />
               ) : (
@@ -711,7 +813,7 @@ export default function Estadisticas() {
           <div>
             <h1 className="text-2xl font-display font-semibold leading-tight">Analítica del negocio</h1>
             <p className="text-sm text-muted dark:text-dark-text-secondary">
-              Rendimiento de {nombreNegocio || 'tu negocio'} · {ETIQUETA_PERIODO[periodo]}
+              Rendimiento de {nombreNegocio || 'tu negocio'} · {etiquetaTramoActual}
               {hora && <span className="text-[11px]"> · actualizado {hora}</span>}
             </p>
           </div>
@@ -727,7 +829,7 @@ export default function Estadisticas() {
             {ocultarMontos ? 'Mostrar' : 'Ocultar'} montos
           </button>
           <button
-            onClick={exportarResumen(actualB, ticket, porCobrar, vencidoTotal, periodo, moneda, puedeVerCostos)}
+            onClick={exportarResumen(actualB, ticket, porCobrar, vencidoTotal, periodo, rango, moneda, puedeVerCostos)}
             className="inline-flex items-center gap-1.5 rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-3 py-2 text-xs font-medium hover:bg-canvas dark:hover:bg-dark-bg transition-colors"
           >
             <span aria-hidden>⬇️</span> Exportar
@@ -811,7 +913,7 @@ export default function Estadisticas() {
           {/* Gráfico principal */}
           <SeccionCard
             titulo="Evolución"
-            subtitulo={comparar ? `Línea llena: ${ETIQUETA_PERIODO[periodo]}. Punteada: ${ETIQUETA_PERIODO_ANT[periodo]}.` : undefined}
+            subtitulo={comparar ? `Línea llena: ${etiquetaTramoActual}. Punteada: ${etiquetaTramoAnterior}.` : undefined}
             accion={<SegmentedChips size="sm" valor={metricaChart} opciones={metricasChart} onChange={setMetricaChart} />}
           >
             {ocultarMontos ? (
@@ -874,12 +976,13 @@ function exportarResumen(
   porCobrar: number,
   vencido: number,
   periodo: Periodo,
+  rango: { inicio: Date; fin: Date },
   moneda: string,
   puedeVerCostos: boolean
 ) {
   return () => {
     const filas: [string, string][] = [
-      ['Período', ETIQUETA_PERIODO[periodo]],
+      ['Período', etiquetaTramo(periodo, rango)],
       ['Ventas netas', String(Math.round(b.ventas))],
       ...(puedeVerCostos ? ([['Ganancia bruta', String(Math.round(b.ganancia))]] as [string, string][]) : []),
       ['Dinero ingresado', String(Math.round(b.ingresado))],
@@ -894,7 +997,7 @@ function exportarResumen(
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `analitica-${periodo}.csv`;
+    a.download = `analitica-${periodo}-${aFechaInput(rango.inicio)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
