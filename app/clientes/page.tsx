@@ -10,6 +10,8 @@ import { eliminarEnBloque } from '../lib/eliminarEnBloque';
 import { getActor, useActor } from '../lib/actor';
 import { tienePermiso } from '../lib/permisos';
 import { simboloMoneda } from '../lib/monedas';
+import { ICONOS } from '../Iconos';
+import { QoviState } from '../QoviState';
 
 type Cliente = {
   id: string;
@@ -281,10 +283,17 @@ export default function Clientes() {
 
       {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Cargando...</p>}
 
-      {!loading && filtrados.length === 0 && (
-        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">
-          {busqueda ? 'No encontramos nada con esa búsqueda.' : 'Todavía no tenés clientes cargados.'}
-        </p>
+      {!loading && filtrados.length === 0 && busqueda && (
+        <QoviState
+          escena="sinResultados"
+          tamano="sm"
+          titulo="No encontramos resultados"
+          descripcion={`Nada coincide con "${busqueda}".`}
+          accionSecundaria={{ label: 'Limpiar búsqueda', onClick: () => setBusqueda('') }}
+        />
+      )}
+      {!loading && filtrados.length === 0 && !busqueda && (
+        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Todavía no tenés clientes cargados.</p>
       )}
 
       {!loading && filtrados.length > 0 && (
@@ -293,7 +302,10 @@ export default function Clientes() {
         </p>
       )}
 
-      <div className="flex flex-col gap-2">
+      {/* Lista compacta (no una tarjeta grande por cliente): un solo
+          contenedor con filas separadas por línea, más denso y más rápido
+          de escanear cuando hay miles de clientes. */}
+      <div className="rounded-2xl border border-border dark:border-dark-border overflow-hidden divide-y divide-border dark:divide-dark-border">
         {paraRenderizar.map((c) => {
           const seleccionado = seleccionados.has(c.id);
           const s = saldos.get(c.id);
@@ -310,8 +322,8 @@ export default function Clientes() {
                 {Math.round(Math.abs(s.saldo)).toLocaleString('es-AR')}
               </span>
             ) : null;
-          const clases = `rounded-xl border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex items-center gap-3 w-full text-left ${
-            seleccionado ? 'ring-2 ring-accent dark:ring-dark-accent border-transparent' : 'border-border dark:border-dark-border'
+          const clases = `flex items-center gap-3 w-full text-left px-4 py-2.5 transition-colors ${
+            seleccionado ? 'bg-accent-soft dark:bg-dark-accent-soft' : 'bg-white dark:bg-dark-surface hover:bg-canvas dark:hover:bg-dark-bg'
           }`;
           const contenido = (
             <>
@@ -323,7 +335,11 @@ export default function Clientes() {
                       : 'border-border dark:border-dark-border'
                   }`}
                 >
-                  {seleccionado && <span className="text-white text-[10px]">✓</span>}
+                  {seleccionado && (
+                    <span aria-hidden="true" className="text-white [&_svg]:h-3 [&_svg]:w-3">
+                      {ICONOS.check}
+                    </span>
+                  )}
                 </span>
               )}
               <div className="flex-1 flex items-center justify-between gap-2 min-w-0">

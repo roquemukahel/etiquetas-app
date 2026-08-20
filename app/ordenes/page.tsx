@@ -8,6 +8,8 @@ import { useActor } from '../lib/actor';
 import { tienePermiso } from '../lib/permisos';
 import { registrarAuditoria } from '../lib/auditoria';
 import { generarOrdenDeReparacion } from '../lib/ordenesServicio';
+import { ICONOS } from '../Iconos';
+import { QoviState } from '../QoviState';
 
 type Orden = {
   id: string;
@@ -45,6 +47,14 @@ type ReparacionLista = {
 };
 
 const ESTADOS = ['todas', 'pendiente', 'pagado', 'entregado'];
+
+// Mismo criterio que el resto de la app: el estado nunca se comunica solo
+// por color, siempre va con texto (acá, capitalize del propio valor).
+const ESTADO_ORDEN_COLOR: Record<string, string> = {
+  pendiente: 'bg-warn/15 text-warn',
+  pagado: 'bg-good/15 text-good',
+  entregado: 'bg-muted/15 text-muted dark:bg-dark-text-secondary/15 dark:text-dark-text-secondary',
+};
 const TIPOS: { id: 'todas' | 'ventas' | 'servicio'; label: string }[] = [
   { id: 'todas', label: 'Todas' },
   { id: 'ventas', label: 'Ventas' },
@@ -339,44 +349,66 @@ export default function Ordenes() {
 
       {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Cargando...</p>}
 
-      {!loading && filtradas.length === 0 && (
+      {!loading && filtradas.length === 0 && (busqueda.trim() !== '' || filtroEstado !== 'todas' || filtroTipo !== 'todas') && (
+        <QoviState
+          escena="sinResultados"
+          tamano="sm"
+          titulo="No encontramos resultados"
+          descripcion="Nada coincide con esa búsqueda o esos filtros."
+          accionSecundaria={{
+            label: 'Limpiar filtros',
+            onClick: () => {
+              setBusqueda('');
+              setFiltroEstado('todas');
+              setFiltroTipo('todas');
+            },
+          }}
+        />
+      )}
+      {!loading && filtradas.length === 0 && busqueda.trim() === '' && filtroEstado === 'todas' && filtroTipo === 'todas' && (
         <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">No hay órdenes para mostrar.</p>
       )}
 
       <div className="flex flex-col gap-2">
-        {filtradas.map((o) => (
-          <Link
-            key={o.id}
-            href={`/ordenes/${o.id}`}
-            className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex items-center justify-between"
-          >
-            <div>
-              <p className="text-sm font-medium">
-                {o.orden_items.length > 0
-                  ? `${o.orden_items[0].descripcion}${o.orden_items.length > 1 ? ` +${o.orden_items.length - 1}` : ''}`
-                  : 'Orden vacía'}
-                {o.orden_items.length > 0 && (
-                  <span className="text-xs font-bold text-accent dark:text-dark-accent">
-                    {' '}
-                    — {esServicioTecnico(o) ? 'Servicio técnico' : 'Venta'}
+        {filtradas.map((o) => {
+          const servicio = esServicioTecnico(o);
+          const estadoInfo = ESTADO_ORDEN_COLOR[o.estado] ?? ESTADO_ORDEN_COLOR.pendiente;
+          return (
+            <Link
+              key={o.id}
+              href={`/ordenes/${o.id}`}
+              className="relative overflow-hidden rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card pl-4 pr-4 py-3 flex items-center justify-between gap-3"
+            >
+              <span className={`absolute left-0 top-0 bottom-0 w-1 ${servicio ? 'bg-repar' : 'bg-accent dark:bg-dark-accent'}`} aria-hidden="true" />
+              <div className="min-w-0">
+                <p className="text-sm font-medium truncate flex items-center gap-1.5">
+                  <span aria-hidden="true" className={`shrink-0 [&_svg]:h-3.5 [&_svg]:w-3.5 ${servicio ? 'text-repar' : 'text-accent dark:text-dark-accent'}`}>
+                    {ICONOS[servicio ? 'herramienta' : 'ordenes']}
                   </span>
-                )}
-              </p>
-              <p className="text-xs text-muted dark:text-dark-text-secondary">
-                {o.clientes ? `${o.clientes.nombre} ${o.clientes.apellido || ''}` : 'Sin cliente'}
-              </p>
-              {(canjesPorOrden.get(o.id) ?? []).length > 0 && (
-                <p className="text-[11px] text-accent dark:text-dark-accent mt-0.5">
-                  🔄 Canje: {(canjesPorOrden.get(o.id) ?? []).map((c) => c.modelo || 'equipo').join(', ')}
+                  <span className="truncate">
+                    {o.orden_items.length > 0
+                      ? `${o.orden_items[0].descripcion}${o.orden_items.length > 1 ? ` +${o.orden_items.length - 1}` : ''}`
+                      : 'Orden vacía'}
+                  </span>
                 </p>
-              )}
-            </div>
-            <div className="text-right">
-              {o.total != null && <p className="text-sm font-medium">${o.total.toLocaleString('es-AR')}</p>}
-              <p className="text-xs text-muted dark:text-dark-text-secondary capitalize">{o.estado}</p>
-            </div>
-          </Link>
-        ))}
+                <p className="text-xs text-muted dark:text-dark-text-secondary truncate">
+                  {o.clientes ? `${o.clientes.nombre} ${o.clientes.apellido || ''}` : 'Sin cliente'}
+                </p>
+                {(canjesPorOrden.get(o.id) ?? []).length > 0 && (
+                  <p className="text-[11px] text-accent dark:text-dark-accent mt-0.5 truncate">
+                    Canje: {(canjesPorOrden.get(o.id) ?? []).map((c) => c.modelo || 'equipo').join(', ')}
+                  </p>
+                )}
+              </div>
+              <div className="text-right shrink-0">
+                {o.total != null && <p className="text-sm font-medium">${o.total.toLocaleString('es-AR')}</p>}
+                <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium capitalize mt-0.5 ${estadoInfo}`}>
+                  {o.estado}
+                </span>
+              </div>
+            </Link>
+          );
+        })}
       </div>
     </main>
   );

@@ -8,6 +8,7 @@ import { tienePermiso } from '../lib/permisos';
 import { simboloMoneda } from '../lib/monedas';
 import { estadoCuenta, ESTADO_INFO } from '../lib/cuentaCorriente';
 import { obtenerTodasLasFilas } from '../lib/db';
+import { QCard } from '../QCard';
 
 type Cliente = { id: string; nombre: string; apellido: string | null; suspendido: boolean | null };
 type Saldo = { cliente_id: string; saldo: number; vencido: number };
@@ -102,7 +103,7 @@ export default function CuentasPorCobrar() {
   }
 
   return (
-    <main className="flex min-h-screen flex-col px-6 py-6 gap-4 max-w-2xl mx-auto w-full">
+    <main className="flex min-h-screen flex-col px-6 py-6 gap-4 max-w-3xl mx-auto w-full">
       <header className="flex items-center gap-3">
         <Link href="/" className="text-2xl leading-none">
           &larr;
@@ -111,21 +112,21 @@ export default function CuentasPorCobrar() {
       </header>
 
       <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-4">
+        <QCard firma microetiqueta="Total">
           <p className="text-2xl font-display font-semibold leading-none text-warn">{fmt(totalPorCobrar)}</p>
           <p className="text-[11px] text-muted dark:text-dark-text-secondary mt-1.5">Total por cobrar (plata en la calle)</p>
-        </div>
-        <div className="rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-4">
+        </QCard>
+        <QCard firma microetiqueta="Vencido">
           <p className={`text-2xl font-display font-semibold leading-none ${totalVencido > 0 ? 'text-bad' : ''}`}>{fmt(totalVencido)}</p>
           <p className="text-[11px] text-muted dark:text-dark-text-secondary mt-1.5">Vencido (a gestionar)</p>
-        </div>
+        </QCard>
       </div>
 
       {loading ? (
         <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Cargando...</p>
       ) : filas.length === 0 ? (
         <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">
-          Nadie te debe nada por cuenta corriente. 🎉
+          Nadie te debe nada por cuenta corriente.
         </p>
       ) : (
         <>

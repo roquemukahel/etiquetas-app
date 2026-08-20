@@ -233,6 +233,17 @@ export const ICONOS: Record<string, React.ReactNode> = {
       <path d="M14.7 3.3 12 6l-2.7-2.7a1 1 0 0 0-1.4 0L5.3 5.9a1 1 0 0 0 0 1.4L8 10l-6 6v2h2l6-6 2.7 2.7a1 1 0 0 0 1.4 0l2.6-2.6a1 1 0 0 0 0-1.4L14 8l2.7-2.7a1 1 0 0 0 0-1.4l-.6-.6a1 1 0 0 0-1.4 0Z" />
     </IconoBase>
   ),
+  papelera: (
+    <IconoBase>
+      <path d="M4 7h16M9 7V4.5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1V7M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13" />
+      <path d="M10 11v6M14 11v6" />
+    </IconoBase>
+  ),
+  check: (
+    <IconoBase>
+      <path d="m5 12.5 4.5 4.5L19 7" />
+    </IconoBase>
+  ),
   editar: (
     <IconoBase>
       <path d="M4 20h4L18.5 9.5a2 2 0 0 0 0-2.8l-1.2-1.2a2 2 0 0 0-2.8 0L4 15v5Z" />

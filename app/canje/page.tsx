@@ -11,6 +11,8 @@ import { tienePermiso } from '../lib/permisos';
 import { infoEstado } from '../lib/reparaciones';
 import MiniaturaDispositivo from '../MiniaturaDispositivo';
 import Avatar from '../Avatar';
+import { ICONOS } from '../Iconos';
+import { Boton, BotonIcono } from '../Boton';
 
 type Canje = {
   id: string;
@@ -295,35 +297,40 @@ export default function PlanCanje() {
                   )}
                 </div>
                 {vista === 'en_canje' && (
-                  <div className="flex gap-2 mt-1">
+                  <div className="flex items-center gap-2 mt-1">
                     {puedeAgregarStock && (
-                      <button
-                        disabled={procesando === c.id}
+                      <Boton
+                        variante="primario"
+                        tamano="sm"
+                        cargando={procesando === c.id}
                         onClick={() => agregarAlStock(c)}
-                        className="flex-1 rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-xs font-medium text-white disabled:opacity-40"
+                        className="flex-1"
                       >
-                        {procesando === c.id ? 'Agregando...' : 'Agregar al Stock'}
-                      </button>
+                        Agregar al stock
+                      </Boton>
                     )}
                     {puedeRecibirServicioTecnico && (
-                      <button
+                      <Boton
+                        variante="secundario"
+                        tamano="sm"
                         disabled={procesando === c.id}
                         onClick={() => derivar(c)}
-                        className="flex-1 rounded-lg border border-border dark:border-dark-border py-2 text-xs font-medium disabled:opacity-40"
+                        className="flex-1"
                       >
                         Derivar a Servicio Técnico
-                      </button>
+                      </Boton>
+                    )}
+                    {puedeEliminar && (
+                      <BotonIcono
+                        variante="peligro"
+                        tamano="sm"
+                        icono={ICONOS.papelera}
+                        ariaLabel="Eliminar de Plan Canje"
+                        disabled={procesando === c.id}
+                        onClick={() => eliminar(c)}
+                      />
                     )}
                   </div>
-                )}
-                {vista === 'en_canje' && puedeEliminar && (
-                  <button
-                    disabled={procesando === c.id}
-                    onClick={() => eliminar(c)}
-                    className="rounded-lg border border-bad/30 py-2 text-xs font-medium text-bad disabled:opacity-40"
-                  >
-                    Eliminar
-                  </button>
                 )}
               </div>
             ))}
