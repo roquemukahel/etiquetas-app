@@ -286,4 +286,18 @@ export const ICONOS: Record<string, React.ReactNode> = {
       <path d="M5 12h14" />
     </IconoBase>
   ),
+  enlace: (
+    <IconoBase>
+      <path d="M9.5 14.5 14.5 9.5" />
+      <path d="M11 6.5 13 4.5a3.5 3.5 0 0 1 5 5l-2 2" />
+      <path d="M13 17.5 11 19.5a3.5 3.5 0 0 1-5-5l2-2" />
+    </IconoBase>
+  ),
+  descargar: (
+    <IconoBase>
+      <path d="M12 3.5v11.5" />
+      <path d="m7.5 10.5 4.5 4.5 4.5-4.5" />
+      <path d="M4.5 18v1.5a1.5 1.5 0 0 0 1.5 1.5h12a1.5 1.5 0 0 0 1.5-1.5V18" />
+    </IconoBase>
+  ),
 };

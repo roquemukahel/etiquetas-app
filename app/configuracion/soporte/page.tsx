@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { ICONOS } from '../../Iconos';
 
 export default function Soporte() {
   const [nombre, setNombre] = useState('');
@@ -38,7 +39,9 @@ export default function Soporte() {
   if (enviado) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-4 px-6 text-center">
-        <p className="text-2xl">✅</p>
+        <span className="flex items-center justify-center h-12 w-12 rounded-full bg-good/10 text-good [&_svg]:h-6 [&_svg]:w-6">
+          {ICONOS.check}
+        </span>
         <h1 className="text-xl font-display font-semibold">¡Gracias por escribirnos!</h1>
         <p className="text-sm text-muted dark:text-dark-text-secondary max-w-xs">
           Recibimos tu mensaje y te vamos a responder a la brevedad.

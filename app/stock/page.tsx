@@ -16,6 +16,15 @@ import { compararModelosPorSalida } from '../lib/catalogosMarcas';
 import { sanitizarDecimal } from '../lib/numeros';
 import MiniaturaDispositivo from '../MiniaturaDispositivo';
 import { QoviState } from '../QoviState';
+import { ICONOS } from '../Iconos';
+
+function IconoChico({ nombre, className = '' }: { nombre: string; className?: string }) {
+  return (
+    <span aria-hidden="true" className={`[&_svg]:h-3 [&_svg]:w-3 inline-flex shrink-0 ${className}`}>
+      {ICONOS[nombre]}
+    </span>
+  );
+}
 
 // Cuando el CSV viene de otro sistema y no separó el IMEI, la batería ni la
 // capacidad en columnas propias, suelen venir mezclados en un texto libre
@@ -1330,8 +1339,8 @@ export default function Stock() {
                       {modelo} · {items.length}
                     </span>
                     {enStock > 0 && enStock < 3 && (
-                      <span className="text-[10px] font-semibold text-bad bg-bad/10 rounded-full px-2 py-0.5 shrink-0">
-                        ⚠ Quedan {enStock} — reponer
+                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-bad bg-bad/10 rounded-full px-2 py-0.5 shrink-0">
+                        <IconoChico nombre="alerta" /> Quedan {enStock} — reponer
                       </span>
                     )}
                   </button>
@@ -1450,8 +1459,14 @@ export default function Stock() {
                                 {d.imei || 'sin IMEI'}
                               </span>
                               {d.salud_bateria != null && (
-                                <span className={d.salud_bateria < 80 ? 'text-[10px] font-semibold text-warn bg-warn/10 rounded-full px-2 py-0.5' : 'text-xs text-muted dark:text-dark-text-secondary'}>
-                                  {d.salud_bateria < 80 ? `⚠ ${d.salud_bateria}% batería` : `${d.salud_bateria}%`}
+                                <span className={d.salud_bateria < 80 ? 'inline-flex items-center gap-1 text-[10px] font-semibold text-warn bg-warn/10 rounded-full px-2 py-0.5' : 'text-xs text-muted dark:text-dark-text-secondary'}>
+                                  {d.salud_bateria < 80 ? (
+                                    <>
+                                      <IconoChico nombre="alerta" /> {d.salud_bateria}% batería
+                                    </>
+                                  ) : (
+                                    `${d.salud_bateria}%`
+                                  )}
                                 </span>
                               )}
                               {sellado && (
@@ -1462,7 +1477,11 @@ export default function Stock() {
                             </p>
                             {(d.detalles || d.agregado_por_nombre) && (
                               <p className="text-xs text-muted dark:text-dark-text-secondary truncate">
-                                {d.detalles && <span className="text-warn">📝 {d.detalles}</span>}
+                                {d.detalles && (
+                                  <span className="inline-flex items-center gap-1 text-warn">
+                                    <IconoChico nombre="documento" /> {d.detalles}
+                                  </span>
+                                )}
                                 {d.detalles && d.agregado_por_nombre && ' · '}
                                 {d.agregado_por_nombre && `Agregado por ${d.agregado_por_nombre}`}
                               </p>
@@ -1620,8 +1639,8 @@ export default function Stock() {
                         className="h-28 w-28 object-contain drop-shadow-md transition-transform duration-300 ease-out group-hover:animate-vaivenLateral"
                       />
                     ) : (
-                      <div className="h-28 w-28 rounded-xl bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border flex items-center justify-center text-3xl">
-                        📷
+                      <div className="h-28 w-28 rounded-xl bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border flex items-center justify-center text-muted dark:text-dark-text-secondary [&_svg]:h-8 [&_svg]:w-8">
+                        {ICONOS.camara}
                       </div>
                     )}
                   </span>

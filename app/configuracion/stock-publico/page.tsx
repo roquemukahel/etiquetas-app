@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { registrarAuditoria } from '../../lib/auditoria';
+import { ICONOS } from '../../Iconos';
 
 type Negocio = { id: string; stock_publico_activo: boolean; token_stock_publico: string };
 
@@ -120,7 +121,12 @@ export default function StockPublicoConfig() {
               }}
               className="self-start rounded-lg border border-border dark:border-dark-border px-3 py-2 text-xs font-medium"
             >
-              {copiado ? '✓ Link copiado' : '🔗 Copiar link'}
+              <span className="inline-flex items-center gap-1">
+                <span aria-hidden="true" className="[&_svg]:h-3.5 [&_svg]:w-3.5 inline-flex shrink-0">
+                  {ICONOS[copiado ? 'check' : 'enlace']}
+                </span>
+                {copiado ? 'Link copiado' : 'Copiar link'}
+              </span>
             </button>
           </div>
         )}

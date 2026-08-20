@@ -9,6 +9,7 @@ import { eliminarEnBloque } from '../../lib/eliminarEnBloque';
 import { registrarAuditoria } from '../../lib/auditoria';
 import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
+import { ICONOS } from '../../Iconos';
 
 type Entidad = 'clientes' | 'dispositivos';
 
@@ -162,13 +163,23 @@ export default function ExportarDatos() {
               disabled={exportando === entidad}
               className="flex-1 rounded-xl border border-border dark:border-dark-border py-2.5 text-center text-xs font-medium disabled:opacity-40"
             >
-              {exportando === entidad ? 'Exportando...' : '⬇ Exportar únicamente'}
+              {exportando === entidad ? (
+                'Exportando...'
+              ) : (
+                <span className="inline-flex items-center justify-center gap-1">
+                  <span aria-hidden="true" className="[&_svg]:h-3.5 [&_svg]:w-3.5 inline-flex shrink-0">{ICONOS.descargar}</span>
+                  Exportar únicamente
+                </span>
+              )}
             </button>
             <button
               onClick={() => abrirConfirmacion(entidad)}
               className="flex-1 rounded-xl border border-bad/40 text-bad py-2.5 text-center text-xs font-medium"
             >
-              ⚠ Exportar y eliminar
+              <span className="inline-flex items-center justify-center gap-1">
+                <span aria-hidden="true" className="[&_svg]:h-3.5 [&_svg]:w-3.5 inline-flex shrink-0">{ICONOS.alerta}</span>
+                Exportar y eliminar
+              </span>
             </button>
           </div>
         </section>

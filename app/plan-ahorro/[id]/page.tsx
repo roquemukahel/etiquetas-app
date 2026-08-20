@@ -9,6 +9,7 @@ import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import { sanitizarDecimal } from '../../lib/numeros';
 import SelectorColorAuto from '../../SelectorColorAuto';
+import { ICONOS } from '../../Iconos';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 
@@ -419,8 +420,9 @@ export default function DetallePlanAhorro() {
       ) : (
         <div className="rounded-xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border px-4 py-3 text-sm flex flex-col gap-1">
           {plan.dispositivo_id && (
-            <span className="self-start text-[10px] font-semibold text-accent dark:text-dark-accent bg-accent-soft dark:bg-dark-accent-soft rounded-full px-2 py-0.5">
-              📱 SEÑA — equipo reservado
+            <span className="self-start inline-flex items-center gap-1 text-[10px] font-semibold text-accent dark:text-dark-accent bg-accent-soft dark:bg-dark-accent-soft rounded-full px-2 py-0.5">
+              <span aria-hidden="true" className="[&_svg]:h-3 [&_svg]:w-3 inline-flex shrink-0">{ICONOS.telefono}</span>
+              SEÑA — equipo reservado
             </span>
           )}
           <p className="font-medium">
