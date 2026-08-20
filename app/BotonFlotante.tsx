@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { crearClienteNavegador } from './lib/supabase/client';
+import { ICONOS } from './Iconos';
 
 // Mismo criterio de exclusión que el selector de "quién trabaja": no tiene
 // sentido un botón de acciones rápidas en pantallas públicas, de login, o de
@@ -22,11 +23,11 @@ const RUTAS_OCULTAS = [
 ];
 
 const ACCIONES = [
-  { href: '/ordenes/nueva', label: 'Nueva venta', icono: '🧾' },
-  { href: '/clientes/nuevo', label: 'Nuevo cliente', icono: '👤' },
-  { href: '/stock/nuevo', label: 'Nuevo ingreso', icono: '📦' },
-  { href: '/servicio-tecnico', label: 'Nueva reparación', icono: '🔧' },
-  { href: '/compras/nueva', label: 'Nueva compra', icono: '💳' },
+  { href: '/ordenes/nueva', label: 'Nueva venta', icono: 'ordenes' },
+  { href: '/clientes/nuevo', label: 'Nuevo cliente', icono: 'clientes' },
+  { href: '/stock/nuevo', label: 'Nuevo ingreso', icono: 'stock' },
+  { href: '/servicio-tecnico', label: 'Nueva reparación', icono: 'herramienta' },
+  { href: '/compras/nueva', label: 'Nueva compra', icono: 'compra' },
 ];
 
 export default function BotonFlotante() {
@@ -69,8 +70,8 @@ export default function BotonFlotante() {
                 style={{ animationDelay: `${i * 30}ms` }}
               >
                 {a.label}
-                <span className="h-8 w-8 rounded-full bg-accent-soft dark:bg-dark-accent-soft flex items-center justify-center text-base shrink-0">
-                  {a.icono}
+                <span className="h-8 w-8 rounded-full bg-accent-soft dark:bg-dark-accent-soft text-accent dark:text-dark-accent flex items-center justify-center shrink-0 [&_svg]:h-4 [&_svg]:w-4">
+                  {ICONOS[a.icono]}
                 </span>
               </Link>
             ))}

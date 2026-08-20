@@ -1,6 +1,16 @@
-export function IconoBase({ children }: { children: React.ReactNode }) {
+export function IconoBase({ children, size = 24 }: { children: React.ReactNode; size?: number }) {
   return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
       {children}
     </svg>
   );
@@ -119,6 +129,114 @@ export const ICONOS: Record<string, React.ReactNode> = {
       <path d="M4 12a8 8 0 1 1 3.2 6.4L4 20l1.2-3.5A7.96 7.96 0 0 1 4 12Z" />
       <path d="M12 8.5a2 2 0 0 1 2 2c0 1.3-2 1.6-2 3" />
       <circle cx="12" cy="15.8" r="0.6" fill="currentColor" stroke="none" />
+    </IconoBase>
+  ),
+
+  // ---- Set adicional: reemplazan emojis usados como íconos funcionales
+  // (pestañas, métricas, estados, navegación) en Servicio Técnico, Plan
+  // Canje y el selector de tema — mismo trazo/tamaño que los de arriba.
+  herramienta: (
+    <IconoBase>
+      <path d="M14.7 6.3a4 4 0 0 1-5.4 5.4L4 17l3 3 5.3-5.3a4 4 0 0 1 5.4-5.4L14.7 6.3Z" />
+    </IconoBase>
+  ),
+  lupa: (
+    <IconoBase>
+      <circle cx="10.5" cy="10.5" r="6.5" />
+      <path d="m20 20-4.3-4.3" />
+    </IconoBase>
+  ),
+  reloj: (
+    <IconoBase>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7.5V12l3 2" />
+    </IconoBase>
+  ),
+  campana: (
+    <IconoBase>
+      <path d="M6 9a6 6 0 0 1 12 0c0 4.5 1.5 6 1.5 6h-15S6 13.5 6 9Z" />
+      <path d="M10 19a2 2 0 0 0 4 0" />
+    </IconoBase>
+  ),
+  chequeado: (
+    <IconoBase>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="m8.5 12.2 2.4 2.4 4.8-5" />
+    </IconoBase>
+  ),
+  ubicacion: (
+    <IconoBase>
+      <path d="M12 21s7-6.4 7-11.5A7 7 0 0 0 5 9.5C5 14.6 12 21 12 21Z" />
+      <circle cx="12" cy="9.5" r="2.3" />
+    </IconoBase>
+  ),
+  local: (
+    <IconoBase>
+      <path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1Z" />
+    </IconoBase>
+  ),
+  enviar: (
+    <IconoBase>
+      <path d="M21 3 3 10.5l7 2.5 2.5 7L21 3Z" />
+      <path d="M12.5 13.5 21 3" />
+    </IconoBase>
+  ),
+  cerrar: (
+    <IconoBase>
+      <path d="M6 6l12 12M18 6 6 18" />
+    </IconoBase>
+  ),
+  sol: (
+    <IconoBase>
+      <circle cx="12" cy="12" r="4.2" />
+      <path d="M12 2.5v2.2M12 19.3v2.2M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.9 19.1l1.6-1.6M17.5 6.5l1.6-1.6" />
+    </IconoBase>
+  ),
+  luna: (
+    <IconoBase>
+      <path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5Z" />
+    </IconoBase>
+  ),
+  diamante: (
+    <IconoBase>
+      <path d="M4 9 8 3h8l4 6-10 12L4 9Z" />
+      <path d="M4 9h16M9.5 3 8 9l4 12 4-12-1.5-6" />
+    </IconoBase>
+  ),
+  recibido: (
+    <IconoBase>
+      <path d="M3 12h5l2 3h4l2-3h5" />
+      <path d="M6 12 6.5 6a1.5 1.5 0 0 1 1.5-1.4h8a1.5 1.5 0 0 1 1.5 1.4l.5 6" />
+      <path d="M4 12v6a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-6" />
+    </IconoBase>
+  ),
+  documento: (
+    <IconoBase>
+      <path d="M7 3h7l4 4v14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" />
+      <path d="M14 3v4h4M9 12h6M9 16h6" />
+    </IconoBase>
+  ),
+  entregado: (
+    <IconoBase>
+      <path d="M3 9 12 4l9 5-9 5-9-5Z" />
+      <path d="M6 11.5v5L12 20l6-3.5v-5" />
+    </IconoBase>
+  ),
+  tablero: (
+    <IconoBase>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M9 4v16M15 4v16M6 9h.01M12 9h.01M6 13h.01M18 13h.01" />
+    </IconoBase>
+  ),
+  repuesto: (
+    <IconoBase>
+      <path d="M14.7 3.3 12 6l-2.7-2.7a1 1 0 0 0-1.4 0L5.3 5.9a1 1 0 0 0 0 1.4L8 10l-6 6v2h2l6-6 2.7 2.7a1 1 0 0 0 1.4 0l2.6-2.6a1 1 0 0 0 0-1.4L14 8l2.7-2.7a1 1 0 0 0 0-1.4l-.6-.6a1 1 0 0 0-1.4 0Z" />
+    </IconoBase>
+  ),
+  editar: (
+    <IconoBase>
+      <path d="M4 20h4L18.5 9.5a2 2 0 0 0 0-2.8l-1.2-1.2a2 2 0 0 0-2.8 0L4 15v5Z" />
+      <path d="M13.5 6.5l3 3" />
     </IconoBase>
   ),
 };

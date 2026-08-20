@@ -1,4 +1,5 @@
 import { infoEstado } from './lib/reparaciones';
+import { ICONOS } from './Iconos';
 
 // Badge de estado de reparación: SIEMPRE combina color + ícono + texto, para
 // que el estado nunca se comunique solamente por color (accesibilidad).
@@ -8,7 +9,9 @@ export default function EstadoBadge({ estado, className = '' }: { estado: string
     <span
       className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium whitespace-nowrap ${info.color} ${className}`}
     >
-      <span aria-hidden="true">{info.icono}</span>
+      <span aria-hidden="true" className="[&_svg]:h-3.5 [&_svg]:w-3.5">
+        {ICONOS[info.icono]}
+      </span>
       {info.label}
     </span>
   );

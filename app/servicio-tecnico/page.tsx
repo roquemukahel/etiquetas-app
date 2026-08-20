@@ -30,6 +30,9 @@ import TextoCondicionGenerado from '../TextoCondicionGenerado';
 import ServicioTecnicoTabs from '../ServicioTecnicoTabs';
 import TarjetaReparacion, { Reparacion, Tecnico } from './TarjetaReparacion';
 import MiBanco from './MiBanco';
+import { ICONOS } from '../Iconos';
+import { QCard } from '../QCard';
+import { QoviState } from '../QoviState';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 
@@ -1310,11 +1313,11 @@ export default function ServicioTecnico() {
           <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5 text-xs">
             {(
               [
-                { id: 'activas', icono: '🛠️', label: 'Activas', valor: indicadores.activas, acento: 'accent' },
-                { id: 'demoradas', icono: '⏰', label: 'Demoradas', valor: indicadores.demoradas, acento: 'bad' },
-                { id: 'aprobacion', icono: '📋', label: 'Esperando aprobación', valor: indicadores.aprobacion, acento: 'warn' },
-                { id: 'repuesto', icono: '📦', label: 'Esperando repuesto', valor: indicadores.repuesto, acento: 'warn' },
-                { id: 'listas', icono: '✅', label: 'Listas', valor: indicadores.listas, acento: 'good' },
+                { id: 'activas', icono: 'herramienta', label: 'Activas', valor: indicadores.activas, acento: 'accent' },
+                { id: 'demoradas', icono: 'reloj', label: 'Demoradas', valor: indicadores.demoradas, acento: 'bad' },
+                { id: 'aprobacion', icono: 'documento', label: 'Esperando aprobación', valor: indicadores.aprobacion, acento: 'warn' },
+                { id: 'repuesto', icono: 'stock', label: 'Esperando repuesto', valor: indicadores.repuesto, acento: 'warn' },
+                { id: 'listas', icono: 'chequeado', label: 'Listas', valor: indicadores.listas, acento: 'good' },
               ] as const
             ).map((ind) => {
               const activo = filtroIndicador === ind.id;
@@ -1331,14 +1334,32 @@ export default function ServicioTecnico() {
                       : 'border-border dark:border-dark-border bg-white dark:bg-dark-surface hover:border-accent/40 dark:hover:border-dark-accent/40'
                   }`}
                 >
-                  <span className={`text-base font-semibold ${colorTexto}`}>
-                    <span aria-hidden="true">{ind.icono}</span> {ind.valor}
+                  <span className={`text-base font-semibold inline-flex items-center gap-1 ${colorTexto}`}>
+                    <span aria-hidden="true" className="[&_svg]:h-4 [&_svg]:w-4">
+                      {ICONOS[ind.icono]}
+                    </span>
+                    {ind.valor}
                   </span>
                   <span className="text-muted dark:text-dark-text-secondary leading-tight">{ind.label}</span>
                 </button>
               );
             })}
           </div>
+
+          {/* Qovi acompaña el resumen de demoradas UNA sola vez, solo cuando
+              hay reparaciones demoradas de verdad y ese filtro está activo —
+              no reemplaza la lista de abajo, solo la introduce. */}
+          {filtroIndicador === 'demoradas' && indicadores.demoradas > 0 && (
+            <QCard firma padding="sm">
+              <QoviState
+                escena="reparacionDemorada"
+                tamano="sm"
+                alineacion="izquierda"
+                titulo={`${indicadores.demoradas} reparación${indicadores.demoradas === 1 ? '' : 'es'} demorada${indicadores.demoradas === 1 ? '' : 's'}`}
+                descripcion="Llevan más de 5 días en el taller o pasaron su fecha estimada. Priorizalas para no perder el ritmo de entrega."
+              />
+            </QCard>
+          )}
 
           <div className="flex flex-col gap-2">
             <input
@@ -1380,13 +1401,22 @@ export default function ServicioTecnico() {
           </div>
 
           {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Cargando...</p>}
-          {!loading && filtrados.length === 0 && (
+          {!loading && filtrados.length === 0 && busqueda.trim() !== '' && (
+            <QoviState
+              escena="sinResultados"
+              tamano="sm"
+              titulo="No encontramos resultados"
+              descripcion={`Nada coincide con "${busqueda.trim()}" en este filtro.`}
+              accionSecundaria={{ label: 'Limpiar filtros', onClick: limpiarFiltros }}
+            />
+          )}
+          {!loading && filtrados.length === 0 && busqueda.trim() === '' && (
             <div className="flex flex-col items-center gap-3 text-center py-8">
               <p className="text-sm text-muted dark:text-dark-text-secondary">
                 {!hayFiltrosActivos
                   ? 'Todavía no recibiste ningún equipo.'
                   : filtroIndicador === 'demoradas'
-                  ? 'No hay reparaciones demoradas. Todo el taller está al día. 🎉'
+                  ? 'No hay reparaciones demoradas. Todo el taller está al día.'
                   : filtroIndicador === 'aprobacion'
                   ? 'Ninguna reparación está esperando aprobación del cliente.'
                   : filtroIndicador === 'repuesto'

@@ -9,7 +9,7 @@ import LandingPublica from './LandingPublica';
 import { simboloMoneda } from './lib/monedas';
 import { imagenParaDescripcion } from './lib/carpetas';
 import { imagenColorDeModelo } from './lib/coloresModelo';
-import { COLOR_ICONO } from './Iconos';
+import { COLOR_ICONO, ICONOS } from './Iconos';
 import NumeroAnimado from './NumeroAnimado';
 import Avatar from './Avatar';
 import BienvenidaQovi from './BienvenidaQovi';
@@ -618,23 +618,23 @@ export default async function Home() {
           <p className="text-sm font-semibold tracking-tight">Actividad reciente</p>
           <div className="flex flex-col gap-3">
             {actividad.map((ev, idx) => {
-              const { emoji, color } = ICONO_ACTIVIDAD[ev.tipo];
+              const { icono, color } = ICONO_ACTIVIDAD[ev.tipo];
               return (
                 <div key={idx} className="flex items-center gap-3">
                   {ev.actorNombre ? (
                     <div className="relative shrink-0">
                       <Avatar src={ev.actorFoto} nombre={ev.actorNombre} size={38} />
                       <div
-                        className={`absolute -bottom-1 -right-1 h-5 w-5 rounded-full bg-gradient-to-br ${COLOR_ICONO[color]} flex items-center justify-center text-[10px] border-2 border-white dark:border-dark-surface`}
+                        className={`absolute -bottom-1 -right-1 h-5 w-5 rounded-full bg-gradient-to-br ${COLOR_ICONO[color]} flex items-center justify-center text-white border-2 border-white dark:border-dark-surface [&_svg]:h-2.5 [&_svg]:w-2.5`}
                       >
-                        {emoji}
+                        {ICONOS[icono]}
                       </div>
                     </div>
                   ) : (
                     <div
-                      className={`h-8 w-8 shrink-0 rounded-full bg-gradient-to-br ${COLOR_ICONO[color]} flex items-center justify-center text-base`}
+                      className={`h-8 w-8 shrink-0 rounded-full bg-gradient-to-br ${COLOR_ICONO[color]} flex items-center justify-center text-white [&_svg]:h-4 [&_svg]:w-4`}
                     >
-                      {emoji}
+                      {ICONOS[icono]}
                     </div>
                   )}
                   <p className="flex-1 min-w-0 text-sm leading-snug truncate">{ev.texto}</p>
@@ -706,13 +706,13 @@ function hace(fecha: Date): string {
   return `Hace ${dias} día${dias === 1 ? '' : 's'}`;
 }
 
-const ICONO_ACTIVIDAD: Record<string, { emoji: string; color: string }> = {
-  venta: { emoji: '💰', color: 'ventas' },
-  reparacion: { emoji: '🔧', color: 'servicio' },
-  stock: { emoji: '📦', color: 'inventario' },
-  cliente: { emoji: '👤', color: 'clientes' },
-  eliminacion: { emoji: '🗑️', color: 'eliminacion' },
-  ajuste: { emoji: '✏️', color: 'compras' },
+const ICONO_ACTIVIDAD: Record<string, { icono: string; color: string }> = {
+  venta: { icono: 'ordenes', color: 'ventas' },
+  reparacion: { icono: 'herramienta', color: 'servicio' },
+  stock: { icono: 'stock', color: 'inventario' },
+  cliente: { icono: 'clientes', color: 'clientes' },
+  eliminacion: { icono: 'cerrar', color: 'eliminacion' },
+  ajuste: { icono: 'editar', color: 'compras' },
 };
 
 const DOT_COLOR: Record<string, string> = {

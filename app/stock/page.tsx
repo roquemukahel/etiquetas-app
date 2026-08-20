@@ -15,6 +15,7 @@ import { asegurarModelo, normalizarNombreModelo } from '../lib/modelos';
 import { compararModelosPorSalida } from '../lib/catalogosMarcas';
 import { sanitizarDecimal } from '../lib/numeros';
 import MiniaturaDispositivo from '../MiniaturaDispositivo';
+import { QoviState } from '../QoviState';
 
 // Cuando el CSV viene de otro sistema y no separó el IMEI, la batería ni la
 // capacidad en columnas propias, suelen venir mezclados en un texto libre
@@ -1268,13 +1269,28 @@ export default function Stock() {
           )}
 
           {!loading && !(vista === 'vendidos' && cargandoVendidos) && grupos.length === 0 && (
-            <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">
-              {busqueda
-                ? 'No encontramos nada con esa búsqueda.'
-                : vista === 'vendidos'
-                ? 'Todavía no marcaste ningún dispositivo como vendido.'
-                : 'Todavía no tenés dispositivos cargados.'}
-            </p>
+            <>
+              {busqueda ? (
+                <QoviState
+                  escena="sinResultados"
+                  tamano="sm"
+                  titulo="No encontramos resultados"
+                  descripcion={`Nada coincide con "${busqueda}" en esta sección.`}
+                  accionSecundaria={{ label: 'Limpiar búsqueda', onClick: () => setBusqueda('') }}
+                />
+              ) : vista === 'vendidos' ? (
+                <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">
+                  Todavía no marcaste ningún dispositivo como vendido.
+                </p>
+              ) : (
+                <QoviState
+                  escena="stockVacio"
+                  titulo="Todavía no hay productos en esta sección"
+                  descripcion="Cargá tu primer dispositivo para empezar a llevar el inventario."
+                  accionPrimaria={puedeAgregarStock ? { label: '+ Nuevo dispositivo', href: '/stock/nuevo' } : undefined}
+                />
+              )}
+            </>
           )}
 
           {!loading && grupos.length > 0 && (
@@ -1575,7 +1591,12 @@ export default function Stock() {
 
           {loadingProductos && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Cargando...</p>}
           {!loadingProductos && productos.length === 0 && (
-            <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Todavía no cargaste productos.</p>
+            <QoviState
+              escena="stockVacio"
+              tamano="sm"
+              titulo="Todavía no hay productos en esta sección"
+              descripcion="Cargá tu primer accesorio con el formulario de arriba."
+            />
           )}
 
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">

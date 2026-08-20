@@ -25,6 +25,8 @@ import {
 } from './datos';
 import { StatCard, SeccionCard, EmptyState, SegmentedChips, AnalyticsTabs, formatMoneda } from './ui';
 import { LineAreaChart } from './charts';
+import { QCard } from '../QCard';
+import { QoviState } from '../QoviState';
 
 type VistaRanking = 'barras' | 'torta';
 type Tab = 'resumen' | 'ventas' | 'caja' | 'cobrar' | 'stock' | 'servicio' | 'clientes' | 'equipo' | 'proveedores';
@@ -602,7 +604,9 @@ export default function Estadisticas() {
 
   function renderContenido() {
     switch (tab) {
-      case 'ventas':
+      case 'ventas': {
+        const evolucionVentas = variacion(actualB.ventas, prevB.ventas);
+        const ventasEnAumento = comparar && !ocultarMontos && actualB.ventas > 0 && prevB.ventas > 0 && actualB.ventas > prevB.ventas;
         return (
           <>
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
@@ -615,6 +619,23 @@ export default function Estadisticas() {
                 {!ocultarMontos && actualB.ventas > 0 && <span className="text-[11px] text-muted dark:text-dark-text-secondary">{Math.round(pctFiado * 100)}% de las ventas</span>}
               </StatCard>
             </div>
+            {/* Qovi solo aparece acá si la comparación real (ya calculada
+                arriba, sin inventar nada) da positiva — nunca decorativo.
+                Va en su propia tarjeta de conclusión, no encima del gráfico
+                de abajo. */}
+            {ventasEnAumento && (
+              <QCard firma padding="sm">
+                <QoviState
+                  escena="estadisticasPositivas"
+                  tamano="sm"
+                  alineacion="izquierda"
+                  titulo="Las ventas van en alza"
+                  descripcion={`${etiquetaTramoActual} vendiste ${
+                    evolucionVentas.pct != null ? `${Math.abs(evolucionVentas.pct).toFixed(1).replace('.', ',')}% más` : 'más'
+                  } que ${etiquetaTramoAnterior}.`}
+                />
+              </QCard>
+            )}
             <SeccionCard titulo="Evolución de ventas" subtitulo={comparar ? `Línea llena: ${etiquetaTramoActual}. Punteada: ${etiquetaTramoAnterior}.` : undefined} accion={<SegmentedChips size="sm" valor={metricaChart} opciones={metricasChart} onChange={setMetricaChart} />}>
               {ocultarMontos ? graficoOculto : <LineAreaChart puntos={serie} moneda={moneda} compararActivo={comparar} />}
             </SeccionCard>
@@ -628,6 +649,7 @@ export default function Estadisticas() {
             </div>
           </>
         );
+      }
 
       case 'caja':
         return (

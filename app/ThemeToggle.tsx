@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import { getTema, setTema, Tema } from './lib/theme';
+import { QCard } from './QCard';
+import { ICONOS } from './Iconos';
 
-const OPCIONES: { valor: Tema; label: string; emoji: string }[] = [
-  { valor: 'light', label: 'Claro', emoji: '☀️' },
-  { valor: 'dark', label: 'Oscuro', emoji: '🌙' },
-  { valor: 'qovento', label: 'Qovento', emoji: '💎' },
+const OPCIONES: { valor: Tema; label: string; icono: string }[] = [
+  { valor: 'light', label: 'Claro', icono: 'sol' },
+  { valor: 'dark', label: 'Oscuro', icono: 'luna' },
+  { valor: 'qovento', label: 'Qovento', icono: 'diamante' },
 ];
 
 export default function ThemeToggle() {
@@ -22,32 +24,34 @@ export default function ThemeToggle() {
   };
 
   return (
-    <div className="rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-5 flex flex-col gap-3">
+    <QCard padding="lg" className="flex flex-col gap-3">
       <div>
         <p className="text-base font-medium text-ink dark:text-dark-text">Apariencia</p>
         <p className="text-xs text-muted dark:text-dark-text-secondary">Elegí cómo se ve la app</p>
       </div>
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Apariencia">
         {OPCIONES.map((o) => (
           <button
             key={o.valor}
             onClick={() => elegir(o.valor)}
-            className={`rounded-xl border p-3 flex flex-col items-center gap-1.5 transition-colors active:scale-[0.98] ${
+            role="radio"
+            aria-checked={tema === o.valor}
+            className={`rounded-xl border p-3 flex flex-col items-center gap-1.5 transition-colors duration-200 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent dark:focus-visible:ring-dark-accent ${
               tema === o.valor
                 ? 'border-accent dark:border-dark-accent bg-accent-soft dark:bg-dark-accent-soft'
                 : 'border-border dark:border-dark-border hover:border-accent/40 dark:hover:border-dark-accent/40'
             }`}
           >
-            <span className="text-xl leading-none">{o.emoji}</span>
+            <span aria-hidden="true" className={tema === o.valor ? 'text-accent dark:text-dark-accent' : 'text-muted dark:text-dark-text-secondary'}>
+              {ICONOS[o.icono]}
+            </span>
             <span className="text-sm font-medium text-ink dark:text-dark-text">{o.label}</span>
           </button>
         ))}
       </div>
       {tema === 'qovento' && (
-        <p className="text-xs text-muted dark:text-dark-text-secondary">
-          Modo Qovento: fondo azulado de la marca en toda la app. ✨
-        </p>
+        <p className="text-xs text-muted dark:text-dark-text-secondary">Modo Qovento: fondo azulado de la marca en toda la app.</p>
       )}
-    </div>
+    </QCard>
   );
 }

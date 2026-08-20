@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { ICONOS } from './Iconos';
 
 export type SeccionServicioTecnico = 'reparaciones' | 'mibanco' | 'tecnicos' | 'repuestos' | 'servicios' | 'proveedores' | 'metricas';
 
@@ -16,13 +17,13 @@ export type SeccionServicioTecnico = 'reparaciones' | 'mibanco' | 'tecnicos' | '
 // /servicio-tecnico (para navegar ahí desde Repuestos, Servicios o
 // Proveedores).
 const ITEMS: { key: SeccionServicioTecnico; icono: string; label: string; href: string }[] = [
-  { key: 'reparaciones', icono: '🛠️', label: 'Reparaciones', href: '/servicio-tecnico' },
-  { key: 'mibanco', icono: '🎯', label: 'Mi banco', href: '/servicio-tecnico?tab=mibanco' },
-  { key: 'tecnicos', icono: '👥', label: 'Técnicos', href: '/servicio-tecnico?tab=tecnicos' },
-  { key: 'repuestos', icono: '🔩', label: 'Repuestos', href: '/servicio-tecnico/stock' },
-  { key: 'servicios', icono: '🗂️', label: 'Servicios', href: '/servicio-tecnico/trabajos' },
-  { key: 'proveedores', icono: '🏷️', label: 'Proveedores', href: '/servicio-tecnico/repuestos' },
-  { key: 'metricas', icono: '📊', label: 'Métricas', href: '/servicio-tecnico/metricas' },
+  { key: 'reparaciones', icono: 'herramienta', label: 'Reparaciones', href: '/servicio-tecnico' },
+  { key: 'mibanco', icono: 'tablero', label: 'Mi banco', href: '/servicio-tecnico?tab=mibanco' },
+  { key: 'tecnicos', icono: 'clientes', label: 'Técnicos', href: '/servicio-tecnico?tab=tecnicos' },
+  { key: 'repuestos', icono: 'repuesto', label: 'Repuestos', href: '/servicio-tecnico/stock' },
+  { key: 'servicios', icono: 'documento', label: 'Servicios', href: '/servicio-tecnico/trabajos' },
+  { key: 'proveedores', icono: 'etiqueta', label: 'Proveedores', href: '/servicio-tecnico/repuestos' },
+  { key: 'metricas', icono: 'estadisticas', label: 'Métricas', href: '/servicio-tecnico/metricas' },
 ];
 
 export default function ServicioTecnicoTabs({
@@ -61,7 +62,9 @@ export default function ServicioTecnicoTabs({
         const handler = handlers[t.key];
         const contenido = (
           <>
-            <span aria-hidden="true">{t.icono}</span>
+            <span aria-hidden="true" className="[&_svg]:h-4 [&_svg]:w-4">
+              {ICONOS[t.icono]}
+            </span>
             {t.label}
           </>
         );

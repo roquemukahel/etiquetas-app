@@ -12,7 +12,9 @@ export type GrupoEstado = 'pendientes' | 'en_proceso' | 'en_espera' | 'listos';
 
 // "color" es la clase bg/text para el badge; "acento" es el token plano
 // (para bordes/puntos/franjas laterales); "icono" acompaña siempre al color
-// para que el estado nunca se comunique solo por color (accesibilidad).
+// para que el estado nunca se comunique solo por color (accesibilidad) — es
+// el NOMBRE del ícono (ver app/Iconos.tsx), no un emoji: este archivo es
+// lógica pura sin JSX, así que EstadoBadge.tsx hace la traducción nombre → SVG.
 export const ESTADOS_REPARACION: {
   id: EstadoReparacion;
   label: string;
@@ -21,14 +23,14 @@ export const ESTADOS_REPARACION: {
   acento: string;
   icono: string;
 }[] = [
-  { id: 'recibido', label: 'Recibido', grupo: 'pendientes', color: 'bg-accent/15 text-accent', acento: 'accent', icono: '📥' },
-  { id: 'esperando_diagnostico', label: 'Esperando diagnóstico', grupo: 'pendientes', color: 'bg-diag/15 text-diag', acento: 'diag', icono: '🔍' },
-  { id: 'esperando_aprobacion', label: 'Esperando aprobación', grupo: 'en_espera', color: 'bg-warn/15 text-warn', acento: 'warn', icono: '📋' },
-  { id: 'esperando_repuesto', label: 'Esperando repuesto', grupo: 'en_espera', color: 'bg-warn/15 text-warn', acento: 'warn', icono: '📦' },
-  { id: 'en_reparacion', label: 'En reparación', grupo: 'en_proceso', color: 'bg-repar/15 text-repar', acento: 'repar', icono: '🔧' },
-  { id: 'listo_para_entregar', label: 'Listo para entregar', grupo: 'listos', color: 'bg-good/15 text-good', acento: 'good', icono: '✅' },
-  { id: 'entregado', label: 'Entregado', grupo: 'listos', color: 'bg-muted/15 text-muted', acento: 'muted', icono: '🤝' },
-  { id: 'cancelado', label: 'Cancelado / sin solución', grupo: 'listos', color: 'bg-bad/15 text-bad', acento: 'bad', icono: '⛔' },
+  { id: 'recibido', label: 'Recibido', grupo: 'pendientes', color: 'bg-accent/15 text-accent', acento: 'accent', icono: 'recibido' },
+  { id: 'esperando_diagnostico', label: 'Esperando diagnóstico', grupo: 'pendientes', color: 'bg-diag/15 text-diag', acento: 'diag', icono: 'lupa' },
+  { id: 'esperando_aprobacion', label: 'Esperando aprobación', grupo: 'en_espera', color: 'bg-warn/15 text-warn', acento: 'warn', icono: 'documento' },
+  { id: 'esperando_repuesto', label: 'Esperando repuesto', grupo: 'en_espera', color: 'bg-warn/15 text-warn', acento: 'warn', icono: 'stock' },
+  { id: 'en_reparacion', label: 'En reparación', grupo: 'en_proceso', color: 'bg-repar/15 text-repar', acento: 'repar', icono: 'herramienta' },
+  { id: 'listo_para_entregar', label: 'Listo para entregar', grupo: 'listos', color: 'bg-good/15 text-good', acento: 'good', icono: 'chequeado' },
+  { id: 'entregado', label: 'Entregado', grupo: 'listos', color: 'bg-muted/15 text-muted', acento: 'muted', icono: 'entregado' },
+  { id: 'cancelado', label: 'Cancelado / sin solución', grupo: 'listos', color: 'bg-bad/15 text-bad', acento: 'bad', icono: 'cerrar' },
 ];
 
 export const GRUPOS_ESTADO: { id: GrupoEstado; label: string }[] = [
