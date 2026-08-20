@@ -8,6 +8,7 @@ import { esDemorado, esHoy, FINALIZADOS } from '../lib/reparaciones';
 import MiniaturaDispositivo from '../MiniaturaDispositivo';
 import Avatar from '../Avatar';
 import EstadoBadge from '../EstadoBadge';
+import { ICONOS } from '../Iconos';
 import TarjetaReparacion, { Reparacion, Tecnico } from './TarjetaReparacion';
 
 // Estados donde el técnico tiene algo concreto para hacer ahora mismo (a
@@ -135,14 +136,14 @@ export default function MiBanco({
   const bloqueadas = propias.filter((r) => !FINALIZADOS.includes(r.estado) && (r.estado === 'esperando_aprobacion' || r.estado === 'esperando_repuesto'));
 
   const INDICADORES: { id: Exclude<Filtro, null>; icono: string; label: string; valor: number; acento: string }[] = [
-    { id: 'activas', icono: '🛠️', label: 'Activas', valor: indicadores.activas, acento: 'accent' },
-    { id: 'demoradas', icono: '⏰', label: 'Demoradas', valor: indicadores.demoradas, acento: 'bad' },
-    { id: 'diagnostico', icono: '🔍', label: 'En diagnóstico', valor: indicadores.diagnostico, acento: 'diag' },
-    { id: 'aprobacion', icono: '📋', label: 'Esp. aprobación', valor: indicadores.aprobacion, acento: 'warn' },
-    { id: 'repuesto', icono: '📦', label: 'Esp. repuesto', valor: indicadores.repuesto, acento: 'warn' },
-    { id: 'reparacion', icono: '🔧', label: 'En reparación', valor: indicadores.reparacion, acento: 'repar' },
-    { id: 'listas', icono: '✅', label: 'Listas', valor: indicadores.listas, acento: 'good' },
-    { id: 'hoy', icono: '🎉', label: 'Hoy completó', valor: indicadores.hoy, acento: 'good' },
+    { id: 'activas', icono: 'tablero', label: 'Activas', valor: indicadores.activas, acento: 'accent' },
+    { id: 'demoradas', icono: 'reloj', label: 'Demoradas', valor: indicadores.demoradas, acento: 'bad' },
+    { id: 'diagnostico', icono: 'lupa', label: 'En diagnóstico', valor: indicadores.diagnostico, acento: 'diag' },
+    { id: 'aprobacion', icono: 'documento', label: 'Esp. aprobación', valor: indicadores.aprobacion, acento: 'warn' },
+    { id: 'repuesto', icono: 'stock', label: 'Esp. repuesto', valor: indicadores.repuesto, acento: 'warn' },
+    { id: 'reparacion', icono: 'herramienta', label: 'En reparación', valor: indicadores.reparacion, acento: 'repar' },
+    { id: 'listas', icono: 'chequeado', label: 'Listas', valor: indicadores.listas, acento: 'good' },
+    { id: 'hoy', icono: 'entregado', label: 'Hoy completó', valor: indicadores.hoy, acento: 'good' },
   ];
   const colorTexto: Record<string, string> = {
     accent: 'text-accent dark:text-dark-accent',
@@ -179,8 +180,11 @@ export default function MiBanco({
                   : 'border-border dark:border-dark-border bg-white dark:bg-dark-surface hover:border-accent/40 dark:hover:border-dark-accent/40'
               }`}
             >
-              <span className={`text-base font-semibold ${colorTexto[ind.acento]}`}>
-                <span aria-hidden="true">{ind.icono}</span> {ind.valor}
+              <span className={`flex items-center gap-1 text-base font-semibold ${colorTexto[ind.acento]}`}>
+                <span aria-hidden="true" className="[&_svg]:h-4 [&_svg]:w-4">
+                  {ICONOS[ind.icono]}
+                </span>
+                {ind.valor}
               </span>
               <span className="text-muted dark:text-dark-text-secondary leading-tight">{ind.label}</span>
             </button>
@@ -192,7 +196,7 @@ export default function MiBanco({
           técnico puede resolver ahora mismo, para que no tenga que escanear
           toda la lista para saber por dónde arrancar. */}
       <div className="rounded-xl border border-accent/30 dark:border-dark-accent/30 bg-accent-soft/40 dark:bg-dark-accent-soft/40 p-3 flex flex-col gap-2">
-        <p className="text-xs font-semibold text-accent dark:text-dark-accent">🎯 Próxima acción</p>
+        <p className="text-xs font-semibold text-accent dark:text-dark-accent">Próxima acción</p>
         {proximaAccion ? (
           <div className="flex items-center gap-3">
             <MiniaturaDispositivo
@@ -232,7 +236,7 @@ export default function MiBanco({
             {bloqueadas.length === 1 ? '' : 'es'} esperando al cliente o a un repuesto — no depende de vos por el momento.
           </p>
         ) : (
-          <p className="text-sm text-muted dark:text-dark-text-secondary">¡Estás al día! No tenés próximas acciones pendientes. 🎉</p>
+          <p className="text-sm text-muted dark:text-dark-text-secondary">¡Estás al día! No tenés próximas acciones pendientes.</p>
         )}
       </div>
 

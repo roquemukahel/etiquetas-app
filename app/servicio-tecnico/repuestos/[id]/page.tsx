@@ -13,6 +13,7 @@ import { codigoLlamada } from '../../../lib/paises';
 import { armarLinkWhatsApp, mensajeConsultaProveedor } from '../../../lib/whatsapp';
 import { extraerStockInsuficiente } from '../../../lib/repuestos';
 import Modal from '../../../Modal';
+import { ICONOS } from '../../../Iconos';
 
 type Proveedor = { id: string; nombre: string; telefono: string | null };
 type Repuesto = { id: string; nombre: string };
@@ -345,7 +346,11 @@ export default function ProveedorRepuestos() {
             >
               <div className="flex items-center justify-between gap-2">
                 <span className="flex items-center gap-2 min-w-0">
-                  {esMejorPrecio && <span className="text-xs shrink-0">✅</span>}
+                  {esMejorPrecio && (
+                    <span aria-hidden="true" className="[&_svg]:h-3.5 [&_svg]:w-3.5 inline-flex shrink-0 text-good">
+                      {ICONOS.check}
+                    </span>
+                  )}
                   <span className="text-sm truncate">{nombreRepuestoDe(p.repuesto_id)}</span>
                   {!p.disponible && (
                     <span className="text-[10px] font-semibold text-bad bg-bad/10 rounded-full px-2 py-0.5 shrink-0">Sin stock</span>

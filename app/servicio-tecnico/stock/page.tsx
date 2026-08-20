@@ -12,6 +12,15 @@ import { extraerStockInsuficiente, extraerDisponibleInsuficiente } from '../../l
 import { FINALIZADOS } from '../../lib/reparaciones';
 import ServicioTecnicoTabs from '../../ServicioTecnicoTabs';
 import Modal from '../../Modal';
+import { ICONOS } from '../../Iconos';
+
+function IconoChico({ nombre, className = '' }: { nombre: string; className?: string }) {
+  return (
+    <span aria-hidden="true" className={`[&_svg]:h-3.5 [&_svg]:w-3.5 inline-flex shrink-0 ${className}`}>
+      {ICONOS[nombre]}
+    </span>
+  );
+}
 
 type Repuesto = {
   id: string;
@@ -558,7 +567,9 @@ export default function StockRepuestos() {
               soloStockBajo ? 'border-warn bg-warn/10' : 'border-border dark:border-dark-border bg-white dark:bg-dark-surface'
             }`}
           >
-            <span className="text-base font-semibold text-warn">⚠️ {indicadores.stockBajo}</span>
+            <span className="flex items-center gap-1 text-base font-semibold text-warn">
+              <IconoChico nombre="alerta" /> {indicadores.stockBajo}
+            </span>
             <span className="text-muted dark:text-dark-text-secondary">Stock bajo</span>
           </button>
           <button
@@ -568,7 +579,9 @@ export default function StockRepuestos() {
               soloSinStock ? 'border-bad bg-bad/10' : 'border-border dark:border-dark-border bg-white dark:bg-dark-surface'
             }`}
           >
-            <span className="text-base font-semibold text-bad">⛔ {indicadores.sinStock}</span>
+            <span className="flex items-center gap-1 text-base font-semibold text-bad">
+              <IconoChico nombre="cerrar" /> {indicadores.sinStock}
+            </span>
             <span className="text-muted dark:text-dark-text-secondary">Sin stock</span>
           </button>
           <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-2.5 py-2 flex flex-col gap-0.5 col-span-2">
@@ -667,8 +680,8 @@ export default function StockRepuestos() {
                   className="h-11 w-11 rounded-lg object-contain bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border p-1 shrink-0"
                 />
               ) : (
-                <div className="h-11 w-11 rounded-lg bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border flex items-center justify-center text-lg shrink-0">
-                  🔩
+                <div className="h-11 w-11 rounded-lg bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border flex items-center justify-center text-muted dark:text-dark-text-secondary [&_svg]:h-5 [&_svg]:w-5 shrink-0">
+                  {ICONOS.repuesto}
                 </div>
               )}
               <button onClick={() => abrirDetalle(r)} className="min-w-0 flex-1 text-left">
@@ -677,7 +690,11 @@ export default function StockRepuestos() {
                   {r.categoria && <span>{r.categoria}</span>}
                   {r.calidad && <span>· {r.calidad}</span>}
                   {r.sku && <span>· SKU {r.sku}</span>}
-                  {r.ubicacion_fisica && <span>· 📍 {r.ubicacion_fisica}</span>}
+                  {r.ubicacion_fisica && (
+                    <span className="flex items-center gap-1">
+                      · <IconoChico nombre="ubicacion" /> {r.ubicacion_fisica}
+                    </span>
+                  )}
                   {nombreProveedor(r.proveedor_id) && <span>· {nombreProveedor(r.proveedor_id)}</span>}
                 </p>
               </button>
@@ -691,12 +708,12 @@ export default function StockRepuestos() {
                 </button>
                 {menuAbierto === r.id && (
                   <div className="absolute right-0 top-6 z-10 w-40 rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-elevated flex flex-col overflow-hidden">
-                    <button onClick={() => abrirDetalle(r)} className="px-3 py-2 text-xs text-left hover:bg-canvas dark:hover:bg-dark-bg">
-                      🔍 Detalle / reservas
+                    <button onClick={() => abrirDetalle(r)} className="flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-canvas dark:hover:bg-dark-bg">
+                      <IconoChico nombre="lupa" /> Detalle / reservas
                     </button>
                     {puedeGestionar && (
-                      <button onClick={() => abrirEdicion(r)} className="px-3 py-2 text-xs text-left hover:bg-canvas dark:hover:bg-dark-bg">
-                        ✏️ Editar
+                      <button onClick={() => abrirEdicion(r)} className="flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-canvas dark:hover:bg-dark-bg">
+                        <IconoChico nombre="editar" /> Editar
                       </button>
                     )}
                     {puedeEliminar && (
@@ -749,8 +766,8 @@ export default function StockRepuestos() {
                   className="h-20 w-20 rounded-lg object-contain bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border p-1"
                 />
               ) : (
-                <div className="h-20 w-20 rounded-lg bg-canvas dark:bg-dark-bg border border-dashed border-border dark:border-dark-border flex items-center justify-center text-2xl">
-                  📷
+                <div className="h-20 w-20 rounded-lg bg-canvas dark:bg-dark-bg border border-dashed border-border dark:border-dark-border flex items-center justify-center text-muted dark:text-dark-text-secondary [&_svg]:h-6 [&_svg]:w-6">
+                  {ICONOS.camara}
                 </div>
               )}
               <input type="file" accept="image/*" className="hidden" onChange={cambiarImagenForm} />

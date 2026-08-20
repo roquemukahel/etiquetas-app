@@ -250,4 +250,40 @@ export const ICONOS: Record<string, React.ReactNode> = {
       <path d="M13.5 6.5l3 3" />
     </IconoBase>
   ),
+  alerta: (
+    <IconoBase>
+      <path d="M12 3.5 21.5 20h-19L12 3.5Z" />
+      <path d="M12 9.5v4.5" />
+      <circle cx="12" cy="17" r="0.6" fill="currentColor" stroke="none" />
+    </IconoBase>
+  ),
+  escudo: (
+    <IconoBase>
+      <path d="M12 3 20 6.2v5.3c0 5-3.4 8.3-8 9.5-4.6-1.2-8-4.5-8-9.5V6.2L12 3Z" />
+      <path d="m8.7 12 2.3 2.3 4.3-4.6" />
+    </IconoBase>
+  ),
+  duplicar: (
+    <IconoBase>
+      <rect x="8.5" y="8.5" width="12" height="12" rx="1.5" />
+      <path d="M15.5 8.5V5a1.5 1.5 0 0 0-1.5-1.5H5A1.5 1.5 0 0 0 3.5 5v9A1.5 1.5 0 0 0 5 15.5h3.5" />
+    </IconoBase>
+  ),
+  deshacer: (
+    <IconoBase>
+      <path d="M7 8H4V5" />
+      <path d="M4 8a8 8 0 1 1-1.7 5" />
+    </IconoBase>
+  ),
+  telefono: (
+    <IconoBase>
+      <rect x="7" y="2.5" width="10" height="19" rx="2" />
+      <path d="M11 18h2" />
+    </IconoBase>
+  ),
+  noAplica: (
+    <IconoBase>
+      <path d="M5 12h14" />
+    </IconoBase>
+  ),
 };

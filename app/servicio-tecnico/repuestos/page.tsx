@@ -8,6 +8,7 @@ import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import { registrarAuditoria } from '../../lib/auditoria';
 import ServicioTecnicoTabs from '../../ServicioTecnicoTabs';
+import { ICONOS } from '../../Iconos';
 
 type Proveedor = { id: string; nombre: string; telefono: string | null };
 type Repuesto = { id: string; nombre: string };
@@ -227,7 +228,11 @@ export default function Repuestos() {
                       } ${!p.disponible ? 'opacity-60' : ''}`}
                     >
                       <span className="flex items-center gap-1.5 min-w-0">
-                        {idx === 0 && p.disponible && <span>✅</span>}
+                        {idx === 0 && p.disponible && (
+                          <span aria-hidden="true" className="[&_svg]:h-3.5 [&_svg]:w-3.5 inline-flex shrink-0 text-good">
+                            {ICONOS.check}
+                          </span>
+                        )}
                         <span className="truncate">{nombreProveedorDe(p.proveedor_id)}</span>
                         {!p.disponible && <span className="text-bad shrink-0">(sin stock)</span>}
                       </span>

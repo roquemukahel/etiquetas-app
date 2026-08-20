@@ -32,6 +32,17 @@ import CheckTri from '../../CheckTri';
 import TextoCondicionGenerado from '../../TextoCondicionGenerado';
 import EstadoBadge from '../../EstadoBadge';
 import ControlCalidad, { ControlCalidadItem } from '../ControlCalidad';
+import { ICONOS } from '../../Iconos';
+
+// Mismo patrón que TarjetaReparacion/EstadoBadge para reescalar los SVG de
+// 24px a un tamaño chico inline junto a texto.
+function IconoChico({ nombre, className = '' }: { nombre: string; className?: string }) {
+  return (
+    <span aria-hidden="true" className={`[&_svg]:h-3.5 [&_svg]:w-3.5 inline-flex shrink-0 ${className}`}>
+      {ICONOS[nombre]}
+    </span>
+  );
+}
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 const ACCESORIOS_OPCIONES = ['Funda', 'Cargador', 'SIM', 'Bandeja SIM'];
@@ -1008,13 +1019,19 @@ export default function FichaReparacion() {
             {r.capacidad_gb ? ` · ${r.capacidad_gb}GB` : ''}
           </p>
           <p className="text-xs text-muted dark:text-dark-text-secondary flex items-center gap-1.5 flex-wrap">
-            {nombreCliente ? `👤 ${nombreCliente}` : '🏬 Equipo propio del local'}
+            <span className="flex items-center gap-1">
+              <IconoChico nombre={nombreCliente ? 'clientes' : 'local'} />
+              {nombreCliente || 'Equipo propio del local'}
+            </span>
             <span>· Ingresó {hace(r.fecha_ingreso_servicio)}</span>
             {demorado && <span className="text-bad font-medium">· Demorada</span>}
           </p>
         </div>
-        <Link href={`/servicio-tecnico/etiqueta/${r.id}`} className="text-xs text-accent dark:text-dark-accent underline shrink-0">
-          🏷️ Etiqueta
+        <Link
+          href={`/servicio-tecnico/etiqueta/${r.id}`}
+          className="flex items-center gap-1 text-xs text-accent dark:text-dark-accent underline shrink-0"
+        >
+          <IconoChico nombre="etiqueta" /> Etiqueta
         </Link>
         {puedeGestionar && (
           <button
@@ -1193,9 +1210,13 @@ export default function FichaReparacion() {
                 <div className="text-sm flex flex-col gap-1">
                   <p className="text-xs">
                     {r.cliente_id ? (
-                      <span className="text-accent dark:text-dark-accent">👤 Equipo de un cliente</span>
+                      <span className="flex items-center gap-1 text-accent dark:text-dark-accent">
+                        <IconoChico nombre="clientes" /> Equipo de un cliente
+                      </span>
                     ) : (
-                      <span className="text-muted dark:text-dark-text-secondary">🏬 Equipo propio del local</span>
+                      <span className="flex items-center gap-1 text-muted dark:text-dark-text-secondary">
+                        <IconoChico nombre="local" /> Equipo propio del local
+                      </span>
                     )}
                   </p>
                   {nombreCliente && (
@@ -1232,8 +1253,9 @@ export default function FichaReparacion() {
                     </p>
                   )}
                   {r.ubicacion_fisica && (
-                    <p>
-                      <span className="text-muted dark:text-dark-text-secondary">Ubicación: </span>📍 {r.ubicacion_fisica}
+                    <p className="flex items-center gap-1">
+                      <span className="text-muted dark:text-dark-text-secondary">Ubicación: </span>
+                      <IconoChico nombre="ubicacion" /> {r.ubicacion_fisica}
                     </p>
                   )}
                 </div>
@@ -1367,7 +1389,12 @@ export default function FichaReparacion() {
                     {/* Reparaciones cargadas antes de este cambio: si nunca se usó la checklist nueva, mostramos la vieja para no perder ese historial. */}
                     {r.camara_frontal_ok == null && r.camara_trasera_ok == null && itemChecklist('Cámaras', r.camaras_ok)}
                     {r.boton_power_ok == null && r.boton_volumen_ok == null && itemChecklist('Botones', r.botones_ok)}
-                    {r.humedad != null && <span>{r.humedad ? '⚠️ Con humedad/manipulación' : '✅ Sin humedad'}</span>}
+                    {r.humedad != null && (
+                      <span className="flex items-center gap-1">
+                        <IconoChico nombre={r.humedad ? 'alerta' : 'check'} className={r.humedad ? 'text-warn' : 'text-good'} />
+                        {r.humedad ? 'Con humedad/manipulación' : 'Sin humedad'}
+                      </span>
+                    )}
                   </p>
                   {r.garantia_condiciones_aceptadas && <p className="text-xs text-good">✓ Cliente aceptó condiciones de garantía</p>}
                   <TextoCondicionGenerado datos={r as any} />
@@ -1480,9 +1507,21 @@ export default function FichaReparacion() {
                   {(r.presupuesto_mano_obra != null || r.presupuesto_repuestos != null) && (
                     <div className="rounded-lg bg-canvas dark:bg-dark-bg p-2.5 flex flex-col gap-1.5">
                       <p className="text-xs font-medium flex items-center gap-1.5">
-                        {r.presupuesto_estado === 'aprobado' && <span className="text-good">✅ Aprobado</span>}
-                        {r.presupuesto_estado === 'rechazado' && <span className="text-bad">✖️ Rechazado</span>}
-                        {r.presupuesto_estado === 'enviado' && <span className="text-warn">📤 Enviado, sin responder</span>}
+                        {r.presupuesto_estado === 'aprobado' && (
+                          <span className="flex items-center gap-1 text-good">
+                            <IconoChico nombre="check" /> Aprobado
+                          </span>
+                        )}
+                        {r.presupuesto_estado === 'rechazado' && (
+                          <span className="flex items-center gap-1 text-bad">
+                            <IconoChico nombre="cerrar" /> Rechazado
+                          </span>
+                        )}
+                        {r.presupuesto_estado === 'enviado' && (
+                          <span className="flex items-center gap-1 text-warn">
+                            <IconoChico nombre="enviar" /> Enviado, sin responder
+                          </span>
+                        )}
                         {!r.presupuesto_estado && <span className="text-muted dark:text-dark-text-secondary">Sin enviar</span>}
                       </p>
                       {r.presupuesto_enviado_at && (
@@ -1730,7 +1769,9 @@ export default function FichaReparacion() {
                   : 'Checklist tomado de los servicios realizados en esta reparación.'}
               </p>
               {r.control_calidad_override && (
-                <p className="text-xs text-warn mb-1">⚠️ Se marcó "Listo para entregar" con controles pendientes (override registrado en el historial).</p>
+                <p className="flex items-center gap-1 text-xs text-warn mb-1">
+                  <IconoChico nombre="alerta" /> Se marcó "Listo para entregar" con controles pendientes (override registrado en el historial).
+                </p>
               )}
               <ControlCalidad
                 checklist={checklistAplicable}
@@ -1754,8 +1795,9 @@ export default function FichaReparacion() {
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={fotoEvidenciaBase64} alt="" className="h-32 w-32 object-cover rounded-lg border border-border dark:border-dark-border self-start" />
                   )}
-                  <label className="self-start rounded-lg border border-border dark:border-dark-border px-3 py-2 text-xs font-medium cursor-pointer">
-                    {fotoEvidenciaBase64 ? '📷 Cambiar foto' : '📷 Sacar/elegir foto (opcional)'}
+                  <label className="self-start flex items-center gap-1 rounded-lg border border-border dark:border-dark-border px-3 py-2 text-xs font-medium cursor-pointer">
+                    <IconoChico nombre="camara" />
+                    {fotoEvidenciaBase64 ? 'Cambiar foto' : 'Sacar/elegir foto (opcional)'}
                     <input type="file" accept="image/*" capture="environment" className="hidden" onChange={elegirFotoEvidencia} />
                   </label>
                   <textarea
@@ -1831,7 +1873,7 @@ export default function FichaReparacion() {
                     .filter((ev) => ev.tipo === 'mensaje_cliente')
                     .map((ev) => (
                       <div key={ev.id} className="text-xs flex gap-2">
-                        <span className="shrink-0">💬</span>
+                        <IconoChico nombre="soporte" className="mt-0.5" />
                         <div className="min-w-0">
                           <p className="text-ink dark:text-dark-text">{ev.texto}</p>
                           <p className="text-muted dark:text-dark-text-secondary">
@@ -1872,7 +1914,10 @@ export default function FichaReparacion() {
                 <div className="flex flex-col gap-2">
                   {eventos.map((ev) => (
                     <div key={ev.id} className="text-xs flex gap-2">
-                      <span className="shrink-0">{ev.tipo === 'nota_interna' ? '📝' : ev.tipo === 'mensaje_cliente' ? '💬' : '⚙️'}</span>
+                      <IconoChico
+                        nombre={ev.tipo === 'nota_interna' ? 'documento' : ev.tipo === 'mensaje_cliente' ? 'soporte' : 'configuracion'}
+                        className="mt-0.5"
+                      />
                       <div className="min-w-0">
                         <p className="text-ink dark:text-dark-text">{ev.texto}</p>
                         <p className="text-muted dark:text-dark-text-secondary">
@@ -1890,7 +1935,7 @@ export default function FichaReparacion() {
         {/* Panel lateral fijo */}
         <aside className="w-full lg:w-72 shrink-0 flex flex-col gap-3">
           <div className="rounded-xl border border-accent/30 dark:border-dark-accent/30 bg-accent-soft/40 dark:bg-dark-accent-soft/40 p-3 flex flex-col gap-1.5">
-            <p className="text-xs font-semibold text-accent dark:text-dark-accent">🎯 Próxima acción</p>
+            <p className="text-xs font-semibold text-accent dark:text-dark-accent">Próxima acción</p>
             {accionSiguiente ? (
               <button
                 disabled={guardando || !puedeGestionar}
@@ -1953,7 +1998,9 @@ export default function FichaReparacion() {
                 : 'border-warn/30 bg-warn/10 text-warn'
             }`}
           >
-            <span className="font-medium">🔍 Control de calidad</span>
+            <span className="flex items-center gap-1 font-medium">
+              <IconoChico nombre="lupa" /> Control de calidad
+            </span>
             <span>
               {checklistAplicable.length - controlesFaltantes.length}/{checklistAplicable.length}
             </span>
@@ -1964,11 +2011,20 @@ export default function FichaReparacion() {
               onClick={copiarLinkSeguimiento}
               className="rounded-xl border border-border dark:border-dark-border py-2.5 text-center text-xs font-medium"
             >
-              {linkCopiado ? '✓ Copiado' : '🔗 Copiar link de seguimiento'}
+              {linkCopiado ? (
+                <span className="flex items-center justify-center gap-1">
+                  <IconoChico nombre="check" /> Copiado
+                </span>
+              ) : (
+                'Copiar link de seguimiento'
+              )}
             </button>
           )}
-          <Link href={`/servicio-tecnico/etiqueta/${r.id}`} className="rounded-xl border border-border dark:border-dark-border py-2.5 text-center text-xs font-medium">
-            🏷️ Imprimir etiqueta
+          <Link
+            href={`/servicio-tecnico/etiqueta/${r.id}`}
+            className="flex items-center justify-center gap-1 rounded-xl border border-border dark:border-dark-border py-2.5 text-center text-xs font-medium"
+          >
+            <IconoChico nombre="etiqueta" /> Imprimir etiqueta
           </Link>
 
           {!editando && (
@@ -2016,7 +2072,11 @@ export default function FichaReparacion() {
                   )
                 )
               )}
-              {!r.cliente_id && r.agregado_a_stock && <p className="text-xs text-good text-center">✅ Ya se agregó al Stock</p>}
+              {!r.cliente_id && r.agregado_a_stock && (
+                <p className="flex items-center justify-center gap-1 text-xs text-good text-center">
+                  <IconoChico nombre="check" /> Ya se agregó al Stock
+                </p>
+              )}
 
               {avisoAgregarStock && (
                 <div className="rounded-xl border border-good/30 bg-good/10 p-3 flex flex-col gap-2">
@@ -2064,7 +2124,14 @@ export default function FichaReparacion() {
 
 function itemChecklist(label: string, valor: boolean | null) {
   if (valor == null) return null;
-  return <span key={label}>{valor ? `✅ ${label}` : `❌ ${label}`}</span>;
+  return (
+    <span key={label} className="inline-flex items-center gap-1">
+      <span aria-hidden="true" className={`[&_svg]:h-3.5 [&_svg]:w-3.5 inline-flex shrink-0 ${valor ? 'text-good' : 'text-bad'}`}>
+        {ICONOS[valor ? 'check' : 'cerrar']}
+      </span>
+      {label}
+    </span>
+  );
 }
 
 function Seccion({ titulo, children }: { titulo: string; children: React.ReactNode }) {

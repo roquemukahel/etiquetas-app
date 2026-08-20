@@ -1232,8 +1232,8 @@ export default function ServicioTecnico() {
                         <Avatar src={t.foto_url} nombre={t.nombre} size={52} />
                         <span className="min-w-0">
                           <p className="text-sm font-medium truncate">{t.nombre}</p>
-                          <span className={`inline-flex items-center gap-1 text-xs font-medium ${ocupado ? 'text-warn' : 'text-good'}`}>
-                            <span aria-hidden="true">{ocupado ? '🟠' : '🟢'}</span>
+                          <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${ocupado ? 'text-warn' : 'text-good'}`}>
+                            <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${ocupado ? 'bg-warn' : 'bg-good'}`} />
                             {ocupado ? 'Ocupado' : 'Disponible'}
                           </span>
                         </span>
@@ -1251,9 +1251,18 @@ export default function ServicioTecnico() {
                     </div>
 
                     <div className="grid grid-cols-3 gap-1.5 text-xs text-muted dark:text-dark-text-secondary">
-                      <span>🔍 {esperandoDiagnostico} diagnóstico</span>
-                      <span>🔧 {enCurso} en curso</span>
-                      <span>✅ {listasHoy} listas hoy</span>
+                      <span className="flex items-center gap-1">
+                        <span aria-hidden="true" className="[&_svg]:h-3.5 [&_svg]:w-3.5 inline-flex shrink-0">{ICONOS.lupa}</span>
+                        {esperandoDiagnostico} diagnóstico
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span aria-hidden="true" className="[&_svg]:h-3.5 [&_svg]:w-3.5 inline-flex shrink-0">{ICONOS.herramienta}</span>
+                        {enCurso} en curso
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span aria-hidden="true" className="[&_svg]:h-3.5 [&_svg]:w-3.5 inline-flex shrink-0">{ICONOS.chequeado}</span>
+                        {listasHoy} listas hoy
+                      </span>
                     </div>
 
                     {/* Carga relativa y tiempo promedio: comparan técnicos entre
@@ -1284,7 +1293,10 @@ export default function ServicioTecnico() {
                 onClick={() => setAlertasAbiertas((v) => !v)}
                 className="flex items-center justify-between px-4 py-3 text-sm font-medium"
               >
-                <span>🔔 {alertas.length} alerta{alertas.length === 1 ? '' : 's'}</span>
+                <span className="flex items-center gap-1">
+                  <span aria-hidden="true" className="[&_svg]:h-3.5 [&_svg]:w-3.5 inline-flex shrink-0">{ICONOS.campana}</span>
+                  {alertas.length} alerta{alertas.length === 1 ? '' : 's'}
+                </span>
                 <span className="text-xs text-muted dark:text-dark-text-secondary">{alertasAbiertas ? 'Ocultar' : 'Ver'}</span>
               </button>
               {alertasAbiertas && (

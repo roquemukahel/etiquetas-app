@@ -6,6 +6,18 @@ import { imagenColorDeModelo } from '../lib/coloresModelo';
 import { ESTADOS_REPARACION, PRIORIDADES, infoEstado } from '../lib/reparaciones';
 import MiniaturaDispositivo from '../MiniaturaDispositivo';
 import EstadoBadge from '../EstadoBadge';
+import { ICONOS } from '../Iconos';
+import { Boton, BotonLink, BotonIcono } from '../Boton';
+
+// Ícono chico reutilizado inline en esta tarjeta (etiqueta, cliente/local,
+// ubicación) — mismo patrón de EstadoBadge para reescalar los SVG de 24px.
+function IconoChico({ nombre }: { nombre: string }) {
+  return (
+    <span aria-hidden="true" className="[&_svg]:h-3.5 [&_svg]:w-3.5 inline-flex shrink-0">
+      {ICONOS[nombre]}
+    </span>
+  );
+}
 
 export type Tecnico = { id: string; nombre: string; foto_url: string | null };
 
@@ -148,9 +160,9 @@ export default function TarjetaReparacion({
             <div className="absolute right-0 top-6 z-10 w-44 rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-elevated flex flex-col overflow-hidden">
               <Link
                 href={`/servicio-tecnico/etiqueta/${r.id}`}
-                className="px-3 py-2 text-xs text-left hover:bg-canvas dark:hover:bg-dark-bg"
+                className="flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-canvas dark:hover:bg-dark-bg"
               >
-                🏷️ Imprimir etiqueta
+                <IconoChico nombre="etiqueta" /> Imprimir etiqueta
               </Link>
               <button
                 onClick={() => onArchivar(r)}
@@ -160,20 +172,24 @@ export default function TarjetaReparacion({
               </button>
               <button
                 onClick={() => onEliminar(r)}
-                className="px-3 py-2 text-xs text-left text-bad hover:bg-bad/10"
+                className="flex items-center gap-2 px-3 py-2 text-xs text-left text-bad hover:bg-bad/10"
               >
-                Eliminar definitivamente
+                <IconoChico nombre="papelera" /> Eliminar definitivamente
               </button>
             </div>
           )}
         </div>
       </div>
 
-      <p className="text-xs">
+      <p className="flex items-center gap-1 text-xs">
         {r.cliente_id ? (
-          <span className="text-accent dark:text-dark-accent">👤 Cliente</span>
+          <span className="flex items-center gap-1 text-accent dark:text-dark-accent">
+            <IconoChico nombre="clientes" /> Cliente
+          </span>
         ) : (
-          <span className="text-muted dark:text-dark-text-secondary">🏬 Propio del local</span>
+          <span className="flex items-center gap-1 text-muted dark:text-dark-text-secondary">
+            <IconoChico nombre="local" /> Propio del local
+          </span>
         )}
       </p>
 
@@ -186,7 +202,11 @@ export default function TarjetaReparacion({
             {PRIORIDADES.find((p) => p.id === r.prioridad)?.label}
           </span>
         )}
-        {r.ubicacion_fisica && <span className="text-muted dark:text-dark-text-secondary">📍 {r.ubicacion_fisica}</span>}
+        {r.ubicacion_fisica && (
+          <span className="flex items-center gap-1 text-muted dark:text-dark-text-secondary">
+            <IconoChico nombre="ubicacion" /> {r.ubicacion_fisica}
+          </span>
+        )}
         <span className="text-muted dark:text-dark-text-secondary">Ingresó {hace(r.fecha_ingreso_servicio)}</span>
       </div>
 
@@ -194,15 +214,22 @@ export default function TarjetaReparacion({
 
       {extra}
 
+      {/* Footer compacto: una sola acción de estado (cuando corresponde) +
+          navegación/WhatsApp en una fila, en vez de barras apiladas de
+          colores saturados. Misma lógica y mismos handlers que antes. */}
       {r.cliente_id ? (
         (r.estado === 'listo_para_entregar' || r.estado === 'cancelado') && (
-          <button
+          <Boton
+            variante="exito"
+            tamano="sm"
+            anchoCompleto
             disabled={guardando === r.id}
+            cargando={guardando === r.id}
             onClick={() => onEntregadoCliente(r)}
-            className="rounded-lg bg-good hover:opacity-90 transition-opacity py-2 text-center text-xs font-medium text-white disabled:opacity-40"
+            iconoIzq={<IconoChico nombre="check" />}
           >
-            ✓ Marcar entregado al cliente
-          </button>
+            Marcar entregado al cliente
+          </Boton>
         )
       ) : (
         // Equipo propio: "Agregar al Stock" sigue disponible tanto en "Listo
@@ -213,43 +240,47 @@ export default function TarjetaReparacion({
         (r.estado === 'listo_para_entregar' || r.estado === 'entregado' || r.estado === 'cancelado') &&
         !r.agregado_a_stock &&
         (puedeAgregarStock ? (
-          <button
+          <Boton
+            variante="exito"
+            tamano="sm"
+            anchoCompleto
             disabled={guardando === r.id}
+            cargando={guardando === r.id}
             onClick={() => onAgregarAlStock(r)}
-            className="rounded-lg bg-good hover:opacity-90 transition-opacity py-2 text-center text-xs font-medium text-white disabled:opacity-40"
+            iconoIzq={<IconoChico nombre="check" />}
           >
-            ✓ Agregar al Stock
-          </button>
+            Agregar al Stock
+          </Boton>
         ) : (
           r.estado === 'entregado' && (
-            <div className="rounded-lg bg-muted/10 py-2 text-center text-xs font-medium text-muted dark:text-dark-text-secondary">
+            <span className="inline-flex items-center justify-center rounded-lg bg-muted/10 h-9 text-xs font-medium text-muted dark:text-dark-text-secondary">
               Entregado
-            </div>
+            </span>
           )
         ))
       )}
 
       {r.estado === 'entregado' && (r.cliente_id || r.agregado_a_stock) && (
-        <div className="rounded-lg bg-muted/10 py-2 text-center text-xs font-medium text-muted dark:text-dark-text-secondary">
-          {r.cliente_id ? '✓ Entregado al cliente' : '✓ Ya está en Stock'}
-        </div>
+        <span className="inline-flex items-center justify-center gap-1 rounded-lg bg-muted/10 h-9 text-xs font-medium text-muted dark:text-dark-text-secondary">
+          <IconoChico nombre="check" />
+          {r.cliente_id ? 'Entregado al cliente' : 'Ya está en Stock'}
+        </span>
       )}
 
       <div className="flex gap-2">
-        <Link
-          href={`/servicio-tecnico/${r.id}`}
-          className="flex-1 rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-center text-xs font-medium text-white"
-        >
+        <BotonLink href={`/servicio-tecnico/${r.id}`} variante="secundario" tamano="sm" className="flex-1">
           Abrir ficha
-        </Link>
+        </BotonLink>
         {r.cliente_id && (
-          <button
+          <BotonIcono
+            icono={ICONOS.enviar}
+            ariaLabel="Enviar WhatsApp"
+            variante="ghost"
+            tamano="sm"
             disabled={guardando === r.id}
             onClick={() => onWhatsApp(r)}
-            className="rounded-lg border border-good/30 text-good px-3 py-2 text-xs font-medium disabled:opacity-40"
-          >
-            WhatsApp
-          </button>
+            className="text-good"
+          />
         )}
       </div>
 

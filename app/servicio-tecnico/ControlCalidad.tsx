@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { comprimirImagen } from '../lib/comprimirImagen';
+import { ICONOS } from '../Iconos';
 
 export type ControlCalidadItem = {
   id: string;
@@ -59,9 +60,9 @@ export default function ControlCalidad({
   };
 
   const RESULTADOS: { id: string; icono: string; titulo: string; activo: string }[] = [
-    { id: 'correcto', icono: '✅', titulo: 'Correcto', activo: 'bg-good text-white' },
-    { id: 'falla', icono: '❌', titulo: 'Falla', activo: 'bg-bad text-white' },
-    { id: 'no_aplica', icono: '➖', titulo: 'No aplica', activo: 'bg-muted text-white' },
+    { id: 'correcto', icono: 'check', titulo: 'Correcto', activo: 'bg-good text-white' },
+    { id: 'falla', icono: 'cerrar', titulo: 'Falla', activo: 'bg-bad text-white' },
+    { id: 'no_aplica', icono: 'noAplica', titulo: 'No aplica', activo: 'bg-muted text-white' },
   ];
 
   return (
@@ -81,8 +82,10 @@ export default function ControlCalidad({
                 <img src={fotoActual} alt="" className="h-8 w-8 rounded object-cover shrink-0" />
               )}
               {!soloLectura && (
-                <label className="shrink-0 text-sm cursor-pointer" aria-label={`Foto de ${item}`}>
-                  📷
+                <label className="shrink-0 cursor-pointer text-muted dark:text-dark-text-secondary" aria-label={`Foto de ${item}`}>
+                  <span aria-hidden="true" className="[&_svg]:h-4 [&_svg]:w-4 inline-flex">
+                    {ICONOS.camara}
+                  </span>
                   <input type="file" accept="image/*" className="hidden" onChange={(e) => elegirFoto(item, e)} />
                 </label>
               )}
@@ -99,7 +102,9 @@ export default function ControlCalidad({
                       reg?.resultado === res.id ? res.activo : 'border border-border dark:border-dark-border'
                     }`}
                   >
-                    {res.icono}
+                    <span aria-hidden="true" className="[&_svg]:h-3.5 [&_svg]:w-3.5 inline-flex">
+                      {ICONOS[res.icono]}
+                    </span>
                   </button>
                 ))}
               </div>

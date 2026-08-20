@@ -9,6 +9,15 @@ import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import ServicioTecnicoTabs from '../../ServicioTecnicoTabs';
 import Modal from '../../Modal';
+import { ICONOS } from '../../Iconos';
+
+function IconoChico({ nombre, className = '' }: { nombre: string; className?: string }) {
+  return (
+    <span aria-hidden="true" className={`[&_svg]:h-3.5 [&_svg]:w-3.5 inline-flex shrink-0 ${className}`}>
+      {ICONOS[nombre]}
+    </span>
+  );
+}
 
 type Trabajo = {
   id: string;
@@ -446,7 +455,9 @@ export default function Servicios() {
                   : 'border-border dark:border-dark-border'
               }`}
             >
-              {verArchivados ? '📦 Viendo archivados' : '📦 Ver archivados'}
+              <span className="inline-flex items-center gap-1">
+                <IconoChico nombre="stock" /> {verArchivados ? 'Viendo archivados' : 'Ver archivados'}
+              </span>
             </button>
             {hayFiltrosActivos && (
               <button
@@ -486,8 +497,8 @@ export default function Servicios() {
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={t.imagen_url} alt={t.nombre} className="h-full w-full object-contain p-3" loading="lazy" />
               ) : (
-                <span className="text-3xl" aria-hidden="true">
-                  🔧
+                <span aria-hidden="true" className="[&_svg]:h-8 [&_svg]:w-8 text-muted dark:text-dark-text-secondary">
+                  {ICONOS.herramienta}
                 </span>
               )}
             </div>
@@ -506,18 +517,18 @@ export default function Servicios() {
                   {menuAbierto === t.id && (
                     <div className="absolute right-0 top-6 z-10 w-44 rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-elevated flex flex-col overflow-hidden">
                       {puedeGestionar && (
-                      <button onClick={() => abrirEdicion(t)} className="px-3 py-2 text-xs text-left hover:bg-canvas dark:hover:bg-dark-bg">
-                        ✏️ Editar
+                      <button onClick={() => abrirEdicion(t)} className="flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-canvas dark:hover:bg-dark-bg">
+                        <IconoChico nombre="editar" /> Editar
                       </button>
                       )}
                       {puedeGestionar && (
-                      <button onClick={() => duplicar(t)} className="px-3 py-2 text-xs text-left hover:bg-canvas dark:hover:bg-dark-bg">
-                        ⧉ Duplicar
+                      <button onClick={() => duplicar(t)} className="flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-canvas dark:hover:bg-dark-bg">
+                        <IconoChico nombre="duplicar" /> Duplicar
                       </button>
                       )}
                       {puedeGestionar && (
-                      <button onClick={() => archivar(t, !t.activo)} className="px-3 py-2 text-xs text-left hover:bg-canvas dark:hover:bg-dark-bg">
-                        {t.activo ? '📦 Archivar' : '↩ Reactivar'}
+                      <button onClick={() => archivar(t, !t.activo)} className="flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-canvas dark:hover:bg-dark-bg">
+                        <IconoChico nombre={t.activo ? 'stock' : 'deshacer'} /> {t.activo ? 'Archivar' : 'Reactivar'}
                       </button>
                       )}
                       {puedeEliminar && (
@@ -539,13 +550,27 @@ export default function Servicios() {
 
               <div className="flex items-center gap-2 flex-wrap text-xs text-muted dark:text-dark-text-secondary mt-0.5">
                 {t.precio != null && <span className="text-ink dark:text-dark-text font-medium">${t.precio.toLocaleString('es-AR')}</span>}
-                {t.duracion_estimada_min != null && <span>⏱ {t.duracion_estimada_min} min</span>}
-                {t.garantia_dias != null && <span>🛡 {t.garantia_dias}d garantía</span>}
+                {t.duracion_estimada_min != null && (
+                  <span className="flex items-center gap-1">
+                    <IconoChico nombre="reloj" /> {t.duracion_estimada_min} min
+                  </span>
+                )}
+                {t.garantia_dias != null && (
+                  <span className="flex items-center gap-1">
+                    <IconoChico nombre="escudo" /> {t.garantia_dias}d garantía
+                  </span>
+                )}
               </div>
 
-              {t.compatibilidad && <p className="text-xs text-muted dark:text-dark-text-secondary truncate">📱 {t.compatibilidad}</p>}
+              {t.compatibilidad && (
+                <p className="flex items-center gap-1 text-xs text-muted dark:text-dark-text-secondary truncate">
+                  <IconoChico nombre="telefono" /> {t.compatibilidad}
+                </p>
+              )}
               {nombreRepuesto(t.repuesto_sugerido_id) && (
-                <p className="text-xs text-muted dark:text-dark-text-secondary truncate">🔩 {nombreRepuesto(t.repuesto_sugerido_id)}</p>
+                <p className="flex items-center gap-1 text-xs text-muted dark:text-dark-text-secondary truncate">
+                  <IconoChico nombre="repuesto" /> {nombreRepuesto(t.repuesto_sugerido_id)}
+                </p>
               )}
 
               {!t.activo && (
@@ -571,8 +596,8 @@ export default function Servicios() {
                   className="h-20 w-20 rounded-lg object-contain bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border p-1"
                 />
               ) : (
-                <div className="h-20 w-20 rounded-lg bg-canvas dark:bg-dark-bg border border-dashed border-border dark:border-dark-border flex items-center justify-center text-2xl">
-                  📷
+                <div className="h-20 w-20 rounded-lg bg-canvas dark:bg-dark-bg border border-dashed border-border dark:border-dark-border flex items-center justify-center text-muted dark:text-dark-text-secondary [&_svg]:h-6 [&_svg]:w-6">
+                  {ICONOS.camara}
                 </div>
               )}
               <input type="file" accept="image/*" className="hidden" onChange={cambiarImagenForm} />

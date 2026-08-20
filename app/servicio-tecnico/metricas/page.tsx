@@ -250,7 +250,7 @@ export default function MetricasServicioTecnico() {
       <div className="grid md:grid-cols-2 gap-4">
         <SeccionCard titulo="Stock crítico" subtitulo="Repuestos en o por debajo del mínimo configurado.">
           {stockCritico.length === 0 ? (
-            <EmptyState icono="✅" titulo="Sin repuestos en stock crítico" />
+            <EmptyState titulo="Sin repuestos en stock crítico" />
           ) : (
             <RankingBarras datos={stockCritico.map((s) => ({ nombre: s.nombre, valor: s.valor }))} sufijo=" disp." />
           )}
