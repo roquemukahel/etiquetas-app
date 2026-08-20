@@ -37,6 +37,8 @@ export type ItemR = {
   cantidad: number;
   precio_unitario: number | null;
   costo: number | null;
+  descripcion: string;
+  tipo: string;
 };
 export type PagoR = { medio: string; monto: number; fecha: string };
 export type CreditoR = { concepto: string; tipo: string; monto: number; fecha: string };
@@ -186,6 +188,35 @@ export function bloqueVentas(
     operaciones: cobradas.length,
     unidades,
   };
+}
+
+export type ProductoVendido = { nombre: string; unidades: number };
+
+// Desglose de unidades vendidas por producto (no por operación): un
+// mayorista que compra 10 teléfonos en una sola orden suma 10 acá, no 1
+// como "operaciones". Se excluyen los ítems de tipo 'trabajo' (mano de obra
+// de Servicio Técnico — no es un producto que se "vende" en este sentido).
+// Los dispositivos se agrupan por modelo+color, sin el IMEI (mismo criterio
+// que "Productos más vendidos" de Inicio, app/page.tsx), así 10 iPhone 13
+// iguales cuentan como una sola fila en vez de 10 filas de a 1.
+export function productosMasVendidos(
+  ordenes: OrdenR[],
+  itemsPorOrden: Map<string, ItemR[]>,
+  desde: Date,
+  hasta: Date
+): ProductoVendido[] {
+  const cobradas = ordenes.filter((o) => ESTADOS_COBRADOS.includes(o.estado) && entre(o.created_at, desde, hasta));
+  const conteo = new Map<string, number>();
+  for (const o of cobradas) {
+    for (const it of itemsPorOrden.get(o.id) ?? []) {
+      if (it.tipo === 'trabajo' || !it.descripcion) continue;
+      const clave = it.tipo === 'dispositivo' ? it.descripcion.split(' · IMEI')[0] : it.descripcion;
+      conteo.set(clave, (conteo.get(clave) ?? 0) + (it.cantidad || 0));
+    }
+  }
+  return Array.from(conteo.entries())
+    .map(([nombre, unidades]) => ({ nombre, unidades }))
+    .sort((a, b) => b.unidades - a.unidades);
 }
 
 // Variación entre dos valores. Devuelve null si el anterior es 0 (para no

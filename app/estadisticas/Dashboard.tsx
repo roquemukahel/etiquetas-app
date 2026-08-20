@@ -17,6 +17,7 @@ import {
   CreditoR,
   rangoDe,
   bloqueVentas,
+  productosMasVendidos,
   variacion,
   montoVenta,
   serieEvolucion,
@@ -126,6 +127,7 @@ export default function Estadisticas() {
   const [vistaFormaPago, setVistaFormaPago] = useState<VistaRanking>('torta');
   const [vistaProveedores, setVistaProveedores] = useState<VistaRanking>('barras');
   const [vistaCompradores, setVistaCompradores] = useState<VistaRanking>('barras');
+  const [vistaProductos, setVistaProductos] = useState<VistaRanking>('barras');
   const [vistaClientesServicio, setVistaClientesServicio] = useState<VistaRanking>('barras');
   const [vistaRegistroStock, setVistaRegistroStock] = useState<VistaRanking>('barras');
 
@@ -221,9 +223,10 @@ export default function Estadisticas() {
             .gte('created_at', desde.toISOString()),
           // "costo" se omite a propósito: la columna orden_items.costo todavía no
           // existe en producción (llega con la fase de costos). Sin esto, el
-          // pedido fallaría y nos quedaríamos sin unidades/ítems. precio_unitario
-          // y cantidad sí existen desde siempre.
-          supabase.from('orden_items').select('orden_id, cantidad, precio_unitario, created_at').gte('created_at', desde.toISOString()),
+          // pedido fallaría y nos quedaríamos sin unidades/ítems. precio_unitario,
+          // cantidad, descripcion y tipo sí existen desde siempre (son las mismas
+          // que ya usa "Productos más vendidos" de Inicio, app/page.tsx).
+          supabase.from('orden_items').select('orden_id, cantidad, precio_unitario, descripcion, tipo, created_at').gte('created_at', desde.toISOString()),
           supabase.from('reparaciones').select('tecnico_id, fecha_reparado').not('fecha_reparado', 'is', null).gte('fecha_reparado', desde.toISOString()),
           supabase
             .from('reparaciones')
@@ -400,6 +403,15 @@ export default function Estadisticas() {
       .sort((a, b) => b.valor - a.valor)
       .slice(0, 10);
   }, [ordenesPeriodo, nombresClientes]);
+
+  // Unidades vendidas por producto (no por operación) — ver comentario en
+  // productosMasVendidos(). Mismo criterio de rango que actualB/prevB, no el
+  // simplificado de los rankings de arriba (importa el corte exacto cuando
+  // se está mirando un tramo pasado ya cerrado, ej. "el mes pasado").
+  const productosVendidos: Dato[] = useMemo(
+    () => productosMasVendidos(ordenes, itemsPorOrden, rango.inicio, rango.fin).map((p) => ({ nombre: p.nombre, valor: p.unidades })),
+    [ordenes, itemsPorOrden, rango]
+  );
 
   const rankingClientesServicio: Dato[] = useMemo(() => {
     const mapa = new Map<string, number>();
@@ -643,12 +655,23 @@ export default function Estadisticas() {
             <SeccionCard titulo="Evolución de ventas" subtitulo={comparar ? `Línea llena: ${etiquetaTramoActual}. Punteada: ${etiquetaTramoAnterior}.` : undefined} accion={<SegmentedChips size="sm" valor={metricaChart} opciones={metricasChart} onChange={setMetricaChart} />}>
               {ocultarMontos ? graficoOculto : <LineAreaChart puntos={serie} moneda={moneda} compararActivo={comparar} />}
             </SeccionCard>
-            <div className="grid md:grid-cols-2 gap-4">
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
               <SeccionCard titulo="Ranking de vendedores" accion={<VistaToggle vista={vistaVendedores} onVista={setVistaVendedores} />}>
                 {vistaVendedores === 'barras' ? <RankingBarras datos={rankingVendedores} moneda={moneda} oculto={ocultarMontos} /> : <RankingTorta datos={rankingVendedores} moneda={moneda} oculto={ocultarMontos} />}
               </SeccionCard>
               <SeccionCard titulo="Mejores compradores" accion={<VistaToggle vista={vistaCompradores} onVista={setVistaCompradores} />}>
                 {vistaCompradores === 'barras' ? <RankingBarras datos={rankingCompradores} moneda={moneda} oculto={ocultarMontos} /> : <RankingTorta datos={rankingCompradores} moneda={moneda} oculto={ocultarMontos} />}
+              </SeccionCard>
+              <SeccionCard
+                titulo="Productos más vendidos"
+                subtitulo={productosVendidos[0] ? `Lo más vendido: ${productosVendidos[0].nombre} (${productosVendidos[0].valor.toLocaleString('es-AR')} u.)` : undefined}
+                accion={<VistaToggle vista={vistaProductos} onVista={setVistaProductos} />}
+              >
+                {vistaProductos === 'barras' ? (
+                  <RankingBarras datos={productosVendidos} sufijo=" u." />
+                ) : (
+                  <RankingTorta datos={productosVendidos} sufijo=" u." />
+                )}
               </SeccionCard>
             </div>
           </>

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { rangoDe } from './datos';
+import { rangoDe, productosMasVendidos, OrdenR, ItemR } from './datos';
 
 // "Ahora" fijo para que los tests sean deterministas: miércoles 19 de
 // agosto de 2026, 15:00.
@@ -77,5 +77,67 @@ describe('rangoDe — período pasado cerrado (fechaReferencia distinta de ahora
     const lunesDeEstaSemana = new Date(2026, 7, 17, 8, 0, 0, 0);
     const r = rangoDe('semana', AHORA, lunesDeEstaSemana);
     expect(r.fin).toEqual(AHORA);
+  });
+});
+
+describe('productosMasVendidos', () => {
+  const desde = new Date(2026, 7, 1);
+  const hasta = new Date(2026, 7, 31, 23, 59, 59, 999);
+
+  function orden(id: string, estado = 'entregado', fecha = new Date(2026, 7, 15)): OrdenR {
+    return { id, vendedor_id: null, cliente_id: null, total: 0, anticipo: 0, monto_canje: 0, estado, forma_pago: null, created_at: fecha.toISOString() };
+  }
+  function item(orden_id: string, over: Partial<ItemR>): ItemR {
+    return { orden_id, cantidad: 1, precio_unitario: 0, costo: null, descripcion: 'Producto', tipo: 'producto', ...over };
+  }
+  function mapa(items: ItemR[]): Map<string, ItemR[]> {
+    const m = new Map<string, ItemR[]>();
+    for (const it of items) m.set(it.orden_id, [...(m.get(it.orden_id) ?? []), it]);
+    return m;
+  }
+
+  it('suma cantidad, no cuenta 1 por orden: un mayorista comprando 10 en una sola orden da 10 unidades', () => {
+    const ordenes = [orden('o1')];
+    const items = mapa([item('o1', { descripcion: 'iPhone 13 128GB Negro · IMEI 123', tipo: 'dispositivo', cantidad: 10 })]);
+    const res = productosMasVendidos(ordenes, items, desde, hasta);
+    expect(res).toEqual([{ nombre: 'iPhone 13 128GB Negro', unidades: 10 }]);
+  });
+
+  it('agrupa dispositivos del mismo modelo/color sin el IMEI, de distintas órdenes', () => {
+    const ordenes = [orden('o1'), orden('o2')];
+    const items = mapa([
+      item('o1', { descripcion: 'iPhone 13 128GB Negro · IMEI 111', tipo: 'dispositivo', cantidad: 1 }),
+      item('o2', { descripcion: 'iPhone 13 128GB Negro · IMEI 222', tipo: 'dispositivo', cantidad: 1 }),
+    ]);
+    const res = productosMasVendidos(ordenes, items, desde, hasta);
+    expect(res).toEqual([{ nombre: 'iPhone 13 128GB Negro', unidades: 2 }]);
+  });
+
+  it('desglosa accesorios distintos por separado y ordena de mayor a menor', () => {
+    const ordenes = [orden('o1')];
+    const items = mapa([
+      item('o1', { descripcion: 'Funda genérica', tipo: 'producto', cantidad: 200 }),
+      item('o1', { descripcion: 'Cable USB-C', tipo: 'producto', cantidad: 350 }),
+    ]);
+    const res = productosMasVendidos(ordenes, items, desde, hasta);
+    expect(res).toEqual([
+      { nombre: 'Cable USB-C', unidades: 350 },
+      { nombre: 'Funda genérica', unidades: 200 },
+    ]);
+  });
+
+  it('excluye ítems de tipo "trabajo" (mano de obra de Servicio Técnico)', () => {
+    const ordenes = [orden('o1')];
+    const items = mapa([item('o1', { descripcion: 'Cambio de pantalla', tipo: 'trabajo', cantidad: 1 })]);
+    expect(productosMasVendidos(ordenes, items, desde, hasta)).toEqual([]);
+  });
+
+  it('ignora órdenes fuera de estado cobrado o fuera del rango de fechas', () => {
+    const ordenes = [orden('o1', 'pendiente'), orden('o2', 'entregado', new Date(2026, 6, 1))];
+    const items = mapa([
+      item('o1', { descripcion: 'Funda', cantidad: 5 }),
+      item('o2', { descripcion: 'Funda', cantidad: 5 }),
+    ]);
+    expect(productosMasVendidos(ordenes, items, desde, hasta)).toEqual([]);
   });
 });
