@@ -606,7 +606,11 @@ export default function Estadisticas() {
     switch (tab) {
       case 'ventas': {
         const evolucionVentas = variacion(actualB.ventas, prevB.ventas);
-        const ventasEnAumento = comparar && !ocultarMontos && actualB.ventas > 0 && prevB.ventas > 0 && actualB.ventas > prevB.ventas;
+        // No exigimos prevB.ventas > 0: si el período anterior fue $0 y este
+        // no, sigue siendo una suba real (el texto ya tiene un fallback sin
+        // porcentaje para ese caso, más abajo). Exigir ambos > 0 lo hacía
+        // innecesariamente raro de ver.
+        const ventasEnAumento = comparar && !ocultarMontos && actualB.ventas > 0 && actualB.ventas > prevB.ventas;
         return (
           <>
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
