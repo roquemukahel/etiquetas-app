@@ -102,6 +102,15 @@ html.qovento.fondo-sutil body::before {
   opacity: 0.4;
 }
 
+/* QCard (app/QCard.tsx) nunca es un link/botón — siempre div/section/
+   article — así que el "levantarse" al pasar el mouse que trae .qv-card en
+   modo Qovento (pensado para tarjetas clickeables) queda anulado acá para
+   sus tarjetas, sin tocar los usos preexistentes de .qv-card que sí son
+   clickeables. */
+html.qovento .qv-card.qv-card--estatico:hover {
+  transform: none;
+}
+
 /* Menú lateral en modo Qovento: vidrio azul oscuro (semi-transparente, con
    desenfoque) — más legible que totalmente transparente, y con una
    separación azulada respecto del contenido. */

@@ -7,7 +7,7 @@ import { ESTADOS_REPARACION, PRIORIDADES, infoEstado } from '../lib/reparaciones
 import MiniaturaDispositivo from '../MiniaturaDispositivo';
 import EstadoBadge from '../EstadoBadge';
 import { ICONOS } from '../Iconos';
-import { Boton, BotonLink, BotonIcono } from '../Boton';
+import { Boton, BotonLink } from '../Boton';
 
 // Ícono chico reutilizado inline en esta tarjeta (etiqueta, cliente/local,
 // ubicación) — mismo patrón de EstadoBadge para reescalar los SVG de 24px.
@@ -272,15 +272,17 @@ export default function TarjetaReparacion({
           Abrir ficha
         </BotonLink>
         {r.cliente_id && (
-          <BotonIcono
-            icono={ICONOS.enviar}
-            ariaLabel="Enviar WhatsApp"
-            variante="ghost"
+          <Boton
+            variante="secundario"
             tamano="sm"
             disabled={guardando === r.id}
+            cargando={guardando === r.id}
             onClick={() => onWhatsApp(r)}
-            className="text-good"
-          />
+            iconoIzq={<IconoChico nombre="enviar" />}
+            className="text-good border-good/30"
+          >
+            WhatsApp
+          </Boton>
         )}
       </div>
 

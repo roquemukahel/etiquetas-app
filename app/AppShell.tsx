@@ -88,7 +88,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    const esSutil = RUTAS_FONDO_SUTIL.some((r) => pathname?.startsWith(r));
+    // startsWith a secas confundiría '/stock' con '/stock-publico' (página
+    // pública, no operativa) — exige que el siguiente carácter sea el fin
+    // de la ruta o una barra, no cualquier sufijo.
+    const esSutil = RUTAS_FONDO_SUTIL.some((r) => pathname === r || pathname?.startsWith(r + '/'));
     document.documentElement.classList.toggle('fondo-sutil', esSutil);
   }, [pathname]);
 

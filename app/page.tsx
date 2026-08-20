@@ -711,7 +711,7 @@ const ICONO_ACTIVIDAD: Record<string, { icono: string; color: string }> = {
   reparacion: { icono: 'herramienta', color: 'servicio' },
   stock: { icono: 'stock', color: 'inventario' },
   cliente: { icono: 'clientes', color: 'clientes' },
-  eliminacion: { icono: 'cerrar', color: 'eliminacion' },
+  eliminacion: { icono: 'papelera', color: 'eliminacion' },
   ajuste: { icono: 'editar', color: 'compras' },
 };
 

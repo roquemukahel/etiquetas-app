@@ -1360,8 +1360,11 @@ export default function ServicioTecnico() {
 
           {/* Qovi acompaña el resumen de demoradas UNA sola vez, solo cuando
               hay reparaciones demoradas de verdad y ese filtro está activo —
-              no reemplaza la lista de abajo, solo la introduce. */}
-          {filtroIndicador === 'demoradas' && indicadores.demoradas > 0 && (
+              no reemplaza la lista de abajo, solo la introduce. Se apaga si
+              además hay una búsqueda activa: si esa combinación no encuentra
+              nada, el bloque de "sin resultados" de más abajo ya cubre ese
+              caso y Qovi no debe aparecer dos veces en la misma pantalla. */}
+          {filtroIndicador === 'demoradas' && indicadores.demoradas > 0 && busqueda.trim() === '' && (
             <QCard firma padding="sm">
               <QoviState
                 escena="reparacionDemorada"

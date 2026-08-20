@@ -33,11 +33,17 @@ export function QCard({
   return (
     <Componente
       className={`relative rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card ${paddings[padding]} ${
-        firma ? 'qv-card' : ''
+        // qv-card--estatico anula el "levantarse" al pasar el mouse que trae
+        // .qv-card en modo Qovento — ese gesto es para tarjetas clickeables
+        // (links/botones) y QCard nunca lo es (siempre div/section/article).
+        firma ? 'qv-card qv-card--estatico' : ''
       } ${className}`}
     >
       {firma && microetiqueta && (
-        <span className="absolute top-3 right-6 text-[9px] font-semibold uppercase tracking-wider text-accent dark:text-dark-accent">
+        // right-9 (no right-6): deja despejado el punto luminoso del Q-Frame
+        // (.qv-card::after, a 14px del borde con su propio resplandor) para
+        // que no se toquen con el texto de la etiqueta.
+        <span className="absolute top-3 right-9 text-[9px] font-semibold uppercase tracking-wider text-accent dark:text-dark-accent">
           {microetiqueta}
         </span>
       )}

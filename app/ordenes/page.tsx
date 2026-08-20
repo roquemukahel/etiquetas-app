@@ -392,6 +392,10 @@ export default function Ordenes() {
                   </span>
                 </p>
                 <p className="text-xs text-muted dark:text-dark-text-secondary truncate">
+                  <span className={`font-medium ${servicio ? 'text-repar' : 'text-accent dark:text-dark-accent'}`}>
+                    {servicio ? 'Servicio técnico' : 'Venta'}
+                  </span>
+                  {' · '}
                   {o.clientes ? `${o.clientes.nombre} ${o.clientes.apellido || ''}` : 'Sin cliente'}
                 </p>
                 {(canjesPorOrden.get(o.id) ?? []).length > 0 && (

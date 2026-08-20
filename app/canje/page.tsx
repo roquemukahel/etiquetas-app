@@ -306,7 +306,7 @@ export default function PlanCanje() {
                         onClick={() => agregarAlStock(c)}
                         className="flex-1"
                       >
-                        Agregar al stock
+                        Agregar al Stock
                       </Boton>
                     )}
                     {puedeRecibirServicioTecnico && (

@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { QOVI_ASSETS, QoviEscena } from './lib/qoviAssets';
 
 // Componente compartido para los 4 estados ilustrados de Qovi (stock
@@ -49,14 +50,20 @@ export function QoviState({
       variante === 'primaria'
         ? 'bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover text-white'
         : 'border border-border dark:border-dark-border hover:bg-canvas dark:hover:bg-dark-bg';
-    const Etiqueta = accion.href ? 'a' : 'button';
+    const claseComun = `inline-flex items-center justify-center rounded-xl px-4 h-10 text-sm font-medium transition-colors disabled:opacity-40 ${clases}`;
+    // Link (no <a> suelto) para que navegar desde acá sea client-side, igual
+    // que el resto de la app — un <a> normal recargaría toda la página.
+    if (accion.href) {
+      return (
+        <Link href={accion.href} className={claseComun}>
+          {accion.label}
+        </Link>
+      );
+    }
     return (
-      <Etiqueta
-        {...(accion.href ? { href: accion.href } : { type: 'button' as const, onClick: accion.onClick, disabled: accion.disabled })}
-        className={`inline-flex items-center justify-center rounded-xl px-4 h-10 text-sm font-medium transition-colors disabled:opacity-40 ${clases}`}
-      >
+      <button type="button" onClick={accion.onClick} disabled={accion.disabled} className={claseComun}>
         {accion.label}
-      </Etiqueta>
+      </button>
     );
   };
 
