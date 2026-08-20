@@ -25,6 +25,21 @@ const RUTAS_SIN_SIDEBAR = [
   '/admin',
 ];
 
+// Pantallas operativas (listas de trabajo día a día): el fondo de marca del
+// modo Qovento se atenúa acá para no competir con la información — se
+// mantiene expresivo en Inicio, Estadísticas y estados vacíos importantes,
+// donde no hay una lista densa que proteger. Ver la regla `.fondo-sutil` en
+// styles/globals.css.
+const RUTAS_FONDO_SUTIL = [
+  '/clientes',
+  '/ordenes',
+  '/stock',
+  '/comisiones',
+  '/canje',
+  '/servicio-tecnico',
+  '/cuentas-por-cobrar',
+];
+
 const NAV = [
   { href: '/', label: 'Inicio', icono: 'inicio' },
   { href: '/ordenes', label: 'Órdenes', icono: 'ordenes' },
@@ -71,6 +86,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    const esSutil = RUTAS_FONDO_SUTIL.some((r) => pathname?.startsWith(r));
+    document.documentElement.classList.toggle('fondo-sutil', esSutil);
+  }, [pathname]);
 
   const ocultar =
     RUTAS_SIN_SIDEBAR.some((r) => pathname?.startsWith(r)) ||

@@ -90,6 +90,16 @@ html.qovento body::before {
   background-position: center top;
   background-repeat: no-repeat;
   pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+
+/* Pantallas operativas (listas de trabajo: Clientes, Órdenes, Stock,
+   Comisiones, Plan Canje, Servicio Técnico, Cuentas por cobrar): se atenúa
+   el fondo de marca para que no compita con la información — clase que
+   alterna AppShell.tsx según la ruta. Inicio, Estadísticas y las pantallas
+   sin esta clase mantienen el fondo a pleno. */
+html.qovento.fondo-sutil body::before {
+  opacity: 0.4;
 }
 
 /* Menú lateral en modo Qovento: vidrio azul oscuro (semi-transparente, con
