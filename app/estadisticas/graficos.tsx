@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Avatar from '../Avatar';
+import { useT } from '../lib/idioma';
 
 // Paleta categórica validada (ver skill de dataviz) contra las superficies
 // reales de las cards de Qovento (blanco en claro, #111827 en oscuro):
@@ -26,6 +27,7 @@ function formatearValor(valor: number, moneda?: string, sufijo?: string, oculto?
 // Medalla 🥇🥈🥉 para los puestos 1/2/3; del 4° en adelante queda el número.
 // Da el toque estético de "podio" a todos los rankings.
 export function PosicionRanking({ pos }: { pos: number }) {
+  const t = useT();
   if (pos > 3) {
     return (
       <span className="w-6 text-xs text-muted dark:text-dark-text-secondary text-center shrink-0 tabular-nums">
@@ -35,7 +37,7 @@ export function PosicionRanking({ pos }: { pos: number }) {
   }
   const medalla = pos === 1 ? '🥇' : pos === 2 ? '🥈' : '🥉';
   return (
-    <span aria-label={`Puesto ${pos}`} className="w-6 shrink-0 text-center text-lg leading-none">
+    <span aria-label={`${t('Puesto')} ${pos}`} className="w-6 shrink-0 text-center text-lg leading-none">
       {medalla}
     </span>
   );
@@ -90,6 +92,7 @@ function arcoPath(cx: number, cy: number, r: number, desdeDeg: number, hastaDeg:
 }
 
 export function RankingTorta({ datos, moneda, sufijo, oculto }: { datos: Dato[]; moneda?: string; sufijo?: string; oculto?: boolean }) {
+  const t = useT();
   const total = datos.reduce((acc, d) => acc + d.valor, 0);
   if (total <= 0) return <SinDatos />;
 
@@ -97,7 +100,7 @@ export function RankingTorta({ datos, moneda, sufijo, oculto }: { datos: Dato[];
   const restoValor = datos.slice(3).reduce((acc, d) => acc + d.valor, 0);
   const slices = [
     ...top.map((d, i) => ({ nombre: d.nombre, valor: d.valor, fotoUrl: d.fotoUrl, light: COLOR_LIGHT[i], dark: COLOR_DARK[i] })),
-    ...(restoValor > 0 ? [{ nombre: 'Otros', valor: restoValor, fotoUrl: undefined, light: OTROS_LIGHT, dark: OTROS_DARK }] : []),
+    ...(restoValor > 0 ? [{ nombre: t('Otros'), valor: restoValor, fotoUrl: undefined, light: OTROS_LIGHT, dark: OTROS_DARK }] : []),
   ];
 
   const segmentos = (colorKey: 'light' | 'dark') => {
@@ -173,5 +176,6 @@ export function EvolucionBarras({ datos, moneda }: { datos: { label: string; val
 }
 
 function SinDatos() {
-  return <p className="text-sm text-muted dark:text-dark-text-secondary text-center py-6">Sin datos para este período.</p>;
+  const t = useT();
+  return <p className="text-sm text-muted dark:text-dark-text-secondary text-center py-6">{t('Sin datos para este período.')}</p>;
 }

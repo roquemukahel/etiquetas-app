@@ -2246,4 +2246,9 @@ export const PT: Record<string, string> = {
     'e seu histórico é mantido completo — as parcelas já pagas não são alteradas.',
   'Cantidad de cuotas nuevas': 'Quantidade de parcelas novas',
   'Nuevo cronograma': 'Novo cronograma',
+
+  // Grupo 4 — Estadísticas: gráficos (charts.tsx, graficos.tsx)
+  'Sin datos para este período.': 'Sem dados para este período.',
+  'Antes:': 'Antes:',
+  Puesto: 'Posição',
 };
