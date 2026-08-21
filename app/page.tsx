@@ -16,6 +16,7 @@ import AccesosRapidos, { MetricasAccesos } from './inicio/AccesosRapidos';
 import IlustracionModulo from './inicio/IlustracionesModulos';
 import OjoResumenFinanciero from './OjoResumenFinanciero';
 import ProductosMasVendidos from './ProductosMasVendidos';
+import QoviLateral from './QoviLateral';
 import AvisoPruebaPorVencer from './AvisoPruebaPorVencer';
 import { obtenerIdiomaServidor, traducir } from './lib/idiomaServidor';
 
@@ -553,8 +554,9 @@ export default async function Home() {
       <div className="lg:grid lg:grid-cols-3 lg:gap-6 flex flex-col gap-6 animate-fade-in-up" style={{ animationDelay: '120ms' }}>
         <Link
           href="/estadisticas"
-          className="qv-card qv-financial group lg:col-span-2 rounded-2xl bg-gradient-to-br from-ink to-[#1B2540] dark:from-dark-surface dark:to-dark-bg text-white p-6 flex flex-col gap-4 shadow-elevated hover:opacity-95 transition-opacity active:scale-[0.99]"
+          className="qv-card qv-financial group relative lg:col-span-2 rounded-2xl bg-gradient-to-br from-ink to-[#1B2540] dark:from-dark-surface dark:to-dark-bg text-white p-6 flex flex-col gap-4 shadow-elevated hover:opacity-95 transition-opacity active:scale-[0.99]"
         >
+          <QoviLateral />
           <OjoResumenFinanciero>
           <div className="flex items-start justify-between">
             <div>
