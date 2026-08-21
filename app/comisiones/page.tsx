@@ -19,6 +19,7 @@ import {
   type TipoMovimiento,
   type EstadoLiquidacion,
 } from '../lib/comisiones/tipos';
+import { useT } from '../lib/idioma';
 
 type Movimiento = {
   id: string;
@@ -40,6 +41,7 @@ export default function Comisiones() {
   const supabase = crearClienteNavegador();
   const router = useRouter();
   const actor = useActor();
+  const t = useT();
   const puedeGestionar = tienePermiso(actor, 'gestionar_comisiones');
   const puedeVer = tienePermiso(actor, 'ver_comisiones');
 
@@ -132,12 +134,12 @@ export default function Comisiones() {
 
   const liquidar = async (vendedorId: string, nombre: string, pendiente: number) => {
     if (!puedeGestionar || trabajando) return;
-    if (!confirm(`¿Liquidar ${m(pendiente)} de ${nombre}? Se aprueban las comisiones pendientes y se arma la liquidación.`)) return;
+    if (!confirm(`${t('¿Liquidar')} ${m(pendiente)} ${t('de')} ${nombre}? ${t('Se aprueban las comisiones pendientes y se arma la liquidación.')}`)) return;
     setTrabajando(vendedorId);
     setError(null);
     const { liquidacionId, error: e } = await liquidarVendedor(supabase, vendedorId, null, null);
     if (e || !liquidacionId) {
-      setError(e || 'No se pudo liquidar.');
+      setError(e || t('No se pudo liquidar.'));
       setTrabajando(null);
       return;
     }
@@ -147,12 +149,12 @@ export default function Comisiones() {
 
   const guardarAjuste = async () => {
     if (!puedeGestionar || !ajVendedor || !ajMotivo.trim()) {
-      setError('Elegí vendedor y escribí un motivo.');
+      setError(t('Elegí vendedor y escribí un motivo.'));
       return;
     }
     const monto = Number(ajMonto.replace(',', '.'));
     if (!monto || monto <= 0) {
-      setError('Ingresá un monto válido.');
+      setError(t('Ingresá un monto válido.'));
       return;
     }
     setTrabajando('ajuste');
@@ -172,13 +174,13 @@ export default function Comisiones() {
     cargar();
   };
 
-  if (loading) return <main className="flex min-h-screen items-center justify-center"><p className="text-sm text-muted dark:text-dark-text-secondary">Cargando comisiones...</p></main>;
+  if (loading) return <main className="flex min-h-screen items-center justify-center"><p className="text-sm text-muted dark:text-dark-text-secondary">{t('Cargando comisiones...')}</p></main>;
 
   if (!puedeVer) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
-        <p className="text-sm text-muted dark:text-dark-text-secondary">No tenés permiso para ver comisiones.</p>
-        <Link href="/" className="text-sm text-accent dark:text-dark-accent underline">Volver al inicio</Link>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t('No tenés permiso para ver comisiones.')}</p>
+        <Link href="/" className="text-sm text-accent dark:text-dark-accent underline">{t('Volver al inicio')}</Link>
       </main>
     );
   }
@@ -187,62 +189,62 @@ export default function Comisiones() {
     <main className="flex min-h-screen flex-col px-6 py-6 gap-5 max-w-4xl mx-auto w-full">
       <header className="flex items-center gap-3">
         <Link href="/" className="text-2xl leading-none">&larr;</Link>
-        <span className="text-lg font-medium mr-auto">Comisiones</span>
-        {puedeGestionar && <Link href="/configuracion/comisiones" className="text-xs text-accent dark:text-dark-accent underline">Configurar</Link>}
+        <span className="text-lg font-medium mr-auto">{t('Comisiones')}</span>
+        {puedeGestionar && <Link href="/configuracion/comisiones" className="text-xs text-accent dark:text-dark-accent underline">{t('Configurar')}</Link>}
       </header>
 
       {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
 
       {activas === false && (
         <div className="rounded-2xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface p-5 text-center flex flex-col items-center gap-2">
-          <p className="text-sm font-medium">Las comisiones están desactivadas</p>
-          {puedeGestionar && <Link href="/configuracion/comisiones" className="mt-1 rounded-xl bg-accent dark:bg-dark-accent text-white px-4 py-2 text-xs font-medium">Activar comisiones</Link>}
+          <p className="text-sm font-medium">{t('Las comisiones están desactivadas')}</p>
+          {puedeGestionar && <Link href="/configuracion/comisiones" className="mt-1 rounded-xl bg-accent dark:bg-dark-accent text-white px-4 py-2 text-xs font-medium">{t('Activar comisiones')}</Link>}
         </div>
       )}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Tarjeta valor={m(tot.generada)} etiqueta="Generadas (a revisar)" tono="text-accent dark:text-dark-accent" />
-        <Tarjeta valor={m(tot.aprobada)} etiqueta="Aprobadas por liquidar" tono="text-good" />
-        <Tarjeta valor={m(tot.pagada)} etiqueta="Pagadas" />
-        <Tarjeta valor={m(tot.ajustesReversiones)} etiqueta="Ajustes y reversiones" tono={tot.ajustesReversiones < 0 ? 'text-bad' : undefined} />
+        <Tarjeta valor={m(tot.generada)} etiqueta={t('Generadas (a revisar)')} tono="text-accent dark:text-dark-accent" />
+        <Tarjeta valor={m(tot.aprobada)} etiqueta={t('Aprobadas por liquidar')} tono="text-good" />
+        <Tarjeta valor={m(tot.pagada)} etiqueta={t('Pagadas')} />
+        <Tarjeta valor={m(tot.ajustesReversiones)} etiqueta={t('Ajustes y reversiones')} tono={tot.ajustesReversiones < 0 ? 'text-bad' : undefined} />
       </div>
 
       <section className="rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card overflow-hidden">
         <div className="px-4 py-3 border-b border-border dark:border-dark-border flex items-center justify-between">
-          <p className="text-sm font-semibold">Por vendedor</p>
-          {puedeGestionar && <button onClick={() => setAjusteAbierto((v) => !v)} className="text-xs text-accent dark:text-dark-accent underline">Ajuste manual</button>}
+          <p className="text-sm font-semibold">{t('Por vendedor')}</p>
+          {puedeGestionar && <button onClick={() => setAjusteAbierto((v) => !v)} className="text-xs text-accent dark:text-dark-accent underline">{t('Ajuste manual')}</button>}
         </div>
 
         {ajusteAbierto && puedeGestionar && (
           <div className="px-4 py-3 border-b border-border dark:border-dark-border bg-canvas dark:bg-dark-bg flex flex-col gap-2">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               <select value={ajVendedor} onChange={(e) => setAjVendedor(e.target.value)} className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-2 text-sm">
-                <option value="">Vendedor…</option>
+                <option value="">{t('Vendedor…')}</option>
                 {vendedores.map((v) => <option key={v.id} value={v.id}>{v.nombre}</option>)}
               </select>
               <select value={ajPositivo ? '1' : '0'} onChange={(e) => setAjPositivo(e.target.value === '1')} className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-2 text-sm">
-                <option value="1">Bonificación (+)</option>
-                <option value="0">Descuento (−)</option>
+                <option value="1">{t('Bonificación (+)')}</option>
+                <option value="0">{t('Descuento (−)')}</option>
               </select>
-              <input value={ajMonto} onChange={(e) => setAjMonto(e.target.value.replace(',', '.').replace(/[^\d.]/g, ''))} inputMode="decimal" placeholder="Monto" className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm" />
-              <input value={ajMotivo} onChange={(e) => setAjMotivo(e.target.value)} placeholder="Motivo (obligatorio)" className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm" />
+              <input value={ajMonto} onChange={(e) => setAjMonto(e.target.value.replace(',', '.').replace(/[^\d.]/g, ''))} inputMode="decimal" placeholder={t('Monto')} className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm" />
+              <input value={ajMotivo} onChange={(e) => setAjMotivo(e.target.value)} placeholder={t('Motivo (obligatorio)')} className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm" />
             </div>
-            <button disabled={trabajando === 'ajuste'} onClick={guardarAjuste} className="self-start rounded-lg bg-accent dark:bg-dark-accent text-white px-4 py-2 text-xs font-medium disabled:opacity-40">Guardar ajuste</button>
+            <button disabled={trabajando === 'ajuste'} onClick={guardarAjuste} className="self-start rounded-lg bg-accent dark:bg-dark-accent text-white px-4 py-2 text-xs font-medium disabled:opacity-40">{t('Guardar ajuste')}</button>
           </div>
         )}
 
         {porVendedor.length === 0 ? (
-          <p className="text-sm text-muted dark:text-dark-text-secondary text-center py-8">Todavía no hay comisiones.</p>
+          <p className="text-sm text-muted dark:text-dark-text-secondary text-center py-8">{t('Todavía no hay comisiones.')}</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-[11px] uppercase tracking-wide text-muted dark:text-dark-text-secondary text-right">
-                  <th className="text-left font-medium px-4 py-2">Vendedor</th>
-                  <th className="font-medium px-2 py-2">Minorista</th>
-                  <th className="font-medium px-2 py-2">Mayorista</th>
-                  <th className="font-medium px-2 py-2">Total</th>
-                  {puedeGestionar && <th className="font-medium px-4 py-2">Pendiente</th>}
+                  <th className="text-left font-medium px-4 py-2">{t('Vendedor')}</th>
+                  <th className="font-medium px-2 py-2">{t('Minorista')}</th>
+                  <th className="font-medium px-2 py-2">{t('Mayorista')}</th>
+                  <th className="font-medium px-2 py-2">{t('Total')}</th>
+                  {puedeGestionar && <th className="font-medium px-4 py-2">{t('Pendiente')}</th>}
                 </tr>
               </thead>
               <tbody>
@@ -256,7 +258,7 @@ export default function Comisiones() {
                       <td className="text-right px-4 py-2.5">
                         {v.pendiente > 0 ? (
                           <button disabled={trabajando === v.vendedorId} onClick={() => liquidar(v.vendedorId, v.nombre, v.pendiente)} className="rounded-lg bg-good text-white px-3 py-1.5 text-xs font-medium disabled:opacity-40 whitespace-nowrap">
-                            {trabajando === v.vendedorId ? '…' : `Liquidar ${m(v.pendiente)}`}
+                            {trabajando === v.vendedorId ? '…' : `${t('Liquidar')} ${m(v.pendiente)}`}
                           </button>
                         ) : (
                           <span className="text-xs text-muted dark:text-dark-text-secondary">—</span>
@@ -273,13 +275,13 @@ export default function Comisiones() {
 
       {liquidaciones.length > 0 && (
         <section className="rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card">
-          <div className="px-4 py-3 border-b border-border dark:border-dark-border"><p className="text-sm font-semibold">Liquidaciones</p></div>
+          <div className="px-4 py-3 border-b border-border dark:border-dark-border"><p className="text-sm font-semibold">{t('Liquidaciones')}</p></div>
           <div className="flex flex-col divide-y divide-border dark:divide-dark-border">
             {liquidaciones.map((l) => (
               <Link key={l.id} href={`/comisiones/liquidaciones/${l.id}`} className="flex items-center gap-3 px-4 py-2.5 hover:bg-canvas dark:hover:bg-dark-bg transition-colors">
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium truncate">{l.vendedores?.nombre ?? 'Vendedor'}</p>
-                  <p className="text-[11px] text-muted dark:text-dark-text-secondary">{new Date(l.created_at).toLocaleDateString('es-AR')} · {LABEL_ESTADO_LIQ[l.estado]}</p>
+                  <p className="text-sm font-medium truncate">{l.vendedores?.nombre ?? t('Vendedor')}</p>
+                  <p className="text-[11px] text-muted dark:text-dark-text-secondary">{new Date(l.created_at).toLocaleDateString('es-AR')} · {t(LABEL_ESTADO_LIQ[l.estado])}</p>
                 </div>
                 <span className="text-sm tabular-nums font-semibold">{m(l.total_neto)}</span>
                 <span className="text-muted dark:text-dark-text-secondary">&rarr;</span>
@@ -290,9 +292,9 @@ export default function Comisiones() {
       )}
 
       <section className="rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card">
-        <div className="px-4 py-3 border-b border-border dark:border-dark-border"><p className="text-sm font-semibold">Movimientos</p></div>
+        <div className="px-4 py-3 border-b border-border dark:border-dark-border"><p className="text-sm font-semibold">{t('Movimientos')}</p></div>
         {movs.length === 0 ? (
-          <p className="text-sm text-muted dark:text-dark-text-secondary text-center py-8">Sin movimientos.</p>
+          <p className="text-sm text-muted dark:text-dark-text-secondary text-center py-8">{t('Sin movimientos.')}</p>
         ) : (
           <div className="flex flex-col divide-y divide-border dark:divide-dark-border">
             {movs.slice(0, 100).map((mv) => {
@@ -301,12 +303,12 @@ export default function Comisiones() {
                 <div key={mv.id} className="flex items-center gap-3 px-4 py-2.5">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium truncate">
-                      {mv.vendedores?.nombre ?? 'Vendedor'}
-                      {mv.tipo_venta && <span className="text-xs text-muted dark:text-dark-text-secondary"> · {LABEL_TIPO_VENTA[mv.tipo_venta as 'minorista' | 'mayorista'] ?? mv.tipo_venta}</span>}
+                      {mv.vendedores?.nombre ?? t('Vendedor')}
+                      {mv.tipo_venta && <span className="text-xs text-muted dark:text-dark-text-secondary"> · {t(LABEL_TIPO_VENTA[mv.tipo_venta as 'minorista' | 'mayorista'] ?? mv.tipo_venta)}</span>}
                     </p>
-                    <p className="text-[11px] text-muted dark:text-dark-text-secondary truncate">{LABEL_TIPO_MOV[mv.tipo_movimiento]}{cliente ? ` · ${cliente}` : ''} · {new Date(mv.fecha_hecho || mv.created_at).toLocaleDateString('es-AR')}</p>
+                    <p className="text-[11px] text-muted dark:text-dark-text-secondary truncate">{t(LABEL_TIPO_MOV[mv.tipo_movimiento])}{cliente ? ` · ${cliente}` : ''} · {new Date(mv.fecha_hecho || mv.created_at).toLocaleDateString('es-AR')}</p>
                   </div>
-                  <span className={`text-[10px] font-medium rounded-full px-2 py-0.5 shrink-0 ${COLOR_ESTADO_MOV[mv.estado]}`}>{LABEL_ESTADO_MOV[mv.estado]}</span>
+                  <span className={`text-[10px] font-medium rounded-full px-2 py-0.5 shrink-0 ${COLOR_ESTADO_MOV[mv.estado]}`}>{t(LABEL_ESTADO_MOV[mv.estado])}</span>
                   <span className={`text-sm tabular-nums font-semibold shrink-0 w-24 text-right ${mv.comision < 0 ? 'text-bad' : ''}`}>{m(mv.comision)}</span>
                 </div>
               );
