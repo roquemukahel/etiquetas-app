@@ -12,6 +12,7 @@ import { sanitizarDecimal } from '../../lib/numeros';
 import { limpiarImei } from '../../lib/imei';
 import SelectorColorAuto from '../../SelectorColorAuto';
 import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
+import { useT } from '../../lib/idioma';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 
@@ -34,6 +35,7 @@ export default function DetalleCompra() {
   const router = useRouter();
   const supabase = crearClienteNavegador();
   const actor = useActor();
+  const t = useT();
   const puedeEliminar = tienePermiso(actor, 'eliminar');
   const puedeRecibirServicioTecnico = tienePermiso(actor, 'recibir_servicio_tecnico');
   const puedeAgregarStock = tienePermiso(actor, 'agregar_stock');
@@ -53,7 +55,7 @@ export default function DetalleCompra() {
   const [editPrecio, setEditPrecio] = useState('');
   const [guardandoEdicion, setGuardandoEdicion] = useState(false);
 
-  const nombreCliente = (c: Compra) => (c.clientes ? `${c.clientes.nombre} ${c.clientes.apellido || ''}`.trim() : 'sin cliente');
+  const nombreCliente = (c: Compra) => (c.clientes ? `${c.clientes.nombre} ${c.clientes.apellido || ''}`.trim() : t('sin cliente'));
 
   useEffect(() => {
     (async () => {
@@ -73,7 +75,7 @@ export default function DetalleCompra() {
       setError(MENSAJE_ACTOR_REQUERIDO);
       return;
     }
-    if (!confirm('¿Agregar este dispositivo al Stock para venderlo?')) return;
+    if (!confirm(t('¿Agregar este dispositivo al Stock para venderlo?'))) return;
     setProcesando(true);
     setError(null);
 
@@ -89,12 +91,12 @@ export default function DetalleCompra() {
       .eq('estado', 'pendiente')
       .select('id');
     if (estadoErr) {
-      setError('No pudimos agregar al stock: ' + estadoErr.message);
+      setError(t('No pudimos agregar al stock:') + ' ' + estadoErr.message);
       setProcesando(false);
       return;
     }
     if (!actualizada || actualizada.length === 0) {
-      setError('Esta compra ya había sido procesada (quizás desde otra pestaña). Recargá la página para ver el estado actual.');
+      setError(t('Esta compra ya había sido procesada (quizás desde otra pestaña). Recargá la página para ver el estado actual.'));
       setProcesando(false);
       return;
     }
@@ -112,7 +114,7 @@ export default function DetalleCompra() {
     });
     if (insertError) {
       await supabase.from('compras').update({ estado: 'pendiente' }).eq('id', id);
-      setError('No pudimos agregar al stock: ' + insertError.message);
+      setError(t('No pudimos agregar al stock:') + ' ' + insertError.message);
       setProcesando(false);
       return;
     }
@@ -128,7 +130,7 @@ export default function DetalleCompra() {
 
   const derivarAServicioTecnico = async () => {
     if (!compra || procesando || !puedeRecibirServicioTecnico) return;
-    if (!confirm('¿Derivar este dispositivo a Servicio Técnico?')) return;
+    if (!confirm(t('¿Derivar este dispositivo a Servicio Técnico?'))) return;
     setProcesando(true);
     setError(null);
 
@@ -149,7 +151,7 @@ export default function DetalleCompra() {
       .select('id, numero_orden')
       .single();
     if (insertError) {
-      setError('No pudimos derivar: ' + insertError.message);
+      setError(t('No pudimos derivar:') + ' ' + insertError.message);
       setProcesando(false);
       return;
     }
@@ -165,13 +167,13 @@ export default function DetalleCompra() {
 
   const eliminarCompra = async () => {
     if (!compra || procesando || !puedeEliminar) return;
-    if (!confirm('¿Eliminar esta compra? Esta acción no se puede deshacer.')) return;
+    if (!confirm(t('¿Eliminar esta compra? Esta acción no se puede deshacer.'))) return;
     setProcesando(true);
     setError(null);
 
     const { error: deleteError } = await supabase.from('compras').delete().eq('id', id);
     if (deleteError) {
-      setError('No pudimos eliminar la compra: ' + deleteError.message);
+      setError(t('No pudimos eliminar la compra:') + ' ' + deleteError.message);
       setProcesando(false);
       return;
     }
@@ -249,7 +251,7 @@ export default function DetalleCompra() {
       })
       .eq('id', id);
     if (updateError) {
-      setError('No pudimos guardar los cambios: ' + updateError.message);
+      setError(t('No pudimos guardar los cambios:') + ' ' + updateError.message);
       setGuardandoEdicion(false);
       return;
     }
@@ -281,7 +283,7 @@ export default function DetalleCompra() {
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center">
-        <p className="text-sm text-muted dark:text-dark-text-secondary">Cargando...</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t('Cargando...')}</p>
       </main>
     );
   }
@@ -289,9 +291,9 @@ export default function DetalleCompra() {
   if (!compra) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-3">
-        <p className="text-sm text-muted dark:text-dark-text-secondary">No encontramos esa compra.</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t('No encontramos esa compra.')}</p>
         <Link href="/compras" className="text-sm text-accent dark:text-dark-accent underline">
-          Volver a compras
+          {t('Volver a compras')}
         </Link>
       </main>
     );
@@ -304,13 +306,13 @@ export default function DetalleCompra() {
           <button onClick={() => setEditando(false)} className="text-2xl leading-none">
             &larr;
           </button>
-          <span className="text-lg font-medium">Editar compra</span>
+          <span className="text-lg font-medium">{t('Editar compra')}</span>
         </header>
 
         {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
 
         <div>
-          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Modelo</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Modelo')}</label>
           <input
             value={editModelo}
             onChange={(e) => setEditModelo(e.target.value)}
@@ -319,7 +321,7 @@ export default function DetalleCompra() {
         </div>
 
         <div>
-          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Almacenamiento</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Almacenamiento')}</label>
           <div className="flex gap-2">
             {STORAGE_OPTIONS.map((gb) => (
               <button
@@ -335,11 +337,11 @@ export default function DetalleCompra() {
           </div>
         </div>
 
-        <SelectorColorAuto label="Color" modelo={editModelo} value={editColor} onChange={setEditColor} />
+        <SelectorColorAuto label={t('Color')} modelo={editModelo} value={editColor} onChange={setEditColor} />
         <SelectorEstadoDispositivo value={editCondicion} onChange={setEditCondicion} />
 
         <div>
-          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">IMEI</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('IMEI')}</label>
           <input
             value={editImei}
             onChange={(e) => setEditImei(e.target.value)}
@@ -348,7 +350,7 @@ export default function DetalleCompra() {
         </div>
 
         <div>
-          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Detalles</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Detalles')}</label>
           <textarea
             value={editDetalles}
             onChange={(e) => setEditDetalles(e.target.value)}
@@ -358,7 +360,7 @@ export default function DetalleCompra() {
         </div>
 
         <div>
-          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Precio pagado</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Precio pagado')}</label>
           <input
             value={editPrecio}
             onChange={(e) => setEditPrecio(sanitizarDecimal(e.target.value))}
@@ -372,7 +374,7 @@ export default function DetalleCompra() {
           onClick={guardarEdicion}
           className="mt-auto w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
         >
-          {guardandoEdicion ? 'Guardando...' : 'Guardar cambios'}
+          {guardandoEdicion ? t('Guardando...') : t('Guardar cambios')}
         </button>
       </main>
     );
@@ -384,9 +386,9 @@ export default function DetalleCompra() {
         <Link href="/compras" className="text-2xl leading-none">
           &larr;
         </Link>
-        <span className="text-lg font-medium mr-auto">Compra</span>
+        <span className="text-lg font-medium mr-auto">{t('Compra')}</span>
         <button onClick={abrirEdicion} className="text-xs text-accent dark:text-dark-accent underline">
-          Editar
+          {t('Editar')}
         </button>
       </header>
 
@@ -394,55 +396,55 @@ export default function DetalleCompra() {
 
       <div className="rounded-xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card px-4 py-3 text-sm flex flex-col gap-1">
         <p>
-          <span className="text-muted dark:text-dark-text-secondary">Cliente: </span>
-          {compra.clientes ? `${compra.clientes.nombre} ${compra.clientes.apellido || ''}` : 'Sin cliente'}
+          <span className="text-muted dark:text-dark-text-secondary">{t('Cliente:')} </span>
+          {compra.clientes ? `${compra.clientes.nombre} ${compra.clientes.apellido || ''}` : t('Sin cliente')}
         </p>
         {compra.clientes?.telefono && (
           <p>
-            <span className="text-muted dark:text-dark-text-secondary">Teléfono: </span>
+            <span className="text-muted dark:text-dark-text-secondary">{t('Teléfono:')} </span>
             {compra.clientes.telefono}
           </p>
         )}
         <p>
-          <span className="text-muted dark:text-dark-text-secondary">Dispositivo: </span>
+          <span className="text-muted dark:text-dark-text-secondary">{t('Dispositivo:')} </span>
           {compra.modelo}
           {compra.capacidad_gb ? ` · ${compra.capacidad_gb}GB` : ''}
           {compra.color ? ` · ${compra.color}` : ''}
           {compra.condicion === 'sellado' && (
             <span className="ml-1.5 inline-block text-[10px] font-bold text-black bg-gradient-to-b from-amber-300 to-amber-500 border border-black/40 rounded-full px-2 py-0.5 align-middle">
-              ✦ SELLADO
+              ✦ {t('SELLADO')}
             </span>
           )}
         </p>
         {compra.imei && (
           <p>
-            <span className="text-muted dark:text-dark-text-secondary">IMEI: </span>
+            <span className="text-muted dark:text-dark-text-secondary">{t('IMEI:')} </span>
             <span className="font-bold font-mono">{compra.imei}</span>
           </p>
         )}
         {compra.detalles && (
           <p>
-            <span className="text-muted dark:text-dark-text-secondary">Detalles: </span>
+            <span className="text-muted dark:text-dark-text-secondary">{t('Detalles:')} </span>
             {compra.detalles}
           </p>
         )}
         {compra.precio != null && (
           <p>
-            <span className="text-muted dark:text-dark-text-secondary">Precio pagado: </span>${compra.precio.toLocaleString('es-AR')}
+            <span className="text-muted dark:text-dark-text-secondary">{t('Precio pagado:')} </span>${compra.precio.toLocaleString('es-AR')}
           </p>
         )}
       </div>
 
       {compra.estado === 'pendiente' ? (
         <div className="flex flex-col gap-2">
-          <p className="text-xs text-muted dark:text-dark-text-secondary font-medium">¿Qué hacemos con este dispositivo?</p>
+          <p className="text-xs text-muted dark:text-dark-text-secondary font-medium">{t('¿Qué hacemos con este dispositivo?')}</p>
           {puedeAgregarStock && (
             <button
               disabled={procesando}
               onClick={agregarAlStock}
               className="w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
             >
-              Agregar al Stock
+              {t('Agregar al Stock')}
             </button>
           )}
           {puedeRecibirServicioTecnico && (
@@ -451,7 +453,7 @@ export default function DetalleCompra() {
               onClick={derivarAServicioTecnico}
               className="w-full rounded-2xl border border-border dark:border-dark-border py-4 text-center text-base font-medium disabled:opacity-40"
             >
-              Derivar a Servicio Técnico
+              {t('Derivar a Servicio Técnico')}
             </button>
           )}
           {puedeEliminar && (
@@ -460,13 +462,13 @@ export default function DetalleCompra() {
               onClick={eliminarCompra}
               className="w-full rounded-2xl border border-bad/30 py-3 text-center text-sm font-medium text-bad disabled:opacity-40"
             >
-              Eliminar
+              {t('Eliminar')}
             </button>
           )}
         </div>
       ) : (
         <p className="text-sm text-good bg-good/10 rounded-lg px-3 py-2">
-          {compra.estado === 'en_stock' ? '✓ Ya está en el Stock, listo para vender.' : '✓ Derivado a Servicio Técnico.'}
+          {compra.estado === 'en_stock' ? `✓ ${t('Ya está en el Stock, listo para vender.')}` : `✓ ${t('Derivado a Servicio Técnico.')}`}
         </p>
       )}
 
@@ -474,7 +476,7 @@ export default function DetalleCompra() {
         href={`/compras/${compra.id}/boleta`}
         className="mt-auto w-full rounded-2xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium"
       >
-        Ver boleta
+        {t('Ver boleta')}
       </Link>
     </main>
   );

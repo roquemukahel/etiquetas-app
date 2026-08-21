@@ -1011,6 +1011,28 @@ export const PT: Record<string, string> = {
   'No pudimos guardar la compra:': 'Não conseguimos salvar a compra:',
   'Precio pagado': 'Preço pago',
   'no se pudo cargar el cliente': 'não foi possível cadastrar o cliente',
+
+  // Compras — detalle
+  Detalles: 'Detalhes',
+  'Dispositivo:': 'Aparelho:',
+  Editar: 'Editar',
+  'Editar compra': 'Editar compra',
+  'Esta compra ya había sido procesada (quizás desde otra pestaña). Recargá la página para ver el estado actual.':
+    'Esta compra já havia sido processada (talvez em outra aba). Recarregue a página para ver o estado atual.',
+  'IMEI:': 'IMEI:',
+  Modelo: 'Modelo',
+  'No encontramos esa compra.': 'Não encontramos essa compra.',
+  'No pudimos derivar:': 'Não conseguimos encaminhar:',
+  'No pudimos eliminar la compra:': 'Não conseguimos excluir a compra:',
+  'Precio pagado:': 'Preço pago:',
+  'Teléfono:': 'Telefone:',
+  'Ver boleta': 'Ver recibo',
+  'Volver a compras': 'Voltar a compras',
+  'Ya está en el Stock, listo para vender.': 'Já está no Estoque, pronto para vender.',
+  'Derivado a Servicio Técnico.': 'Encaminhado para Assistência Técnica.',
+  'sin cliente': 'sem cliente',
+  '¿Eliminar esta compra? Esta acción no se puede deshacer.': 'Excluir esta compra? Esta ação não pode ser desfeita.',
+  '¿Qué hacemos con este dispositivo?': 'O que fazemos com este aparelho?',
   'no se pudo crear la compra': 'não foi possível criar a compra',
   '¿Presenta algún detalle? Ej. pantalla con manchas, batería al 70%...':
     'Apresenta algum detalhe? Ex. tela com manchas, bateria a 70%...',
