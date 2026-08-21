@@ -8,6 +8,7 @@ import { MONEDAS } from '../../lib/monedas';
 import { PAISES } from '../../lib/paises';
 import { MARCAS_DISPONIBLES, CATALOGO_MODELOS, normalizarNombreModelo } from '../../lib/catalogosMarcas';
 import { registrarAuditoria } from '../../lib/auditoria';
+import { useT } from '../../lib/idioma';
 
 type Negocio = {
   id: string;
@@ -45,6 +46,7 @@ const TAMANOS = [9, 10, 11, 12, 13, 14];
 export default function DatosNegocio() {
   const router = useRouter();
   const supabase = crearClienteNavegador();
+  const t = useT();
 
   const [negocio, setNegocio] = useState<Negocio | null>(null);
   const [loading, setLoading] = useState(true);
@@ -139,14 +141,14 @@ export default function DatosNegocio() {
     if (errDisp) {
       // Puede pasar si algún equipo ya fue vendido (queda referenciado por una
       // orden). Mostramos el motivo real en vez de fallar en silencio.
-      setErrorMarca('No se pudieron borrar los equipos: ' + errDisp.message);
+      setErrorMarca(t('No se pudieron borrar los equipos:') + ' ' + errDisp.message);
       setProcesandoMarca(false);
       return;
     }
     // 2) Borrar las carpetas de esos modelos.
     const { error: errMod } = await supabase.from('modelos_stock').delete().in('nombre', catalogo);
     if (errMod) {
-      setErrorMarca('No se pudieron borrar las carpetas: ' + errMod.message);
+      setErrorMarca(t('No se pudieron borrar las carpetas:') + ' ' + errMod.message);
       setProcesandoMarca(false);
       return;
     }
@@ -154,7 +156,7 @@ export default function DatosNegocio() {
     const nuevasMarcas = negocio.marcas_stock.filter((m) => m !== id);
     const { error: errNeg } = await supabase.from('negocios').update({ marcas_stock: nuevasMarcas }).eq('id', negocio.id);
     if (errNeg) {
-      setErrorMarca('No se pudo actualizar el negocio: ' + errNeg.message);
+      setErrorMarca(t('No se pudo actualizar el negocio:') + ' ' + errNeg.message);
       setProcesandoMarca(false);
       return;
     }
@@ -216,7 +218,7 @@ export default function DatosNegocio() {
       .eq('id', negocio.id);
 
     if (updateError) {
-      setError('No pudimos guardar: ' + updateError.message);
+      setError(t('No pudimos guardar:') + ' ' + updateError.message);
       setGuardando(false);
       return;
     }
@@ -245,7 +247,7 @@ export default function DatosNegocio() {
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center">
-        <p className="text-sm text-muted dark:text-dark-text-secondary">Cargando...</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t('Cargando...')}</p>
       </main>
     );
   }
@@ -253,9 +255,9 @@ export default function DatosNegocio() {
   if (!negocio) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-3">
-        <p className="text-sm text-muted dark:text-dark-text-secondary">No encontramos tu negocio.</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t('No encontramos tu negocio.')}</p>
         <Link href="/configuracion" className="text-sm text-accent dark:text-dark-accent underline">
-          Volver
+          {t('Volver')}
         </Link>
       </main>
     );
@@ -267,44 +269,44 @@ export default function DatosNegocio() {
         <Link href="/configuracion" className="text-2xl leading-none">
           &larr;
         </Link>
-        <span className="text-lg font-medium">Datos del negocio</span>
+        <span className="text-lg font-medium">{t('Datos del negocio')}</span>
       </header>
 
       {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
 
       <div className="flex flex-col gap-3">
         <div>
-          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Logo</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Logo')}</label>
           <div className="flex items-center gap-3">
             {negocio.logo_url && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={negocio.logo_url} alt="Logo" className="h-14 w-14 rounded-lg object-contain bg-white dark:bg-dark-surface border border-border dark:border-dark-border" />
+              <img src={negocio.logo_url} alt={t('Logo')} className="h-14 w-14 rounded-lg object-contain bg-white dark:bg-dark-surface border border-border dark:border-dark-border" />
             )}
             <label className="text-sm text-accent dark:text-dark-accent underline cursor-pointer">
-              {negocio.logo_url ? 'Cambiar logo' : 'Subir logo'}
+              {negocio.logo_url ? t('Cambiar logo') : t('Subir logo')}
               <input type="file" accept="image/*" className="hidden" onChange={handleLogo} />
             </label>
           </div>
         </div>
 
-        <Campo label="Nombre del negocio" valor={negocio.nombre} onChange={(v) => campo('nombre', v)} />
+        <Campo label={t('Nombre del negocio')} valor={negocio.nombre} onChange={(v) => campo('nombre', v)} />
         <Campo
-          label="Eslogan del negocio (opcional — aparece en la boleta, junto a tu logo)"
+          label={t('Eslogan del negocio (opcional — aparece en la boleta, junto a tu logo)')}
           valor={negocio.eslogan ?? ''}
           onChange={(v) => campo('eslogan', v)}
         />
-        <Campo label="Teléfono" valor={negocio.telefono ?? ''} onChange={(v) => campo('telefono', v)} />
-        <Campo label="Dirección" valor={negocio.direccion ?? ''} onChange={(v) => campo('direccion', v)} />
+        <Campo label={t('Teléfono')} valor={negocio.telefono ?? ''} onChange={(v) => campo('telefono', v)} />
+        <Campo label={t('Dirección')} valor={negocio.direccion ?? ''} onChange={(v) => campo('direccion', v)} />
 
         <div>
           <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">
-            Monedas con las que trabajás (elegí hasta 2)
+            {t('Monedas con las que trabajás (elegí hasta 2)')}
           </label>
           <p className="text-xs text-muted dark:text-dark-text-secondary mb-2">
-            La primera es tu moneda principal: en ella se hacen todas las boletas y se calculan las Estadísticas.
+            {t('La primera es tu moneda principal: en ella se hacen todas las boletas y se calculan las Estadísticas.')}
             {negocio.monedas_habilitadas.length === 2
-              ? ' Si habilitás una segunda, vas a poder mostrar también en la boleta un monto aproximado en esa moneda, solo informativo para el cliente (nunca se suma en Estadísticas).'
-              : ' Podés habilitar una segunda moneda para mostrar un monto aproximado informativo en la boleta.'}
+              ? ` ${t('Si habilitás una segunda, vas a poder mostrar también en la boleta un monto aproximado en esa moneda, solo informativo para el cliente (nunca se suma en Estadísticas).')}`
+              : ` ${t('Podés habilitar una segunda moneda para mostrar un monto aproximado informativo en la boleta.')}`}
           </p>
           <div className="grid grid-cols-2 gap-2">
             {MONEDAS.map((m) => {
@@ -337,18 +339,18 @@ export default function DatosNegocio() {
           {negocio.monedas_habilitadas.length === 2 && (
             <div className="mt-2">
               <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">
-                Tipo de cambio: 1 {negocio.monedas_habilitadas[0]} ={' '}
+                {t('Tipo de cambio:')} 1 {negocio.monedas_habilitadas[0]} ={' '}
                 <input
                   value={negocio.tipo_cambio?.toString() ?? ''}
                   onChange={(e) => campoNum('tipo_cambio', e.target.value ? Number(e.target.value) : (null as any))}
                   inputMode="numeric"
-                  placeholder="ej. 1000"
+                  placeholder={t('ej. 1000')}
                   className="inline-block w-28 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-1 text-sm ml-1"
                 />{' '}
                 {negocio.monedas_habilitadas[1]}
               </label>
               <p className="text-xs text-muted dark:text-dark-text-secondary">
-                Se usa para calcular el monto informativo sugerido al crear una orden (siempre editable en el momento).
+                {t('Se usa para calcular el monto informativo sugerido al crear una orden (siempre editable en el momento).')}
               </p>
             </div>
           )}
@@ -356,7 +358,7 @@ export default function DatosNegocio() {
 
         <div>
           <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">
-            País (se usa para armar bien los links de WhatsApp con el código de área correcto)
+            {t('País (se usa para armar bien los links de WhatsApp con el código de área correcto)')}
           </label>
           <select
             value={negocio.pais}
@@ -373,28 +375,23 @@ export default function DatosNegocio() {
 
         <div>
           <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">
-            Días de garantía (opcional — al vender un dispositivo se calcula solo la fecha de vencimiento)
+            {t('Días de garantía (opcional — al vender un dispositivo se calcula solo la fecha de vencimiento)')}
           </label>
           <input
             value={negocio.garantia_dias?.toString() ?? ''}
             onChange={(e) => campoNum('garantia_dias', e.target.value ? Number(e.target.value) : (null as any))}
             inputMode="numeric"
-            placeholder="Ej. 90"
+            placeholder={t('Ej. 90')}
             className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
           />
         </div>
 
         <div>
           <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">
-            Marcas que vendés (crea carpetas de Stock automáticamente)
+            {t('Marcas que vendés (crea carpetas de Stock automáticamente)')}
           </label>
           <p className="text-xs text-muted dark:text-dark-text-secondary mb-2">
-            Al tildar una marca con catálogo (iPhone, Samsung, Xiaomi) y guardar, se crean solas las carpetas de
-            Stock de cada modelo, con el nombre ya escrito bien y parejo — así no tenés que cargarlas una por una ni
-            terminás con carpetas repetidas por una mayúscula o un espacio de más. Si <span className="font-medium">destildás</span> una
-            marca, te vamos a preguntar si querés borrar sus carpetas y los equipos que tengan cargados adentro (útil
-            si activaste una marca por error). "Otras marcas" es para cuando vendés algo que no está en las listas
-            (por ejemplo, accesorios o consolas): esas seguís creándolas vos desde Stock &gt; Carpetas.
+            {t('Al tildar una marca con catálogo (iPhone, Samsung, Xiaomi) y guardar, se crean solas las carpetas de Stock de cada modelo, con el nombre ya escrito bien y parejo — así no tenés que cargarlas una por una ni terminás con carpetas repetidas por una mayúscula o un espacio de más. Si')} <span className="font-medium">{t('destildás')}</span> {t('una marca, te vamos a preguntar si querés borrar sus carpetas y los equipos que tengan cargados adentro (útil si activaste una marca por error). "Otras marcas" es para cuando vendés algo que no está en las listas (por ejemplo, accesorios o consolas): esas seguís creándolas vos desde Stock')} &gt; {t('Carpetas.')}
           </p>
           <div className="flex flex-col gap-2">
             {MARCAS_DISPONIBLES.map((m) => {
@@ -414,7 +411,7 @@ export default function DatosNegocio() {
                   />
                   <span className="font-medium">{m.nombre}</span>
                   {!CATALOGO_MODELOS[m.id] && (
-                    <span className="text-xs text-muted dark:text-dark-text-secondary ml-auto">sin catálogo</span>
+                    <span className="text-xs text-muted dark:text-dark-text-secondary ml-auto">{t('sin catálogo')}</span>
                   )}
                 </label>
               );
@@ -423,7 +420,7 @@ export default function DatosNegocio() {
         </div>
 
         <TextoConTamano
-          label="Garantía de productos (va en la boleta de venta)"
+          label={t('Garantía de productos (va en la boleta de venta)')}
           valor={negocio.texto_garantia ?? ''}
           onChange={(v) => campo('texto_garantia', v)}
           tamano={negocio.texto_garantia_tamano}
@@ -431,7 +428,7 @@ export default function DatosNegocio() {
         />
 
         <TextoConTamano
-          label="Garantía de servicio técnico (va en la boleta cuando incluye un arreglo)"
+          label={t('Garantía de servicio técnico (va en la boleta cuando incluye un arreglo)')}
           valor={negocio.texto_garantia_servicio ?? ''}
           onChange={(v) => campo('texto_garantia_servicio', v)}
           tamano={negocio.texto_garantia_servicio_tamano}
@@ -439,33 +436,33 @@ export default function DatosNegocio() {
         />
 
         <TextoConTamano
-          label="Declaración de compra (va en la boleta al comprarle un dispositivo a alguien)"
+          label={t('Declaración de compra (va en la boleta al comprarle un dispositivo a alguien)')}
           valor={negocio.texto_declaracion_compra ?? ''}
           onChange={(v) => campo('texto_declaracion_compra', v)}
           tamano={negocio.texto_declaracion_compra_tamano}
           onChangeTamano={(v) => campoNum('texto_declaracion_compra_tamano', v)}
-          placeholder="Declaro que el dispositivo entregado es de mi propiedad, ha sido obtenido de buena fe y que soy responsable de la información brindada."
+          placeholder={t('Declaro que el dispositivo entregado es de mi propiedad, ha sido obtenido de buena fe y que soy responsable de la información brindada.')}
         />
 
         <TextoConTamano
-          label="Términos y condiciones (va en el comprobante de pago/deuda de Proveedores)"
+          label={t('Términos y condiciones (va en el comprobante de pago/deuda de Proveedores)')}
           valor={negocio.texto_declaracion_proveedor ?? ''}
           onChange={(v) => campo('texto_declaracion_proveedor', v)}
           tamano={negocio.texto_declaracion_proveedor_tamano}
           onChangeTamano={(v) => campoNum('texto_declaracion_proveedor_tamano', v)}
-          placeholder="Ej. plazos de pago acordados, condiciones de la deuda, etc."
+          placeholder={t('Ej. plazos de pago acordados, condiciones de la deuda, etc.')}
         />
 
         <TextoConTamano
-          label="Términos y condiciones (va en el comprobante de pago de Plan de ahorro)"
+          label={t('Términos y condiciones (va en el comprobante de pago de Plan de ahorro)')}
           valor={negocio.texto_declaracion_plan_ahorro ?? ''}
           onChange={(v) => campo('texto_declaracion_plan_ahorro', v)}
           tamano={negocio.texto_declaracion_plan_ahorro_tamano}
           onChangeTamano={(v) => campoNum('texto_declaracion_plan_ahorro_tamano', v)}
-          placeholder="Ej. condiciones del plan de ahorro, plazos, qué pasa si se cancela, etc."
+          placeholder={t('Ej. condiciones del plan de ahorro, plazos, qué pasa si se cancela, etc.')}
         />
 
-        <p className="text-xs text-muted dark:text-dark-text-secondary font-medium mt-2">Redes sociales (opcional)</p>
+        <p className="text-xs text-muted dark:text-dark-text-secondary font-medium mt-2">{t('Redes sociales (opcional)')}</p>
         <RedSocial
           label="Instagram"
           valor={negocio.instagram ?? ''}
@@ -494,7 +491,7 @@ export default function DatosNegocio() {
         onClick={handleGuardar}
         className="mt-auto w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
       >
-        {guardando ? 'Guardando...' : 'Guardar cambios'}
+        {guardando ? t('Guardando...') : t('Guardar cambios')}
       </button>
 
       {marcaAEliminar && (
@@ -503,20 +500,20 @@ export default function DatosNegocio() {
             className="w-full max-w-sm rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border p-5 flex flex-col gap-3"
             onClick={(e) => e.stopPropagation()}
           >
-            <p className="text-base font-semibold text-bad">Desactivar {marcaAEliminar.nombre}</p>
+            <p className="text-base font-semibold text-bad">{t('Desactivar')} {marcaAEliminar.nombre}</p>
             {marcaAEliminar.carpetas.length === 0 ? (
               <p className="text-sm text-muted dark:text-dark-text-secondary">
-                No hay carpetas de {marcaAEliminar.nombre} cargadas. Se va a desactivar la marca sin borrar nada.
+                {t('No hay carpetas de')} {marcaAEliminar.nombre} {t('cargadas. Se va a desactivar la marca sin borrar nada.')}
               </p>
             ) : (
               <p className="text-sm text-muted dark:text-dark-text-secondary">
-                Al desactivar esta marca se van a <span className="font-medium text-ink dark:text-dark-text">eliminar {marcaAEliminar.carpetas.length} carpeta{marcaAEliminar.carpetas.length === 1 ? '' : 's'}</span>
+                {t('Al desactivar esta marca se van a')} <span className="font-medium text-ink dark:text-dark-text">{t('eliminar')} {marcaAEliminar.carpetas.length} {marcaAEliminar.carpetas.length === 1 ? t('carpeta') : t('carpetas')}</span>
                 {marcaAEliminar.equipos > 0 ? (
                   <>
-                    {' '}y los <span className="font-medium text-ink dark:text-dark-text">{marcaAEliminar.equipos} equipo{marcaAEliminar.equipos === 1 ? '' : 's'}</span> que tienen cargados adentro
+                    {' '}{t('y los')} <span className="font-medium text-ink dark:text-dark-text">{marcaAEliminar.equipos} {marcaAEliminar.equipos === 1 ? t('equipo') : t('equipos')}</span> {t('que tienen cargados adentro')}
                   </>
                 ) : null}
-                . <span className="font-medium">No se puede deshacer.</span>
+                . <span className="font-medium">{t('No se puede deshacer.')}</span>
               </p>
             )}
 
@@ -530,14 +527,14 @@ export default function DatosNegocio() {
                 disabled={procesandoMarca}
                 className="flex-1 rounded-lg border border-border dark:border-dark-border py-2 text-sm font-medium disabled:opacity-40"
               >
-                Cancelar
+                {t('Cancelar')}
               </button>
               <button
                 onClick={confirmarDesactivarMarca}
                 disabled={procesandoMarca}
                 className="flex-1 rounded-lg bg-bad text-white py-2 text-sm font-medium disabled:opacity-40"
               >
-                {procesandoMarca ? 'Borrando...' : marcaAEliminar.carpetas.length === 0 ? 'Desactivar' : 'Sí, borrar todo'}
+                {procesandoMarca ? t('Borrando...') : marcaAEliminar.carpetas.length === 0 ? t('Desactivar') : t('Sí, borrar todo')}
               </button>
             </div>
           </div>
@@ -583,6 +580,7 @@ function TextoConTamano({
   onChangeTamano: (v: number) => void;
   placeholder?: string;
 }) {
+  const t = useT();
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
@@ -592,9 +590,9 @@ function TextoConTamano({
           onChange={(e) => onChangeTamano(Number(e.target.value))}
           className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-1 text-xs shrink-0 ml-2"
         >
-          {TAMANOS.map((t) => (
-            <option key={t} value={t}>
-              Letra {t}px
+          {TAMANOS.map((tam) => (
+            <option key={tam} value={tam}>
+              {t('Letra')} {tam}px
             </option>
           ))}
         </select>
@@ -624,6 +622,7 @@ function RedSocial({
   mostrar: boolean;
   onToggleMostrar: (v: boolean) => void;
 }) {
+  const t = useT();
   return (
     <div className="flex items-center gap-2">
       <div className="flex-1">
@@ -642,7 +641,7 @@ function RedSocial({
           onChange={(e) => onToggleMostrar(e.target.checked)}
           className="h-5 w-5 accent-ink"
         />
-        <span className="text-[10px] text-muted dark:text-dark-text-secondary">en boleta</span>
+        <span className="text-[10px] text-muted dark:text-dark-text-secondary">{t('en boleta')}</span>
       </label>
     </div>
   );

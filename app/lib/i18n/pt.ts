@@ -1409,6 +1409,62 @@ export const PT: Record<string, string> = {
   'y borrar la carpeta': 'e excluir a pasta',
   '¿Confirmás?': 'Confirma?',
 
+  // Configuración — Datos del negocio
+  'Al desactivar esta marca se van a': 'Ao desativar esta marca, você vai',
+  'Al tildar una marca con catálogo (iPhone, Samsung, Xiaomi) y guardar, se crean solas las carpetas de Stock de cada modelo, con el nombre ya escrito bien y parejo — así no tenés que cargarlas una por una ni terminás con carpetas repetidas por una mayúscula o un espacio de más. Si':
+    'Ao marcar uma marca com catálogo (iPhone, Samsung, Xiaomi) e salvar, as pastas de Estoque de cada modelo são criadas sozinhas, com o nome já escrito certo e uniforme — assim você não precisa cadastrá-las uma por uma nem acaba com pastas repetidas por causa de uma maiúscula ou um espaço a mais. Se',
+  'Borrando...': 'Excluindo...',
+  'Cambiar logo': 'Trocar logo',
+  'Carpetas.': 'Pastas.',
+  'Declaración de compra (va en la boleta al comprarle un dispositivo a alguien)': 'Declaração de compra (vai no recibo ao comprar um aparelho de alguém)',
+  'Declaro que el dispositivo entregado es de mi propiedad, ha sido obtenido de buena fe y que soy responsable de la información brindada.':
+    'Declaro que o aparelho entregue é de minha propriedade, foi obtido de boa fé e que sou responsável pela informação fornecida.',
+  Desactivar: 'Desativar',
+  Dirección: 'Endereço',
+  'Días de garantía (opcional — al vender un dispositivo se calcula solo la fecha de vencimiento)':
+    'Dias de garantia (opcional — ao vender um aparelho, a data de vencimento é calculada sozinha)',
+  'Ej. condiciones del plan de ahorro, plazos, qué pasa si se cancela, etc.': 'Ex. condições do plano de poupança, prazos, o que acontece se for cancelado, etc.',
+  'Ej. plazos de pago acordados, condiciones de la deuda, etc.': 'Ex. prazos de pagamento acordados, condições da dívida, etc.',
+  'Eslogan del negocio (opcional — aparece en la boleta, junto a tu logo)': 'Slogan do negócio (opcional — aparece no recibo, junto ao seu logo)',
+  'Garantía de productos (va en la boleta de venta)': 'Garantia de produtos (vai no recibo de venda)',
+  'Garantía de servicio técnico (va en la boleta cuando incluye un arreglo)': 'Garantia de assistência técnica (vai no recibo quando inclui um reparo)',
+  'La primera es tu moneda principal: en ella se hacen todas las boletas y se calculan las Estadísticas.':
+    'A primeira é sua moeda principal: nela são feitos todos os recibos e calculadas as Estatísticas.',
+  Letra: 'Letra',
+  Logo: 'Logo',
+  'Marcas que vendés (crea carpetas de Stock automáticamente)': 'Marcas que você vende (cria pastas de Estoque automaticamente)',
+  'Monedas con las que trabajás (elegí hasta 2)': 'Moedas com as quais você trabalha (escolha até 2)',
+  'No hay carpetas de': 'Não há pastas de',
+  'No se pudieron borrar las carpetas:': 'Não foi possível excluir as pastas:',
+  'No se pudieron borrar los equipos:': 'Não foi possível excluir os aparelhos:',
+  'No se pudo actualizar el negocio:': 'Não foi possível atualizar o negócio:',
+  'Nombre del negocio': 'Nome do negócio',
+  'País (se usa para armar bien los links de WhatsApp con el código de área correcto)':
+    'País (usado para montar corretamente os links de WhatsApp com o código de área correto)',
+  'Podés habilitar una segunda moneda para mostrar un monto aproximado informativo en la boleta.':
+    'Você pode habilitar uma segunda moeda para mostrar um valor aproximado informativo no recibo.',
+  'Redes sociales (opcional)': 'Redes sociais (opcional)',
+  'Se usa para calcular el monto informativo sugerido al crear una orden (siempre editable en el momento).':
+    'É usado para calcular o valor informativo sugerido ao criar um pedido (sempre editável no momento).',
+  'Si habilitás una segunda, vas a poder mostrar también en la boleta un monto aproximado en esa moneda, solo informativo para el cliente (nunca se suma en Estadísticas).':
+    'Se você habilitar uma segunda, também vai poder mostrar no recibo um valor aproximado nessa moeda, apenas informativo para o cliente (nunca é somado nas Estatísticas).',
+  'Subir logo': 'Enviar logo',
+  'Sí, borrar todo': 'Sim, excluir tudo',
+  'Tipo de cambio:': 'Taxa de câmbio:',
+  'Términos y condiciones (va en el comprobante de pago de Plan de ahorro)': 'Termos e condições (vai no comprovante de pagamento do Plano de poupança)',
+  'Términos y condiciones (va en el comprobante de pago/deuda de Proveedores)': 'Termos e condições (vai no comprovante de pagamento/dívida de Fornecedores)',
+  'cargadas. Se va a desactivar la marca sin borrar nada.': 'cadastradas. A marca vai ser desativada sem excluir nada.',
+  carpeta: 'pasta',
+  carpetas: 'pastas',
+  destildás: 'desmarcar',
+  'ej. 1000': 'ex. 1000',
+  eliminar: 'excluir',
+  'que tienen cargados adentro': 'que estão cadastrados dentro',
+  'sin catálogo': 'sem catálogo',
+  'una marca, te vamos a preguntar si querés borrar sus carpetas y los equipos que tengan cargados adentro (útil si activaste una marca por error). "Otras marcas" es para cuando vendés algo que no está en las listas (por ejemplo, accesorios o consolas): esas seguís creándolas vos desde Stock':
+    'uma marca, vamos perguntar se você quer excluir suas pastas e os aparelhos que estiverem cadastrados dentro delas (útil se você ativou uma marca por engano). "Outras marcas" é para quando você vende algo que não está nas listas (por exemplo, acessórios ou consoles): essas você continua criando pelo Estoque',
+  'y los': 'e os',
+
   // Estadísticas — Dashboard: tabs, períodos, métricas (labels de arrays)
   'esta semana': 'esta semana',
   'este mes': 'este mês',
