@@ -252,7 +252,7 @@ export default function DetalleCliente() {
       moneda: monedaCodigo,
     });
     if ('error' in resultadoCuotas) {
-      setError('El pago se registró, pero no pudimos aplicarlo a las cuotas: ' + resultadoCuotas.error);
+      setError(`${t('El pago se registró, pero no pudimos aplicarlo a las cuotas:')} ` + resultadoCuotas.error);
     }
     setGuardandoPago(false);
     setRegistrandoPago(false);
@@ -271,7 +271,7 @@ export default function DetalleCliente() {
   const registrarAjuste = async () => {
     const monto = Number(ajusteMonto);
     if (!monto || monto <= 0) {
-      setError('Poné un monto mayor a cero.');
+      setError(t('Poné un monto mayor a cero.'));
       return;
     }
     setGuardandoAjuste(true);
@@ -291,7 +291,7 @@ export default function DetalleCliente() {
       registrado_por_foto_url: a?.fotoUrl ?? null,
     });
     if (mErr) {
-      setError('No pudimos registrar el ajuste: ' + mErr.message);
+      setError(`${t('No pudimos registrar el ajuste:')} ` + mErr.message);
       setGuardandoAjuste(false);
       return;
     }
@@ -303,14 +303,16 @@ export default function DetalleCliente() {
   const anularMovimiento = async (m: Movimiento) => {
     if (
       !confirm(
-        '¿Anular este movimiento? Deja de contar en el saldo (queda registrado como anulado, no se borra). Sirve para corregir un error de carga.'
+        t(
+          '¿Anular este movimiento? Deja de contar en el saldo (queda registrado como anulado, no se borra). Sirve para corregir un error de carga.'
+        )
       )
     )
       return;
     setError(null);
     const { error: mErr } = await supabase.from('cta_cte_movimientos').update({ anulado: true }).eq('id', m.id);
     if (mErr) {
-      setError('No pudimos anular el movimiento: ' + mErr.message);
+      setError(`${t('No pudimos anular el movimiento:')} ` + mErr.message);
       return;
     }
     // Si el movimiento venía de un pago, también anulamos ese pago para que
@@ -335,7 +337,7 @@ export default function DetalleCliente() {
       })
       .eq('id', id);
     if (upErr) {
-      setError('No pudimos guardar la configuración: ' + upErr.message);
+      setError(`${t('No pudimos guardar la configuración:')} ` + upErr.message);
       setGuardandoCredito(false);
       return;
     }
@@ -371,7 +373,7 @@ export default function DetalleCliente() {
       })
       .eq('id', id);
     if (updateError) {
-      setError('No pudimos guardar los cambios: ' + updateError.message);
+      setError(`${t('No pudimos guardar los cambios:')} ` + updateError.message);
       setGuardando(false);
       return;
     }
@@ -381,11 +383,11 @@ export default function DetalleCliente() {
 
   const handleEliminar = async () => {
     if (!c || !puedeEliminar) return;
-    if (!confirm('¿Eliminar este cliente? No se puede deshacer.')) return;
+    if (!confirm(t('¿Eliminar este cliente? No se puede deshacer.'))) return;
     setGuardando(true);
     const { error: deleteError } = await supabase.from('clientes').delete().eq('id', id);
     if (deleteError) {
-      setError('No pudimos eliminar: ' + deleteError.message);
+      setError(`${t('No pudimos eliminar:')} ` + deleteError.message);
       setGuardando(false);
       return;
     }
@@ -401,7 +403,7 @@ export default function DetalleCliente() {
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center">
-        <p className="text-sm text-muted dark:text-dark-text-secondary">Cargando...</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t('Cargando...')}</p>
       </main>
     );
   }
@@ -409,9 +411,9 @@ export default function DetalleCliente() {
   if (!c) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-3">
-        <p className="text-sm text-muted dark:text-dark-text-secondary">No encontramos ese cliente.</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t('No encontramos ese cliente.')}</p>
         <Link href="/clientes" className="text-sm text-accent dark:text-dark-accent underline">
-          Volver a clientes
+          {t('Volver a clientes')}
         </Link>
       </main>
     );
@@ -435,24 +437,24 @@ export default function DetalleCliente() {
         const signo = m.tipo === 'cargo' ? '+' : '−';
         const et =
           m.concepto === 'venta'
-            ? 'Compra'
+            ? t('Compra')
             : m.concepto === 'pago'
-            ? 'Pago'
+            ? t('Pago')
             : m.concepto === 'nota_credito'
-            ? 'Nota de crédito'
-            : 'Ajuste';
+            ? t('Nota de crédito')
+            : t('Ajuste');
         return `• ${new Date(m.fecha).toLocaleDateString('es-AR')} ${et}: ${signo}${fmt(m.monto)}`;
       })
       .join('\n');
     const estadoTxt =
       saldo > 0.009
-        ? `Tu saldo pendiente es ${fmt(saldo)}.`
+        ? `${t('Tu saldo pendiente es')} ${fmt(saldo)}.`
         : saldo < -0.009
-        ? `Tenés un saldo a favor de ${fmt(Math.abs(saldo))}.`
-        : 'Tu cuenta está al día. ¡Gracias!';
-    return `Hola ${c.nombre}! Te paso el resumen de tu cuenta${negocioNombre ? ` en ${negocioNombre}` : ''}:\n\n${estadoTxt}${
-      lineas ? `\n\nÚltimos movimientos:\n${lineas}` : ''
-    }${portalUrl ? `\n\nPodés ver tu cuenta actualizada cuando quieras acá:\n${portalUrl}` : ''}`;
+        ? `${t('Tenés un saldo a favor de')} ${fmt(Math.abs(saldo))}.`
+        : t('Tu cuenta está al día. ¡Gracias!');
+    return `${t('Hola')} ${c.nombre}! ${t('Te paso el resumen de tu cuenta')}${negocioNombre ? ` ${t('en')} ${negocioNombre}` : ''}:\n\n${estadoTxt}${
+      lineas ? `\n\n${t('Últimos movimientos:')}\n${lineas}` : ''
+    }${portalUrl ? `\n\n${t('Podés ver tu cuenta actualizada cuando quieras acá:')}\n${portalUrl}` : ''}`;
   };
   const linkExtracto = armarLinkWhatsApp(c.telefono, mensajeExtracto(), codigoPais);
 
@@ -473,22 +475,30 @@ export default function DetalleCliente() {
       {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
       {movimientosError && (
         <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">
-          No pudimos cargar los movimientos de cuenta corriente — el saldo de abajo puede no ser real. Recargá la página.
+          {t('No pudimos cargar los movimientos de cuenta corriente — el saldo de abajo puede no ser real. Recargá la página.')}
         </p>
       )}
 
       <div className="flex items-center gap-1.5 text-sm overflow-x-auto">
-        {(['cuenta', 'financiacion', 'compras', 'servicio', 'datos'] as const).map((t) => (
+        {(['cuenta', 'financiacion', 'compras', 'servicio', 'datos'] as const).map((tabId) => (
           <button
-            key={t}
-            onClick={() => setTab(t)}
+            key={tabId}
+            onClick={() => setTab(tabId)}
             className={`flex-1 whitespace-nowrap rounded-xl py-2 px-2 font-medium ${
-              tab === t
+              tab === tabId
                 ? 'bg-accent dark:bg-dark-accent text-white'
                 : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
             }`}
           >
-            {t === 'cuenta' ? 'Cuenta cte.' : t === 'financiacion' ? 'Financiaciones' : t === 'compras' ? 'Compras' : t === 'servicio' ? 'Servicio Téc.' : 'Datos'}
+            {tabId === 'cuenta'
+              ? t('Cuenta cte.')
+              : tabId === 'financiacion'
+              ? t('Financiaciones')
+              : tabId === 'compras'
+              ? t('Compras')
+              : tabId === 'servicio'
+              ? t('Servicio Téc.')
+              : t('Datos')}
           </button>
         ))}
       </div>
@@ -500,20 +510,24 @@ export default function DetalleCliente() {
             <div className="flex items-end justify-between gap-3">
               <div>
                 <p className="text-xs text-muted dark:text-dark-text-secondary uppercase tracking-wide font-semibold">
-                  {saldo < -0.009 ? 'Saldo a favor' : 'Saldo actual'}
+                  {saldo < -0.009 ? t('Saldo a favor') : t('Saldo actual')}
                 </p>
                 <p className={`text-3xl font-display font-semibold leading-none mt-1 ${colorSaldo}`}>{fmt(Math.abs(saldo))}</p>
               </div>
-              {diasMora != null && <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-bad/10 text-bad">Vencido hace {diasMora} días</span>}
+              {diasMora != null && (
+                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-bad/10 text-bad">
+                  {t('Vencido hace')} {diasMora} {t('días')}
+                </span>
+              )}
             </div>
 
             {c.cta_cte_habilitada && c.limite_credito != null && (
               <div>
                 <div className="flex justify-between text-xs text-muted dark:text-dark-text-secondary mb-1">
-                  <span>Crédito usado</span>
+                  <span>{t('Crédito usado')}</span>
                   <span>
                     {fmt(Math.max(0, saldo))} / {fmt(c.limite_credito)}
-                    {disponible != null && disponible > 0 ? ` · disponible ${fmt(disponible)}` : ''}
+                    {disponible != null && disponible > 0 ? ` · ${t('disponible')} ${fmt(disponible)}` : ''}
                   </span>
                 </div>
                 <div className="h-2 rounded-full bg-canvas dark:bg-dark-bg overflow-hidden border border-border dark:border-dark-border">
@@ -530,13 +544,13 @@ export default function DetalleCliente() {
                 onClick={abrirRegistrarPago}
                 className="rounded-xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors px-4 py-2 text-sm font-medium text-white"
               >
-                💸 Registrar pago
+                💸 {t('Registrar pago')}
               </button>
               <Link
                 href={`/ordenes/nueva?clienteId=${id}`}
                 className="rounded-xl border border-border dark:border-dark-border px-4 py-2 text-sm font-medium"
               >
-                🧾 Nueva venta
+                🧾 {t('Nueva venta')}
               </Link>
               <a
                 href={linkExtracto}
@@ -544,7 +558,7 @@ export default function DetalleCliente() {
                 rel="noopener noreferrer"
                 className="rounded-xl border border-border dark:border-dark-border px-4 py-2 text-sm font-medium"
               >
-                📤 Enviar extracto
+                📤 {t('Enviar extracto')}
               </a>
               {portalUrl && (
                 <button
@@ -555,20 +569,20 @@ export default function DetalleCliente() {
                   }}
                   className="rounded-xl border border-border dark:border-dark-border px-4 py-2 text-sm font-medium"
                 >
-                  {linkCopiado ? '✓ Link copiado' : '🔗 Portal del cliente'}
+                  {linkCopiado ? `✓ ${t('Link copiado')}` : `🔗 ${t('Portal del cliente')}`}
                 </button>
               )}
               <button
                 onClick={abrirAjuste}
                 className="rounded-xl border border-border dark:border-dark-border px-4 py-2 text-sm font-medium"
               >
-                🔄 Ajuste / Nota de crédito
+                🔄 {t('Ajuste / Nota de crédito')}
               </button>
               <button
                 onClick={() => setConfigAbierta((v) => !v)}
                 className="rounded-xl border border-border dark:border-dark-border px-4 py-2 text-sm font-medium"
               >
-                🎚️ {c.cta_cte_habilitada ? 'Editar crédito' : 'Habilitar crédito'}
+                🎚️ {c.cta_cte_habilitada ? t('Editar crédito') : t('Habilitar crédito')}
               </button>
             </div>
           </div>
@@ -576,28 +590,28 @@ export default function DetalleCliente() {
           {/* Configuración de crédito */}
           {configAbierta && (
             <div className="rounded-2xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-4 flex flex-col gap-3">
-              <p className="text-sm font-semibold">Configuración de crédito</p>
+              <p className="text-sm font-semibold">{t('Configuración de crédito')}</p>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={credHabilitada} onChange={(e) => setCredHabilitada(e.target.checked)} className="h-5 w-5 accent-ink" />
-                <span className="text-sm">Habilitar cuenta corriente (permitir venderle fiado)</span>
+                <span className="text-sm">{t('Habilitar cuenta corriente (permitir venderle fiado)')}</span>
               </label>
               {credHabilitada && (
                 <>
                   <div className="flex gap-2">
                     <div className="flex-1">
-                      <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Límite de crédito (vacío = sin límite)</label>
-                      <input value={credLimite} onChange={(e) => setCredLimite(e.target.value.replace(/[^\d]/g, ''))} inputMode="numeric" placeholder="Sin límite" className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm" />
+                      <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Límite de crédito (vacío = sin límite)')}</label>
+                      <input value={credLimite} onChange={(e) => setCredLimite(e.target.value.replace(/[^\d]/g, ''))} inputMode="numeric" placeholder={t('Sin límite')} className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm" />
                     </div>
                     <div className="w-32">
-                      <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Vencimiento (días)</label>
+                      <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Vencimiento (días)')}</label>
                       <input value={credPlazo} onChange={(e) => setCredPlazo(e.target.value.replace(/[^\d]/g, ''))} inputMode="numeric" placeholder="30" className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm" />
                     </div>
                   </div>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input type="checkbox" checked={credSuspendido} onChange={(e) => setCredSuspendido(e.target.checked)} className="h-5 w-5 accent-ink" />
-                    <span className="text-sm">Suspendido (no permitir nuevas ventas a crédito)</span>
+                    <span className="text-sm">{t('Suspendido (no permitir nuevas ventas a crédito)')}</span>
                   </label>
-                  <textarea value={credObs} onChange={(e) => setCredObs(e.target.value)} rows={2} placeholder="Observaciones (opcional)" className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm" />
+                  <textarea value={credObs} onChange={(e) => setCredObs(e.target.value)} rows={2} placeholder={t('Observaciones (opcional)')} className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm" />
                 </>
               )}
               <button
@@ -605,17 +619,17 @@ export default function DetalleCliente() {
                 onClick={guardarCredito}
                 className="rounded-xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
               >
-                {guardandoCredito ? 'Guardando...' : 'Guardar'}
+                {guardandoCredito ? t('Guardando...') : t('Guardar')}
               </button>
             </div>
           )}
 
           {/* Extracto */}
           <div>
-            <p className="text-sm font-semibold mb-2">Movimientos</p>
+            <p className="text-sm font-semibold mb-2">{t('Movimientos')}</p>
             {extracto.length === 0 ? (
               <p className="text-sm text-muted dark:text-dark-text-secondary text-center py-6">
-                Todavía no hay movimientos en la cuenta de este cliente.
+                {t('Todavía no hay movimientos en la cuenta de este cliente.')}
               </p>
             ) : (
               <div className="flex flex-col gap-2">
@@ -625,11 +639,11 @@ export default function DetalleCliente() {
                     <div key={m.id} className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex items-center justify-between gap-3">
                       <div className="min-w-0">
                         <p className="text-sm font-medium capitalize truncate">
-                          {m.concepto === 'venta' ? 'Venta a cuenta corriente' : m.concepto === 'pago' ? 'Pago recibido' : m.concepto.replace('_', ' ')}
+                          {m.concepto === 'venta' ? t('Venta a cuenta corriente') : m.concepto === 'pago' ? t('Pago recibido') : m.concepto.replace('_', ' ')}
                         </p>
                         <p className="text-xs text-muted dark:text-dark-text-secondary">
                           {new Date(m.fecha).toLocaleDateString('es-AR')}
-                          {esCargo && m.vencimiento ? ` · vence ${new Date(m.vencimiento).toLocaleDateString('es-AR')}` : ''}
+                          {esCargo && m.vencimiento ? ` · ${t('vence')} ${new Date(m.vencimiento).toLocaleDateString('es-AR')}` : ''}
                         </p>
                         {m.observacion && <p className="text-xs text-muted dark:text-dark-text-secondary truncate">{m.observacion}</p>}
                       </div>
@@ -638,9 +652,9 @@ export default function DetalleCliente() {
                           {esCargo ? '+' : '−'}
                           {fmt(m.monto)}
                         </p>
-                        <p className="text-[11px] text-muted dark:text-dark-text-secondary">saldo {fmt(m.saldoAcum)}</p>
+                        <p className="text-[11px] text-muted dark:text-dark-text-secondary">{t('saldo')} {fmt(m.saldoAcum)}</p>
                         <button onClick={() => anularMovimiento(m)} className="text-[10px] text-bad underline mt-0.5">
-                          Anular
+                          {t('Anular')}
                         </button>
                       </div>
                     </div>
@@ -659,24 +673,24 @@ export default function DetalleCliente() {
       {tab === 'compras' && (
         <>
           {ordenesCompra.length > 0 && (
-            <p className="text-xs text-muted dark:text-dark-text-secondary">Total comprado histórico: {fmt(totalComprado)}</p>
+            <p className="text-xs text-muted dark:text-dark-text-secondary">{t('Total comprado histórico:')} {fmt(totalComprado)}</p>
           )}
-          <ListaOrdenes ordenes={ordenesCompra} filtrarTipo={(t) => t !== 'trabajo'} vacio="Todavía no le hiciste ninguna venta a este cliente." moneda={moneda} />
+          <ListaOrdenes ordenes={ordenesCompra} filtrarTipo={(tipo) => tipo !== 'trabajo'} vacio={t('Todavía no le hiciste ninguna venta a este cliente.')} moneda={moneda} />
         </>
       )}
 
       {tab === 'servicio' && (
-        <ListaOrdenes ordenes={ordenesServicio} filtrarTipo={(t) => t === 'trabajo'} vacio="Todavía no le hiciste ningún arreglo a este cliente." moneda={moneda} />
+        <ListaOrdenes ordenes={ordenesServicio} filtrarTipo={(tipo) => tipo === 'trabajo'} vacio={t('Todavía no le hiciste ningún arreglo a este cliente.')} moneda={moneda} />
       )}
 
       {tab === 'datos' && (
         <>
           <div className="flex flex-col gap-3">
-            <Campo label="Nombre" valor={c.nombre} onChange={(v) => campo('nombre', v)} />
-            <Campo label="Apellido" valor={c.apellido ?? ''} onChange={(v) => campo('apellido', v)} />
-            <Campo label="Domicilio" valor={c.domicilio ?? ''} onChange={(v) => campo('domicilio', v)} />
+            <Campo label={t('Nombre')} valor={c.nombre} onChange={(v) => campo('nombre', v)} />
+            <Campo label={t('Apellido')} valor={c.apellido ?? ''} onChange={(v) => campo('apellido', v)} />
+            <Campo label={t('Domicilio')} valor={c.domicilio ?? ''} onChange={(v) => campo('domicilio', v)} />
             <Campo label="Email" valor={c.email ?? ''} onChange={(v) => campo('email', v)} />
-            <Campo label="Teléfono" valor={c.telefono ?? ''} onChange={(v) => campo('telefono', v)} />
+            <Campo label={t('Teléfono')} valor={c.telefono ?? ''} onChange={(v) => campo('telefono', v)} />
             <Campo label="DNI" valor={c.dni ?? ''} onChange={(v) => campo('dni', v)} />
           </div>
 
@@ -685,7 +699,7 @@ export default function DetalleCliente() {
             onClick={handleGuardar}
             className="w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
           >
-            {guardando ? 'Guardando...' : 'Guardar cambios'}
+            {guardando ? t('Guardando...') : t('Guardar cambios')}
           </button>
           {puedeEliminar && (
             <button
@@ -693,7 +707,7 @@ export default function DetalleCliente() {
               onClick={handleEliminar}
               className="w-full rounded-2xl border border-bad/30 py-3 text-center text-sm font-medium text-bad disabled:opacity-40"
             >
-              Eliminar cliente
+              {t('Eliminar cliente')}
             </button>
           )}
         </>
@@ -703,14 +717,14 @@ export default function DetalleCliente() {
       {registrandoPago && (
         <div className="fixed inset-0 z-50 bg-ink/60 backdrop-blur-sm flex items-center justify-center px-6" onClick={() => setRegistrandoPago(false)}>
           <div className="w-full max-w-sm bg-white dark:bg-dark-surface rounded-2xl shadow-elevated p-5 flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
-            <p className="text-base font-semibold">Registrar pago de {c.nombre}</p>
-            {saldo > 0 && <p className="text-xs text-muted dark:text-dark-text-secondary">Debe {fmt(saldo)}.</p>}
+            <p className="text-base font-semibold">{t('Registrar pago de')} {c.nombre}</p>
+            {saldo > 0 && <p className="text-xs text-muted dark:text-dark-text-secondary">{t('Debe')} {fmt(saldo)}.</p>}
             <div>
-              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Monto</label>
+              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Monto')}</label>
               <input value={pagoMonto} onChange={(e) => setPagoMonto(e.target.value.replace(/[^\d]/g, ''))} inputMode="numeric" autoFocus placeholder="0" className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2.5 text-lg" />
             </div>
             <div>
-              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Medio de pago</label>
+              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Medio de pago')}</label>
               <div className="flex flex-wrap gap-2">
                 {MEDIOS_PAGO.map((m) => (
                   <button key={m.codigo} onClick={() => setPagoMedio(m.codigo)} className={`rounded-lg px-3 py-2 text-sm font-medium ${pagoMedio === m.codigo ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'}`}>
@@ -719,17 +733,17 @@ export default function DetalleCliente() {
                 ))}
               </div>
             </div>
-            <textarea value={pagoObs} onChange={(e) => setPagoObs(e.target.value)} rows={2} placeholder="Observación (opcional)" className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm" />
+            <textarea value={pagoObs} onChange={(e) => setPagoObs(e.target.value)} rows={2} placeholder={t('Observación (opcional)')} className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm" />
             <div className="flex gap-2">
               <button onClick={() => setRegistrandoPago(false)} className="flex-1 rounded-xl border border-border dark:border-dark-border py-2.5 text-sm font-medium">
-                Cancelar
+                {t('Cancelar')}
               </button>
               <button
                 disabled={guardandoPago || !pagoMonto}
                 onClick={registrarPago}
                 className="flex-1 rounded-xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2.5 text-sm font-medium text-white disabled:opacity-40"
               >
-                {guardandoPago ? 'Guardando...' : 'Registrar'}
+                {guardandoPago ? t('Guardando...') : t('Registrar')}
               </button>
             </div>
           </div>
@@ -740,41 +754,41 @@ export default function DetalleCliente() {
       {ajustando && (
         <div className="fixed inset-0 z-50 bg-ink/60 backdrop-blur-sm flex items-center justify-center px-6" onClick={() => setAjustando(false)}>
           <div className="w-full max-w-sm bg-white dark:bg-dark-surface rounded-2xl shadow-elevated p-5 flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
-            <p className="text-base font-semibold">Ajustar la cuenta de {c.nombre}</p>
+            <p className="text-base font-semibold">{t('Ajustar la cuenta de')} {c.nombre}</p>
             <div className="flex gap-2">
               <button
                 onClick={() => setAjusteTipo('descuento')}
                 className={`flex-1 rounded-lg py-2 text-sm font-medium ${ajusteTipo === 'descuento' ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'}`}
               >
-                Descontar deuda
+                {t('Descontar deuda')}
               </button>
               <button
                 onClick={() => setAjusteTipo('cargo')}
                 className={`flex-1 rounded-lg py-2 text-sm font-medium ${ajusteTipo === 'cargo' ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'}`}
               >
-                Agregar deuda
+                {t('Agregar deuda')}
               </button>
             </div>
             <p className="text-[11px] text-muted dark:text-dark-text-secondary">
               {ajusteTipo === 'descuento'
-                ? 'Baja lo que te debe (nota de crédito, condonación, una devolución).'
-                : 'Sube lo que te debe (por ejemplo un interés por mora o un ajuste).'}
+                ? t('Baja lo que te debe (nota de crédito, condonación, una devolución).')
+                : t('Sube lo que te debe (por ejemplo un interés por mora o un ajuste).')}
             </p>
             <div>
-              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Monto</label>
+              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Monto')}</label>
               <input value={ajusteMonto} onChange={(e) => setAjusteMonto(e.target.value.replace(/[^\d]/g, ''))} inputMode="numeric" autoFocus placeholder="0" className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2.5 text-lg" />
             </div>
-            <textarea value={ajusteObs} onChange={(e) => setAjusteObs(e.target.value)} rows={2} placeholder="Motivo (recomendado)" className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm" />
+            <textarea value={ajusteObs} onChange={(e) => setAjusteObs(e.target.value)} rows={2} placeholder={t('Motivo (recomendado)')} className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm" />
             <div className="flex gap-2">
               <button onClick={() => setAjustando(false)} className="flex-1 rounded-xl border border-border dark:border-dark-border py-2.5 text-sm font-medium">
-                Cancelar
+                {t('Cancelar')}
               </button>
               <button
                 disabled={guardandoAjuste || !ajusteMonto}
                 onClick={registrarAjuste}
                 className="flex-1 rounded-xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2.5 text-sm font-medium text-white disabled:opacity-40"
               >
-                {guardandoAjuste ? 'Guardando...' : 'Aplicar ajuste'}
+                {guardandoAjuste ? t('Guardando...') : t('Aplicar ajuste')}
               </button>
             </div>
           </div>
@@ -795,6 +809,7 @@ function ListaOrdenes({
   vacio: string;
   moneda: string;
 }) {
+  const t = useT();
   if (ordenes.length === 0) {
     return <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{vacio}</p>;
   }
@@ -810,13 +825,13 @@ function ListaOrdenes({
           >
             <div>
               <p className="text-sm font-medium">
-                {items.length > 0 ? `${items[0].descripcion}${items.length > 1 ? ` +${items.length - 1}` : ''}` : 'Orden vacía'}
+                {items.length > 0 ? `${items[0].descripcion}${items.length > 1 ? ` +${items.length - 1}` : ''}` : t('Orden vacía')}
               </p>
               <p className="text-xs text-muted dark:text-dark-text-secondary">{new Date(o.created_at).toLocaleDateString('es-AR')}</p>
             </div>
             <div className="text-right">
               {o.total != null && <p className="text-sm font-medium">{moneda}{o.total.toLocaleString('es-AR')}</p>}
-              <p className="text-xs text-muted dark:text-dark-text-secondary capitalize">{o.estado}</p>
+              <p className="text-xs text-muted dark:text-dark-text-secondary capitalize">{t(o.estado)}</p>
             </div>
           </Link>
         );
