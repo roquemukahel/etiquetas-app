@@ -15,6 +15,7 @@ import { asegurarModelo, normalizarNombreModelo } from '../lib/modelos';
 import { compararModelosPorSalida } from '../lib/catalogosMarcas';
 import { sanitizarDecimal } from '../lib/numeros';
 import { obtenerCategorias, type Categoria } from '../lib/categorias';
+import { asegurarProveedor } from '../lib/proveedores';
 import MiniaturaDispositivo from '../MiniaturaDispositivo';
 import { QoviState } from '../QoviState';
 import { ICONOS } from '../Iconos';
@@ -74,6 +75,13 @@ type Producto = {
   modalidad?: string | null;
   marca?: string | null;
   numero_serie?: string | null;
+  sku?: string | null;
+  codigo_barras?: string | null;
+  proveedor_id?: string | null;
+  stock_minimo?: number | null;
+  garantia_dias?: number | null;
+  descripcion?: string | null;
+  notas?: string | null;
 };
 
 // Catálogo inicial que se puede cargar con un toque desde "Agregar accesorios
@@ -168,6 +176,18 @@ export default function Stock() {
   const [marcaProducto, setMarcaProducto] = useState('');
   const [numeroSerieProducto, setNumeroSerieProducto] = useState('');
   const [cantidadInicialProducto, setCantidadInicialProducto] = useState('1');
+  // "Perfil genérico" (categorias_stock_supabase.sql): campos que existen en
+  // la base hace tiempo pero nunca tuvieron formulario — colapsados detrás
+  // de "Más campos" para no abrumar el alta rápida de un accesorio simple.
+  const [mostrarMasCamposProducto, setMostrarMasCamposProducto] = useState(false);
+  const [skuProducto, setSkuProducto] = useState('');
+  const [codigoBarrasProducto, setCodigoBarrasProducto] = useState('');
+  const [proveedorProducto, setProveedorProducto] = useState('');
+  const [stockMinimoProducto, setStockMinimoProducto] = useState('');
+  const [garantiaDiasProducto, setGarantiaDiasProducto] = useState('');
+  const [descripcionProducto, setDescripcionProducto] = useState('');
+  const [notasProducto, setNotasProducto] = useState('');
+  const [proveedoresSugeridos, setProveedoresSugeridos] = useState<string[]>([]);
   // Filtro de la grilla de accesorios por categoría — '' = todas.
   const [filtroCategoriaProducto, setFiltroCategoriaProducto] = useState('');
   const [guardandoProducto, setGuardandoProducto] = useState(false);
@@ -357,6 +377,14 @@ export default function Stock() {
         // corrió la migración) — el formulario sigue funcionando igual que
         // antes, simplemente sin selector de categoría.
       }
+    })();
+    // Mismo patrón que Proveedor en app/stock/nuevo/page.tsx: nombres
+    // existentes como sugerencia de autocompletar, nunca bloquea escribir
+    // uno nuevo. Si la tabla no existe o está vacía, el datalist queda vacío
+    // y listo — no rompe nada.
+    (async () => {
+      const { data } = await supabase.from('proveedores').select('nombre').order('nombre');
+      setProveedoresSugeridos(((data as { nombre: string }[]) ?? []).map((p) => p.nombre));
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -886,6 +914,7 @@ export default function Stock() {
     // celular): cantidad siempre 1, no tiene sentido pedir "cantidad inicial".
     // Por cantidad = varias unidades idénticas bajo el mismo registro.
     const esSerializado = categoriasStock.length > 0 && modalidadProducto === 'serializado';
+    const proveedorId = mostrarMasCamposProducto ? await asegurarProveedor(supabase, proveedorProducto) : null;
     const { error: insertError } = await supabase.from('productos').insert({
       nombre: nombreProducto.trim(),
       precio: precioProducto ? Number(precioProducto) : null,
@@ -893,6 +922,17 @@ export default function Stock() {
       cantidad: esSerializado ? 1 : Math.max(0, Math.floor(Number(cantidadInicialProducto) || 0)),
       ...(categoriaProducto ? { categoria_id: categoriaProducto, modalidad: modalidadProducto } : {}),
       ...(esSerializado ? { marca: marcaProducto.trim() || null, numero_serie: numeroSerieProducto.trim() || null } : {}),
+      ...(mostrarMasCamposProducto
+        ? {
+            sku: skuProducto.trim() || null,
+            codigo_barras: codigoBarrasProducto.trim() || null,
+            proveedor_id: proveedorId,
+            stock_minimo: stockMinimoProducto ? Math.max(0, Math.floor(Number(stockMinimoProducto))) : null,
+            garantia_dias: garantiaDiasProducto ? Math.max(0, Math.floor(Number(garantiaDiasProducto))) : null,
+            descripcion: descripcionProducto.trim() || null,
+            notas: notasProducto.trim() || null,
+          }
+        : {}),
     });
     if (insertError) {
       setErrorProducto('No pudimos guardar: ' + insertError.message);
@@ -905,6 +945,14 @@ export default function Stock() {
     setMarcaProducto('');
     setNumeroSerieProducto('');
     setCantidadInicialProducto('1');
+    setSkuProducto('');
+    setCodigoBarrasProducto('');
+    setProveedorProducto('');
+    setStockMinimoProducto('');
+    setGarantiaDiasProducto('');
+    setDescripcionProducto('');
+    setNotasProducto('');
+    setMostrarMasCamposProducto(false);
     setGuardandoProducto(false);
     cargarProductos();
   };
@@ -1763,6 +1811,73 @@ export default function Stock() {
                       placeholder="Cantidad inicial"
                       className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
                     />
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setMostrarMasCamposProducto((v) => !v)}
+                    className="self-start text-xs font-medium text-accent dark:text-dark-accent hover:underline"
+                  >
+                    {mostrarMasCamposProducto ? '− Ocultar más campos' : '+ Más campos (SKU, proveedor, garantía…)'}
+                  </button>
+                  {mostrarMasCamposProducto && (
+                    <div className="flex flex-col gap-2 rounded-xl bg-canvas dark:bg-dark-bg p-3">
+                      <div className="flex gap-2">
+                        <input
+                          value={skuProducto}
+                          onChange={(e) => setSkuProducto(e.target.value)}
+                          placeholder="SKU (opcional)"
+                          className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+                        />
+                        <input
+                          value={codigoBarrasProducto}
+                          onChange={(e) => setCodigoBarrasProducto(e.target.value)}
+                          placeholder="Código de barras (opcional)"
+                          className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+                        />
+                      </div>
+                      <input
+                        value={proveedorProducto}
+                        onChange={(e) => setProveedorProducto(e.target.value)}
+                        placeholder="Proveedor (opcional)"
+                        list="proveedores-producto"
+                        className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+                      />
+                      <datalist id="proveedores-producto">
+                        {proveedoresSugeridos.map((p) => (
+                          <option key={p} value={p} />
+                        ))}
+                      </datalist>
+                      <div className="flex gap-2">
+                        <input
+                          value={stockMinimoProducto}
+                          onChange={(e) => setStockMinimoProducto(e.target.value.replace(/[^\d]/g, ''))}
+                          inputMode="numeric"
+                          placeholder="Stock mínimo (opcional)"
+                          className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+                        />
+                        <input
+                          value={garantiaDiasProducto}
+                          onChange={(e) => setGarantiaDiasProducto(e.target.value.replace(/[^\d]/g, ''))}
+                          inputMode="numeric"
+                          placeholder="Garantía en días (opcional)"
+                          className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+                        />
+                      </div>
+                      <textarea
+                        value={descripcionProducto}
+                        onChange={(e) => setDescripcionProducto(e.target.value)}
+                        placeholder="Descripción (opcional)"
+                        rows={2}
+                        className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm resize-none"
+                      />
+                      <textarea
+                        value={notasProducto}
+                        onChange={(e) => setNotasProducto(e.target.value)}
+                        placeholder="Notas internas (opcional)"
+                        rows={2}
+                        className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm resize-none"
+                      />
+                    </div>
                   )}
                 </>
               )}
