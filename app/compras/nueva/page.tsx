@@ -10,6 +10,7 @@ import { sanitizarDecimal } from '../../lib/numeros';
 import { limpiarImei } from '../../lib/imei';
 import SelectorColorAuto from '../../SelectorColorAuto';
 import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
+import { useT } from '../../lib/idioma';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 
@@ -23,6 +24,7 @@ type Cliente = {
 export default function NuevaCompra() {
   const router = useRouter();
   const supabase = crearClienteNavegador();
+  const t = useT();
 
   const [step, setStep] = useState<'cliente' | 'dispositivo'>('cliente');
 
@@ -99,7 +101,7 @@ export default function NuevaCompra() {
           })
           .select()
           .single();
-        if (cErr || !data) throw new Error(cErr?.message || 'no se pudo cargar el cliente');
+        if (cErr || !data) throw new Error(cErr?.message || t('no se pudo cargar el cliente'));
         clienteId = data.id;
       }
 
@@ -117,13 +119,13 @@ export default function NuevaCompra() {
         })
         .select()
         .single();
-      if (compraErr || !compra) throw new Error(compraErr?.message || 'no se pudo crear la compra');
+      if (compraErr || !compra) throw new Error(compraErr?.message || t('no se pudo crear la compra'));
 
       await asegurarModelo(supabase, modelo);
 
       router.push(`/compras/${compra.id}/boleta`);
     } catch (err: any) {
-      setError('No pudimos guardar la compra: ' + (err?.message || 'error desconocido'));
+      setError(t('No pudimos guardar la compra:') + ' ' + (err?.message || t('error desconocido')));
       setGuardando(false);
     }
   };
@@ -135,7 +137,7 @@ export default function NuevaCompra() {
           <Link href="/compras" className="text-2xl leading-none">
             &larr;
           </Link>
-          <span className="text-lg font-medium">Nueva compra · Cliente</span>
+          <span className="text-lg font-medium">{t('Nueva compra')} · {t('Cliente')}</span>
         </header>
 
         <div className="flex items-center gap-2 text-sm">
@@ -145,7 +147,7 @@ export default function NuevaCompra() {
               modoCliente === 'existente' ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
             }`}
           >
-            Cliente existente
+            {t('Cliente existente')}
           </button>
           <button
             onClick={() => setModoCliente('nuevo')}
@@ -153,7 +155,7 @@ export default function NuevaCompra() {
               modoCliente === 'nuevo' ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
             }`}
           >
-            Cargar nuevo
+            {t('Cargar nuevo')}
           </button>
         </div>
 
@@ -162,12 +164,12 @@ export default function NuevaCompra() {
             <input
               value={buscarCliente}
               onChange={(e) => setBuscarCliente(e.target.value)}
-              placeholder="Buscar por nombre o teléfono..."
+              placeholder={t('Buscar por nombre o teléfono...')}
               className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
             />
             <div className="flex flex-col gap-2">
               {clientesFiltrados.length === 0 && (
-                <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-4">No encontramos clientes con esa búsqueda.</p>
+                <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-4">{t('No encontramos clientes con esa búsqueda.')}</p>
               )}
               {clientesFiltrados.map((c) => (
                 <button
@@ -185,18 +187,18 @@ export default function NuevaCompra() {
           </>
         ) : (
           <div className="flex flex-col gap-3">
-            <Campo label="Nombre" valor={nuevoNombre} onChange={setNuevoNombre} />
-            <Campo label="Apellido" valor={nuevoApellido} onChange={setNuevoApellido} />
-            <Campo label="Teléfono" valor={nuevoTelefono} onChange={setNuevoTelefono} />
-            <Campo label="Email" valor={nuevoEmail} onChange={setNuevoEmail} />
-            <Campo label="Domicilio" valor={nuevoDomicilio} onChange={setNuevoDomicilio} />
-            <Campo label="DNI" valor={nuevoDni} onChange={setNuevoDni} />
+            <Campo label={t('Nombre')} valor={nuevoNombre} onChange={setNuevoNombre} />
+            <Campo label={t('Apellido')} valor={nuevoApellido} onChange={setNuevoApellido} />
+            <Campo label={t('Teléfono')} valor={nuevoTelefono} onChange={setNuevoTelefono} />
+            <Campo label={t('Email')} valor={nuevoEmail} onChange={setNuevoEmail} />
+            <Campo label={t('Domicilio')} valor={nuevoDomicilio} onChange={setNuevoDomicilio} />
+            <Campo label={t('DNI')} valor={nuevoDni} onChange={setNuevoDni} />
             <button
               disabled={!nuevoNombre.trim()}
               onClick={confirmarClienteNuevo}
               className="mt-2 w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
             >
-              Continuar
+              {t('Continuar')}
             </button>
           </div>
         )}
@@ -210,18 +212,18 @@ export default function NuevaCompra() {
         <button onClick={() => setStep('cliente')} className="text-2xl leading-none">
           &larr;
         </button>
-        <span className="text-lg font-medium">Nueva compra · Dispositivo</span>
+        <span className="text-lg font-medium">{t('Nueva compra')} · {t('Dispositivo')}</span>
       </header>
 
       {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
 
       <div className="rounded-xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card px-4 py-3 text-sm">
-        <span className="text-muted dark:text-dark-text-secondary">Cliente: </span>
+        <span className="text-muted dark:text-dark-text-secondary">{t('Cliente:')} </span>
         {modoCliente === 'existente' ? `${clienteElegido?.nombre} ${clienteElegido?.apellido || ''}` : nuevoNombre}
       </div>
 
       <div className="flex flex-col gap-3">
-        <Campo label="Modelo (carpeta)" valor={modelo} onChange={setModelo} placeholder="iPhone 13" listaId="carpetas-stock-compra" />
+        <Campo label={t('Modelo (carpeta)')} valor={modelo} onChange={setModelo} placeholder="iPhone 13" listaId="carpetas-stock-compra" />
         <datalist id="carpetas-stock-compra">
           {carpetas.map((c) => (
             <option key={c} value={c} />
@@ -229,7 +231,7 @@ export default function NuevaCompra() {
         </datalist>
 
         <div>
-          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Almacenamiento</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Almacenamiento')}</label>
           <div className="flex gap-2">
             {STORAGE_OPTIONS.map((gb) => (
               <button
@@ -245,23 +247,23 @@ export default function NuevaCompra() {
           </div>
         </div>
 
-        <SelectorColorAuto label="Color" modelo={modelo} value={color} onChange={setColor} />
+        <SelectorColorAuto label={t('Color')} modelo={modelo} value={color} onChange={setColor} />
         <SelectorEstadoDispositivo value={condicion} onChange={setCondicion} />
 
-        <Campo label="IMEI" valor={imei} onChange={setImei} placeholder="IMEI" />
+        <Campo label={t('IMEI')} valor={imei} onChange={setImei} placeholder={t('IMEI')} />
 
         <div>
-          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Detalles (opcional)</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Detalles (opcional)')}</label>
           <textarea
             value={detalles}
             onChange={(e) => setDetalles(e.target.value)}
-            placeholder="¿Presenta algún detalle? Ej. pantalla con manchas, batería al 70%..."
+            placeholder={t('¿Presenta algún detalle? Ej. pantalla con manchas, batería al 70%...')}
             rows={3}
             className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
           />
         </div>
 
-        <Campo label="Precio pagado" valor={precio} onChange={setPrecio} numerico />
+        <Campo label={t('Precio pagado')} valor={precio} onChange={setPrecio} numerico />
       </div>
 
       <button
@@ -269,7 +271,7 @@ export default function NuevaCompra() {
         onClick={handleConfirmar}
         className="mt-auto w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
       >
-        {guardando ? 'Guardando...' : 'Confirmar compra'}
+        {guardando ? t('Guardando...') : t('Confirmar compra')}
       </button>
     </main>
   );

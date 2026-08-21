@@ -995,4 +995,23 @@ export const PT: Record<string, string> = {
   'Nueva compra': 'Nova compra',
   compra: 'compra',
   compras: 'compras',
+
+  // Compras — nueva
+  'Buscar por nombre o teléfono...': 'Buscar por nome ou telefone...',
+  'Cargar nuevo': 'Cadastrar novo',
+  'Cliente existente': 'Cliente existente',
+  'Cliente:': 'Cliente:',
+  'Confirmar compra': 'Confirmar compra',
+  Continuar: 'Continuar',
+  DNI: 'CPF',
+  'Detalles (opcional)': 'Detalhes (opcional)',
+  Email: 'E-mail',
+  IMEI: 'IMEI',
+  'No encontramos clientes con esa búsqueda.': 'Não encontramos clientes com essa busca.',
+  'No pudimos guardar la compra:': 'Não conseguimos salvar a compra:',
+  'Precio pagado': 'Preço pago',
+  'no se pudo cargar el cliente': 'não foi possível cadastrar o cliente',
+  'no se pudo crear la compra': 'não foi possível criar a compra',
+  '¿Presenta algún detalle? Ej. pantalla con manchas, batería al 70%...':
+    'Apresenta algum detalhe? Ex. tela com manchas, bateria a 70%...',
 };
