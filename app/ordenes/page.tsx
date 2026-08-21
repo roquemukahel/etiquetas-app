@@ -10,6 +10,7 @@ import { registrarAuditoria } from '../lib/auditoria';
 import { generarOrdenDeReparacion } from '../lib/ordenesServicio';
 import { ICONOS } from '../Iconos';
 import { QoviState } from '../QoviState';
+import { useT } from '../lib/idioma';
 
 type Orden = {
   id: string;
@@ -73,6 +74,7 @@ export default function Ordenes() {
   const supabase = crearClienteNavegador();
   const router = useRouter();
   const actor = useActor();
+  const t = useT();
   const puedeVender = tienePermiso(actor, 'vender');
   const [ordenes, setOrdenes] = useState<Orden[]>([]);
   const [canjes, setCanjes] = useState<CanjeOrden[]>([]);
@@ -124,11 +126,11 @@ export default function Ordenes() {
 
   const generarBoleta = async (r: ReparacionLista) => {
     if (!puedeVender || generando) return;
-    if (!confirm(`¿Generar la boleta de ${r.modelo || 'este equipo'}? Se cobra el importe de la reparación.`)) return;
+    if (!confirm(`${t('¿Generar la boleta de')} ${r.modelo || t('este equipo')}? ${t('Se cobra el importe de la reparación.')}`)) return;
     setGenerando(r.id);
     const { ordenId, total, error } = await generarOrdenDeReparacion(supabase, r as any);
     if (error || !ordenId) {
-      alert(error || 'No pudimos generar la boleta.');
+      alert(error || t('No pudimos generar la boleta.'));
       setGenerando(null);
       return;
     }
@@ -145,14 +147,14 @@ export default function Ordenes() {
     if (!puedeVender || generando) return;
     if (
       !confirm(
-        `¿Generar la boleta de ${r.modelo || 'este equipo'}? La reparación queda como cancelada/sin solución — esto es solo para cobrar el diagnóstico o dejar constancia, no cambia ese estado.`
+        `${t('¿Generar la boleta de')} ${r.modelo || t('este equipo')}? ${t('La reparación queda como cancelada/sin solución — esto es solo para cobrar el diagnóstico o dejar constancia, no cambia ese estado.')}`
       )
     )
       return;
     setGenerando(r.id);
     const { ordenId, total, error } = await generarOrdenDeReparacion(supabase, r as any, { marcarEntregado: false });
     if (error || !ordenId) {
-      alert(error || 'No pudimos generar la boleta.');
+      alert(error || t('No pudimos generar la boleta.'));
       setGenerando(null);
       return;
     }
@@ -209,26 +211,26 @@ export default function Ordenes() {
         <Link href="/" className="text-2xl leading-none">
           &larr;
         </Link>
-        <span className="text-lg font-medium">Órdenes</span>
+        <span className="text-lg font-medium">{t('Órdenes')}</span>
       </header>
 
       <input
         value={busqueda}
         onChange={(e) => setBusqueda(e.target.value)}
-        placeholder="Buscar por cliente, modelo, IMEI o plan canje..."
+        placeholder={t('Buscar por cliente, modelo, IMEI o plan canje...')}
         className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
       />
 
       <div className="flex items-center gap-2 text-xs overflow-x-auto">
-        {TIPOS.map((t) => (
+        {TIPOS.map((tipo) => (
           <button
-            key={t.id}
-            onClick={() => setFiltroTipo(t.id)}
+            key={tipo.id}
+            onClick={() => setFiltroTipo(tipo.id)}
             className={`shrink-0 rounded-xl px-3 py-2 font-medium ${
-              filtroTipo === t.id ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
+              filtroTipo === tipo.id ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
             }`}
           >
-            {t.label}
+            {t(tipo.label)}
           </button>
         ))}
       </div>
@@ -242,7 +244,7 @@ export default function Ordenes() {
               filtroEstado === e ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
             }`}
           >
-            {e}
+            {t(e)}
           </button>
         ))}
       </div>
@@ -252,18 +254,18 @@ export default function Ordenes() {
           href="/ordenes/nueva"
           className="w-full rounded-2xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium"
         >
-          + Nueva orden
+          + {t('Nueva orden')}
         </Link>
       ) : (
         <p className="text-xs text-muted dark:text-dark-text-secondary text-center">
-          No tenés permiso para crear órdenes.
+          {t('No tenés permiso para crear órdenes.')}
         </p>
       )}
 
       {puedeVender && reparacionesListas.length > 0 && (
         <section className="rounded-2xl border border-good/40 bg-good/5 p-3 flex flex-col gap-2">
           <p className="text-sm font-medium text-good">
-            🔧 Reparados por el técnico · listos para cobrar ({reparacionesListas.length})
+            🔧 {t('Reparados por el técnico · listos para cobrar')} ({reparacionesListas.length})
           </p>
           {reparacionesListas.map((r) => {
             const importe = r.importe_total ?? (r.presupuesto_mano_obra || 0) + (r.presupuesto_repuestos || 0);
@@ -274,11 +276,11 @@ export default function Ordenes() {
               >
                 <div className="min-w-0">
                   <p className="text-sm font-medium truncate">
-                    {r.modelo || 'Equipo'}
+                    {r.modelo || t('Equipo')}
                     {r.numero_orden && <span className="text-xs text-muted dark:text-dark-text-secondary"> · {r.numero_orden}</span>}
                   </p>
                   <p className="text-xs text-muted dark:text-dark-text-secondary truncate">
-                    {r.clientes ? `${r.clientes.nombre} ${r.clientes.apellido || ''}`.trim() : 'Sin cliente'}
+                    {r.clientes ? `${r.clientes.nombre} ${r.clientes.apellido || ''}`.trim() : t('Sin cliente')}
                     {importe > 0 && ` · $${importe.toLocaleString('es-AR')}`}
                   </p>
                 </div>
@@ -287,14 +289,14 @@ export default function Ordenes() {
                     href={`/servicio-tecnico/${r.id}`}
                     className="text-xs text-accent dark:text-dark-accent underline whitespace-nowrap"
                   >
-                    Ver ficha
+                    {t('Ver ficha')}
                   </Link>
                   <button
                     disabled={generando === r.id}
                     onClick={() => generarBoleta(r)}
                     className="rounded-lg bg-good hover:opacity-90 transition-opacity px-3 py-2 text-xs font-medium text-white disabled:opacity-40 whitespace-nowrap"
                   >
-                    {generando === r.id ? 'Generando…' : 'Generar boleta'}
+                    {generando === r.id ? t('Generando…') : t('Generar boleta')}
                   </button>
                 </div>
               </div>
@@ -306,7 +308,7 @@ export default function Ordenes() {
       {puedeVender && reparacionesCanceladas.length > 0 && (
         <section className="rounded-2xl border border-bad/40 bg-bad/5 p-3 flex flex-col gap-2">
           <p className="text-sm font-medium text-bad">
-            🔴 Cancelados sin solución ({reparacionesCanceladas.length})
+            🔴 {t('Cancelados sin solución')} ({reparacionesCanceladas.length})
           </p>
           {reparacionesCanceladas.map((r) => {
             const importe = r.importe_total ?? (r.presupuesto_mano_obra || 0) + (r.presupuesto_repuestos || 0);
@@ -317,11 +319,11 @@ export default function Ordenes() {
               >
                 <div className="min-w-0">
                   <p className="text-sm font-medium truncate">
-                    {r.modelo || 'Equipo'}
+                    {r.modelo || t('Equipo')}
                     {r.numero_orden && <span className="text-xs text-muted dark:text-dark-text-secondary"> · {r.numero_orden}</span>}
                   </p>
                   <p className="text-xs text-muted dark:text-dark-text-secondary truncate">
-                    {r.clientes ? `${r.clientes.nombre} ${r.clientes.apellido || ''}`.trim() : 'Sin cliente'}
+                    {r.clientes ? `${r.clientes.nombre} ${r.clientes.apellido || ''}`.trim() : t('Sin cliente')}
                     {importe > 0 && ` · $${importe.toLocaleString('es-AR')}`}
                     {r.diagnostico && ` · ${r.diagnostico}`}
                   </p>
@@ -331,14 +333,14 @@ export default function Ordenes() {
                     href={`/servicio-tecnico/${r.id}`}
                     className="text-xs text-accent dark:text-dark-accent underline whitespace-nowrap"
                   >
-                    Ver ficha
+                    {t('Ver ficha')}
                   </Link>
                   <button
                     disabled={generando === r.id}
                     onClick={() => generarBoletaCancelada(r)}
                     className="rounded-lg bg-bad hover:opacity-90 transition-opacity px-3 py-2 text-xs font-medium text-white disabled:opacity-40 whitespace-nowrap"
                   >
-                    {generando === r.id ? 'Generando…' : 'Generar boleta'}
+                    {generando === r.id ? t('Generando…') : t('Generar boleta')}
                   </button>
                 </div>
               </div>
@@ -347,16 +349,16 @@ export default function Ordenes() {
         </section>
       )}
 
-      {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Cargando...</p>}
+      {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{t('Cargando...')}</p>}
 
       {!loading && filtradas.length === 0 && (busqueda.trim() !== '' || filtroEstado !== 'todas' || filtroTipo !== 'todas') && (
         <QoviState
           escena="sinResultados"
           tamano="sm"
-          titulo="No encontramos resultados"
-          descripcion="Nada coincide con esa búsqueda o esos filtros."
+          titulo={t('No encontramos resultados')}
+          descripcion={t('Nada coincide con esa búsqueda o esos filtros.')}
           accionSecundaria={{
-            label: 'Limpiar filtros',
+            label: t('Limpiar filtros'),
             onClick: () => {
               setBusqueda('');
               setFiltroEstado('todas');
@@ -366,7 +368,7 @@ export default function Ordenes() {
         />
       )}
       {!loading && filtradas.length === 0 && busqueda.trim() === '' && filtroEstado === 'todas' && filtroTipo === 'todas' && (
-        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">No hay órdenes para mostrar.</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{t('No hay órdenes para mostrar.')}</p>
       )}
 
       <div className="flex flex-col gap-2">
@@ -388,26 +390,26 @@ export default function Ordenes() {
                   <span className="truncate">
                     {o.orden_items.length > 0
                       ? `${o.orden_items[0].descripcion}${o.orden_items.length > 1 ? ` +${o.orden_items.length - 1}` : ''}`
-                      : 'Orden vacía'}
+                      : t('Orden vacía')}
                   </span>
                 </p>
                 <p className="text-xs text-muted dark:text-dark-text-secondary truncate">
                   <span className={`font-medium ${servicio ? 'text-repar' : 'text-accent dark:text-dark-accent'}`}>
-                    {servicio ? 'Servicio técnico' : 'Venta'}
+                    {servicio ? t('Servicio técnico') : t('Venta')}
                   </span>
                   {' · '}
-                  {o.clientes ? `${o.clientes.nombre} ${o.clientes.apellido || ''}` : 'Sin cliente'}
+                  {o.clientes ? `${o.clientes.nombre} ${o.clientes.apellido || ''}` : t('Sin cliente')}
                 </p>
                 {(canjesPorOrden.get(o.id) ?? []).length > 0 && (
                   <p className="text-[11px] text-accent dark:text-dark-accent mt-0.5 truncate">
-                    Canje: {(canjesPorOrden.get(o.id) ?? []).map((c) => c.modelo || 'equipo').join(', ')}
+                    {t('Canje:')} {(canjesPorOrden.get(o.id) ?? []).map((c) => c.modelo || t('equipo')).join(', ')}
                   </p>
                 )}
               </div>
               <div className="text-right shrink-0">
                 {o.total != null && <p className="text-sm font-medium">${o.total.toLocaleString('es-AR')}</p>}
                 <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium capitalize mt-0.5 ${estadoInfo}`}>
-                  {o.estado}
+                  {t(o.estado)}
                 </span>
               </div>
             </Link>
