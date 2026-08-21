@@ -1264,11 +1264,11 @@ export default function Estadisticas() {
             {ocultarMontos ? 'Mostrar' : 'Ocultar'} montos
           </button>
           <button
-            onClick={exportarResumen(
-              actualB,
+            onClick={exportarResumenCSV({
+              b: actualB,
               ticket,
               porCobrar,
-              vencidoTotal,
+              vencido: vencidoTotal,
               periodo,
               rango,
               moneda,
@@ -1281,11 +1281,35 @@ export default function Estadisticas() {
               puedeVerEgresos,
               egresosPeriodo,
               hayEgresos,
-              resultadoOperativoEstimado
-            )}
+              resultadoOperativoEstimado,
+            })}
             className="inline-flex items-center gap-1.5 rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-3 py-2 text-xs font-medium hover:bg-canvas dark:hover:bg-dark-bg transition-colors"
           >
-            <span aria-hidden>⬇️</span> Exportar
+            <span aria-hidden>⬇️</span> CSV
+          </button>
+          <button
+            onClick={exportarResumenPDF({
+              b: actualB,
+              ticket,
+              porCobrar,
+              vencido: vencidoTotal,
+              periodo,
+              rango,
+              moneda,
+              puedeVerCostos,
+              nombreNegocio,
+              resumenFinanciacion,
+              saldoProveedoresTotal,
+              pagadoProveedoresPeriodo,
+              resumenComisiones,
+              puedeVerEgresos,
+              egresosPeriodo,
+              hayEgresos,
+              resultadoOperativoEstimado,
+            })}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-3 py-2 text-xs font-medium hover:bg-canvas dark:hover:bg-dark-bg transition-colors"
+          >
+            <span aria-hidden>📄</span> PDF
           </button>
         </div>
       </header>
@@ -1463,76 +1487,142 @@ function celdaCSV(v: string): string {
   return `"${(esFormula ? "'" : '') + v.replace(/"/g, '""')}"`;
 }
 
-function exportarResumen(
-  b: { ventas: number; ganancia: number; ingresado: number; credito: number; operaciones: number },
-  ticket: number,
-  porCobrar: number,
-  vencido: number,
-  periodo: Periodo,
-  rango: { inicio: Date; fin: Date },
-  moneda: string,
-  puedeVerCostos: boolean,
-  nombreNegocio: string,
-  resumenFinanciacion: { totalFinanciadoActivo: number; cobradoPeriodo: number; saldoPendiente: number; vencido: number; hayDatos: boolean },
-  saldoProveedoresTotal: number | null,
-  pagadoProveedoresPeriodo: number,
-  resumenComisiones: { generada: number; pagada: number; pendiente: number; hayDatos: boolean },
-  puedeVerEgresos: boolean,
-  egresosPeriodo: number,
-  hayEgresos: boolean,
-  resultadoOperativoEstimado: number
-) {
+// Construye las mismas filas [métrica, valor] que consumen CSV y PDF — una
+// sola fuente de verdad, para que los dos formatos de exportación (y la
+// pantalla) nunca puedan mostrar números distintos entre sí.
+type ParametrosExport = {
+  b: { ventas: number; ganancia: number; ingresado: number; credito: number; operaciones: number };
+  ticket: number;
+  porCobrar: number;
+  vencido: number;
+  periodo: Periodo;
+  rango: { inicio: Date; fin: Date };
+  moneda: string;
+  puedeVerCostos: boolean;
+  nombreNegocio: string;
+  resumenFinanciacion: { totalFinanciadoActivo: number; cobradoPeriodo: number; saldoPendiente: number; vencido: number; hayDatos: boolean };
+  saldoProveedoresTotal: number | null;
+  pagadoProveedoresPeriodo: number;
+  resumenComisiones: { generada: number; pagada: number; pendiente: number; hayDatos: boolean };
+  puedeVerEgresos: boolean;
+  egresosPeriodo: number;
+  hayEgresos: boolean;
+  resultadoOperativoEstimado: number;
+};
+
+function construirFilasExport(p: ParametrosExport): [string, string][] {
+  const { b, ticket, porCobrar, vencido, periodo, rango, puedeVerCostos, resumenFinanciacion, saldoProveedoresTotal, pagadoProveedoresPeriodo, resumenComisiones, puedeVerEgresos, egresosPeriodo, hayEgresos, resultadoOperativoEstimado } = p;
+  return [
+    ['Período', etiquetaTramo(periodo, rango)],
+    ['Ventas netas', String(Math.round(b.ventas))],
+    ...(puedeVerCostos ? ([['Ganancia bruta', String(Math.round(b.ganancia))]] as [string, string][]) : []),
+    ['Dinero ingresado', String(Math.round(b.ingresado))],
+    ['Crédito otorgado', String(Math.round(b.credito))],
+    ['Saldo por cobrar', String(Math.round(porCobrar))],
+    ['Saldo vencido', String(Math.round(vencido))],
+    ['Operaciones', String(b.operaciones)],
+    ['Ticket promedio', String(Math.round(ticket))],
+    ...(resumenFinanciacion.hayDatos
+      ? ([
+          ['Financiación — financiado activo', String(Math.round(resumenFinanciacion.totalFinanciadoActivo))],
+          ['Financiación — cobrado en el período', String(Math.round(resumenFinanciacion.cobradoPeriodo))],
+          ['Financiación — saldo en cuotas', String(Math.round(resumenFinanciacion.saldoPendiente))],
+          ['Financiación — vencido en cuotas', String(Math.round(resumenFinanciacion.vencido))],
+        ] as [string, string][])
+      : []),
+    ...(saldoProveedoresTotal != null
+      ? ([
+          ['Proveedores — pagado en el período', String(Math.round(pagadoProveedoresPeriodo))],
+          ['Proveedores — saldo pendiente', String(Math.round(saldoProveedoresTotal))],
+        ] as [string, string][])
+      : []),
+    ...(puedeVerCostos && resumenComisiones.hayDatos
+      ? ([
+          ['Comisiones — generada en el período', String(Math.round(resumenComisiones.generada))],
+          ['Comisiones — pagada en el período', String(Math.round(resumenComisiones.pagada))],
+          ['Comisiones — pendiente', String(Math.round(resumenComisiones.pendiente))],
+        ] as [string, string][])
+      : []),
+    ...(puedeVerEgresos && hayEgresos
+      ? ([
+          ['Egresos operativos del período', String(Math.round(egresosPeriodo))],
+          ...(puedeVerCostos ? ([['Resultado operativo estimado', String(Math.round(resultadoOperativoEstimado))]] as [string, string][]) : []),
+        ] as [string, string][])
+      : []),
+  ];
+}
+
+function exportarResumenCSV(p: ParametrosExport) {
   return () => {
     const ahora = new Date();
     const filas: [string, string][] = [
-      ['Negocio', nombreNegocio || 'Sin nombre'],
+      ['Negocio', p.nombreNegocio || 'Sin nombre'],
       ['Generado el', ahora.toLocaleString('es-AR')],
       ['Zona horaria', Intl.DateTimeFormat().resolvedOptions().timeZone],
-      ['Moneda', moneda],
-      ['Período', etiquetaTramo(periodo, rango)],
-      ['Ventas netas', String(Math.round(b.ventas))],
-      ...(puedeVerCostos ? ([['Ganancia bruta', String(Math.round(b.ganancia))]] as [string, string][]) : []),
-      ['Dinero ingresado', String(Math.round(b.ingresado))],
-      ['Crédito otorgado', String(Math.round(b.credito))],
-      ['Saldo por cobrar', String(Math.round(porCobrar))],
-      ['Saldo vencido', String(Math.round(vencido))],
-      ['Operaciones', String(b.operaciones)],
-      ['Ticket promedio', String(Math.round(ticket))],
-      ...(resumenFinanciacion.hayDatos
-        ? ([
-            ['Financiación — financiado activo', String(Math.round(resumenFinanciacion.totalFinanciadoActivo))],
-            ['Financiación — cobrado en el período', String(Math.round(resumenFinanciacion.cobradoPeriodo))],
-            ['Financiación — saldo en cuotas', String(Math.round(resumenFinanciacion.saldoPendiente))],
-            ['Financiación — vencido en cuotas', String(Math.round(resumenFinanciacion.vencido))],
-          ] as [string, string][])
-        : []),
-      ...(saldoProveedoresTotal != null
-        ? ([
-            ['Proveedores — pagado en el período', String(Math.round(pagadoProveedoresPeriodo))],
-            ['Proveedores — saldo pendiente', String(Math.round(saldoProveedoresTotal))],
-          ] as [string, string][])
-        : []),
-      ...(puedeVerCostos && resumenComisiones.hayDatos
-        ? ([
-            ['Comisiones — generada en el período', String(Math.round(resumenComisiones.generada))],
-            ['Comisiones — pagada en el período', String(Math.round(resumenComisiones.pagada))],
-            ['Comisiones — pendiente', String(Math.round(resumenComisiones.pendiente))],
-          ] as [string, string][])
-        : []),
-      ...(puedeVerEgresos && hayEgresos
-        ? ([
-            ['Egresos operativos del período', String(Math.round(egresosPeriodo))],
-            ...(puedeVerCostos ? ([['Resultado operativo estimado', String(Math.round(resultadoOperativoEstimado))]] as [string, string][]) : []),
-          ] as [string, string][])
-        : []),
+      ['Moneda', p.moneda],
+      ...construirFilasExport(p),
     ];
-    const csv = `Métrica,Valor (${moneda})\n` + filas.map(([k, v]) => `${celdaCSV(k)},${celdaCSV(v)}`).join('\n');
+    const csv = `Métrica,Valor (${p.moneda})\n` + filas.map(([k, v]) => `${celdaCSV(k)},${celdaCSV(v)}`).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `analitica-${periodo}-${aFechaInput(rango.inicio)}.csv`;
+    a.download = `analitica-${p.periodo}-${aFechaInput(p.rango.inicio)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+}
+
+// Mismo contenido que el CSV (construirFilasExport es la única fuente),
+// como resumen visual en PDF — mismo patrón ya usado en la liquidación de
+// comisiones (app/comisiones/liquidaciones/[id]/page.tsx): import dinámico
+// de jsPDF, texto posicionado a mano, salto de página simple.
+function exportarResumenPDF(p: ParametrosExport) {
+  return async () => {
+    const { jsPDF } = await import('jspdf');
+    const doc = new jsPDF();
+    const ahora = new Date();
+    let y = 16;
+
+    doc.setFontSize(14);
+    doc.text(p.nombreNegocio || 'Qovento', 14, y);
+    y += 8;
+    doc.setFontSize(11);
+    doc.text('Analítica del negocio', 14, y);
+    y += 6;
+    doc.setFontSize(9);
+    doc.text(
+      `Generado: ${ahora.toLocaleString('es-AR')} (${Intl.DateTimeFormat().resolvedOptions().timeZone})   ·   Moneda: ${p.moneda}`,
+      14,
+      y
+    );
+    y += 10;
+
+    doc.setFontSize(10);
+    doc.text('Métrica', 14, y);
+    doc.text('Valor', 196, y, { align: 'right' });
+    y += 2;
+    doc.line(14, y, 196, y);
+    y += 6;
+    doc.setFontSize(9);
+    for (const [clave, valor] of construirFilasExport(p)) {
+      if (y > 275) {
+        doc.addPage();
+        y = 16;
+      }
+      const numero = Number(valor);
+      // El signo va ANTES del símbolo de moneda ("-$500", no "$-500") — un
+      // resultado operativo o una ganancia bruta negativos son casos reales
+      // que el propio dashboard ya contempla (los pinta en rojo).
+      const texto =
+        clave === 'Período' || Number.isNaN(numero)
+          ? valor
+          : `${numero < 0 ? '-' : ''}${p.moneda}${Math.abs(numero).toLocaleString('es-AR')}`;
+      doc.text(clave, 14, y);
+      doc.text(texto, 196, y, { align: 'right' });
+      y += 6;
+    }
+
+    doc.save(`analitica-${p.periodo}-${aFechaInput(p.rango.inicio)}.pdf`);
   };
 }
