@@ -2251,4 +2251,40 @@ export const PT: Record<string, string> = {
   'Sin datos para este período.': 'Sem dados para este período.',
   'Antes:': 'Antes:',
   Puesto: 'Posição',
+
+  // Servicio Técnico — Repuestos detalle (proveedor)
+  Actualizado: 'Atualizado',
+  'Agregar a stock': 'Adicionar ao estoque',
+  'Agregar repuesto': 'Adicionar peça',
+  'Cantidad comprada': 'Quantidade comprada',
+  'Disponible ahora': 'Disponível agora',
+  'Editar precio': 'Editar preço',
+  'No encontramos este proveedor.': 'Não encontramos este fornecedor.',
+  'No pudimos registrar la entrada.': 'Não conseguimos registrar a entrada.',
+  'No pudimos registrar la entrada:': 'Não conseguimos registrar a entrada:',
+  'Se suma al stock físico del repuesto con este costo por unidad, y queda en el historial de movimientos.':
+    'É somado ao estoque físico da peça com este custo por unidade, e fica no histórico de movimentações.',
+  'También se van a borrar los precios que tenga cargados.': 'Também serão excluídos os preços que ele tiver cadastrados.',
+  'Tiempo de entrega (días)': 'Prazo de entrega (dias)',
+  'Todavía no cargaste repuestos para este proveedor.': 'Você ainda não cadastrou peças para este fornecedor.',
+  Repuesto: 'Peça',
+  'c/u': 'cada',
+  'entrega en': 'entrega em',
+  garantía: 'garantia',
+  '¿Eliminar a': 'Excluir',
+  '¿Eliminar este repuesto de la lista de este proveedor?': 'Excluir esta peça da lista deste fornecedor?',
+
+  // Servicio Técnico — Etiqueta del equipo (chrome de la página; el contenido impreso de EtiquetaServicio no se traduce)
+  'No encontramos ese equipo.': 'Não encontramos esse aparelho.',
+  'Etiqueta del equipo': 'Etiqueta do aparelho',
+  'Tamaño de la etiqueta': 'Tamanho da etiqueta',
+  'Subir el logo de tu negocio en Configuración': 'Envie o logo do seu negócio em Configurações',
+  'Guardar / compartir PNG': 'Salvar / compartilhar PNG',
+  'Guardar / compartir PDF': 'Salvar / compartilhar PDF',
+
+  // Nueva Etiqueta — tamaños compartidos (nueva-etiqueta/Etiqueta.tsx TAMANOS, usado también en Servicio Técnico > Etiqueta)
+  'Estándar 5 × 3 cm': 'Padrão 5 × 3 cm',
+  'Para impresoras comunes o etiquetas en hoja.': 'Para impressoras comuns ou etiquetas em folha.',
+  'Térmica 58 mm': 'Térmica 58 mm',
+  'Para impresoras térmicas de ticket (rollo de 58 mm).': 'Para impressoras térmicas de ticket (rolo de 58 mm).',
 };
