@@ -355,7 +355,82 @@ begin
   where id = p_plan_id and negocio_id = v_negocio;
 end $$;
 
+-- ============================================================
+-- RPC: reprogramar un plan — anula las cuotas pendientes del plan viejo Y
+-- crea el plan nuevo con su cronograma, TODO en una sola transacción.
+--
+-- Antes esto se hacía desde el navegador con DOS llamadas separadas
+-- (financiacion_anular_plan + financiacion_crear_plan): si la primera
+-- terminaba bien pero la segunda fallaba (ej. un corte de red), la deuda
+-- del plan viejo quedaba anulada sin que se llegara a crear el reemplazo —
+-- la plata "desaparecía" del módulo de financiación sin dejar rastro de a
+-- dónde fue. Con las dos partes adentro de esta única función, si cualquier
+-- paso falla, Postgres deshace todo — nunca queda a mitad de camino.
+-- p_cuotas ya viene calculado por el motor de dominio (mismo formato que
+-- financiacion_crear_plan): [{numero, fecha_vencimiento, importe}, ...].
+-- ============================================================
+create or replace function financiacion_reprogramar(
+  p_plan_anterior_id uuid,
+  p_cliente_id uuid,
+  p_orden_id uuid,
+  p_moneda text,
+  p_saldo_a_reprogramar numeric,
+  p_cuotas jsonb,
+  p_motivo text,
+  p_usuario text
+) returns uuid language plpgsql security definer as $$
+declare
+  v_negocio uuid := negocio_actual();
+  v_plan_nuevo uuid;
+  v_cuota jsonb;
+  v_cuota_id uuid;
+  v_cantidad int;
+begin
+  if v_negocio is null then raise exception 'Sin negocio'; end if;
+  if p_motivo is null or length(trim(p_motivo)) = 0 then raise exception 'La reprogramación necesita un motivo'; end if;
+  if p_saldo_a_reprogramar <= 0 then raise exception 'El saldo a reprogramar debe ser mayor a 0'; end if;
+  v_cantidad := jsonb_array_length(p_cuotas);
+  if v_cantidad < 1 then raise exception 'El nuevo plan necesita al menos 1 cuota'; end if;
+
+  -- 1) Anular cuotas pendientes del plan viejo y sus cargos (las pagadas quedan intactas).
+  update cta_cte_movimientos
+    set anulado = true
+  where negocio_id = v_negocio and cuota_id in (
+    select id from financiacion_cuotas where plan_id = p_plan_anterior_id and negocio_id = v_negocio and estado <> 'pagada'
+  );
+  update financiacion_cuotas
+    set estado = 'anulada', updated_at = now()
+  where plan_id = p_plan_anterior_id and negocio_id = v_negocio and estado <> 'pagada';
+
+  -- 2) Crear el plan nuevo con el saldo pendiente, enlazado al anterior.
+  insert into financiacion_planes (
+    negocio_id, cliente_id, orden_id, moneda, importe_original, entrega_inicial,
+    importe_financiado, cantidad_cuotas, primera_cuota_fecha, observaciones, creado_por, plan_anterior_id
+  ) values (
+    v_negocio, p_cliente_id, p_orden_id, p_moneda, p_saldo_a_reprogramar, 0,
+    p_saldo_a_reprogramar, v_cantidad, (p_cuotas->0->>'fecha_vencimiento')::date, p_motivo, p_usuario, p_plan_anterior_id
+  ) returning id into v_plan_nuevo;
+
+  for v_cuota in select * from jsonb_array_elements(p_cuotas)
+  loop
+    insert into financiacion_cuotas (negocio_id, plan_id, numero, fecha_vencimiento, importe_original)
+    values (v_negocio, v_plan_nuevo, (v_cuota->>'numero')::int, (v_cuota->>'fecha_vencimiento')::date, (v_cuota->>'importe')::numeric)
+    returning id into v_cuota_id;
+
+    insert into cta_cte_movimientos (negocio_id, cliente_id, tipo, concepto, monto, moneda, orden_id, cuota_id, vencimiento, registrado_por_nombre)
+    values (v_negocio, p_cliente_id, 'cargo', 'cuota', (v_cuota->>'importe')::numeric, p_moneda, p_orden_id, v_cuota_id, (v_cuota->>'fecha_vencimiento')::date, p_usuario);
+  end loop;
+
+  -- 3) El plan viejo queda 'reprogramado' (no 'anulado' — se reemplazó, no se canceló sin más).
+  update financiacion_planes
+    set estado = 'reprogramado', observaciones = coalesce(observaciones || E'\n', '') || 'Reprogramado: ' || p_motivo, updated_at = now()
+  where id = p_plan_anterior_id and negocio_id = v_negocio;
+
+  return v_plan_nuevo;
+end $$;
+
 grant execute on function financiacion_crear_plan(uuid, uuid, text, numeric, numeric, numeric, jsonb, text, text) to authenticated;
 grant execute on function financiacion_aplicar_pago(uuid, jsonb, text) to authenticated;
 grant execute on function financiacion_ajustar_cuotas(uuid, numeric, text, uuid[], text) to authenticated;
 grant execute on function financiacion_anular_plan(uuid, text, text) to authenticated;
+grant execute on function financiacion_reprogramar(uuid, uuid, uuid, text, numeric, jsonb, text, text) to authenticated;

@@ -22,6 +22,7 @@ import { generarCronograma, estadoVisualCuota, aFechaISO, type EstadoVisualCuota
 import { QCard } from './QCard';
 import { Boton } from './Boton';
 import Modal from './Modal';
+import CampoFecha from './CampoFecha';
 
 const ETIQUETA_ESTADO: Record<EstadoVisualCuota, string> = {
   pendiente: 'Pendiente',
@@ -383,12 +384,7 @@ function ModalNuevoPlan({
           <CampoNumero label="Cantidad de cuotas" valor={cantidadCuotas} onChange={setCantidadCuotas} />
           <div>
             <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Fecha de la 1ª cuota</label>
-            <input
-              type="date"
-              value={primeraFecha}
-              onChange={(e) => setPrimeraFecha(e.target.value)}
-              className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
-            />
+            <CampoFecha value={primeraFecha} onChange={setPrimeraFecha} ancho="completo" />
           </div>
         </div>
         <div>
@@ -596,7 +592,7 @@ function ModalReprogramar({
   const supabase = crearClienteNavegador();
   const [cantidadCuotas, setCantidadCuotas] = useState('3');
   const [primeraFecha, setPrimeraFecha] = useState(() => aFechaISO(new Date()));
-  const [observaciones, setObservaciones] = useState('');
+  const [motivo, setMotivo] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const moneda = simboloMoneda(plan.moneda);
@@ -621,6 +617,10 @@ function ModalReprogramar({
       setError('Elegí al menos 1 cuota.');
       return;
     }
+    if (!motivo.trim()) {
+      setError('La reprogramación necesita un motivo.');
+      return;
+    }
     setGuardando(true);
     setError(null);
     const resultado = await reprogramarFinanciacion(supabase, {
@@ -631,7 +631,7 @@ function ModalReprogramar({
       saldoARepgramar: saldoPendiente,
       cantidadCuotas: cuotas,
       primeraFecha,
-      observaciones,
+      motivo,
     });
     setGuardando(false);
     if ('error' in resultado) {
@@ -654,19 +654,14 @@ function ModalReprogramar({
           <CampoNumero label="Cantidad de cuotas nuevas" valor={cantidadCuotas} onChange={setCantidadCuotas} />
           <div>
             <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Fecha de la 1ª cuota</label>
-            <input
-              type="date"
-              value={primeraFecha}
-              onChange={(e) => setPrimeraFecha(e.target.value)}
-              className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
-            />
+            <CampoFecha value={primeraFecha} onChange={setPrimeraFecha} ancho="completo" />
           </div>
         </div>
         <div>
-          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Motivo / observaciones (opcional)</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Motivo (obligatorio)</label>
           <textarea
-            value={observaciones}
-            onChange={(e) => setObservaciones(e.target.value)}
+            value={motivo}
+            onChange={(e) => setMotivo(e.target.value)}
             rows={2}
             className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
           />
@@ -691,7 +686,7 @@ function ModalReprogramar({
           <Boton variante="secundario" tamano="md" onClick={onClose} className="flex-1">
             Cancelar
           </Boton>
-          <Boton variante="primario" tamano="md" disabled={!preview} cargando={guardando} onClick={confirmar} className="flex-1">
+          <Boton variante="primario" tamano="md" disabled={!preview || !motivo.trim()} cargando={guardando} onClick={confirmar} className="flex-1">
             Reprogramar
           </Boton>
         </div>

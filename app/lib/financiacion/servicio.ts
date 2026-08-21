@@ -196,6 +196,12 @@ export async function anularPlanFinanciacion(
 
 // ---------- Reprogramar: crea un plan NUEVO con cronograma nuevo, conserva
 // el anterior íntegro (nunca se borra ni se reescribe el histórico) ----------
+// Todo (anular las cuotas viejas + crear el plan nuevo) pasa por UN solo RPC
+// (financiacion_reprogramar), que corre como una única transacción en la
+// base — si algo falla a mitad de camino, Postgres deshace todo. Antes esto
+// eran 2 llamadas separadas desde acá: si la primera (anular) terminaba bien
+// y la segunda (crear) fallaba, la deuda del plan viejo quedaba anulada sin
+// que se llegara a crear el reemplazo.
 export async function reprogramarFinanciacion(
   supabase: SupabaseClient,
   params: {
@@ -206,39 +212,43 @@ export async function reprogramarFinanciacion(
     saldoARepgramar: number; // lo que queda pendiente del plan viejo, se transforma en el nuevo cronograma
     cantidadCuotas: number;
     primeraFecha: string;
-    observaciones?: string;
+    motivo: string;
   }
 ): Promise<{ planId: string } | { error: string }> {
-  // 1) Anular las cuotas pendientes del plan viejo (deja de generar
-  //    vencimientos futuros por partida doble) — las pagadas quedan intactas.
-  const anulado = await anularPlanFinanciacion(supabase, {
-    planId: params.planAnteriorId,
-    motivo: 'Reprogramación: se reemplaza por un nuevo cronograma.',
+  let cuotas;
+  try {
+    cuotas = generarCronograma({
+      importeFinanciado: params.saldoARepgramar,
+      cantidadCuotas: params.cantidadCuotas,
+      primeraFecha: params.primeraFecha,
+      decimales: decimalesMoneda(params.moneda),
+    });
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'No se pudo armar el cronograma.' };
+  }
+
+  const actor = getActor();
+  const { data, error } = await supabase.rpc('financiacion_reprogramar', {
+    p_plan_anterior_id: params.planAnteriorId,
+    p_cliente_id: params.clienteId,
+    p_orden_id: params.ordenId,
+    p_moneda: params.moneda,
+    p_saldo_a_reprogramar: params.saldoARepgramar,
+    p_cuotas: cuotas,
+    p_motivo: params.motivo.trim(),
+    p_usuario: actor?.nombre ?? null,
   });
-  if ('error' in anulado) return anulado;
+  if (error) return { error: error.message };
 
-  // 2) Crear el plan nuevo con el saldo que quedaba, enlazado al anterior.
-  const nuevo = await crearPlanFinanciacion(supabase, {
-    clienteId: params.clienteId,
-    ordenId: params.ordenId,
-    moneda: params.moneda,
-    importeOriginal: params.saldoARepgramar,
-    entregaInicial: 0,
-    cantidadCuotas: params.cantidadCuotas,
-    primeraFecha: params.primeraFecha,
-    observaciones: params.observaciones,
+  await registrarAuditoria(supabase, {
+    accion: `reprogramó un plan de financiación en ${params.cantidadCuotas} cuota${params.cantidadCuotas === 1 ? '' : 's'}: ${params.motivo.trim()}`,
+    entidad: 'plan_financiacion',
+    entidadId: data as string,
+    valorAnterior: { plan_anterior_id: params.planAnteriorId },
+    valorNuevo: { saldo_reprogramado: params.saldoARepgramar, cuotas: params.cantidadCuotas },
   });
-  if ('error' in nuevo) return nuevo;
 
-  // El plan NUEVO queda enlazado al viejo (para poder mostrar "viene de una
-  // reprogramación" en su historial); el plan VIEJO queda con estado
-  // 'reprogramado' (no 'anulado' — financiacion_anular_plan ya lo dejó en
-  // 'anulado' arriba, acá lo corregimos, para distinguir "se reemplazó por
-  // uno nuevo" de "se canceló sin más").
-  await supabase.from('financiacion_planes').update({ plan_anterior_id: params.planAnteriorId }).eq('id', nuevo.planId);
-  await supabase.from('financiacion_planes').update({ estado: 'reprogramado' }).eq('id', params.planAnteriorId);
-
-  return { planId: nuevo.planId };
+  return { planId: data as string };
 }
 
 // ---------- Consultas ----------

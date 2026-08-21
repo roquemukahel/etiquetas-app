@@ -934,14 +934,44 @@ export default function Stock() {
   };
 
   const guardarCantidad = async (p: Producto) => {
-    const nueva = Number(valorCantidad) || 0;
+    const nueva = Math.round(Number(valorCantidad) || 0);
     const costoNuevo = valorCosto ? Number(valorCosto) : null;
     const precioNuevo = valorPrecio ? Number(valorPrecio) : null;
-    if (nueva === p.cantidad && costoNuevo === (p.costo ?? null) && precioNuevo === (p.precio ?? null)) {
+    const cambioCantidad = nueva - p.cantidad;
+    const cambianOtros = costoNuevo !== (p.costo ?? null) || precioNuevo !== (p.precio ?? null);
+    if (cambioCantidad === 0 && !cambianOtros) {
       setEditandoCantidad(null);
       return;
     }
-    await supabase.from('productos').update({ cantidad: nueva, costo: costoNuevo, precio: precioNuevo }).eq('id', p.id);
+    const actorProducto = getActor();
+    // La cantidad se mueve por el RPC atómico producto_mover_stock (select
+    // ... for update, nunca la deja negativa, deja rastro en
+    // producto_movimientos) — antes era un update directo con la cantidad
+    // capturada al abrir el editor, así que dos ediciones simultáneas del
+    // mismo producto (o una pestaña vieja) se pisaban entre sí sin avisar.
+    if (cambioCantidad !== 0) {
+      const { error: movError } = await supabase.rpc('producto_mover_stock', {
+        p_producto_id: p.id,
+        p_tipo: 'ajuste',
+        p_cantidad: cambioCantidad,
+        p_motivo: 'Edición manual desde Stock',
+        p_usuario: actorProducto?.nombre ?? null,
+      });
+      if (movError) {
+        // Si el negocio todavía no corrió categorias_stock_supabase.sql, este
+        // RPC no existe — no bloqueamos una función tan básica por eso, se
+        // cae al update directo de siempre (mismo comportamiento que había).
+        const migracionNoCorrida = /producto_mover_stock|schema cache/i.test(movError.message);
+        if (!migracionNoCorrida) {
+          setErrorProducto('No pudimos actualizar la cantidad: ' + movError.message);
+          return;
+        }
+        await supabase.from('productos').update({ cantidad: nueva }).eq('id', p.id);
+      }
+    }
+    if (cambianOtros) {
+      await supabase.from('productos').update({ costo: costoNuevo, precio: precioNuevo }).eq('id', p.id);
+    }
     await registrarAuditoria(supabase, {
       accion: `editó el accesorio "${p.nombre}"`,
       entidad: 'producto',

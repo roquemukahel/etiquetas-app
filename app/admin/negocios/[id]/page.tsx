@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, ShieldAlert, ShieldCheck, Trash2, Plus, X } from 'lucide-react';
 import { crearClienteNavegador } from '../../../lib/supabase/client';
+import CampoFecha from '../../../CampoFecha';
 import {
   SeccionCard, EmptyState, Skeleton, EstadoBadge, AccesoManualChip, EtiquetaNotaChip,
 } from '../../_ui';
@@ -569,21 +570,19 @@ function TabSuscripcion({ detalle, onGuardado, supabase }: { detalle: Detalle; o
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-xs text-dark-text-secondary">Extender prueba hasta</span>
-            <input
-              type="date"
+            <CampoFecha
               value={finPrueba}
-              onChange={(e) => setFinPrueba(e.target.value)}
-              className="bg-dark-bg border border-dark-border rounded-lg px-2.5 py-2 text-sm"
+              onChange={setFinPrueba}
+              classNameSelect="bg-dark-bg border border-dark-border rounded-lg px-2 py-2 text-sm disabled:opacity-40"
             />
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-xs text-dark-text-secondary">Acceso manual otorgado hasta</span>
-            <input
-              type="date"
+            <CampoFecha
               value={accesoManual}
               disabled={sinVencimiento}
-              onChange={(e) => setAccesoManual(e.target.value)}
-              className="bg-dark-bg border border-dark-border rounded-lg px-2.5 py-2 text-sm disabled:opacity-40"
+              onChange={setAccesoManual}
+              classNameSelect="bg-dark-bg border border-dark-border rounded-lg px-2 py-2 text-sm disabled:opacity-40"
             />
           </label>
           <label className="flex items-center gap-2 text-xs cursor-pointer">

@@ -531,7 +531,7 @@ export default function DetalleCliente() {
                 💸 Registrar pago
               </button>
               <Link
-                href="/ordenes/nueva"
+                href={`/ordenes/nueva?clienteId=${id}`}
                 className="rounded-xl border border-border dark:border-dark-border px-4 py-2 text-sm font-medium"
               >
                 🧾 Nueva venta
