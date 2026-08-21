@@ -483,4 +483,38 @@ export const PT: Record<string, string> = {
   'Volver al stock': 'Voltar ao estoque',
   'Zona de peligro': 'Zona de perigo',
   'del historial de Stock. Esta acción no se puede deshacer.': 'do histórico do Estoque. Essa ação não pode ser desfeita.',
+
+  // Clientes (lista)
+  'Al día': 'Em dia',
+  'Buscar por nombre, email, teléfono, DNI...': 'Buscar por nome, email, telefone, CPF...',
+  'Cargar cliente': 'Cadastrar cliente',
+  'Con cuenta corriente': 'Com conta corrente',
+  'Con saldo': 'Com saldo',
+  'En mora': 'Em atraso',
+  'Listo: se importaron': 'Pronto: foram importados',
+  Mostrando: 'Mostrando',
+  'Ningún cliente entra en este filtro.': 'Nenhum cliente entra neste filtro.',
+  'No pudimos leer el archivo:': 'Não conseguimos ler o arquivo:',
+  'No se puede deshacer.': 'Não pode ser desfeito.',
+  'Saldo a favor': 'Saldo a favor',
+  'Se eliminaron': 'Foram excluídos',
+  'Se guardaron': 'Foram salvos',
+  'Se omitieron': 'Foram ignoradas',
+  'Te debe': 'Deve para você',
+  'Todavía no tenés clientes cargados.': 'Você ainda não tem clientes cadastrados.',
+  'Ver todos': 'Ver todos',
+  'antes de un error:': 'antes de um erro:',
+  'clientes.': 'clientes.',
+  'filas sin nombre o con un DNI ya cargado.': 'linhas sem nome ou com um CPF já cadastrado.',
+  más: 'mais',
+  'no se pudieron eliminar porque tienen ventas u otro historial vinculado.':
+    'não puderam ser excluídos porque têm vendas ou outro histórico vinculado.',
+  'sin contacto': 'sem contato',
+
+  // Clientes — nuevo
+  'No pudimos guardar el cliente:': 'Não conseguimos salvar o cliente:',
+  Nombre: 'Nome',
+  Apellido: 'Sobrenome',
+  Domicilio: 'Endereço',
+  'Guardar cliente': 'Salvar cliente',
 };

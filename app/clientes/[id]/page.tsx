@@ -13,6 +13,7 @@ import { codigoLlamada } from '../../lib/paises';
 import { MEDIOS_PAGO, calcularSaldo, estadoCuenta, ESTADO_INFO, diasDeMora } from '../../lib/cuentaCorriente';
 import { aplicarPagoAFinanciacion } from '../../lib/financiacion/servicio';
 import FinanciacionCliente from '../../FinanciacionCliente';
+import { useT } from '../../lib/idioma';
 
 type Cliente = {
   id: string;
@@ -55,6 +56,7 @@ export default function DetalleCliente() {
   const router = useRouter();
   const supabase = crearClienteNavegador();
   const actor = useActor();
+  const t = useT();
   const puedeEliminar = tienePermiso(actor, 'eliminar');
 
   const [c, setC] = useState<Cliente | null>(null);
@@ -198,7 +200,7 @@ export default function DetalleCliente() {
   const registrarPago = async () => {
     const monto = Number(pagoMonto);
     if (!monto || monto <= 0) {
-      setError('Poné un monto mayor a cero.');
+      setError(t('Poné un monto mayor a cero.'));
       return;
     }
     setGuardandoPago(true);
@@ -219,7 +221,7 @@ export default function DetalleCliente() {
       .select()
       .single();
     if (pErr || !pago) {
-      setError('No pudimos registrar el pago: ' + (pErr?.message ?? ''));
+      setError(`${t('No pudimos registrar el pago:')} ` + (pErr?.message ?? ''));
       setGuardandoPago(false);
       return;
     }
@@ -235,7 +237,7 @@ export default function DetalleCliente() {
       registrado_por_foto_url: a?.fotoUrl ?? null,
     });
     if (mErr) {
-      setError('El pago se guardó pero no se pudo asentar en la cuenta: ' + mErr.message);
+      setError(`${t('El pago se guardó pero no se pudo asentar en la cuenta:')} ` + mErr.message);
       setGuardandoPago(false);
       return;
     }
