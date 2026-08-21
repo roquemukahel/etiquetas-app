@@ -1573,6 +1573,35 @@ export const PT: Record<string, string> = {
   Vendedores: 'Vendedores',
   '¿Eliminar este vendedor?': 'Excluir este vendedor?',
 
+  // Configuración — Categorías de egresos
+  'Ej. Marketing': 'Ex. Marketing',
+  'Estas son las categorías que vas a poder elegir al registrar un egreso. Te dejamos algunas cargadas para arrancar — renombralas, agregá las que te sirvan, o archivá las que no uses.':
+    'Estas são as categorias que você vai poder escolher ao registrar uma despesa. Deixamos algumas cadastradas para começar — renomeie, adicione as que forem úteis, ou arquive as que não usar.',
+  'No tenés permiso para gestionar categorías de egresos.': 'Você não tem permissão para gerenciar categorias de despesas.',
+  'egreso(s) cargados — se conservan intactos, solo deja de ofrecerse para elegir en formularios nuevos.':
+    'despesa(s) cadastrada(s) — permanecem intactas, apenas deixa de ser oferecida para escolher em formulários novos.',
+
+  // Configuración — Comisiones
+  '(las anteriores no generan comisión).': '(as anteriores não geram comissão).',
+  Activo: 'Ativo',
+  'Comisión en ventas mayoristas': 'Comissão em vendas atacado',
+  'Comisión en ventas minoristas': 'Comissão em vendas varejo',
+  Desactivado: 'Desativado',
+  'Ejemplo: una venta minorista neta de': 'Exemplo: uma venda varejo líquida de',
+  'Empieza a regir': 'Começa a valer',
+  'Ir al panel de comisiones →': 'Ir para o painel de comissões →',
+  'No pudimos guardar.': 'Não conseguimos salvar.',
+  'No se pudo crear el plan': 'Não foi possível criar o plano',
+  'No tenés permiso para configurar comisiones.': 'Você não tem permissão para configurar comissões.',
+  'Reglas avanzadas (distinta comisión por dispositivos, accesorios, producto…) →': 'Regras avançadas (comissão diferente por aparelhos, acessórios, produto…) →',
+  'comisión de': 'comissão de',
+  con: 'com',
+  'del vendedor sobre la venta, según sea minorista o mayorista. Se aplica a las ventas confirmadas':
+    'do vendedor sobre a venda, seja varejo ou atacado. Se aplica às vendas confirmadas',
+  'desde la fecha de activación': 'desde a data de ativação',
+  'para el vendedor.': 'para o vendedor.',
+  'porcentaje de comisión': 'porcentagem de comissão',
+
   // Estadísticas — Dashboard: tabs, períodos, métricas (labels de arrays)
   'esta semana': 'esta semana',
   'este mes': 'este mês',
