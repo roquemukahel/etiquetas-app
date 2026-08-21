@@ -36,7 +36,12 @@ export type Permiso =
   // gestionar_usuarios (ver el bloque de arriba): es una operación que
   // condona o reescribe deuda, no una venta más.
   | 'gestionar_financiacion'
-  | 'ajustar_financiacion';
+  | 'ajustar_financiacion'
+  // Ver costos/ganancia/márgenes en Estadísticas — igual que 'ver_proveedores'
+  // y 'gestionar_comisiones': sin columna propia, cae en el default de abajo
+  // (solo accesoCompleto o administrador). Un vendedor sin acceso completo
+  // no tiene por qué ver la rentabilidad global del negocio.
+  | 'ver_costos';
 
 // Sin actor elegido todavía, o un actor sin datos de permisos (guardado
 // antes de que existiera esto): no restringimos — mantiene el

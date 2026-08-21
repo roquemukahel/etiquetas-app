@@ -275,3 +275,72 @@ export function serieEvolucion(
     };
   });
 }
+
+// ---------- Resumen de financiación propia en cuotas (para Estadísticas) ----------
+// Reutiliza las tablas del módulo de financiación (financiacion_planes/
+// cuotas/pagos) — NO reimplementa el motor de cronogramas/proyección de
+// app/lib/financiacion/motor.ts, son sumas directas sobre lo que ese módulo
+// ya persiste. Función pura: recibe filas + fechas, no toca Supabase.
+export type PlanFinR = { importe_financiado: number; estado: string; created_at: string };
+export type CuotaFinR = { importe_original: number; importe_pagado: number; estado: string; fecha_vencimiento: string };
+export type PagoFinR = { monto_aplicado: number; created_at: string };
+export type ResumenFinanciacion = {
+  totalFinanciadoActivo: number;
+  nuevosCreditosPeriodo: number;
+  saldoPendiente: number;
+  vencido: number;
+  proximasAVencer: number;
+  cobradoPeriodo: number;
+  pctMorosidad: number;
+  hayDatos: boolean;
+};
+
+export function resumenFinanciacionDe(
+  planes: PlanFinR[],
+  cuotas: CuotaFinR[],
+  pagos: PagoFinR[],
+  inicio: Date,
+  fin: Date,
+  hoy: Date
+): ResumenFinanciacion {
+  const hoyISO = hoy.toISOString().slice(0, 10);
+  const en7dias = new Date(hoy);
+  en7dias.setDate(en7dias.getDate() + 7);
+  const en7ISO = en7dias.toISOString().slice(0, 10);
+
+  const totalFinanciadoActivo = planes.filter((p) => p.estado === 'activo' || p.estado === 'completado').reduce((a, p) => a + p.importe_financiado, 0);
+  const nuevosCreditosPeriodo = planes.filter((p) => entre(p.created_at, inicio, fin)).reduce((a, p) => a + p.importe_financiado, 0);
+  const pendientes = cuotas.filter((c) => c.estado === 'pendiente');
+  const saldoPendiente = pendientes.reduce((a, c) => a + Math.max(0, c.importe_original - c.importe_pagado), 0);
+  const vencido = pendientes.filter((c) => c.fecha_vencimiento < hoyISO).reduce((a, c) => a + Math.max(0, c.importe_original - c.importe_pagado), 0);
+  const proximasAVencer = pendientes.filter((c) => c.fecha_vencimiento >= hoyISO && c.fecha_vencimiento <= en7ISO).length;
+  const cobradoPeriodo = pagos.filter((p) => entre(p.created_at, inicio, fin)).reduce((a, p) => a + p.monto_aplicado, 0);
+  const pctMorosidad = saldoPendiente > 0.009 ? (vencido / saldoPendiente) * 100 : 0;
+
+  return {
+    totalFinanciadoActivo,
+    nuevosCreditosPeriodo,
+    saldoPendiente,
+    vencido,
+    proximasAVencer,
+    cobradoPeriodo,
+    pctMorosidad,
+    hayDatos: planes.length > 0 || cuotas.length > 0,
+  };
+}
+
+// ---------- Resumen de comisiones del período (para Estadísticas) ----------
+// Reutiliza comision_movimientos (el libro inmutable del módulo de
+// Comisiones) — no reimplementa su motor de cálculo, solo agrupa por estado.
+export type ComisionMovR = { comision: number; estado: string; fecha_hecho: string | null; created_at: string };
+export type ResumenComisiones = { generada: number; pagada: number; pendiente: number; hayDatos: boolean };
+
+export function resumenComisionesDe(movimientos: ComisionMovR[], inicio: Date, fin: Date): ResumenComisiones {
+  const delPeriodo = movimientos.filter((c) => entre(c.fecha_hecho ?? c.created_at, inicio, fin));
+  const generada = delPeriodo.reduce((a, c) => a + c.comision, 0);
+  const pagada = delPeriodo.filter((c) => c.estado === 'pagada').reduce((a, c) => a + c.comision, 0);
+  const pendiente = delPeriodo
+    .filter((c) => c.estado === 'generada' || c.estado === 'aprobada' || c.estado === 'en_liquidacion')
+    .reduce((a, c) => a + c.comision, 0);
+  return { generada, pagada, pendiente, hayDatos: movimientos.length > 0 };
+}
