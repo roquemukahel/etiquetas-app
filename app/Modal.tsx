@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { useT } from './lib/idioma';
 
 // Modal/drawer genérico — mismo patrón visual que ya usaban a mano
 // clientes/[id] y otras páginas (overlay + tarjeta centrada), ahora en un
@@ -17,6 +18,7 @@ export default function Modal({
   children: React.ReactNode;
   maxWidth?: string;
 }) {
+  const t = useT();
   const ref = useRef<HTMLDivElement>(null);
   // onClose casi siempre se pasa como función inline (ej. "() =>
   // setModalAbierto(false)"), así que cambia de identidad en cada
@@ -64,7 +66,7 @@ export default function Modal({
           <p className="text-base font-semibold">{titulo}</p>
           <button
             onClick={onClose}
-            aria-label="Cerrar"
+            aria-label={t('Cerrar')}
             className="shrink-0 text-xl leading-none text-muted dark:text-dark-text-secondary hover:text-ink dark:hover:text-dark-text px-1"
           >
             ×

@@ -2132,4 +2132,19 @@ export const PT: Record<string, string> = {
   'No pudimos agregar algún canje nuevo:': 'Não conseguimos adicionar uma troca nova:',
   'No pudimos actualizar el estado:': 'Não conseguimos atualizar o status:',
   'No pudimos cancelar la orden:': 'Não conseguimos cancelar o pedido:',
+
+  // Grupo 1 — atomos de UI compartidos (Modal, ThemeToggle, SelectorColor, errores globales)
+  Otro: 'Outro',
+  'Escribí el color': 'Digite a cor',
+  'Color elegido:': 'Cor escolhida:',
+  Apariencia: 'Aparência',
+  'Elegí cómo se ve la app': 'Escolha como o app é exibido',
+  Claro: 'Claro',
+  Oscuro: 'Escuro',
+  'Modo Qovento: fondo azulado de la marca en toda la app.': 'Modo Qovento: fundo azulado da marca em todo o app.',
+  'Algo salió mal': 'Algo deu errado',
+  'Ya nos avisamos del error. Probá recargar la página.': 'Já fomos avisados do erro. Tente recarregar a página.',
+  'Esta cuenta está desactivada': 'Esta conta está desativada',
+  'Tu acceso a Qovento fue desactivado. Si creés que es un error, contactá a quien te dio de alta el servicio.':
+    'Seu acesso ao Qovento foi desativado. Se você acha que é um erro, entre em contato com quem ativou o serviço para você.',
 };
