@@ -1387,6 +1387,28 @@ export const PT: Record<string, string> = {
   'Ejemplo: un equipo de': 'Exemplo: um aparelho de',
   Contado: 'À vista',
 
+  // Configuración — Carpetas del stock
+  'Borrar la carpeta vacía': 'Excluir a pasta vazia',
+  'Borrar vacía': 'Excluir vazia',
+  'Elegí la carpeta destino...': 'Escolha a pasta destino...',
+  'Mover los': 'Mover os',
+  'No pudimos borrar la carpeta:': 'Não conseguimos excluir a pasta:',
+  'No pudimos mover los equipos:': 'Não conseguimos mover os aparelhos:',
+  'No tenés permiso para gestionar el stock.': 'Você não tem permissão para gerenciar o estoque.',
+  'Todavía no hay carpetas de stock.': 'Ainda não há pastas de estoque.',
+  'Unificando...': 'Unificando...',
+  Unificar: 'Unificar',
+  'Unificar en': 'Unificar em',
+  'Unificá carpetas repetidas (por ejemplo "13" dentro de "iPhone 13") y borrá las que quedaron vacías. Al unificar, los equipos de una carpeta se mueven a la otra y la carpeta vieja se elimina.':
+    'Unifique pastas repetidas (por exemplo "13" dentro de "iPhone 13") e exclua as que ficaram vazias. Ao unificar, os aparelhos de uma pasta se movem para a outra e a pasta antiga é excluída.',
+  'Vas a mover todos los equipos de la carpeta': 'Você vai mover todos os aparelhos da pasta',
+  'Volver a Configuración': 'Voltar a Configurações',
+  'a:': 'a:',
+  'carpeta no registrada': 'pasta não registrada',
+  equipos: 'aparelhos',
+  'y borrar la carpeta': 'e excluir a pasta',
+  '¿Confirmás?': 'Confirma?',
+
   // Estadísticas — Dashboard: tabs, períodos, métricas (labels de arrays)
   'esta semana': 'esta semana',
   'este mes': 'este mês',

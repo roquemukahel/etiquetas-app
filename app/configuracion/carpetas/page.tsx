@@ -8,12 +8,14 @@ import { registrarAuditoria } from '../../lib/auditoria';
 import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import { obtenerTodasLasFilas } from '../../lib/db';
+import { useT } from '../../lib/idioma';
 
 type Carpeta = { nombre: string; total: number; enStock: number; enModelos: boolean };
 
 export default function CarpetasStock() {
   const supabase = crearClienteNavegador();
   const actor = useActor();
+  const t = useT();
   const puede = tienePermiso(actor, 'agregar_stock');
 
   const [carpetas, setCarpetas] = useState<Carpeta[]>([]);
@@ -72,7 +74,7 @@ export default function CarpetasStock() {
     if (!destinoLimpio || destinoLimpio === desde) return;
     if (
       !confirm(
-        `Vas a mover todos los equipos de la carpeta "${desde}" a "${destinoLimpio}" y borrar la carpeta "${desde}". ¿Confirmás?`
+        `${t('Vas a mover todos los equipos de la carpeta')} "${desde}" ${t('a')} "${destinoLimpio}" ${t('y borrar la carpeta')} "${desde}". ${t('¿Confirmás?')}`
       )
     )
       return;
@@ -82,7 +84,7 @@ export default function CarpetasStock() {
     // 1) Reasignar los dispositivos de la carpeta vieja a la nueva.
     const { error: updError } = await supabase.from('dispositivos').update({ modelo: destinoLimpio }).eq('modelo', desde);
     if (updError) {
-      setError('No pudimos mover los equipos: ' + updError.message);
+      setError(t('No pudimos mover los equipos:') + ' ' + updError.message);
       setProcesando(null);
       return;
     }
@@ -103,12 +105,12 @@ export default function CarpetasStock() {
   };
 
   const borrarVacia = async (nombre: string) => {
-    if (!confirm(`Borrar la carpeta vacía "${nombre}"?`)) return;
+    if (!confirm(`${t('Borrar la carpeta vacía')} "${nombre}"?`)) return;
     setProcesando(nombre);
     setError(null);
     const { error: delError } = await supabase.from('modelos_stock').delete().eq('nombre', nombre);
     if (delError) {
-      setError('No pudimos borrar la carpeta: ' + delError.message);
+      setError(t('No pudimos borrar la carpeta:') + ' ' + delError.message);
       setProcesando(null);
       return;
     }
@@ -120,9 +122,9 @@ export default function CarpetasStock() {
   if (!puede) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
-        <p className="text-sm text-muted dark:text-dark-text-secondary">No tenés permiso para gestionar el stock.</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t('No tenés permiso para gestionar el stock.')}</p>
         <Link href="/configuracion" className="text-sm text-accent dark:text-dark-accent underline">
-          Volver a Configuración
+          {t('Volver a Configuración')}
         </Link>
       </main>
     );
@@ -134,20 +136,19 @@ export default function CarpetasStock() {
         <Link href="/configuracion" className="text-2xl leading-none">
           &larr;
         </Link>
-        <span className="text-lg font-medium">Carpetas del stock</span>
+        <span className="text-lg font-medium">{t('Carpetas del stock')}</span>
       </header>
 
       <p className="text-sm text-muted dark:text-dark-text-secondary">
-        Unificá carpetas repetidas (por ejemplo "13" dentro de "iPhone 13") y borrá las que quedaron vacías. Al unificar,
-        los equipos de una carpeta se mueven a la otra y la carpeta vieja se elimina.
+        {t('Unificá carpetas repetidas (por ejemplo "13" dentro de "iPhone 13") y borrá las que quedaron vacías. Al unificar, los equipos de una carpeta se mueven a la otra y la carpeta vieja se elimina.')}
       </p>
 
       {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
 
       {loading ? (
-        <p className="text-sm text-muted dark:text-dark-text-secondary">Cargando...</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t('Cargando...')}</p>
       ) : carpetas.length === 0 ? (
-        <p className="text-sm text-muted dark:text-dark-text-secondary">Todavía no hay carpetas de stock.</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t('Todavía no hay carpetas de stock.')}</p>
       ) : (
         <div className="flex flex-col gap-2">
           {carpetas.map((c) => (
@@ -156,8 +157,8 @@ export default function CarpetasStock() {
                 <div className="min-w-0">
                   <p className="text-sm font-medium truncate">{c.nombre}</p>
                   <p className="text-xs text-muted dark:text-dark-text-secondary">
-                    {c.total} equipo{c.total === 1 ? '' : 's'} · {c.enStock} en stock
-                    {!c.enModelos && c.total > 0 ? ' · carpeta no registrada' : ''}
+                    {c.total} {c.total === 1 ? t('equipo') : t('equipos')} · {c.enStock} {t('en stock')}
+                    {!c.enModelos && c.total > 0 ? ` · ${t('carpeta no registrada')}` : ''}
                   </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
@@ -167,7 +168,7 @@ export default function CarpetasStock() {
                       onClick={() => borrarVacia(c.nombre)}
                       className="text-xs text-bad underline disabled:opacity-40"
                     >
-                      Borrar vacía
+                      {t('Borrar vacía')}
                     </button>
                   ) : (
                     <button
@@ -175,7 +176,7 @@ export default function CarpetasStock() {
                       onClick={() => abrirFusion(c.nombre)}
                       className="text-xs text-accent dark:text-dark-accent underline disabled:opacity-40"
                     >
-                      {fusionarDesde === c.nombre ? 'Cancelar' : 'Unificar'}
+                      {fusionarDesde === c.nombre ? t('Cancelar') : t('Unificar')}
                     </button>
                   )}
                 </div>
@@ -184,14 +185,14 @@ export default function CarpetasStock() {
               {fusionarDesde === c.nombre && (
                 <div className="rounded-lg bg-canvas dark:bg-dark-bg p-2.5 flex flex-col gap-2">
                   <label className="text-xs text-muted dark:text-dark-text-secondary">
-                    Mover los {c.total} equipo{c.total === 1 ? '' : 's'} de «{c.nombre}» a:
+                    {t('Mover los')} {c.total} {c.total === 1 ? t('equipo') : t('equipos')} {t('de')} «{c.nombre}» {t('a:')}
                   </label>
                   <select
                     value={destino}
                     onChange={(e) => setDestino(e.target.value)}
                     className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-2 text-sm"
                   >
-                    <option value="">Elegí la carpeta destino...</option>
+                    <option value="">{t('Elegí la carpeta destino...')}</option>
                     {otras.map((n) => (
                       <option key={n} value={n}>
                         {n}
@@ -203,7 +204,7 @@ export default function CarpetasStock() {
                     onClick={() => fusionar(c.nombre)}
                     className="rounded-lg bg-accent dark:bg-dark-accent text-white py-2 text-sm font-medium disabled:opacity-40"
                   >
-                    {procesando === c.nombre ? 'Unificando...' : `Unificar en «${destino || '...'}»`}
+                    {procesando === c.nombre ? t('Unificando...') : `${t('Unificar en')} «${destino || '...'}»`}
                   </button>
                 </div>
               )}
