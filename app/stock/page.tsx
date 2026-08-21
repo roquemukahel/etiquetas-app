@@ -16,6 +16,7 @@ import { compararModelosPorSalida } from '../lib/catalogosMarcas';
 import { sanitizarDecimal } from '../lib/numeros';
 import { obtenerCategorias, type Categoria } from '../lib/categorias';
 import { asegurarProveedor } from '../lib/proveedores';
+import { useT } from '../lib/idioma';
 import MiniaturaDispositivo from '../MiniaturaDispositivo';
 import { QoviState } from '../QoviState';
 import { ICONOS } from '../Iconos';
@@ -123,6 +124,7 @@ const VISTAS_RAPIDAS: { id: FiltroRapido; label: string }[] = [
 export default function Stock() {
   const supabase = crearClienteNavegador();
   const actor = useActor();
+  const t = useT();
   const puedeEliminar = tienePermiso(actor, 'eliminar');
   const puedeAgregarStock = tienePermiso(actor, 'agregar_stock');
   const puedeRecibirServicioTecnico = tienePermiso(actor, 'recibir_servicio_tecnico');
@@ -294,10 +296,10 @@ export default function Stock() {
   const eliminarCarpetaVacia = async (modelo: string) => {
     if (!puedeEliminar) return;
     setCarpetaMenuAbierta(null);
-    if (!confirm(`¿Eliminar la carpeta "${modelo}"? No tiene dispositivos, así que no se pierde nada.`)) return;
+    if (!confirm(`${t('¿Eliminar la carpeta')} "${modelo}"? ${t('No tiene dispositivos, así que no se pierde nada.')}`)) return;
     const { error } = await supabase.from('modelos_stock').delete().eq('nombre', modelo);
     if (error) {
-      alert('No pudimos eliminar la carpeta: ' + error.message);
+      alert(`${t('No pudimos eliminar la carpeta:')} ` + error.message);
       return;
     }
     await registrarAuditoria(supabase, {
@@ -545,7 +547,12 @@ export default function Stock() {
     if (!puedeEliminar) return;
     const ids = Array.from(seleccionados);
     if (ids.length === 0) return;
-    if (!confirm(`¿Eliminar ${ids.length} dispositivo${ids.length === 1 ? '' : 's'} del historial? No se puede deshacer.`)) return;
+    if (
+      !confirm(
+        `${t('¿Eliminar')} ${ids.length} ${ids.length === 1 ? t('dispositivo') : t('dispositivos')} ${t('del historial? No se puede deshacer.')}`
+      )
+    )
+      return;
 
     setEliminandoSeleccion(true);
     const aEliminar = dispositivos.filter((d) => seleccionados.has(d.id));
@@ -590,7 +597,7 @@ export default function Stock() {
       salirDeSeleccion();
       cargarDispositivos();
     } else {
-      alert('No pudimos actualizar los dispositivos seleccionados: ' + error.message);
+      alert(`${t('No pudimos actualizar los dispositivos seleccionados:')} ` + error.message);
     }
     setProcesandoSeleccion(false);
   };
@@ -613,7 +620,7 @@ export default function Stock() {
       salirDeSeleccion();
       cargarDispositivos();
     } else {
-      alert('No pudimos mover los dispositivos seleccionados: ' + error.message);
+      alert(`${t('No pudimos mover los dispositivos seleccionados:')} ` + error.message);
     }
     setProcesandoSeleccion(false);
   };
@@ -660,7 +667,12 @@ export default function Stock() {
   const derivarDispositivoAServicio = async (d: Dispositivo) => {
     if (!puedeRecibirServicioTecnico) return;
     setAccionAbiertaId(null);
-    if (!confirm(`¿Derivar ${d.modelo || 'este dispositivo'} a Servicio Técnico? Sale de Stock y aparece ahí para diagnosticarlo.`)) return;
+    if (
+      !confirm(
+        `${t('¿Derivar')} ${d.modelo || t('este dispositivo')} ${t('a Servicio Técnico? Sale de Stock y aparece ahí para diagnosticarlo.')}`
+      )
+    )
+      return;
     setProcesandoAccion(d.id);
     const { data: nueva, error: insertError } = await supabase
       .from('reparaciones')
@@ -671,13 +683,13 @@ export default function Stock() {
     // stock, quedaría "perdido" (ni en Stock ni en Servicio Técnico, sin
     // ninguna reparación real que lo respalde).
     if (insertError || !nueva) {
-      alert('No pudimos derivar el dispositivo a Servicio Técnico: ' + (insertError?.message ?? 'error desconocido'));
+      alert(`${t('No pudimos derivar el dispositivo a Servicio Técnico:')} ` + (insertError?.message ?? t('error desconocido')));
       setProcesandoAccion(null);
       return;
     }
     const { error: updateError } = await supabase.from('dispositivos').update({ en_stock: false }).eq('id', d.id);
     if (updateError) {
-      alert('Se creó la reparación pero no pudimos sacar el dispositivo de Stock: ' + updateError.message);
+      alert(`${t('Se creó la reparación pero no pudimos sacar el dispositivo de Stock:')} ` + updateError.message);
     }
     await registrarAuditoria(supabase, {
       accion: `derivó de Stock a Servicio Técnico un dispositivo (${nueva.numero_orden || ''}, ${d.modelo || 'sin modelo'}${d.imei ? `, IMEI ${d.imei}` : ''})`,
@@ -691,7 +703,7 @@ export default function Stock() {
   const eliminarDispositivo = async (d: Dispositivo) => {
     if (!puedeEliminar) return;
     setAccionAbiertaId(null);
-    if (!confirm(`¿Eliminar ${d.modelo || 'este dispositivo'} del historial? No se puede deshacer.`)) return;
+    if (!confirm(`${t('¿Eliminar')} ${d.modelo || t('este dispositivo')} ${t('del historial? No se puede deshacer.')}`)) return;
     setProcesandoAccion(d.id);
     const { error } = await supabase.from('dispositivos').delete().eq('id', d.id);
     if (!error) {
@@ -935,7 +947,7 @@ export default function Stock() {
         : {}),
     });
     if (insertError) {
-      setErrorProducto('No pudimos guardar: ' + insertError.message);
+      setErrorProducto(`${t('No pudimos guardar:')} ` + insertError.message);
       setGuardandoProducto(false);
       return;
     }
@@ -959,7 +971,7 @@ export default function Stock() {
 
   const eliminarProducto = async (id: string) => {
     if (!puedeEliminar) return;
-    if (!confirm('¿Eliminar este producto?')) return;
+    if (!confirm(t('¿Eliminar este producto?'))) return;
     const producto = productos.find((p) => p.id === id);
     await supabase.from('productos').delete().eq('id', id);
     await registrarAuditoria(supabase, {
@@ -1011,7 +1023,7 @@ export default function Stock() {
         // cae al update directo de siempre (mismo comportamiento que había).
         const migracionNoCorrida = /producto_mover_stock|schema cache/i.test(movError.message);
         if (!migracionNoCorrida) {
-          setErrorProducto('No pudimos actualizar la cantidad: ' + movError.message);
+          setErrorProducto(`${t('No pudimos actualizar la cantidad:')} ` + movError.message);
           return;
         }
         await supabase.from('productos').update({ cantidad: nueva }).eq('id', p.id);
@@ -1050,13 +1062,13 @@ export default function Stock() {
           &larr;
         </Link>
         <div className="min-w-0 mr-auto">
-          <p className="text-lg font-medium leading-tight">Stock</p>
+          <p className="text-lg font-medium leading-tight">{t('Stock')}</p>
           <p className="text-xs text-muted dark:text-dark-text-secondary truncate">
             {tab === 'celulares'
               ? vista === 'stock'
-                ? `${capital.unidadesCel} dispositivo${capital.unidadesCel === 1 ? '' : 's'} disponible${capital.unidadesCel === 1 ? '' : 's'}`
-                : `${totalVendidos} dispositivo${totalVendidos === 1 ? '' : 's'} vendido${totalVendidos === 1 ? '' : 's'}`
-              : `${productos.length} accesorio${productos.length === 1 ? '' : 's'} en catálogo`}
+                ? `${capital.unidadesCel} ${capital.unidadesCel === 1 ? t('dispositivo disponible') : t('dispositivos disponibles')}`
+                : `${totalVendidos} ${totalVendidos === 1 ? t('dispositivo vendido') : t('dispositivos vendidos')}`
+              : `${productos.length} ${productos.length === 1 ? t('accesorio en catálogo') : t('accesorios en catálogo')}`}
           </p>
         </div>
 
@@ -1068,7 +1080,7 @@ export default function Stock() {
                   onClick={() => setMenuAbierto(menuAbierto === 'agregar' ? null : 'agregar')}
                   className="rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors px-3 py-2 text-xs font-medium text-white"
                 >
-                  + Agregar
+                  + {t('Agregar')}
                 </button>
                 {menuAbierto === 'agregar' && (
                   <div className="absolute right-0 top-full mt-1.5 w-44 rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-elevated py-1 z-30">
@@ -1077,14 +1089,14 @@ export default function Stock() {
                       onClick={() => setMenuAbierto(null)}
                       className="block px-3.5 py-2.5 text-sm hover:bg-canvas dark:hover:bg-dark-bg"
                     >
-                      Cargar a mano
+                      {t('Cargar a mano')}
                     </Link>
                     <Link
                       href="/stock/foto"
                       onClick={() => setMenuAbierto(null)}
                       className="block px-3.5 py-2.5 text-sm hover:bg-canvas dark:hover:bg-dark-bg"
                     >
-                      Cargar con foto
+                      {t('Cargar con foto')}
                     </Link>
                   </div>
                 )}
@@ -1094,7 +1106,7 @@ export default function Stock() {
               <button
                 onClick={() => setMenuAbierto(menuAbierto === 'mas' ? null : 'mas')}
                 className="rounded-lg border border-border dark:border-dark-border px-2.5 py-2 text-sm leading-none"
-                aria-label="Más acciones"
+                aria-label={t('Más acciones')}
               >
                 ···
               </button>
@@ -1103,12 +1115,12 @@ export default function Stock() {
                   {puedeAgregarStock && (
                     <label className="px-3.5 py-2.5 text-sm hover:bg-canvas dark:hover:bg-dark-bg cursor-pointer">
                       {preparando
-                        ? 'Leyendo archivo...'
+                        ? t('Leyendo archivo...')
                         : importando
                         ? progresoImport
-                          ? `Importando... ${progresoImport.hechas}/${progresoImport.total}`
-                          : 'Importando...'
-                        : 'Importar CSV'}
+                          ? `${t('Importando...')} ${progresoImport.hechas}/${progresoImport.total}`
+                          : t('Importando...')
+                        : t('Importar CSV')}
                       <input
                         ref={inputImportRef}
                         type="file"
@@ -1130,14 +1142,14 @@ export default function Stock() {
                     disabled={totalDispositivos === 0 || exportandoDispositivos}
                     className="px-3.5 py-2.5 text-sm text-left hover:bg-canvas dark:hover:bg-dark-bg disabled:opacity-40"
                   >
-                    {exportandoDispositivos ? 'Exportando...' : 'Exportar CSV'}
+                    {exportandoDispositivos ? t('Exportando...') : t('Exportar CSV')}
                   </button>
                   <Link
                     href="/stock/carpetas"
                     onClick={() => setMenuAbierto(null)}
                     className="px-3.5 py-2.5 text-sm hover:bg-canvas dark:hover:bg-dark-bg"
                   >
-                    Administrar carpetas
+                    {t('Administrar carpetas')}
                   </Link>
                 </div>
               )}
@@ -1153,23 +1165,23 @@ export default function Stock() {
       {puedeVerCapital && (
         <div className="rounded-2xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted dark:text-dark-text-secondary mb-2">
-            Capital en stock
+            {t('Capital en stock')}
           </p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
             <IndicadorCapital
-              etiqueta="Invertido (a costo)"
+              etiqueta={t('Invertido (a costo)')}
               valor={capital.costo}
               cobertura={capital.costoCobertura}
               total={capital.totalItems}
             />
             <IndicadorCapital
-              etiqueta="Valor de venta"
+              etiqueta={t('Valor de venta')}
               valor={capital.venta}
               cobertura={capital.ventaCobertura}
               total={capital.totalItems}
             />
             <IndicadorCapital
-              etiqueta="Ganancia potencial"
+              etiqueta={t('Ganancia potencial')}
               valor={capital.ganancia}
               cobertura={capital.gananciaCobertura}
               total={capital.totalItems}
@@ -1194,13 +1206,13 @@ export default function Stock() {
                     : 'text-muted dark:text-dark-text-secondary'
                 }`}
               >
-                Datos incompletos
+                {t('Datos incompletos')}
               </p>
             </button>
           </div>
           <p className="text-[11px] text-muted dark:text-dark-text-secondary mt-2.5 text-center">
-            {capital.unidadesCel} dispositivo{capital.unidadesCel === 1 ? '' : 's'} en stock · {capital.unidadesAcc} accesorio
-            {capital.unidadesAcc === 1 ? '' : 's'}. Cada indicador cuenta solo los ítems con ese dato cargado.
+            {capital.unidadesCel} {capital.unidadesCel === 1 ? t('dispositivo en stock') : t('dispositivos en stock')} · {capital.unidadesAcc}{' '}
+            {capital.unidadesAcc === 1 ? t('accesorio') : t('accesorios')}. {t('Cada indicador cuenta solo los ítems con ese dato cargado.')}
           </p>
         </div>
       )}
@@ -1212,7 +1224,7 @@ export default function Stock() {
             tab === 'celulares' ? 'bg-accent dark:bg-dark-accent text-white' : 'text-ink dark:text-dark-text'
           }`}
         >
-          Dispositivos <span className="opacity-70">{totalDispositivos}</span>
+          {t('Dispositivos')} <span className="opacity-70">{totalDispositivos}</span>
         </button>
         <button
           onClick={() => setTab('accesorios')}
@@ -1220,7 +1232,7 @@ export default function Stock() {
             tab === 'accesorios' ? 'bg-accent dark:bg-dark-accent text-white' : 'text-ink dark:text-dark-text'
           }`}
         >
-          Accesorios <span className="opacity-70">{productos.length}</span>
+          {t('Accesorios')} <span className="opacity-70">{productos.length}</span>
         </button>
       </div>
 
@@ -1231,13 +1243,13 @@ export default function Stock() {
               <input
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
-                placeholder="Buscar por modelo, IMEI, serie, código, color o proveedor…"
+                placeholder={t('Buscar por modelo, IMEI, serie, código, color o proveedor…')}
                 className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl pl-4 pr-9 py-3 text-sm"
               />
               {busqueda && (
                 <button
                   onClick={() => setBusqueda('')}
-                  aria-label="Limpiar búsqueda"
+                  aria-label={t('Limpiar búsqueda')}
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 h-6 w-6 rounded-full text-muted dark:text-dark-text-secondary hover:bg-canvas dark:hover:bg-dark-bg flex items-center justify-center"
                 >
                   ✕
@@ -1247,7 +1259,7 @@ export default function Stock() {
 
             {busquedaDebounced.trim() && (
               <p className="text-xs text-muted dark:text-dark-text-secondary">
-                {filtrados.length} resultado{filtrados.length === 1 ? '' : 's'}
+                {filtrados.length} {filtrados.length === 1 ? t('resultado') : t('resultados')}
               </p>
             )}
 
@@ -1258,7 +1270,7 @@ export default function Stock() {
                   vista === 'stock' ? 'bg-accent dark:bg-dark-accent text-white' : 'text-ink dark:text-dark-text'
                 }`}
               >
-                En stock <span className="opacity-70">{capital.unidadesCel}</span>
+                {t('En stock')} <span className="opacity-70">{capital.unidadesCel}</span>
               </button>
               <button
                 onClick={() => setVista('vendidos')}
@@ -1266,7 +1278,7 @@ export default function Stock() {
                   vista === 'vendidos' ? 'bg-accent dark:bg-dark-accent text-white' : 'text-ink dark:text-dark-text'
                 }`}
               >
-                Vendidos <span className="opacity-70">{totalVendidos}</span>
+                {t('Vendidos')} <span className="opacity-70">{totalVendidos}</span>
               </button>
             </div>
 
@@ -1281,7 +1293,7 @@ export default function Stock() {
                       : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
                   }`}
                 >
-                  {v.label}
+                  {t(v.label)}
                 </button>
               ))}
             </div>
@@ -1289,7 +1301,7 @@ export default function Stock() {
 
           {planImport && puedeAgregarStock && (
             <div className="rounded-xl border border-accent/30 dark:border-dark-accent/30 bg-accent-soft dark:bg-dark-accent-soft p-3.5 flex flex-col gap-2.5">
-              <p className="text-sm font-medium">Revisá antes de confirmar</p>
+              <p className="text-sm font-medium">{t('Revisá antes de confirmar')}</p>
               <ul className="text-xs text-muted dark:text-dark-text-secondary flex flex-col gap-1">
                 <li>El archivo tiene {planImport.totalCSV} filas.</li>
                 <li>
@@ -1298,12 +1310,14 @@ export default function Stock() {
                 </li>
                 {planImport.omitidosDuplicado > 0 && (
                   <li>
-                    Se omiten <strong className="text-ink dark:text-dark-text">{planImport.omitidosDuplicado}</strong> por tener el
-                    mismo IMEI que uno que ya tenés cargado (para no duplicar).
+                    {t('Se omiten')} <strong className="text-ink dark:text-dark-text">{planImport.omitidosDuplicado}</strong>{' '}
+                    {t('por tener el mismo IMEI que uno que ya tenés cargado (para no duplicar).')}
                   </li>
                 )}
                 {planImport.omitidosSinModelo > 0 && (
-                  <li>Se omiten {planImport.omitidosSinModelo} filas sin modelo reconocible.</li>
+                  <li>
+                    {t('Se omiten')} {planImport.omitidosSinModelo} {t('filas sin modelo reconocible.')}
+                  </li>
                 )}
               </ul>
               <div className="flex gap-2">
@@ -1312,7 +1326,7 @@ export default function Stock() {
                   disabled={importando}
                   className="flex-1 rounded-lg border border-border dark:border-dark-border py-2 text-xs font-medium disabled:opacity-40"
                 >
-                  Cancelar
+                  {t('Cancelar')}
                 </button>
                 <button
                   onClick={confirmarImportacion}
@@ -1321,9 +1335,9 @@ export default function Stock() {
                 >
                   {importando
                     ? progresoImport
-                      ? `Importando... ${progresoImport.hechas}/${progresoImport.total}`
-                      : 'Importando...'
-                    : `Confirmar e importar ${planImport.filas.length}`}
+                      ? `${t('Importando...')} ${progresoImport.hechas}/${progresoImport.total}`
+                      : t('Importando...')
+                    : `${t('Confirmar e importar')} ${planImport.filas.length}`}
                 </button>
               </div>
             </div>
@@ -1338,9 +1352,11 @@ export default function Stock() {
           {modoSeleccion ? (
             <div className="sticky top-0 z-10 rounded-xl border border-accent/30 dark:border-dark-accent/30 bg-accent-soft dark:bg-dark-accent-soft px-4 py-3 flex flex-col gap-2.5">
               <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-medium">{seleccionados.size} seleccionado{seleccionados.size === 1 ? '' : 's'}</p>
+                <p className="text-sm font-medium">
+                  {seleccionados.size} {seleccionados.size === 1 ? t('seleccionado') : t('seleccionados')}
+                </p>
                 <button onClick={salirDeSeleccion} className="text-xs text-muted dark:text-dark-text-secondary underline">
-                  Cancelar
+                  {t('Cancelar')}
                 </button>
               </div>
 
@@ -1352,21 +1368,21 @@ export default function Stock() {
                       disabled={seleccionados.size === 0 || procesandoSeleccion}
                       className="rounded-lg bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-xs font-medium px-3 py-1.5 disabled:opacity-40"
                     >
-                      Marcar en stock
+                      {t('Marcar en stock')}
                     </button>
                     <button
                       onClick={() => marcarStockSeleccionados(false)}
                       disabled={seleccionados.size === 0 || procesandoSeleccion}
                       className="rounded-lg bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-xs font-medium px-3 py-1.5 disabled:opacity-40"
                     >
-                      Marcar fuera de stock
+                      {t('Marcar fuera de stock')}
                     </button>
                     <button
                       onClick={() => setMoviendoCarpeta((v) => !v)}
                       disabled={seleccionados.size === 0}
                       className="rounded-lg bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-xs font-medium px-3 py-1.5 disabled:opacity-40"
                     >
-                      Mover de carpeta
+                      {t('Mover de carpeta')}
                     </button>
                   </>
                 )}
@@ -1375,7 +1391,7 @@ export default function Stock() {
                   disabled={seleccionados.size === 0}
                   className="rounded-lg bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-xs font-medium px-3 py-1.5 disabled:opacity-40"
                 >
-                  Exportar seleccionados
+                  {t('Exportar seleccionados')}
                 </button>
               </div>
 
@@ -1385,7 +1401,7 @@ export default function Stock() {
                     value={carpetaDestino}
                     onChange={(e) => setCarpetaDestino(e.target.value)}
                     list="carpetas-mover-seleccion"
-                    placeholder="Carpeta destino (ej. iPhone 13)"
+                    placeholder={t('Carpeta destino (ej. iPhone 13)')}
                     autoFocus
                     className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                   />
@@ -1399,7 +1415,7 @@ export default function Stock() {
                     disabled={!carpetaDestino.trim() || procesandoSeleccion}
                     className="rounded-lg bg-accent dark:bg-dark-accent text-white text-xs font-medium px-3 py-2 disabled:opacity-40 shrink-0"
                   >
-                    Mover
+                    {t('Mover')}
                   </button>
                 </div>
               )}
@@ -1411,7 +1427,7 @@ export default function Stock() {
                     disabled={seleccionados.size === 0 || eliminandoSeleccion}
                     className="rounded-lg bg-bad text-white text-xs font-medium px-3 py-1.5 disabled:opacity-40"
                   >
-                    {eliminandoSeleccion ? 'Eliminando...' : 'Eliminar'}
+                    {eliminandoSeleccion ? t('Eliminando...') : t('Eliminar')}
                   </button>
                 </div>
               )}
@@ -1422,14 +1438,16 @@ export default function Stock() {
                 onClick={() => setModoSeleccion(true)}
                 className="self-start text-xs text-accent dark:text-dark-accent underline"
               >
-                Seleccionar varios
+                {t('Seleccionar varios')}
               </button>
             )
           )}
 
           {(loading || (vista === 'vendidos' && cargandoVendidos)) && (
             <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">
-              {vista === 'vendidos' && cargandoVendidos ? `Cargando el historial de vendidos${totalVendidos ? ` (${totalVendidos})` : ''}...` : 'Cargando...'}
+              {vista === 'vendidos' && cargandoVendidos
+                ? `${t('Cargando el historial de vendidos')}${totalVendidos ? ` (${totalVendidos})` : ''}...`
+                : t('Cargando...')}
             </p>
           )}
 
@@ -1439,20 +1457,20 @@ export default function Stock() {
                 <QoviState
                   escena="sinResultados"
                   tamano="sm"
-                  titulo="No encontramos resultados"
-                  descripcion={`Nada coincide con "${busqueda}" en esta sección.`}
-                  accionSecundaria={{ label: 'Limpiar búsqueda', onClick: () => setBusqueda('') }}
+                  titulo={t('No encontramos resultados')}
+                  descripcion={`${t('Nada coincide con')} "${busqueda}" ${t('en esta sección.')}`}
+                  accionSecundaria={{ label: t('Limpiar búsqueda'), onClick: () => setBusqueda('') }}
                 />
               ) : vista === 'vendidos' ? (
                 <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">
-                  Todavía no marcaste ningún dispositivo como vendido.
+                  {t('Todavía no marcaste ningún dispositivo como vendido.')}
                 </p>
               ) : (
                 <QoviState
                   escena="stockVacio"
-                  titulo="Todavía no hay productos en esta sección"
-                  descripcion="Cargá tu primer dispositivo para empezar a llevar el inventario."
-                  accionPrimaria={puedeAgregarStock ? { label: '+ Nuevo dispositivo', href: '/stock/nuevo' } : undefined}
+                  titulo={t('Todavía no hay productos en esta sección')}
+                  descripcion={t('Cargá tu primer dispositivo para empezar a llevar el inventario.')}
+                  accionPrimaria={puedeAgregarStock ? { label: `+ ${t('Nuevo dispositivo')}`, href: '/stock/nuevo' } : undefined}
                 />
               )}
             </>
@@ -1461,18 +1479,18 @@ export default function Stock() {
           {!loading && grupos.length > 0 && (
             <div className="flex items-center gap-3 text-xs text-muted dark:text-dark-text-secondary">
               <button onClick={expandirTodas} className="underline decoration-dotted hover:text-ink dark:hover:text-dark-text">
-                Expandir todas
+                {t('Expandir todas')}
               </button>
               <button onClick={contraerTodas} className="underline decoration-dotted hover:text-ink dark:hover:text-dark-text">
-                Contraer todas
+                {t('Contraer todas')}
               </button>
               {gruposVacios > 0 && (
                 <button
                   onClick={() => setMostrarVacias((v) => !v)}
                   className="ml-auto underline decoration-dotted hover:text-ink dark:hover:text-dark-text"
                 >
-                  {mostrarVacias ? 'Ocultar' : 'Mostrar'} {gruposVacios} carpeta{gruposVacios === 1 ? '' : 's'} vacía
-                  {gruposVacios === 1 ? '' : 's'}
+                  {mostrarVacias ? t('Ocultar') : t('Mostrar')} {gruposVacios}{' '}
+                  {gruposVacios === 1 ? t('carpeta vacía') : t('carpetas vacías')}
                 </button>
               )}
             </div>
@@ -1496,7 +1514,7 @@ export default function Stock() {
                     </span>
                     {enStock > 0 && enStock < 3 && (
                       <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-bad bg-bad/10 rounded-full px-2 py-0.5 shrink-0">
-                        <IconoChico nombre="alerta" /> Quedan {enStock} — reponer
+                        <IconoChico nombre="alerta" /> {t('Quedan')} {enStock} — {t('reponer')}
                       </span>
                     )}
                   </button>
@@ -1505,7 +1523,7 @@ export default function Stock() {
                       <button
                         onClick={() => setCarpetaMenuAbierta(carpetaMenuAbierta === modelo ? null : modelo)}
                         className="h-8 w-8 rounded-lg hover:bg-canvas dark:hover:bg-dark-bg flex items-center justify-center text-muted dark:text-dark-text-secondary"
-                        aria-label={`Más acciones de la carpeta ${modelo}`}
+                        aria-label={`${t('Más acciones de la carpeta')} ${modelo}`}
                       >
                         ···
                       </button>
@@ -1517,7 +1535,7 @@ export default function Stock() {
                               onClick={() => setCarpetaMenuAbierta(null)}
                               className="px-3.5 py-2.5 text-sm hover:bg-canvas dark:hover:bg-dark-bg"
                             >
-                              Agregar dispositivo acá
+                              {t('Agregar dispositivo acá')}
                             </Link>
                           )}
                           {puedeAgregarStock && (
@@ -1526,7 +1544,7 @@ export default function Stock() {
                               onClick={() => setCarpetaMenuAbierta(null)}
                               className="px-3.5 py-2.5 text-sm hover:bg-canvas dark:hover:bg-dark-bg"
                             >
-                              Renombrar / administrar
+                              {t('Renombrar / administrar')}
                             </Link>
                           )}
                           {puedeEliminar &&
@@ -1535,20 +1553,20 @@ export default function Stock() {
                                 onClick={() => eliminarCarpetaVacia(modelo)}
                                 className="px-3.5 py-2.5 text-sm text-left text-bad hover:bg-bad/5 border-t border-border dark:border-dark-border mt-1"
                               >
-                                Eliminar carpeta
+                                {t('Eliminar carpeta')}
                               </button>
                             ) : (
                               <>
                                 <p className="px-3.5 pt-2.5 pb-1 text-xs text-muted dark:text-dark-text-secondary border-t border-border dark:border-dark-border mt-1">
-                                  Tiene {items.length} dispositivo{items.length === 1 ? '' : 's'} — movelos o eliminalos para poder
-                                  borrar la carpeta.
+                                  {t('Tiene')} {items.length} {items.length === 1 ? t('dispositivo') : t('dispositivos')} —{' '}
+                                  {t('movelos o eliminalos para poder borrar la carpeta.')}
                                 </p>
                                 <button
                                   onClick={() => eliminarCarpeta(modelo, items)}
                                   disabled={eliminandoCarpeta === modelo}
                                   className="px-3.5 py-2.5 text-sm text-left text-bad hover:bg-bad/5 disabled:opacity-40"
                                 >
-                                  {eliminandoCarpeta === modelo ? 'Eliminando...' : `Eliminar los ${items.length} dispositivos`}
+                                  {eliminandoCarpeta === modelo ? t('Eliminando...') : `${t('Eliminar los')} ${items.length} ${t('dispositivos')}`}
                                 </button>
                               </>
                             ))}
@@ -1558,7 +1576,7 @@ export default function Stock() {
                   )}
                 </div>
                 {items.length === 0 && (
-                  <p className="text-xs text-muted dark:text-dark-text-secondary italic">Carpeta vacía, todavía sin dispositivos.</p>
+                  <p className="text-xs text-muted dark:text-dark-text-secondary italic">{t('Carpeta vacía, todavía sin dispositivos.')}</p>
                 )}
                 {expandido && <div className="flex flex-col gap-2">
                   {items.map((d) => {
@@ -1608,17 +1626,17 @@ export default function Stock() {
                           <div className="min-w-0">
                             <p className="text-sm font-medium flex items-center gap-1.5 flex-wrap">
                               <span>
-                                {d.capacidad_gb ? `${d.capacidad_gb} GB` : 'Capacidad s/d'}
-                                {d.color ? ` · ${d.color}` : ' · Sin color'}
+                                {d.capacidad_gb ? `${d.capacidad_gb} GB` : t('Capacidad s/d')}
+                                {d.color ? ` · ${d.color}` : ` · ${t('Sin color')}`}
                               </span>
                               <span className="text-xs text-muted dark:text-dark-text-secondary font-mono">
-                                {d.imei || 'sin IMEI'}
+                                {d.imei || t('sin IMEI')}
                               </span>
                               {d.salud_bateria != null && (
                                 <span className={d.salud_bateria < 80 ? 'inline-flex items-center gap-1 text-[10px] font-semibold text-warn bg-warn/10 rounded-full px-2 py-0.5' : 'text-xs text-muted dark:text-dark-text-secondary'}>
                                   {d.salud_bateria < 80 ? (
                                     <>
-                                      <IconoChico nombre="alerta" /> {d.salud_bateria}% batería
+                                      <IconoChico nombre="alerta" /> {d.salud_bateria}% {t('batería')}
                                     </>
                                   ) : (
                                     `${d.salud_bateria}%`
@@ -1627,7 +1645,7 @@ export default function Stock() {
                               )}
                               {sellado && (
                                 <span className="text-[10px] font-bold text-black bg-gradient-to-b from-amber-300 to-amber-500 border border-black/40 rounded-full px-2 py-0.5">
-                                  ✦ SELLADO
+                                  ✦ {t('SELLADO')}
                                 </span>
                               )}
                             </p>
@@ -1639,18 +1657,18 @@ export default function Stock() {
                                   </span>
                                 )}
                                 {d.detalles && d.agregado_por_nombre && ' · '}
-                                {d.agregado_por_nombre && `Agregado por ${d.agregado_por_nombre}`}
+                                {d.agregado_por_nombre && `${t('Agregado por')} ${d.agregado_por_nombre}`}
                               </p>
                             )}
                           </div>
                           <div className="text-right shrink-0">
                             <p className="text-sm font-medium">
                               {d.precio != null ? `$${d.precio.toLocaleString('es-AR')}` : (
-                                <span className="text-muted dark:text-dark-text-secondary font-normal">Sin precio</span>
+                                <span className="text-muted dark:text-dark-text-secondary font-normal">{t('Sin precio')}</span>
                               )}
                             </p>
                             {vista === 'vendidos' && (
-                              <p className="text-xs text-muted dark:text-dark-text-secondary">vendido</p>
+                              <p className="text-xs text-muted dark:text-dark-text-secondary">{t('vendido')}</p>
                             )}
                           </div>
                         </div>
@@ -1675,7 +1693,7 @@ export default function Stock() {
                             <button
                               onClick={() => setAccionAbiertaId(accionAbiertaId === d.id ? null : d.id)}
                               disabled={procesando}
-                              aria-label={`Más acciones de ${d.modelo || 'este dispositivo'}`}
+                              aria-label={`${t('Más acciones de')} ${d.modelo || t('este dispositivo')}`}
                               className="h-10 w-10 rounded-lg border border-border dark:border-dark-border text-muted dark:text-dark-text-secondary hover:bg-canvas dark:hover:bg-dark-bg flex items-center justify-center disabled:opacity-40"
                             >
                               {procesando ? '…' : '···'}
@@ -1687,14 +1705,14 @@ export default function Stock() {
                                   onClick={() => setAccionAbiertaId(null)}
                                   className="px-3.5 py-2.5 text-sm hover:bg-canvas dark:hover:bg-dark-bg"
                                 >
-                                  Ver ficha
+                                  {t('Ver ficha')}
                                 </Link>
                                 {puedeAgregarStock && (
                                   <button
                                     onClick={() => toggleStockDispositivo(d)}
                                     className="px-3.5 py-2.5 text-sm text-left hover:bg-canvas dark:hover:bg-dark-bg"
                                   >
-                                    {d.en_stock ? 'Marcar fuera de stock' : 'Volver a stock'}
+                                    {d.en_stock ? t('Marcar fuera de stock') : t('Volver a stock')}
                                   </button>
                                 )}
                                 {d.en_stock && puedeRecibirServicioTecnico && (
@@ -1702,7 +1720,7 @@ export default function Stock() {
                                     onClick={() => derivarDispositivoAServicio(d)}
                                     className="px-3.5 py-2.5 text-sm text-left hover:bg-canvas dark:hover:bg-dark-bg"
                                   >
-                                    Derivar a Servicio Técnico
+                                    {t('Derivar a Servicio Técnico')}
                                   </button>
                                 )}
                                 {puedeEliminar && (
@@ -1710,7 +1728,7 @@ export default function Stock() {
                                     onClick={() => eliminarDispositivo(d)}
                                     className="px-3.5 py-2.5 text-sm text-left text-bad hover:bg-bad/5 border-t border-border dark:border-dark-border mt-1"
                                   >
-                                    Eliminar del historial
+                                    {t('Eliminar del historial')}
                                   </button>
                                 )}
                               </div>
@@ -1735,21 +1753,21 @@ export default function Stock() {
               <input
                 value={nombreProducto}
                 onChange={(e) => setNombreProducto(e.target.value)}
-                placeholder="Nombre (ej. Funda, AirPods)"
+                placeholder={t('Nombre (ej. Funda, AirPods)')}
                 className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
               />
               <div className="flex gap-2">
                 <input
                   value={costoProducto}
                   onChange={(e) => setCostoProducto(sanitizarDecimal(e.target.value))}
-                  placeholder="Costo (lo que te costó)"
+                  placeholder={t('Costo (lo que te costó)')}
                   inputMode="decimal"
                   className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
                 />
                 <input
                   value={precioProducto}
                   onChange={(e) => setPrecioProducto(sanitizarDecimal(e.target.value))}
-                  placeholder="Precio (venta)"
+                  placeholder={t('Precio (venta)')}
                   inputMode="decimal"
                   className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
                 />
@@ -1763,7 +1781,7 @@ export default function Stock() {
                       const cat = categoriasStock.find((c) => c.id === e.target.value);
                       if (cat) setModalidadProducto(cat.modalidad_default);
                     }}
-                    aria-label="Categoría"
+                    aria-label={t('Categoría')}
                     className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
                   >
                     {categoriasStock.map((c) => (
@@ -1784,7 +1802,7 @@ export default function Stock() {
                             : 'text-muted dark:text-dark-text-secondary'
                         }`}
                       >
-                        {m === 'cantidad' ? 'Por cantidad' : 'Individual (serializado)'}
+                        {m === 'cantidad' ? t('Por cantidad') : t('Individual (serializado)')}
                       </button>
                     ))}
                   </div>
@@ -1793,13 +1811,13 @@ export default function Stock() {
                       <input
                         value={marcaProducto}
                         onChange={(e) => setMarcaProducto(e.target.value)}
-                        placeholder="Marca (opcional)"
+                        placeholder={t('Marca (opcional)')}
                         className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
                       />
                       <input
                         value={numeroSerieProducto}
                         onChange={(e) => setNumeroSerieProducto(e.target.value)}
-                        placeholder="Número de serie (opcional)"
+                        placeholder={t('Número de serie (opcional)')}
                         className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
                       />
                     </div>
@@ -1808,7 +1826,7 @@ export default function Stock() {
                       value={cantidadInicialProducto}
                       onChange={(e) => setCantidadInicialProducto(e.target.value.replace(/[^\d]/g, ''))}
                       inputMode="numeric"
-                      placeholder="Cantidad inicial"
+                      placeholder={t('Cantidad inicial')}
                       className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
                     />
                   )}
@@ -1817,7 +1835,7 @@ export default function Stock() {
                     onClick={() => setMostrarMasCamposProducto((v) => !v)}
                     className="self-start text-xs font-medium text-accent dark:text-dark-accent hover:underline"
                   >
-                    {mostrarMasCamposProducto ? '− Ocultar más campos' : '+ Más campos (SKU, proveedor, garantía…)'}
+                    {mostrarMasCamposProducto ? `− ${t('Ocultar más campos')}` : `+ ${t('Más campos (SKU, proveedor, garantía…)')}`}
                   </button>
                   {mostrarMasCamposProducto && (
                     <div className="flex flex-col gap-2 rounded-xl bg-canvas dark:bg-dark-bg p-3">
@@ -1825,20 +1843,20 @@ export default function Stock() {
                         <input
                           value={skuProducto}
                           onChange={(e) => setSkuProducto(e.target.value)}
-                          placeholder="SKU (opcional)"
+                          placeholder={t('SKU (opcional)')}
                           className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
                         />
                         <input
                           value={codigoBarrasProducto}
                           onChange={(e) => setCodigoBarrasProducto(e.target.value)}
-                          placeholder="Código de barras (opcional)"
+                          placeholder={t('Código de barras (opcional)')}
                           className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
                         />
                       </div>
                       <input
                         value={proveedorProducto}
                         onChange={(e) => setProveedorProducto(e.target.value)}
-                        placeholder="Proveedor (opcional)"
+                        placeholder={t('Proveedor (opcional)')}
                         list="proveedores-producto"
                         className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
                       />
@@ -1852,28 +1870,28 @@ export default function Stock() {
                           value={stockMinimoProducto}
                           onChange={(e) => setStockMinimoProducto(e.target.value.replace(/[^\d]/g, ''))}
                           inputMode="numeric"
-                          placeholder="Stock mínimo (opcional)"
+                          placeholder={t('Stock mínimo (opcional)')}
                           className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
                         />
                         <input
                           value={garantiaDiasProducto}
                           onChange={(e) => setGarantiaDiasProducto(e.target.value.replace(/[^\d]/g, ''))}
                           inputMode="numeric"
-                          placeholder="Garantía en días (opcional)"
+                          placeholder={t('Garantía en días (opcional)')}
                           className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
                         />
                       </div>
                       <textarea
                         value={descripcionProducto}
                         onChange={(e) => setDescripcionProducto(e.target.value)}
-                        placeholder="Descripción (opcional)"
+                        placeholder={t('Descripción (opcional)')}
                         rows={2}
                         className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm resize-none"
                       />
                       <textarea
                         value={notasProducto}
                         onChange={(e) => setNotasProducto(e.target.value)}
-                        placeholder="Notas internas (opcional)"
+                        placeholder={t('Notas internas (opcional)')}
                         rows={2}
                         className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm resize-none"
                       />
@@ -1886,7 +1904,7 @@ export default function Stock() {
                 onClick={agregarProducto}
                 className="w-full rounded-xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-3 text-sm font-medium text-white disabled:opacity-40"
               >
-                Agregar al catálogo
+                {t('Agregar al catálogo')}
               </button>
             </div>
           )}
@@ -1899,7 +1917,7 @@ export default function Stock() {
                   !filtroCategoriaProducto ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-canvas dark:bg-dark-bg text-muted dark:text-dark-text-secondary'
                 }`}
               >
-                Todas ({productos.length})
+                {t('Todas')} ({productos.length})
               </button>
               {categoriasStock
                 .filter((c) => (conteoPorCategoria.get(c.id) || 0) > 0)
@@ -1921,24 +1939,24 @@ export default function Stock() {
                     filtroCategoriaProducto === '__sin_categoria__' ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-canvas dark:bg-dark-bg text-muted dark:text-dark-text-secondary'
                   }`}
                 >
-                  Sin categoría ({conteoPorCategoria.get('__sin_categoria__') || 0})
+                  {t('Sin categoría')} ({conteoPorCategoria.get('__sin_categoria__') || 0})
                 </button>
               )}
             </div>
           )}
 
-          {loadingProductos && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Cargando...</p>}
+          {loadingProductos && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{t('Cargando...')}</p>}
           {!loadingProductos && productos.length === 0 && (
             <QoviState
               escena="stockVacio"
               tamano="sm"
-              titulo="Todavía no hay productos en esta sección"
-              descripcion="Cargá tu primer accesorio con el formulario de arriba."
+              titulo={t('Todavía no hay productos en esta sección')}
+              descripcion={t('Cargá tu primer accesorio con el formulario de arriba.')}
             />
           )}
           {!loadingProductos && productos.length > 0 && productosFiltrados.length === 0 && (
             <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-4">
-              No hay productos en esta categoría todavía.
+              {t('No hay productos en esta categoría todavía.')}
             </p>
           )}
 
@@ -1950,7 +1968,7 @@ export default function Stock() {
               >
                 {p.cantidad === 0 && (
                   <span className="absolute top-2 left-2 text-[10px] font-semibold text-bad bg-bad/10 rounded-full px-2 py-0.5 z-10">
-                    Sin stock
+                    {t('Sin stock')}
                   </span>
                 )}
                 <label className="cursor-pointer pt-1">
@@ -1980,7 +1998,7 @@ export default function Stock() {
                 <div className="leading-tight min-h-[2.2em]">
                   {p.precio != null && <p className="text-sm font-medium">${p.precio.toLocaleString('es-AR')}</p>}
                   {p.costo != null && (
-                    <p className="text-[11px] text-muted dark:text-dark-text-secondary">costo ${p.costo.toLocaleString('es-AR')}</p>
+                    <p className="text-[11px] text-muted dark:text-dark-text-secondary">{t('costo')} ${p.costo.toLocaleString('es-AR')}</p>
                   )}
                 </div>
 
@@ -1988,27 +2006,27 @@ export default function Stock() {
                   <div className="flex flex-col items-center gap-2 w-full pt-1 border-t border-border dark:border-dark-border mt-1">
                     <div className="flex flex-wrap items-center justify-center gap-1.5">
                       <label className="flex items-center gap-1 text-xs text-muted dark:text-dark-text-secondary">
-                        Costo
+                        {t('Costo')}
                         <input
                           value={valorCosto}
                           onChange={(e) => setValorCosto(sanitizarDecimal(e.target.value))}
                           inputMode="decimal"
-                          placeholder="Costo"
+                          placeholder={t('Costo')}
                           className="w-16 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-2 py-1 text-sm"
                         />
                       </label>
                       <label className="flex items-center gap-1 text-xs text-muted dark:text-dark-text-secondary">
-                        Precio
+                        {t('Precio')}
                         <input
                           value={valorPrecio}
                           onChange={(e) => setValorPrecio(sanitizarDecimal(e.target.value))}
                           inputMode="decimal"
-                          placeholder="Precio"
+                          placeholder={t('Precio')}
                           className="w-16 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-2 py-1 text-sm"
                         />
                       </label>
                       <label className="flex items-center gap-1 text-xs text-muted dark:text-dark-text-secondary">
-                        Cant.
+                        {t('Cant.')}
                         <input
                           value={valorCantidad}
                           onChange={(e) => setValorCantidad(e.target.value)}
@@ -2019,17 +2037,17 @@ export default function Stock() {
                       </label>
                     </div>
                     <button onClick={() => guardarCantidad(p)} className="text-xs text-accent dark:text-dark-accent underline">
-                      Guardar
+                      {t('Guardar')}
                     </button>
                   </div>
                 ) : (
                   <button onClick={() => abrirEdicionCantidad(p)} className="text-xs text-muted dark:text-dark-text-secondary underline decoration-dotted">
-                    Stock: <span className="font-medium text-ink dark:text-dark-text">{p.cantidad}</span>
+                    {t('Stock:')} <span className="font-medium text-ink dark:text-dark-text">{p.cantidad}</span>
                   </button>
                 )}
                 {puedeEliminar && (
                   <button onClick={() => eliminarProducto(p.id)} className="text-xs text-bad underline">
-                    Eliminar
+                    {t('Eliminar')}
                   </button>
                 )}
               </div>
@@ -2059,18 +2077,19 @@ function IndicadorCapital({
   total: number;
   tono?: string;
 }) {
+  const t = useT();
   const sinDatos = cobertura === 0;
   return (
     <div>
       {sinDatos ? (
-        <p className="text-lg font-display font-semibold text-muted dark:text-dark-text-secondary">Sin calcular</p>
+        <p className="text-lg font-display font-semibold text-muted dark:text-dark-text-secondary">{t('Sin calcular')}</p>
       ) : (
         <p className={`text-lg font-display font-semibold ${tono ?? ''}`}>${Math.round(valor).toLocaleString('es-AR')}</p>
       )}
       <p className="text-[11px] text-muted dark:text-dark-text-secondary">{etiqueta}</p>
       {!sinDatos && cobertura < total && (
         <p className="text-[10px] text-muted dark:text-dark-text-secondary">
-          {cobertura} de {total} incluidos
+          {cobertura} {t('de')} {total} {t('incluidos')}
         </p>
       )}
     </div>

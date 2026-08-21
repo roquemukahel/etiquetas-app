@@ -13,6 +13,7 @@ import SelectorColorAuto from '../../SelectorColorAuto';
 import { sanitizarDecimal } from '../../lib/numeros';
 import { limpiarImei } from '../../lib/imei';
 import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
+import { useT } from '../../lib/idioma';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 
@@ -40,6 +41,7 @@ export default function DetalleDispositivo() {
   const router = useRouter();
   const supabase = crearClienteNavegador();
   const actor = useActor();
+  const t = useT();
   const puedeEliminar = tienePermiso(actor, 'eliminar');
   const puedeRecibirServicioTecnico = tienePermiso(actor, 'recibir_servicio_tecnico');
   // Costo, proveedor y margen son datos sensibles del dueño — mismo permiso
@@ -100,7 +102,7 @@ export default function DetalleDispositivo() {
   }, [hayCambios]);
 
   const volverAtras = (e: React.MouseEvent) => {
-    if (hayCambios && !confirm('Tenés cambios sin guardar. ¿Salir igual?')) {
+    if (hayCambios && !confirm(t('Tenés cambios sin guardar. ¿Salir igual?'))) {
       e.preventDefault();
     }
   };
@@ -145,7 +147,7 @@ export default function DetalleDispositivo() {
       .eq('id', id);
 
     if (updateError) {
-      setError('No pudimos guardar los cambios: ' + updateError.message);
+      setError(`${t('No pudimos guardar los cambios:')} ` + updateError.message);
       setGuardando(false);
       return;
     }
@@ -197,13 +199,13 @@ export default function DetalleDispositivo() {
     // stock, quedaría "perdido" (ni en Stock ni en Servicio Técnico, sin
     // ninguna reparación real que lo respalde).
     if (insertError || !nueva) {
-      setError('No pudimos derivar el dispositivo a Servicio Técnico: ' + (insertError?.message ?? 'error desconocido'));
+      setError(`${t('No pudimos derivar el dispositivo a Servicio Técnico:')} ` + (insertError?.message ?? t('error desconocido')));
       setDerivando(false);
       return;
     }
     const { error: updateError } = await supabase.from('dispositivos').update({ en_stock: false }).eq('id', d.id);
     if (updateError) {
-      setError('Se creó la reparación pero no pudimos sacar el dispositivo de Stock: ' + updateError.message);
+      setError(`${t('Se creó la reparación pero no pudimos sacar el dispositivo de Stock:')} ` + updateError.message);
     }
     await registrarAuditoria(supabase, {
       accion: `derivó de Stock a Servicio Técnico un dispositivo (${nueva.numero_orden || ''}, ${d.modelo || 'sin modelo'}${d.imei ? `, IMEI ${d.imei}` : ''})`,
@@ -219,7 +221,7 @@ export default function DetalleDispositivo() {
     setEliminando(true);
     const { error: deleteError } = await supabase.from('dispositivos').delete().eq('id', id);
     if (deleteError) {
-      setError('No pudimos eliminar: ' + deleteError.message);
+      setError(`${t('No pudimos eliminar:')} ` + deleteError.message);
       setEliminando(false);
       setConfirmandoEliminar(false);
       return;
@@ -236,7 +238,7 @@ export default function DetalleDispositivo() {
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center">
-        <p className="text-sm text-muted dark:text-dark-text-secondary">Cargando...</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t('Cargando...')}</p>
       </main>
     );
   }
@@ -244,9 +246,9 @@ export default function DetalleDispositivo() {
   if (!d) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-3">
-        <p className="text-sm text-muted dark:text-dark-text-secondary">No encontramos ese dispositivo.</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t('No encontramos ese dispositivo.')}</p>
         <Link href="/stock" className="text-sm text-accent dark:text-dark-accent underline">
-          Volver al stock
+          {t('Volver al stock')}
         </Link>
       </main>
     );
@@ -259,8 +261,8 @@ export default function DetalleDispositivo() {
           &larr;
         </Link>
         <div className="min-w-0">
-          <p className="text-lg font-medium leading-tight truncate">{d.modelo || 'Dispositivo'}</p>
-          <p className="text-xs text-muted dark:text-dark-text-secondary font-mono truncate">{d.imei || 'sin IMEI'}</p>
+          <p className="text-lg font-medium leading-tight truncate">{d.modelo || t('Dispositivo')}</p>
+          <p className="text-xs text-muted dark:text-dark-text-secondary font-mono truncate">{d.imei || t('sin IMEI')}</p>
         </div>
         <div className="ml-auto flex items-center gap-2 shrink-0">
           <span
@@ -268,10 +270,10 @@ export default function DetalleDispositivo() {
               d.en_stock ? 'bg-good/15 text-good' : 'bg-black/5 dark:bg-white/10 text-muted dark:text-dark-text-secondary'
             }`}
           >
-            {d.en_stock ? 'Disponible' : 'Fuera de stock'}
+            {d.en_stock ? t('Disponible') : t('Fuera de stock')}
           </span>
           <button type="button" onClick={() => campo('en_stock', !d.en_stock)} className="text-xs text-accent dark:text-dark-accent underline whitespace-nowrap">
-            Cambiar estado
+            {t('Cambiar estado')}
           </button>
         </div>
       </header>
@@ -282,18 +284,18 @@ export default function DetalleDispositivo() {
         <div className="flex flex-col gap-0.5">
           {d.garantia_vencimiento && (
             <p className="text-xs text-muted dark:text-dark-text-secondary">
-              🛡️ Garantía hasta el {new Date(d.garantia_vencimiento + 'T00:00:00').toLocaleDateString('es-AR')}
+              🛡️ {t('Garantía hasta el')} {new Date(d.garantia_vencimiento + 'T00:00:00').toLocaleDateString('es-AR')}
             </p>
           )}
           {d.agregado_por_nombre && (
-            <p className="text-xs text-muted dark:text-dark-text-secondary">Agregado por {d.agregado_por_nombre}</p>
+            <p className="text-xs text-muted dark:text-dark-text-secondary">{t('Agregado por')} {d.agregado_por_nombre}</p>
           )}
         </div>
       )}
 
       <div className="grid md:grid-cols-2 gap-4">
-        <Seccion titulo="Identificación">
-          <Campo label="Modelo (carpeta)" valor={d.modelo ?? ''} onChange={(v) => campo('modelo', v)} listaId="carpetas-stock" />
+        <Seccion titulo={t('Identificación')}>
+          <Campo label={t('Modelo (carpeta)')} valor={d.modelo ?? ''} onChange={(v) => campo('modelo', v)} listaId="carpetas-stock" />
           <datalist id="carpetas-stock">
             {carpetas.map((c) => (
               <option key={c} value={c} />
@@ -301,13 +303,13 @@ export default function DetalleDispositivo() {
           </datalist>
           <div className="grid grid-cols-2 gap-3">
             <Campo label="IMEI" valor={d.imei ?? ''} onChange={(v) => campo('imei', v)} mono />
-            <Campo label="Serie / código (opcional)" valor={d.numero_serie ?? ''} onChange={(v) => campo('numero_serie', v)} mono />
+            <Campo label={t('Serie / código (opcional)')} valor={d.numero_serie ?? ''} onChange={(v) => campo('numero_serie', v)} mono />
           </div>
         </Seccion>
 
-        <Seccion titulo="Características">
+        <Seccion titulo={t('Características')}>
           <div>
-            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Almacenamiento</label>
+            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Almacenamiento')}</label>
             <div className="flex gap-2">
               {STORAGE_OPTIONS.map((gb) => (
                 <button
@@ -328,37 +330,37 @@ export default function DetalleDispositivo() {
             <input
               value={d.capacidad_gb != null && !STORAGE_OPTIONS.includes(d.capacidad_gb) ? String(d.capacidad_gb) : ''}
               onChange={(e) => campo('capacidad_gb', e.target.value ? Number(sanitizarDecimal(e.target.value)) : null)}
-              placeholder="Otro valor en GB"
+              placeholder={t('Otro valor en GB')}
               inputMode="numeric"
               className="mt-2 w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-2.5 text-sm"
             />
           </div>
 
           <Campo
-            label="Salud de batería (%)"
+            label={t('Salud de batería (%)')}
             valor={d.salud_bateria?.toString() ?? ''}
             onChange={(v) => campo('salud_bateria', v ? Number(v) : null)}
             numerico
           />
 
-          <SelectorColorAuto label="Color" modelo={d.modelo} value={d.color ?? ''} onChange={(v) => campo('color', v)} />
+          <SelectorColorAuto label={t('Color')} modelo={d.modelo} value={d.color ?? ''} onChange={(v) => campo('color', v)} />
 
           <SelectorEstadoDispositivo value={d.estado ?? 'usado'} onChange={(v) => campo('estado', v)} />
         </Seccion>
 
-        <Seccion titulo="Información comercial">
+        <Seccion titulo={t('Información comercial')}>
           {puedeVerComercial ? (
             <>
               <div className="grid grid-cols-2 gap-3">
-                <Campo label="Precio" valor={d.precio?.toString() ?? ''} onChange={(v) => campo('precio', v ? Number(v) : null)} numerico />
+                <Campo label={t('Precio')} valor={d.precio?.toString() ?? ''} onChange={(v) => campo('precio', v ? Number(v) : null)} numerico />
                 <Campo
-                  label="Costo (opcional)"
+                  label={t('Costo (opcional)')}
                   valor={d.costo?.toString() ?? ''}
                   onChange={(v) => campo('costo', v ? Number(v) : null)}
                   numerico
                 />
               </div>
-              <Campo label="Proveedor (opcional)" valor={d.proveedor ?? ''} onChange={(v) => campo('proveedor', v)} listaId="proveedores-stock-id" />
+              <Campo label={t('Proveedor (opcional)')} valor={d.proveedor ?? ''} onChange={(v) => campo('proveedor', v)} listaId="proveedores-stock-id" />
               <datalist id="proveedores-stock-id">
                 {proveedores.map((p) => (
                   <option key={p} value={p} />
@@ -367,22 +369,22 @@ export default function DetalleDispositivo() {
             </>
           ) : (
             <>
-              <Campo label="Precio" valor={d.precio?.toString() ?? ''} onChange={(v) => campo('precio', v ? Number(v) : null)} numerico />
+              <Campo label={t('Precio')} valor={d.precio?.toString() ?? ''} onChange={(v) => campo('precio', v ? Number(v) : null)} numerico />
               <p className="text-xs text-muted dark:text-dark-text-secondary">
-                Costo y proveedor son visibles solo para quienes pueden ver estadísticas.
+                {t('Costo y proveedor son visibles solo para quienes pueden ver estadísticas.')}
               </p>
             </>
           )}
         </Seccion>
 
-        <Seccion titulo="Observaciones y operación">
+        <Seccion titulo={t('Observaciones y operación')}>
           <div>
-            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Detalles del equipo (opcional)</label>
+            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Detalles del equipo (opcional)')}</label>
             <textarea
               value={d.detalles ?? ''}
               onChange={(e) => campo('detalles', e.target.value)}
               rows={2}
-              placeholder="Ej. módulo con detalle, carcasa con un rayón…"
+              placeholder={t('Ej. módulo con detalle, carcasa con un rayón…')}
               className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
             />
           </div>
@@ -394,7 +396,7 @@ export default function DetalleDispositivo() {
               onChange={(e) => campo('mostrar_en_stock_publico', e.target.checked)}
               className="h-5 w-5 accent-ink"
             />
-            <span className="text-sm">Mostrar en el stock público (si está activado en Configuración)</span>
+            <span className="text-sm">{t('Mostrar en el stock público (si está activado en Configuración)')}</span>
           </label>
 
           {d.en_stock && puedeRecibirServicioTecnico && (
@@ -404,17 +406,17 @@ export default function DetalleDispositivo() {
                   onClick={() => setDerivarAbierto(true)}
                   className="mt-3 w-full rounded-xl border border-border dark:border-dark-border py-2.5 text-center text-sm font-medium"
                 >
-                  Derivar a Servicio Técnico
+                  {t('Derivar a Servicio Técnico')}
                 </button>
               ) : (
                 <div className="mt-3 flex flex-col gap-2">
                   <p className="text-xs font-medium text-muted dark:text-dark-text-secondary">
-                    Este dispositivo va a salir de Stock y va a aparecer en Servicio Técnico.
+                    {t('Este dispositivo va a salir de Stock y va a aparecer en Servicio Técnico.')}
                   </p>
                   <textarea
                     value={derivarDetalles}
                     onChange={(e) => setDerivarDetalles(e.target.value)}
-                    placeholder="Detalles (ej. no enciende, pantalla rota)"
+                    placeholder={t('Detalles (ej. no enciende, pantalla rota)')}
                     rows={2}
                     className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                   />
@@ -423,14 +425,14 @@ export default function DetalleDispositivo() {
                       onClick={() => setDerivarAbierto(false)}
                       className="flex-1 rounded-lg border border-border dark:border-dark-border py-2 text-sm font-medium"
                     >
-                      Cancelar
+                      {t('Cancelar')}
                     </button>
                     <button
                       disabled={derivando}
                       onClick={derivarAServicioTecnico}
                       className="flex-1 rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
                     >
-                      {derivando ? 'Derivando...' : 'Confirmar'}
+                      {derivando ? t('Derivando...') : t('Confirmar')}
                     </button>
                   </div>
                 </div>
@@ -447,19 +449,19 @@ export default function DetalleDispositivo() {
             onClick={() => setZonaPeligroAbierta((v) => !v)}
             className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-bad"
           >
-            Zona de peligro
+            {t('Zona de peligro')}
             <span className="text-xs">{zonaPeligroAbierta ? '▾' : '▸'}</span>
           </button>
           {zonaPeligroAbierta && (
             <div className="px-4 pb-4 flex flex-col gap-2 border-t border-bad/15 dark:border-bad/20 pt-3">
               <p className="text-xs text-muted dark:text-dark-text-secondary">
-                Eliminar este dispositivo lo saca para siempre del historial de Stock. No se puede deshacer.
+                {t('Eliminar este dispositivo lo saca para siempre del historial de Stock. No se puede deshacer.')}
               </p>
               <button
                 onClick={() => setConfirmandoEliminar(true)}
                 className="self-start rounded-xl border border-bad/30 px-4 py-2 text-sm font-medium text-bad"
               >
-                Eliminar del historial
+                {t('Eliminar del historial')}
               </button>
             </div>
           )}
@@ -475,10 +477,10 @@ export default function DetalleDispositivo() {
             onClick={(e) => e.stopPropagation()}
             className="w-full sm:max-w-sm rounded-2xl bg-white dark:bg-dark-surface shadow-elevated p-5 flex flex-col gap-3"
           >
-            <p className="text-base font-semibold">¿Eliminar este dispositivo?</p>
+            <p className="text-base font-semibold">{t('¿Eliminar este dispositivo?')}</p>
             <p className="text-sm text-muted dark:text-dark-text-secondary">
-              Se borra {d.modelo || 'este equipo'}
-              {d.imei ? ` (IMEI ${d.imei})` : ''} del historial de Stock. Esta acción no se puede deshacer.
+              {t('Se borra')} {d.modelo || t('este equipo')}
+              {d.imei ? ` (IMEI ${d.imei})` : ''} {t('del historial de Stock. Esta acción no se puede deshacer.')}
             </p>
             <div className="flex gap-2 mt-1">
               <button
@@ -486,14 +488,14 @@ export default function DetalleDispositivo() {
                 onClick={() => setConfirmandoEliminar(false)}
                 className="flex-1 rounded-xl border border-border dark:border-dark-border py-2.5 text-sm font-medium disabled:opacity-40"
               >
-                Cancelar
+                {t('Cancelar')}
               </button>
               <button
                 disabled={eliminando}
                 onClick={handleEliminar}
                 className="flex-1 rounded-xl bg-bad text-white py-2.5 text-sm font-medium disabled:opacity-40"
               >
-                {eliminando ? 'Eliminando...' : 'Sí, eliminar'}
+                {eliminando ? t('Eliminando...') : t('Sí, eliminar')}
               </button>
             </div>
           </div>
@@ -501,13 +503,13 @@ export default function DetalleDispositivo() {
       )}
 
       <div className="fixed bottom-0 left-0 right-0 lg:left-64 z-10 bg-white dark:bg-dark-surface border-t border-border dark:border-dark-border px-6 py-3 flex items-center gap-3">
-        {hayCambios && <span className="text-xs text-warn">Cambios sin guardar</span>}
+        {hayCambios && <span className="text-xs text-warn">{t('Cambios sin guardar')}</span>}
         <button
           disabled={guardando}
           onClick={handleGuardar}
           className="ml-auto rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors px-6 py-3 text-sm font-medium text-white disabled:opacity-40"
         >
-          {guardando ? 'Guardando...' : 'Guardar cambios'}
+          {guardando ? t('Guardando...') : t('Guardar cambios')}
         </button>
       </div>
     </main>

@@ -21,10 +21,12 @@ import {
 } from '../../lib/categorias';
 import { Boton, BotonIcono } from '../../Boton';
 import { ICONOS } from '../../Iconos';
+import { useT } from '../../lib/idioma';
 
 export default function CategoriasStock() {
   const supabase = crearClienteNavegador();
   const actor = useActor();
+  const t = useT();
   const puede = tienePermiso(actor, 'agregar_stock');
 
   const [categorias, setCategorias] = useState<Categoria[]>([]);
@@ -107,8 +109,8 @@ export default function CategoriasStock() {
 
   const archivar = async (c: Categoria) => {
     const conteo = await contarEnCategoria(supabase, c.id);
-    const detalle = conteo.dispositivos + conteo.productos > 0 ? ` Tiene ${conteo.dispositivos} dispositivo(s) y ${conteo.productos} producto(s) cargados — se conservan intactos, solo deja de ofrecerse para elegir en formularios nuevos.` : '';
-    if (!confirm(`¿Archivar la categoría "${c.nombre}"?${detalle}`)) return;
+    const detalle = conteo.dispositivos + conteo.productos > 0 ? ` ${t('Tiene')} ${conteo.dispositivos} ${t('dispositivo(s) y')} ${conteo.productos} ${t('producto(s) cargados — se conservan intactos, solo deja de ofrecerse para elegir en formularios nuevos.')}` : '';
+    if (!confirm(`${t('¿Archivar la categoría')} "${c.nombre}"?${detalle}`)) return;
     setProcesando(c.id);
     setError(null);
     const resultado = await archivarCategoria(supabase, c.id);
@@ -137,9 +139,9 @@ export default function CategoriasStock() {
   if (!loading && !puede) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
-        <p className="text-sm text-muted dark:text-dark-text-secondary">No tenés permiso para gestionar categorías de stock.</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t('No tenés permiso para gestionar categorías de stock.')}</p>
         <Link href="/configuracion" className="text-sm text-accent dark:text-dark-accent underline">
-          Volver
+          {t('Volver')}
         </Link>
       </main>
     );
@@ -151,47 +153,46 @@ export default function CategoriasStock() {
         <Link href="/configuracion" className="text-2xl leading-none">
           &larr;
         </Link>
-        <span className="text-lg font-medium">Categorías de stock</span>
+        <span className="text-lg font-medium">{t('Categorías de stock')}</span>
       </header>
 
       <p className="text-xs text-muted dark:text-dark-text-secondary">
-        El stock ya no está limitado a celulares — creá las categorías que necesites (electrodomésticos, artículos del hogar, lo que vendas). "Celulares" y
-        "Accesorios" son las que ya tenías, migradas automáticamente sin perder nada.
+        {t('El stock ya no está limitado a celulares — creá las categorías que necesites (electrodomésticos, artículos del hogar, lo que vendas). "Celulares" y "Accesorios" son las que ya tenías, migradas automáticamente sin perder nada.')}
       </p>
 
       {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
 
       <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-4 flex flex-col gap-3">
-        <p className="text-sm font-medium">Nueva categoría</p>
+        <p className="text-sm font-medium">{t('Nueva categoría')}</p>
         <input
           value={nombreNueva}
           onChange={(e) => setNombreNueva(e.target.value)}
-          placeholder="Ej. Electrodomésticos"
+          placeholder={t('Ej. Electrodomésticos')}
           className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
         />
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Perfil de formulario</label>
+            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Perfil de formulario')}</label>
             <select value={perfilNueva} onChange={(e) => setPerfilNueva(e.target.value as PerfilCategoria)} className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-2 text-sm">
-              <option value="generico">Genérico</option>
-              <option value="dispositivo">Dispositivo (como celulares)</option>
+              <option value="generico">{t('Genérico')}</option>
+              <option value="dispositivo">{t('Dispositivo (como celulares)')}</option>
             </select>
           </div>
           <div>
-            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Control de stock</label>
+            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Control de stock')}</label>
             <select value={modalidadNueva} onChange={(e) => setModalidadNueva(e.target.value as ModalidadStock)} className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-2 text-sm">
-              <option value="cantidad">Por cantidad</option>
-              <option value="serializado">Individual (serializado)</option>
+              <option value="cantidad">{t('Por cantidad')}</option>
+              <option value="serializado">{t('Individual (serializado)')}</option>
             </select>
           </div>
         </div>
         <Boton variante="primario" tamano="sm" cargando={creando} disabled={!nombreNueva.trim()} onClick={crear} className="self-start">
-          + Crear categoría
+          + {t('Crear categoría')}
         </Boton>
       </div>
 
       {loading ? (
-        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-4">Cargando...</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-4">{t('Cargando...')}</p>
       ) : (
         <div className="flex flex-col gap-2">
           {categorias.map((c, idx) => (
@@ -219,39 +220,39 @@ export default function CategoriasStock() {
                   </button>
                 )}
                 <p className="text-[11px] text-muted dark:text-dark-text-secondary">
-                  {c.perfil_default === 'dispositivo' ? 'Perfil dispositivo' : 'Perfil genérico'} · {c.modalidad_default === 'serializado' ? 'Individual' : 'Por cantidad'}
-                  {!c.activa ? ' · Inactiva' : ''}
+                  {c.perfil_default === 'dispositivo' ? t('Perfil dispositivo') : t('Perfil genérico')} · {c.modalidad_default === 'serializado' ? t('Individual') : t('Por cantidad')}
+                  {!c.activa ? ` · ${t('Inactiva')}` : ''}
                 </p>
               </div>
               <div className="flex items-center gap-1 shrink-0">
                 {editandoId === c.id ? (
-                  <BotonIcono icono={ICONOS.check} ariaLabel="Guardar nombre" variante="ghost" tamano="sm" disabled={procesando === c.id} onClick={() => guardarNombre(c)} />
+                  <BotonIcono icono={ICONOS.check} ariaLabel={t('Guardar nombre')} variante="ghost" tamano="sm" disabled={procesando === c.id} onClick={() => guardarNombre(c)} />
                 ) : (
-                  <BotonIcono icono={ICONOS.editar} ariaLabel="Renombrar" variante="ghost" tamano="sm" onClick={() => { setEditandoId(c.id); setNombreEdit(c.nombre); }} />
+                  <BotonIcono icono={ICONOS.editar} ariaLabel={t('Renombrar')} variante="ghost" tamano="sm" onClick={() => { setEditandoId(c.id); setNombreEdit(c.nombre); }} />
                 )}
                 <label className="flex items-center gap-1 text-[11px] text-muted dark:text-dark-text-secondary px-1 cursor-pointer">
                   <input type="checkbox" checked={c.activa} disabled={procesando === c.id} onChange={() => toggleActiva(c)} className="h-3.5 w-3.5 accent-ink" />
-                  Activa
+                  {t('Activa')}
                 </label>
-                <BotonIcono icono={ICONOS.papelera} ariaLabel={`Archivar ${c.nombre}`} variante="peligro" tamano="sm" disabled={procesando === c.id} onClick={() => archivar(c)} />
+                <BotonIcono icono={ICONOS.papelera} ariaLabel={`${t('Archivar')} ${c.nombre}`} variante="peligro" tamano="sm" disabled={procesando === c.id} onClick={() => archivar(c)} />
               </div>
             </div>
           ))}
-          {categorias.length === 0 && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-2">Todavía no creaste ninguna categoría.</p>}
+          {categorias.length === 0 && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-2">{t('Todavía no creaste ninguna categoría.')}</p>}
         </div>
       )}
 
       {archivadas.length > 0 && (
         <div className="flex flex-col gap-2">
           <button onClick={() => setVerArchivadas((v) => !v)} className="text-xs text-accent dark:text-dark-accent underline self-start">
-            {verArchivadas ? 'Ocultar' : 'Ver'} archivadas ({archivadas.length})
+            {verArchivadas ? t('Ocultar') : t('Ver')} {t('archivadas')} ({archivadas.length})
           </button>
           {verArchivadas &&
             archivadas.map((c) => (
               <div key={c.id} className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-4 py-3 flex items-center justify-between gap-2 opacity-70">
                 <p className="text-sm">{c.nombre}</p>
                 <Boton variante="secundario" tamano="sm" disabled={procesando === c.id} onClick={() => restaurar(c)}>
-                  Restaurar
+                  {t('Restaurar')}
                 </Boton>
               </div>
             ))}

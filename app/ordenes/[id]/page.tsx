@@ -10,6 +10,7 @@ import { limpiarImei } from '../../lib/imei';
 import { asegurarModelo } from '../../lib/modelos';
 import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
+import { useT } from '../../lib/idioma';
 import { simboloMoneda } from '../../lib/monedas';
 import { sanitizarDecimal } from '../../lib/numeros';
 import { liberarRepuestosDeReparaciones } from '../../lib/repuestos';
@@ -132,6 +133,7 @@ export default function DetalleOrden() {
   const actor = useActor();
   const puedeEliminar = tienePermiso(actor, 'eliminar');
   const puedeRecibirServicioTecnico = tienePermiso(actor, 'recibir_servicio_tecnico');
+  const t = useT();
 
   const [orden, setOrden] = useState<Orden | null>(null);
   const [canjes, setCanjes] = useState<Canje[]>([]);
@@ -441,7 +443,7 @@ export default function DetalleOrden() {
       .select('id, modelo, capacidad_gb, color, imei, precio, salud_bateria')
       .eq('en_stock', true);
     if (fetchError) {
-      setError('No pudimos traer el stock: ' + fetchError.message);
+      setError(t('No pudimos traer el stock:') + ' ' + fetchError.message);
       return;
     }
     setDispositivosStockEdit((data as DispositivoStockEdit[]) ?? []);
@@ -488,7 +490,7 @@ export default function DetalleOrden() {
       .single();
     setCargandoDispositivoEdit(false);
     if (dErr || !data) {
-      setError('No pudimos cargar el dispositivo: ' + (dErr?.message || ''));
+      setError(t('No pudimos cargar el dispositivo:') + ' ' + (dErr?.message || ''));
       return;
     }
     await asegurarModelo(supabase, nuevoModeloDispEdit);
@@ -658,7 +660,7 @@ export default function DetalleOrden() {
         .update({ descripcion: despues.descripcion, cantidad: despues.cantidad, precio_unitario: despues.precio_unitario })
         .eq('id', cambio.id);
       if (itemUpdError) {
-        setError('No pudimos actualizar un ítem: ' + itemUpdError.message);
+        setError(t('No pudimos actualizar un ítem:') + ' ' + itemUpdError.message);
         setGuardando(false);
         return;
       }
@@ -685,8 +687,8 @@ export default function DetalleOrden() {
         }
         setError(
           reservaError
-            ? 'No pudimos reservar los dispositivos agregados: ' + reservaError.message
-            : 'Alguno de los dispositivos que agregaste ya se vendió (quizás desde otra pestaña). Sacalo de la lista y probá de nuevo.'
+            ? t('No pudimos reservar los dispositivos agregados:') + ' ' + reservaError.message
+            : t('Alguno de los dispositivos que agregaste ya se vendió (quizás desde otra pestaña). Sacalo de la lista y probá de nuevo.')
         );
         setGuardando(false);
         return;
@@ -701,7 +703,7 @@ export default function DetalleOrden() {
         if (dispositivoIdsNuevos.length > 0) {
           await supabase.from('dispositivos').update({ en_stock: true }).in('id', dispositivoIdsNuevos);
         }
-        setError('No pudimos agregar un ítem nuevo: ' + itemsInsError.message);
+        setError(t('No pudimos agregar un ítem nuevo:') + ' ' + itemsInsError.message);
         setGuardando(false);
         return;
       }
@@ -719,7 +721,7 @@ export default function DetalleOrden() {
         .delete()
         .in('id', canjesEliminados.map((c) => c.id));
       if (canjesDelError) {
-        setError('No pudimos quitar algún canje: ' + canjesDelError.message);
+        setError(t('No pudimos quitar algún canje:') + ' ' + canjesDelError.message);
         setGuardando(false);
         return;
       }
@@ -731,7 +733,7 @@ export default function DetalleOrden() {
         .update({ monto: c.monto ? Number(c.monto) : null })
         .eq('id', c.id);
       if (canjeUpdError) {
-        setError('No pudimos actualizar un canje: ' + canjeUpdError.message);
+        setError(t('No pudimos actualizar un canje:') + ' ' + canjeUpdError.message);
         setGuardando(false);
         return;
       }
@@ -752,7 +754,7 @@ export default function DetalleOrden() {
         }))
       );
       if (canjesInsError) {
-        setError('No pudimos agregar algún canje nuevo: ' + canjesInsError.message);
+        setError(t('No pudimos agregar algún canje nuevo:') + ' ' + canjesInsError.message);
         setGuardando(false);
         return;
       }
@@ -784,7 +786,7 @@ export default function DetalleOrden() {
       })
       .eq('id', id);
     if (updateError) {
-      setError('No pudimos guardar los cambios: ' + updateError.message);
+      setError(t('No pudimos guardar los cambios:') + ' ' + updateError.message);
       setGuardando(false);
       return;
     }
@@ -824,7 +826,7 @@ export default function DetalleOrden() {
       .update({ estado: nuevoEstado, fecha_entrega: nuevoEstado === 'entregado' ? new Date().toISOString() : null })
       .eq('id', id);
     if (updateError) {
-      setError('No pudimos actualizar el estado: ' + updateError.message);
+      setError(t('No pudimos actualizar el estado:') + ' ' + updateError.message);
       setGuardando(false);
       return;
     }
@@ -835,8 +837,8 @@ export default function DetalleOrden() {
   const handleCancelar = async () => {
     if (!orden || !puedeEliminar) return;
     const mensaje = yaDerivado
-      ? '¿Eliminar esta orden? También se va a borrar la reparación derivada en Servicio Técnico. Los dispositivos vendidos vuelven al stock. No se puede deshacer.'
-      : '¿Eliminar esta orden? Los dispositivos vendidos vuelven al stock. No se puede deshacer.';
+      ? t('¿Eliminar esta orden? También se va a borrar la reparación derivada en Servicio Técnico. Los dispositivos vendidos vuelven al stock. No se puede deshacer.')
+      : t('¿Eliminar esta orden? Los dispositivos vendidos vuelven al stock. No se puede deshacer.');
     if (!confirm(mensaje)) return;
     setGuardando(true);
     setError(null);
@@ -895,7 +897,7 @@ export default function DetalleOrden() {
     }
     const { error: deleteError } = await supabase.from('ordenes').delete().eq('id', id);
     if (deleteError) {
-      setError('No pudimos cancelar la orden: ' + deleteError.message);
+      setError(t('No pudimos cancelar la orden:') + ' ' + deleteError.message);
       setGuardando(false);
       return;
     }
@@ -913,7 +915,7 @@ export default function DetalleOrden() {
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center">
-        <p className="text-sm text-muted dark:text-dark-text-secondary">Cargando...</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t('Cargando...')}</p>
       </main>
     );
   }
@@ -921,7 +923,7 @@ export default function DetalleOrden() {
   if (canjesError) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-3">
-        <p className="text-sm text-bad">No pudimos cargar el plan canje de esta orden.</p>
+        <p className="text-sm text-bad">{t('No pudimos cargar el plan canje de esta orden.')}</p>
         <button
           onClick={() => {
             setCanjesError(false);
@@ -930,7 +932,7 @@ export default function DetalleOrden() {
           }}
           className="text-sm text-accent dark:text-dark-accent underline"
         >
-          Reintentar
+          {t('Reintentar')}
         </button>
       </main>
     );
@@ -939,9 +941,9 @@ export default function DetalleOrden() {
   if (!orden) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-3">
-        <p className="text-sm text-muted dark:text-dark-text-secondary">No encontramos esa orden.</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t('No encontramos esa orden.')}</p>
         <Link href="/ordenes" className="text-sm text-accent dark:text-dark-accent underline">
-          Volver a órdenes
+          {t('Volver a órdenes')}
         </Link>
       </main>
     );
@@ -954,13 +956,13 @@ export default function DetalleOrden() {
           <button onClick={() => setEditando(false)} className="text-2xl leading-none">
             &larr;
           </button>
-          <span className="text-lg font-medium">Editar orden</span>
+          <span className="text-lg font-medium">{t('Editar orden')}</span>
         </header>
 
         {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
 
         <div>
-          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Forma de pago</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Forma de pago')}</label>
           <div className="flex gap-2">
             {FORMAS_PAGO.map((f) => (
               <button
@@ -970,20 +972,20 @@ export default function DetalleOrden() {
                   formaPagoEdit === f ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
                 }`}
               >
-                {f}
+                {t(f)}
               </button>
             ))}
           </div>
         </div>
 
         <div>
-          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Vendedor</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Vendedor')}</label>
           <select
             value={vendedorEdit}
             onChange={(e) => setVendedorEdit(e.target.value)}
             className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
           >
-            <option value="">Sin asignar</option>
+            <option value="">{t('Sin asignar')}</option>
             {vendedores.map((v) => (
               <option key={v.id} value={v.id}>
                 {v.nombre}
@@ -994,11 +996,11 @@ export default function DetalleOrden() {
 
         {monedasDisponibles.length > 1 && (
           <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-3 flex flex-col gap-2">
-            <span className="text-sm font-medium">¿En qué moneda mostrar el monto en la boleta?</span>
+            <span className="text-sm font-medium">{t('¿En qué moneda mostrar el monto en la boleta?')}</span>
             <div className="flex gap-2">
               {([
-                { v: 'principal', t: `Solo ${simboloMoneda(monedasDisponibles[0])}` },
-                { v: 'ambas', t: 'Ambas' },
+                { v: 'principal', label: `${t('Solo')} ${simboloMoneda(monedasDisponibles[0])}` },
+                { v: 'ambas', label: t('Ambas') },
               ] as const).map((op) => (
                 <button
                   key={op.v}
@@ -1015,24 +1017,24 @@ export default function DetalleOrden() {
                       : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
                   }`}
                 >
-                  {op.t}
+                  {op.label}
                 </button>
               ))}
             </div>
             {muestraSecundariaEdit && (
               <>
                 <label className="text-xs text-muted dark:text-dark-text-secondary mt-1">
-                  Monto en {monedasDisponibles[1]} (con tu tipo de cambio, lo podés corregir)
+                  {t('Monto en')} {monedasDisponibles[1]} {t('(con tu tipo de cambio, lo podés corregir)')}
                 </label>
                 <input
                   value={montoSecundarioEdit}
                   onChange={(e) => setMontoSecundarioEdit(sanitizarDecimal(e.target.value))}
                   inputMode="decimal"
-                  placeholder={`Monto en ${monedasDisponibles[1]}`}
+                  placeholder={`${t('Monto en')} ${monedasDisponibles[1]}`}
                   className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
                 />
                 <p className="text-xs text-muted dark:text-dark-text-secondary">
-                  Las Estadísticas siempre se calculan en {monedasDisponibles[0]}. Esto solo cambia cómo se ve la boleta.
+                  {t('Las Estadísticas siempre se calculan en')} {monedasDisponibles[0]}. {t('Esto solo cambia cómo se ve la boleta.')}
                 </p>
               </>
             )}
@@ -1046,12 +1048,12 @@ export default function DetalleOrden() {
                 <input
                   value={i.descripcion}
                   onChange={(e) => actualizarItemEdit(i.id, 'descripcion', e.target.value)}
-                  placeholder={i.esNuevo ? 'Accesorio o ítem (ej. Funda, Vidrio templado)' : undefined}
+                  placeholder={i.esNuevo ? t('Accesorio o ítem (ej. Funda, Vidrio templado)') : undefined}
                   className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                 />
                 {i.esNuevo && (
                   <button onClick={() => quitarItemEdit(i.id)} className="text-xs text-bad underline shrink-0">
-                    Quitar
+                    {t('Quitar')}
                   </button>
                 )}
               </div>
@@ -1060,7 +1062,7 @@ export default function DetalleOrden() {
                   value={i.cantidad}
                   onChange={(e) => actualizarItemEdit(i.id, 'cantidad', e.target.value)}
                   disabled={i.tipo === 'dispositivo'}
-                  title={i.tipo === 'dispositivo' ? 'Un dispositivo del stock siempre se vende de a uno' : undefined}
+                  title={i.tipo === 'dispositivo' ? t('Un dispositivo del stock siempre se vende de a uno') : undefined}
                   inputMode="numeric"
                   className="w-16 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded px-2 py-1 text-center disabled:opacity-50"
                 />
@@ -1075,16 +1077,16 @@ export default function DetalleOrden() {
               </div>
               {i.tipo === 'dispositivo' && (
                 <div className="flex items-center gap-2 text-xs">
-                  <span className="text-muted dark:text-dark-text-secondary">Batería del equipo</span>
+                  <span className="text-muted dark:text-dark-text-secondary">{t('Batería del equipo')}</span>
                   <input
                     value={i.bateria}
                     onChange={(e) => actualizarItemEdit(i.id, 'bateria', e.target.value.replace(/[^\d]/g, '').slice(0, 3))}
                     inputMode="numeric"
-                    placeholder="ej. 89"
+                    placeholder={t('ej. 89')}
                     className="w-20 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded px-2 py-1 text-center"
                   />
                   <span className="text-muted dark:text-dark-text-secondary">%</span>
-                  <span className="text-[10px] text-muted dark:text-dark-text-secondary">(aparece en la boleta)</span>
+                  <span className="text-[10px] text-muted dark:text-dark-text-secondary">{t('(aparece en la boleta)')}</span>
                 </div>
               )}
             </div>
@@ -1095,13 +1097,13 @@ export default function DetalleOrden() {
               onClick={agregarItemEdit}
               className="self-start text-xs text-accent dark:text-dark-accent underline"
             >
-              + Agregar ítem / accesorio
+              + {t('Agregar ítem / accesorio')}
             </button>
             <button
               onClick={() => (agregandoDispositivoEdit ? setAgregandoDispositivoEdit(false) : abrirDispositivoEdit())}
               className="self-start text-xs text-accent dark:text-dark-accent underline"
             >
-              {agregandoDispositivoEdit ? 'Cancelar' : '+ Agregar dispositivo'}
+              {agregandoDispositivoEdit ? t('Cancelar') : `+ ${t('Agregar dispositivo')}`}
             </button>
           </div>
 
@@ -1114,7 +1116,7 @@ export default function DetalleOrden() {
                     modoDispositivoEdit === 'stock' ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                   }`}
                 >
-                  Del stock
+                  {t('Del stock')}
                 </button>
                 <button
                   onClick={() => setModoDispositivoEdit('nuevo')}
@@ -1122,7 +1124,7 @@ export default function DetalleOrden() {
                     modoDispositivoEdit === 'nuevo' ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                   }`}
                 >
-                  Cargar nuevo
+                  {t('Cargar nuevo')}
                 </button>
               </div>
 
@@ -1131,12 +1133,12 @@ export default function DetalleOrden() {
                   <input
                     value={buscarDispositivoEdit}
                     onChange={(e) => setBuscarDispositivoEdit(e.target.value)}
-                    placeholder="Buscar por modelo o IMEI..."
+                    placeholder={t('Buscar por modelo o IMEI...')}
                     className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                   />
                   <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
                     {dispositivosStockEditFiltrados.length === 0 && (
-                      <p className="text-xs text-muted dark:text-dark-text-secondary text-center py-2">No hay dispositivos disponibles.</p>
+                      <p className="text-xs text-muted dark:text-dark-text-secondary text-center py-2">{t('No hay dispositivos disponibles.')}</p>
                     )}
                     {dispositivosStockEditFiltrados.map((d) => (
                       <button
@@ -1167,7 +1169,7 @@ export default function DetalleOrden() {
                   <input
                     value={nuevoModeloDispEdit}
                     onChange={(e) => setNuevoModeloDispEdit(e.target.value)}
-                    placeholder="Modelo (ej. iPhone 13)"
+                    placeholder={t('Modelo (ej. iPhone 13)')}
                     className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                   />
                   <div className="flex gap-2">
@@ -1183,18 +1185,18 @@ export default function DetalleOrden() {
                       </button>
                     ))}
                   </div>
-                  <SelectorColorAuto label="Color" modelo={nuevoModeloDispEdit} value={nuevoColorDispEdit} onChange={setNuevoColorDispEdit} />
+                  <SelectorColorAuto label={t('Color')} modelo={nuevoModeloDispEdit} value={nuevoColorDispEdit} onChange={setNuevoColorDispEdit} />
                   <SelectorEstadoDispositivo value={nuevoEstadoDispEdit} onChange={setNuevoEstadoDispEdit} />
                   <input
                     value={nuevoImeiDispEdit}
                     onChange={(e) => setNuevoImeiDispEdit(e.target.value)}
-                    placeholder="IMEI"
+                    placeholder={t('IMEI')}
                     className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm font-mono"
                   />
                   <input
                     value={nuevoPrecioDispEdit}
                     onChange={(e) => setNuevoPrecioDispEdit(sanitizarDecimal(e.target.value))}
-                    placeholder="Precio"
+                    placeholder={t('Precio')}
                     inputMode="decimal"
                     className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                   />
@@ -1203,7 +1205,7 @@ export default function DetalleOrden() {
                     onClick={agregarDispositivoNuevoEdit}
                     className="w-full rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
                   >
-                    {cargandoDispositivoEdit ? 'Agregando...' : 'Agregar al carrito'}
+                    {cargandoDispositivoEdit ? t('Agregando...') : t('Agregar al carrito')}
                   </button>
                 </div>
               )}
@@ -1212,7 +1214,7 @@ export default function DetalleOrden() {
         </div>
 
         <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-3 flex flex-col gap-2">
-          <p className="text-xs font-medium text-muted dark:text-dark-text-secondary">Plan canje</p>
+          <p className="text-xs font-medium text-muted dark:text-dark-text-secondary">{t('Plan canje')}</p>
 
           {canjesEdit.length > 0 && (
             <div className="flex flex-col gap-2">
@@ -1221,11 +1223,11 @@ export default function DetalleOrden() {
                   <div className="min-w-0">
                     <p className="text-sm font-medium truncate">
                       {canjesEdit.length > 1 ? `${idx + 1}. ` : ''}
-                      {c.modelo || 'Sin modelo'}
+                      {c.modelo || t('Sin modelo')}
                       {c.capacidad_gb ? ` · ${c.capacidad_gb}GB` : ''}
                       {c.color ? ` · ${c.color}` : ''}
                     </p>
-                    {c.imei && <p className="text-xs text-muted dark:text-dark-text-secondary">IMEI: {c.imei}</p>}
+                    {c.imei && <p className="text-xs text-muted dark:text-dark-text-secondary">{t('IMEI:')} {c.imei}</p>}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <span className="text-xs">$</span>
@@ -1236,7 +1238,7 @@ export default function DetalleOrden() {
                       className="w-20 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded px-2 py-1 text-sm"
                     />
                     <button onClick={() => quitarCanjeEdit(c.tempId)} className="text-xs text-bad underline">
-                      Quitar
+                      {t('Quitar')}
                     </button>
                   </div>
                 </div>
@@ -1249,7 +1251,7 @@ export default function DetalleOrden() {
               <input
                 value={canjeModelo}
                 onChange={(e) => setCanjeModelo(e.target.value)}
-                placeholder="Modelo (ej. iPhone 11)"
+                placeholder={t('Modelo (ej. iPhone 11)')}
                 className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
               />
               <div className="flex gap-2">
@@ -1270,13 +1272,13 @@ export default function DetalleOrden() {
                 <input
                   value={canjeImei}
                   onChange={(e) => setCanjeImei(e.target.value)}
-                  placeholder="IMEI"
+                  placeholder={t('IMEI')}
                   className="flex-1 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm font-mono"
                 />
                 <input
                   value={canjeBateria}
                   onChange={(e) => setCanjeBateria(e.target.value)}
-                  placeholder="Batería %"
+                  placeholder={t('Batería %')}
                   inputMode="numeric"
                   className="w-24 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                 />
@@ -1284,14 +1286,14 @@ export default function DetalleOrden() {
               <input
                 value={canjeMonto}
                 onChange={(e) => setCanjeMonto(sanitizarDecimal(e.target.value))}
-                placeholder="Monto que se le reconoce"
+                placeholder={t('Monto que se le reconoce')}
                 inputMode="decimal"
                 className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
               />
               <textarea
                 value={canjeDetalles}
                 onChange={(e) => setCanjeDetalles(e.target.value)}
-                placeholder="Detalles (opcional)"
+                placeholder={t('Detalles (opcional)')}
                 rows={2}
                 className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
               />
@@ -1300,14 +1302,14 @@ export default function DetalleOrden() {
                   onClick={() => setAgregandoCanje(false)}
                   className="flex-1 rounded-lg border border-border dark:border-dark-border py-2 text-sm font-medium"
                 >
-                  Cancelar
+                  {t('Cancelar')}
                 </button>
                 <button
                   disabled={!canjeModelo.trim()}
                   onClick={agregarCanjeEdit}
                   className="flex-1 rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
                 >
-                  Agregar
+                  {t('Agregar')}
                 </button>
               </div>
             </div>
@@ -1316,14 +1318,14 @@ export default function DetalleOrden() {
               onClick={() => setAgregandoCanje(true)}
               className="self-start text-xs text-accent dark:text-dark-accent underline"
             >
-              + Agregar equipo de canje
+              + {t('Agregar equipo de canje')}
             </button>
           )}
         </div>
 
         <div className="flex gap-2">
           <div className="flex-1">
-            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Anticipo</label>
+            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Anticipo')}</label>
             <input
               value={anticipoEdit}
               onChange={(e) => setAnticipoEdit(sanitizarDecimal(e.target.value))}
@@ -1332,7 +1334,7 @@ export default function DetalleOrden() {
             />
           </div>
           <div className="flex-1">
-            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Impuesto %</label>
+            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Impuesto %')}</label>
             <input
               value={impuestoEdit}
               onChange={(e) => setImpuestoEdit(sanitizarDecimal(e.target.value))}
@@ -1343,7 +1345,7 @@ export default function DetalleOrden() {
         </div>
 
         <div>
-          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Nota para la boleta</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Nota para la boleta')}</label>
           <textarea
             value={notaEdit}
             onChange={(e) => setNotaEdit(e.target.value)}
@@ -1359,17 +1361,17 @@ export default function DetalleOrden() {
             onChange={(e) => setIncluirGarantiaEdit(e.target.checked)}
             className="h-5 w-5 accent-ink"
           />
-          <span className="text-sm font-medium">Incluir el texto de garantía en la boleta</span>
+          <span className="text-sm font-medium">{t('Incluir el texto de garantía en la boleta')}</span>
         </label>
 
         {(tieneTrabajo || orden.aclaraciones_tecnico) && (
           <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-3 flex flex-col gap-2">
-            <label className="text-xs font-medium text-muted dark:text-dark-text-secondary">Aclaraciones del técnico (salen en la boleta)</label>
+            <label className="text-xs font-medium text-muted dark:text-dark-text-secondary">{t('Aclaraciones del técnico (salen en la boleta)')}</label>
             <textarea
               value={aclaracionesEdit}
               onChange={(e) => setAclaracionesEdit(e.target.value)}
               rows={2}
-              placeholder="Lo que el técnico aclara para el cliente (diagnóstico, qué se hizo, pruebas…)"
+              placeholder={t('Lo que el técnico aclara para el cliente (diagnóstico, qué se hizo, pruebas…)')}
               className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
             />
             <label className="flex items-center gap-2 cursor-pointer text-sm">
@@ -1379,13 +1381,13 @@ export default function DetalleOrden() {
                 onChange={(e) => setIncluirAclaracionesEdit(e.target.checked)}
                 className="h-4 w-4 accent-ink"
               />
-              Incluir estas aclaraciones en la boleta
+              {t('Incluir estas aclaraciones en la boleta')}
             </label>
           </div>
         )}
 
         <div className="flex items-center justify-between text-lg font-medium border-t border-border dark:border-dark-border pt-3">
-          <span>Total</span>
+          <span>{t('Total')}</span>
           <span>${totalEdit.toLocaleString('es-AR')}</span>
         </div>
 
@@ -1394,7 +1396,7 @@ export default function DetalleOrden() {
           onClick={guardarEdicion}
           className="mt-auto w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
         >
-          {guardando ? 'Guardando...' : 'Guardar cambios'}
+          {guardando ? t('Guardando...') : t('Guardar cambios')}
         </button>
       </main>
     );
@@ -1406,9 +1408,9 @@ export default function DetalleOrden() {
         <Link href="/ordenes" className="text-2xl leading-none">
           &larr;
         </Link>
-        <span className="text-lg font-medium mr-auto">Orden</span>
+        <span className="text-lg font-medium mr-auto">{t('Orden')}</span>
         <button onClick={empezarEdicion} className="text-xs text-accent dark:text-dark-accent underline">
-          Editar
+          {t('Editar')}
         </button>
       </header>
 
@@ -1416,38 +1418,38 @@ export default function DetalleOrden() {
 
       <div className="rounded-xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border px-4 py-3 text-sm flex flex-col gap-1">
         <p>
-          <span className="text-muted dark:text-dark-text-secondary">Cliente:</span>{' '}
-          {orden.clientes ? `${orden.clientes.nombre} ${orden.clientes.apellido || ''}` : 'Sin cliente'}
+          <span className="text-muted dark:text-dark-text-secondary">{t('Cliente:')}</span>{' '}
+          {orden.clientes ? `${orden.clientes.nombre} ${orden.clientes.apellido || ''}` : t('Sin cliente')}
         </p>
         {orden.clientes?.telefono && (
           <p>
-            <span className="text-muted dark:text-dark-text-secondary">Teléfono:</span> {orden.clientes.telefono}
+            <span className="text-muted dark:text-dark-text-secondary">{t('Teléfono:')}</span> {orden.clientes.telefono}
           </p>
         )}
         {orden.vendedores?.nombre && (
           <p className="flex items-center gap-1.5">
-            <span className="text-muted dark:text-dark-text-secondary">Vendedor:</span>
+            <span className="text-muted dark:text-dark-text-secondary">{t('Vendedor:')}</span>
             <Avatar src={orden.vendedores.foto_url} nombre={orden.vendedores.nombre} size={34} /> {orden.vendedores.nombre}
           </p>
         )}
         <p>
-          <span className="text-muted dark:text-dark-text-secondary">Forma de pago:</span> {orden.forma_pago}
+          <span className="text-muted dark:text-dark-text-secondary">{t('Forma de pago:')}</span> {orden.forma_pago && t(orden.forma_pago)}
         </p>
         {orden.total != null && (
           <p>
-            <span className="text-muted dark:text-dark-text-secondary">Total:</span> ${orden.total.toLocaleString('es-AR')}
+            <span className="text-muted dark:text-dark-text-secondary">{t('Total:')}</span> ${orden.total.toLocaleString('es-AR')}
           </p>
         )}
         {orden.nota && (
           <p>
-            <span className="text-muted dark:text-dark-text-secondary">Nota:</span> {orden.nota}
+            <span className="text-muted dark:text-dark-text-secondary">{t('Nota:')}</span> {orden.nota}
           </p>
         )}
       </div>
 
       {orden.aclaraciones_tecnico && (
         <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex flex-col gap-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted dark:text-dark-text-secondary">Aclaraciones del técnico</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted dark:text-dark-text-secondary">{t('Aclaraciones del técnico')}</p>
           <p className="text-sm whitespace-pre-wrap">{orden.aclaraciones_tecnico}</p>
           <label className="flex items-center gap-2 cursor-pointer text-sm border-t border-border dark:border-dark-border pt-2">
             <input
@@ -1460,7 +1462,7 @@ export default function DetalleOrden() {
               }}
               className="h-4 w-4 accent-ink"
             />
-            Incluir estas aclaraciones en la boleta
+            {t('Incluir estas aclaraciones en la boleta')}
           </label>
         </div>
       )}
@@ -1481,14 +1483,14 @@ export default function DetalleOrden() {
 
       {canjes.length > 0 && (
         <div className="flex flex-col gap-2">
-          <p className="text-xs font-medium text-muted dark:text-dark-text-secondary">Plan canje</p>
+          <p className="text-xs font-medium text-muted dark:text-dark-text-secondary">{t('Plan canje')}</p>
           {canjes.map((c) => (
             <div
               key={c.id}
               className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex items-center justify-between text-sm"
             >
               <span>
-                {c.modelo || 'Sin modelo'}
+                {c.modelo || t('Sin modelo')}
                 {c.capacidad_gb ? ` · ${c.capacidad_gb}GB` : ''}
                 {c.color ? ` · ${c.color}` : ''}
                 {c.imei ? ` · IMEI ${c.imei}` : ''}
@@ -1503,14 +1505,14 @@ export default function DetalleOrden() {
         href={`/ordenes/${orden.id}/boleta`}
         className="w-full rounded-2xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium"
       >
-        Ver boleta
+        {t('Ver boleta')}
       </Link>
 
       {tieneTrabajo && yaDerivado && (
         <p className="text-xs text-muted dark:text-dark-text-secondary text-center">
-          Este equipo ya fue derivado a{' '}
+          {t('Este equipo ya fue derivado a')}{' '}
           <Link href="/servicio-tecnico" className="text-accent dark:text-dark-accent underline">
-            Servicio Técnico
+            {t('Servicio Técnico')}
           </Link>
           .
         </p>
@@ -1521,17 +1523,17 @@ export default function DetalleOrden() {
           onClick={abrirDerivar}
           className="w-full rounded-2xl border-2 border-amber-400 bg-amber-50 text-amber-900 dark:bg-amber-400/10 dark:text-amber-300 dark:border-amber-400/50 py-3 text-center text-sm font-semibold flex items-center justify-center gap-1.5"
         >
-          🔧 Derivar a Servicio Técnico
+          🔧 {t('Derivar a Servicio Técnico')}
         </button>
       )}
 
       {derivarAbierto && (
         <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-3 flex flex-col gap-2">
-          <p className="text-xs font-medium text-muted dark:text-dark-text-secondary">Datos del equipo a derivar</p>
+          <p className="text-xs font-medium text-muted dark:text-dark-text-secondary">{t('Datos del equipo a derivar')}</p>
           <input
             value={derivarModelo}
             onChange={(e) => setDerivarModelo(e.target.value)}
-            placeholder="Modelo (ej. iPhone 13)"
+            placeholder={t('Modelo (ej. iPhone 13)')}
             className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
           />
           <div className="flex gap-2">
@@ -1551,13 +1553,13 @@ export default function DetalleOrden() {
           <input
             value={derivarImei}
             onChange={(e) => setDerivarImei(e.target.value)}
-            placeholder="IMEI"
+            placeholder={t('IMEI')}
             className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm font-mono"
           />
           <textarea
             value={derivarDetalles}
             onChange={(e) => setDerivarDetalles(e.target.value)}
-            placeholder="Detalles (ej. no enciende, pantalla rota)"
+            placeholder={t('Detalles (ej. no enciende, pantalla rota)')}
             rows={2}
             className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
           />
@@ -1566,21 +1568,21 @@ export default function DetalleOrden() {
               onClick={() => setDerivarAbierto(false)}
               className="flex-1 rounded-lg border border-border dark:border-dark-border py-2 text-sm font-medium"
             >
-              Cancelar
+              {t('Cancelar')}
             </button>
             <button
               disabled={!derivarModelo.trim() || derivando}
               onClick={derivarAServicioTecnico}
               className="flex-1 rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
             >
-              {derivando ? 'Derivando...' : 'Derivar a Servicio Técnico'}
+              {derivando ? t('Derivando...') : t('Derivar a Servicio Técnico')}
             </button>
           </div>
         </div>
       )}
 
       <div>
-        <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Estado</label>
+        <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Estado')}</label>
         <div className="flex gap-2">
           {ESTADOS.map((e) => (
             <button
@@ -1591,7 +1593,7 @@ export default function DetalleOrden() {
                 orden.estado === e ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
               }`}
             >
-              {e}
+              {t(e)}
             </button>
           ))}
         </div>
@@ -1603,7 +1605,7 @@ export default function DetalleOrden() {
           onClick={handleCancelar}
           className="mt-auto w-full rounded-2xl border border-bad/30 py-3 text-center text-sm font-medium text-bad disabled:opacity-40"
         >
-          Eliminar orden
+          {t('Eliminar orden')}
         </button>
       )}
     </main>

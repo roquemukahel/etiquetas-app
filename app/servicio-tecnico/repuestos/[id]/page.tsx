@@ -14,6 +14,7 @@ import { armarLinkWhatsApp, mensajeConsultaProveedor } from '../../../lib/whatsa
 import { extraerStockInsuficiente } from '../../../lib/repuestos';
 import Modal from '../../../Modal';
 import { ICONOS } from '../../../Iconos';
+import { useT } from '../../../lib/idioma';
 
 type Proveedor = { id: string; nombre: string; telefono: string | null };
 type Repuesto = { id: string; nombre: string };
@@ -40,17 +41,18 @@ type FormState = {
 
 const FORM_VACIO: FormState = { nombre: '', precio: '', disponible: true, tiempo_entrega_dias: '', garantia_dias: '', observaciones: '' };
 
-function antiguedad(iso: string): string {
+function antiguedad(iso: string, t: (texto: string) => string): string {
   const dias = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
-  if (dias <= 0) return 'hoy';
-  if (dias === 1) return 'hace 1 día';
-  if (dias < 30) return `hace ${dias} días`;
+  if (dias <= 0) return t('hoy');
+  if (dias === 1) return t('hace 1 día');
+  if (dias < 30) return `${t('hace')} ${dias} ${t('días')}`;
   const meses = Math.floor(dias / 30);
-  return `hace ${meses} mes${meses === 1 ? '' : 'es'}`;
+  return `${t('hace')} ${meses} ${meses === 1 ? t('mes') : t('meses')}`;
 }
 
 export default function ProveedorRepuestos() {
   const { id } = useParams<{ id: string }>();
+  const t = useT();
   const supabase = crearClienteNavegador();
   const actor = useActor();
   const puedeGestionar = tienePermiso(actor, 'gestionar_servicio_tecnico');
@@ -108,7 +110,7 @@ export default function ProveedorRepuestos() {
 
   const eliminarProveedor = async () => {
     if (!proveedor || !puedeEliminar) return;
-    if (!confirm(`¿Eliminar a "${proveedor.nombre}"? También se van a borrar los precios que tenga cargados.`)) return;
+    if (!confirm(`${t('¿Eliminar a')} "${proveedor.nombre}"? ${t('También se van a borrar los precios que tenga cargados.')}`)) return;
     await supabase.from('proveedores_repuestos').delete().eq('id', proveedor.id);
     await registrarAuditoria(supabase, {
       accion: `eliminó un proveedor de repuestos (${proveedor.nombre})`,
@@ -119,7 +121,7 @@ export default function ProveedorRepuestos() {
     window.location.href = '/servicio-tecnico/repuestos';
   };
 
-  const nombreRepuestoDe = (repuestoId: string) => repuestos.find((r) => r.id === repuestoId)?.nombre ?? 'Repuesto eliminado';
+  const nombreRepuestoDe = (repuestoId: string) => repuestos.find((r) => r.id === repuestoId)?.nombre ?? t('Repuesto eliminado');
 
   const minimoPorRepuesto = useMemo(() => {
     const mapa = new Map<string, number>();
@@ -180,7 +182,7 @@ export default function ProveedorRepuestos() {
         .update({ precio: Number(form.precio), actualizado_at: new Date().toISOString(), ...camposComunes })
         .eq('id', editandoId);
       if (updError) {
-        setError('No pudimos guardar: ' + updError.message);
+        setError(t('No pudimos guardar:') + ' ' + updError.message);
         setGuardando(false);
         return;
       }
@@ -220,7 +222,7 @@ export default function ProveedorRepuestos() {
       .select('id')
       .single();
     if (upsertError) {
-      setError('No pudimos guardar: ' + upsertError.message);
+      setError(t('No pudimos guardar:') + ' ' + upsertError.message);
       setGuardando(false);
       return;
     }
@@ -237,7 +239,7 @@ export default function ProveedorRepuestos() {
 
   const eliminarPrecio = async (precioId: string) => {
     if (!puedeGestionar) return;
-    if (!confirm('¿Eliminar este repuesto de la lista de este proveedor?')) return;
+    if (!confirm(t('¿Eliminar este repuesto de la lista de este proveedor?'))) return;
     const precio = precios.find((p) => p.id === precioId);
     await supabase.from('repuestos_precios').delete().eq('id', precioId);
     await registrarAuditoria(supabase, {
@@ -266,7 +268,7 @@ export default function ProveedorRepuestos() {
     });
     if (rpcError) {
       const stockActual = extraerStockInsuficiente(rpcError.message);
-      setError(stockActual != null ? 'No pudimos registrar la entrada.' : 'No pudimos registrar la entrada: ' + rpcError.message);
+      setError(stockActual != null ? t('No pudimos registrar la entrada.') : t('No pudimos registrar la entrada:') + ' ' + rpcError.message);
       setGuardandoStock(false);
       return;
     }
@@ -283,7 +285,7 @@ export default function ProveedorRepuestos() {
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center">
-        <p className="text-sm text-muted dark:text-dark-text-secondary">Cargando...</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t('Cargando...')}</p>
       </main>
     );
   }
@@ -291,9 +293,9 @@ export default function ProveedorRepuestos() {
   if (!proveedor) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-3">
-        <p className="text-sm text-muted dark:text-dark-text-secondary">No encontramos este proveedor.</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t('No encontramos este proveedor.')}</p>
         <Link href="/servicio-tecnico/repuestos" className="text-sm text-accent dark:text-dark-accent underline">
-          Volver
+          {t('Volver')}
         </Link>
       </main>
     );
@@ -302,7 +304,7 @@ export default function ProveedorRepuestos() {
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
       <header className="flex items-center gap-3">
-        <Link href="/servicio-tecnico/repuestos" aria-label="Volver" className="text-2xl leading-none">
+        <Link href="/servicio-tecnico/repuestos" aria-label={t('Volver')} className="text-2xl leading-none">
           &larr;
         </Link>
         <div className="min-w-0 mr-auto">
@@ -321,7 +323,7 @@ export default function ProveedorRepuestos() {
         )}
         {puedeEliminar && (
           <button onClick={eliminarProveedor} className="text-xs text-bad underline shrink-0">
-            Eliminar
+            {t('Eliminar')}
           </button>
         )}
       </header>
@@ -330,7 +332,7 @@ export default function ProveedorRepuestos() {
 
       {preciosDeEsteProveedor.length === 0 && (
         <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-4">
-          Todavía no cargaste repuestos para este proveedor.
+          {t('Todavía no cargaste repuestos para este proveedor.')}
         </p>
       )}
 
@@ -353,7 +355,7 @@ export default function ProveedorRepuestos() {
                   )}
                   <span className="text-sm truncate">{nombreRepuestoDe(p.repuesto_id)}</span>
                   {!p.disponible && (
-                    <span className="text-[10px] font-semibold text-bad bg-bad/10 rounded-full px-2 py-0.5 shrink-0">Sin stock</span>
+                    <span className="text-[10px] font-semibold text-bad bg-bad/10 rounded-full px-2 py-0.5 shrink-0">{t('Sin stock')}</span>
                   )}
                 </span>
                 {puedeGestionar ? (
@@ -372,9 +374,9 @@ export default function ProveedorRepuestos() {
                 )}
               </div>
               <div className="flex items-center gap-2 flex-wrap text-[11px] text-muted dark:text-dark-text-secondary">
-                <span>Actualizado {antiguedad(p.actualizado_at)}</span>
-                {p.tiempo_entrega_dias != null && <span>· entrega en {p.tiempo_entrega_dias}d</span>}
-                {p.garantia_dias != null && <span>· garantía {p.garantia_dias}d</span>}
+                <span>{t('Actualizado')} {antiguedad(p.actualizado_at, t)}</span>
+                {p.tiempo_entrega_dias != null && <span>· {t('entrega en')} {p.tiempo_entrega_dias}d</span>}
+                {p.garantia_dias != null && <span>· {t('garantía')} {p.garantia_dias}d</span>}
               </div>
               {p.observaciones && <p className="text-[11px] text-muted dark:text-dark-text-secondary">{p.observaciones}</p>}
               {(puedeAgregarStock || puedeGestionar) && (
@@ -387,12 +389,12 @@ export default function ProveedorRepuestos() {
                       }}
                       className="text-xs text-accent dark:text-dark-accent underline"
                     >
-                      + Agregar a stock
+                      + {t('Agregar a stock')}
                     </button>
                   )}
                   {puedeGestionar && (
                     <button onClick={() => eliminarPrecio(p.id)} className="text-xs text-bad underline">
-                      Eliminar
+                      {t('Eliminar')}
                     </button>
                   )}
                 </div>
@@ -407,20 +409,20 @@ export default function ProveedorRepuestos() {
           onClick={abrirNuevo}
           className="rounded-xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2.5 text-sm font-medium text-white"
         >
-          + Agregar repuesto
+          + {t('Agregar repuesto')}
         </button>
       )}
 
       {modalAbierto && (
-        <Modal titulo={editandoId ? 'Editar precio' : 'Agregar repuesto'} onClose={() => setModalAbierto(false)}>
+        <Modal titulo={editandoId ? t('Editar precio') : t('Agregar repuesto')} onClose={() => setModalAbierto(false)}>
           {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
           <div className="flex flex-col gap-3">
             <div>
-              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Repuesto</label>
+              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Repuesto')}</label>
               <input
                 value={form.nombre}
                 onChange={(e) => setForm((f) => ({ ...f, nombre: e.target.value }))}
-                placeholder="Ej. Batería iPhone 13"
+                placeholder={t('Ej. Batería iPhone 13')}
                 list="catalogo-repuestos"
                 disabled={!!editandoId}
                 autoFocus
@@ -433,7 +435,7 @@ export default function ProveedorRepuestos() {
               </datalist>
             </div>
             <div>
-              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Precio</label>
+              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Precio')}</label>
               <input
                 value={form.precio}
                 onChange={(e) => setForm((f) => ({ ...f, precio: sanitizarDecimal(e.target.value) }))}
@@ -443,7 +445,7 @@ export default function ProveedorRepuestos() {
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Tiempo de entrega (días)</label>
+                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Tiempo de entrega (días)')}</label>
                 <input
                   value={form.tiempo_entrega_dias}
                   onChange={(e) => setForm((f) => ({ ...f, tiempo_entrega_dias: e.target.value.replace(/\D/g, '') }))}
@@ -452,7 +454,7 @@ export default function ProveedorRepuestos() {
                 />
               </div>
               <div>
-                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Garantía (días)</label>
+                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Garantía (días)')}</label>
                 <input
                   value={form.garantia_dias}
                   onChange={(e) => setForm((f) => ({ ...f, garantia_dias: e.target.value.replace(/\D/g, '') }))}
@@ -468,10 +470,10 @@ export default function ProveedorRepuestos() {
                 onChange={(e) => setForm((f) => ({ ...f, disponible: e.target.checked }))}
                 className="h-4 w-4 accent-ink"
               />
-              Disponible ahora
+              {t('Disponible ahora')}
             </label>
             <div>
-              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Observaciones</label>
+              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Observaciones')}</label>
               <textarea
                 value={form.observaciones}
                 onChange={(e) => setForm((f) => ({ ...f, observaciones: e.target.value }))}
@@ -482,27 +484,27 @@ export default function ProveedorRepuestos() {
           </div>
           <div className="flex gap-2">
             <button onClick={() => setModalAbierto(false)} className="flex-1 rounded-xl border border-border dark:border-dark-border py-2.5 text-sm font-medium">
-              Cancelar
+              {t('Cancelar')}
             </button>
             <button
               disabled={!form.nombre.trim() || !form.precio || guardando}
               onClick={guardar}
               className="flex-1 rounded-xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2.5 text-sm font-medium text-white disabled:opacity-40"
             >
-              {guardando ? 'Guardando...' : 'Guardar'}
+              {guardando ? t('Guardando...') : t('Guardar')}
             </button>
           </div>
         </Modal>
       )}
 
       {agregandoStockPara && (
-        <Modal titulo="Agregar a stock" onClose={() => setAgregandoStockPara(null)} maxWidth="max-w-sm">
+        <Modal titulo={t('Agregar a stock')} onClose={() => setAgregandoStockPara(null)} maxWidth="max-w-sm">
           <p className="text-sm">
             {nombreRepuestoDe(agregandoStockPara.repuesto_id)} — {moneda}
-            {agregandoStockPara.precio.toLocaleString('es-AR')} c/u
+            {agregandoStockPara.precio.toLocaleString('es-AR')} {t('c/u')}
           </p>
           <div>
-            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Cantidad comprada</label>
+            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Cantidad comprada')}</label>
             <input
               value={cantidadAStock}
               onChange={(e) => setCantidadAStock(e.target.value.replace(/\D/g, ''))}
@@ -512,18 +514,18 @@ export default function ProveedorRepuestos() {
             />
           </div>
           <p className="text-[11px] text-muted dark:text-dark-text-secondary">
-            Se suma al stock físico del repuesto con este costo por unidad, y queda en el historial de movimientos.
+            {t('Se suma al stock físico del repuesto con este costo por unidad, y queda en el historial de movimientos.')}
           </p>
           <div className="flex gap-2">
             <button onClick={() => setAgregandoStockPara(null)} className="flex-1 rounded-xl border border-border dark:border-dark-border py-2.5 text-sm font-medium">
-              Cancelar
+              {t('Cancelar')}
             </button>
             <button
               disabled={!cantidadAStock || guardandoStock}
               onClick={confirmarAgregarStock}
               className="flex-1 rounded-xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2.5 text-sm font-medium text-white disabled:opacity-40"
             >
-              {guardandoStock ? 'Guardando...' : 'Confirmar'}
+              {guardandoStock ? t('Guardando...') : t('Confirmar')}
             </button>
           </div>
         </Modal>

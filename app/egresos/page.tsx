@@ -22,6 +22,7 @@ import { QCard } from '../QCard';
 import { Boton } from '../Boton';
 import Modal from '../Modal';
 import CampoFecha from '../CampoFecha';
+import { useT } from '../lib/idioma';
 
 type Proveedor = { id: string; nombre: string };
 
@@ -41,6 +42,7 @@ function ultimoDiaMes(d: Date): string {
 export default function Egresos() {
   const supabase = crearClienteNavegador();
   const actor = useActor();
+  const t = useT();
   const puede = tienePermiso(actor, 'gestionar_egresos');
 
   const [egresos, setEgresos] = useState<Egreso[]>([]);
@@ -68,7 +70,7 @@ export default function Egresos() {
       setEgresos(egresosData);
       setCategorias(categoriasData);
     } catch (e) {
-      setError('No pudimos cargar los egresos: ' + (e instanceof Error ? e.message : 'error desconocido'));
+      setError(t('No pudimos cargar los egresos:') + ' ' + (e instanceof Error ? e.message : t('error desconocido')));
     }
     setLoading(false);
   };
@@ -94,7 +96,7 @@ export default function Egresos() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [puede, desde, hasta]);
 
-  const nombreCategoria = (id: string | null) => (id ? categorias.find((c) => c.id === id)?.nombre ?? 'Categoría eliminada' : 'Sin categoría');
+  const nombreCategoria = (id: string | null) => (id ? categorias.find((c) => c.id === id)?.nombre ?? t('Categoría eliminada') : t('Sin categoría'));
 
   // Total por moneda — nunca se suman monedas distintas.
   const totalesPorMoneda = useMemo(() => {
@@ -106,9 +108,9 @@ export default function Egresos() {
   if (!loading && !puede) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
-        <p className="text-sm text-muted dark:text-dark-text-secondary">No tenés permiso para ver Egresos.</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t('No tenés permiso para ver Egresos.')}</p>
         <Link href="/" className="text-sm text-accent dark:text-dark-accent underline">
-          Volver al inicio
+          {t('Volver al inicio')}
         </Link>
       </main>
     );
@@ -120,30 +122,29 @@ export default function Egresos() {
         <Link href="/" className="text-2xl leading-none">
           &larr;
         </Link>
-        <span className="text-lg font-medium">Egresos</span>
+        <span className="text-lg font-medium">{t('Egresos')}</span>
       </header>
 
       <p className="text-xs text-muted dark:text-dark-text-secondary">
-        Gasto operativo, retiro de dinero o ajuste — no es acá donde se cargan compras de mercadería (Compras) ni pagos a
-        proveedores (Proveedores), esos ya tienen su lugar propio.
+        {t('Gasto operativo, retiro de dinero o ajuste — no es acá donde se cargan compras de mercadería (Compras) ni pagos a proveedores (Proveedores), esos ya tienen su lugar propio.')}
       </p>
 
       {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
 
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Desde</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Desde')}</label>
           <CampoFecha value={desde} onChange={setDesde} ancho="completo" />
         </div>
         <div>
-          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Hasta</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Hasta')}</label>
           <CampoFecha value={hasta} onChange={setHasta} ancho="completo" />
         </div>
       </div>
 
       <QCard firma padding="sm" className="flex flex-wrap gap-4">
         {totalesPorMoneda.length === 0 ? (
-          <p className="text-sm text-muted dark:text-dark-text-secondary">Sin egresos en este rango.</p>
+          <p className="text-sm text-muted dark:text-dark-text-secondary">{t('Sin egresos en este rango.')}</p>
         ) : (
           totalesPorMoneda.map(([mon, total]) => (
             <div key={mon}>
@@ -151,20 +152,20 @@ export default function Egresos() {
                 {simboloMoneda(mon)}
                 {Math.round(total).toLocaleString('es-AR')}
               </p>
-              <p className="text-[11px] text-muted dark:text-dark-text-secondary mt-1">Total {mon}</p>
+              <p className="text-[11px] text-muted dark:text-dark-text-secondary mt-1">{t('Total')} {mon}</p>
             </div>
           ))
         )}
       </QCard>
 
       <Boton variante="primario" tamano="md" onClick={() => setModalNuevo(true)} className="self-start">
-        + Registrar egreso
+        + {t('Registrar egreso')}
       </Boton>
 
       {loading ? (
-        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Cargando...</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{t('Cargando...')}</p>
       ) : egresos.length === 0 ? (
-        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">No hay egresos cargados en este rango.</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{t('No hay egresos cargados en este rango.')}</p>
       ) : (
         <div className="flex flex-col gap-2">
           {egresos.map((e) => (
@@ -172,7 +173,7 @@ export default function Egresos() {
               <div className="min-w-0">
                 <p className="text-sm font-medium truncate">{e.descripcion}</p>
                 <p className="text-[11px] text-muted dark:text-dark-text-secondary">
-                  {new Date(e.fecha + 'T00:00:00').toLocaleDateString('es-AR')} · {nombreCategoria(e.categoria_id)} · {ETIQUETA_TIPO_EGRESO[e.tipo]}
+                  {new Date(e.fecha + 'T00:00:00').toLocaleDateString('es-AR')} · {nombreCategoria(e.categoria_id)} · {t(ETIQUETA_TIPO_EGRESO[e.tipo])}
                   {e.medio_pago ? ` · ${medioLabel(e.medio_pago)}` : ''}
                   {e.registrado_por_nombre ? ` · ${e.registrado_por_nombre}` : ''}
                 </p>
@@ -183,7 +184,7 @@ export default function Egresos() {
                   {Math.round(e.importe).toLocaleString('es-AR')}
                 </span>
                 <button onClick={() => setModalAnular(e)} className="text-xs text-bad underline">
-                  Anular
+                  {t('Anular')}
                 </button>
               </div>
             </div>
@@ -235,6 +236,7 @@ function ModalNuevoEgreso({
   onCreado: () => void;
 }) {
   const supabase = crearClienteNavegador();
+  const t = useT();
   const [fecha, setFecha] = useState(() => aFechaLocal(new Date()));
   const [categoriaId, setCategoriaId] = useState(categorias[0]?.id ?? '');
   const [tipo, setTipo] = useState<TipoEgreso>('gasto_operativo');
@@ -250,11 +252,11 @@ function ModalNuevoEgreso({
   const confirmar = async () => {
     const monto = Number(importe) || 0;
     if (!descripcion.trim()) {
-      setError('Poné una descripción.');
+      setError(t('Poné una descripción.'));
       return;
     }
     if (monto <= 0) {
-      setError('El importe tiene que ser mayor a 0.');
+      setError(t('El importe tiene que ser mayor a 0.'));
       return;
     }
     setGuardando(true);
@@ -279,25 +281,25 @@ function ModalNuevoEgreso({
   };
 
   return (
-    <Modal titulo="Registrar egreso" onClose={onClose} maxWidth="max-w-lg">
+    <Modal titulo={t('Registrar egreso')} onClose={onClose} maxWidth="max-w-lg">
       <div className="flex flex-col gap-3">
         {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
         <div>
-          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Descripción</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Descripción')}</label>
           <input
             value={descripcion}
             onChange={(e) => setDescripcion(e.target.value)}
-            placeholder="Ej. Alquiler de agosto"
+            placeholder={t('Ej. Alquiler de agosto')}
             className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
           />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Fecha</label>
+            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Fecha')}</label>
             <CampoFecha value={fecha} onChange={setFecha} ancho="completo" />
           </div>
           <div>
-            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Tipo</label>
+            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Tipo')}</label>
             <select
               value={tipo}
               onChange={(e) => setTipo(e.target.value as TipoEgreso)}
@@ -305,7 +307,7 @@ function ModalNuevoEgreso({
             >
               {(Object.entries(ETIQUETA_TIPO_EGRESO) as [TipoEgreso, string][]).map(([valor, label]) => (
                 <option key={valor} value={valor}>
-                  {label}
+                  {t(label)}
                 </option>
               ))}
             </select>
@@ -313,7 +315,7 @@ function ModalNuevoEgreso({
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Importe</label>
+            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Importe')}</label>
             <input
               value={importe}
               onChange={(e) => setImporte(sanitizarDecimal(e.target.value))}
@@ -323,7 +325,7 @@ function ModalNuevoEgreso({
           </div>
           {monedasDisponibles.length > 1 ? (
             <div>
-              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Moneda</label>
+              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Moneda')}</label>
               <select value={moneda} onChange={(e) => setMoneda(e.target.value)} className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm">
                 {monedasDisponibles.map((m) => (
                   <option key={m} value={m}>
@@ -334,9 +336,9 @@ function ModalNuevoEgreso({
             </div>
           ) : (
             <div>
-              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Categoría</label>
+              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Categoría')}</label>
               <select value={categoriaId} onChange={(e) => setCategoriaId(e.target.value)} className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm">
-                <option value="">Sin categoría</option>
+                <option value="">{t('Sin categoría')}</option>
                 {categorias.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.nombre}
@@ -348,9 +350,9 @@ function ModalNuevoEgreso({
         </div>
         {monedasDisponibles.length > 1 && (
           <div>
-            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Categoría</label>
+            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Categoría')}</label>
             <select value={categoriaId} onChange={(e) => setCategoriaId(e.target.value)} className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm">
-              <option value="">Sin categoría</option>
+              <option value="">{t('Sin categoría')}</option>
               {categorias.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.nombre}
@@ -361,9 +363,9 @@ function ModalNuevoEgreso({
         )}
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Medio de pago (opcional)</label>
+            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Medio de pago (opcional)')}</label>
             <select value={medioPago} onChange={(e) => setMedioPago(e.target.value)} className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm">
-              <option value="">Sin especificar</option>
+              <option value="">{t('Sin especificar')}</option>
               {MEDIOS_PAGO.map((m) => (
                 <option key={m.codigo} value={m.codigo}>
                   {m.label}
@@ -372,9 +374,9 @@ function ModalNuevoEgreso({
             </select>
           </div>
           <div>
-            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Proveedor (opcional)</label>
+            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Proveedor (opcional)')}</label>
             <select value={proveedorId} onChange={(e) => setProveedorId(e.target.value)} className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm">
-              <option value="">Ninguno</option>
+              <option value="">{t('Ninguno')}</option>
               {proveedores.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.nombre}
@@ -384,7 +386,7 @@ function ModalNuevoEgreso({
           </div>
         </div>
         <div>
-          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Notas (opcional)</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Notas (opcional)')}</label>
           <textarea
             value={notas}
             onChange={(e) => setNotas(e.target.value)}
@@ -394,10 +396,10 @@ function ModalNuevoEgreso({
         </div>
         <div className="flex gap-2 mt-1">
           <Boton variante="secundario" tamano="md" onClick={onClose} className="flex-1">
-            Cancelar
+            {t('Cancelar')}
           </Boton>
           <Boton variante="primario" tamano="md" cargando={guardando} onClick={confirmar} className="flex-1">
-            Registrar
+            {t('Registrar')}
           </Boton>
         </div>
       </div>
@@ -407,13 +409,14 @@ function ModalNuevoEgreso({
 
 function ModalAnularEgreso({ egreso, onClose, onAnulado }: { egreso: Egreso; onClose: () => void; onAnulado: () => void }) {
   const supabase = crearClienteNavegador();
+  const t = useT();
   const [motivo, setMotivo] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
 
   const confirmar = async () => {
     if (!motivo.trim()) {
-      setError('La anulación necesita un motivo.');
+      setError(t('La anulación necesita un motivo.'));
       return;
     }
     setGuardando(true);
@@ -428,15 +431,15 @@ function ModalAnularEgreso({ egreso, onClose, onAnulado }: { egreso: Egreso; onC
   };
 
   return (
-    <Modal titulo="Anular egreso" onClose={onClose} maxWidth="max-w-sm">
+    <Modal titulo={t('Anular egreso')} onClose={onClose} maxWidth="max-w-sm">
       <div className="flex flex-col gap-3">
         {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
         <p className="text-sm text-muted dark:text-dark-text-secondary">
           "{egreso.descripcion}" — {simboloMoneda(egreso.moneda)}
-          {Math.round(egreso.importe).toLocaleString('es-AR')}. No se puede deshacer.
+          {Math.round(egreso.importe).toLocaleString('es-AR')}. {t('No se puede deshacer.')}
         </p>
         <div>
-          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Motivo (obligatorio)</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Motivo (obligatorio)')}</label>
           <input
             value={motivo}
             onChange={(e) => setMotivo(e.target.value)}
@@ -445,10 +448,10 @@ function ModalAnularEgreso({ egreso, onClose, onAnulado }: { egreso: Egreso; onC
         </div>
         <div className="flex gap-2 mt-1">
           <Boton variante="secundario" tamano="md" onClick={onClose} className="flex-1">
-            Cancelar
+            {t('Cancelar')}
           </Boton>
           <Boton variante="peligro" tamano="md" cargando={guardando} onClick={confirmar} className="flex-1">
-            Sí, anular
+            {t('Sí, anular')}
           </Boton>
         </div>
       </div>

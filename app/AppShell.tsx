@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { crearClienteNavegador } from './lib/supabase/client';
 import { ICONOS } from './Iconos';
 import QMark from './QMark';
+import { useT } from './lib/idioma';
 
 // El sidebar solo existe en pantallas grandes (ver <aside className="hidden
 // lg:flex">) — en el celular la navegación sigue exactamente igual que
@@ -61,6 +62,7 @@ const NAV = [
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const supabase = crearClienteNavegador();
+  const t = useT();
   const [sesion, setSesion] = useState<'cargando' | 'si' | 'no'>('cargando');
   const [negocio, setNegocio] = useState<{ nombre: string; logo_url: string | null } | null>(null);
   const [diasPrueba, setDiasPrueba] = useState<number | null>(null);
@@ -112,13 +114,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {mostrarAvisoPrueba && (
         <div className="no-print sticky top-[52px] z-30 w-full bg-accent-soft dark:bg-dark-accent-soft text-accent dark:text-dark-accent text-xs px-4 py-2 flex items-center justify-center gap-3 flex-wrap">
           <span>
-            Te quedan <strong>{diasPrueba}</strong> día{diasPrueba === 1 ? '' : 's'} de prueba gratis.
+            {t('Te quedan')} <strong>{diasPrueba}</strong> {diasPrueba === 1 ? t('día') : t('días')} {t('de prueba gratis.')}
           </span>
           <Link
             href="/configuracion/suscripcion"
             className="shrink-0 rounded-full bg-accent dark:bg-dark-accent text-white px-3 py-1 font-medium"
           >
-            Realizar el pago
+            {t('Realizar el pago')}
           </Link>
         </div>
       )}
@@ -159,7 +161,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 }`}
               >
                 {ICONOS[item.icono]}
-                {item.label}
+                {t(item.label)}
               </Link>
             );
           })}

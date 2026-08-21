@@ -2,8 +2,10 @@
 
 import { useState } from 'react';
 import { COLORES_IPHONE } from './lib/coloresIphone';
+import { useT } from './lib/idioma';
 
 export default function SelectorColor({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const t = useT();
   const coincide = COLORES_IPHONE.find((c) => c.nombre.toLowerCase() === value.trim().toLowerCase());
   const [otro, setOtro] = useState(Boolean(value) && !coincide);
 
@@ -37,18 +39,18 @@ export default function SelectorColor({ value, onChange }: { value: string; onCh
               : 'border-border dark:border-dark-border text-muted dark:text-dark-text-secondary'
           }`}
         >
-          Otro
+          {t('Otro')}
         </button>
       </div>
       {otro ? (
         <input
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder="Escribí el color"
+          placeholder={t('Escribí el color')}
           className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
         />
       ) : (
-        value && <p className="text-xs text-muted dark:text-dark-text-secondary">Color elegido: {value}</p>
+        value && <p className="text-xs text-muted dark:text-dark-text-secondary">{t('Color elegido:')} {value}</p>
       )}
     </div>
   );

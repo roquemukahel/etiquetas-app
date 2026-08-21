@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { simboloMoneda } from '../../lib/monedas';
+import { useT } from '../../lib/idioma';
+import SelectorIdiomaFlotante from '../../SelectorIdiomaFlotante';
 
 type Movimiento = {
   tipo: string;
@@ -26,6 +28,7 @@ type Cuenta = {
 
 export default function PortalCuenta() {
   const { token } = useParams<{ token: string }>();
+  const t = useT();
   const supabase = crearClienteNavegador();
   const [cuenta, setCuenta] = useState<Cuenta | null>(null);
   const [loading, setLoading] = useState(true);
@@ -44,7 +47,8 @@ export default function PortalCuenta() {
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center">
-        <p className="text-sm text-muted dark:text-dark-text-secondary">Cargando...</p>
+        <SelectorIdiomaFlotante />
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t('Cargando...')}</p>
       </main>
     );
   }
@@ -52,9 +56,10 @@ export default function PortalCuenta() {
   if (!cuenta) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
+        <SelectorIdiomaFlotante />
         <p className="text-2xl">🔍</p>
         <p className="text-sm text-muted dark:text-dark-text-secondary">
-          No encontramos esta cuenta. Revisá el link que te mandaron.
+          {t('No encontramos esta cuenta. Revisá el link que te mandaron.')}
         </p>
       </main>
     );
@@ -66,6 +71,7 @@ export default function PortalCuenta() {
 
   return (
     <main className="flex min-h-screen flex-col items-center px-6 py-10 gap-6">
+      <SelectorIdiomaFlotante />
       <div className="flex flex-col items-center gap-2">
         {cuenta.logo ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -79,35 +85,35 @@ export default function PortalCuenta() {
       </div>
 
       <p className="text-base text-center">
-        Hola <strong>{cuenta.nombre}</strong>, este es el resumen de tu cuenta:
+        {t('Hola')} <strong>{cuenta.nombre}</strong>{t(', este es el resumen de tu cuenta:')}
       </p>
 
       <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-6 flex flex-col items-center gap-1 text-center">
         <p className="text-xs text-muted dark:text-dark-text-secondary uppercase tracking-wide font-semibold">
-          {aFavor ? 'Saldo a favor' : 'Saldo actual'}
+          {aFavor ? t('Saldo a favor') : t('Saldo actual')}
         </p>
         <p className={`text-4xl font-display font-semibold ${debe ? 'text-bad' : aFavor ? 'text-good' : ''}`}>
           {fmt(saldo)}
         </p>
         <p className="text-sm text-muted dark:text-dark-text-secondary mt-1">
-          {debe ? 'Es lo que tenés pendiente de pago.' : aFavor ? 'Tenés saldo a favor.' : '¡Estás al día! Gracias 🙌'}
+          {debe ? t('Es lo que tenés pendiente de pago.') : aFavor ? t('Tenés saldo a favor.') : t('¡Estás al día! Gracias 🙌')}
         </p>
       </div>
 
       {cuenta.movimientos.length > 0 && (
         <div className="w-full max-w-sm">
-          <p className="text-sm font-semibold mb-2">Movimientos</p>
+          <p className="text-sm font-semibold mb-2">{t('Movimientos')}</p>
           <div className="flex flex-col gap-2">
             {cuenta.movimientos.map((m, idx) => {
               const esCargo = m.tipo === 'cargo';
               const et =
                 m.concepto === 'venta'
-                  ? 'Compra'
+                  ? t('Compra')
                   : m.concepto === 'pago'
-                  ? 'Pago'
+                  ? t('Pago')
                   : m.concepto === 'nota_credito'
-                  ? 'Nota de crédito'
-                  : 'Ajuste';
+                  ? t('Nota de crédito')
+                  : t('Ajuste');
               return (
                 <div
                   key={idx}
@@ -131,7 +137,7 @@ export default function PortalCuenta() {
         </div>
       )}
 
-      <p className="text-xs text-muted dark:text-dark-text-secondary mt-auto">con Qovento</p>
+      <p className="text-xs text-muted dark:text-dark-text-secondary mt-auto">{t('con Qovento')}</p>
     </main>
   );
 }

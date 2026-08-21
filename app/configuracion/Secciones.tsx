@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useActor } from '../lib/actor';
 import { tienePermiso, Permiso } from '../lib/permisos';
+import { useT } from '../lib/idioma';
 
 // Cada sección puede pedir un permiso para verse. Las que no piden nada las
 // ve cualquiera. Vendedores/Técnicos/Auditoría son solo para administrador
@@ -34,6 +35,7 @@ const SECCIONES: Seccion[] = [
 
 export default function Secciones() {
   const actor = useActor();
+  const t = useT();
   // El actor vive en localStorage (solo en el navegador). En el primer
   // render (servidor + hidratación) todavía no lo tenemos, así que hasta
   // montar mostramos todo — igual que renderiza el servidor — y recién
@@ -51,8 +53,8 @@ export default function Secciones() {
           href={s.href}
           className="rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-5 flex flex-col hover:border-accent/40 dark:hover:border-dark-accent/40 hover:shadow-elevated transition-all active:scale-[0.98]"
         >
-          <span className="text-base font-medium">{s.titulo}</span>
-          <span className="text-xs text-muted dark:text-dark-text-secondary">{s.desc}</span>
+          <span className="text-base font-medium">{t(s.titulo)}</span>
+          <span className="text-xs text-muted dark:text-dark-text-secondary">{t(s.desc)}</span>
         </Link>
       ))}
     </>

@@ -13,6 +13,7 @@ import { FINALIZADOS } from '../../lib/reparaciones';
 import ServicioTecnicoTabs from '../../ServicioTecnicoTabs';
 import Modal from '../../Modal';
 import { ICONOS } from '../../Iconos';
+import { useT } from '../../lib/idioma';
 
 function IconoChico({ nombre, className = '' }: { nombre: string; className?: string }) {
   return (
@@ -107,6 +108,7 @@ const FORM_VACIO: FormState = {
 export default function StockRepuestos() {
   const supabase = crearClienteNavegador();
   const actor = useActor();
+  const t = useT();
   const puedeGestionar = tienePermiso(actor, 'agregar_stock');
   const puedeEliminar = tienePermiso(actor, 'eliminar');
 
@@ -294,7 +296,7 @@ export default function StockRepuestos() {
         })
         .eq('id', editandoId);
       if (updError) {
-        setError('No pudimos guardar: ' + updError.message);
+        setError(t('No pudimos guardar:') + ' ' + updError.message);
         setGuardando(false);
         return;
       }
@@ -324,7 +326,7 @@ export default function StockRepuestos() {
         })
         .eq('id', existente.id);
       if (updError) {
-        setError('No pudimos guardar: ' + updError.message);
+        setError(t('No pudimos guardar:') + ' ' + updError.message);
         setGuardando(false);
         return;
       }
@@ -336,7 +338,7 @@ export default function StockRepuestos() {
         ...payloadComun,
       });
       if (insError) {
-        setError('No pudimos guardar: ' + insError.message);
+        setError(t('No pudimos guardar:') + ' ' + insError.message);
         setGuardando(false);
         return;
       }
@@ -349,7 +351,7 @@ export default function StockRepuestos() {
   const eliminarRepuesto = async (r: Repuesto) => {
     setMenuAbierto(null);
     if (!puedeEliminar) return;
-    if (!confirm(`¿Eliminar "${r.nombre}" del catálogo de repuestos? No se puede deshacer.`)) return;
+    if (!confirm(`${t('¿Eliminar')} "${r.nombre}" ${t('del catálogo de repuestos? No se puede deshacer.')}`)) return;
     await supabase.from('repuestos').delete().eq('id', r.id);
     await registrarAuditoria(supabase, {
       accion: `eliminó el repuesto "${r.nombre}" del catálogo`,
@@ -398,7 +400,7 @@ export default function StockRepuestos() {
 
   const reparacionLabel = (id: string) => {
     const rp = reparacionesAbiertas.find((x) => x.id === id);
-    return rp ? `${rp.numero_orden ?? ''} · ${rp.modelo ?? 'equipo'}`.trim() : 'Reparación';
+    return rp ? `${rp.numero_orden ?? ''} · ${rp.modelo ?? t('equipo')}`.trim() : t('Reparación');
   };
 
   const reservar = async () => {
@@ -415,7 +417,7 @@ export default function StockRepuestos() {
     });
     if (rpcError) {
       const disp = extraerDisponibleInsuficiente(rpcError.message);
-      setError(disp != null ? `Solo hay ${disp} disponible de "${repuestoDetalle.nombre}" para reservar.` : 'No pudimos reservar: ' + rpcError.message);
+      setError(disp != null ? `${t('Solo hay')} ${disp} ${t('disponible de')} "${repuestoDetalle.nombre}" ${t('para reservar.')}` : t('No pudimos reservar:') + ' ' + rpcError.message);
       setGuardandoReserva(false);
       return;
     }
@@ -432,14 +434,14 @@ export default function StockRepuestos() {
 
   const liberarReserva = async (res: Reserva) => {
     if (!repuestoDetalle || !puedeGestionar) return;
-    if (!confirm('¿Liberar esta reserva? El repuesto vuelve a estar disponible para otra reparación.')) return;
+    if (!confirm(t('¿Liberar esta reserva? El repuesto vuelve a estar disponible para otra reparación.'))) return;
     const actorActual = getActor();
     const { error: rpcError } = await supabase.rpc('repuesto_liberar_reserva', {
       p_reserva_id: res.id,
       p_actor_nombre: actorActual?.nombre ?? null,
     });
     if (rpcError) {
-      setError('No pudimos liberar la reserva: ' + rpcError.message);
+      setError(t('No pudimos liberar la reserva:') + ' ' + rpcError.message);
       return;
     }
     await registrarAuditoria(supabase, {
@@ -452,14 +454,14 @@ export default function StockRepuestos() {
 
   const confirmarReserva = async (res: Reserva) => {
     if (!repuestoDetalle || !puedeGestionar) return;
-    if (!confirm('¿Confirmar el uso de esta reserva? Se descuenta del stock físico como repuesto consumido en la reparación.')) return;
+    if (!confirm(t('¿Confirmar el uso de esta reserva? Se descuenta del stock físico como repuesto consumido en la reparación.'))) return;
     const actorActual = getActor();
     const { error: rpcError } = await supabase.rpc('repuesto_confirmar_reserva', {
       p_reserva_id: res.id,
       p_actor_nombre: actorActual?.nombre ?? null,
     });
     if (rpcError) {
-      setError('No pudimos confirmar la reserva: ' + rpcError.message);
+      setError(t('No pudimos confirmar la reserva:') + ' ' + rpcError.message);
       return;
     }
     await registrarAuditoria(supabase, {
@@ -474,7 +476,7 @@ export default function StockRepuestos() {
     if (!repuestoDetalle || !puedeGestionar) return;
     const cantidadIngresada = Number(movCantidad) || 0;
     if (cantidadIngresada === 0) {
-      setError('Ingresá una cantidad válida distinta de cero.');
+      setError(t('Ingresá una cantidad válida distinta de cero.'));
       return;
     }
     // Rotura/pérdida/transferencia siempre restan; entrada/devolución/
@@ -494,7 +496,7 @@ export default function StockRepuestos() {
     });
     if (rpcError) {
       const stockActual = extraerStockInsuficiente(rpcError.message);
-      setError(stockActual != null ? `Ese movimiento dejaría el stock en negativo (hay ${stockActual}).` : 'No pudimos registrar el movimiento: ' + rpcError.message);
+      setError(stockActual != null ? `${t('Ese movimiento dejaría el stock en negativo (hay')} ${stockActual}).` : t('No pudimos registrar el movimiento:') + ' ' + rpcError.message);
       setGuardandoMovimiento(false);
       return;
     }
@@ -513,7 +515,7 @@ export default function StockRepuestos() {
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center">
-        <p className="text-sm text-muted dark:text-dark-text-secondary">Cargando...</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t('Cargando...')}</p>
       </main>
     );
   }
@@ -521,19 +523,19 @@ export default function StockRepuestos() {
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
       <header className="flex items-start gap-3">
-        <Link href="/servicio-tecnico" aria-label="Volver" className="text-2xl leading-none mt-0.5">
+        <Link href="/servicio-tecnico" aria-label={t('Volver')} className="text-2xl leading-none mt-0.5">
           &larr;
         </Link>
         <div className="mr-auto">
-          <h1 className="text-lg font-medium leading-tight">Repuestos</h1>
-          <p className="text-xs text-muted dark:text-dark-text-secondary">Stock, reservas y movimientos con costo real</p>
+          <h1 className="text-lg font-medium leading-tight">{t('Repuestos')}</h1>
+          <p className="text-xs text-muted dark:text-dark-text-secondary">{t('Stock, reservas y movimientos con costo real')}</p>
         </div>
         {puedeGestionar && (
           <button
             onClick={abrirNuevo}
             className="shrink-0 rounded-xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors px-4 py-2.5 text-sm font-medium text-white"
           >
-            + Nuevo repuesto
+            + {t('Nuevo repuesto')}
           </button>
         )}
       </header>
@@ -546,19 +548,19 @@ export default function StockRepuestos() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-xs">
           <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-2.5 py-2 flex flex-col gap-0.5">
             <span className="text-base font-semibold text-accent dark:text-dark-accent">{indicadores.tipos}</span>
-            <span className="text-muted dark:text-dark-text-secondary">Tipos</span>
+            <span className="text-muted dark:text-dark-text-secondary">{t('Tipos')}</span>
           </div>
           <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-2.5 py-2 flex flex-col gap-0.5">
             <span className="text-base font-semibold">{indicadores.fisicas}</span>
-            <span className="text-muted dark:text-dark-text-secondary">Unidades físicas</span>
+            <span className="text-muted dark:text-dark-text-secondary">{t('Unidades físicas')}</span>
           </div>
           <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-2.5 py-2 flex flex-col gap-0.5">
             <span className="text-base font-semibold text-warn">{indicadores.reservadas}</span>
-            <span className="text-muted dark:text-dark-text-secondary">Reservadas</span>
+            <span className="text-muted dark:text-dark-text-secondary">{t('Reservadas')}</span>
           </div>
           <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-2.5 py-2 flex flex-col gap-0.5">
             <span className="text-base font-semibold text-good">{indicadores.disponibles}</span>
-            <span className="text-muted dark:text-dark-text-secondary">Disponibles</span>
+            <span className="text-muted dark:text-dark-text-secondary">{t('Disponibles')}</span>
           </div>
           <button
             onClick={() => setSoloStockBajo((v) => !v)}
@@ -570,7 +572,7 @@ export default function StockRepuestos() {
             <span className="flex items-center gap-1 text-base font-semibold text-warn">
               <IconoChico nombre="alerta" /> {indicadores.stockBajo}
             </span>
-            <span className="text-muted dark:text-dark-text-secondary">Stock bajo</span>
+            <span className="text-muted dark:text-dark-text-secondary">{t('Stock bajo')}</span>
           </button>
           <button
             onClick={() => setSoloSinStock((v) => !v)}
@@ -582,14 +584,14 @@ export default function StockRepuestos() {
             <span className="flex items-center gap-1 text-base font-semibold text-bad">
               <IconoChico nombre="cerrar" /> {indicadores.sinStock}
             </span>
-            <span className="text-muted dark:text-dark-text-secondary">Sin stock</span>
+            <span className="text-muted dark:text-dark-text-secondary">{t('Sin stock')}</span>
           </button>
           <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-2.5 py-2 flex flex-col gap-0.5 col-span-2">
             <span className="text-base font-semibold">
               {moneda}
               {Math.round(indicadores.valorTotal).toLocaleString('es-AR')}
             </span>
-            <span className="text-muted dark:text-dark-text-secondary">Valor del inventario (a costo)</span>
+            <span className="text-muted dark:text-dark-text-secondary">{t('Valor del inventario (a costo)')}</span>
           </div>
         </div>
       )}
@@ -599,7 +601,7 @@ export default function StockRepuestos() {
           <input
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
-            placeholder="Buscar por nombre o SKU..."
+            placeholder={t('Buscar por nombre o SKU...')}
             className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-2.5 text-sm"
           />
           <div className="flex gap-2 flex-wrap">
@@ -608,7 +610,7 @@ export default function StockRepuestos() {
               onChange={(e) => setFiltroCategoria(e.target.value)}
               className="flex-1 min-w-[120px] bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
             >
-              <option value="">Toda categoría</option>
+              <option value="">{t('Toda categoría')}</option>
               {categoriasUsadas.map((c) => (
                 <option key={c} value={c}>
                   {c}
@@ -620,10 +622,10 @@ export default function StockRepuestos() {
               onChange={(e) => setFiltroCalidad(e.target.value)}
               className="flex-1 min-w-[120px] bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
             >
-              <option value="">Toda calidad</option>
+              <option value="">{t('Toda calidad')}</option>
               {CALIDADES.map((c) => (
                 <option key={c} value={c}>
-                  {c}
+                  {t(c)}
                 </option>
               ))}
             </select>
@@ -632,7 +634,7 @@ export default function StockRepuestos() {
               onChange={(e) => setFiltroProveedor(e.target.value)}
               className="flex-1 min-w-[120px] bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
             >
-              <option value="">Todo proveedor</option>
+              <option value="">{t('Todo proveedor')}</option>
               {proveedores.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.nombre}
@@ -644,7 +646,7 @@ export default function StockRepuestos() {
                 onClick={limpiarFiltros}
                 className="shrink-0 rounded-lg px-3 py-2 text-xs font-medium border border-border dark:border-dark-border"
               >
-                Limpiar filtros
+                {t('Limpiar filtros')}
               </button>
             )}
           </div>
@@ -652,14 +654,14 @@ export default function StockRepuestos() {
       )}
 
       {repuestos.length === 0 && (
-        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Todavía no cargaste repuestos.</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{t('Todavía no cargaste repuestos.')}</p>
       )}
       {repuestos.length > 0 && filtrados.length === 0 && (
         <div className="flex flex-col items-center gap-3 text-center py-8">
-          <p className="text-sm text-muted dark:text-dark-text-secondary">No hay repuestos en este filtro.</p>
+          <p className="text-sm text-muted dark:text-dark-text-secondary">{t('No hay repuestos en este filtro.')}</p>
           {hayFiltrosActivos && (
             <button onClick={limpiarFiltros} className="text-xs text-accent dark:text-dark-accent underline">
-              Limpiar filtros
+              {t('Limpiar filtros')}
             </button>
           )}
         </div>
@@ -688,7 +690,7 @@ export default function StockRepuestos() {
                 <p className="text-sm font-medium truncate">{r.nombre}</p>
                 <p className="text-xs text-muted dark:text-dark-text-secondary flex items-center gap-1.5 flex-wrap">
                   {r.categoria && <span>{r.categoria}</span>}
-                  {r.calidad && <span>· {r.calidad}</span>}
+                  {r.calidad && <span>· {t(r.calidad)}</span>}
                   {r.sku && <span>· SKU {r.sku}</span>}
                   {r.ubicacion_fisica && (
                     <span className="flex items-center gap-1">
@@ -701,7 +703,7 @@ export default function StockRepuestos() {
               <div className="relative shrink-0">
                 <button
                   onClick={() => setMenuAbierto(menuAbierto === r.id ? null : r.id)}
-                  aria-label="Más acciones"
+                  aria-label={t('Más acciones')}
                   className="text-lg leading-none px-1 text-muted dark:text-dark-text-secondary"
                 >
                   ⋯
@@ -709,16 +711,16 @@ export default function StockRepuestos() {
                 {menuAbierto === r.id && (
                   <div className="absolute right-0 top-6 z-10 w-40 rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-elevated flex flex-col overflow-hidden">
                     <button onClick={() => abrirDetalle(r)} className="flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-canvas dark:hover:bg-dark-bg">
-                      <IconoChico nombre="lupa" /> Detalle / reservas
+                      <IconoChico nombre="lupa" /> {t('Detalle / reservas')}
                     </button>
                     {puedeGestionar && (
                       <button onClick={() => abrirEdicion(r)} className="flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-canvas dark:hover:bg-dark-bg">
-                        <IconoChico nombre="editar" /> Editar
+                        <IconoChico nombre="editar" /> {t('Editar')}
                       </button>
                     )}
                     {puedeEliminar && (
                       <button onClick={() => eliminarRepuesto(r)} className="px-3 py-2 text-xs text-left text-bad hover:bg-bad/10">
-                        Eliminar
+                        {t('Eliminar')}
                       </button>
                     )}
                   </div>
@@ -728,25 +730,25 @@ export default function StockRepuestos() {
 
             <div className="flex items-center gap-3 flex-wrap text-xs">
               <span>
-                Físico: <span className="font-medium text-ink dark:text-dark-text">{r.cantidad_stock}</span>
+                {t('Físico:')} <span className="font-medium text-ink dark:text-dark-text">{r.cantidad_stock}</span>
               </span>
               {r.cantidad_reservada > 0 && (
                 <span className="text-warn">
-                  Reservado: <span className="font-medium">{r.cantidad_reservada}</span>
+                  {t('Reservado:')} <span className="font-medium">{r.cantidad_reservada}</span>
                 </span>
               )}
               <span className={sinStock(r) ? 'text-bad font-medium' : stockBajo(r) ? 'text-warn font-medium' : 'text-good font-medium'}>
-                Disponible: {disponible(r)}
+                {t('Disponible:')} {disponible(r)}
               </span>
               {r.costo_unitario != null && (
                 <span className="text-muted dark:text-dark-text-secondary">
-                  · costo c/u {moneda}
+                  · {t('costo c/u')} {moneda}
                   {r.costo_unitario.toLocaleString('es-AR')}
                 </span>
               )}
-              {sinStock(r) && <span className="text-[10px] font-semibold text-bad bg-bad/10 rounded-full px-2 py-0.5">Sin stock</span>}
+              {sinStock(r) && <span className="text-[10px] font-semibold text-bad bg-bad/10 rounded-full px-2 py-0.5">{t('Sin stock')}</span>}
               {!sinStock(r) && stockBajo(r) && (
-                <span className="text-[10px] font-semibold text-warn bg-warn/10 rounded-full px-2 py-0.5">Stock bajo</span>
+                <span className="text-[10px] font-semibold text-warn bg-warn/10 rounded-full px-2 py-0.5">{t('Stock bajo')}</span>
               )}
             </div>
           </div>
@@ -754,7 +756,7 @@ export default function StockRepuestos() {
       </div>
 
       {modalAbierto && (
-        <Modal titulo={editandoId ? 'Editar repuesto' : 'Nuevo repuesto'} onClose={() => setModalAbierto(false)} maxWidth="max-w-lg">
+        <Modal titulo={editandoId ? t('Editar repuesto') : t('Nuevo repuesto')} onClose={() => setModalAbierto(false)} maxWidth="max-w-lg">
           {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
           <div className="flex flex-col gap-3">
             <label className="self-start cursor-pointer">
@@ -774,11 +776,11 @@ export default function StockRepuestos() {
             </label>
 
             <div>
-              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Nombre *</label>
+              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Nombre *')}</label>
               <input
                 value={form.nombre}
                 onChange={(e) => setForm((f) => ({ ...f, nombre: e.target.value }))}
-                placeholder="Ej. Batería iPhone 13"
+                placeholder={t('Ej. Batería iPhone 13')}
                 list="catalogo-repuestos-stock"
                 autoFocus
                 className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
@@ -793,7 +795,7 @@ export default function StockRepuestos() {
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">
-                  {editandoId ? 'Stock físico' : 'Cantidad a agregar'}
+                  {editandoId ? t('Stock físico') : t('Cantidad a agregar')}
                 </label>
                 <input
                   value={form.cantidad_stock}
@@ -804,16 +806,16 @@ export default function StockRepuestos() {
                   className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm disabled:opacity-50"
                 />
                 {editandoId && (
-                  <p className="text-[11px] text-muted dark:text-dark-text-secondary mt-1">Para cambiar el stock, registrá un movimiento.</p>
+                  <p className="text-[11px] text-muted dark:text-dark-text-secondary mt-1">{t('Para cambiar el stock, registrá un movimiento.')}</p>
                 )}
               </div>
               <div>
-                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Costo por unidad</label>
+                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Costo por unidad')}</label>
                 <input
                   value={form.costo_unitario}
                   onChange={(e) => setForm((f) => ({ ...f, costo_unitario: sanitizarDecimal(e.target.value) }))}
                   inputMode="decimal"
-                  placeholder="Sin cargar"
+                  placeholder={t('Sin cargar')}
                   className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                 />
               </div>
@@ -821,11 +823,11 @@ export default function StockRepuestos() {
 
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Categoría</label>
+                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Categoría')}</label>
                 <input
                   value={form.categoria}
                   onChange={(e) => setForm((f) => ({ ...f, categoria: e.target.value }))}
-                  placeholder="Ej. Batería"
+                  placeholder={t('Ej. Batería')}
                   list="categorias-repuestos"
                   className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                 />
@@ -836,16 +838,16 @@ export default function StockRepuestos() {
                 </datalist>
               </div>
               <div>
-                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Calidad</label>
+                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Calidad')}</label>
                 <select
                   value={form.calidad}
                   onChange={(e) => setForm((f) => ({ ...f, calidad: e.target.value }))}
                   className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                 >
-                  <option value="">Sin especificar</option>
+                  <option value="">{t('Sin especificar')}</option>
                   {CALIDADES.map((c) => (
                     <option key={c} value={c}>
-                      {c}
+                      {t(c)}
                     </option>
                   ))}
                 </select>
@@ -853,11 +855,11 @@ export default function StockRepuestos() {
             </div>
 
             <div>
-              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Dispositivos compatibles</label>
+              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Dispositivos compatibles')}</label>
               <input
                 value={form.compatibilidad}
                 onChange={(e) => setForm((f) => ({ ...f, compatibilidad: e.target.value }))}
-                placeholder="Ej. iPhone 11, 11 Pro"
+                placeholder={t('Ej. iPhone 11, 11 Pro')}
                 className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
               />
             </div>
@@ -872,7 +874,7 @@ export default function StockRepuestos() {
                 />
               </div>
               <div>
-                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Código de barras</label>
+                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Código de barras')}</label>
                 <input
                   value={form.codigo_barras}
                   onChange={(e) => setForm((f) => ({ ...f, codigo_barras: e.target.value }))}
@@ -883,22 +885,22 @@ export default function StockRepuestos() {
 
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Ubicación física</label>
+                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Ubicación física')}</label>
                 <input
                   value={form.ubicacion_fisica}
                   onChange={(e) => setForm((f) => ({ ...f, ubicacion_fisica: e.target.value }))}
-                  placeholder="Ej. Estante A-3"
+                  placeholder={t('Ej. Estante A-3')}
                   className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                 />
               </div>
               <div>
-                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Proveedor</label>
+                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Proveedor')}</label>
                 <select
                   value={form.proveedor_id}
                   onChange={(e) => setForm((f) => ({ ...f, proveedor_id: e.target.value }))}
                   className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                 >
-                  <option value="">Sin especificar</option>
+                  <option value="">{t('Sin especificar')}</option>
                   {proveedores.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.nombre}
@@ -910,7 +912,7 @@ export default function StockRepuestos() {
 
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Stock mínimo (alerta)</label>
+                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Stock mínimo (alerta)')}</label>
                 <input
                   value={form.stock_minimo}
                   onChange={(e) => setForm((f) => ({ ...f, stock_minimo: e.target.value.replace(/\D/g, '') }))}
@@ -919,7 +921,7 @@ export default function StockRepuestos() {
                 />
               </div>
               <div>
-                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Garantía (días)</label>
+                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Garantía (días)')}</label>
                 <input
                   value={form.garantia_dias}
                   onChange={(e) => setForm((f) => ({ ...f, garantia_dias: e.target.value.replace(/\D/g, '') }))}
@@ -930,7 +932,7 @@ export default function StockRepuestos() {
             </div>
 
             <div>
-              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Observaciones</label>
+              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Observaciones')}</label>
               <textarea
                 value={form.observaciones}
                 onChange={(e) => setForm((f) => ({ ...f, observaciones: e.target.value }))}
@@ -945,14 +947,14 @@ export default function StockRepuestos() {
               onClick={() => setModalAbierto(false)}
               className="flex-1 rounded-xl border border-border dark:border-dark-border py-2.5 text-sm font-medium"
             >
-              Cancelar
+              {t('Cancelar')}
             </button>
             <button
               disabled={!form.nombre.trim() || guardando}
               onClick={guardar}
               className="flex-1 rounded-xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2.5 text-sm font-medium text-white disabled:opacity-40"
             >
-              {guardando ? 'Guardando...' : 'Guardar'}
+              {guardando ? t('Guardando...') : t('Guardar')}
             </button>
           </div>
         </Modal>
@@ -963,28 +965,28 @@ export default function StockRepuestos() {
           {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
           <div className="flex items-center gap-3 text-xs flex-wrap">
             <span>
-              Físico: <span className="font-medium text-ink dark:text-dark-text">{repuestoDetalle.cantidad_stock}</span>
+              {t('Físico:')} <span className="font-medium text-ink dark:text-dark-text">{repuestoDetalle.cantidad_stock}</span>
             </span>
-            <span className="text-warn">Reservado: {repuestoDetalle.cantidad_reservada}</span>
-            <span className="text-good font-medium">Disponible: {disponible(repuestoDetalle)}</span>
+            <span className="text-warn">{t('Reservado:')} {repuestoDetalle.cantidad_reservada}</span>
+            <span className="text-good font-medium">{t('Disponible:')} {disponible(repuestoDetalle)}</span>
           </div>
 
           {cargandoDetalle ? (
-            <p className="text-sm text-muted dark:text-dark-text-secondary text-center py-4">Cargando...</p>
+            <p className="text-sm text-muted dark:text-dark-text-secondary text-center py-4">{t('Cargando...')}</p>
           ) : (
             <>
               {puedeGestionar && (
                 <div className="rounded-xl border border-border dark:border-dark-border p-3 flex flex-col gap-2">
-                  <p className="text-xs font-semibold">Reservar para una reparación</p>
+                  <p className="text-xs font-semibold">{t('Reservar para una reparación')}</p>
                   <select
                     value={reservarReparacionId}
                     onChange={(e) => setReservarReparacionId(e.target.value)}
                     className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                   >
-                    <option value="">Elegí una reparación abierta...</option>
+                    <option value="">{t('Elegí una reparación abierta...')}</option>
                     {reparacionesAbiertas.map((rp) => (
                       <option key={rp.id} value={rp.id}>
-                        {rp.numero_orden} · {rp.modelo ?? 'equipo'}
+                        {rp.numero_orden} · {rp.modelo ?? t('equipo')}
                       </option>
                     ))}
                   </select>
@@ -1000,7 +1002,7 @@ export default function StockRepuestos() {
                       onClick={reservar}
                       className="flex-1 rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
                     >
-                      {guardandoReserva ? 'Reservando...' : 'Reservar'}
+                      {guardandoReserva ? t('Reservando...') : t('Reservar')}
                     </button>
                   </div>
                 </div>
@@ -1008,7 +1010,7 @@ export default function StockRepuestos() {
 
               {reservasDetalle.length > 0 && (
                 <div className="flex flex-col gap-1.5">
-                  <p className="text-xs font-semibold">Reservas activas</p>
+                  <p className="text-xs font-semibold">{t('Reservas activas')}</p>
                   {reservasDetalle.map((res) => (
                     <div
                       key={res.id}
@@ -1020,10 +1022,10 @@ export default function StockRepuestos() {
                       {puedeGestionar && (
                         <span className="flex gap-2 shrink-0">
                           <button onClick={() => confirmarReserva(res)} className="text-good underline font-medium">
-                            Confirmar uso
+                            {t('Confirmar uso')}
                           </button>
                           <button onClick={() => liberarReserva(res)} className="text-bad underline">
-                            Liberar
+                            {t('Liberar')}
                           </button>
                         </span>
                       )}
@@ -1034,7 +1036,7 @@ export default function StockRepuestos() {
 
               {puedeGestionar && (
                 <div className="rounded-xl border border-border dark:border-dark-border p-3 flex flex-col gap-2">
-                  <p className="text-xs font-semibold">Registrar movimiento</p>
+                  <p className="text-xs font-semibold">{t('Registrar movimiento')}</p>
                   <select
                     value={movTipo}
                     onChange={(e) => setMovTipo(e.target.value)}
@@ -1044,7 +1046,7 @@ export default function StockRepuestos() {
                       .filter(([tipo]) => !['consumo', 'reserva', 'liberacion'].includes(tipo))
                       .map(([tipo, label]) => (
                         <option key={tipo} value={tipo}>
-                          {label}
+                          {t(label)}
                         </option>
                       ))}
                   </select>
@@ -1052,7 +1054,7 @@ export default function StockRepuestos() {
                     <input
                       value={movCantidad}
                       onChange={(e) => setMovCantidad(e.target.value.replace(/[^\d-]/g, '').replace(/(?!^)-/g, ''))}
-                      placeholder={movTipo === 'ajuste' ? 'Cantidad (+/-)' : 'Cantidad'}
+                      placeholder={movTipo === 'ajuste' ? t('Cantidad (+/-)') : t('Cantidad')}
                       inputMode="numeric"
                       className="flex-1 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                     />
@@ -1060,7 +1062,7 @@ export default function StockRepuestos() {
                       <input
                         value={movCosto}
                         onChange={(e) => setMovCosto(sanitizarDecimal(e.target.value))}
-                        placeholder="Costo c/u"
+                        placeholder={t('Costo c/u')}
                         inputMode="decimal"
                         className="flex-1 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                       />
@@ -1069,7 +1071,7 @@ export default function StockRepuestos() {
                   <input
                     value={movMotivo}
                     onChange={(e) => setMovMotivo(e.target.value)}
-                    placeholder="Motivo (opcional)"
+                    placeholder={t('Motivo (opcional)')}
                     className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                   />
                   <button
@@ -1077,20 +1079,20 @@ export default function StockRepuestos() {
                     onClick={registrarMovimiento}
                     className="rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
                   >
-                    {guardandoMovimiento ? 'Guardando...' : 'Registrar'}
+                    {guardandoMovimiento ? t('Guardando...') : t('Registrar')}
                   </button>
                 </div>
               )}
 
               <div className="flex flex-col gap-1.5">
-                <p className="text-xs font-semibold">Movimientos recientes</p>
+                <p className="text-xs font-semibold">{t('Movimientos recientes')}</p>
                 {movimientosDetalle.length === 0 && (
-                  <p className="text-xs text-muted dark:text-dark-text-secondary">Todavía no hay movimientos registrados.</p>
+                  <p className="text-xs text-muted dark:text-dark-text-secondary">{t('Todavía no hay movimientos registrados.')}</p>
                 )}
                 {movimientosDetalle.map((m) => (
                   <div key={m.id} className="flex items-center justify-between gap-2 text-xs border-b border-border dark:border-dark-border pb-1.5 last:border-0">
                     <span>
-                      {LABEL_MOVIMIENTO[m.tipo] ?? m.tipo}
+                      {t(LABEL_MOVIMIENTO[m.tipo] ?? m.tipo)}
                       {m.motivo ? ` — ${m.motivo}` : ''}
                     </span>
                     <span className={`font-medium tabular-nums shrink-0 ${m.cantidad < 0 ? 'text-bad' : 'text-good'}`}>

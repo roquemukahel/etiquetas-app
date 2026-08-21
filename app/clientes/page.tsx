@@ -12,6 +12,7 @@ import { tienePermiso } from '../lib/permisos';
 import { simboloMoneda } from '../lib/monedas';
 import { ICONOS } from '../Iconos';
 import { QoviState } from '../QoviState';
+import { useT } from '../lib/idioma';
 
 type Cliente = {
   id: string;
@@ -30,6 +31,7 @@ type FiltroCuentaCorriente = 'todos' | 'con_cta' | CategoriaCtaReal;
 export default function Clientes() {
   const supabase = crearClienteNavegador();
   const actor = useActor();
+  const t = useT();
   const puedeEliminar = tienePermiso(actor, 'eliminar');
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [loading, setLoading] = useState(true);
@@ -139,12 +141,12 @@ export default function Clientes() {
       const omitidos = filas.length - nuevos.length;
       setResultadoImport(
         error
-          ? `Se guardaron ${guardadas} de ${nuevos.length} antes de un error: ${error}`
-          : `Listo: se importaron ${guardadas} clientes.${omitidos > 0 ? ` Se omitieron ${omitidos} filas sin nombre o con un DNI ya cargado.` : ''}`
+          ? `${t('Se guardaron')} ${guardadas} ${t('de')} ${nuevos.length} ${t('antes de un error:')} ${error}`
+          : `${t('Listo: se importaron')} ${guardadas} ${t('clientes.')}${omitidos > 0 ? ` ${t('Se omitieron')} ${omitidos} ${t('filas sin nombre o con un DNI ya cargado.')}` : ''}`
       );
       cargar();
     } catch (err: any) {
-      setResultadoImport('No pudimos leer el archivo: ' + (err?.message ?? 'error desconocido'));
+      setResultadoImport(`${t('No pudimos leer el archivo:')} ` + (err?.message ?? t('error desconocido')));
     }
 
     setImportando(false);
@@ -170,7 +172,10 @@ export default function Clientes() {
     if (!puedeEliminar) return;
     const ids = Array.from(seleccionados);
     if (ids.length === 0) return;
-    if (!confirm(`¿Eliminar ${ids.length} cliente${ids.length === 1 ? '' : 's'}? No se puede deshacer.`)) return;
+    if (
+      !confirm(`${t('¿Eliminar')} ${ids.length} ${ids.length === 1 ? t('cliente') : t('clientes')}? ${t('No se puede deshacer.')}`)
+    )
+      return;
 
     setEliminandoSeleccion(true);
     const aEliminar = clientes.filter((c) => seleccionados.has(c.id));
@@ -191,7 +196,7 @@ export default function Clientes() {
     cargar();
     if (bloqueados.length > 0) {
       alert(
-        `Se eliminaron ${eliminados.length} de ${ids.length}. ${bloqueados.length} no se pudieron eliminar porque tienen ventas u otro historial vinculado.`
+        `${t('Se eliminaron')} ${eliminados.length} ${t('de')} ${ids.length}. ${bloqueados.length} ${t('no se pudieron eliminar porque tienen ventas u otro historial vinculado.')}`
       );
     }
   };
@@ -265,13 +270,13 @@ export default function Clientes() {
         <Link href="/" className="text-2xl leading-none">
           &larr;
         </Link>
-        <span className="text-lg font-medium">Clientes</span>
+        <span className="text-lg font-medium">{t('Clientes')}</span>
       </header>
 
       <input
         value={busqueda}
         onChange={(e) => setBusqueda(e.target.value)}
-        placeholder="Buscar por nombre, email, teléfono, DNI..."
+        placeholder={t('Buscar por nombre, email, teléfono, DNI...')}
         className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
       />
 
@@ -279,12 +284,12 @@ export default function Clientes() {
         <div className="flex flex-wrap gap-1.5">
           {(
             [
-              ['todos', `Todos (${clientes.length})`],
-              ['con_cta', `Con cuenta corriente (${conteosCta.con_cta})`],
-              ['vencido', `En mora (${conteosCta.vencido})`],
-              ['con_saldo', `Con saldo (${conteosCta.con_saldo})`],
-              ['a_favor', `Saldo a favor (${conteosCta.a_favor})`],
-              ['al_dia', `Al día (${conteosCta.al_dia})`],
+              ['todos', `${t('Todos')} (${clientes.length})`],
+              ['con_cta', `${t('Con cuenta corriente')} (${conteosCta.con_cta})`],
+              ['vencido', `${t('En mora')} (${conteosCta.vencido})`],
+              ['con_saldo', `${t('Con saldo')} (${conteosCta.con_saldo})`],
+              ['a_favor', `${t('Saldo a favor')} (${conteosCta.a_favor})`],
+              ['al_dia', `${t('Al día')} (${conteosCta.al_dia})`],
             ] as [FiltroCuentaCorriente, string][]
           )
             .filter(([clave]) => clave === 'todos' || (conteosCta as Record<string, number>)[clave] > 0)
@@ -306,16 +311,16 @@ export default function Clientes() {
         href="/clientes/nuevo"
         className="w-full rounded-2xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium"
       >
-        + Cargar cliente
+        + {t('Cargar cliente')}
       </Link>
 
       <div className="flex gap-2">
         <label className="flex-1 rounded-xl border border-border dark:border-dark-border py-2.5 text-center text-xs font-medium cursor-pointer">
           {importando
             ? progresoImport
-              ? `Importando... ${progresoImport.hechas}/${progresoImport.total}`
-              : 'Leyendo archivo...'
-            : '⬆ Importar CSV'}
+              ? `${t('Importando...')} ${progresoImport.hechas}/${progresoImport.total}`
+              : t('Leyendo archivo...')
+            : `⬆ ${t('Importar CSV')}`}
           <input ref={inputImportRef} type="file" accept=".csv" className="hidden" disabled={importando} onChange={importar} />
         </label>
         <button
@@ -323,7 +328,7 @@ export default function Clientes() {
           disabled={clientes.length === 0}
           className="flex-1 rounded-xl border border-border dark:border-dark-border py-2.5 text-center text-xs font-medium disabled:opacity-40"
         >
-          ⬇ Exportar CSV
+          ⬇ {t('Exportar CSV')}
         </button>
       </div>
 
@@ -335,54 +340,56 @@ export default function Clientes() {
 
       {modoSeleccion ? (
         <div className="sticky top-0 z-10 rounded-xl border border-accent/30 dark:border-dark-accent/30 bg-accent-soft dark:bg-dark-accent-soft px-4 py-2.5 flex items-center justify-between gap-2">
-          <p className="text-sm font-medium">{seleccionados.size} seleccionado{seleccionados.size === 1 ? '' : 's'}</p>
+          <p className="text-sm font-medium">
+            {seleccionados.size} {seleccionados.size === 1 ? t('seleccionado') : t('seleccionados')}
+          </p>
           <div className="flex items-center gap-2">
             <button onClick={salirDeSeleccion} className="text-xs text-muted dark:text-dark-text-secondary underline">
-              Cancelar
+              {t('Cancelar')}
             </button>
             <button
               onClick={eliminarSeleccionados}
               disabled={seleccionados.size === 0 || eliminandoSeleccion}
               className="rounded-lg bg-bad text-white text-xs font-medium px-3 py-1.5 disabled:opacity-40"
             >
-              {eliminandoSeleccion ? 'Eliminando...' : 'Eliminar'}
+              {eliminandoSeleccion ? t('Eliminando...') : t('Eliminar')}
             </button>
           </div>
         </div>
       ) : (
         puedeEliminar && (
           <button onClick={() => setModoSeleccion(true)} className="self-start text-xs text-accent dark:text-dark-accent underline">
-            Seleccionar varios
+            {t('Seleccionar varios')}
           </button>
         )
       )}
 
-      {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Cargando...</p>}
+      {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{t('Cargando...')}</p>}
 
       {!loading && filtrados.length === 0 && busqueda && (
         <QoviState
           escena="sinResultados"
           tamano="sm"
-          titulo="No encontramos resultados"
-          descripcion={`Nada coincide con "${busqueda}".`}
-          accionSecundaria={{ label: 'Limpiar búsqueda', onClick: () => setBusqueda('') }}
+          titulo={t('No encontramos resultados')}
+          descripcion={`${t('Nada coincide con')} "${busqueda}".`}
+          accionSecundaria={{ label: t('Limpiar búsqueda'), onClick: () => setBusqueda('') }}
         />
       )}
       {!loading && filtrados.length === 0 && !busqueda && filtroCta !== 'todos' && (
         <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">
-          Ningún cliente entra en este filtro.{' '}
+          {t('Ningún cliente entra en este filtro.')}{' '}
           <button onClick={() => setFiltroCta('todos')} className="text-accent dark:text-dark-accent underline">
-            Ver todos
+            {t('Ver todos')}
           </button>
         </p>
       )}
       {!loading && filtrados.length === 0 && !busqueda && filtroCta === 'todos' && (
-        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Todavía no tenés clientes cargados.</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{t('Todavía no tenés clientes cargados.')}</p>
       )}
 
       {!loading && filtrados.length > 0 && (
         <p className="text-xs text-muted dark:text-dark-text-secondary">
-          Mostrando {paraRenderizar.length} de {filtrados.length}
+          {t('Mostrando')} {paraRenderizar.length} {t('de')} {filtrados.length}
         </p>
       )}
 
@@ -399,7 +406,7 @@ export default function Clientes() {
                 className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${
                   s.saldo > 0 ? (s.vencido > 0 ? 'bg-bad/10 text-bad' : 'bg-warn/10 text-warn') : 'bg-good/10 text-good'
                 }`}
-                title={s.saldo > 0 ? 'Te debe' : 'Saldo a favor'}
+                title={s.saldo > 0 ? t('Te debe') : t('Saldo a favor')}
               >
                 {s.saldo < 0 ? '+' : ''}
                 {moneda}
@@ -431,7 +438,7 @@ export default function Clientes() {
                   <p className="text-sm font-medium truncate">
                     {c.nombre} {c.apellido || ''}
                   </p>
-                  <p className="text-xs text-muted dark:text-dark-text-secondary truncate">{c.telefono || c.email || 'sin contacto'}</p>
+                  <p className="text-xs text-muted dark:text-dark-text-secondary truncate">{c.telefono || c.email || t('sin contacto')}</p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   {saldoChip}
@@ -458,7 +465,7 @@ export default function Clientes() {
           onClick={() => setVisibles((v) => v + PASO_VISIBLES)}
           className="w-full rounded-xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium"
         >
-          Mostrar {Math.min(PASO_VISIBLES, filtrados.length - visibles)} más
+          {t('Mostrar')} {Math.min(PASO_VISIBLES, filtrados.length - visibles)} {t('más')}
         </button>
       )}
     </main>

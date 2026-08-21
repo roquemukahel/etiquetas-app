@@ -5,11 +5,13 @@ import Link from 'next/link';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { registrarAuditoria } from '../../lib/auditoria';
 import { ICONOS } from '../../Iconos';
+import { useT } from '../../lib/idioma';
 
 type Negocio = { id: string; stock_publico_activo: boolean; token_stock_publico: string };
 
 export default function StockPublicoConfig() {
   const supabase = crearClienteNavegador();
+  const t = useT();
   const [negocio, setNegocio] = useState<Negocio | null>(null);
   const [loading, setLoading] = useState(true);
   const [guardando, setGuardando] = useState(false);
@@ -43,7 +45,7 @@ export default function StockPublicoConfig() {
     const { error } = await supabase.from('negocios').update({ stock_publico_activo: nuevoValor }).eq('id', negocio.id);
     setGuardando(false);
     if (error) {
-      alert('No pudimos guardar: ' + error.message);
+      alert(t('No pudimos guardar:') + ' ' + error.message);
       return;
     }
     setNegocio((prev) => (prev ? { ...prev, stock_publico_activo: nuevoValor } : prev));
@@ -56,7 +58,7 @@ export default function StockPublicoConfig() {
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center">
-        <p className="text-sm text-muted dark:text-dark-text-secondary">Cargando...</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t('Cargando...')}</p>
       </main>
     );
   }
@@ -64,16 +66,16 @@ export default function StockPublicoConfig() {
   if (!negocio) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
-        <p className="text-sm text-muted dark:text-dark-text-secondary">No pudimos cargar la configuración.</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t('No pudimos cargar la configuración.')}</p>
         {errorCarga && (
           <p className="text-xs text-bad bg-bad/10 rounded-lg px-3 py-2 max-w-sm break-words">
             {errorCarga.includes('column') || errorCarga.includes('does not exist')
-              ? 'Parece que falta correr la migración SQL de Stock público (stock_publico_supabase.sql).'
+              ? t('Parece que falta correr la migración SQL de Stock público (stock_publico_supabase.sql).')
               : errorCarga}
           </p>
         )}
         <Link href="/configuracion" className="text-sm text-accent dark:text-dark-accent underline">
-          Volver
+          {t('Volver')}
         </Link>
       </main>
     );
@@ -87,18 +89,16 @@ export default function StockPublicoConfig() {
         <Link href="/configuracion" className="text-2xl leading-none">
           &larr;
         </Link>
-        <span className="text-lg font-medium">Stock público</span>
+        <span className="text-lg font-medium">{t('Stock público')}</span>
       </header>
 
       <p className="text-xs text-muted dark:text-dark-text-secondary -mt-2">
-        Un enlace que le podés mandar a cualquier cliente para que vea, sin necesidad de cuenta, qué equipos tenés
-        disponibles en este momento (modelo, capacidad, color y cuántos hay de cada uno — sin precios, IMEI ni costos).
-        Se actualiza solo, en tiempo real.
+        {t('Un enlace que le podés mandar a cualquier cliente para que vea, sin necesidad de cuenta, qué equipos tenés disponibles en este momento (modelo, capacidad, color y cuántos hay de cada uno — sin precios, IMEI ni costos). Se actualiza solo, en tiempo real.')}
       </p>
 
       <div className="rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-4 flex flex-col gap-3">
         <label className="flex items-center justify-between gap-3 cursor-pointer">
-          <span className="text-sm font-medium">Enlace activo</span>
+          <span className="text-sm font-medium">{t('Enlace activo')}</span>
           <input
             type="checkbox"
             checked={negocio.stock_publico_activo}
@@ -125,7 +125,7 @@ export default function StockPublicoConfig() {
                 <span aria-hidden="true" className="[&_svg]:h-3.5 [&_svg]:w-3.5 inline-flex shrink-0">
                   {ICONOS[copiado ? 'check' : 'enlace']}
                 </span>
-                {copiado ? 'Link copiado' : 'Copiar link'}
+                {copiado ? t('Link copiado') : t('Copiar link')}
               </span>
             </button>
           </div>
@@ -133,8 +133,7 @@ export default function StockPublicoConfig() {
       </div>
 
       <p className="text-xs text-muted dark:text-dark-text-secondary">
-        Por defecto se muestran todos los equipos "en stock". Para ocultar uno puntual (ej. uno reservado), entrá a su
-        ficha en Stock y destildá "Mostrar en el stock público".
+        {t('Por defecto se muestran todos los equipos "en stock". Para ocultar uno puntual (ej. uno reservado), entrá a su ficha en Stock y destildá "Mostrar en el stock público".')}
       </p>
     </main>
   );

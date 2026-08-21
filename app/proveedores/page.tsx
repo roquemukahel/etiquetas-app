@@ -5,12 +5,14 @@ import Link from 'next/link';
 import { crearClienteNavegador } from '../lib/supabase/client';
 import { useActor } from '../lib/actor';
 import { tienePermiso } from '../lib/permisos';
+import { useT } from '../lib/idioma';
 
 type Proveedor = { id: string; nombre: string; telefono: string | null; saldo: number };
 
 export default function Proveedores() {
   const supabase = crearClienteNavegador();
   const actor = useActor();
+  const t = useT();
   const puedeVer = tienePermiso(actor, 'ver_proveedores');
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [loading, setLoading] = useState(true);
@@ -55,7 +57,7 @@ export default function Proveedores() {
     setError(null);
     const { error: insertError } = await supabase.from('proveedores').insert({ nombre: nombre.trim() });
     if (insertError) {
-      setError('No pudimos guardar: ' + insertError.message);
+      setError(t('No pudimos guardar:') + ' ' + insertError.message);
       setGuardando(false);
       return;
     }
@@ -67,9 +69,9 @@ export default function Proveedores() {
   if (!puedeVer) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
-        <p className="text-sm text-muted dark:text-dark-text-secondary">No tenés permiso para ver Proveedores.</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t('No tenés permiso para ver Proveedores.')}</p>
         <Link href="/" className="text-sm text-accent dark:text-dark-accent underline">
-          Volver al inicio
+          {t('Volver al inicio')}
         </Link>
       </main>
     );
@@ -81,24 +83,24 @@ export default function Proveedores() {
         <Link href="/" className="text-2xl leading-none">
           &larr;
         </Link>
-        <span className="text-lg font-medium">Proveedores</span>
+        <span className="text-lg font-medium">{t('Proveedores')}</span>
       </header>
 
       <p className="text-xs text-muted dark:text-dark-text-secondary -mt-2">
-        A quién le comprás stock en lote. Entrá a cada uno para ver las compras y llevar la cuenta de lo que le debés.
+        {t('A quién le comprás stock en lote. Entrá a cada uno para ver las compras y llevar la cuenta de lo que le debés.')}
       </p>
 
       {(totalPorPagar > 0 || totalAFavor > 0) && (
         <div className={totalPorPagar > 0 && totalAFavor > 0 ? 'grid grid-cols-2 gap-3' : 'flex'}>
           {totalPorPagar > 0 && (
             <div className="flex-1 rounded-2xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-4">
-              <p className="text-[11px] uppercase tracking-wide text-muted dark:text-dark-text-secondary">Total por pagar</p>
+              <p className="text-[11px] uppercase tracking-wide text-muted dark:text-dark-text-secondary">{t('Total por pagar')}</p>
               <p className="text-2xl font-display font-semibold text-bad">${Math.round(totalPorPagar).toLocaleString('es-AR')}</p>
             </div>
           )}
           {totalAFavor > 0 && (
             <div className="flex-1 rounded-2xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-4">
-              <p className="text-[11px] uppercase tracking-wide text-muted dark:text-dark-text-secondary">Saldo a favor</p>
+              <p className="text-[11px] uppercase tracking-wide text-muted dark:text-dark-text-secondary">{t('Saldo a favor')}</p>
               <p className="text-2xl font-display font-semibold text-good">${Math.round(totalAFavor).toLocaleString('es-AR')}</p>
             </div>
           )}
@@ -111,7 +113,7 @@ export default function Proveedores() {
         <input
           value={nombre}
           onChange={(e) => setNombre(e.target.value)}
-          placeholder="Nombre del proveedor"
+          placeholder={t('Nombre del proveedor')}
           className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
         />
         <button
@@ -119,13 +121,13 @@ export default function Proveedores() {
           onClick={agregar}
           className="rounded-xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors px-5 text-sm font-medium text-white disabled:opacity-40"
         >
-          Agregar
+          {t('Agregar')}
         </button>
       </div>
 
-      {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Cargando...</p>}
+      {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{t('Cargando...')}</p>}
       {!loading && proveedores.length === 0 && (
-        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Todavía no tenés proveedores cargados.</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{t('Todavía no tenés proveedores cargados.')}</p>
       )}
 
       <div className="flex flex-col gap-2">
@@ -141,9 +143,9 @@ export default function Proveedores() {
             </div>
             <div className="flex items-center gap-2">
               {p.saldo > 0 ? (
-                <span className="text-sm font-medium text-bad">le debés ${Math.round(p.saldo).toLocaleString('es-AR')}</span>
+                <span className="text-sm font-medium text-bad">{t('le debés')} ${Math.round(p.saldo).toLocaleString('es-AR')}</span>
               ) : p.saldo < 0 ? (
-                <span className="text-xs font-medium text-good">saldo a favor ${Math.round(-p.saldo).toLocaleString('es-AR')}</span>
+                <span className="text-xs font-medium text-good">{t('saldo a favor')} ${Math.round(-p.saldo).toLocaleString('es-AR')}</span>
               ) : null}
               <span className="text-muted dark:text-dark-text-secondary">&rsaquo;</span>
             </div>

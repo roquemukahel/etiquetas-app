@@ -10,6 +10,7 @@ import { tienePermiso } from '../../lib/permisos';
 import { sanitizarDecimal } from '../../lib/numeros';
 import SelectorColorAuto from '../../SelectorColorAuto';
 import { ICONOS } from '../../Iconos';
+import { useT } from '../../lib/idioma';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 
@@ -39,6 +40,7 @@ export default function DetallePlanAhorro() {
   const router = useRouter();
   const supabase = crearClienteNavegador();
   const actor = useActor();
+  const t = useT();
   const puedeVer = tienePermiso(actor, 'ver_plan_ahorro');
   const puedeEliminar = tienePermiso(actor, 'eliminar');
 
@@ -63,7 +65,7 @@ export default function DetallePlanAhorro() {
   const [editDetalles, setEditDetalles] = useState('');
   const [guardandoEdicion, setGuardandoEdicion] = useState(false);
 
-  const nombreCliente = (p: Plan) => (p.clientes ? `${p.clientes.nombre} ${p.clientes.apellido || ''}`.trim() : 'sin cliente');
+  const nombreCliente = (p: Plan) => (p.clientes ? `${p.clientes.nombre} ${p.clientes.apellido || ''}`.trim() : t('sin cliente'));
 
   const cargar = async () => {
     const { data: planData } = await supabase
@@ -103,7 +105,7 @@ export default function DetallePlanAhorro() {
     if (!plan) return;
     const monto = Number(montoPago);
     if (!monto || monto <= 0) {
-      setError('Poné un monto válido');
+      setError(t('Poné un monto válido'));
       return;
     }
     setGuardandoPago(true);
@@ -121,7 +123,7 @@ export default function DetallePlanAhorro() {
       .select('id')
       .single();
     if (dbError) {
-      setError('No pudimos guardar el pago: ' + dbError.message);
+      setError(t('No pudimos guardar el pago:') + ' ' + dbError.message);
       setGuardandoPago(false);
       return;
     }
@@ -138,7 +140,7 @@ export default function DetallePlanAhorro() {
   };
 
   const anularMovimiento = async (movId: string) => {
-    if (!confirm('¿Anular este pago? Deja de contar para el total juntado (queda registrado como anulado, no se borra).')) return;
+    if (!confirm(t('¿Anular este pago? Deja de contar para el total juntado (queda registrado como anulado, no se borra).'))) return;
     await supabase.from('plan_ahorro_movimientos').update({ anulado: true }).eq('id', movId);
     cargar();
   };
@@ -146,12 +148,12 @@ export default function DetallePlanAhorro() {
   const cambiarEstado = async (nuevoEstado: string) => {
     if (!plan || procesando) return;
     const mensajes: Record<string, string> = {
-      completado: '¿Marcar este plan como completado y entregar el equipo?',
-      cancelado: '¿Cancelar este plan de ahorro?',
-      activo: '¿Reactivar este plan?',
+      completado: t('¿Marcar este plan como completado y entregar el equipo?'),
+      cancelado: t('¿Cancelar este plan de ahorro?'),
+      activo: t('¿Reactivar este plan?'),
     };
     if (nuevoEstado === 'completado' && !completo) {
-      if (!confirm(`Todavía le faltan $${Math.round(falta).toLocaleString('es-AR')} para completar el objetivo. ${mensajes.completado}`)) return;
+      if (!confirm(`${t('Todavía le faltan')} $${Math.round(falta).toLocaleString('es-AR')} ${t('para completar el objetivo.')} ${mensajes.completado}`)) return;
     } else if (!confirm(mensajes[nuevoEstado])) {
       return;
     }
@@ -175,8 +177,8 @@ export default function DetallePlanAhorro() {
   const confirmarEntregaSena = async () => {
     if (!plan || !plan.dispositivo_id || procesando) return;
     const aviso = completo
-      ? '¿Confirmar la entrega y generar la venta de este equipo?'
-      : `Todavía le faltan $${Math.round(falta).toLocaleString('es-AR')} para completar el objetivo. ¿Generar la venta igual?`;
+      ? t('¿Confirmar la entrega y generar la venta de este equipo?')
+      : `${t('Todavía le faltan')} $${Math.round(falta).toLocaleString('es-AR')} ${t('para completar el objetivo.')} ${t('¿Generar la venta igual?')}`;
     if (!confirm(aviso)) return;
 
     setProcesando(true);
@@ -188,17 +190,17 @@ export default function DetallePlanAhorro() {
       .eq('id', plan.dispositivo_id)
       .single();
     if (dispError || !disp) {
-      setError('No pudimos encontrar el dispositivo reservado.');
+      setError(t('No pudimos encontrar el dispositivo reservado.'));
       setProcesando(false);
       return;
     }
     if (!disp.en_stock) {
-      setError('Este equipo ya no figura en Stock (puede que ya se haya vendido o dado de baja).');
+      setError(t('Este equipo ya no figura en Stock (puede que ya se haya vendido o dado de baja).'));
       setProcesando(false);
       return;
     }
 
-    const descripcion = `${disp.modelo || 'Equipo'}${disp.capacidad_gb ? ` ${disp.capacidad_gb}GB` : ''}${disp.color ? ` ${disp.color}` : ''}${disp.imei ? ` · IMEI ${disp.imei}` : ''}`;
+    const descripcion = `${disp.modelo || t('Equipo')}${disp.capacidad_gb ? ` ${disp.capacidad_gb}GB` : ''}${disp.color ? ` ${disp.color}` : ''}${disp.imei ? ` · IMEI ${disp.imei}` : ''}`;
 
     const { data: orden, error: ordenError } = await supabase
       .from('ordenes')
@@ -212,7 +214,7 @@ export default function DetallePlanAhorro() {
       .select()
       .single();
     if (ordenError || !orden) {
-      setError('No pudimos generar la venta: ' + (ordenError?.message || ''));
+      setError(t('No pudimos generar la venta:') + ' ' + (ordenError?.message || ''));
       setProcesando(false);
       return;
     }
@@ -250,7 +252,7 @@ export default function DetallePlanAhorro() {
 
   const guardarEdicion = async () => {
     if (!plan || !editMontoObjetivo || Number(editMontoObjetivo) <= 0) {
-      setError('Poné un monto objetivo válido');
+      setError(t('Poné un monto objetivo válido'));
       return;
     }
     setGuardandoEdicion(true);
@@ -291,7 +293,7 @@ export default function DetallePlanAhorro() {
 
   const eliminarPlan = async () => {
     if (!plan || !puedeEliminar) return;
-    if (!confirm(`¿Eliminar este plan de ahorro de ${nombreCliente(plan)}? Se pierde el historial de pagos. No se puede deshacer.`)) return;
+    if (!confirm(`${t('¿Eliminar este plan de ahorro de')} ${nombreCliente(plan)}? ${t('Se pierde el historial de pagos. No se puede deshacer.')}`)) return;
     await supabase.from('planes_ahorro').delete().eq('id', plan.id);
     await registrarAuditoria(supabase, {
       accion: `eliminó un plan de ahorro (${nombreCliente(plan)}${plan.modelo ? `, ${plan.modelo}` : ''})`,
@@ -305,9 +307,9 @@ export default function DetallePlanAhorro() {
   if (!puedeVer) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
-        <p className="text-sm text-muted dark:text-dark-text-secondary">No tenés permiso para ver Plan de ahorro.</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t('No tenés permiso para ver Plan de ahorro.')}</p>
         <Link href="/" className="text-sm text-accent dark:text-dark-accent underline">
-          Volver al inicio
+          {t('Volver al inicio')}
         </Link>
       </main>
     );
@@ -316,7 +318,7 @@ export default function DetallePlanAhorro() {
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center">
-        <p className="text-sm text-muted dark:text-dark-text-secondary">Cargando...</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t('Cargando...')}</p>
       </main>
     );
   }
@@ -324,9 +326,9 @@ export default function DetallePlanAhorro() {
   if (!plan) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-3">
-        <p className="text-sm text-muted dark:text-dark-text-secondary">No encontramos ese plan.</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t('No encontramos ese plan.')}</p>
         <Link href="/plan-ahorro" className="text-sm text-accent dark:text-dark-accent underline">
-          Volver a Plan de ahorro
+          {t('Volver a Plan de ahorro')}
         </Link>
       </main>
     );
@@ -340,14 +342,14 @@ export default function DetallePlanAhorro() {
         </Link>
         <span className="text-lg font-medium mr-auto">{nombreCliente(plan)}</span>
         <button onClick={() => (editando ? setEditando(false) : abrirEdicion())} className="text-xs text-accent dark:text-dark-accent underline">
-          {editando ? 'Cerrar' : 'Editar'}
+          {editando ? t('Cerrar') : t('Editar')}
         </button>
       </header>
 
       {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
       {movimientosError && (
         <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">
-          No pudimos cargar los pagos — el total de abajo puede no ser real. Recargá la página.
+          {t('No pudimos cargar los pagos — el total de abajo puede no ser real. Recargá la página.')}
         </p>
       )}
 
@@ -357,14 +359,14 @@ export default function DetallePlanAhorro() {
             plan.estado === 'completado' ? 'bg-good/15 text-good' : 'bg-bad/15 text-bad'
           }`}
         >
-          {plan.estado === 'completado' ? 'Completado y entregado' : 'Cancelado'}
+          {plan.estado === 'completado' ? t('Completado y entregado') : t('Cancelado')}
         </span>
       )}
 
       {editando ? (
         <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-3 flex flex-col gap-2">
           <div>
-            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Modelo deseado</label>
+            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Modelo deseado')}</label>
             <input
               value={editModelo}
               onChange={(e) => setEditModelo(e.target.value)}
@@ -372,7 +374,7 @@ export default function DetallePlanAhorro() {
             />
           </div>
           <div>
-            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Almacenamiento</label>
+            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Almacenamiento')}</label>
             <div className="flex gap-2">
               {STORAGE_OPTIONS.map((gb) => (
                 <button
@@ -387,9 +389,9 @@ export default function DetallePlanAhorro() {
               ))}
             </div>
           </div>
-          <SelectorColorAuto label="Color" modelo={editModelo} value={editColor} onChange={setEditColor} />
+          <SelectorColorAuto label={t('Color')} modelo={editModelo} value={editColor} onChange={setEditColor} />
           <div>
-            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Monto objetivo</label>
+            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Monto objetivo')}</label>
             <input
               value={editMontoObjetivo}
               onChange={(e) => setEditMontoObjetivo(sanitizarDecimal(e.target.value))}
@@ -400,7 +402,7 @@ export default function DetallePlanAhorro() {
           <textarea
             value={editDetalles}
             onChange={(e) => setEditDetalles(e.target.value)}
-            placeholder="Detalles (opcional)"
+            placeholder={t('Detalles (opcional)')}
             rows={2}
             className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
           />
@@ -409,11 +411,11 @@ export default function DetallePlanAhorro() {
             onClick={guardarEdicion}
             className="rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
           >
-            Guardar
+            {t('Guardar')}
           </button>
           {puedeEliminar && (
             <button onClick={eliminarPlan} className="rounded-lg border border-bad/30 py-2 text-sm font-medium text-bad">
-              Eliminar plan
+              {t('Eliminar plan')}
             </button>
           )}
         </div>
@@ -422,11 +424,11 @@ export default function DetallePlanAhorro() {
           {plan.dispositivo_id && (
             <span className="self-start inline-flex items-center gap-1 text-[10px] font-semibold text-accent dark:text-dark-accent bg-accent-soft dark:bg-dark-accent-soft rounded-full px-2 py-0.5">
               <span aria-hidden="true" className="[&_svg]:h-3 [&_svg]:w-3 inline-flex shrink-0">{ICONOS.telefono}</span>
-              SEÑA — equipo reservado
+              {t('SEÑA — equipo reservado')}
             </span>
           )}
           <p className="font-medium">
-            {plan.modelo || 'Sin modelo'}
+            {plan.modelo || t('Sin modelo')}
             {plan.capacidad_gb ? ` · ${plan.capacidad_gb}GB` : ''}
             {plan.color ? ` · ${plan.color}` : ''}
           </p>
@@ -438,7 +440,7 @@ export default function DetallePlanAhorro() {
       <div className="rounded-2xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-4 flex flex-col gap-3">
         <div>
           <div className="flex items-end justify-between gap-3 mb-1.5">
-            <p className="text-[11px] uppercase tracking-wide text-muted dark:text-dark-text-secondary">Juntado</p>
+            <p className="text-[11px] uppercase tracking-wide text-muted dark:text-dark-text-secondary">{t('Juntado')}</p>
             <p className="text-[11px] text-muted dark:text-dark-text-secondary">
               ${Math.round(pagado).toLocaleString('es-AR')} / ${Math.round(plan.monto_objetivo).toLocaleString('es-AR')}
             </p>
@@ -447,7 +449,7 @@ export default function DetallePlanAhorro() {
             <div className={`h-full rounded-full ${completo ? 'bg-good' : 'bg-accent dark:bg-dark-accent'}`} style={{ width: `${pct}%` }} />
           </div>
           <p className={`text-xs mt-1.5 ${completo ? 'text-good font-medium' : 'text-muted dark:text-dark-text-secondary'}`}>
-            {completo ? '¡Objetivo completado!' : `Faltan $${Math.round(falta).toLocaleString('es-AR')}`}
+            {completo ? t('¡Objetivo completado!') : `${t('Faltan')} $${Math.round(falta).toLocaleString('es-AR')}`}
           </p>
         </div>
 
@@ -462,14 +464,14 @@ export default function DetallePlanAhorro() {
               }}
               className="flex-1 rounded-xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-sm font-medium text-white"
             >
-              {registrandoPago ? 'Cancelar' : '+ Registrar pago'}
+              {registrandoPago ? t('Cancelar') : `+ ${t('Registrar pago')}`}
             </button>
             <button
               onClick={() => (plan.dispositivo_id ? confirmarEntregaSena() : cambiarEstado('completado'))}
               disabled={procesando}
               className="flex-1 rounded-xl border border-border dark:border-dark-border py-2 text-sm font-medium disabled:opacity-40"
             >
-              {plan.dispositivo_id ? 'Entregar y generar venta' : 'Entregar equipo'}
+              {plan.dispositivo_id ? t('Entregar y generar venta') : t('Entregar equipo')}
             </button>
           </div>
         )}
@@ -479,7 +481,7 @@ export default function DetallePlanAhorro() {
             disabled={procesando}
             className="rounded-xl border border-border dark:border-dark-border py-2 text-sm font-medium disabled:opacity-40"
           >
-            Reactivar plan
+            {t('Reactivar plan')}
           </button>
         )}
 
@@ -490,7 +492,7 @@ export default function DetallePlanAhorro() {
               onChange={(e) => setMontoPago(sanitizarDecimal(e.target.value))}
               inputMode="decimal"
               autoFocus
-              placeholder="Monto que paga hoy"
+              placeholder={t('Monto que paga hoy')}
               className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
             />
             <select
@@ -498,16 +500,16 @@ export default function DetallePlanAhorro() {
               onChange={(e) => setMedioPago(e.target.value)}
               className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
             >
-              <option value="efectivo">Efectivo</option>
-              <option value="transferencia">Transferencia</option>
-              <option value="débito">Débito</option>
-              <option value="crédito">Crédito</option>
+              <option value="efectivo">{t('Efectivo')}</option>
+              <option value="transferencia">{t('Transferencia')}</option>
+              <option value="débito">{t('Débito')}</option>
+              <option value="crédito">{t('Crédito')}</option>
               <option value="usdt">USDT</option>
             </select>
             <input
               value={obsPago}
               onChange={(e) => setObsPago(e.target.value)}
-              placeholder="Observación (opcional)"
+              placeholder={t('Observación (opcional)')}
               className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
             />
             <button
@@ -515,19 +517,19 @@ export default function DetallePlanAhorro() {
               onClick={registrarPago}
               className="rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
             >
-              {guardandoPago ? 'Guardando...' : 'Guardar y ver comprobante'}
+              {guardandoPago ? t('Guardando...') : t('Guardar y ver comprobante')}
             </button>
           </div>
         )}
 
         {movimientos.length > 0 && (
           <div className="flex flex-col gap-1.5 border-t border-border dark:border-dark-border pt-3">
-            <p className="text-[11px] uppercase tracking-wide text-muted dark:text-dark-text-secondary">Pagos</p>
+            <p className="text-[11px] uppercase tracking-wide text-muted dark:text-dark-text-secondary">{t('Pagos')}</p>
             {movimientos.map((m) => (
               <div key={m.id} className="flex items-center justify-between gap-2 text-sm">
                 <div className="min-w-0">
                   <p className="truncate">
-                    {m.medio || 'Pago'}
+                    {m.medio || t('Pago')}
                     {m.observacion ? ` · ${m.observacion}` : ''}
                   </p>
                   <p className="text-[11px] text-muted dark:text-dark-text-secondary">{new Date(m.fecha).toLocaleDateString('es-AR')}</p>
@@ -535,10 +537,10 @@ export default function DetallePlanAhorro() {
                 <div className="flex items-center gap-2 shrink-0">
                   <p className="text-sm font-medium text-good">+${Math.round(m.monto).toLocaleString('es-AR')}</p>
                   <Link href={`/plan-ahorro/${id}/comprobante/${m.id}`} className="text-[11px] text-accent dark:text-dark-accent underline">
-                    Comprobante
+                    {t('Comprobante')}
                   </Link>
                   <button onClick={() => anularMovimiento(m.id)} className="text-[11px] text-bad underline">
-                    Anular
+                    {t('Anular')}
                   </button>
                 </div>
               </div>

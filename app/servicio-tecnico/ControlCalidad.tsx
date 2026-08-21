@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { comprimirImagen } from '../lib/comprimirImagen';
 import { ICONOS } from '../Iconos';
+import { useT } from '../lib/idioma';
 
 export type ControlCalidadItem = {
   id: string;
@@ -29,6 +30,7 @@ export default function ControlCalidad({
   onGuardar: (item: string, resultado: string, observacion: string | null, fotoUrl: string | null) => void;
   soloLectura: boolean;
 }) {
+  const t = useT();
   const [observaciones, setObservaciones] = useState<Record<string, string>>({});
   const [fotosNuevas, setFotosNuevas] = useState<Record<string, string>>({});
 
@@ -60,15 +62,15 @@ export default function ControlCalidad({
   };
 
   const RESULTADOS: { id: string; icono: string; titulo: string; activo: string }[] = [
-    { id: 'correcto', icono: 'check', titulo: 'Correcto', activo: 'bg-good text-white' },
-    { id: 'falla', icono: 'cerrar', titulo: 'Falla', activo: 'bg-bad text-white' },
-    { id: 'no_aplica', icono: 'noAplica', titulo: 'No aplica', activo: 'bg-muted text-white' },
+    { id: 'correcto', icono: 'check', titulo: t('Correcto'), activo: 'bg-good text-white' },
+    { id: 'falla', icono: 'cerrar', titulo: t('Falla'), activo: 'bg-bad text-white' },
+    { id: 'no_aplica', icono: 'noAplica', titulo: t('No aplica'), activo: 'bg-muted text-white' },
   ];
 
   return (
     <div className="flex flex-col gap-0.5">
       <p className="text-xs font-medium text-muted dark:text-dark-text-secondary -mt-1 mb-1">
-        {controlados}/{checklist.length} controlados
+        {controlados}/{checklist.length} {t('controlados')}
       </p>
       {checklist.map((item) => {
         const reg = registroDe(item);
@@ -82,7 +84,7 @@ export default function ControlCalidad({
                 <img src={fotoActual} alt="" className="h-8 w-8 rounded object-cover shrink-0" />
               )}
               {!soloLectura && (
-                <label className="shrink-0 cursor-pointer text-muted dark:text-dark-text-secondary" aria-label={`Foto de ${item}`}>
+                <label className="shrink-0 cursor-pointer text-muted dark:text-dark-text-secondary" aria-label={`${t('Foto de')} ${item}`}>
                   <span aria-hidden="true" className="[&_svg]:h-4 [&_svg]:w-4 inline-flex">
                     {ICONOS.camara}
                   </span>
@@ -114,7 +116,7 @@ export default function ControlCalidad({
                 value={observaciones[item] ?? reg.observacion ?? ''}
                 onChange={(e) => setObservaciones((p) => ({ ...p, [item]: e.target.value }))}
                 onBlur={() => guardarObservacion(item)}
-                placeholder="Observación (opcional)"
+                placeholder={t('Observación (opcional)')}
                 className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-2 py-1 text-xs"
               />
             )}

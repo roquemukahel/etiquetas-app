@@ -7,6 +7,7 @@ import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import { registrarAuditoria } from '../../lib/auditoria';
 import CampoFecha from '../../CampoFecha';
+import { useT } from '../../lib/idioma';
 
 // Configuración rápida: enciende el módulo y crea/actualiza un plan general con
 // dos reglas (minorista %, mayorista %). Usa el MISMO motor de reglas que el
@@ -15,6 +16,7 @@ import CampoFecha from '../../CampoFecha';
 export default function ConfiguracionComisiones() {
   const supabase = crearClienteNavegador();
   const actor = useActor();
+  const t = useT();
   const puede = tienePermiso(actor, 'gestionar_comisiones');
 
   const [negocioId, setNegocioId] = useState<string | null>(null);
@@ -76,7 +78,7 @@ export default function ConfiguracionComisiones() {
           .insert({ nombre: 'Plan general', descripcion: 'Comisiones minorista y mayorista', es_default: true, vigencia_desde: desde, creado_por: actor?.nombre ?? null })
           .select('id')
           .single();
-        if (ePlan || !plan) throw new Error(ePlan?.message || 'No se pudo crear el plan');
+        if (ePlan || !plan) throw new Error(ePlan?.message || t('No se pudo crear el plan'));
         pid = plan.id;
       } else {
         await supabase.from('comision_planes').update({ es_default: true, updated_at: new Date().toISOString() }).eq('id', pid);
@@ -117,7 +119,7 @@ export default function ConfiguracionComisiones() {
       setOk(true);
       setTimeout(() => setOk(false), 2500);
     } catch (e: any) {
-      setError(e?.message || 'No pudimos guardar.');
+      setError(e?.message || t('No pudimos guardar.'));
     } finally {
       setGuardando(false);
     }
@@ -126,8 +128,8 @@ export default function ConfiguracionComisiones() {
   if (!loading && !puede) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
-        <p className="text-sm text-muted dark:text-dark-text-secondary">No tenés permiso para configurar comisiones.</p>
-        <Link href="/configuracion" className="text-sm text-accent dark:text-dark-accent underline">Volver</Link>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t('No tenés permiso para configurar comisiones.')}</p>
+        <Link href="/configuracion" className="text-sm text-accent dark:text-dark-accent underline">{t('Volver')}</Link>
       </main>
     );
   }
@@ -138,10 +140,10 @@ export default function ConfiguracionComisiones() {
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4 max-w-2xl mx-auto w-full">
       <header className="flex items-center gap-3">
         <Link href="/configuracion" className="text-2xl leading-none">&larr;</Link>
-        <span className="text-lg font-medium mr-auto">Comisiones</span>
+        <span className="text-lg font-medium mr-auto">{t('Comisiones')}</span>
         {!loading && (
           <span className={`text-xs font-medium rounded-full px-2.5 py-1 ${activas ? 'bg-good/15 text-good' : 'bg-muted/15 text-muted'}`}>
-            {activas ? 'Activo' : 'Desactivado'}
+            {activas ? t('Activo') : t('Desactivado')}
           </span>
         )}
       </header>
@@ -149,19 +151,18 @@ export default function ConfiguracionComisiones() {
       {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
 
       {loading ? (
-        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Cargando...</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{t('Cargando...')}</p>
       ) : (
         <div className="flex flex-col gap-4">
           <p className="text-sm text-muted dark:text-dark-text-secondary">
-            Poné el <strong>porcentaje de comisión</strong> del vendedor sobre la venta, según sea minorista o mayorista.
-            Se aplica a las ventas confirmadas <strong>desde la fecha de activación</strong> (las anteriores no generan comisión).
+            {t('Poné el')} <strong>{t('porcentaje de comisión')}</strong> {t('del vendedor sobre la venta, según sea minorista o mayorista. Se aplica a las ventas confirmadas')} <strong>{t('desde la fecha de activación')}</strong> {t('(las anteriores no generan comisión).')}
           </p>
 
           <div className="rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-4 flex flex-col gap-3">
-            <Fila label="Comisión en ventas minoristas" valor={minorista} onChange={setMinorista} />
-            <Fila label="Comisión en ventas mayoristas" valor={mayorista} onChange={setMayorista} />
+            <Fila label={t('Comisión en ventas minoristas')} valor={minorista} onChange={setMinorista} />
+            <Fila label={t('Comisión en ventas mayoristas')} valor={mayorista} onChange={setMayorista} />
             <div className="flex items-center justify-between gap-3">
-              <label className="text-sm font-medium">Empieza a regir</label>
+              <label className="text-sm font-medium">{t('Empieza a regir')}</label>
               <CampoFecha
                 value={desde}
                 onChange={setDesde}
@@ -171,8 +172,8 @@ export default function ConfiguracionComisiones() {
           </div>
 
           <div className="rounded-xl bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border px-4 py-3 text-xs text-muted dark:text-dark-text-secondary">
-            Ejemplo: una venta minorista neta de <strong>$100.000</strong> con {Number(pct(minorista)) || 0}% →
-            comisión de <strong>${previewMin.toLocaleString('es-AR')}</strong> para el vendedor.
+            {t('Ejemplo: una venta minorista neta de')} <strong>$100.000</strong> {t('con')} {Number(pct(minorista)) || 0}% →
+            {t('comisión de')} <strong>${previewMin.toLocaleString('es-AR')}</strong> {t('para el vendedor.')}
           </div>
 
           <div className="flex flex-col sm:flex-row gap-2">
@@ -181,7 +182,7 @@ export default function ConfiguracionComisiones() {
               onClick={() => guardar(true)}
               className="flex-1 rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-3.5 text-center text-sm font-medium text-white disabled:opacity-40"
             >
-              {guardando ? 'Guardando...' : ok ? '✓ Guardado' : activas ? 'Guardar cambios' : 'Activar comisiones'}
+              {guardando ? t('Guardando...') : ok ? `✓ ${t('Guardado')}` : activas ? t('Guardar cambios') : t('Activar comisiones')}
             </button>
             {activas && (
               <button
@@ -189,7 +190,7 @@ export default function ConfiguracionComisiones() {
                 onClick={() => guardar(false)}
                 className="rounded-2xl border border-border dark:border-dark-border py-3.5 px-5 text-center text-sm font-medium disabled:opacity-40"
               >
-                Desactivar
+                {t('Desactivar')}
               </button>
             )}
           </div>
@@ -197,10 +198,10 @@ export default function ConfiguracionComisiones() {
           {activas && (
             <div className="flex flex-col items-center gap-1.5">
               <Link href="/comisiones/planes" className="text-sm text-accent dark:text-dark-accent underline text-center">
-                Reglas avanzadas (distinta comisión por dispositivos, accesorios, producto…) →
+                {t('Reglas avanzadas (distinta comisión por dispositivos, accesorios, producto…) →')}
               </Link>
               <Link href="/comisiones" className="text-sm text-accent dark:text-dark-accent underline text-center">
-                Ir al panel de comisiones →
+                {t('Ir al panel de comisiones →')}
               </Link>
             </div>
           )}

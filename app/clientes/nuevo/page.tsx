@@ -5,10 +5,12 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { getActor } from '../../lib/actor';
+import { useT } from '../../lib/idioma';
 
 export default function NuevoCliente() {
   const router = useRouter();
   const supabase = crearClienteNavegador();
+  const t = useT();
 
   const [nombre, setNombre] = useState('');
   const [apellido, setApellido] = useState('');
@@ -39,7 +41,7 @@ export default function NuevoCliente() {
     });
 
     if (insertError) {
-      setError('No pudimos guardar el cliente: ' + insertError.message);
+      setError(`${t('No pudimos guardar el cliente:')} ` + insertError.message);
       setGuardando(false);
       return;
     }
@@ -54,17 +56,17 @@ export default function NuevoCliente() {
         <Link href="/clientes" className="text-2xl leading-none">
           &larr;
         </Link>
-        <span className="text-lg font-medium">Cargar cliente</span>
+        <span className="text-lg font-medium">{t('Cargar cliente')}</span>
       </header>
 
       {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
 
       <div className="flex flex-col gap-3">
-        <Campo label="Nombre" valor={nombre} onChange={setNombre} />
-        <Campo label="Apellido" valor={apellido} onChange={setApellido} />
-        <Campo label="Domicilio" valor={domicilio} onChange={setDomicilio} />
+        <Campo label={t('Nombre')} valor={nombre} onChange={setNombre} />
+        <Campo label={t('Apellido')} valor={apellido} onChange={setApellido} />
+        <Campo label={t('Domicilio')} valor={domicilio} onChange={setDomicilio} />
         <Campo label="Email" valor={email} onChange={setEmail} />
-        <Campo label="Teléfono" valor={telefono} onChange={setTelefono} />
+        <Campo label={t('Teléfono')} valor={telefono} onChange={setTelefono} />
         <Campo label="DNI" valor={dni} onChange={setDni} />
       </div>
 
@@ -73,7 +75,7 @@ export default function NuevoCliente() {
         onClick={handleGuardar}
         className="mt-auto w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
       >
-        {guardando ? 'Guardando...' : 'Guardar cliente'}
+        {guardando ? t('Guardando...') : t('Guardar cliente')}
       </button>
     </main>
   );

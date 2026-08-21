@@ -10,6 +10,7 @@ import Avatar from '../Avatar';
 import EstadoBadge from '../EstadoBadge';
 import { ICONOS } from '../Iconos';
 import TarjetaReparacion, { Reparacion, Tecnico } from './TarjetaReparacion';
+import { useT } from '../lib/idioma';
 
 // Estados donde el técnico tiene algo concreto para hacer ahora mismo (a
 // diferencia de "esperando aprobación"/"esperando repuesto", que dependen
@@ -83,6 +84,7 @@ export default function MiBanco({
   puedeAgregarStock: boolean;
   esPropio: boolean;
 }) {
+  const t = useT();
   const [filtro, setFiltro] = useState<Filtro>('activas');
 
   const propias = useMemo(() => reparaciones.filter((r) => r.tecnico_id === tecnicoId), [reparaciones, tecnicoId]);
@@ -159,9 +161,9 @@ export default function MiBanco({
       <div className="flex items-center gap-2.5">
         <Avatar src={fotoTecnico(tecnicoId)} nombre={nombreTecnico(tecnicoId) ?? '?'} size={44} />
         <div>
-          <p className="text-sm font-semibold">{esPropio ? 'Mi banco' : `Banco de ${nombreTecnico(tecnicoId) ?? 'técnico'}`}</p>
+          <p className="text-sm font-semibold">{esPropio ? t('Mi banco') : `${t('Banco de')} ${nombreTecnico(tecnicoId) ?? t('técnico')}`}</p>
           <p className="text-xs text-muted dark:text-dark-text-secondary">
-            {esPropio ? 'Tu día de trabajo, ordenado por prioridad' : 'Vista personalizada de este técnico'}
+            {esPropio ? t('Tu día de trabajo, ordenado por prioridad') : t('Vista personalizada de este técnico')}
           </p>
         </div>
       </div>
@@ -186,7 +188,7 @@ export default function MiBanco({
                 </span>
                 {ind.valor}
               </span>
-              <span className="text-muted dark:text-dark-text-secondary leading-tight">{ind.label}</span>
+              <span className="text-muted dark:text-dark-text-secondary leading-tight">{t(ind.label)}</span>
             </button>
           );
         })}
@@ -196,7 +198,7 @@ export default function MiBanco({
           técnico puede resolver ahora mismo, para que no tenga que escanear
           toda la lista para saber por dónde arrancar. */}
       <div className="rounded-xl border border-accent/30 dark:border-dark-accent/30 bg-accent-soft/40 dark:bg-dark-accent-soft/40 p-3 flex flex-col gap-2">
-        <p className="text-xs font-semibold text-accent dark:text-dark-accent">Próxima acción</p>
+        <p className="text-xs font-semibold text-accent dark:text-dark-accent">{t('Próxima acción')}</p>
         {proximaAccion ? (
           <div className="flex items-center gap-3">
             <MiniaturaDispositivo
@@ -210,7 +212,7 @@ export default function MiBanco({
               <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
                 <EstadoBadge estado={proximaAccion.estado} />
                 {proximaAccion.prioridad !== 'normal' && (
-                  <span className="text-xs font-medium text-bad">{proximaAccion.prioridad === 'critica' ? 'Crítica' : 'Urgente'}</span>
+                  <span className="text-xs font-medium text-bad">{proximaAccion.prioridad === 'critica' ? t('Crítica') : t('Urgente')}</span>
                 )}
               </div>
             </div>
@@ -220,28 +222,28 @@ export default function MiBanco({
                 onClick={() => onCambiarEstado(proximaAccion, ACCION_POR_ESTADO[proximaAccion.estado].siguiente)}
                 className="rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors px-3 py-2 text-xs font-medium text-white disabled:opacity-40 whitespace-nowrap"
               >
-                {ACCION_POR_ESTADO[proximaAccion.estado].label}
+                {t(ACCION_POR_ESTADO[proximaAccion.estado].label)}
               </button>
               <Link
                 href={`/servicio-tecnico/${proximaAccion.id}`}
                 className="text-center text-xs text-accent dark:text-dark-accent underline"
               >
-                Abrir ficha
+                {t('Abrir ficha')}
               </Link>
             </div>
           </div>
         ) : bloqueadas.length > 0 ? (
           <p className="text-sm text-muted dark:text-dark-text-secondary">
-            No tenés nada pendiente de tu parte ahora mismo. Hay {bloqueadas.length} reparación
-            {bloqueadas.length === 1 ? '' : 'es'} esperando al cliente o a un repuesto — no depende de vos por el momento.
+            {t('No tenés nada pendiente de tu parte ahora mismo. Hay')} {bloqueadas.length}{' '}
+            {bloqueadas.length === 1 ? t('reparación esperando al cliente o a un repuesto — no depende de vos por el momento.') : t('reparaciones esperando al cliente o a un repuesto — no depende de vos por el momento.')}
           </p>
         ) : (
-          <p className="text-sm text-muted dark:text-dark-text-secondary">¡Estás al día! No tenés próximas acciones pendientes.</p>
+          <p className="text-sm text-muted dark:text-dark-text-secondary">{t('¡Estás al día! No tenés próximas acciones pendientes.')}</p>
         )}
       </div>
 
       {filtradas.length === 0 ? (
-        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-2">No hay reparaciones en este filtro.</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-2">{t('No hay reparaciones en este filtro.')}</p>
       ) : (
         <div className="flex flex-col gap-2">
           {filtradas.map((r) => (

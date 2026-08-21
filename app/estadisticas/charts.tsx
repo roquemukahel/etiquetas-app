@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { PuntoSerie } from './datos';
 import { formatMoneda } from './ui';
+import { useT } from '../lib/idioma';
 
 // Sparkline: línea mínima sin ejes, para meter dentro de un KPI.
 export function Sparkline({ valores, alto = 28 }: { valores: number[]; alto?: number }) {
@@ -34,10 +35,11 @@ export function LineAreaChart({
   moneda: string;
   compararActivo: boolean;
 }) {
+  const t = useT();
   const [hover, setHover] = useState<number | null>(null);
 
   if (puntos.length === 0) {
-    return <p className="text-sm text-muted dark:text-dark-text-secondary text-center py-10">Sin datos para este período.</p>;
+    return <p className="text-sm text-muted dark:text-dark-text-secondary text-center py-10">{t('Sin datos para este período.')}</p>;
   }
 
   const W = 640;
@@ -81,13 +83,13 @@ export function LineAreaChart({
         }}
       >
         {/* Grilla horizontal recesiva */}
-        {[0, 0.5, 1].map((t) => (
+        {[0, 0.5, 1].map((frac) => (
           <line
-            key={t}
+            key={frac}
             x1={padL}
             x2={W - padR}
-            y1={padT + innerH - t * innerH}
-            y2={padT + innerH - t * innerH}
+            y1={padT + innerH - frac * innerH}
+            y2={padT + innerH - frac * innerH}
             className="text-border dark:text-dark-border"
             stroke="currentColor"
             strokeWidth={1}
@@ -149,7 +151,7 @@ export function LineAreaChart({
           <p>{formatMoneda(puntos[hover].actual, moneda)}</p>
           {compararActivo && puntos[hover].anterior != null && (
             <p className="text-white/70">
-              Antes: {formatMoneda(puntos[hover].anterior || 0, moneda)}
+              {t('Antes:')} {formatMoneda(puntos[hover].anterior || 0, moneda)}
               {pct(puntos[hover].actual, puntos[hover].anterior) != null && ` (${pct(puntos[hover].actual, puntos[hover].anterior)}%)`}
             </p>
           )}

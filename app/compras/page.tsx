@@ -8,6 +8,7 @@ import { registrarAuditoria } from '../lib/auditoria';
 import { useActor } from '../lib/actor';
 import { tienePermiso } from '../lib/permisos';
 import MiniaturaDispositivo from '../MiniaturaDispositivo';
+import { useT } from '../lib/idioma';
 
 type Compra = {
   id: string;
@@ -29,6 +30,7 @@ const ETIQUETA_ESTADO: Record<string, string> = {
 export default function Compras() {
   const supabase = crearClienteNavegador();
   const actor = useActor();
+  const t = useT();
   const puedeEliminar = tienePermiso(actor, 'eliminar');
   const [compras, setCompras] = useState<Compra[]>([]);
   const [loading, setLoading] = useState(true);
@@ -71,7 +73,7 @@ export default function Compras() {
     if (!puedeEliminar) return;
     const ids = Array.from(seleccionados);
     if (ids.length === 0) return;
-    if (!confirm(`¿Eliminar ${ids.length} compra${ids.length === 1 ? '' : 's'}? No se puede deshacer.`)) return;
+    if (!confirm(`${t('¿Eliminar')} ${ids.length} ${ids.length === 1 ? t('compra') : t('compras')}? ${t('No se puede deshacer.')}`)) return;
 
     setEliminandoSeleccion(true);
     const aEliminar = compras.filter((c) => seleccionados.has(c.id));
@@ -106,13 +108,13 @@ export default function Compras() {
         <Link href="/" className="text-2xl leading-none">
           &larr;
         </Link>
-        <span className="text-lg font-medium">Compra de dispositivos</span>
+        <span className="text-lg font-medium">{t('Compra de dispositivos')}</span>
       </header>
 
       <input
         value={busqueda}
         onChange={(e) => setBusqueda(e.target.value)}
-        placeholder="Buscar por modelo o cliente..."
+        placeholder={t('Buscar por modelo o cliente...')}
         className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
       />
 
@@ -120,36 +122,38 @@ export default function Compras() {
         href="/compras/nueva"
         className="w-full rounded-2xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium"
       >
-        + Nueva compra
+        + {t('Nueva compra')}
       </Link>
 
       {modoSeleccion ? (
         <div className="sticky top-0 z-10 rounded-xl border border-accent/30 dark:border-dark-accent/30 bg-accent-soft dark:bg-dark-accent-soft px-4 py-2.5 flex items-center justify-between gap-2">
-          <p className="text-sm font-medium">{seleccionados.size} seleccionado{seleccionados.size === 1 ? '' : 's'}</p>
+          <p className="text-sm font-medium">
+            {seleccionados.size} {seleccionados.size === 1 ? t('seleccionado') : t('seleccionados')}
+          </p>
           <div className="flex items-center gap-2">
             <button onClick={salirDeSeleccion} className="text-xs text-muted dark:text-dark-text-secondary underline">
-              Cancelar
+              {t('Cancelar')}
             </button>
             <button
               onClick={eliminarSeleccionados}
               disabled={seleccionados.size === 0 || eliminandoSeleccion}
               className="rounded-lg bg-bad text-white text-xs font-medium px-3 py-1.5 disabled:opacity-40"
             >
-              {eliminandoSeleccion ? 'Eliminando...' : 'Eliminar'}
+              {eliminandoSeleccion ? t('Eliminando...') : t('Eliminar')}
             </button>
           </div>
         </div>
       ) : (
         puedeEliminar && (
           <button onClick={() => setModoSeleccion(true)} className="self-start text-xs text-accent dark:text-dark-accent underline">
-            Seleccionar varios
+            {t('Seleccionar varios')}
           </button>
         )
       )}
 
-      {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Cargando...</p>}
+      {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{t('Cargando...')}</p>}
       {!loading && filtradas.length === 0 && (
-        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">No hay compras para mostrar.</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{t('No hay compras para mostrar.')}</p>
       )}
 
       <div className="flex flex-col gap-2">
@@ -184,12 +188,12 @@ export default function Compras() {
                     </p>
                   )}
                   <p className="text-xs text-muted dark:text-dark-text-secondary">
-                    {c.clientes ? `${c.clientes.nombre} ${c.clientes.apellido || ''}` : 'Sin cliente'}
+                    {c.clientes ? `${c.clientes.nombre} ${c.clientes.apellido || ''}` : t('Sin cliente')}
                   </p>
                 </div>
                 <div className="text-right">
                   {c.precio != null && <p className="text-sm font-medium">${c.precio.toLocaleString('es-AR')}</p>}
-                  <p className="text-xs text-muted dark:text-dark-text-secondary">{ETIQUETA_ESTADO[c.estado] || c.estado}</p>
+                  <p className="text-xs text-muted dark:text-dark-text-secondary">{t(ETIQUETA_ESTADO[c.estado] || c.estado)}</p>
                 </div>
               </div>
             </>

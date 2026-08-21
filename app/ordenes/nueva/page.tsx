@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
+import { useT } from '../../lib/idioma';
 import { asegurarModelo } from '../../lib/modelos';
 import { obtenerTodasLasFilas } from '../../lib/db';
 import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../../lib/carpetas';
@@ -154,6 +155,7 @@ export default function NuevaOrden() {
   const puedeVender = tienePermiso(actorActual, 'vender');
   const puedeRecibirServicioTecnico = tienePermiso(actorActual, 'recibir_servicio_tecnico');
   const puedeGestionarFinanciacion = tienePermiso(actorActual, 'gestionar_financiacion');
+  const t = useT();
 
   const [step, setStep] = useState<'cliente' | 'carrito' | 'confirmar'>('cliente');
 
@@ -489,7 +491,7 @@ export default function NuevaOrden() {
     const { error } = await supabase.from('clientes').update(cambios).eq('id', clienteElegido.id);
     setGuardandoCtaInline(false);
     if (error) {
-      alert('No pudimos habilitar la cuenta corriente: ' + error.message);
+      alert(t('No pudimos habilitar la cuenta corriente:') + ' ' + error.message);
       return;
     }
     setClienteElegido((prev) => (prev ? { ...prev, ...cambios } : prev));
@@ -589,7 +591,7 @@ export default function NuevaOrden() {
       .single();
     setCargandoDispositivo(false);
     if (dErr || !data) {
-      setError('No pudimos cargar el dispositivo: ' + (dErr?.message || ''));
+      setError(t('No pudimos cargar el dispositivo:') + ' ' + (dErr?.message || ''));
       return;
     }
     await asegurarModelo(supabase, nuevoModelo);
@@ -681,10 +683,10 @@ export default function NuevaOrden() {
     setTrabajoColor('');
   };
 
-  const agregarTrabajoDelCatalogo = (t: Trabajo) => {
+  const agregarTrabajoDelCatalogo = (trab: Trabajo) => {
     setCarrito((c) => [
       ...c,
-      { tempId: idTemporal(), descripcion: descripcionTrabajo(t.nombre), cantidad: 1, precioUnitario: t.precio ?? 0, tipo: 'trabajo' },
+      { tempId: idTemporal(), descripcion: descripcionTrabajo(trab.nombre), cantidad: 1, precioUnitario: trab.precio ?? 0, tipo: 'trabajo' },
     ]);
     agregarTextoCondicionANota();
     setTrabajoModelo('');
@@ -910,7 +912,7 @@ export default function NuevaOrden() {
               );
           }
           throw new Error(
-            'Uno o más de estos dispositivos ya se vendieron en otra orden. Volvé a la pantalla anterior y actualizá el carrito.'
+            t('Uno o más de estos dispositivos ya se vendieron en otra orden. Volvé a la pantalla anterior y actualizá el carrito.')
           );
         }
         dispositivosReservados = true;
@@ -932,7 +934,7 @@ export default function NuevaOrden() {
           })
           .select()
           .single();
-        if (cErr || !data) throw new Error(cErr?.message || 'no se pudo cargar el cliente');
+        if (cErr || !data) throw new Error(cErr?.message || t('no se pudo cargar el cliente'));
         clienteId = data.id;
       }
 
@@ -960,7 +962,7 @@ export default function NuevaOrden() {
         })
         .select()
         .single();
-      if (oErr || !orden) throw new Error(oErr?.message || 'no se pudo crear la orden');
+      if (oErr || !orden) throw new Error(oErr?.message || t('no se pudo crear la orden'));
       ordenCreadaId = orden.id;
 
       if (canjesEfectivos.length > 0) {
@@ -977,7 +979,7 @@ export default function NuevaOrden() {
             vendedor_id: vendedorId || null,
           }))
         );
-        if (canjesErr) throw new Error(canjesErr.message || 'no se pudieron cargar los dispositivos de canje');
+        if (canjesErr) throw new Error(canjesErr.message || t('no se pudieron cargar los dispositivos de canje'));
       }
 
       const { error: itemsErr } = await supabase.from('orden_items').insert(
@@ -1028,7 +1030,7 @@ export default function NuevaOrden() {
             primeraFecha: financiarPrimeraFecha,
             observaciones: 'Financiación generada al confirmar la orden.',
           });
-          if ('error' in resultadoPlan) throw new Error('No pudimos crear el plan de financiación: ' + resultadoPlan.error);
+          if ('error' in resultadoPlan) throw new Error(t('No pudimos crear el plan de financiación:') + ' ' + resultadoPlan.error);
         } else {
           const { error: movErr } = await supabase.from('cta_cte_movimientos').insert({
             cliente_id: clienteId,
@@ -1087,7 +1089,7 @@ export default function NuevaOrden() {
           .select('id, numero_orden')
           .single();
         if (repErr) {
-          alert(`⚠️ La orden se guardó, pero no pudimos derivar "${der.modelo.trim()}" a Servicio Técnico: ${repErr.message}`);
+          alert(`⚠️ ${t('La orden se guardó, pero no pudimos derivar')} "${der.modelo.trim()}" ${t('a Servicio Técnico:')} ${repErr.message}`);
         } else {
           await registrarAuditoria(supabase, {
             accion: `derivó a Servicio Técnico un equipo al crear una orden (${der.modelo.trim()}${der.prioritario ? ', prioritario' : ''})`,
@@ -1112,9 +1114,9 @@ export default function NuevaOrden() {
             'La comisión de esta venta ya estaba generada',
           ];
           if (rc.error) {
-            alert('⚠️ No se pudo generar la comisión: ' + rc.error);
+            alert(`⚠️ ${t('No se pudo generar la comisión:')} ` + rc.error);
           } else if (rc.generadas === 0 && rc.motivo && !motivosSilenciosos.includes(rc.motivo)) {
-            alert('⚠️ Esta venta no generó comisión: ' + rc.motivo + '.');
+            alert(`⚠️ ${t('Esta venta no generó comisión:')} ` + rc.motivo + '.');
           }
         } catch {}
       }
@@ -1133,7 +1135,7 @@ export default function NuevaOrden() {
       if (ordenCreadaId) {
         await supabase.from('ordenes').delete().eq('id', ordenCreadaId);
       }
-      setError('No pudimos crear la orden: ' + (err?.message || 'error desconocido'));
+      setError(t('No pudimos crear la orden:') + ' ' + (err?.message || t('error desconocido')));
       setGuardando(false);
     }
   };
@@ -1145,7 +1147,7 @@ export default function NuevaOrden() {
           <Link href="/ordenes" className="text-2xl leading-none">
             &larr;
           </Link>
-          <span className="text-lg font-medium">Nueva orden · Cliente</span>
+          <span className="text-lg font-medium">{t('Nueva orden')} · {t('Cliente')}</span>
         </header>
 
         <div className="flex items-center gap-2 text-sm">
@@ -1155,7 +1157,7 @@ export default function NuevaOrden() {
               modoCliente === 'existente' ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
             }`}
           >
-            Cliente existente
+            {t('Cliente existente')}
           </button>
           <button
             onClick={() => setModoCliente('nuevo')}
@@ -1163,7 +1165,7 @@ export default function NuevaOrden() {
               modoCliente === 'nuevo' ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
             }`}
           >
-            Cargar nuevo
+            {t('Cargar nuevo')}
           </button>
         </div>
 
@@ -1172,12 +1174,12 @@ export default function NuevaOrden() {
             <input
               value={buscarCliente}
               onChange={(e) => setBuscarCliente(e.target.value)}
-              placeholder="Buscar por nombre o teléfono..."
+              placeholder={t('Buscar por nombre o teléfono...')}
               className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
             />
             <div className="flex flex-col gap-2">
               {clientesFiltrados.length === 0 && (
-                <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-4">No encontramos clientes con esa búsqueda.</p>
+                <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-4">{t('No encontramos clientes con esa búsqueda.')}</p>
               )}
               {clientesFiltrados.map((c) => (
                 <button
@@ -1195,17 +1197,17 @@ export default function NuevaOrden() {
           </>
         ) : (
           <div className="flex flex-col gap-3">
-            <Campo label="Nombre" valor={nuevoNombre} onChange={setNuevoNombre} />
-            <Campo label="Apellido" valor={nuevoApellido} onChange={setNuevoApellido} />
-            <Campo label="Teléfono" valor={nuevoTelefono} onChange={setNuevoTelefono} />
-            <Campo label="Domicilio" valor={nuevoDomicilio} onChange={setNuevoDomicilio} />
-            <Campo label="DNI" valor={nuevoDni} onChange={setNuevoDni} />
+            <Campo label={t('Nombre')} valor={nuevoNombre} onChange={setNuevoNombre} />
+            <Campo label={t('Apellido')} valor={nuevoApellido} onChange={setNuevoApellido} />
+            <Campo label={t('Teléfono')} valor={nuevoTelefono} onChange={setNuevoTelefono} />
+            <Campo label={t('Domicilio')} valor={nuevoDomicilio} onChange={setNuevoDomicilio} />
+            <Campo label={t('DNI')} valor={nuevoDni} onChange={setNuevoDni} />
             <button
               disabled={!nuevoNombre.trim()}
               onClick={confirmarClienteNuevo}
               className="mt-2 w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
             >
-              Continuar
+              {t('Continuar')}
             </button>
           </div>
         )}
@@ -1220,7 +1222,7 @@ export default function NuevaOrden() {
           <button onClick={() => setStep('cliente')} className="text-2xl leading-none">
             &larr;
           </button>
-          <span className="text-lg font-medium">Nueva orden · Ítems</span>
+          <span className="text-lg font-medium">{t('Nueva orden')} · {t('Ítems')}</span>
         </header>
 
         {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
@@ -1230,19 +1232,19 @@ export default function NuevaOrden() {
             onClick={() => setPanelAbierto(panelAbierto === 'dispositivo' ? null : 'dispositivo')}
             className="flex-1 rounded-xl border border-border dark:border-dark-border py-3 text-sm font-medium"
           >
-            + Dispositivo
+            + {t('Dispositivo')}
           </button>
           <button
             onClick={() => setPanelAbierto(panelAbierto === 'producto' ? null : 'producto')}
             className="flex-1 rounded-xl border border-border dark:border-dark-border py-3 text-sm font-medium"
           >
-            + Accesorio / producto
+            + {t('Accesorio / producto')}
           </button>
           <button
             onClick={() => setPanelAbierto(panelAbierto === 'trabajo' ? null : 'trabajo')}
             className="flex-1 rounded-xl border-2 border-amber-400 bg-amber-50 text-amber-900 dark:bg-amber-400/10 dark:text-amber-300 dark:border-amber-400/50 py-3 text-sm font-semibold flex items-center justify-center gap-1.5"
           >
-            🔧 Servicio técnico
+            🔧 {t('Servicio técnico')}
           </button>
         </div>
 
@@ -1255,7 +1257,7 @@ export default function NuevaOrden() {
                   modoDispositivo === 'stock' ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                 }`}
               >
-                Del stock
+                {t('Del stock')}
               </button>
               <button
                 onClick={() => setModoDispositivo('nuevo')}
@@ -1263,7 +1265,7 @@ export default function NuevaOrden() {
                   modoDispositivo === 'nuevo' ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                 }`}
               >
-                Cargar nuevo
+                {t('Cargar nuevo')}
               </button>
             </div>
 
@@ -1272,12 +1274,12 @@ export default function NuevaOrden() {
                 <input
                   value={buscarDispositivo}
                   onChange={(e) => setBuscarDispositivo(e.target.value)}
-                  placeholder="Buscar por modelo o IMEI..."
+                  placeholder={t('Buscar por modelo o IMEI...')}
                   className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                 />
                 <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
                   {dispositivosFiltrados.length === 0 && (
-                    <p className="text-xs text-muted dark:text-dark-text-secondary text-center py-2">No hay dispositivos disponibles.</p>
+                    <p className="text-xs text-muted dark:text-dark-text-secondary text-center py-2">{t('No hay dispositivos disponibles.')}</p>
                   )}
                   {dispositivosFiltrados.map((d) => (
                     <button
@@ -1310,7 +1312,7 @@ export default function NuevaOrden() {
                 <input
                   value={nuevoModelo}
                   onChange={(e) => setNuevoModelo(e.target.value)}
-                  placeholder="Modelo (ej. iPhone 13)"
+                  placeholder={t('Modelo (ej. iPhone 13)')}
                   list="carpetas-stock"
                   className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                 />
@@ -1337,13 +1339,13 @@ export default function NuevaOrden() {
                 <input
                   value={nuevoImeiDispositivo}
                   onChange={(e) => setNuevoImeiDispositivo(e.target.value)}
-                  placeholder="IMEI"
+                  placeholder={t('IMEI')}
                   className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm font-mono"
                 />
                 <input
                   value={nuevoPrecioDispositivo}
                   onChange={(e) => setNuevoPrecioDispositivo(sanitizarDecimal(e.target.value))}
-                  placeholder="Precio"
+                  placeholder={t('Precio')}
                   inputMode="decimal"
                   className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                 />
@@ -1352,7 +1354,7 @@ export default function NuevaOrden() {
                   onClick={agregarDispositivoNuevo}
                   className="w-full rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
                 >
-                  {cargandoDispositivo ? 'Agregando...' : 'Agregar al carrito'}
+                  {cargandoDispositivo ? t('Agregando...') : t('Agregar al carrito')}
                 </button>
               </div>
             )}
@@ -1368,7 +1370,7 @@ export default function NuevaOrden() {
                   modoProducto === 'catalogo' ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                 }`}
               >
-                Del catálogo
+                {t('Del catálogo')}
               </button>
               <button
                 onClick={() => setModoProducto('manual')}
@@ -1376,7 +1378,7 @@ export default function NuevaOrden() {
                   modoProducto === 'manual' ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                 }`}
               >
-                Cargar a mano
+                {t('Cargar a mano')}
               </button>
             </div>
 
@@ -1384,7 +1386,7 @@ export default function NuevaOrden() {
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-96 overflow-y-auto">
                 {productos.length === 0 && (
                   <p className="col-span-full text-xs text-muted dark:text-dark-text-secondary text-center py-2">
-                    Todavía no cargaste productos en Stock &gt; Accesorios.
+                    {t('Todavía no cargaste productos en Stock > Accesorios.')}
                   </p>
                 )}
                 {productos.map((p, i) => (
@@ -1415,21 +1417,21 @@ export default function NuevaOrden() {
                 <input
                   value={productoManualNombre}
                   onChange={(e) => setProductoManualNombre(e.target.value)}
-                  placeholder="Nombre del ítem"
+                  placeholder={t('Nombre del ítem')}
                   className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                 />
                 <div className="flex gap-2">
                   <input
                     value={productoManualCantidad}
                     onChange={(e) => setProductoManualCantidad(e.target.value)}
-                    placeholder="Cantidad"
+                    placeholder={t('Cantidad')}
                     inputMode="numeric"
                     className="w-1/3 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                   />
                   <input
                     value={productoManualPrecio}
                     onChange={(e) => setProductoManualPrecio(sanitizarDecimal(e.target.value))}
-                    placeholder="Precio unitario"
+                    placeholder={t('Precio unitario')}
                     inputMode="decimal"
                     className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                   />
@@ -1439,7 +1441,7 @@ export default function NuevaOrden() {
                   onClick={agregarProductoManual}
                   className="w-full rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
                 >
-                  Agregar al carrito
+                  {t('Agregar al carrito')}
                 </button>
               </div>
             )}
@@ -1455,7 +1457,7 @@ export default function NuevaOrden() {
                   modoTrabajo === 'catalogo' ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                 }`}
               >
-                Del catálogo
+                {t('Del catálogo')}
               </button>
               <button
                 onClick={() => setModoTrabajo('manual')}
@@ -1463,18 +1465,18 @@ export default function NuevaOrden() {
                   modoTrabajo === 'manual' ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                 }`}
               >
-                Cargar a mano
+                {t('Cargar a mano')}
               </button>
             </div>
 
             <div>
               <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">
-                Modelo del equipo (opcional, ej. iPhone 13)
+                {t('Modelo del equipo (opcional, ej. iPhone 13)')}
               </label>
               <input
                 value={trabajoModelo}
                 onChange={(e) => setTrabajoModelo(e.target.value)}
-                placeholder="¿A qué iPhone se le hace el arreglo?"
+                placeholder={t('¿A qué iPhone se le hace el arreglo?')}
                 list="carpetas-stock-trabajo"
                 className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
               />
@@ -1486,46 +1488,45 @@ export default function NuevaOrden() {
             </div>
 
             <div>
-              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">IMEI del equipo (opcional)</label>
+              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('IMEI del equipo (opcional)')}</label>
               <input
                 value={trabajoImei}
                 onChange={(e) => setTrabajoImei(e.target.value)}
-                placeholder="IMEI"
+                placeholder={t('IMEI')}
                 inputMode="numeric"
                 className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm font-mono"
               />
             </div>
-            <SelectorColorAuto label="Color del equipo (opcional)" modelo={trabajoModelo} value={trabajoColor} onChange={setTrabajoColor} />
+            <SelectorColorAuto label={t('Color del equipo (opcional)')} modelo={trabajoModelo} value={trabajoColor} onChange={setTrabajoColor} />
 
             <div className="flex flex-col gap-2 border-t border-border dark:border-dark-border pt-3">
               <p className="text-xs font-medium text-muted dark:text-dark-text-secondary">
-                ¿Cómo entra el equipo? (para saber qué se garantiza al entregarlo)
+                {t('¿Cómo entra el equipo? (para saber qué se garantiza al entregarlo)')}
               </p>
-              <CheckTri label="Enciende" valor={trabajoEnciende} onChange={setTrabajoEnciende} />
+              <CheckTri label={t('Enciende')} valor={trabajoEnciende} onChange={setTrabajoEnciende} />
               {ITEMS_CHECKLIST_INGRESO.map((item) => {
                 const deshabilitado = CAMPOS_DEPENDEN_MODULO.includes(item.campo) && trabajoChecklist.modulo_ok === false;
                 return (
                   <CheckTri
                     key={item.campo}
-                    label={item.label}
+                    label={t(item.label)}
                     disabled={deshabilitado}
                     valor={deshabilitado ? null : trabajoChecklist[item.campo] ?? null}
                     onChange={(v) => setTrabajoChecklist((p) => ({ ...p, [item.campo]: v }))}
                   />
                 );
               })}
-              <CheckTri label="Humedad / manipulación" valor={trabajoHumedad} onChange={setTrabajoHumedad} invertido />
+              <CheckTri label={t('Humedad / manipulación')} valor={trabajoHumedad} onChange={setTrabajoHumedad} invertido />
               <textarea
                 value={trabajoExcepcionGarantia}
                 onChange={(e) => setTrabajoExcepcionGarantia(e.target.value)}
-                placeholder='Excepción adicional a la garantía (opcional, ej. "por golpe fuerte, no garantizamos Face ID")'
+                placeholder={t('Excepción adicional a la garantía (opcional, ej. "por golpe fuerte, no garantizamos Face ID")')}
                 rows={2}
                 className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
               />
               <TextoCondicionGenerado datos={datosChecklistTrabajo()} />
               <p className="text-[10px] text-muted dark:text-dark-text-secondary -mt-1">
-                Al agregar el trabajo al carrito, este texto se suma solo a la nota de la boleta — la garantía general
-                que ya configuraste en Configuración &gt; Datos del negocio sigue apareciendo igual, esto es aparte.
+                {t('Al agregar el trabajo al carrito, este texto se suma solo a la nota de la boleta — la garantía general que ya configuraste en Configuración > Datos del negocio sigue apareciendo igual, esto es aparte.')}
               </p>
             </div>
 
@@ -1533,20 +1534,20 @@ export default function NuevaOrden() {
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-96 overflow-y-auto">
                 {trabajos.length === 0 && (
                   <p className="col-span-full text-xs text-muted dark:text-dark-text-secondary text-center py-2">
-                    Todavía no cargaste trabajos en Servicio Técnico.
+                    {t('Todavía no cargaste trabajos en Servicio Técnico.')}
                   </p>
                 )}
-                {trabajos.map((t, i) => (
+                {trabajos.map((trab, i) => (
                   <button
-                    key={t.id}
-                    onClick={() => agregarTrabajoDelCatalogo(t)}
+                    key={trab.id}
+                    onClick={() => agregarTrabajoDelCatalogo(trab)}
                     className="group rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface p-2.5 flex flex-col items-center gap-1 text-center"
                   >
                     <span className="block animate-flotar" style={{ animationDelay: `${(i % 3) * 0.4}s` }}>
-                      {t.imagen_url ? (
+                      {trab.imagen_url ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
-                          src={t.imagen_url}
+                          src={trab.imagen_url}
                           alt=""
                           className="h-16 w-16 object-contain transition-transform duration-300 ease-out group-hover:animate-vaivenLateral"
                         />
@@ -1554,8 +1555,8 @@ export default function NuevaOrden() {
                         <div className="h-16 w-16 rounded-lg bg-canvas dark:bg-dark-bg flex items-center justify-center text-2xl">🔧</div>
                       )}
                     </span>
-                    <span className="text-xs font-medium leading-tight line-clamp-2">{t.nombre}</span>
-                    {t.precio != null && <span className="text-xs font-semibold">{moneda}{t.precio.toLocaleString('es-AR')}</span>}
+                    <span className="text-xs font-medium leading-tight line-clamp-2">{trab.nombre}</span>
+                    {trab.precio != null && <span className="text-xs font-semibold">{moneda}{trab.precio.toLocaleString('es-AR')}</span>}
                   </button>
                 ))}
               </div>
@@ -1564,13 +1565,13 @@ export default function NuevaOrden() {
                 <input
                   value={trabajoManualNombre}
                   onChange={(e) => setTrabajoManualNombre(e.target.value)}
-                  placeholder="Nombre del arreglo"
+                  placeholder={t('Nombre del arreglo')}
                   className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                 />
                 <input
                   value={trabajoManualPrecio}
                   onChange={(e) => setTrabajoManualPrecio(sanitizarDecimal(e.target.value))}
-                  placeholder="Precio"
+                  placeholder={t('Precio')}
                   inputMode="decimal"
                   className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                 />
@@ -1579,7 +1580,7 @@ export default function NuevaOrden() {
                   onClick={agregarTrabajoManual}
                   className="w-full rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
                 >
-                  Agregar al carrito
+                  {t('Agregar al carrito')}
                 </button>
               </div>
             )}
@@ -1588,7 +1589,7 @@ export default function NuevaOrden() {
 
         <div className="flex flex-col gap-2">
           {carrito.length === 0 && (
-            <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-4">El carrito está vacío. Agregá al menos un ítem.</p>
+            <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-4">{t('El carrito está vacío. Agregá al menos un ítem.')}</p>
           )}
           {carrito.map((i) => (
             <div
@@ -1602,7 +1603,7 @@ export default function NuevaOrden() {
                     value={i.cantidad}
                     onChange={(e) => actualizarCantidadItem(i.tempId, e.target.value)}
                     disabled={i.tipo === 'dispositivo'}
-                    title={i.tipo === 'dispositivo' ? 'Un dispositivo del stock siempre se vende de a uno' : undefined}
+                    title={i.tipo === 'dispositivo' ? t('Un dispositivo del stock siempre se vende de a uno') : undefined}
                     inputMode="numeric"
                     className="w-12 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded px-1 py-0.5 text-xs text-center disabled:opacity-50"
                   />
@@ -1618,7 +1619,7 @@ export default function NuevaOrden() {
               <div className="flex items-center gap-3">
                 <p className="text-sm font-medium">{moneda}{(i.cantidad * i.precioUnitario).toLocaleString('es-AR')}</p>
                 <button onClick={() => quitarDelCarrito(i.tempId)} className="text-xs text-bad underline">
-                  Quitar
+                  {t('Quitar')}
                 </button>
               </div>
             </div>
@@ -1627,7 +1628,7 @@ export default function NuevaOrden() {
 
         {carrito.length > 0 && (
           <div className="flex items-center justify-between text-sm font-medium border-t border-border dark:border-dark-border pt-3">
-            <span>Subtotal</span>
+            <span>{t('Subtotal')}</span>
             <span>{moneda}{subtotal.toLocaleString('es-AR')}</span>
           </div>
         )}
@@ -1641,7 +1642,7 @@ export default function NuevaOrden() {
           }}
           className="mt-auto w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
         >
-          Continuar
+          {t('Continuar')}
         </button>
       </main>
     );
@@ -1653,28 +1654,28 @@ export default function NuevaOrden() {
         <button onClick={() => setStep('carrito')} className="text-2xl leading-none">
           &larr;
         </button>
-        <span className="text-lg font-medium">Nueva orden · Confirmar</span>
+        <span className="text-lg font-medium">{t('Nueva orden')} · {t('Confirmar')}</span>
       </header>
 
       {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
 
       <div className="rounded-xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border px-4 py-3 text-sm flex flex-col gap-1">
         <p>
-          <span className="text-muted dark:text-dark-text-secondary">Cliente:</span>{' '}
+          <span className="text-muted dark:text-dark-text-secondary">{t('Cliente:')}</span>{' '}
           {modoCliente === 'existente' ? `${clienteElegido?.nombre} ${clienteElegido?.apellido || ''}` : nuevoNombre}
         </p>
         <p>
-          <span className="text-muted dark:text-dark-text-secondary">Ítems:</span> {carrito.length}
+          <span className="text-muted dark:text-dark-text-secondary">{t('Ítems:')}</span> {carrito.length}
         </p>
       </div>
 
       {monedasDisponibles.length > 1 && (
         <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-3 flex flex-col gap-2">
-          <span className="text-sm font-medium">¿En qué moneda mostrar el monto en la boleta?</span>
+          <span className="text-sm font-medium">{t('¿En qué moneda mostrar el monto en la boleta?')}</span>
           <div className="flex gap-2">
             {([
-              { v: 'principal', t: `Solo ${simboloMoneda(monedasDisponibles[0])}` },
-              { v: 'ambas', t: 'Ambas' },
+              { v: 'principal', t: `${t('Solo')} ${simboloMoneda(monedasDisponibles[0])}` },
+              { v: 'ambas', t: t('Ambas') },
             ] as const).map((op) => (
               <button
                 key={op.v}
@@ -1696,7 +1697,7 @@ export default function NuevaOrden() {
           {muestraSecundaria && (
             <>
               <label className="text-xs text-muted dark:text-dark-text-secondary mt-1">
-                Monto en {monedasDisponibles[1]} (calculado con tu tipo de cambio, lo podés corregir)
+                {t('Monto en')} {monedasDisponibles[1]} {t('(calculado con tu tipo de cambio, lo podés corregir)')}
               </label>
               <input
                 value={montoSecundario}
@@ -1705,12 +1706,11 @@ export default function NuevaOrden() {
                   setMontoSecundarioTocado(true);
                 }}
                 inputMode="decimal"
-                placeholder={`Monto en ${monedasDisponibles[1]}`}
+                placeholder={`${t('Monto en')} ${monedasDisponibles[1]}`}
                 className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
               />
               <p className="text-xs text-muted dark:text-dark-text-secondary">
-                Las Estadísticas siempre se calculan en {monedasDisponibles[0]} (tu moneda principal). Esto solo cambia
-                cómo se ve la boleta del cliente.
+                {t('Las Estadísticas siempre se calculan en')} {monedasDisponibles[0]} {t('(tu moneda principal). Esto solo cambia cómo se ve la boleta del cliente.')}
               </p>
             </>
           )}
@@ -1718,14 +1718,14 @@ export default function NuevaOrden() {
       )}
 
       <div>
-        <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Vendedor</label>
+        <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Vendedor')}</label>
         <select
           value={vendedorId}
           onChange={(e) => setVendedorId(e.target.value)}
           className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
         >
           <option value="" disabled>
-            Elegí quién atendió esta venta...
+            {t('Elegí quién atendió esta venta...')}
           </option>
           {vendedores.map((v) => (
             <option key={v.id} value={v.id}>
@@ -1735,20 +1735,19 @@ export default function NuevaOrden() {
         </select>
         {!vendedorId && vendedores.length > 0 && (
           <p className="text-[10px] text-warn mt-1">
-            Es obligatorio para poder confirmar la orden — así no queda como "Sin asignar" en Estadísticas.
+            {t('Es obligatorio para poder confirmar la orden — así no queda como "Sin asignar" en Estadísticas.')}
           </p>
         )}
         {vendedores.length === 0 && (
           <p className="text-[10px] text-muted dark:text-dark-text-secondary mt-1">
-            Todavía no cargaste vendedores en Configuración — podés confirmar sin elegir uno, pero después no vas a
-            poder saber quién hizo esta venta en Estadísticas.
+            {t('Todavía no cargaste vendedores en Configuración — podés confirmar sin elegir uno, pero después no vas a poder saber quién hizo esta venta en Estadísticas.')}
           </p>
         )}
       </div>
 
       {planes.length > 0 && subtotal > 0 && (
         <div>
-          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Plan de pago</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Plan de pago')}</label>
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setCuotasElegidas(0)}
@@ -1756,8 +1755,8 @@ export default function NuevaOrden() {
                 cuotasElegidas === 0 ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
               }`}
             >
-              Contado
-              <span className="block text-[10px] opacity-80 font-normal">ahora · sin recargo</span>
+              {t('Contado')}
+              <span className="block text-[10px] opacity-80 font-normal">{t('ahora · sin recargo')}</span>
             </button>
             {planes.map((p) => (
               <button
@@ -1767,19 +1766,19 @@ export default function NuevaOrden() {
                   cuotasElegidas === p.cuotas ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
                 }`}
               >
-                {etiquetaCuotas(p.cuotas)}
+                {t(etiquetaCuotas(p.cuotas))}
                 <span className="block text-[10px] opacity-80 font-normal">
-                  de {moneda}{Math.round(valorCuota(subtotal, p.cuotas, p.interes)).toLocaleString('es-AR')}
+                  {t('de')} {moneda}{Math.round(valorCuota(subtotal, p.cuotas, p.interes)).toLocaleString('es-AR')}
                 </span>
               </button>
             ))}
           </div>
           {cuotasElegidas >= 1 && (
             <p className="text-[11px] text-muted dark:text-dark-text-secondary mt-1">
-              {cuotasElegidas === 1 ? 'Paga a ~1 mes: ' : ''}
-              {etiquetaCuotas(cuotasElegidas)} de {moneda}
-              {Math.round(valorCuota(subtotal, cuotasElegidas, interesPlan)).toLocaleString('es-AR')} · total financiado{' '}
-              {moneda}{Math.round(subtotalFinanciado).toLocaleString('es-AR')} (interés {interesPlan}%)
+              {cuotasElegidas === 1 ? `${t('Paga a ~1 mes:')} ` : ''}
+              {t(etiquetaCuotas(cuotasElegidas))} {t('de')} {moneda}
+              {Math.round(valorCuota(subtotal, cuotasElegidas, interesPlan)).toLocaleString('es-AR')} · {t('total financiado')}{' '}
+              {moneda}{Math.round(subtotalFinanciado).toLocaleString('es-AR')} ({t('interés')} {interesPlan}%)
             </p>
           )}
         </div>
@@ -1787,20 +1786,20 @@ export default function NuevaOrden() {
 
       {comisionesActivas && (
         <div className="flex items-center justify-between gap-2">
-          <label className="text-xs text-muted dark:text-dark-text-secondary">Tipo de venta</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary">{t('Tipo de venta')}</label>
           <div className="inline-flex items-center gap-1 rounded-xl bg-canvas dark:bg-dark-bg p-0.5">
-            {(['minorista', 'mayorista'] as const).map((t) => (
+            {(['minorista', 'mayorista'] as const).map((tv) => (
               <button
-                key={t}
+                key={tv}
                 type="button"
-                onClick={() => setTipoVenta(t)}
+                onClick={() => setTipoVenta(tv)}
                 className={`rounded-lg px-3 py-1.5 text-xs font-medium capitalize transition-colors ${
-                  tipoVenta === t
+                  tipoVenta === tv
                     ? 'bg-white dark:bg-dark-surface-elevated text-ink dark:text-dark-text shadow-card'
                     : 'text-muted dark:text-dark-text-secondary'
                 }`}
               >
-                {t}
+                {t(tv)}
               </button>
             ))}
           </div>
@@ -1809,7 +1808,7 @@ export default function NuevaOrden() {
 
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
-          <label className="text-xs text-muted dark:text-dark-text-secondary">Cómo se paga</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary">{t('Cómo se paga')}</label>
           <button
             onClick={() => {
               const nuevo = !pagoMixto;
@@ -1820,7 +1819,7 @@ export default function NuevaOrden() {
             }}
             className="text-xs text-accent dark:text-dark-accent underline"
           >
-            {pagoMixto ? 'Un solo medio' : 'Dividir en varios (mixto)'}
+            {pagoMixto ? t('Un solo medio') : t('Dividir en varios (mixto)')}
           </button>
         </div>
 
@@ -1834,7 +1833,7 @@ export default function NuevaOrden() {
                   medioSimple === m.codigo ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
                 }`}
               >
-                {m.icono} {m.label}
+                {m.icono} {t(m.label)}
               </button>
             ))}
             {ctaCteDisponible && (
@@ -1844,7 +1843,7 @@ export default function NuevaOrden() {
                   medioSimple === CUENTA_CORRIENTE ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
                 }`}
               >
-                📒 Cuenta corriente
+                📒 {t('Cuenta corriente')}
               </button>
             )}
             {/* Antes esto era solo un link de texto chico más abajo, separado
@@ -1861,7 +1860,7 @@ export default function NuevaOrden() {
                     : 'border-border dark:border-dark-border text-muted dark:text-dark-text-secondary'
                 }`}
               >
-                📒 Cuenta corriente (habilitar)
+                📒 {t('Cuenta corriente (habilitar)')}
               </button>
             )}
           </div>
@@ -1876,20 +1875,20 @@ export default function NuevaOrden() {
                 >
                   {MEDIOS_PAGO.map((m) => (
                     <option key={m.codigo} value={m.codigo}>
-                      {m.label}
+                      {t(m.label)}
                     </option>
                   ))}
-                  {ctaCteDisponible && <option value={CUENTA_CORRIENTE}>Cuenta corriente</option>}
+                  {ctaCteDisponible && <option value={CUENTA_CORRIENTE}>{t('Cuenta corriente')}</option>}
                 </select>
                 <input
                   value={l.monto}
                   onChange={(e) => actualizarLineaPago(l.tempId, 'monto', sanitizarDecimal(e.target.value))}
                   inputMode="decimal"
-                  placeholder="Monto"
+                  placeholder={t('Monto')}
                   className="w-28 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                 />
                 <button onClick={() => quitarLineaPago(l.tempId)} className="text-bad text-xs font-medium shrink-0">
-                  Quitar
+                  {t('Quitar')}
                 </button>
               </div>
             ))}
@@ -1897,7 +1896,7 @@ export default function NuevaOrden() {
               onClick={agregarLineaPago}
               className="rounded-lg border border-border dark:border-dark-border py-2 text-sm font-medium"
             >
-              + Agregar medio
+              + {t('Agregar medio')}
             </button>
             {/* En modo mixto, cuenta corriente solo aparece en el <select> de
                 cada línea si ya está habilitada — acá va el mismo disparador
@@ -1907,11 +1906,11 @@ export default function NuevaOrden() {
                 onClick={() => setHabilitandoCta((v) => !v)}
                 className="self-start text-xs text-accent dark:text-dark-accent underline"
               >
-                📒 Habilitar cuenta corriente para este cliente
+                📒 {t('Habilitar cuenta corriente para este cliente')}
               </button>
             )}
             <div className="flex items-center justify-between text-xs">
-              <span className="text-muted dark:text-dark-text-secondary">Asignado</span>
+              <span className="text-muted dark:text-dark-text-secondary">{t('Asignado')}</span>
               <span className={asignacionOk ? 'text-good font-medium' : 'text-warn font-medium'}>
                 {moneda}{Math.round(montoAsignado).toLocaleString('es-AR')} / {moneda}{Math.round(total).toLocaleString('es-AR')}
                 {asignacionOk ? ' ✓' : ''}
@@ -1927,15 +1926,15 @@ export default function NuevaOrden() {
                 }
                 className="text-xs text-accent dark:text-dark-accent underline self-start"
               >
-                Poner el resto ({moneda}{Math.round(restantePorAsignar).toLocaleString('es-AR')}) en cuenta corriente
+                {t('Poner el resto')} ({moneda}{Math.round(restantePorAsignar).toLocaleString('es-AR')}) {t('en cuenta corriente')}
               </button>
             )}
             {!asignacionOk && (
               <p className="text-[10px] text-warn">
-                La suma de los medios tiene que dar el total.{' '}
+                {t('La suma de los medios tiene que dar el total.')}{' '}
                 {restantePorAsignar > 0
-                  ? `Falta asignar ${moneda}${Math.round(restantePorAsignar).toLocaleString('es-AR')}.`
-                  : `Te pasaste por ${moneda}${Math.round(-restantePorAsignar).toLocaleString('es-AR')}.`}
+                  ? `${t('Falta asignar')} ${moneda}${Math.round(restantePorAsignar).toLocaleString('es-AR')}.`
+                  : `${t('Te pasaste por')} ${moneda}${Math.round(-restantePorAsignar).toLocaleString('es-AR')}.`}
               </p>
             )}
           </div>
@@ -1944,26 +1943,25 @@ export default function NuevaOrden() {
         {ctaCteDisponible && montoCuentaCorriente > 0 && (
           <div className="rounded-lg bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border px-3 py-2 text-xs flex flex-col gap-1">
             <div className="flex justify-between">
-              <span className="text-muted dark:text-dark-text-secondary">📒 Queda debiendo</span>
+              <span className="text-muted dark:text-dark-text-secondary">📒 {t('Queda debiendo')}</span>
               <span className="font-medium">{moneda}{Math.round(montoCuentaCorriente).toLocaleString('es-AR')}</span>
             </div>
             {saldoCliente > 0 && (
               <div className="flex justify-between">
-                <span className="text-muted dark:text-dark-text-secondary">Saldo anterior</span>
+                <span className="text-muted dark:text-dark-text-secondary">{t('Saldo anterior')}</span>
                 <span>{moneda}{Math.round(saldoCliente).toLocaleString('es-AR')}</span>
               </div>
             )}
             {clienteElegido?.limite_credito != null && (
               <div className="flex justify-between">
-                <span className="text-muted dark:text-dark-text-secondary">Límite de crédito</span>
+                <span className="text-muted dark:text-dark-text-secondary">{t('Límite de crédito')}</span>
                 <span>{moneda}{Math.round(clienteElegido.limite_credito).toLocaleString('es-AR')}</span>
               </div>
             )}
             {excedeLimite && (
               <p className="text-bad">
-                Supera el límite de crédito (disponible {moneda}
-                {Math.round(Math.max(0, creditoDisponible)).toLocaleString('es-AR')}). No se puede confirmar hasta
-                cobrarle o subirle el límite.
+                {t('Supera el límite de crédito (disponible')} {moneda}
+                {Math.round(Math.max(0, creditoDisponible)).toLocaleString('es-AR')}). {t('No se puede confirmar hasta cobrarle o subirle el límite.')}
               </p>
             )}
           </div>
@@ -1982,22 +1980,21 @@ export default function NuevaOrden() {
               }}
               className="flex items-center justify-between text-xs font-medium"
             >
-              <span>🧾 Financiar en cuotas propias (con vencimientos)</span>
+              <span>🧾 {t('Financiar en cuotas propias (con vencimientos)')}</span>
               <span className={`rounded-full px-2 py-0.5 ${financiarActivo ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-canvas dark:bg-dark-bg text-muted dark:text-dark-text-secondary'}`}>
-                {financiarActivo ? 'Activado' : 'Desactivado'}
+                {financiarActivo ? t('Activado') : t('Desactivado')}
               </span>
             </button>
             {!financiarActivo && (
               <p className="text-[10px] text-muted dark:text-dark-text-secondary">
-                Si no lo activás, lo que queda debiendo entra como un cargo único a cuenta corriente (como siempre).
-                Activándolo, se arma un cronograma con una cuota y un vencimiento por mes.
+                {t('Si no lo activás, lo que queda debiendo entra como un cargo único a cuenta corriente (como siempre). Activándolo, se arma un cronograma con una cuota y un vencimiento por mes.')}
               </p>
             )}
             {financiarActivo && (
               <>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-[10px] text-muted dark:text-dark-text-secondary block mb-1">Cantidad de cuotas</label>
+                    <label className="text-[10px] text-muted dark:text-dark-text-secondary block mb-1">{t('Cantidad de cuotas')}</label>
                     <input
                       value={financiarCuotas}
                       inputMode="numeric"
@@ -2006,7 +2003,7 @@ export default function NuevaOrden() {
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] text-muted dark:text-dark-text-secondary block mb-1">Fecha de la 1ª cuota</label>
+                    <label className="text-[10px] text-muted dark:text-dark-text-secondary block mb-1">{t('Fecha de la 1ª cuota')}</label>
                     <CampoFecha value={financiarPrimeraFecha} onChange={setFinanciarPrimeraFecha} ancho="completo" />
                   </div>
                 </div>
@@ -2014,14 +2011,14 @@ export default function NuevaOrden() {
                   <div className="flex flex-col gap-0.5 max-h-32 overflow-y-auto">
                     {previewFinanciacion.map((c) => (
                       <div key={c.numero} className="flex items-center justify-between text-[11px] text-muted dark:text-dark-text-secondary">
-                        <span>Cuota {c.numero}/{financiarCuotasNum}</span>
+                        <span>{t('Cuota')} {c.numero}/{financiarCuotasNum}</span>
                         <span>{new Date(c.fecha_vencimiento + 'T00:00:00').toLocaleDateString('es-AR')}</span>
                         <span className="font-medium text-ink dark:text-dark-text">{moneda}{Math.round(c.importe).toLocaleString('es-AR')}</span>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-[10px] text-warn">Completá cantidad de cuotas y fecha de la 1ª para ver el cronograma.</p>
+                  <p className="text-[10px] text-warn">{t('Completá cantidad de cuotas y fecha de la 1ª para ver el cronograma.')}</p>
                 )}
               </>
             )}
@@ -2031,30 +2028,29 @@ export default function NuevaOrden() {
         {clienteElegido && !ctaCteDisponible && (saldoClienteError || clienteElegido.suspendido) && (
           <p className="text-[10px] text-muted dark:text-dark-text-secondary">
             {saldoClienteError
-              ? 'No pudimos confirmar el saldo de este cliente, así que por las dudas no se puede vender a cuenta corriente ahora. Probá de nuevo en un momento.'
-              : 'Este cliente está suspendido para cuenta corriente.'}
+              ? t('No pudimos confirmar el saldo de este cliente, así que por las dudas no se puede vender a cuenta corriente ahora. Probá de nuevo en un momento.')
+              : t('Este cliente está suspendido para cuenta corriente.')}
           </p>
         )}
 
         {habilitandoCta && !ctaCteDisponible && (
           <div className="rounded-lg bg-canvas dark:bg-dark-bg p-2.5 flex flex-col gap-2">
             <p className="text-[10px] text-muted dark:text-dark-text-secondary">
-              Cuenta corriente = la financiación propia del local (fiado, sin interés fijo) — distinta de las cuotas de
-              arriba. Se habilita para este cliente y queda usada en esta misma venta.
+              {t('Cuenta corriente = la financiación propia del local (fiado, sin interés fijo) — distinta de las cuotas de arriba. Se habilita para este cliente y queda usada en esta misma venta.')}
             </p>
             <div className="flex gap-2">
               <label className="flex-1 flex flex-col gap-0.5">
-                <span className="text-[10px] text-muted dark:text-dark-text-secondary">Límite de crédito (opcional)</span>
+                <span className="text-[10px] text-muted dark:text-dark-text-secondary">{t('Límite de crédito (opcional)')}</span>
                 <input
                   value={limiteCtaInline}
                   onChange={(e) => setLimiteCtaInline(sanitizarDecimal(e.target.value))}
                   inputMode="decimal"
-                  placeholder="Sin límite"
+                  placeholder={t('Sin límite')}
                   className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-1.5 text-xs"
                 />
               </label>
               <label className="flex-1 flex flex-col gap-0.5">
-                <span className="text-[10px] text-muted dark:text-dark-text-secondary">Plazo (días)</span>
+                <span className="text-[10px] text-muted dark:text-dark-text-secondary">{t('Plazo (días)')}</span>
                 <input
                   value={plazoCtaInline}
                   onChange={(e) => setPlazoCtaInline(e.target.value.replace(/\D/g, ''))}
@@ -2069,13 +2065,13 @@ export default function NuevaOrden() {
                 onClick={habilitarCtaCteInline}
                 className="flex-1 rounded-lg bg-accent dark:bg-dark-accent text-white py-1.5 text-xs font-medium disabled:opacity-40"
               >
-                {guardandoCtaInline ? 'Habilitando...' : 'Habilitar y usar en esta venta'}
+                {guardandoCtaInline ? t('Habilitando...') : t('Habilitar y usar en esta venta')}
               </button>
               <button
                 onClick={() => setHabilitandoCta(false)}
                 className="rounded-lg border border-border dark:border-dark-border px-3 py-1.5 text-xs font-medium"
               >
-                Cancelar
+                {t('Cancelar')}
               </button>
             </div>
           </div>
@@ -2084,7 +2080,7 @@ export default function NuevaOrden() {
 
       <div className="flex gap-2">
         <div className="flex-1">
-          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Anticipo</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Anticipo')}</label>
           <input
             value={anticipo}
             onChange={(e) => setAnticipo(sanitizarDecimal(e.target.value))}
@@ -2094,7 +2090,7 @@ export default function NuevaOrden() {
           />
         </div>
         <div className="flex-1">
-          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Impuesto %</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Impuesto %')}</label>
           <input
             value={impuesto}
             onChange={(e) => setImpuesto(sanitizarDecimal(e.target.value))}
@@ -2107,13 +2103,13 @@ export default function NuevaOrden() {
 
       <div>
         <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">
-          Nota para la boleta (opcional)
+          {t('Nota para la boleta (opcional)')}
         </label>
         <textarea
           value={nota}
           onChange={(e) => setNota(e.target.value)}
           rows={2}
-          placeholder="Ej. el equipo tiene un detalle en la pantalla, se vende igual con este descuento"
+          placeholder={t('Ej. el equipo tiene un detalle en la pantalla, se vende igual con este descuento')}
           className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
         />
       </div>
@@ -2126,14 +2122,14 @@ export default function NuevaOrden() {
             onChange={(e) => setIncluirGarantia(e.target.checked)}
             className="h-5 w-5 accent-ink"
           />
-          <span className="text-sm font-medium">Incluir el texto de garantía en la boleta</span>
+          <span className="text-sm font-medium">{t('Incluir el texto de garantía en la boleta')}</span>
         </label>
         <Link
           href="/configuracion/negocio"
           target="_blank"
           className="text-xs text-accent dark:text-dark-accent underline shrink-0"
         >
-          Editar texto
+          {t('Editar texto')}
         </Link>
       </div>
 
@@ -2145,7 +2141,7 @@ export default function NuevaOrden() {
             onChange={(e) => setCanjeActivo(e.target.checked)}
             className="h-5 w-5 accent-ink"
           />
-          <span className="text-sm font-medium">Plan canje: recibo uno o más dispositivos como parte de pago</span>
+          <span className="text-sm font-medium">{t('Plan canje: recibo uno o más dispositivos como parte de pago')}</span>
         </label>
 
         {canjesCarrito.length > 0 && (
@@ -2162,7 +2158,7 @@ export default function NuevaOrden() {
                     {c.capacidad_gb ? ` · ${c.capacidad_gb}GB` : ''}
                     {c.color ? ` · ${c.color}` : ''}
                   </p>
-                  {c.imei && <p className="text-xs text-muted dark:text-dark-text-secondary font-mono">IMEI: {c.imei}</p>}
+                  {c.imei && <p className="text-xs text-muted dark:text-dark-text-secondary font-mono">{t('IMEI:')} {c.imei}</p>}
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <span className="text-xs text-muted dark:text-dark-text-secondary">{moneda}</span>
@@ -2174,7 +2170,7 @@ export default function NuevaOrden() {
                     className="w-24 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded px-2 py-1 text-sm"
                   />
                   <button onClick={() => quitarCanje(c.tempId)} className="text-bad text-xs font-medium">
-                    Quitar
+                    {t('Quitar')}
                   </button>
                 </div>
               </div>
@@ -2187,7 +2183,7 @@ export default function NuevaOrden() {
             <input
               value={canjeModelo}
               onChange={(e) => setCanjeModelo(e.target.value)}
-              placeholder="Modelo del dispositivo entregado"
+              placeholder={t('Modelo del dispositivo entregado')}
               className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
             />
             <div className="flex gap-2">
@@ -2207,27 +2203,27 @@ export default function NuevaOrden() {
             <input
               value={canjeBateria}
               onChange={(e) => setCanjeBateria(e.target.value)}
-              placeholder="Batería %"
+              placeholder={t('Batería %')}
               inputMode="numeric"
               className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
             />
             <input
               value={canjeImei}
               onChange={(e) => setCanjeImei(e.target.value)}
-              placeholder="IMEI"
+              placeholder={t('IMEI')}
               className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm font-mono"
             />
             <input
               value={canjeMonto}
               onChange={(e) => setCanjeMonto(sanitizarDecimal(e.target.value))}
-              placeholder="Monto reconocido"
+              placeholder={t('Monto reconocido')}
               inputMode="decimal"
               className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
             />
             <textarea
               value={canjeDetalles}
               onChange={(e) => setCanjeDetalles(e.target.value)}
-              placeholder="Detalles del dispositivo (ej. no anda el parlante, módulo con detalle)"
+              placeholder={t('Detalles del dispositivo (ej. no anda el parlante, módulo con detalle)')}
               rows={3}
               className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
             />
@@ -2236,17 +2232,17 @@ export default function NuevaOrden() {
               disabled={!canjeModelo.trim()}
               className="rounded-lg border border-border dark:border-dark-border py-2 text-sm font-medium disabled:opacity-40"
             >
-              + Agregar este dispositivo
+              + {t('Agregar este dispositivo')}
             </button>
             <p className="text-xs text-muted dark:text-dark-text-secondary">
-              El monto reconocido ya se descuenta del total y el dispositivo se guarda en Plan Canje al confirmar la orden (no entra directo al stock). Usá <span className="font-medium">+ Agregar este dispositivo</span> solo si vas a cargar más de uno.
+              {t('El monto reconocido ya se descuenta del total y el dispositivo se guarda en Plan Canje al confirmar la orden (no entra directo al stock). Usá')} <span className="font-medium">+ {t('Agregar este dispositivo')}</span> {t('solo si vas a cargar más de uno.')}
             </p>
           </div>
         )}
       </div>
 
       <div>
-        <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Estado</label>
+        <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Estado')}</label>
         <div className="flex gap-2">
           {ESTADOS_ORDEN.map((e) => (
             <button
@@ -2256,14 +2252,14 @@ export default function NuevaOrden() {
                 estadoOrden === e ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
               }`}
             >
-              {e}
+              {t(e)}
             </button>
           ))}
         </div>
       </div>
 
       <div className="flex items-center justify-between text-lg font-medium border-t border-border dark:border-dark-border pt-3">
-        <span>Total</span>
+        <span>{t('Total')}</span>
         <span>{moneda}{total.toLocaleString('es-AR')}</span>
       </div>
 
@@ -2277,10 +2273,9 @@ export default function NuevaOrden() {
               className="h-5 w-5 accent-amber-500 mt-0.5 shrink-0"
             />
             <span>
-              <span className="font-semibold text-amber-900 dark:text-amber-300">🔧 Derivar a Servicio Técnico al confirmar</span>
+              <span className="font-semibold text-amber-900 dark:text-amber-300">🔧 {t('Derivar a Servicio Técnico al confirmar')}</span>
               <span className="block text-xs text-amber-800/90 dark:text-amber-300/70 mt-0.5">
-                El equipo pasa directo a reparación al hacer la boleta. Recomendado para celulares que se venden con
-                batería baja (ej.: subir batería de un equipo que el cliente ya compró y está esperando).
+                {t('El equipo pasa directo a reparación al hacer la boleta. Recomendado para celulares que se venden con batería baja (ej.: subir batería de un equipo que el cliente ya compró y está esperando).')}
               </span>
             </span>
           </label>
@@ -2289,7 +2284,7 @@ export default function NuevaOrden() {
             <div className="flex flex-col gap-2 mt-1">
               {derivaciones.length > 1 && (
                 <p className="text-xs text-amber-800 dark:text-amber-300">
-                  Tildá los equipos que van a Servicio Técnico. Podés derivar varios de una misma boleta.
+                  {t('Tildá los equipos que van a Servicio Técnico. Podés derivar varios de una misma boleta.')}
                 </p>
               )}
               {derivaciones.map((der) => {
@@ -2314,10 +2309,10 @@ export default function NuevaOrden() {
                       />
                       <span className="min-w-0 flex-1">
                         <span className="block text-sm font-medium text-amber-950 dark:text-amber-100 break-words">
-                          {der.modelo.trim() ? resumen : 'Equipo a cargar'}
+                          {der.modelo.trim() ? resumen : t('Equipo a cargar')}
                         </span>
                         {der.desdeTrabajo && (
-                          <span className="block text-[11px] text-amber-700/80 dark:text-amber-300/70">Equipo de la ficha técnica (lleva su checklist)</span>
+                          <span className="block text-[11px] text-amber-700/80 dark:text-amber-300/70">{t('Equipo de la ficha técnica (lleva su checklist)')}</span>
                         )}
                       </span>
                       {der.incluir && der.modelo.trim() && !der.editar && (
@@ -2326,7 +2321,7 @@ export default function NuevaOrden() {
                           onClick={() => actualizarDerivacion(der.key, { editar: true })}
                           className="shrink-0 text-xs text-amber-800 dark:text-amber-300 underline"
                         >
-                          Cambiar
+                          {t('Cambiar')}
                         </button>
                       )}
                     </label>
@@ -2338,7 +2333,7 @@ export default function NuevaOrden() {
                             <input
                               value={der.modelo}
                               onChange={(e) => actualizarDerivacion(der.key, { modelo: e.target.value })}
-                              placeholder="Modelo del equipo (ej. iPhone 14)"
+                              placeholder={t('Modelo del equipo (ej. iPhone 14)')}
                               className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                             />
                             <div className="flex gap-2">
@@ -2359,7 +2354,7 @@ export default function NuevaOrden() {
                             <input
                               value={der.imei}
                               onChange={(e) => actualizarDerivacion(der.key, { imei: e.target.value })}
-                              placeholder="IMEI (opcional)"
+                              placeholder={t('IMEI (opcional)')}
                               className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm font-mono"
                             />
                           </>
@@ -2367,7 +2362,7 @@ export default function NuevaOrden() {
                         <input
                           value={der.motivo}
                           onChange={(e) => actualizarDerivacion(der.key, { motivo: e.target.value })}
-                          placeholder="¿Qué se le hace? (ej. subir batería, cambiar módulo)"
+                          placeholder={t('¿Qué se le hace? (ej. subir batería, cambiar módulo)')}
                           className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                         />
                         <label className="flex items-center gap-2 text-sm cursor-pointer">
@@ -2377,7 +2372,7 @@ export default function NuevaOrden() {
                             onChange={(e) => actualizarDerivacion(der.key, { prioritario: e.target.checked })}
                             className="h-4 w-4 accent-amber-500"
                           />
-                          <span className="text-amber-900 dark:text-amber-200">Prioritario — el cliente está esperando</span>
+                          <span className="text-amber-900 dark:text-amber-200">{t('Prioritario — el cliente está esperando')}</span>
                         </label>
                       </div>
                     )}
@@ -2390,14 +2385,14 @@ export default function NuevaOrden() {
       )}
 
       {!puedeVender && (
-        <p className="text-xs text-bad text-center">No tenés permiso para crear órdenes.</p>
+        <p className="text-xs text-bad text-center">{t('No tenés permiso para crear órdenes.')}</p>
       )}
       <button
         disabled={!puedeConfirmar || guardando}
         onClick={handleConfirmar}
         className="mt-auto w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
       >
-        {guardando ? 'Creando orden...' : 'Confirmar orden'}
+        {guardando ? t('Creando orden...') : t('Confirmar orden')}
       </button>
     </main>
   );

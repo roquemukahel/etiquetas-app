@@ -10,6 +10,7 @@ import { tienePermiso } from '../../lib/permisos';
 import ServicioTecnicoTabs from '../../ServicioTecnicoTabs';
 import Modal from '../../Modal';
 import { ICONOS } from '../../Iconos';
+import { useT } from '../../lib/idioma';
 
 function IconoChico({ nombre, className = '' }: { nombre: string; className?: string }) {
   return (
@@ -99,6 +100,7 @@ const FORM_VACIO: FormState = {
 export default function Servicios() {
   const supabase = crearClienteNavegador();
   const actor = useActor();
+  const t = useT();
   const puedeGestionar = tienePermiso(actor, 'gestionar_servicio_tecnico');
   // "Eliminar definitivamente" usa el mismo permiso más estricto que ya
   // protege el borrado duro de reparaciones (distinto de "gestionar" —
@@ -137,16 +139,16 @@ export default function Servicios() {
 
   const filtrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
-    return trabajos.filter((t) => {
-      if (verArchivados ? t.activo : !t.activo) return false;
-      if (filtroCategoria && t.categoria !== filtroCategoria) return false;
-      if (q && !t.nombre.toLowerCase().includes(q)) return false;
+    return trabajos.filter((trab) => {
+      if (verArchivados ? trab.activo : !trab.activo) return false;
+      if (filtroCategoria && trab.categoria !== filtroCategoria) return false;
+      if (q && !trab.nombre.toLowerCase().includes(q)) return false;
       return true;
     });
   }, [trabajos, busqueda, filtroCategoria, verArchivados]);
 
   const categoriasUsadas = useMemo(() => {
-    const usadas = new Set(trabajos.map((t) => t.categoria).filter(Boolean) as string[]);
+    const usadas = new Set(trabajos.map((trab) => trab.categoria).filter(Boolean) as string[]);
     return CATEGORIAS.filter((c) => usadas.has(c));
   }, [trabajos]);
 
@@ -160,21 +162,21 @@ export default function Servicios() {
     setModalAbierto(true);
   };
 
-  const abrirEdicion = (t: Trabajo) => {
+  const abrirEdicion = (trab: Trabajo) => {
     if (!puedeGestionar) return;
-    setEditandoId(t.id);
+    setEditandoId(trab.id);
     setForm({
-      nombre: t.nombre,
-      precio: t.precio != null ? String(t.precio) : '',
-      categoria: t.categoria ?? '',
-      descripcion_interna: t.descripcion_interna ?? '',
-      duracion_estimada_min: t.duracion_estimada_min != null ? String(t.duracion_estimada_min) : '',
-      garantia_dias: t.garantia_dias != null ? String(t.garantia_dias) : '',
-      compatibilidad: t.compatibilidad ?? '',
-      repuesto_sugerido_id: t.repuesto_sugerido_id ?? '',
-      checklist_tecnico: (t.checklist_tecnico ?? []).join('\n'),
-      instrucciones_internas: t.instrucciones_internas ?? '',
-      imagen_url: t.imagen_url,
+      nombre: trab.nombre,
+      precio: trab.precio != null ? String(trab.precio) : '',
+      categoria: trab.categoria ?? '',
+      descripcion_interna: trab.descripcion_interna ?? '',
+      duracion_estimada_min: trab.duracion_estimada_min != null ? String(trab.duracion_estimada_min) : '',
+      garantia_dias: trab.garantia_dias != null ? String(trab.garantia_dias) : '',
+      compatibilidad: trab.compatibilidad ?? '',
+      repuesto_sugerido_id: trab.repuesto_sugerido_id ?? '',
+      checklist_tecnico: (trab.checklist_tecnico ?? []).join('\n'),
+      instrucciones_internas: trab.instrucciones_internas ?? '',
+      imagen_url: trab.imagen_url,
     });
     setError(null);
     setMenuAbierto(null);
@@ -215,7 +217,7 @@ export default function Servicios() {
     if (editandoId) {
       const { error: updError } = await supabase.from('trabajos').update(payload).eq('id', editandoId);
       if (updError) {
-        setError('No pudimos guardar: ' + updError.message);
+        setError(`${t('No pudimos guardar:')} ` + updError.message);
         setGuardando(false);
         return;
       }
@@ -227,7 +229,7 @@ export default function Servicios() {
     } else {
       const { data: nuevo, error: insError } = await supabase.from('trabajos').insert(payload).select('id').single();
       if (insError) {
-        setError('No pudimos guardar: ' + insError.message);
+        setError(`${t('No pudimos guardar:')} ` + insError.message);
         setGuardando(false);
         return;
       }
@@ -242,29 +244,29 @@ export default function Servicios() {
     cargar();
   };
 
-  const duplicar = async (t: Trabajo) => {
+  const duplicar = async (trab: Trabajo) => {
     if (!puedeGestionar) return;
     setMenuAbierto(null);
     const { data: nuevo, error: insError } = await supabase
       .from('trabajos')
       .insert({
-        nombre: `${t.nombre} (copia)`,
-        precio: t.precio,
-        imagen_url: t.imagen_url,
-        categoria: t.categoria,
-        descripcion_interna: t.descripcion_interna,
-        duracion_estimada_min: t.duracion_estimada_min,
-        garantia_dias: t.garantia_dias,
-        compatibilidad: t.compatibilidad,
-        repuesto_sugerido_id: t.repuesto_sugerido_id,
-        checklist_tecnico: t.checklist_tecnico,
-        instrucciones_internas: t.instrucciones_internas,
+        nombre: `${trab.nombre} (copia)`,
+        precio: trab.precio,
+        imagen_url: trab.imagen_url,
+        categoria: trab.categoria,
+        descripcion_interna: trab.descripcion_interna,
+        duracion_estimada_min: trab.duracion_estimada_min,
+        garantia_dias: trab.garantia_dias,
+        compatibilidad: trab.compatibilidad,
+        repuesto_sugerido_id: trab.repuesto_sugerido_id,
+        checklist_tecnico: trab.checklist_tecnico,
+        instrucciones_internas: trab.instrucciones_internas,
       })
       .select('id')
       .single();
     if (insError) return;
     await registrarAuditoria(supabase, {
-      accion: `duplicó el servicio "${t.nombre}" del catálogo`,
+      accion: `duplicó el servicio "${trab.nombre}" del catálogo`,
       entidad: 'trabajo',
       entidadId: nuevo?.id,
     });
@@ -273,33 +275,33 @@ export default function Servicios() {
 
   // "Archivar" en vez de eliminar es la vía normal para retirar un servicio
   // del catálogo: nunca borra nada que ya se haya usado en una reparación.
-  const archivar = async (t: Trabajo, activo: boolean) => {
+  const archivar = async (trab: Trabajo, activo: boolean) => {
     if (!puedeGestionar) return;
     setMenuAbierto(null);
-    await supabase.from('trabajos').update({ activo }).eq('id', t.id);
+    await supabase.from('trabajos').update({ activo }).eq('id', trab.id);
     await registrarAuditoria(supabase, {
-      accion: `${activo ? 'reactivó' : 'archivó'} el servicio "${t.nombre}" del catálogo`,
+      accion: `${activo ? 'reactivó' : 'archivó'} el servicio "${trab.nombre}" del catálogo`,
       entidad: 'trabajo',
-      entidadId: t.id,
+      entidadId: trab.id,
     });
-    setTrabajos((ts) => ts.map((x) => (x.id === t.id ? { ...x, activo } : x)));
+    setTrabajos((ts) => ts.map((x) => (x.id === trab.id ? { ...x, activo } : x)));
   };
 
-  const eliminar = async (t: Trabajo) => {
+  const eliminar = async (trab: Trabajo) => {
     if (!puedeEliminar) return;
     setMenuAbierto(null);
     if (
       !confirm(
-        `¿Eliminar definitivamente "${t.nombre}"? Esto no se puede deshacer. Si ya se usó en alguna reparación, mejor archivalo en vez de eliminarlo.`
+        `${t('¿Eliminar definitivamente')} "${trab.nombre}"? ${t('Esto no se puede deshacer. Si ya se usó en alguna reparación, mejor archivalo en vez de eliminarlo.')}`
       )
     )
       return;
-    await supabase.from('trabajos').delete().eq('id', t.id);
+    await supabase.from('trabajos').delete().eq('id', trab.id);
     await registrarAuditoria(supabase, {
-      accion: `eliminó definitivamente el servicio "${t.nombre}" del catálogo`,
+      accion: `eliminó definitivamente el servicio "${trab.nombre}" del catálogo`,
       entidad: 'trabajo',
-      entidadId: t.id,
-      valorAnterior: { nombre: t.nombre, precio: t.precio, categoria: t.categoria },
+      entidadId: trab.id,
+      valorAnterior: { nombre: trab.nombre, precio: trab.precio, categoria: trab.categoria },
     });
     cargar();
   };
@@ -310,8 +312,8 @@ export default function Servicios() {
     setError(null);
     // Si ya se cargaron antes (o el dueño ya tenía un servicio con ese
     // nombre), no los duplicamos.
-    const nombresExistentes = new Set(trabajos.map((t) => t.nombre.trim().toLowerCase()));
-    const aInsertar = TRABAJOS_DEFAULT.filter((t) => !nombresExistentes.has(t.nombre.toLowerCase()));
+    const nombresExistentes = new Set(trabajos.map((trab) => trab.nombre.trim().toLowerCase()));
+    const aInsertar = TRABAJOS_DEFAULT.filter((trab) => !nombresExistentes.has(trab.nombre.toLowerCase()));
     if (aInsertar.length === 0) {
       setConfirmandoDefaults(false);
       setCargandoDefaults(false);
@@ -319,16 +321,16 @@ export default function Servicios() {
     }
     const { error: insertError } = await supabase
       .from('trabajos')
-      .insert(aInsertar.map((t) => ({ nombre: t.nombre, imagen_url: t.imagen, categoria: t.categoria })));
+      .insert(aInsertar.map((trab) => ({ nombre: trab.nombre, imagen_url: trab.imagen, categoria: trab.categoria })));
     if (insertError) {
-      setError('No pudimos cargar los servicios por defecto: ' + insertError.message);
+      setError(`${t('No pudimos cargar los servicios por defecto:')} ` + insertError.message);
       setCargandoDefaults(false);
       return;
     }
     await registrarAuditoria(supabase, {
       accion: `cargó el catálogo de servicios por defecto (${aInsertar.length} servicio${aInsertar.length === 1 ? '' : 's'})`,
       entidad: 'trabajo',
-      valorNuevo: { trabajos: aInsertar.map((t) => t.nombre) },
+      valorNuevo: { trabajos: aInsertar.map((trab) => trab.nombre) },
     });
     setConfirmandoDefaults(false);
     setCargandoDefaults(false);
@@ -345,13 +347,13 @@ export default function Servicios() {
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
       <header className="flex items-start gap-3">
-        <Link href="/servicio-tecnico" aria-label="Volver" className="text-2xl leading-none mt-0.5">
+        <Link href="/servicio-tecnico" aria-label={t('Volver')} className="text-2xl leading-none mt-0.5">
           &larr;
         </Link>
         <div className="mr-auto">
-          <h1 className="text-lg font-medium leading-tight">Servicios</h1>
+          <h1 className="text-lg font-medium leading-tight">{t('Servicios')}</h1>
           <p className="text-xs text-muted dark:text-dark-text-secondary">
-            Catálogo de arreglos: precio, duración, garantía y repuesto sugerido
+            {t('Catálogo de arreglos: precio, duración, garantía y repuesto sugerido')}
           </p>
         </div>
         {puedeGestionar && (
@@ -359,7 +361,7 @@ export default function Servicios() {
             onClick={abrirNuevo}
             className="shrink-0 rounded-xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors px-4 py-2.5 text-sm font-medium text-white"
           >
-            + Nuevo servicio
+            + {t('Nuevo servicio')}
           </button>
         )}
       </header>
@@ -369,7 +371,7 @@ export default function Servicios() {
       {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
       {!puedeGestionar && (
         <p className="text-xs text-muted dark:text-dark-text-secondary text-center">
-          No tenés permiso para gestionar Servicio Técnico — solo podés ver el catálogo.
+          {t('No tenés permiso para gestionar Servicio Técnico — solo podés ver el catálogo.')}
         </p>
       )}
 
@@ -377,10 +379,9 @@ export default function Servicios() {
         <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-4 py-3 flex flex-col gap-3">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-medium">Agregar servicios por defecto</p>
+              <p className="text-sm font-medium">{t('Agregar servicios por defecto')}</p>
               <p className="text-xs text-muted dark:text-dark-text-secondary">
-                Carga un catálogo inicial con imagen: cambio de batería, flex de carga, cámara trasera, módulo, tapa y
-                limpieza de pin de carga.
+                {t('Carga un catálogo inicial con imagen: cambio de batería, flex de carga, cámara trasera, módulo, tapa y limpieza de pin de carga.')}
               </p>
             </div>
             <button
@@ -401,21 +402,21 @@ export default function Servicios() {
           </div>
           {confirmandoDefaults && (
             <div className="rounded-lg border border-accent/30 dark:border-dark-accent/30 bg-accent-soft dark:bg-dark-accent-soft px-3 py-2.5 flex flex-col gap-2">
-              <p className="text-xs">Una vez que actives esta opción, se cargarán servicios por defecto. ¿Deseás hacerlo?</p>
+              <p className="text-xs">{t('Una vez que actives esta opción, se cargarán servicios por defecto. ¿Deseás hacerlo?')}</p>
               <div className="flex gap-2">
                 <button
                   disabled={cargandoDefaults}
                   onClick={cargarTrabajosDefault}
                   className="rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
                 >
-                  {cargandoDefaults ? 'Cargando…' : 'Sí, cargar'}
+                  {cargandoDefaults ? t('Cargando…') : t('Sí, cargar')}
                 </button>
                 <button
                   disabled={cargandoDefaults}
                   onClick={() => setConfirmandoDefaults(false)}
                   className="rounded-lg border border-border dark:border-dark-border px-3 py-1.5 text-xs font-medium disabled:opacity-40"
                 >
-                  Cancelar
+                  {t('Cancelar')}
                 </button>
               </div>
             </div>
@@ -428,21 +429,21 @@ export default function Servicios() {
           <input
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
-            placeholder="Buscar servicio..."
-            aria-label="Buscar servicio"
+            placeholder={t('Buscar servicio...')}
+            aria-label={t('Buscar servicio')}
             className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-2.5 text-sm"
           />
           <div className="flex gap-2 flex-wrap">
             <select
               value={filtroCategoria}
               onChange={(e) => setFiltroCategoria(e.target.value)}
-              aria-label="Filtrar por categoría"
+              aria-label={t('Filtrar por categoría')}
               className="flex-1 min-w-[140px] bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
             >
-              <option value="">Todas las categorías</option>
+              <option value="">{t('Todas las categorías')}</option>
               {categoriasUsadas.map((c) => (
                 <option key={c} value={c}>
-                  {c}
+                  {t(c)}
                 </option>
               ))}
             </select>
@@ -456,7 +457,7 @@ export default function Servicios() {
               }`}
             >
               <span className="inline-flex items-center gap-1">
-                <IconoChico nombre="stock" /> {verArchivados ? 'Viendo archivados' : 'Ver archivados'}
+                <IconoChico nombre="stock" /> {verArchivados ? t('Viendo archivados') : t('Ver archivados')}
               </span>
             </button>
             {hayFiltrosActivos && (
@@ -464,38 +465,38 @@ export default function Servicios() {
                 onClick={limpiarFiltros}
                 className="shrink-0 rounded-lg px-3 py-2 text-xs font-medium border border-border dark:border-dark-border"
               >
-                Limpiar filtros
+                {t('Limpiar filtros')}
               </button>
             )}
           </div>
         </div>
       )}
 
-      {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Cargando...</p>}
+      {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{t('Cargando...')}</p>}
 
       {!loading && trabajos.length > 0 && filtrados.length === 0 && (
         <div className="flex flex-col items-center gap-3 text-center py-8">
           <p className="text-sm text-muted dark:text-dark-text-secondary">
-            {verArchivados ? 'No hay servicios archivados.' : 'No hay servicios en este filtro.'}
+            {verArchivados ? t('No hay servicios archivados.') : t('No hay servicios en este filtro.')}
           </p>
           {hayFiltrosActivos && (
             <button onClick={limpiarFiltros} className="text-xs text-accent dark:text-dark-accent underline">
-              Limpiar filtros
+              {t('Limpiar filtros')}
             </button>
           )}
         </div>
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-        {filtrados.map((t) => (
+        {filtrados.map((trab) => (
           <div
-            key={t.id}
+            key={trab.id}
             className="group relative rounded-2xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card flex flex-col transition-all duration-200 ease-out hover:-translate-y-1 hover:rotate-[0.5deg] hover:shadow-elevated motion-reduce:transition-none motion-reduce:hover:transform-none"
           >
             <div className="h-28 rounded-t-2xl bg-canvas dark:bg-dark-bg flex items-center justify-center overflow-hidden shrink-0">
-              {t.imagen_url ? (
+              {trab.imagen_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={t.imagen_url} alt={t.nombre} className="h-full w-full object-contain p-3" loading="lazy" />
+                <img src={trab.imagen_url} alt={trab.nombre} className="h-full w-full object-contain p-3" loading="lazy" />
               ) : (
                 <span aria-hidden="true" className="[&_svg]:h-8 [&_svg]:w-8 text-muted dark:text-dark-text-secondary">
                   {ICONOS.herramienta}
@@ -504,36 +505,36 @@ export default function Servicios() {
             </div>
             <div className="p-3 flex flex-col gap-1.5 flex-1">
               <div className="flex items-start justify-between gap-2">
-                <p className="text-sm font-medium leading-tight">{t.nombre}</p>
+                <p className="text-sm font-medium leading-tight">{trab.nombre}</p>
                 {(puedeGestionar || puedeEliminar) && (
                 <div className="relative shrink-0">
                   <button
-                    onClick={() => setMenuAbierto(menuAbierto === t.id ? null : t.id)}
-                    aria-label="Más acciones"
+                    onClick={() => setMenuAbierto(menuAbierto === trab.id ? null : trab.id)}
+                    aria-label={t('Más acciones')}
                     className="text-lg leading-none px-1 text-muted dark:text-dark-text-secondary"
                   >
                     ⋯
                   </button>
-                  {menuAbierto === t.id && (
+                  {menuAbierto === trab.id && (
                     <div className="absolute right-0 top-6 z-10 w-44 rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-elevated flex flex-col overflow-hidden">
                       {puedeGestionar && (
-                      <button onClick={() => abrirEdicion(t)} className="flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-canvas dark:hover:bg-dark-bg">
-                        <IconoChico nombre="editar" /> Editar
+                      <button onClick={() => abrirEdicion(trab)} className="flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-canvas dark:hover:bg-dark-bg">
+                        <IconoChico nombre="editar" /> {t('Editar')}
                       </button>
                       )}
                       {puedeGestionar && (
-                      <button onClick={() => duplicar(t)} className="flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-canvas dark:hover:bg-dark-bg">
-                        <IconoChico nombre="duplicar" /> Duplicar
+                      <button onClick={() => duplicar(trab)} className="flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-canvas dark:hover:bg-dark-bg">
+                        <IconoChico nombre="duplicar" /> {t('Duplicar')}
                       </button>
                       )}
                       {puedeGestionar && (
-                      <button onClick={() => archivar(t, !t.activo)} className="flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-canvas dark:hover:bg-dark-bg">
-                        <IconoChico nombre={t.activo ? 'stock' : 'deshacer'} /> {t.activo ? 'Archivar' : 'Reactivar'}
+                      <button onClick={() => archivar(trab, !trab.activo)} className="flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-canvas dark:hover:bg-dark-bg">
+                        <IconoChico nombre={trab.activo ? 'stock' : 'deshacer'} /> {trab.activo ? t('Archivar') : t('Reactivar')}
                       </button>
                       )}
                       {puedeEliminar && (
-                      <button onClick={() => eliminar(t)} className="px-3 py-2 text-xs text-left text-bad hover:bg-bad/10">
-                        Eliminar definitivamente
+                      <button onClick={() => eliminar(trab)} className="px-3 py-2 text-xs text-left text-bad hover:bg-bad/10">
+                        {t('Eliminar definitivamente')}
                       </button>
                       )}
                     </div>
@@ -542,40 +543,40 @@ export default function Servicios() {
                 )}
               </div>
 
-              {t.categoria && (
+              {trab.categoria && (
                 <span className="self-start rounded-full bg-accent-soft dark:bg-dark-accent-soft text-accent dark:text-dark-accent text-[11px] font-medium px-2 py-0.5">
-                  {t.categoria}
+                  {t(trab.categoria)}
                 </span>
               )}
 
               <div className="flex items-center gap-2 flex-wrap text-xs text-muted dark:text-dark-text-secondary mt-0.5">
-                {t.precio != null && <span className="text-ink dark:text-dark-text font-medium">${t.precio.toLocaleString('es-AR')}</span>}
-                {t.duracion_estimada_min != null && (
+                {trab.precio != null && <span className="text-ink dark:text-dark-text font-medium">${trab.precio.toLocaleString('es-AR')}</span>}
+                {trab.duracion_estimada_min != null && (
                   <span className="flex items-center gap-1">
-                    <IconoChico nombre="reloj" /> {t.duracion_estimada_min} min
+                    <IconoChico nombre="reloj" /> {trab.duracion_estimada_min} min
                   </span>
                 )}
-                {t.garantia_dias != null && (
+                {trab.garantia_dias != null && (
                   <span className="flex items-center gap-1">
-                    <IconoChico nombre="escudo" /> {t.garantia_dias}d garantía
+                    <IconoChico nombre="escudo" /> {trab.garantia_dias}d {t('garantía')}
                   </span>
                 )}
               </div>
 
-              {t.compatibilidad && (
+              {trab.compatibilidad && (
                 <p className="flex items-center gap-1 text-xs text-muted dark:text-dark-text-secondary truncate">
-                  <IconoChico nombre="telefono" /> {t.compatibilidad}
+                  <IconoChico nombre="telefono" /> {trab.compatibilidad}
                 </p>
               )}
-              {nombreRepuesto(t.repuesto_sugerido_id) && (
+              {nombreRepuesto(trab.repuesto_sugerido_id) && (
                 <p className="flex items-center gap-1 text-xs text-muted dark:text-dark-text-secondary truncate">
-                  <IconoChico nombre="repuesto" /> {nombreRepuesto(t.repuesto_sugerido_id)}
+                  <IconoChico nombre="repuesto" /> {nombreRepuesto(trab.repuesto_sugerido_id)}
                 </p>
               )}
 
-              {!t.activo && (
+              {!trab.activo && (
                 <span className="self-start rounded-full bg-muted/15 text-muted dark:text-dark-text-secondary text-[11px] font-medium px-2 py-0.5 mt-auto">
-                  Archivado
+                  {t('Archivado')}
                 </span>
               )}
             </div>
@@ -584,7 +585,7 @@ export default function Servicios() {
       </div>
 
       {modalAbierto && (
-        <Modal titulo={editandoId ? 'Editar servicio' : 'Nuevo servicio'} onClose={() => setModalAbierto(false)} maxWidth="max-w-lg">
+        <Modal titulo={editandoId ? t('Editar servicio') : t('Nuevo servicio')} onClose={() => setModalAbierto(false)} maxWidth="max-w-lg">
           {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
           <div className="flex flex-col gap-3">
             <label className="self-start cursor-pointer">
@@ -604,11 +605,11 @@ export default function Servicios() {
             </label>
 
             <div>
-              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Nombre *</label>
+              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Nombre')} *</label>
               <input
                 value={form.nombre}
                 onChange={(e) => setForm((f) => ({ ...f, nombre: e.target.value }))}
-                placeholder="Ej. Cambio de pantalla"
+                placeholder={t('Ej. Cambio de pantalla')}
                 autoFocus
                 className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
               />
@@ -616,7 +617,7 @@ export default function Servicios() {
 
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Precio base</label>
+                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Precio base')}</label>
                 <input
                   value={form.precio}
                   onChange={(e) => setForm((f) => ({ ...f, precio: sanitizarDecimal(e.target.value) }))}
@@ -626,16 +627,16 @@ export default function Servicios() {
                 />
               </div>
               <div>
-                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Categoría</label>
+                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Categoría')}</label>
                 <select
                   value={form.categoria}
                   onChange={(e) => setForm((f) => ({ ...f, categoria: e.target.value }))}
                   className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                 >
-                  <option value="">Sin categoría</option>
+                  <option value="">{t('Sin categoría')}</option>
                   {CATEGORIAS.map((c) => (
                     <option key={c} value={c}>
-                      {c}
+                      {t(c)}
                     </option>
                   ))}
                 </select>
@@ -644,45 +645,45 @@ export default function Servicios() {
 
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Duración estimada (min)</label>
+                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Duración estimada (min)')}</label>
                 <input
                   value={form.duracion_estimada_min}
                   onChange={(e) => setForm((f) => ({ ...f, duracion_estimada_min: e.target.value.replace(/\D/g, '') }))}
                   inputMode="numeric"
-                  placeholder="Ej. 60"
+                  placeholder={t('Ej. 60')}
                   className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                 />
               </div>
               <div>
-                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Garantía (días)</label>
+                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Garantía (días)')}</label>
                 <input
                   value={form.garantia_dias}
                   onChange={(e) => setForm((f) => ({ ...f, garantia_dias: e.target.value.replace(/\D/g, '') }))}
                   inputMode="numeric"
-                  placeholder="Ej. 90"
+                  placeholder={t('Ej. 90')}
                   className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                 />
               </div>
             </div>
 
             <div>
-              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Dispositivos compatibles</label>
+              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Dispositivos compatibles')}</label>
               <input
                 value={form.compatibilidad}
                 onChange={(e) => setForm((f) => ({ ...f, compatibilidad: e.target.value }))}
-                placeholder="Ej. iPhone 11, 11 Pro, 11 Pro Max"
+                placeholder={t('Ej. iPhone 11, 11 Pro, 11 Pro Max')}
                 className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
               />
             </div>
 
             <div>
-              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Repuesto sugerido</label>
+              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Repuesto sugerido')}</label>
               <select
                 value={form.repuesto_sugerido_id}
                 onChange={(e) => setForm((f) => ({ ...f, repuesto_sugerido_id: e.target.value }))}
                 className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
               >
-                <option value="">Ninguno</option>
+                <option value="">{t('Ninguno')}</option>
                 {repuestos.map((r) => (
                   <option key={r.id} value={r.id}>
                     {r.nombre}
@@ -692,18 +693,18 @@ export default function Servicios() {
             </div>
 
             <div>
-              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Checklist técnico (uno por línea)</label>
+              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Checklist técnico (uno por línea)')}</label>
               <textarea
                 value={form.checklist_tecnico}
                 onChange={(e) => setForm((f) => ({ ...f, checklist_tecnico: e.target.value }))}
                 rows={3}
-                placeholder={'Ej.\nVerificar Face ID\nProbar carga inalámbrica'}
+                placeholder={t('Ej.\nVerificar Face ID\nProbar carga inalámbrica')}
                 className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
               />
             </div>
 
             <div>
-              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Descripción interna (opcional)</label>
+              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Descripción interna (opcional)')}</label>
               <textarea
                 value={form.descripcion_interna}
                 onChange={(e) => setForm((f) => ({ ...f, descripcion_interna: e.target.value }))}
@@ -713,12 +714,12 @@ export default function Servicios() {
             </div>
 
             <div>
-              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Instrucciones internas (opcional)</label>
+              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Instrucciones internas (opcional)')}</label>
               <textarea
                 value={form.instrucciones_internas}
                 onChange={(e) => setForm((f) => ({ ...f, instrucciones_internas: e.target.value }))}
                 rows={2}
-                placeholder="Solo la ve el equipo, nunca el cliente"
+                placeholder={t('Solo la ve el equipo, nunca el cliente')}
                 className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
               />
             </div>
@@ -729,14 +730,14 @@ export default function Servicios() {
               onClick={() => setModalAbierto(false)}
               className="flex-1 rounded-xl border border-border dark:border-dark-border py-2.5 text-sm font-medium"
             >
-              Cancelar
+              {t('Cancelar')}
             </button>
             <button
               disabled={!form.nombre.trim() || guardando}
               onClick={guardar}
               className="flex-1 rounded-xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2.5 text-sm font-medium text-white disabled:opacity-40"
             >
-              {guardando ? 'Guardando...' : 'Guardar'}
+              {guardando ? t('Guardando...') : t('Guardar')}
             </button>
           </div>
         </Modal>

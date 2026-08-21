@@ -19,10 +19,12 @@ import {
 } from '../../lib/egresos';
 import { Boton, BotonIcono } from '../../Boton';
 import { ICONOS } from '../../Iconos';
+import { useT } from '../../lib/idioma';
 
 export default function CategoriasEgresos() {
   const supabase = crearClienteNavegador();
   const actor = useActor();
+  const t = useT();
   const puede = tienePermiso(actor, 'gestionar_egresos');
 
   const [categorias, setCategorias] = useState<CategoriaEgreso[]>([]);
@@ -103,8 +105,8 @@ export default function CategoriasEgresos() {
 
   const archivar = async (c: CategoriaEgreso) => {
     const conteo = await contarEnCategoriaEgreso(supabase, c.id);
-    const detalle = conteo > 0 ? ` Tiene ${conteo} egreso(s) cargados — se conservan intactos, solo deja de ofrecerse para elegir en formularios nuevos.` : '';
-    if (!confirm(`¿Archivar la categoría "${c.nombre}"?${detalle}`)) return;
+    const detalle = conteo > 0 ? ` ${t('Tiene')} ${conteo} ${t('egreso(s) cargados — se conservan intactos, solo deja de ofrecerse para elegir en formularios nuevos.')}` : '';
+    if (!confirm(`${t('¿Archivar la categoría')} "${c.nombre}"?${detalle}`)) return;
     setProcesando(c.id);
     setError(null);
     const resultado = await archivarCategoriaEgreso(supabase, c.id);
@@ -133,9 +135,9 @@ export default function CategoriasEgresos() {
   if (!loading && !puede) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
-        <p className="text-sm text-muted dark:text-dark-text-secondary">No tenés permiso para gestionar categorías de egresos.</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t('No tenés permiso para gestionar categorías de egresos.')}</p>
         <Link href="/configuracion" className="text-sm text-accent dark:text-dark-accent underline">
-          Volver
+          {t('Volver')}
         </Link>
       </main>
     );
@@ -147,34 +149,33 @@ export default function CategoriasEgresos() {
         <Link href="/configuracion" className="text-2xl leading-none">
           &larr;
         </Link>
-        <span className="text-lg font-medium">Categorías de egresos</span>
+        <span className="text-lg font-medium">{t('Categorías de egresos')}</span>
       </header>
 
       <p className="text-xs text-muted dark:text-dark-text-secondary">
-        Estas son las categorías que vas a poder elegir al registrar un egreso. Te dejamos algunas cargadas para arrancar —
-        renombralas, agregá las que te sirvan, o archivá las que no uses.
+        {t('Estas son las categorías que vas a poder elegir al registrar un egreso. Te dejamos algunas cargadas para arrancar — renombralas, agregá las que te sirvan, o archivá las que no uses.')}
       </p>
 
       {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
 
       <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-4 flex flex-col gap-3">
-        <p className="text-sm font-medium">Nueva categoría</p>
+        <p className="text-sm font-medium">{t('Nueva categoría')}</p>
         <div className="flex gap-2">
           <input
             value={nombreNueva}
             onChange={(e) => setNombreNueva(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && crear()}
-            placeholder="Ej. Marketing"
+            placeholder={t('Ej. Marketing')}
             className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
           />
           <Boton variante="primario" tamano="sm" cargando={creando} disabled={!nombreNueva.trim()} onClick={crear}>
-            + Crear
+            + {t('Crear')}
           </Boton>
         </div>
       </div>
 
       {loading ? (
-        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-4">Cargando...</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-4">{t('Cargando...')}</p>
       ) : (
         <div className="flex flex-col gap-2">
           {categorias.map((c, idx) => (
@@ -201,37 +202,37 @@ export default function CategoriasEgresos() {
                     {c.nombre}
                   </button>
                 )}
-                {!c.activa && <p className="text-[11px] text-muted dark:text-dark-text-secondary">Inactiva</p>}
+                {!c.activa && <p className="text-[11px] text-muted dark:text-dark-text-secondary">{t('Inactiva')}</p>}
               </div>
               <div className="flex items-center gap-1 shrink-0">
                 {editandoId === c.id ? (
-                  <BotonIcono icono={ICONOS.check} ariaLabel="Guardar nombre" variante="ghost" tamano="sm" disabled={procesando === c.id} onClick={() => guardarNombre(c)} />
+                  <BotonIcono icono={ICONOS.check} ariaLabel={t('Guardar nombre')} variante="ghost" tamano="sm" disabled={procesando === c.id} onClick={() => guardarNombre(c)} />
                 ) : (
-                  <BotonIcono icono={ICONOS.editar} ariaLabel="Renombrar" variante="ghost" tamano="sm" onClick={() => { setEditandoId(c.id); setNombreEdit(c.nombre); }} />
+                  <BotonIcono icono={ICONOS.editar} ariaLabel={t('Renombrar')} variante="ghost" tamano="sm" onClick={() => { setEditandoId(c.id); setNombreEdit(c.nombre); }} />
                 )}
                 <label className="flex items-center gap-1 text-[11px] text-muted dark:text-dark-text-secondary px-1 cursor-pointer">
                   <input type="checkbox" checked={c.activa} disabled={procesando === c.id} onChange={() => toggleActiva(c)} className="h-3.5 w-3.5 accent-ink" />
-                  Activa
+                  {t('Activa')}
                 </label>
-                <BotonIcono icono={ICONOS.papelera} ariaLabel={`Archivar ${c.nombre}`} variante="peligro" tamano="sm" disabled={procesando === c.id} onClick={() => archivar(c)} />
+                <BotonIcono icono={ICONOS.papelera} ariaLabel={`${t('Archivar')} ${c.nombre}`} variante="peligro" tamano="sm" disabled={procesando === c.id} onClick={() => archivar(c)} />
               </div>
             </div>
           ))}
-          {categorias.length === 0 && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-2">Todavía no creaste ninguna categoría.</p>}
+          {categorias.length === 0 && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-2">{t('Todavía no creaste ninguna categoría.')}</p>}
         </div>
       )}
 
       {archivadas.length > 0 && (
         <div className="flex flex-col gap-2">
           <button onClick={() => setVerArchivadas((v) => !v)} className="text-xs text-accent dark:text-dark-accent underline self-start">
-            {verArchivadas ? 'Ocultar' : 'Ver'} archivadas ({archivadas.length})
+            {verArchivadas ? t('Ocultar') : t('Ver')} {t('archivadas')} ({archivadas.length})
           </button>
           {verArchivadas &&
             archivadas.map((c) => (
               <div key={c.id} className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-4 py-3 flex items-center justify-between gap-2 opacity-70">
                 <p className="text-sm">{c.nombre}</p>
                 <Boton variante="secundario" tamano="sm" disabled={procesando === c.id} onClick={() => restaurar(c)}>
-                  Restaurar
+                  {t('Restaurar')}
                 </Boton>
               </div>
             ))}
