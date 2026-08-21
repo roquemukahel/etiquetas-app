@@ -2301,4 +2301,47 @@ export const PT: Record<string, string> = {
   'Tu etiqueta': 'Sua etiqueta',
   'foto cargada': 'foto carregada',
   'tocá para sacar foto': 'toque para tirar foto',
+
+  // Páginas públicas — seguimiento (estados de reparación vistos por el cliente)
+  'Esperando tu aprobación': 'Aguardando sua aprovação',
+  'Esperando un repuesto': 'Aguardando uma peça',
+  '¡Listo para retirar!': 'Pronto para retirar!',
+  'Ya recibimos tu equipo. Pronto lo vamos a revisar.': 'Já recebemos seu aparelho. Em breve vamos revisá-lo.',
+  'Tu equipo está en cola para que un técnico lo revise.': 'Seu aparelho está na fila para um técnico revisá-lo.',
+  'Ya armamos el presupuesto. Lo podés aprobar o rechazar acá abajo.': 'Já montamos o orçamento. Você pode aprová-lo ou rejeitá-lo aqui embaixo.',
+  'Estamos esperando que llegue un repuesto para terminar la reparación.': 'Estamos esperando chegar uma peça para terminar o reparo.',
+  'Tu equipo está siendo reparado. Te vamos a avisar apenas esté listo.': 'Seu aparelho está sendo reparado. Vamos avisar assim que estiver pronto.',
+  'Tu equipo ya está reparado. Pasá por el local cuando quieras.': 'Seu aparelho já está reparado. Passe na loja quando quiser.',
+  'Este equipo ya fue retirado del local.': 'Este aparelho já foi retirado da loja.',
+  'Esta reparación fue cancelada. Consultanos por más información.': 'Este reparo foi cancelado. Consulte-nos para mais informações.',
+  'No pudimos registrar tu respuesta. Probá de nuevo o contactanos directamente.':
+    'Não conseguimos registrar sua resposta. Tente de novo ou entre em contato diretamente conosco.',
+  'No encontramos este seguimiento. Revisá el link que te mandaron.': 'Não encontramos este acompanhamento. Verifique o link que te enviaram.',
+  ', así va tu reparación:': ', assim está seu reparo:',
+  'Ingresó:': 'Entrou em:',
+  'Arreglo:': 'Reparo:',
+  'Reparado:': 'Reparado:',
+  'Aprobaste este presupuesto': 'Você aprovou este orçamento',
+  el: 'em',
+  'Rechazaste este presupuesto. Contactanos si querés que lo revisemos.':
+    'Você rejeitou este orçamento. Entre em contato se quiser que o revisemos.',
+  Aprobar: 'Aprovar',
+  Rechazar: 'Rejeitar',
+  'Hay novedades nuevas': 'Há novidades',
+  'Novedades del técnico': 'Novidades do técnico',
+  'con Qovento': 'com Qovento',
+
+  // Páginas públicas — cuenta corriente del cliente
+  'No encontramos esta cuenta. Revisá el link que te mandaron.': 'Não encontramos esta conta. Verifique o link que te enviaram.',
+  ', este es el resumen de tu cuenta:': ', este é o resumo da sua conta:',
+  'Es lo que tenés pendiente de pago.': 'É o que você tem pendente de pagamento.',
+  'Tenés saldo a favor.': 'Você tem saldo a favor.',
+  '¡Estás al día! Gracias 🙌': 'Você está em dia! Obrigado 🙌',
+
+  // Páginas públicas — stock público (catálogo)
+  'No encontramos este stock. Puede que el link esté mal o que el local haya desactivado esta página.':
+    'Não encontramos este estoque. Pode ser que o link esteja errado ou que a loja tenha desativado esta página.',
+  'Stock disponible en tiempo real': 'Estoque disponível em tempo real',
+  'No hay equipos disponibles en este momento.': 'Não há aparelhos disponíveis neste momento.',
+  disponibles: 'disponíveis',
 };

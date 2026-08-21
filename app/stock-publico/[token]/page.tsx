@@ -6,6 +6,8 @@ import { crearClienteNavegador } from '../../lib/supabase/client';
 import { ESLOGAN } from '../../lib/eslogan';
 import { imagenColorDeModelo } from '../../lib/coloresModelo';
 import MiniaturaDispositivo from '../../MiniaturaDispositivo';
+import { useT } from '../../lib/idioma';
+import SelectorIdiomaFlotante from '../../SelectorIdiomaFlotante';
 
 type ModeloDisponible = {
   modelo: string | null;
@@ -24,6 +26,7 @@ type StockPublico = {
 
 export default function StockPublico() {
   const { token } = useParams<{ token: string }>();
+  const t = useT();
   const supabase = crearClienteNavegador();
   const [datos, setDatos] = useState<StockPublico | null>(null);
   const [loading, setLoading] = useState(true);
@@ -39,7 +42,8 @@ export default function StockPublico() {
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-canvas">
-        <p className="text-sm text-muted">Cargando...</p>
+        <SelectorIdiomaFlotante />
+        <p className="text-sm text-muted">{t('Cargando...')}</p>
       </main>
     );
   }
@@ -47,9 +51,10 @@ export default function StockPublico() {
   if (!datos) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center bg-canvas">
+        <SelectorIdiomaFlotante />
         <p className="text-2xl">🔍</p>
         <p className="text-sm text-muted">
-          No encontramos este stock. Puede que el link esté mal o que el local haya desactivado esta página.
+          {t('No encontramos este stock. Puede que el link esté mal o que el local haya desactivado esta página.')}
         </p>
       </main>
     );
@@ -60,7 +65,7 @@ export default function StockPublico() {
   // fácil de escanear que una lista plana.
   const porModelo = new Map<string, ModeloDisponible[]>();
   for (const m of datos.modelos) {
-    const clave = m.modelo || 'Otro';
+    const clave = m.modelo || t('Otro');
     if (!porModelo.has(clave)) porModelo.set(clave, []);
     porModelo.get(clave)!.push(m);
   }
@@ -73,6 +78,7 @@ export default function StockPublico() {
   // quedaba prácticamente invisible sobre las tarjetas blancas de acá.
   return (
     <main className="flex min-h-screen flex-col items-center px-6 py-10 gap-6 bg-canvas">
+      <SelectorIdiomaFlotante />
       <div className="w-full max-w-xl flex flex-col gap-6 text-ink">
         <div className="flex flex-col items-center gap-2 text-center">
           {datos.logo_url && (
@@ -80,13 +86,13 @@ export default function StockPublico() {
             <img src={datos.logo_url} alt={datos.nombre} className="h-20 w-20 rounded-2xl object-contain bg-white border border-border shadow-card" />
           )}
           <p className="text-xl font-display font-semibold">{datos.nombre}</p>
-          <p className="text-sm text-muted">Stock disponible en tiempo real</p>
+          <p className="text-sm text-muted">{t('Stock disponible en tiempo real')}</p>
           {datos.telefono && <p className="text-xs text-muted">📞 {datos.telefono}</p>}
         </div>
 
         {porModelo.size === 0 ? (
           <p className="text-sm text-muted text-center bg-white rounded-2xl border border-border shadow-card p-6">
-            No hay equipos disponibles en este momento.
+            {t('No hay equipos disponibles en este momento.')}
           </p>
         ) : (
           <div className="flex flex-col gap-4">
@@ -104,12 +110,12 @@ export default function StockPublico() {
                         </p>
                         {v.estado === 'sellado' && (
                           <span className="inline-block text-[10px] font-bold text-black bg-gradient-to-b from-amber-300 to-amber-500 border border-black/40 rounded-full px-2 py-0.5">
-                            ✦ SELLADO
+                            ✦ {t('SELLADO')}
                           </span>
                         )}
                       </div>
                       <span className="text-sm font-medium text-good shrink-0">
-                        {v.cantidad} disponible{v.cantidad === 1 ? '' : 's'}
+                        {v.cantidad} {v.cantidad === 1 ? t('disponible') : t('disponibles')}
                       </span>
                     </div>
                   ))}

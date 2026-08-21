@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
+import { useT } from '../../lib/idioma';
+import SelectorIdiomaFlotante from '../../SelectorIdiomaFlotante';
 
 type Evidencia = { id: string; foto_url: string | null; nota: string | null; created_at: string };
 
@@ -72,6 +74,7 @@ const ESTADOS: Record<string, { titulo: string; desc: string; emoji: string }> =
 
 export default function Seguimiento() {
   const { token } = useParams<{ token: string }>();
+  const t = useT();
   const supabase = crearClienteNavegador();
   const [datos, setDatos] = useState<Seguimiento | null>(null);
   const [loading, setLoading] = useState(true);
@@ -92,7 +95,7 @@ export default function Seguimiento() {
     setErrorRespuesta(null);
     const { error } = await supabase.rpc('reparacion_responder_presupuesto', { p_token: token, p_aprobar: aprobar });
     if (error) {
-      setErrorRespuesta('No pudimos registrar tu respuesta. Probá de nuevo o contactanos directamente.');
+      setErrorRespuesta(t('No pudimos registrar tu respuesta. Probá de nuevo o contactanos directamente.'));
       setRespondiendo(false);
       return;
     }
@@ -128,7 +131,8 @@ export default function Seguimiento() {
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center">
-        <p className="text-sm text-muted dark:text-dark-text-secondary">Cargando...</p>
+        <SelectorIdiomaFlotante />
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t('Cargando...')}</p>
       </main>
     );
   }
@@ -136,8 +140,9 @@ export default function Seguimiento() {
   if (!datos) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
+        <SelectorIdiomaFlotante />
         <p className="text-2xl">🔍</p>
-        <p className="text-sm text-muted dark:text-dark-text-secondary">No encontramos este seguimiento. Revisá el link que te mandaron.</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t('No encontramos este seguimiento. Revisá el link que te mandaron.')}</p>
       </main>
     );
   }
@@ -146,6 +151,7 @@ export default function Seguimiento() {
 
   return (
     <main className="flex min-h-screen flex-col items-center px-6 py-10 gap-6">
+      <SelectorIdiomaFlotante />
       <div className="flex flex-col items-center gap-2">
         {datos.logo_negocio ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -156,17 +162,17 @@ export default function Seguimiento() {
 
       {datos.nombre_cliente && (
         <p className="text-base text-center">
-          Hola <strong>{datos.nombre_cliente}</strong>, así va tu reparación:
+          {t('Hola')} <strong>{datos.nombre_cliente}</strong>{t(', así va tu reparación:')}
         </p>
       )}
 
       <div className="w-full max-w-xs rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-6 flex flex-col items-center gap-3 text-center">
         <p className="text-4xl">{info.emoji}</p>
-        <p className="text-lg font-display font-semibold">{info.titulo}</p>
-        <p className="text-sm text-muted dark:text-dark-text-secondary">{info.desc}</p>
+        <p className="text-lg font-display font-semibold">{t(info.titulo)}</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t(info.desc)}</p>
 
         <div className="w-full border-t border-border dark:border-dark-border mt-2 pt-3 flex flex-col gap-1 text-sm">
-          {datos.numero_orden && <p className="text-xs text-muted dark:text-dark-text-secondary">Orden {datos.numero_orden}</p>}
+          {datos.numero_orden && <p className="text-xs text-muted dark:text-dark-text-secondary">{t('Orden')} {datos.numero_orden}</p>}
           <p className="font-medium">
             {datos.modelo}
             {datos.capacidad_gb ? ` · ${datos.capacidad_gb}GB` : ''}
@@ -174,20 +180,20 @@ export default function Seguimiento() {
           </p>
           {datos.fecha_ingreso_servicio && (
             <p className="text-xs text-muted dark:text-dark-text-secondary">
-              Ingresó: {new Date(datos.fecha_ingreso_servicio).toLocaleDateString('es-AR')}
+              {t('Ingresó:')} {new Date(datos.fecha_ingreso_servicio).toLocaleDateString('es-AR')}
             </p>
           )}
           {datos.fecha_estimada && datos.estado !== 'entregado' && datos.estado !== 'listo_para_entregar' && (
             <p className="text-xs text-muted dark:text-dark-text-secondary">
-              Fecha estimada: {new Date(datos.fecha_estimada + 'T00:00:00').toLocaleDateString('es-AR')}
+              {t('Fecha estimada:')} {new Date(datos.fecha_estimada + 'T00:00:00').toLocaleDateString('es-AR')}
             </p>
           )}
           {datos.trabajos_realizados && datos.trabajos_realizados.length > 0 && (
-            <p className="text-xs text-muted dark:text-dark-text-secondary">Arreglo: {datos.trabajos_realizados.join(', ')}</p>
+            <p className="text-xs text-muted dark:text-dark-text-secondary">{t('Arreglo:')} {datos.trabajos_realizados.join(', ')}</p>
           )}
           {datos.fecha_reparado && (
             <p className="text-xs text-muted dark:text-dark-text-secondary">
-              Reparado: {new Date(datos.fecha_reparado).toLocaleDateString('es-AR')}
+              {t('Reparado:')} {new Date(datos.fecha_reparado).toLocaleDateString('es-AR')}
             </p>
           )}
         </div>
@@ -195,17 +201,17 @@ export default function Seguimiento() {
 
       {(datos.presupuesto_mano_obra != null || datos.presupuesto_repuestos != null) && (
         <div className="w-full max-w-xs rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-5 flex flex-col gap-3">
-          <p className="text-sm font-semibold text-center">Presupuesto</p>
+          <p className="text-sm font-semibold text-center">{t('Presupuesto')}</p>
           {datos.diagnostico && <p className="text-xs text-muted dark:text-dark-text-secondary">{datos.diagnostico}</p>}
           <p className="text-2xl font-display font-semibold text-center">
             ${((datos.presupuesto_mano_obra || 0) + (datos.presupuesto_repuestos || 0)).toLocaleString('es-AR')}
           </p>
 
           {datos.presupuesto_estado === 'aprobado' && (
-            <p className="text-sm text-good text-center">✅ Aprobaste este presupuesto{datos.presupuesto_respondido_at ? ` el ${new Date(datos.presupuesto_respondido_at).toLocaleDateString('es-AR')}` : ''}.</p>
+            <p className="text-sm text-good text-center">✅ {t('Aprobaste este presupuesto')}{datos.presupuesto_respondido_at ? ` ${t('el')} ${new Date(datos.presupuesto_respondido_at).toLocaleDateString('es-AR')}` : ''}.</p>
           )}
           {datos.presupuesto_estado === 'rechazado' && (
-            <p className="text-sm text-bad text-center">Rechazaste este presupuesto. Contactanos si querés que lo revisemos.</p>
+            <p className="text-sm text-bad text-center">{t('Rechazaste este presupuesto. Contactanos si querés que lo revisemos.')}</p>
           )}
           {(datos.presupuesto_estado == null || datos.presupuesto_estado === 'enviado') && (
             <>
@@ -216,14 +222,14 @@ export default function Seguimiento() {
                   onClick={() => responderPresupuesto(true)}
                   className="flex-1 rounded-xl bg-good text-white py-2.5 text-sm font-medium disabled:opacity-40"
                 >
-                  Aprobar
+                  {t('Aprobar')}
                 </button>
                 <button
                   disabled={respondiendo}
                   onClick={() => responderPresupuesto(false)}
                   className="flex-1 rounded-xl border border-bad/40 text-bad py-2.5 text-sm font-medium disabled:opacity-40"
                 >
-                  Rechazar
+                  {t('Rechazar')}
                 </button>
               </div>
             </>
@@ -234,10 +240,10 @@ export default function Seguimiento() {
       {(datos.evidencias?.length ?? 0) > 0 && (
         <div className="w-full max-w-xs flex flex-col gap-2">
           {hayNovedadesNuevas && (
-            <p className="text-xs font-medium text-accent dark:text-dark-accent text-center">🔔 Hay novedades nuevas</p>
+            <p className="text-xs font-medium text-accent dark:text-dark-accent text-center">🔔 {t('Hay novedades nuevas')}</p>
           )}
           <p className="text-xs font-semibold text-muted dark:text-dark-text-secondary uppercase tracking-wide">
-            Novedades del técnico
+            {t('Novedades del técnico')}
           </p>
           {[...datos.evidencias].reverse().map((e) => (
             <div key={e.id} className="rounded-xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-3 flex gap-2.5">
@@ -256,7 +262,7 @@ export default function Seguimiento() {
         </div>
       )}
 
-      <p className="text-xs text-muted dark:text-dark-text-secondary mt-auto">con Qovento</p>
+      <p className="text-xs text-muted dark:text-dark-text-secondary mt-auto">{t('con Qovento')}</p>
     </main>
   );
 }
