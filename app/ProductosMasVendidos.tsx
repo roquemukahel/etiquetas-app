@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useT } from './lib/idioma';
 
 type Item = { nombre: string; cantidad: number; imagenUrl: string | null };
 
@@ -17,11 +18,12 @@ const MEDALLAS = [
 export default function ProductosMasVendidos({ telefonos, accesorios }: { telefonos: Item[]; accesorios: Item[] }) {
   const [tab, setTab] = useState<'telefonos' | 'accesorios'>('telefonos');
   const lista = tab === 'telefonos' ? telefonos : accesorios;
+  const t = useT();
 
   return (
     <div className="qv-card rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-elevated p-5 flex flex-col gap-3">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-semibold tracking-tight">Más vendidos</p>
+        <p className="text-sm font-semibold tracking-tight">{t('Más vendidos')}</p>
         <div className="flex items-center gap-1 rounded-full bg-canvas dark:bg-dark-bg p-0.5 text-[11px] font-medium">
           <button
             onClick={() => setTab('telefonos')}
@@ -29,7 +31,7 @@ export default function ProductosMasVendidos({ telefonos, accesorios }: { telefo
               tab === 'telefonos' ? 'bg-white dark:bg-dark-surface shadow text-ink dark:text-dark-text' : 'text-muted dark:text-dark-text-secondary'
             }`}
           >
-            📱 Teléfonos
+            📱 {t('Teléfonos')}
           </button>
           <button
             onClick={() => setTab('accesorios')}
@@ -37,14 +39,14 @@ export default function ProductosMasVendidos({ telefonos, accesorios }: { telefo
               tab === 'accesorios' ? 'bg-white dark:bg-dark-surface shadow text-ink dark:text-dark-text' : 'text-muted dark:text-dark-text-secondary'
             }`}
           >
-            🎧 Accesorios
+            🎧 {t('Accesorios')}
           </button>
         </div>
       </div>
 
       {lista.length === 0 ? (
         <p className="text-xs text-muted dark:text-dark-text-secondary">
-          Todavía no hay ventas de {tab === 'telefonos' ? 'teléfonos' : 'accesorios'} este mes.
+          {tab === 'telefonos' ? t('Todavía no hay ventas de teléfonos este mes.') : t('Todavía no hay ventas de accesorios este mes.')}
         </p>
       ) : (
         <div className="flex flex-col gap-3">
@@ -76,7 +78,7 @@ export default function ProductosMasVendidos({ telefonos, accesorios }: { telefo
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-medium truncate">{p.nombre}</p>
                   <p className="text-[11px] text-muted dark:text-dark-text-secondary">
-                    {p.cantidad} unidad{p.cantidad === 1 ? '' : 'es'}
+                    {p.cantidad} {p.cantidad === 1 ? t('unidad') : t('unidades')}
                   </p>
                 </div>
               </div>

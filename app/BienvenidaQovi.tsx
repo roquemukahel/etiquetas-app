@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useT } from './lib/idioma';
 
 // A pedido del usuario, el saludo aparece SIEMPRE al entrar/actualizar el
 // Inicio, 30 s después de cargar (no "una sola vez"). Si más adelante querés que
@@ -9,6 +10,7 @@ const DEMORA_MS = 30000;
 
 export default function BienvenidaQovi() {
   const [visible, setVisible] = useState(false);
+  const t = useT();
 
   useEffect(() => {
     // Modo prueba: qovento.app/?qovi=1 lo hace salir rápido (para revisarlo sin
@@ -63,31 +65,31 @@ export default function BienvenidaQovi() {
 
           <button
             onClick={cerrar}
-            aria-label="Cerrar"
+            aria-label={t('Cerrar')}
             className="absolute top-2.5 right-2.5 flex h-7 w-7 items-center justify-center rounded-full text-muted dark:text-dark-text-secondary hover:bg-canvas dark:hover:bg-dark-bg transition-colors text-sm"
           >
             ✕
           </button>
 
           <h2 id="qovi-titulo" className="text-lg font-display font-semibold tracking-tight pr-6">
-            ¡Hola! Soy Qovi <span className="qv-saludo-mano inline-block">👋</span>
+            {t('¡Hola! Soy Qovi')} <span className="qv-saludo-mano inline-block">👋</span>
           </h2>
 
           <div className="mt-1.5 flex flex-col gap-1.5 text-[13px] text-ink/90 dark:text-dark-text leading-snug">
-            <p>Hicimos una puesta a punto: corregimos errores y mejoramos la estabilidad del sistema.</p>
-            <p>Seguimos trabajando en cada detalle para que tu negocio avance sin límites.</p>
-            <p className="font-medium">¡Gracias por confiar en nosotros! Que tengas una jornada increíble.</p>
+            <p>{t('Hicimos una puesta a punto: corregimos errores y mejoramos la estabilidad del sistema.')}</p>
+            <p>{t('Seguimos trabajando en cada detalle para que tu negocio avance sin límites.')}</p>
+            <p className="font-medium">{t('¡Gracias por confiar en nosotros! Que tengas una jornada increíble.')}</p>
           </div>
 
           <p className="mt-2 text-[11px] text-muted dark:text-dark-text-secondary">
-            Esto recién empieza — Qovento sigue creciendo. 🚀
+            {t('Esto recién empieza — Qovento sigue creciendo. 🚀')}
           </p>
 
           <button
             onClick={cerrar}
             className="mt-3 w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2.5 text-center text-sm font-medium text-white"
           >
-            ¡Gracias, Qovi!
+            {t('¡Gracias, Qovi!')}
           </button>
         </div>
       </div>

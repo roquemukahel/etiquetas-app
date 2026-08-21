@@ -3,10 +3,12 @@
 import { useRouter } from 'next/navigation';
 import { crearClienteNavegador } from './lib/supabase/client';
 import { clearActor } from './lib/actor';
+import { useT } from './lib/idioma';
 
 export default function BotonSalir() {
   const router = useRouter();
   const supabase = crearClienteNavegador();
+  const t = useT();
 
   const salir = async () => {
     await supabase.auth.signOut();
@@ -17,7 +19,7 @@ export default function BotonSalir() {
 
   return (
     <button onClick={salir} className="text-xs text-muted dark:text-dark-text-secondary underline">
-      Cerrar sesión
+      {t('Cerrar sesión')}
     </button>
   );
 }

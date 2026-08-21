@@ -18,8 +18,11 @@ import IlustracionModulo from './inicio/IlustracionesModulos';
 import OjoResumenFinanciero from './OjoResumenFinanciero';
 import ProductosMasVendidos from './ProductosMasVendidos';
 import AvisoPruebaPorVencer from './AvisoPruebaPorVencer';
+import { obtenerIdiomaServidor, traducir } from './lib/idiomaServidor';
 
 export default async function Home() {
+  const idioma = obtenerIdiomaServidor();
+  const t = (texto: string) => traducir(idioma, texto);
   const supabase = crearClienteServidor();
   const {
     data: { user },
@@ -318,11 +321,11 @@ export default async function Home() {
       const extra = (o.orden_items?.length ?? 0) > 1 ? ` y ${o.orden_items.length - 1} más` : '';
       const vendedor = o.vendedores?.nombre;
       const cliente = o.clientes ? `${o.clientes.nombre} ${o.clientes.apellido || ''}`.trim() : null;
-      const que = primerItem ? `${primerItem}${extra}` : 'una venta';
+      const que = primerItem ? `${primerItem}${extra}` : t('una venta');
       candidatos.push({
         tipo: 'venta',
         fecha: new Date(o.created_at),
-        texto: `${vendedor ? `${vendedor} vendió` : 'Se vendió'} ${que}${cliente ? ` a ${cliente}` : ''}`,
+        texto: `${vendedor ? `${vendedor} ${t('vendió')}` : t('Se vendió')} ${que}${cliente ? ` ${t('a')} ${cliente}` : ''}`,
         actorNombre: vendedor ?? null,
         actorFoto: o.vendedores?.foto_url ?? null,
       });
@@ -333,7 +336,7 @@ export default async function Home() {
       candidatos.push({
         tipo: 'reparacion',
         fecha: new Date(r.fecha_reparado),
-        texto: `${tecnico ? `${tecnico} terminó` : 'Se terminó'} una reparación${r.modelo ? ` de ${r.modelo}` : ''}`,
+        texto: `${tecnico ? `${tecnico} ${t('terminó')}` : t('Se terminó')} ${t('una reparación')}${r.modelo ? ` ${t('de')} ${r.modelo}` : ''}`,
         actorNombre: tecnico ?? null,
         actorFoto: r.tecnicos?.foto_url ?? null,
       });
@@ -344,7 +347,7 @@ export default async function Home() {
       candidatos.push({
         tipo: 'stock',
         fecha: new Date(d.created_at),
-        texto: `${cargadoPor ? `${cargadoPor} ingresó` : 'Ingresó'} ${d.modelo || 'un equipo'} al stock`,
+        texto: `${cargadoPor ? `${cargadoPor} ${t('ingresó')}` : t('Ingresó')} ${d.modelo || t('un equipo')} ${t('al stock')}`,
         actorNombre: d.agregado_por_nombre ?? null,
         actorFoto: d.agregado_por_foto_url ?? null,
       });
@@ -356,7 +359,7 @@ export default async function Home() {
       candidatos.push({
         tipo: 'cliente',
         fecha: new Date(c.created_at),
-        texto: `${cargadoPor ? `${cargadoPor} cargó` : 'Se cargó'} un nuevo cliente: ${nombreCompleto}`,
+        texto: `${cargadoPor ? `${cargadoPor} ${t('cargó')}` : t('Se cargó')} ${t('un nuevo cliente:')} ${nombreCompleto}`,
         actorNombre: c.agregado_por_nombre ?? null,
         actorFoto: c.agregado_por_foto_url ?? null,
       });
@@ -402,33 +405,33 @@ export default async function Home() {
     if ((countListosEntregar ?? 0) > 0) {
       notifs.push({
         color: 'bad',
-        texto: `${countListosEntregar} equipo${countListosEntregar === 1 ? '' : 's'} listo${countListosEntregar === 1 ? '' : 's'} para entregar`,
+        texto: `${countListosEntregar} ${countListosEntregar === 1 ? t('equipo listo para entregar') : t('equipos listos para entregar')}`,
         href: '/servicio-tecnico',
       });
     }
     if ((countGarantias ?? 0) > 0) {
       notifs.push({
         color: 'warn',
-        texto: `${countGarantias} garantía${countGarantias === 1 ? '' : 's'} vence${countGarantias === 1 ? '' : 'n'} esta semana`,
+        texto: `${countGarantias} ${countGarantias === 1 ? t('garantía vence esta semana') : t('garantías vencen esta semana')}`,
         href: '/stock',
       });
     }
     if ((countStockQuieto ?? 0) > 0) {
       notifs.push({
         color: 'accent',
-        texto: `${countStockQuieto} equipo${countStockQuieto === 1 ? '' : 's'} lleva${countStockQuieto === 1 ? '' : 'n'} más de 30 días sin venderse`,
+        texto: `${countStockQuieto} ${countStockQuieto === 1 ? t('equipo lleva más de 30 días sin venderse') : t('equipos llevan más de 30 días sin venderse')}`,
         href: '/stock',
       });
     }
     if (modelosBajos.length === 1) {
-      notifs.push({ color: 'good', texto: `Queda poco stock de ${modelosBajos[0][0]}`, href: '/stock' });
+      notifs.push({ color: 'good', texto: `${t('Queda poco stock de')} ${modelosBajos[0][0]}`, href: '/stock' });
     } else if (modelosBajos.length > 1) {
-      notifs.push({ color: 'good', texto: `${modelosBajos.length} modelos están por agotarse`, href: '/stock' });
+      notifs.push({ color: 'good', texto: `${modelosBajos.length} ${t('modelos están por agotarse')}`, href: '/stock' });
     }
     if ((countServicioLargo ?? 0) > 0) {
       notifs.push({
         color: 'violet-500',
-        texto: `${countServicioLargo} equipo${countServicioLargo === 1 ? '' : 's'} lleva${countServicioLargo === 1 ? '' : 'n'} más de 60 días en reparación`,
+        texto: `${countServicioLargo} ${countServicioLargo === 1 ? t('equipo lleva más de 60 días en reparación') : t('equipos llevan más de 60 días en reparación')}`,
         href: '/servicio-tecnico',
       });
     }
@@ -437,7 +440,7 @@ export default async function Home() {
     const ultimaVenta = actividad.find((a) => a.tipo === 'venta');
     metricas = {
       ordenesPendientes: pendientes,
-      ultimaVentaTexto: ultimaVenta ? `Última venta ${hace(ultimaVenta.fecha).toLowerCase()}` : null,
+      ultimaVentaTexto: ultimaVenta ? `${t('Última venta')} ${hace(ultimaVenta.fecha, t).toLowerCase()}` : null,
       enStock,
       porAgotarse: modelosBajos.length,
       sinPrecio: countSinPrecio ?? 0,
@@ -478,7 +481,11 @@ export default async function Home() {
           href="/configuracion/suscripcion"
           className="fixed top-3 right-3 z-30 flex items-center gap-1.5 rounded-full bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors text-white text-xs font-medium pl-3 pr-2.5 py-1.5 shadow-elevated"
         >
-          <span>{diasDePrueba > 0 ? `${diasDePrueba} día${diasDePrueba === 1 ? '' : 's'} de prueba` : 'Prueba vencida'}</span>
+          <span>
+            {diasDePrueba > 0
+              ? `${diasDePrueba} ${diasDePrueba === 1 ? t('día') : t('días')} ${t('de prueba')}`
+              : t('Prueba vencida')}
+          </span>
           <span className="text-white/70">&rarr;</span>
         </Link>
       )}
@@ -505,11 +512,11 @@ export default async function Home() {
         <div className="flex items-center gap-4">
           {esAdmin && (
             <Link href="/admin" className="text-xs text-accent dark:text-dark-accent font-medium hover:text-accent-hover dark:hover:text-dark-accent-hover transition-colors">
-              Panel Admin
+              {t('Panel Admin')}
             </Link>
           )}
           <Link href="/configuracion" className="text-xs text-muted dark:text-dark-text-secondary hover:text-ink dark:hover:text-dark-text transition-colors">
-            Configuración
+            {t('Configuración')}
           </Link>
           <BotonSalir />
         </div>
@@ -526,10 +533,10 @@ export default async function Home() {
 
       <div className="qv-card rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-4 flex flex-col gap-2.5 animate-fade-in-up" style={{ animationDelay: '90ms' }}>
         <p className="text-xs font-semibold uppercase tracking-wide text-muted dark:text-dark-text-secondary">
-          Centro de notificaciones
+          {t('Centro de notificaciones')}
         </p>
         {notificaciones.length === 0 ? (
-          <p className="text-sm text-good flex items-center gap-1.5">✓ Todo en orden, no hay alertas por ahora.</p>
+          <p className="text-sm text-good flex items-center gap-1.5">✓ {t('Todo en orden, no hay alertas por ahora.')}</p>
         ) : (
           <div className="flex flex-col gap-2">
             {notificaciones.map((n, idx) => (
@@ -544,7 +551,7 @@ export default async function Home() {
       </div>
 
       <p className="text-xs font-semibold uppercase tracking-wide text-muted dark:text-dark-text-secondary -mb-1">
-        Resumen financiero
+        {t('Resumen financiero')}
       </p>
       <div className="lg:grid lg:grid-cols-3 lg:gap-6 flex flex-col gap-6 animate-fade-in-up" style={{ animationDelay: '120ms' }}>
         <Link
@@ -554,13 +561,13 @@ export default async function Home() {
           <OjoResumenFinanciero>
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-xs text-white/60 mb-1">Ingresos este mes</p>
+              <p className="text-xs text-white/60 mb-1">{t('Ingresos este mes')}</p>
               <p className="qv-financial-value text-4xl sm:text-5xl font-display font-semibold tracking-tight">
                 <NumeroAnimado prefijo={moneda} valor={ingresosMes} />
               </p>
               <div className="flex items-center gap-2 mt-2">
                 <p className="text-xs text-white/60">
-                  {ventasMes} venta{ventasMes === 1 ? '' : 's'} este mes
+                  {ventasMes} {ventasMes === 1 ? t('venta este mes') : t('ventas este mes')}
                 </p>
                 {deltaPct != null && (
                   <span
@@ -587,27 +594,28 @@ export default async function Home() {
           </div>
 
           <div className="grid grid-cols-2 gap-4 pt-3 border-t border-white/10">
-            <MiniStatTrend etiqueta="Ventas" valorNumerico={ventasMes} deltaPct={deltaVentasPct} serie={serieVentas} />
+            <MiniStatTrend etiqueta={t('Ventas')} valorNumerico={ventasMes} deltaPct={deltaVentasPct} serie={serieVentas} t={t} />
             <MiniStatTrend
-              etiqueta="Ticket promedio"
+              etiqueta={t('Ticket promedio')}
               valorNumerico={Math.round(ticketPromedio)}
               prefijo={moneda}
               deltaPct={deltaTicketPct}
               serie={serieTicket}
+              t={t}
             />
           </div>
           </OjoResumenFinanciero>
 
-          <span className="text-xs text-white/50 group-hover:text-white/70">Ver estadísticas completas &rarr;</span>
+          <span className="text-xs text-white/50 group-hover:text-white/70">{t('Ver estadísticas completas')} &rarr;</span>
         </Link>
 
         <ProductosMasVendidos telefonos={masVendidosTelefonos} accesorios={masVendidosAccesorios} />
       </div>
 
       <div className="grid grid-cols-3 gap-3 animate-fade-in-up" style={{ animationDelay: '180ms' }}>
-        <StatTile valor={enStock} etiqueta="En stock" icono="stock" color="inventario" href="/stock" />
-        <StatTile valor={pendientes} etiqueta="Pendientes" icono="ordenes" color="servicio" href="/ordenes" />
-        <StatTile valor={totalClientes} etiqueta="Clientes" icono="clientes" color="clientes" href="/clientes" />
+        <StatTile valor={enStock} etiqueta={t('En stock')} icono="stock" color="inventario" href="/stock" />
+        <StatTile valor={pendientes} etiqueta={t('Pendientes')} icono="ordenes" color="servicio" href="/ordenes" />
+        <StatTile valor={totalClientes} etiqueta={t('Clientes')} icono="clientes" color="clientes" href="/clientes" />
       </div>
 
       {actividad.length > 0 && (
@@ -615,7 +623,7 @@ export default async function Home() {
           className="qv-card rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-5 flex flex-col gap-3 animate-fade-in-up"
           style={{ animationDelay: '210ms' }}
         >
-          <p className="text-sm font-semibold tracking-tight">Actividad reciente</p>
+          <p className="text-sm font-semibold tracking-tight">{t('Actividad reciente')}</p>
           <div className="flex flex-col gap-3">
             {actividad.map((ev, idx) => {
               const { icono, color } = ICONO_ACTIVIDAD[ev.tipo];
@@ -638,7 +646,7 @@ export default async function Home() {
                     </div>
                   )}
                   <p className="flex-1 min-w-0 text-sm leading-snug truncate">{ev.texto}</p>
-                  <p className="shrink-0 text-[11px] text-muted dark:text-dark-text-secondary">{hace(ev.fecha)}</p>
+                  <p className="shrink-0 text-[11px] text-muted dark:text-dark-text-secondary">{hace(ev.fecha, t)}</p>
                 </div>
               );
             })}
@@ -646,7 +654,7 @@ export default async function Home() {
         </div>
       )}
 
-      <AccesosRapidos metricas={metricas} />
+      <AccesosRapidos metricas={metricas} t={t} />
 
       <div className="text-center mt-auto pt-6 pb-2 flex flex-col items-center gap-1.5">
         <p className="flex items-center justify-center gap-2 text-sm font-display font-semibold">
@@ -655,7 +663,7 @@ export default async function Home() {
           Qovento
         </p>
         <p className="text-xs text-muted dark:text-dark-text-secondary max-w-xs leading-snug">
-          El sistema más rápido para vender, reparar y gestionar comercios de tecnología.
+          {t('El sistema más rápido para vender, reparar y gestionar comercios de tecnología.')}
         </p>
       </div>
     </main>
@@ -695,15 +703,15 @@ function StatTile({
   );
 }
 
-function hace(fecha: Date): string {
+function hace(fecha: Date, t: (texto: string) => string): string {
   const segundos = Math.max(0, Math.floor((Date.now() - fecha.getTime()) / 1000));
-  if (segundos < 60) return 'Recién';
+  if (segundos < 60) return t('Recién');
   const minutos = Math.floor(segundos / 60);
-  if (minutos < 60) return `Hace ${minutos} minuto${minutos === 1 ? '' : 's'}`;
+  if (minutos < 60) return `${t('Hace')} ${minutos} ${minutos === 1 ? t('minuto') : t('minutos')}`;
   const horas = Math.floor(minutos / 60);
-  if (horas < 24) return `Hace ${horas} hora${horas === 1 ? '' : 's'}`;
+  if (horas < 24) return `${t('Hace')} ${horas} ${horas === 1 ? t('hora') : t('horas')}`;
   const dias = Math.floor(horas / 24);
-  return `Hace ${dias} día${dias === 1 ? '' : 's'}`;
+  return `${t('Hace')} ${dias} ${dias === 1 ? t('día') : t('días')}`;
 }
 
 const ICONO_ACTIVIDAD: Record<string, { icono: string; color: string }> = {
@@ -750,12 +758,14 @@ function MiniStatTrend({
   prefijo,
   deltaPct,
   serie,
+  t,
 }: {
   etiqueta: string;
   valorNumerico: number;
   prefijo?: string;
   deltaPct: number | null;
   serie: number[];
+  t: (texto: string) => string;
 }) {
   return (
     <div className="flex items-center justify-between gap-2">
@@ -767,7 +777,7 @@ function MiniStatTrend({
         {deltaPct != null && (
           <p className={`text-[11px] ${deltaPct >= 0 ? 'text-good' : 'text-bad'}`}>
             {deltaPct >= 0 ? '+' : ''}
-            {deltaPct}% vs. mes anterior
+            {deltaPct}% {t('vs. mes anterior')}
           </p>
         )}
       </div>

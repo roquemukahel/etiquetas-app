@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { crearClienteNavegador } from './lib/supabase/client';
 import { Actor, getActor, setActor as guardarActor, clearActor } from './lib/actor';
+import { useIdioma, setIdioma, useT } from './lib/idioma';
 import Avatar from './Avatar';
 
 const RUTAS_SIN_SELECTOR = [
@@ -51,7 +52,10 @@ const COLUMNAS_PERMISOS =
 
 export default function SelectorDeActor() {
   const pathname = usePathname();
+  const router = useRouter();
   const supabase = crearClienteNavegador();
+  const idioma = useIdioma();
+  const t = useT();
 
   const [actor, setActorState] = useState<Actor | null | undefined>(undefined);
   const [postergado, setPostergado] = useState(false);
@@ -253,15 +257,31 @@ export default function SelectorDeActor() {
             <span className="h-1.5 w-1.5 rounded-full bg-good shrink-0" />
             <Avatar src={actor.fotoUrl} nombre={actor.nombre} size={40} />
             <span className="truncate">
-              Trabajando como <strong>{actor.nombre}</strong>
+              {t('Trabajando como')} <strong>{actor.nombre}</strong>
             </span>
           </span>
           <span className="flex items-center gap-3 shrink-0">
+            {/* Selector de idioma — PRUEBA (ver app/lib/idioma.ts). Visible
+               en todas las pantallas porque esta barra es la única franja
+               que aparece siempre, en celular y en escritorio. */}
+            <button
+              onClick={() => {
+                setIdioma(idioma === 'es' ? 'pt' : 'es');
+                // Inicio (app/page.tsx) es un Server Component: sin este
+                // refresh, la cookie nueva no se nota hasta la próxima
+                // navegación entera.
+                router.refresh();
+              }}
+              title={idioma === 'es' ? 'Mudar para português' : 'Cambiar a español'}
+              className="rounded-full border border-white/30 px-2 py-0.5 font-medium opacity-80 hover:opacity-100"
+            >
+              {idioma === 'es' ? '🇧🇷 PT' : '🇦🇷 ES'}
+            </button>
             <button onClick={abrirMiPerfil} className="underline opacity-80 hover:opacity-100">
-              Mi perfil
+              {t('Mi perfil')}
             </button>
             <button onClick={() => setCambiando(true)} className="underline opacity-80 hover:opacity-100">
-              Cambiar
+              {t('Cambiar')}
             </button>
           </span>
         </div>
@@ -274,7 +294,7 @@ export default function SelectorDeActor() {
               onClick={() => setEditandoPerfil(false)}
               className="self-start text-xs text-muted dark:text-dark-text-secondary underline"
             >
-              Cerrar
+              {t('Cerrar')}
             </button>
 
             <div className="flex items-center gap-3">
@@ -284,7 +304,7 @@ export default function SelectorDeActor() {
               </label>
               <div className="min-w-0">
                 <p className="text-sm font-semibold truncate">{actor.nombre}</p>
-                <p className="text-xs text-muted dark:text-dark-text-secondary">Tocá la foto para cambiarla</p>
+                <p className="text-xs text-muted dark:text-dark-text-secondary">{t('Tocá la foto para cambiarla')}</p>
               </div>
             </div>
 
@@ -292,13 +312,13 @@ export default function SelectorDeActor() {
               <input
                 value={telefonoPerfil}
                 onChange={(e) => setTelefonoPerfil(e.target.value)}
-                placeholder="Teléfono"
+                placeholder={t('Teléfono')}
                 className="flex-1 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
               />
               <input
                 value={edadPerfil}
                 onChange={(e) => setEdadPerfil(e.target.value)}
-                placeholder="Edad"
+                placeholder={t('Edad')}
                 inputMode="numeric"
                 className="w-20 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
               />
@@ -309,7 +329,7 @@ export default function SelectorDeActor() {
               onClick={guardarMiPerfil}
               className="rounded-xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-3 text-sm font-medium text-white disabled:opacity-40"
             >
-              Guardar
+              {t('Guardar')}
             </button>
           </div>
         </div>
@@ -317,9 +337,9 @@ export default function SelectorDeActor() {
 
       {!actor && postergado && !cambiando && (
         <div className="no-print sticky top-0 z-40 w-full bg-ink text-white text-xs px-4 py-1.5 flex items-center justify-between">
-          <span>Sin elegir quién trabaja</span>
+          <span>{t('Sin elegir quién trabaja')}</span>
           <button onClick={retomarEleccion} className="underline opacity-80 hover:opacity-100">
-            Elegir
+            {t('Elegir')}
           </button>
         </div>
       )}
@@ -332,35 +352,35 @@ export default function SelectorDeActor() {
                 onClick={() => setCambiando(false)}
                 className="self-start text-xs text-muted dark:text-dark-text-secondary underline"
               >
-                Cancelar
+                {t('Cancelar')}
               </button>
             )}
 
             {!eligiendoTipo ? (
               <>
                 <div className="text-center">
-                  <p className="text-lg font-display font-semibold">¡Bienvenido/a! 👋</p>
-                  <p className="text-sm text-muted dark:text-dark-text-secondary mt-1">¿Con quién tengo el gusto?</p>
+                  <p className="text-lg font-display font-semibold">{t('¡Bienvenido/a! 👋')}</p>
+                  <p className="text-sm text-muted dark:text-dark-text-secondary mt-1">{t('¿Con quién tengo el gusto?')}</p>
                 </div>
 
                 {cargando ? (
-                  <p className="text-sm text-muted dark:text-dark-text-secondary text-center">Cargando...</p>
+                  <p className="text-sm text-muted dark:text-dark-text-secondary text-center">{t('Cargando...')}</p>
                 ) : sinPersonas ? (
                   <div className="flex flex-col gap-2 text-center">
                     <p className="text-sm text-muted dark:text-dark-text-secondary">
-                      Todavía no cargaste vendedores ni técnicos.
+                      {t('Todavía no cargaste vendedores ni técnicos.')}
                     </p>
                     <Link href="/configuracion/vendedores" className="text-sm text-accent dark:text-dark-accent underline">
-                      Cargar vendedores
+                      {t('Cargar vendedores')}
                     </Link>
                     <Link href="/configuracion/tecnicos" className="text-sm text-accent dark:text-dark-accent underline">
-                      Cargar técnicos
+                      {t('Cargar técnicos')}
                     </Link>
                     <button
                       onClick={posponer}
                       className="text-xs text-muted dark:text-dark-text-secondary underline mt-2"
                     >
-                      Continuar sin elegir por ahora
+                      {t('Continuar sin elegir por ahora')}
                     </button>
                   </div>
                 ) : (
@@ -370,14 +390,14 @@ export default function SelectorDeActor() {
                       disabled={vendedores.length === 0}
                       className="flex-1 rounded-xl bg-accent dark:bg-dark-accent text-white py-3 text-sm font-medium disabled:opacity-40"
                     >
-                      Soy vendedor
+                      {t('Soy vendedor')}
                     </button>
                     <button
                       onClick={() => setEligiendoTipo('tecnico')}
                       disabled={tecnicos.length === 0}
                       className="flex-1 rounded-xl bg-accent dark:bg-dark-accent text-white py-3 text-sm font-medium disabled:opacity-40"
                     >
-                      Soy técnico
+                      {t('Soy técnico')}
                     </button>
                   </div>
                 )}
@@ -388,13 +408,15 @@ export default function SelectorDeActor() {
                   onClick={() => setPersonaPin(null)}
                   className="self-start text-xs text-accent dark:text-dark-accent underline"
                 >
-                  &larr; Volver
+                  &larr; {t('Volver')}
                 </button>
                 <div className="flex items-center gap-2.5">
                   <Avatar src={personaPin.persona.foto_url} nombre={personaPin.persona.nombre} size={48} />
-                  <p className="text-sm font-medium">Ingresá el PIN de {personaPin.persona.nombre}</p>
+                  <p className="text-sm font-medium">
+                    {t('Ingresá el PIN de')} {personaPin.persona.nombre}
+                  </p>
                 </div>
-                {errorPin && <p className="text-xs text-bad">{errorPin}</p>}
+                {errorPin && <p className="text-xs text-bad">{t(errorPin)}</p>}
                 <input
                   value={pinIngresado}
                   onChange={(e) => {
@@ -414,7 +436,7 @@ export default function SelectorDeActor() {
                   disabled={pinIngresado.length < 4 || verificandoPin}
                   className="rounded-xl bg-accent dark:bg-dark-accent text-white py-3 text-sm font-medium disabled:opacity-40"
                 >
-                  {verificandoPin ? 'Verificando...' : 'Confirmar'}
+                  {verificandoPin ? t('Verificando...') : t('Confirmar')}
                 </button>
               </>
             ) : (
@@ -423,9 +445,9 @@ export default function SelectorDeActor() {
                   onClick={() => setEligiendoTipo(null)}
                   className="self-start text-xs text-accent dark:text-dark-accent underline"
                 >
-                  &larr; Volver
+                  &larr; {t('Volver')}
                 </button>
-                <p className="text-sm font-medium">Elegí tu nombre</p>
+                <p className="text-sm font-medium">{t('Elegí tu nombre')}</p>
                 <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
                   {(eligiendoTipo === 'vendedor' ? vendedores : tecnicos).map((p) => (
                     <button

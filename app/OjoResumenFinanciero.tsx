@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useActor } from './lib/actor';
 import { tienePermiso } from './lib/permisos';
+import { useT } from './lib/idioma';
 
 // Ojo para ocultar el resumen financiero del inicio (los ingresos son sensibles:
 // no deberían quedar a la vista de un cliente en el mostrador).
@@ -15,6 +16,7 @@ import { tienePermiso } from './lib/permisos';
 //    por el dueño en Configuración > Vendedores), directamente no lo puede ver.
 export default function OjoResumenFinanciero({ children }: { children: React.ReactNode }) {
   const actor = useActor();
+  const t = useT();
   const esAdmin = actor?.permisos?.esAdministrador ?? true;
   const puedeVer = tienePermiso(actor, 'ver_estadisticas');
 
@@ -56,19 +58,19 @@ export default function OjoResumenFinanciero({ children }: { children: React.Rea
     return (
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-xs text-white/60 mb-1">Ingresos este mes</p>
+          <p className="text-xs text-white/60 mb-1">{t('Ingresos este mes')}</p>
           <p className="text-4xl sm:text-5xl font-display font-semibold tracking-tight text-white/40 select-none">
             $ ••••••
           </p>
           <p className="text-[11px] text-white/40 mt-2">
-            {esAdmin ? 'Oculto — tocá el ojo para mostrar' : 'Oculto — solo un administrador puede mostrarlo'}
+            {esAdmin ? t('Oculto — tocá el ojo para mostrar') : t('Oculto — solo un administrador puede mostrarlo')}
           </p>
         </div>
         <button
           type="button"
           onClick={mostrar}
-          aria-label={esAdmin ? 'Mostrar el resumen' : 'Solo un administrador puede mostrarlo'}
-          title={esAdmin ? 'Mostrar' : 'Solo un administrador puede mostrarlo'}
+          aria-label={esAdmin ? t('Mostrar el resumen') : t('Solo un administrador puede mostrarlo')}
+          title={esAdmin ? t('Mostrar') : t('Solo un administrador puede mostrarlo')}
           className={`shrink-0 rounded-full bg-white/10 p-2.5 text-white/70 ${esAdmin ? 'hover:bg-white/20' : 'opacity-60 cursor-not-allowed'}`}
         >
           <OjoCerrado />
@@ -82,8 +84,8 @@ export default function OjoResumenFinanciero({ children }: { children: React.Rea
       <button
         type="button"
         onClick={ocultar}
-        aria-label="Ocultar el resumen"
-        title="Ocultar (privacidad)"
+        aria-label={t('Ocultar el resumen')}
+        title={t('Ocultar (privacidad)')}
         className="absolute -top-1 -right-1 z-10 rounded-full bg-white/10 hover:bg-white/20 p-2 text-white/70"
       >
         <OjoAbierto />

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useT } from './lib/idioma';
 
 // Cartel de aviso cuando quedan 1 o 2 días de prueba — para que no agarre
 // de sorpresa y puedan pagar con anticipación en vez de dejarlo para el
@@ -11,6 +12,7 @@ import Link from 'next/link';
 // vencer).
 export default function AvisoPruebaPorVencer({ diasDePrueba }: { diasDePrueba: number | null }) {
   const [cerrado, setCerrado] = useState(false);
+  const t = useT();
 
   if (cerrado || diasDePrueba == null || (diasDePrueba !== 1 && diasDePrueba !== 2)) return null;
 
@@ -19,21 +21,25 @@ export default function AvisoPruebaPorVencer({ diasDePrueba }: { diasDePrueba: n
       <span className="text-xl shrink-0">⏳</span>
       <p className="flex-1 text-sm">
         {diasDePrueba === 1 ? (
-          <>Tu prueba gratis vence <strong>mañana</strong>.</>
+          <>
+            {t('Tu prueba gratis vence')} <strong>{t('mañana')}</strong>.
+          </>
         ) : (
-          <>Tu prueba gratis vence en <strong>2 días</strong>.</>
+          <>
+            {t('Tu prueba gratis vence en')} <strong>{t('2 días')}</strong>.
+          </>
         )}{' '}
-        Activá tu suscripción con tiempo para no quedarte sin acceso.
+        {t('Activá tu suscripción con tiempo para no quedarte sin acceso.')}
       </p>
       <Link
         href="/configuracion/suscripcion"
         className="shrink-0 rounded-lg bg-warn text-white px-3 py-1.5 text-xs font-medium whitespace-nowrap"
       >
-        Activar ahora
+        {t('Activar ahora')}
       </Link>
       <button
         onClick={() => setCerrado(true)}
-        aria-label="Cerrar aviso"
+        aria-label={t('Cerrar aviso')}
         className="shrink-0 text-muted dark:text-dark-text-secondary text-lg leading-none px-1"
       >
         &times;
