@@ -11,6 +11,7 @@ import { obtenerTodasLasFilas } from '../lib/db';
 import { QCard } from '../QCard';
 import { EvolucionBarras } from '../estadisticas/graficos';
 import { proyeccionMensual, alertasCuotas, aFechaISO, type CuotaProyeccion, type PagoAplicadoProyeccion, type AlertaCuota } from '../lib/financiacion/motor';
+import { useT } from '../lib/idioma';
 
 type Cliente = { id: string; nombre: string; apellido: string | null; suspendido: boolean | null };
 type Saldo = { cliente_id: string; saldo: number; vencido: number };
@@ -39,6 +40,7 @@ type CuotaFila = {
 export default function CuentasPorCobrar() {
   const supabase = crearClienteNavegador();
   const actor = useActor();
+  const t = useT();
   // Misma llave que Estadísticas: es información sensible de plata.
   const puedeVer = tienePermiso(actor, 'ver_estadisticas');
 
@@ -89,7 +91,7 @@ export default function CuentasPorCobrar() {
           const saldo = Number(s.saldo) || 0;
           return {
             id: s.cliente_id,
-            nombre: c ? `${c.nombre} ${c.apellido || ''}`.trim() : 'Cliente eliminado',
+            nombre: c ? `${c.nombre} ${c.apellido || ''}`.trim() : t('Cliente eliminado'),
             saldo,
             vencido: Number(s.vencido) || 0,
             suspendido: !!c?.suspendido,
@@ -189,7 +191,7 @@ export default function CuentasPorCobrar() {
       .map((c) => ({
         id: c.id,
         cliente_id: c.cliente_id,
-        clienteNombre: nombresClientes.get(c.cliente_id) ?? 'Cliente eliminado',
+        clienteNombre: nombresClientes.get(c.cliente_id) ?? t('Cliente eliminado'),
         plan_id: c.plan_id,
         numero: c.numero,
         cuotaTotal: c.cantidad_cuotas,
@@ -217,9 +219,9 @@ export default function CuentasPorCobrar() {
   if (!puedeVer) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
-        <p className="text-sm text-muted dark:text-dark-text-secondary">No tenés permiso para ver Cuentas por cobrar.</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t('No tenés permiso para ver Cuentas por cobrar.')}</p>
         <Link href="/" className="text-sm text-accent dark:text-dark-accent underline">
-          Volver al inicio
+          {t('Volver al inicio')}
         </Link>
       </main>
     );
@@ -231,16 +233,16 @@ export default function CuentasPorCobrar() {
         <Link href="/" className="text-2xl leading-none">
           &larr;
         </Link>
-        <span className="text-lg font-medium">Cuentas por cobrar</span>
+        <span className="text-lg font-medium">{t('Cuentas por cobrar')}</span>
       </header>
 
       {alertas.length > 0 && (
         <div className="rounded-xl border border-warn/30 bg-warn/10 flex flex-col overflow-hidden">
           <button onClick={() => setAlertasAbiertas((v) => !v)} className="flex items-center justify-between px-4 py-3 text-sm font-medium">
             <span>
-              {alertas.length} cuota{alertas.length === 1 ? '' : 's'} para atender (vencidas o por vencer)
+              {alertas.length} {alertas.length === 1 ? t('cuota para atender (vencida o por vencer)') : t('cuotas para atender (vencidas o por vencer)')}
             </span>
-            <span className="text-xs text-muted dark:text-dark-text-secondary">{alertasAbiertas ? 'Ocultar' : 'Ver'}</span>
+            <span className="text-xs text-muted dark:text-dark-text-secondary">{alertasAbiertas ? t('Ocultar') : t('Ver')}</span>
           </button>
           {alertasAbiertas && (
             <div className="flex flex-col border-t border-warn/20">
@@ -248,17 +250,17 @@ export default function CuentasPorCobrar() {
                 <div key={a.id} className="flex items-center gap-2 px-4 py-2 text-xs hover:bg-white/40 dark:hover:bg-black/10">
                   <span className={`h-2 w-2 rounded-full shrink-0 ${a.categoria === 'proxima_a_vencer' ? 'bg-warn' : 'bg-bad'}`} />
                   <Link href={`/clientes/${a.clienteId}`} className="flex-1 min-w-0 truncate">
-                    <span className="font-medium">{a.clienteNombre}</span> · cuota {a.cuotaNumero}/{a.cuotaTotal} ·{' '}
+                    <span className="font-medium">{a.clienteNombre}</span> · {t('cuota')} {a.cuotaNumero}/{a.cuotaTotal} ·{' '}
                     {simboloMoneda(a.moneda)}
                     {Math.round(a.importe).toLocaleString('es-AR')} ·{' '}
                     {a.categoria === 'vencida'
-                      ? `vencida hace ${a.diasAtraso} día${a.diasAtraso === 1 ? '' : 's'}`
+                      ? `${t('vencida hace')} ${a.diasAtraso} ${a.diasAtraso === 1 ? t('día') : t('días')}`
                       : a.categoria === 'vence_hoy'
-                      ? 'vence hoy'
-                      : `vence el ${new Date(a.fechaVencimiento + 'T00:00:00').toLocaleDateString('es-AR')}`}
+                      ? t('vence hoy')
+                      : `${t('vence el')} ${new Date(a.fechaVencimiento + 'T00:00:00').toLocaleDateString('es-AR')}`}
                   </Link>
                   <button onClick={() => descartarAlerta(a.id)} className="shrink-0 text-muted dark:text-dark-text-secondary underline">
-                    Descartar
+                    {t('Descartar')}
                   </button>
                 </div>
               ))}
@@ -268,13 +270,13 @@ export default function CuentasPorCobrar() {
       )}
 
       <div className="grid grid-cols-2 gap-3">
-        <QCard firma microetiqueta="Total">
+        <QCard firma microetiqueta={t('Total')}>
           <p className="text-2xl font-display font-semibold leading-none text-warn">{fmt(totalPorCobrar)}</p>
-          <p className="text-[11px] text-muted dark:text-dark-text-secondary mt-1.5">Total por cobrar (plata en la calle)</p>
+          <p className="text-[11px] text-muted dark:text-dark-text-secondary mt-1.5">{t('Total por cobrar (plata en la calle)')}</p>
         </QCard>
-        <QCard firma microetiqueta="Vencido">
+        <QCard firma microetiqueta={t('Vencido')}>
           <p className={`text-2xl font-display font-semibold leading-none ${totalVencido > 0 ? 'text-bad' : ''}`}>{fmt(totalVencido)}</p>
-          <p className="text-[11px] text-muted dark:text-dark-text-secondary mt-1.5">Vencido (a gestionar)</p>
+          <p className="text-[11px] text-muted dark:text-dark-text-secondary mt-1.5">{t('Vencido (a gestionar)')}</p>
         </QCard>
       </div>
 
@@ -285,8 +287,8 @@ export default function CuentasPorCobrar() {
       {!loading && monedasConCuotas.length > 0 && monedaProyeccion && (
         <QCard padding="sm" className="flex flex-col gap-3">
           <div className="flex items-center justify-between gap-2 flex-wrap">
-            <p className="text-sm font-medium" title="Ingresos previstos de tus cuotas por cobrar — no garantiza que el cliente pague, y no incluye ventas fuera de un plan de financiación.">
-              Proyección de cobranzas
+            <p className="text-sm font-medium" title={t('Ingresos previstos de tus cuotas por cobrar — no garantiza que el cliente pague, y no incluye ventas fuera de un plan de financiación.')}>
+              {t('Proyección de cobranzas')}
             </p>
             <div className="flex items-center gap-1.5">
               {monedasConCuotas.length > 1 && (
@@ -310,7 +312,7 @@ export default function CuentasPorCobrar() {
                     horizonte === h ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border'
                   }`}
                 >
-                  {h} meses
+                  {h} {t('meses')}
                 </button>
               ))}
             </div>
@@ -318,32 +320,32 @@ export default function CuentasPorCobrar() {
 
           {mesActual && (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-              <ResumenMes etiqueta="A cobrar este mes" valor={`${simboloMoneda(monedaProyeccion)}${Math.round(mesActual.programado).toLocaleString('es-AR')}`} />
-              <ResumenMes etiqueta="Cobrado este mes" valor={`${simboloMoneda(monedaProyeccion)}${Math.round(mesActual.cobrado).toLocaleString('es-AR')}`} tono="text-good" />
-              <ResumenMes etiqueta="Pendiente del mes" valor={`${simboloMoneda(monedaProyeccion)}${Math.round(mesActual.pendiente).toLocaleString('es-AR')}`} tono={mesActual.pendiente > 0 ? 'text-warn' : undefined} />
-              <ResumenMes etiqueta="% cobrado del mes" valor={pctCobradoMes != null ? `${pctCobradoMes}%` : '—'} />
+              <ResumenMes etiqueta={t('A cobrar este mes')} valor={`${simboloMoneda(monedaProyeccion)}${Math.round(mesActual.programado).toLocaleString('es-AR')}`} />
+              <ResumenMes etiqueta={t('Cobrado este mes')} valor={`${simboloMoneda(monedaProyeccion)}${Math.round(mesActual.cobrado).toLocaleString('es-AR')}`} tono="text-good" />
+              <ResumenMes etiqueta={t('Pendiente del mes')} valor={`${simboloMoneda(monedaProyeccion)}${Math.round(mesActual.pendiente).toLocaleString('es-AR')}`} tono={mesActual.pendiente > 0 ? 'text-warn' : undefined} />
+              <ResumenMes etiqueta={t('% cobrado del mes')} valor={pctCobradoMes != null ? `${pctCobradoMes}%` : '—'} />
             </div>
           )}
 
-          <EvolucionBarras datos={proyeccion.map((m) => ({ label: etiquetaMesCorta(m.mes), valor: m.pendiente }))} moneda={simboloMoneda(monedaProyeccion)} />
+          <EvolucionBarras datos={proyeccion.map((m) => ({ label: etiquetaMesCorta(m.mes, t), valor: m.pendiente }))} moneda={simboloMoneda(monedaProyeccion)} />
 
           <div className="overflow-x-auto -mx-1">
             <table className="w-full text-xs min-w-[420px]">
               <thead>
                 <tr className="text-left text-muted dark:text-dark-text-secondary border-b border-border dark:border-dark-border">
-                  <th className="py-1.5 pr-2 font-medium">Mes</th>
-                  <th className="py-1.5 px-2 font-medium text-right">Programado</th>
-                  <th className="py-1.5 px-2 font-medium text-right">Cobrado</th>
-                  <th className="py-1.5 px-2 font-medium text-right">Pendiente</th>
-                  <th className="py-1.5 px-2 font-medium text-right">Vencido</th>
-                  <th className="py-1.5 pl-2 font-medium text-right">Cuotas</th>
-                  <th className="py-1.5 pl-2 font-medium text-right">Clientes</th>
+                  <th className="py-1.5 pr-2 font-medium">{t('Mes')}</th>
+                  <th className="py-1.5 px-2 font-medium text-right">{t('Programado')}</th>
+                  <th className="py-1.5 px-2 font-medium text-right">{t('Cobrado')}</th>
+                  <th className="py-1.5 px-2 font-medium text-right">{t('Pendiente')}</th>
+                  <th className="py-1.5 px-2 font-medium text-right">{t('Vencido')}</th>
+                  <th className="py-1.5 pl-2 font-medium text-right">{t('Cuotas')}</th>
+                  <th className="py-1.5 pl-2 font-medium text-right">{t('Clientes')}</th>
                 </tr>
               </thead>
               <tbody>
                 {proyeccion.map((m) => (
                   <tr key={m.mes} className="border-b border-border/60 dark:border-dark-border/60 last:border-0">
-                    <td className="py-1.5 pr-2">{etiquetaMesCorta(m.mes)}</td>
+                    <td className="py-1.5 pr-2">{etiquetaMesCorta(m.mes, t)}</td>
                     <td className="py-1.5 px-2 text-right tabular-nums">{simboloMoneda(monedaProyeccion)}{Math.round(m.programado).toLocaleString('es-AR')}</td>
                     <td className="py-1.5 px-2 text-right tabular-nums text-good">{simboloMoneda(monedaProyeccion)}{Math.round(m.cobrado).toLocaleString('es-AR')}</td>
                     <td className="py-1.5 px-2 text-right tabular-nums">{simboloMoneda(monedaProyeccion)}{Math.round(m.pendiente).toLocaleString('es-AR')}</td>
@@ -359,15 +361,15 @@ export default function CuentasPorCobrar() {
       )}
 
       {loading ? (
-        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Cargando...</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{t('Cargando...')}</p>
       ) : filas.length === 0 ? (
         <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">
-          Nadie te debe nada por cuenta corriente.
+          {t('Nadie te debe nada por cuenta corriente.')}
         </p>
       ) : (
         <>
           <div className="flex items-center gap-1.5 text-xs">
-            <span className="text-muted dark:text-dark-text-secondary">Ordenar por:</span>
+            <span className="text-muted dark:text-dark-text-secondary">{t('Ordenar por:')}</span>
             {(['saldo', 'vencido', 'nombre'] as const).map((o) => (
               <button
                 key={o}
@@ -376,7 +378,7 @@ export default function CuentasPorCobrar() {
                   orden === o ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border'
                 }`}
               >
-                {o === 'saldo' ? 'Deuda' : o === 'vencido' ? 'Vencido' : 'Nombre'}
+                {o === 'saldo' ? t('Deuda') : o === 'vencido' ? t('Vencido') : t('Nombre')}
               </button>
             ))}
           </div>
@@ -395,7 +397,7 @@ export default function CuentasPorCobrar() {
                     <p className="text-sm font-medium truncate">{f.nombre}</p>
                     <span className={`inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full mt-0.5 ${info.fondo}`}>
                       {info.label}
-                      {f.vencido > 0 ? ` · vencido ${fmt(f.vencido)}` : ''}
+                      {f.vencido > 0 ? ` · ${t('vencido')} ${fmt(f.vencido)}` : ''}
                     </span>
                   </div>
                   <p className="text-sm font-semibold text-warn shrink-0">{fmt(f.saldo)}</p>
@@ -421,7 +423,7 @@ function ResumenMes({ etiqueta, valor, tono }: { etiqueta: string; valor: string
 // 'YYYY-MM' -> "ago" (mes corto en español, sin depender de que el navegador
 // tenga el locale 'es' cargado igual en todos lados: se arma a mano).
 const MESES_CORTOS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
-function etiquetaMesCorta(mesISO: string): string {
+function etiquetaMesCorta(mesISO: string, t: (texto: string) => string): string {
   const [anio, mes] = mesISO.split('-').map(Number);
-  return `${MESES_CORTOS[mes - 1]} ${String(anio).slice(2)}`;
+  return `${t(MESES_CORTOS[mes - 1])} ${String(anio).slice(2)}`;
 }
