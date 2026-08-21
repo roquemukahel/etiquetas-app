@@ -1566,6 +1566,13 @@ export const PT: Record<string, string> = {
   años: 'anos',
   '¿Eliminar este técnico?': 'Excluir este técnico?',
 
+  // Configuración — Vendedores
+  'No tenés permiso para gestionar vendedores.': 'Você não tem permissão para gerenciar vendedores.',
+  'Nombre del vendedor': 'Nome do vendedor',
+  'Todavía no cargaste vendedores.': 'Você ainda não cadastrou vendedores.',
+  Vendedores: 'Vendedores',
+  '¿Eliminar este vendedor?': 'Excluir este vendedor?',
+
   // Estadísticas — Dashboard: tabs, períodos, métricas (labels de arrays)
   'esta semana': 'esta semana',
   'este mes': 'este mês',

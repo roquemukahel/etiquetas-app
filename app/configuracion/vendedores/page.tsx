@@ -8,6 +8,7 @@ import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import Avatar from '../../Avatar';
 import PermisosEditor, { PermisosForm } from '../../PermisosEditor';
+import { useT } from '../../lib/idioma';
 
 type Vendedor = {
   id: string;
@@ -42,6 +43,7 @@ const PERMISOS_DEFAULT: PermisosForm = {
 export default function Vendedores() {
   const supabase = crearClienteNavegador();
   const actor = useActor();
+  const t = useT();
   const puedeGestionarUsuarios = tienePermiso(actor, 'gestionar_usuarios');
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [loading, setLoading] = useState(true);
@@ -72,7 +74,7 @@ export default function Vendedores() {
     setError(null);
     const { error: insertError } = await supabase.from('vendedores').insert({ nombre: nombre.trim() });
     if (insertError) {
-      setError('No pudimos guardar: ' + insertError.message);
+      setError(t('No pudimos guardar:') + ' ' + insertError.message);
       setGuardando(false);
       return;
     }
@@ -82,7 +84,7 @@ export default function Vendedores() {
   };
 
   const eliminar = async (id: string) => {
-    if (!confirm('¿Eliminar este vendedor?')) return;
+    if (!confirm(t('¿Eliminar este vendedor?'))) return;
     const vendedor = vendedores.find((v) => v.id === id);
     await supabase.from('vendedores').delete().eq('id', id);
     await registrarAuditoria(supabase, {
@@ -127,7 +129,7 @@ export default function Vendedores() {
 
   const guardarPerfil = async (v: Vendedor) => {
     if (pinEdit.trim() && !/^\d{4,6}$/.test(pinEdit.trim())) {
-      setError('El PIN tiene que ser de 4 a 6 números, o dejarlo vacío para no pedir ninguno');
+      setError(t('El PIN tiene que ser de 4 a 6 números, o dejarlo vacío para no pedir ninguno'));
       return;
     }
     setGuardandoPerfil(true);
@@ -156,9 +158,9 @@ export default function Vendedores() {
   if (!puedeGestionarUsuarios) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
-        <p className="text-sm text-muted dark:text-dark-text-secondary">No tenés permiso para gestionar vendedores.</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t('No tenés permiso para gestionar vendedores.')}</p>
         <Link href="/configuracion" className="text-sm text-accent dark:text-dark-accent underline">
-          Volver
+          {t('Volver')}
         </Link>
       </main>
     );
@@ -170,7 +172,7 @@ export default function Vendedores() {
         <Link href="/configuracion" className="text-2xl leading-none">
           &larr;
         </Link>
-        <span className="text-lg font-medium">Vendedores</span>
+        <span className="text-lg font-medium">{t('Vendedores')}</span>
       </header>
 
       {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
@@ -179,7 +181,7 @@ export default function Vendedores() {
         <input
           value={nombre}
           onChange={(e) => setNombre(e.target.value)}
-          placeholder="Nombre del vendedor"
+          placeholder={t('Nombre del vendedor')}
           className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
         />
         <button
@@ -187,13 +189,13 @@ export default function Vendedores() {
           onClick={agregar}
           className="rounded-xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors px-5 text-sm font-medium text-white disabled:opacity-40"
         >
-          Agregar
+          {t('Agregar')}
         </button>
       </div>
 
-      {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Cargando...</p>}
+      {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{t('Cargando...')}</p>}
       {!loading && vendedores.length === 0 && (
-        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Todavía no cargaste vendedores.</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{t('Todavía no cargaste vendedores.')}</p>
       )}
 
       <div className="flex flex-col gap-2">
@@ -210,15 +212,15 @@ export default function Vendedores() {
                   <p className="text-xs text-muted dark:text-dark-text-secondary">
                     {v.telefono}
                     {v.telefono && v.edad ? ' · ' : ''}
-                    {v.edad ? `${v.edad} años` : ''}
+                    {v.edad ? `${v.edad} ${t('años')}` : ''}
                   </p>
                 )}
               </div>
               <button onClick={() => abrirPerfil(v)} className="shrink-0 text-xs text-accent dark:text-dark-accent underline">
-                {editando === v.id ? 'Cerrar' : 'Editar'}
+                {editando === v.id ? t('Cerrar') : t('Editar')}
               </button>
               <button onClick={() => eliminar(v.id)} className="shrink-0 text-xs text-bad underline">
-                Eliminar
+                {t('Eliminar')}
               </button>
             </div>
 
@@ -228,13 +230,13 @@ export default function Vendedores() {
                   <input
                     value={telefonoEdit}
                     onChange={(e) => setTelefonoEdit(e.target.value)}
-                    placeholder="Teléfono"
+                    placeholder={t('Teléfono')}
                     className="flex-1 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                   />
                   <input
                     value={edadEdit}
                     onChange={(e) => setEdadEdit(e.target.value)}
-                    placeholder="Edad"
+                    placeholder={t('Edad')}
                     inputMode="numeric"
                     className="w-20 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                   />
@@ -243,14 +245,13 @@ export default function Vendedores() {
                   <input
                     value={pinEdit}
                     onChange={(e) => setPinEdit(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                    placeholder="PIN de 4 a 6 dígitos (opcional)"
+                    placeholder={t('PIN de 4 a 6 dígitos (opcional)')}
                     inputMode="numeric"
                     maxLength={6}
                     className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                   />
                   <p className="text-[10px] text-muted dark:text-dark-text-secondary mt-1">
-                    Si le ponés un PIN, va a tener que escribirlo al elegirse en "Cambiar". Dejalo vacío para que no
-                    pida nada.
+                    {t('Si le ponés un PIN, va a tener que escribirlo al elegirse en "Cambiar". Dejalo vacío para que no pida nada.')}
                   </p>
                 </div>
 
@@ -261,7 +262,7 @@ export default function Vendedores() {
                   onClick={() => guardarPerfil(v)}
                   className="rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
                 >
-                  Guardar
+                  {t('Guardar')}
                 </button>
               </div>
             )}
