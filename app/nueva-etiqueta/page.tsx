@@ -8,6 +8,7 @@ import { asegurarModelo } from '../lib/modelos';
 import { limpiarImei } from '../lib/imei';
 import { getActor, MENSAJE_ACTOR_REQUERIDO } from '../lib/actor';
 import SelectorColorAuto from '../SelectorColorAuto';
+import { useT } from '../lib/idioma';
 
 type ExtractedData = {
   modelo: string | null;
@@ -32,6 +33,7 @@ function fileToBase64(file: File): Promise<string> {
 }
 
 export default function NuevaEtiqueta() {
+  const t = useT();
   const supabase = crearClienteNavegador();
   const [step, setStep] = useState<'captura' | 'revision' | 'etiqueta'>('captura');
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
@@ -82,7 +84,7 @@ export default function NuevaEtiqueta() {
 
     if (puedeCompartir) {
       try {
-        await navigator.share({ files: [file], title: 'Etiqueta' });
+        await navigator.share({ files: [file], title: t('Etiqueta') });
         return;
       } catch {
         // si cancela el share, no hacemos nada más
@@ -220,7 +222,7 @@ export default function NuevaEtiqueta() {
       setDatos(data);
       setStep('revision');
     } catch (err) {
-      setError('No pudimos leer la foto. Podés cargar los datos a mano.');
+      setError(t('No pudimos leer la foto. Podés cargar los datos a mano.'));
       setDatos({
         modelo: null,
         capacidad_gb: almacenamiento,
@@ -241,7 +243,7 @@ export default function NuevaEtiqueta() {
           <button onClick={() => setStep('captura')} className="text-2xl leading-none">
             &larr;
           </button>
-          <span className="text-lg font-medium">Revisá los datos</span>
+          <span className="text-lg font-medium">{t('Revisá los datos')}</span>
         </header>
 
         {error && (
@@ -249,20 +251,20 @@ export default function NuevaEtiqueta() {
         )}
 
         <div className="flex flex-col gap-3">
-          <Campo label="Modelo" valor={datos.modelo ?? ''} onChange={(v) => setDatos({ ...datos, modelo: v })} />
+          <Campo label={t('Modelo')} valor={datos.modelo ?? ''} onChange={(v) => setDatos({ ...datos, modelo: v })} />
           <Campo
-            label="Capacidad (GB)"
+            label={t('Capacidad (GB)')}
             valor={datos.capacidad_gb?.toString() ?? ''}
             onChange={(v) => setDatos({ ...datos, capacidad_gb: Number(v) || null })}
           />
           <Campo label="IMEI" valor={datos.imei ?? ''} onChange={(v) => setDatos({ ...datos, imei: v })} mono />
           <Campo
-            label="N° de serie"
+            label={t('N° de serie')}
             valor={datos.numero_serie ?? ''}
             onChange={(v) => setDatos({ ...datos, numero_serie: v })}
             mono
           />
-          <Campo label="Salud de batería (%)" valor={bateria} onChange={setBateria} />
+          <Campo label={t('Salud de batería (%)')} valor={bateria} onChange={setBateria} />
         </div>
 
         <label className="flex items-center gap-3 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 cursor-pointer">
@@ -272,14 +274,14 @@ export default function NuevaEtiqueta() {
             onChange={(e) => setAgregarAlStock(e.target.checked)}
             className="h-5 w-5 accent-ink"
           />
-          <span className="text-sm font-medium">Agregar este dispositivo al stock</span>
+          <span className="text-sm font-medium">{t('Agregar este dispositivo al stock')}</span>
         </label>
 
         {agregarAlStock && (
           <div className="flex flex-col gap-3">
-            <SelectorColorAuto label="Color" modelo={datos.modelo} value={color} onChange={setColor} />
-            <Campo label="Precio" valor={precio} onChange={setPrecio} />
-            <Campo label="Proveedor (opcional)" valor={proveedor} onChange={setProveedor} />
+            <SelectorColorAuto label={t('Color')} modelo={datos.modelo} value={color} onChange={setColor} />
+            <Campo label={t('Precio')} valor={precio} onChange={setPrecio} />
+            <Campo label={t('Proveedor (opcional)')} valor={proveedor} onChange={setProveedor} />
           </div>
         )}
 
@@ -288,26 +290,26 @@ export default function NuevaEtiqueta() {
           onClick={handleContinuarAEtiqueta}
           className="mt-auto w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
         >
-          {guardandoStock ? 'Guardando en stock...' : 'Continuar al diseño de la etiqueta'}
+          {guardandoStock ? t('Guardando en stock...') : t('Continuar al diseño de la etiqueta')}
         </button>
       </main>
     );
   }
 
   if (step === 'etiqueta' && datos) {
-    const t = TAMANOS[formato];
-    const previewScale = 288 / t.wPx;
+    const tam = TAMANOS[formato];
+    const previewScale = 288 / tam.wPx;
     return (
       <main className="flex min-h-screen flex-col px-6 py-6 gap-5 items-center">
         <header className="w-full flex items-center gap-3">
           <button onClick={() => setStep('revision')} className="text-2xl leading-none">
             &larr;
           </button>
-          <span className="text-lg font-medium">Tu etiqueta</span>
+          <span className="text-lg font-medium">{t('Tu etiqueta')}</span>
         </header>
 
         <div className="w-full">
-          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Tamaño de la etiqueta</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Tamaño de la etiqueta')}</label>
           <div className="flex gap-2">
             {(Object.keys(TAMANOS) as FormatoEtiqueta[]).map((f) => (
               <button
@@ -319,24 +321,24 @@ export default function NuevaEtiqueta() {
                     : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
                 }`}
               >
-                {TAMANOS[f].label}
+                {t(TAMANOS[f].label)}
               </button>
             ))}
           </div>
-          <p className="text-xs text-muted dark:text-dark-text-secondary mt-1">{t.ayuda}</p>
+          <p className="text-xs text-muted dark:text-dark-text-secondary mt-1">{t(tam.ayuda)}</p>
         </div>
 
         {/* Vista previa reducida (solo para mostrar; NO se captura desde acá) */}
         <div
           style={{
-            width: `${t.wPx * previewScale}px`,
-            height: `${t.hPx * previewScale}px`,
+            width: `${tam.wPx * previewScale}px`,
+            height: `${tam.hPx * previewScale}px`,
             boxShadow: '0 4px 24px rgba(0,0,0,0.12)',
             borderRadius: formato === 'estandar' ? '8px' : '2px',
             overflow: 'hidden',
           }}
         >
-          <div style={{ transform: `scale(${previewScale})`, transformOrigin: 'top left', width: `${t.wPx}px`, height: `${t.hPx}px` }}>
+          <div style={{ transform: `scale(${previewScale})`, transformOrigin: 'top left', width: `${tam.wPx}px`, height: `${tam.hPx}px` }}>
             <Etiqueta
               logo={logo}
               modelo={datos.modelo}
@@ -363,7 +365,7 @@ export default function NuevaEtiqueta() {
 
         {!logo && (
           <Link href="/configuracion/negocio" className="text-sm text-accent dark:text-dark-accent underline -mt-6">
-            Subir el logo de tu negocio en Configuración
+            {t('Subir el logo de tu negocio en Configuración')}
           </Link>
         )}
 
@@ -373,14 +375,14 @@ export default function NuevaEtiqueta() {
             disabled={descargando}
             className="w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
           >
-            Guardar / compartir PNG
+            {t('Guardar / compartir PNG')}
           </button>
           <button
             onClick={descargarPDF}
             disabled={descargando}
             className="w-full rounded-2xl border border-border dark:border-dark-border py-4 text-center text-base font-medium"
           >
-            Guardar / compartir PDF
+            {t('Guardar / compartir PDF')}
           </button>
         </div>
       </main>
@@ -393,7 +395,7 @@ export default function NuevaEtiqueta() {
         <Link href="/" className="text-2xl leading-none">
           &larr;
         </Link>
-        <span className="text-lg font-medium">Nueva etiqueta</span>
+        <span className="text-lg font-medium">{t('Nueva etiqueta')}</span>
       </header>
 
       <label className="flex items-center gap-3 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 cursor-pointer">
@@ -402,14 +404,14 @@ export default function NuevaEtiqueta() {
           {photoPreview ? '✓' : '📷'}
         </div>
         <div className="flex-1">
-          <p className="text-sm font-medium">Info del dispositivo</p>
-          <p className="text-xs text-muted dark:text-dark-text-secondary">{photoPreview ? 'foto cargada' : 'tocá para sacar foto'}</p>
+          <p className="text-sm font-medium">{t('Info del dispositivo')}</p>
+          <p className="text-xs text-muted dark:text-dark-text-secondary">{photoPreview ? t('foto cargada') : t('tocá para sacar foto')}</p>
         </div>
       </label>
 
       {!photoFile && (
         <div>
-          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">O escribí el IMEI a mano</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('O escribí el IMEI a mano')}</label>
           <input
             value={imeiManual}
             onChange={(e) => setImeiManual(e.target.value)}
@@ -420,7 +422,7 @@ export default function NuevaEtiqueta() {
       )}
 
       <div>
-        <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Salud de batería (%)</label>
+        <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Salud de batería (%)')}</label>
         <input
           type="number"
           inputMode="numeric"
@@ -432,7 +434,7 @@ export default function NuevaEtiqueta() {
       </div>
 
       <div>
-        <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Almacenamiento</label>
+        <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Almacenamiento')}</label>
         <div className="flex gap-2">
           {STORAGE_OPTIONS.map((gb) => (
             <button
@@ -453,7 +455,7 @@ export default function NuevaEtiqueta() {
         onClick={handleContinuar}
         className="mt-auto w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
       >
-        {loading ? 'Leyendo la foto...' : 'Continuar'}
+        {loading ? t('Leyendo la foto...') : t('Continuar')}
       </button>
     </main>
   );

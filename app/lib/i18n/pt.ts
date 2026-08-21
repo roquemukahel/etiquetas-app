@@ -2287,4 +2287,18 @@ export const PT: Record<string, string> = {
   'Para impresoras comunes o etiquetas en hoja.': 'Para impressoras comuns ou etiquetas em folha.',
   'Térmica 58 mm': 'Térmica 58 mm',
   'Para impresoras térmicas de ticket (rollo de 58 mm).': 'Para impressoras térmicas de ticket (rolo de 58 mm).',
+
+  // Nueva Etiqueta — página completa (chrome; el contenido impreso de Etiqueta.tsx no se traduce)
+  'Agregar este dispositivo al stock': 'Adicionar este aparelho ao estoque',
+  Almacenamiento: 'Armazenamento',
+  'Capacidad (GB)': 'Capacidade (GB)',
+  'Continuar al diseño de la etiqueta': 'Continuar para o design da etiqueta',
+  'Guardando en stock...': 'Adicionando ao estoque...',
+  'N° de serie': 'N° de série',
+  'No pudimos leer la foto. Podés cargar los datos a mano.': 'Não conseguimos ler a foto. Você pode preencher os dados manualmente.',
+  'O escribí el IMEI a mano': 'Ou digite o IMEI manualmente',
+  'Revisá los datos': 'Revise os dados',
+  'Tu etiqueta': 'Sua etiqueta',
+  'foto cargada': 'foto carregada',
+  'tocá para sacar foto': 'toque para tirar foto',
 };
