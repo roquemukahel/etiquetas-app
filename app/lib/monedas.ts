@@ -16,3 +16,13 @@ export const MONEDAS = [
 export function simboloMoneda(codigo: string | null | undefined) {
   return MONEDAS.find((m) => m.codigo === codigo)?.simbolo ?? '$';
 }
+
+// Cuántos decimales usar en cálculos de dinero según la moneda — las que en
+// la práctica no se manejan con centavos (pesos con mucha inflación, etc.)
+// van sin decimales, el resto con 2. Usado por cualquier motor de cálculo
+// que necesite redondear (ver app/lib/financiacion/motor.ts).
+export function decimalesMoneda(codigo: string | null | undefined): number {
+  const sinDecimales = ['ARS', 'CLP', 'COP', 'PYG', 'VES'];
+  if (codigo && sinDecimales.includes(codigo.toUpperCase())) return 0;
+  return 2;
+}

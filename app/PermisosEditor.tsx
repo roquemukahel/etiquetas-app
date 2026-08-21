@@ -12,6 +12,7 @@ export type PermisosForm = {
   puedeVerEstadisticas: boolean;
   puedeRecibirServicioTecnico: boolean;
   puedeGestionarServicioTecnico: boolean;
+  puedeGestionarFinanciacion: boolean;
 };
 
 export default function PermisosEditor({
@@ -113,6 +114,15 @@ export default function PermisosEditor({
                   className="h-4 w-4 accent-ink"
                 />
                 <span className="text-sm">Puede gestionar Servicio Técnico (cambiar estado, cobrar, entregar)</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={valor.puedeGestionarFinanciacion}
+                  onChange={(e) => set('puedeGestionarFinanciacion', e.target.checked)}
+                  className="h-4 w-4 accent-ink"
+                />
+                <span className="text-sm">Puede crear financiaciones en cuotas y registrar sus pagos</span>
               </label>
             </div>
           )}

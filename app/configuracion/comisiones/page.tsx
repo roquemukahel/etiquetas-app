@@ -6,6 +6,7 @@ import { crearClienteNavegador } from '../../lib/supabase/client';
 import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import { registrarAuditoria } from '../../lib/auditoria';
+import CampoFecha from '../../CampoFecha';
 
 // Configuración rápida: enciende el módulo y crea/actualiza un plan general con
 // dos reglas (minorista %, mayorista %). Usa el MISMO motor de reglas que el
@@ -161,11 +162,10 @@ export default function ConfiguracionComisiones() {
             <Fila label="Comisión en ventas mayoristas" valor={mayorista} onChange={setMayorista} />
             <div className="flex items-center justify-between gap-3">
               <label className="text-sm font-medium">Empieza a regir</label>
-              <input
-                type="date"
+              <CampoFecha
                 value={desde}
-                onChange={(e) => setDesde(e.target.value)}
-                className="bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                onChange={setDesde}
+                classNameSelect="bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-2 py-2 text-sm"
               />
             </div>
           </div>

@@ -33,6 +33,7 @@ import TextoCondicionGenerado from '../../TextoCondicionGenerado';
 import EstadoBadge from '../../EstadoBadge';
 import ControlCalidad, { ControlCalidadItem } from '../ControlCalidad';
 import { ICONOS } from '../../Iconos';
+import CampoFecha from '../../CampoFecha';
 
 // Mismo patrón que TarjetaReparacion/EstadoBadge para reescalar los SVG de
 // 24px a un tamaño chico inline junto a texto.
@@ -1442,11 +1443,11 @@ export default function FichaReparacion() {
                   <Campo label="Trabajo recomendado" valor={f.trabajo_recomendado} onChange={(v) => setFm((p) => ({ ...p, trabajo_recomendado: v }))} textarea />
                   <div>
                     <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Fecha estimada de entrega</label>
-                    <input
-                      type="date"
+                    <CampoFecha
                       value={f.fecha_estimada}
-                      onChange={(e) => setFm((p) => ({ ...p, fecha_estimada: e.target.value }))}
-                      className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+                      onChange={(iso) => setFm((p) => ({ ...p, fecha_estimada: iso }))}
+                      ancho="completo"
+                      classNameSelect="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-2 py-3 text-sm"
                     />
                   </div>
                   <Campo label="Observaciones internas (no las ve el cliente)" valor={f.observaciones_internas} onChange={(v) => setFm((p) => ({ ...p, observaciones_internas: v }))} textarea />

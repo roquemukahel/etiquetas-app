@@ -28,7 +28,15 @@ export type Permiso =
   // comisiones lo puede cualquiera (el vendedor ve SOLO las suyas, filtrado en
   // las consultas).
   | 'gestionar_comisiones'
-  | 'ver_comisiones';
+  | 'ver_comisiones'
+  // Financiación propia en cuotas: crear un plan y registrar pagos de cuota
+  // es un permiso granular propio (como vender/agregar_stock) — un
+  // vendedor autorizado lo hace en el día a día. Ajustar/reprogramar/anular
+  // un plan queda reservado a administrador, igual que auditoria/
+  // gestionar_usuarios (ver el bloque de arriba): es una operación que
+  // condona o reescribe deuda, no una venta más.
+  | 'gestionar_financiacion'
+  | 'ajustar_financiacion';
 
 // Sin actor elegido todavía, o un actor sin datos de permisos (guardado
 // antes de que existiera esto): no restringimos — mantiene el
@@ -52,7 +60,7 @@ export function tienePermiso(actor: Actor | null, permiso: Permiso): boolean {
   // este cambio no existía la distinción, así que un vendedor con acceso
   // completo pero sin ser administrador ahora pierde estas dos, algo que
   // no pasaba con ninguno de los otros permisos).
-  if (permiso === 'auditoria' || permiso === 'gestionar_usuarios' || permiso === 'exportar_eliminar_datos') return false;
+  if (permiso === 'auditoria' || permiso === 'gestionar_usuarios' || permiso === 'exportar_eliminar_datos' || permiso === 'ajustar_financiacion') return false;
   if (actor.permisos.accesoCompleto) return true;
   switch (permiso) {
     case 'vender':
@@ -71,8 +79,12 @@ export function tienePermiso(actor: Actor | null, permiso: Permiso): boolean {
       // Cualquiera puede ver comisiones; las consultas filtran a las propias
       // del vendedor cuando no tiene acceso completo.
       return true;
-    // 'gestionar_comisiones' NO está acá a propósito: cae en default → solo
-    // administrador o acceso completo (que ya devolvieron true más arriba).
+    case 'gestionar_financiacion':
+      return actor.permisos.puedeGestionarFinanciacion ?? true;
+    // 'gestionar_comisiones' y 'ajustar_financiacion' NO están acá a
+    // propósito: gestionar_comisiones cae en default → solo administrador o
+    // acceso completo; ajustar_financiacion ya se resolvió (a false) arriba,
+    // antes de llegar acá.
     default:
       return false;
   }

@@ -43,10 +43,11 @@ type Persona = {
   puede_ver_estadisticas?: boolean;
   puede_recibir_servicio_tecnico?: boolean;
   puede_gestionar_servicio_tecnico?: boolean;
+  puede_gestionar_financiacion?: boolean;
 };
 
 const COLUMNAS_PERMISOS =
-  'id, es_administrador, acceso_completo, puede_vender, puede_eliminar, puede_agregar_stock, puede_ver_estadisticas, puede_recibir_servicio_tecnico, puede_gestionar_servicio_tecnico';
+  'id, es_administrador, acceso_completo, puede_vender, puede_eliminar, puede_agregar_stock, puede_ver_estadisticas, puede_recibir_servicio_tecnico, puede_gestionar_servicio_tecnico, puede_gestionar_financiacion';
 
 export default function SelectorDeActor() {
   const pathname = usePathname();
@@ -162,6 +163,7 @@ export default function SelectorDeActor() {
         puedeVerEstadisticas: persona.puede_ver_estadisticas ?? true,
         puedeRecibirServicioTecnico: persona.puede_recibir_servicio_tecnico ?? true,
         puedeGestionarServicioTecnico: persona.puede_gestionar_servicio_tecnico ?? true,
+        puedeGestionarFinanciacion: persona.puede_gestionar_financiacion ?? true,
       },
     };
     guardarActor(nuevo);

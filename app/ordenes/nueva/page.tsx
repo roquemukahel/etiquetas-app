@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { asegurarModelo } from '../../lib/modelos';
 import { obtenerTodasLasFilas } from '../../lib/db';
@@ -18,7 +18,11 @@ import {
   vencimientoDesdeHoy,
 } from '../../lib/cuentaCorriente';
 import { planesActivos, interesDe, valorCuota, etiquetaCuotas } from '../../lib/cuotas';
+import { crearPlanFinanciacion } from '../../lib/financiacion/servicio';
+import { generarCronograma, sumarMesConClamp, aFechaISO } from '../../lib/financiacion/motor';
+import { decimalesMoneda } from '../../lib/monedas';
 import { generarComisionesAccion } from '../../comisiones/acciones';
+import CampoFecha from '../../CampoFecha';
 import { ITEMS_CHECKLIST_INGRESO, CAMPOS_DEPENDEN_MODULO, generarTextoCondicionIngreso } from '../../lib/reparaciones';
 import SelectorColorAuto from '../../SelectorColorAuto';
 import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
@@ -145,10 +149,17 @@ function InputDecimal({
 
 export default function NuevaOrden() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // Si se llega acá desde "Nueva venta" en la ficha de un cliente
+  // (?clienteId=...), ese cliente ya viene elegido — no tiene sentido
+  // hacerlo elegir de nuevo. Se resuelve en cuanto termina de cargar la
+  // lista de clientes (más abajo).
+  const clienteIdPreseleccionado = searchParams.get('clienteId');
   const supabase = crearClienteNavegador();
   const actorActual = useActor();
   const puedeVender = tienePermiso(actorActual, 'vender');
   const puedeRecibirServicioTecnico = tienePermiso(actorActual, 'recibir_servicio_tecnico');
+  const puedeGestionarFinanciacion = tienePermiso(actorActual, 'gestionar_financiacion');
 
   const [step, setStep] = useState<'cliente' | 'carrito' | 'confirmar'>('cliente');
 
@@ -243,6 +254,14 @@ export default function NuevaOrden() {
   const [nota, setNota] = useState('');
   const [incluirGarantia, setIncluirGarantia] = useState(true);
 
+  // Financiación propia en cuotas (con cronograma y vencimientos propios —
+  // distinta del recargo fijo de "Plan de pago" de más arriba). Solo tiene
+  // sentido si una parte de la venta queda en cuenta corriente: en vez de un
+  // solo cargo grande, genera un cargo por cuota, cada uno con su vencimiento.
+  const [financiarActivo, setFinanciarActivo] = useState(false);
+  const [financiarCuotas, setFinanciarCuotas] = useState('3');
+  const [financiarPrimeraFecha, setFinanciarPrimeraFecha] = useState('');
+
   // --- plan canje ---
   const [canjeActivo, setCanjeActivo] = useState(false);
   const [canjesCarrito, setCanjesCarrito] = useState<CanjeCarrito[]>([]);
@@ -300,13 +319,19 @@ export default function NuevaOrden() {
       setComisionesActivas(!!negocio?.comisiones_activas);
     })();
     (async () => {
-      setClientes(
-        await obtenerTodasLasFilas<Cliente>(
-          supabase,
-          'clientes',
-          'id, nombre, apellido, telefono, cta_cte_habilitada, limite_credito, plazo_dias, suspendido'
-        )
+      const data = await obtenerTodasLasFilas<Cliente>(
+        supabase,
+        'clientes',
+        'id, nombre, apellido, telefono, cta_cte_habilitada, limite_credito, plazo_dias, suspendido'
       );
+      setClientes(data);
+      if (clienteIdPreseleccionado) {
+        const match = data.find((c) => c.id === clienteIdPreseleccionado);
+        if (match) {
+          setClienteElegido(match);
+          setStep('carrito');
+        }
+      }
     })();
     (async () => {
       // OJO: antes esto era un select() sin paginar. PostgREST corta en
@@ -496,6 +521,22 @@ export default function NuevaOrden() {
   const creditoDisponible =
     clienteElegido?.limite_credito == null ? Infinity : clienteElegido.limite_credito - saldoCliente;
   const excedeLimite = montoCuentaCorriente > creditoDisponible + 0.5;
+
+  const financiarCuotasNum = Math.max(1, Math.floor(Number(financiarCuotas) || 0));
+  const financiarCronogramaValido = financiarActivo ? financiarCuotasNum > 0 && !!financiarPrimeraFecha : true;
+  const previewFinanciacion = useMemo(() => {
+    if (!financiarActivo || montoCuentaCorriente <= 0 || financiarCuotasNum <= 0 || !financiarPrimeraFecha) return null;
+    try {
+      return generarCronograma({
+        importeFinanciado: montoCuentaCorriente,
+        cantidadCuotas: financiarCuotasNum,
+        primeraFecha: financiarPrimeraFecha,
+        decimales: decimalesMoneda(monedaOrden),
+      });
+    } catch {
+      return null;
+    }
+  }, [financiarActivo, montoCuentaCorriente, financiarCuotasNum, financiarPrimeraFecha, monedaOrden]);
 
   const elegirCliente = (c: Cliente) => {
     setClienteElegido(c);
@@ -720,7 +761,8 @@ export default function NuevaOrden() {
     (vendedores.length === 0 || !!vendedorId) &&
     asignacionOk &&
     !excedeLimite &&
-    (montoCuentaCorriente <= 0 || ctaCteDisponible);
+    (montoCuentaCorriente <= 0 || ctaCteDisponible) &&
+    (montoCuentaCorriente <= 0 || !financiarActivo || (financiarCronogramaValido && !!previewFinanciacion));
 
   // Etiqueta legible del cobro para guardar en la orden (forma_pago) y
   // mostrar en listados/boleta, sin perder el detalle real que vive en la
@@ -972,18 +1014,35 @@ export default function NuevaOrden() {
         if (pagosErr) throw new Error(pagosErr.message);
       }
       if (montoCuentaCorriente > 0 && clienteId) {
-        const { error: movErr } = await supabase.from('cta_cte_movimientos').insert({
-          cliente_id: clienteId,
-          tipo: 'cargo',
-          concepto: 'venta',
-          monto: montoCuentaCorriente,
-          moneda: monedaOrden,
-          orden_id: orden.id,
-          vencimiento: vencimientoDesdeHoy(clienteElegido?.plazo_dias),
-          registrado_por_nombre: actorCobro?.nombre ?? null,
-          registrado_por_foto_url: actorCobro?.fotoUrl ?? null,
-        });
-        if (movErr) throw new Error(movErr.message);
+        if (financiarActivo && previewFinanciacion) {
+          // Financiación propia en cuotas: en vez de un solo cargo, el plan
+          // genera un cargo POR CUOTA en cta_cte_movimientos (cada uno con su
+          // propio vencimiento) — ver financiacion_crear_plan() en la migración.
+          const resultadoPlan = await crearPlanFinanciacion(supabase, {
+            clienteId,
+            ordenId: orden.id,
+            moneda: monedaOrden,
+            importeOriginal: montoCuentaCorriente,
+            entregaInicial: 0,
+            cantidadCuotas: financiarCuotasNum,
+            primeraFecha: financiarPrimeraFecha,
+            observaciones: 'Financiación generada al confirmar la orden.',
+          });
+          if ('error' in resultadoPlan) throw new Error('No pudimos crear el plan de financiación: ' + resultadoPlan.error);
+        } else {
+          const { error: movErr } = await supabase.from('cta_cte_movimientos').insert({
+            cliente_id: clienteId,
+            tipo: 'cargo',
+            concepto: 'venta',
+            monto: montoCuentaCorriente,
+            moneda: monedaOrden,
+            orden_id: orden.id,
+            vencimiento: vencimientoDesdeHoy(clienteElegido?.plazo_dias),
+            registrado_por_nombre: actorCobro?.nombre ?? null,
+            registrado_por_foto_url: actorCobro?.fotoUrl ?? null,
+          });
+          if (movErr) throw new Error(movErr.message);
+        }
       }
 
       // Derivar a Servicio Técnico: crea UNA reparación por cada equipo tildado
@@ -1906,6 +1965,65 @@ export default function NuevaOrden() {
                 {Math.round(Math.max(0, creditoDisponible)).toLocaleString('es-AR')}). No se puede confirmar hasta
                 cobrarle o subirle el límite.
               </p>
+            )}
+          </div>
+        )}
+
+        {ctaCteDisponible && montoCuentaCorriente > 0 && puedeGestionarFinanciacion && (
+          <div className="rounded-lg border border-dashed border-border dark:border-dark-border p-2.5 flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                const nuevo = !financiarActivo;
+                setFinanciarActivo(nuevo);
+                if (nuevo && !financiarPrimeraFecha) {
+                  setFinanciarPrimeraFecha(aFechaISO(sumarMesConClamp(new Date(), 1)));
+                }
+              }}
+              className="flex items-center justify-between text-xs font-medium"
+            >
+              <span>🧾 Financiar en cuotas propias (con vencimientos)</span>
+              <span className={`rounded-full px-2 py-0.5 ${financiarActivo ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-canvas dark:bg-dark-bg text-muted dark:text-dark-text-secondary'}`}>
+                {financiarActivo ? 'Activado' : 'Desactivado'}
+              </span>
+            </button>
+            {!financiarActivo && (
+              <p className="text-[10px] text-muted dark:text-dark-text-secondary">
+                Si no lo activás, lo que queda debiendo entra como un cargo único a cuenta corriente (como siempre).
+                Activándolo, se arma un cronograma con una cuota y un vencimiento por mes.
+              </p>
+            )}
+            {financiarActivo && (
+              <>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] text-muted dark:text-dark-text-secondary block mb-1">Cantidad de cuotas</label>
+                    <input
+                      value={financiarCuotas}
+                      inputMode="numeric"
+                      onChange={(e) => setFinanciarCuotas(e.target.value.replace(/[^\d]/g, ''))}
+                      className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-muted dark:text-dark-text-secondary block mb-1">Fecha de la 1ª cuota</label>
+                    <CampoFecha value={financiarPrimeraFecha} onChange={setFinanciarPrimeraFecha} ancho="completo" />
+                  </div>
+                </div>
+                {previewFinanciacion ? (
+                  <div className="flex flex-col gap-0.5 max-h-32 overflow-y-auto">
+                    {previewFinanciacion.map((c) => (
+                      <div key={c.numero} className="flex items-center justify-between text-[11px] text-muted dark:text-dark-text-secondary">
+                        <span>Cuota {c.numero}/{financiarCuotasNum}</span>
+                        <span>{new Date(c.fecha_vencimiento + 'T00:00:00').toLocaleDateString('es-AR')}</span>
+                        <span className="font-medium text-ink dark:text-dark-text">{moneda}{Math.round(c.importe).toLocaleString('es-AR')}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-warn">Completá cantidad de cuotas y fecha de la 1ª para ver el cronograma.</p>
+                )}
+              </>
             )}
           </div>
         )}

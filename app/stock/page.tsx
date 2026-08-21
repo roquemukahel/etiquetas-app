@@ -14,6 +14,7 @@ import { obtenerTodasLasFilas } from '../lib/db';
 import { asegurarModelo, normalizarNombreModelo } from '../lib/modelos';
 import { compararModelosPorSalida } from '../lib/catalogosMarcas';
 import { sanitizarDecimal } from '../lib/numeros';
+import { obtenerCategorias, type Categoria } from '../lib/categorias';
 import MiniaturaDispositivo from '../MiniaturaDispositivo';
 import { QoviState } from '../QoviState';
 import { ICONOS } from '../Iconos';
@@ -62,7 +63,18 @@ type Dispositivo = {
   agregado_por_nombre: string | null;
 };
 
-type Producto = { id: string; nombre: string; precio: number | null; costo: number | null; imagen_url: string | null; cantidad: number };
+type Producto = {
+  id: string;
+  nombre: string;
+  precio: number | null;
+  costo: number | null;
+  imagen_url: string | null;
+  cantidad: number;
+  categoria_id?: string | null;
+  modalidad?: string | null;
+  marca?: string | null;
+  numero_serie?: string | null;
+};
 
 // Catálogo inicial que se puede cargar con un toque desde "Agregar accesorios
 // por defecto" — se insertan sin precio/costo/cantidad (el dueño los completa
@@ -143,6 +155,21 @@ export default function Stock() {
   const [nombreProducto, setNombreProducto] = useState('');
   const [precioProducto, setPrecioProducto] = useState('');
   const [costoProducto, setCostoProducto] = useState('');
+  // Categorías de stock (app/lib/categorias.ts): si el negocio no corrió
+  // todavía la migración correspondiente, esta consulta simplemente vuelve
+  // vacía (la tabla no existe) y el selector no se muestra — agregar un
+  // accesorio sigue funcionando exactamente igual que antes.
+  const [categoriasStock, setCategoriasStock] = useState<Categoria[]>([]);
+  const [categoriaProducto, setCategoriaProducto] = useState('');
+  // Modalidad del producto que se está por agregar: la sugiere la categoría
+  // elegida (modalidad_default), pero queda editable — la spec pide que sea
+  // "explícitamente seleccionable por producto", no fija por categoría.
+  const [modalidadProducto, setModalidadProducto] = useState<'cantidad' | 'serializado'>('cantidad');
+  const [marcaProducto, setMarcaProducto] = useState('');
+  const [numeroSerieProducto, setNumeroSerieProducto] = useState('');
+  const [cantidadInicialProducto, setCantidadInicialProducto] = useState('1');
+  // Filtro de la grilla de accesorios por categoría — '' = todas.
+  const [filtroCategoriaProducto, setFiltroCategoriaProducto] = useState('');
   const [guardandoProducto, setGuardandoProducto] = useState(false);
   const [errorProducto, setErrorProducto] = useState<string | null>(null);
   const [editandoCantidad, setEditandoCantidad] = useState<string | null>(null);
@@ -311,6 +338,28 @@ export default function Stock() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vista]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await obtenerCategorias(supabase, false);
+        setCategoriasStock(data);
+        // Default razonable: "Accesorios" (la migrada) si existe, si no la
+        // primera de perfil genérico — nunca "Celulares" por default acá,
+        // este formulario es el de accesorios.
+        const sugerida = data.find((c) => c.nombre.toLowerCase() === 'accesorios') ?? data.find((c) => c.perfil_default === 'generico');
+        if (sugerida) {
+          setCategoriaProducto(sugerida.id);
+          setModalidadProducto(sugerida.modalidad_default);
+        }
+      } catch {
+        // Tabla stock_categorias todavía no existe en este negocio (no se
+        // corrió la migración) — el formulario sigue funcionando igual que
+        // antes, simplemente sin selector de categoría.
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [exportandoDispositivos, setExportandoDispositivos] = useState(false);
   // No exporta lo que ya está en memoria: si "Vendidos" todavía no se
@@ -810,14 +859,40 @@ export default function Stock() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dispositivos, productos]);
 
+  // Cuántos productos hay por categoría — para los chips de filtro. Los
+  // productos sin categoria_id (negocios que todavía no corrieron la
+  // migración, o productos de antes del backfill) cuentan como "Sin
+  // categoría", nunca se pierden de la cuenta total.
+  const conteoPorCategoria = useMemo(() => {
+    const mapa = new Map<string, number>();
+    for (const p of productos) {
+      const clave = p.categoria_id || '__sin_categoria__';
+      mapa.set(clave, (mapa.get(clave) || 0) + 1);
+    }
+    return mapa;
+  }, [productos]);
+
+  const productosFiltrados = useMemo(() => {
+    if (!filtroCategoriaProducto) return productos;
+    if (filtroCategoriaProducto === '__sin_categoria__') return productos.filter((p) => !p.categoria_id);
+    return productos.filter((p) => p.categoria_id === filtroCategoriaProducto);
+  }, [productos, filtroCategoriaProducto]);
+
   const agregarProducto = async () => {
     if (!nombreProducto.trim() || !puedeAgregarStock) return;
     setGuardandoProducto(true);
     setErrorProducto(null);
+    // Serializado = un registro es UNA unidad con identidad propia (como un
+    // celular): cantidad siempre 1, no tiene sentido pedir "cantidad inicial".
+    // Por cantidad = varias unidades idénticas bajo el mismo registro.
+    const esSerializado = categoriasStock.length > 0 && modalidadProducto === 'serializado';
     const { error: insertError } = await supabase.from('productos').insert({
       nombre: nombreProducto.trim(),
       precio: precioProducto ? Number(precioProducto) : null,
       costo: costoProducto ? Number(costoProducto) : null,
+      cantidad: esSerializado ? 1 : Math.max(0, Math.floor(Number(cantidadInicialProducto) || 0)),
+      ...(categoriaProducto ? { categoria_id: categoriaProducto, modalidad: modalidadProducto } : {}),
+      ...(esSerializado ? { marca: marcaProducto.trim() || null, numero_serie: numeroSerieProducto.trim() || null } : {}),
     });
     if (insertError) {
       setErrorProducto('No pudimos guardar: ' + insertError.message);
@@ -827,6 +902,9 @@ export default function Stock() {
     setNombreProducto('');
     setPrecioProducto('');
     setCostoProducto('');
+    setMarcaProducto('');
+    setNumeroSerieProducto('');
+    setCantidadInicialProducto('1');
     setGuardandoProducto(false);
     cargarProductos();
   };
@@ -856,14 +934,44 @@ export default function Stock() {
   };
 
   const guardarCantidad = async (p: Producto) => {
-    const nueva = Number(valorCantidad) || 0;
+    const nueva = Math.round(Number(valorCantidad) || 0);
     const costoNuevo = valorCosto ? Number(valorCosto) : null;
     const precioNuevo = valorPrecio ? Number(valorPrecio) : null;
-    if (nueva === p.cantidad && costoNuevo === (p.costo ?? null) && precioNuevo === (p.precio ?? null)) {
+    const cambioCantidad = nueva - p.cantidad;
+    const cambianOtros = costoNuevo !== (p.costo ?? null) || precioNuevo !== (p.precio ?? null);
+    if (cambioCantidad === 0 && !cambianOtros) {
       setEditandoCantidad(null);
       return;
     }
-    await supabase.from('productos').update({ cantidad: nueva, costo: costoNuevo, precio: precioNuevo }).eq('id', p.id);
+    const actorProducto = getActor();
+    // La cantidad se mueve por el RPC atómico producto_mover_stock (select
+    // ... for update, nunca la deja negativa, deja rastro en
+    // producto_movimientos) — antes era un update directo con la cantidad
+    // capturada al abrir el editor, así que dos ediciones simultáneas del
+    // mismo producto (o una pestaña vieja) se pisaban entre sí sin avisar.
+    if (cambioCantidad !== 0) {
+      const { error: movError } = await supabase.rpc('producto_mover_stock', {
+        p_producto_id: p.id,
+        p_tipo: 'ajuste',
+        p_cantidad: cambioCantidad,
+        p_motivo: 'Edición manual desde Stock',
+        p_usuario: actorProducto?.nombre ?? null,
+      });
+      if (movError) {
+        // Si el negocio todavía no corrió categorias_stock_supabase.sql, este
+        // RPC no existe — no bloqueamos una función tan básica por eso, se
+        // cae al update directo de siempre (mismo comportamiento que había).
+        const migracionNoCorrida = /producto_mover_stock|schema cache/i.test(movError.message);
+        if (!migracionNoCorrida) {
+          setErrorProducto('No pudimos actualizar la cantidad: ' + movError.message);
+          return;
+        }
+        await supabase.from('productos').update({ cantidad: nueva }).eq('id', p.id);
+      }
+    }
+    if (cambianOtros) {
+      await supabase.from('productos').update({ costo: costoNuevo, precio: precioNuevo }).eq('id', p.id);
+    }
     await registrarAuditoria(supabase, {
       accion: `editó el accesorio "${p.nombre}"`,
       entidad: 'producto',
@@ -1598,6 +1706,66 @@ export default function Stock() {
                   className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
                 />
               </div>
+              {categoriasStock.length > 0 && (
+                <>
+                  <select
+                    value={categoriaProducto}
+                    onChange={(e) => {
+                      setCategoriaProducto(e.target.value);
+                      const cat = categoriasStock.find((c) => c.id === e.target.value);
+                      if (cat) setModalidadProducto(cat.modalidad_default);
+                    }}
+                    aria-label="Categoría"
+                    className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+                  >
+                    {categoriasStock.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.nombre}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="inline-flex items-center gap-1 rounded-xl bg-canvas dark:bg-dark-bg p-0.5 self-start">
+                    {(['cantidad', 'serializado'] as const).map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setModalidadProducto(m)}
+                        className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                          modalidadProducto === m
+                            ? 'bg-white dark:bg-dark-surface-elevated text-ink dark:text-dark-text shadow-card'
+                            : 'text-muted dark:text-dark-text-secondary'
+                        }`}
+                      >
+                        {m === 'cantidad' ? 'Por cantidad' : 'Individual (serializado)'}
+                      </button>
+                    ))}
+                  </div>
+                  {modalidadProducto === 'serializado' ? (
+                    <div className="flex gap-2">
+                      <input
+                        value={marcaProducto}
+                        onChange={(e) => setMarcaProducto(e.target.value)}
+                        placeholder="Marca (opcional)"
+                        className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+                      />
+                      <input
+                        value={numeroSerieProducto}
+                        onChange={(e) => setNumeroSerieProducto(e.target.value)}
+                        placeholder="Número de serie (opcional)"
+                        className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+                      />
+                    </div>
+                  ) : (
+                    <input
+                      value={cantidadInicialProducto}
+                      onChange={(e) => setCantidadInicialProducto(e.target.value.replace(/[^\d]/g, ''))}
+                      inputMode="numeric"
+                      placeholder="Cantidad inicial"
+                      className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+                    />
+                  )}
+                </>
+              )}
               <button
                 disabled={!nombreProducto.trim() || guardandoProducto}
                 onClick={agregarProducto}
@@ -1605,6 +1773,42 @@ export default function Stock() {
               >
                 Agregar al catálogo
               </button>
+            </div>
+          )}
+
+          {categoriasStock.length > 0 && productos.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                onClick={() => setFiltroCategoriaProducto('')}
+                className={`rounded-full px-3 py-1.5 text-xs font-medium ${
+                  !filtroCategoriaProducto ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-canvas dark:bg-dark-bg text-muted dark:text-dark-text-secondary'
+                }`}
+              >
+                Todas ({productos.length})
+              </button>
+              {categoriasStock
+                .filter((c) => (conteoPorCategoria.get(c.id) || 0) > 0)
+                .map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => setFiltroCategoriaProducto(c.id)}
+                    className={`rounded-full px-3 py-1.5 text-xs font-medium ${
+                      filtroCategoriaProducto === c.id ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-canvas dark:bg-dark-bg text-muted dark:text-dark-text-secondary'
+                    }`}
+                  >
+                    {c.nombre} ({conteoPorCategoria.get(c.id) || 0})
+                  </button>
+                ))}
+              {(conteoPorCategoria.get('__sin_categoria__') || 0) > 0 && (
+                <button
+                  onClick={() => setFiltroCategoriaProducto('__sin_categoria__')}
+                  className={`rounded-full px-3 py-1.5 text-xs font-medium ${
+                    filtroCategoriaProducto === '__sin_categoria__' ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-canvas dark:bg-dark-bg text-muted dark:text-dark-text-secondary'
+                  }`}
+                >
+                  Sin categoría ({conteoPorCategoria.get('__sin_categoria__') || 0})
+                </button>
+              )}
             </div>
           )}
 
@@ -1617,9 +1821,14 @@ export default function Stock() {
               descripcion="Cargá tu primer accesorio con el formulario de arriba."
             />
           )}
+          {!loadingProductos && productos.length > 0 && productosFiltrados.length === 0 && (
+            <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-4">
+              No hay productos en esta categoría todavía.
+            </p>
+          )}
 
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {productos.map((p, i) => (
+            {productosFiltrados.map((p, i) => (
               <div
                 key={p.id}
                 className="group relative rounded-2xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-3 flex flex-col items-center gap-1.5 text-center overflow-hidden"
@@ -1648,6 +1857,11 @@ export default function Stock() {
                 </label>
 
                 <p className="text-sm font-medium leading-tight">{p.nombre}</p>
+                {(p.marca || p.numero_serie) && (
+                  <p className="text-[10px] text-muted dark:text-dark-text-secondary leading-tight -mt-1">
+                    {[p.marca, p.numero_serie].filter(Boolean).join(' · ')}
+                  </p>
+                )}
                 <div className="leading-tight min-h-[2.2em]">
                   {p.precio != null && <p className="text-sm font-medium">${p.precio.toLocaleString('es-AR')}</p>}
                   {p.costo != null && (

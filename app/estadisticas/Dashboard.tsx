@@ -27,6 +27,7 @@ import { StatCard, SeccionCard, EmptyState, SegmentedChips, AnalyticsTabs, forma
 import { LineAreaChart } from './charts';
 import { QCard } from '../QCard';
 import { QoviState } from '../QoviState';
+import CampoFecha from '../CampoFecha';
 
 type VistaRanking = 'barras' | 'torta';
 type Tab = 'resumen' | 'ventas' | 'caja' | 'cobrar' | 'stock' | 'servicio' | 'clientes' | 'equipo' | 'proveedores';
@@ -58,7 +59,7 @@ const ETIQUETA_PERIODO_ANT: Record<Periodo, string> = {
   anio: 'el año anterior',
 };
 
-// Fecha en formato yyyy-mm-dd para el <input type="date">, usando los
+// Fecha en formato yyyy-mm-dd para CampoFecha, usando los
 // componentes LOCALES (no toISOString(), que es UTC y puede correr un día
 // para atrás/adelante según la hora y el huso horario).
 function aFechaInput(d: Date): string {
@@ -589,12 +590,12 @@ export default function Estadisticas() {
             Volver a {etiquetaPeriodo}
           </button>
         )}
-        <input
-          type="date"
+        <CampoFecha
           value={aFechaInput(fechaReferencia)}
-          onChange={(e) => e.target.value && setFechaReferencia(new Date(e.target.value + 'T12:00:00'))}
-          aria-label="Elegir una fecha específica"
-          className="ml-auto bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-1 text-xs"
+          onChange={(iso) => setFechaReferencia(new Date(iso + 'T12:00:00'))}
+          ariaLabel="Elegir una fecha específica"
+          className="ml-auto"
+          classNameSelect="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-1.5 py-1 text-xs"
         />
       </div>
     </div>

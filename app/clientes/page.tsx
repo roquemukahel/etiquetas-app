@@ -21,7 +21,11 @@ type Cliente = {
   email: string | null;
   telefono: string | null;
   dni: string | null;
+  cta_cte_habilitada?: boolean | null;
 };
+
+type CategoriaCtaReal = 'con_saldo' | 'vencido' | 'a_favor' | 'al_dia';
+type FiltroCuentaCorriente = 'todos' | 'con_cta' | CategoriaCtaReal;
 
 export default function Clientes() {
   const supabase = crearClienteNavegador();
@@ -42,6 +46,10 @@ export default function Clientes() {
   const [saldos, setSaldos] = useState<Map<string, { saldo: number; vencido: number }>>(new Map());
   const [monedaCodigo, setMonedaCodigo] = useState('ARS');
   const moneda = useMemo(() => simboloMoneda(monedaCodigo), [monedaCodigo]);
+  // Filtro por estado de cuenta corriente — para encontrar rápido, en una
+  // lista larga, a quién le falta cobrar o quién tiene saldo a favor, sin
+  // tener que abrir cliente por cliente.
+  const [filtroCta, setFiltroCta] = useState<FiltroCuentaCorriente>('todos');
 
   // Columnas explícitas (no "*"): con miles de clientes, traer columnas que
   // esta pantalla no usa (sobre todo la foto en base64 de quién lo cargó)
@@ -50,7 +58,7 @@ export default function Clientes() {
     const data = await obtenerTodasLasFilas<Cliente>(
       supabase,
       'clientes',
-      'id, nombre, apellido, domicilio, email, telefono, dni',
+      'id, nombre, apellido, domicilio, email, telefono, dni, cta_cte_habilitada',
       [{ columna: 'nombre' }]
     );
     setClientes(data);
@@ -188,15 +196,56 @@ export default function Clientes() {
     }
   };
 
+  // Categoría de cuenta corriente de un cliente, misma lógica en el filtro y
+  // en el conteo de los chips — para que nunca puedan mostrar números
+  // distintos entre sí.
+  //
+  // El "vencido" que devuelve saldos_cuenta_corriente() es la suma de TODO
+  // cargo cuyo vencimiento ya pasó, sin descontar lo que el cliente ya pagó
+  // después — un cargo vencido y completamente saldado sigue sumando ahí.
+  // El resto de la app ya lo sabe y lo acota (ver la ficha del cliente,
+  // app/clientes/[id]/page.tsx: `vencido = Math.min(Math.max(saldo, 0),
+  // sumaVencida)`) y estadoCuenta() en app/lib/cuentaCorriente.ts chequea
+  // saldo<=0 ANTES que vencido — acá se replica el mismo criterio, si no,
+  // un cliente que ya pagó todo podía aparecer en el chip "En mora".
+  const categoriaCta = (c: Cliente): CategoriaCtaReal | null => {
+    if (!c.cta_cte_habilitada) return null;
+    const s = saldos.get(c.id);
+    const saldo = s?.saldo ?? 0;
+    const vencido = Math.min(Math.max(saldo, 0), s?.vencido ?? 0);
+    if (saldo < -0.009) return 'a_favor';
+    if (saldo <= 0.009) return 'al_dia';
+    if (vencido > 0.009) return 'vencido';
+    return 'con_saldo';
+  };
+
+  const conteosCta = useMemo(() => {
+    const c = { con_cta: 0, con_saldo: 0, vencido: 0, a_favor: 0, al_dia: 0 };
+    for (const cliente of clientes) {
+      const cat = categoriaCta(cliente);
+      if (!cat) continue;
+      c.con_cta++;
+      c[cat]++;
+    }
+    return c;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientes, saldos]);
+
   const filtrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
-    if (!q) return clientes;
-    return clientes.filter((c) =>
-      [c.nombre, c.apellido, c.email, c.telefono, c.dni]
-        .filter(Boolean)
-        .some((campo) => campo!.toLowerCase().includes(q))
-    );
-  }, [clientes, busqueda]);
+    let base = clientes;
+    if (q) {
+      base = base.filter((c) =>
+        [c.nombre, c.apellido, c.email, c.telefono, c.dni]
+          .filter(Boolean)
+          .some((campo) => campo!.toLowerCase().includes(q))
+      );
+    }
+    if (filtroCta === 'todos') return base;
+    if (filtroCta === 'con_cta') return base.filter((c) => !!c.cta_cte_habilitada);
+    return base.filter((c) => categoriaCta(c) === filtroCta);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientes, busqueda, filtroCta, saldos]);
 
   // Con miles de clientes, pintar TODAS las tarjetas de una es lo que hace
   // sentir lenta la pantalla (no la consulta en sí) — de a poco entonces,
@@ -207,7 +256,7 @@ export default function Clientes() {
   const [visibles, setVisibles] = useState(PASO_VISIBLES);
   useEffect(() => {
     setVisibles(PASO_VISIBLES);
-  }, [busqueda]);
+  }, [busqueda, filtroCta]);
   const paraRenderizar = useMemo(() => filtrados.slice(0, visibles), [filtrados, visibles]);
 
   return (
@@ -225,6 +274,33 @@ export default function Clientes() {
         placeholder="Buscar por nombre, email, teléfono, DNI..."
         className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
       />
+
+      {conteosCta.con_cta > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {(
+            [
+              ['todos', `Todos (${clientes.length})`],
+              ['con_cta', `Con cuenta corriente (${conteosCta.con_cta})`],
+              ['vencido', `En mora (${conteosCta.vencido})`],
+              ['con_saldo', `Con saldo (${conteosCta.con_saldo})`],
+              ['a_favor', `Saldo a favor (${conteosCta.a_favor})`],
+              ['al_dia', `Al día (${conteosCta.al_dia})`],
+            ] as [FiltroCuentaCorriente, string][]
+          )
+            .filter(([clave]) => clave === 'todos' || (conteosCta as Record<string, number>)[clave] > 0)
+            .map(([clave, etiqueta]) => (
+              <button
+                key={clave}
+                onClick={() => setFiltroCta(clave)}
+                className={`rounded-full px-3 py-1.5 text-xs font-medium ${
+                  filtroCta === clave ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-canvas dark:bg-dark-bg text-muted dark:text-dark-text-secondary'
+                }`}
+              >
+                {etiqueta}
+              </button>
+            ))}
+        </div>
+      )}
 
       <Link
         href="/clientes/nuevo"
@@ -292,7 +368,15 @@ export default function Clientes() {
           accionSecundaria={{ label: 'Limpiar búsqueda', onClick: () => setBusqueda('') }}
         />
       )}
-      {!loading && filtrados.length === 0 && !busqueda && (
+      {!loading && filtrados.length === 0 && !busqueda && filtroCta !== 'todos' && (
+        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">
+          Ningún cliente entra en este filtro.{' '}
+          <button onClick={() => setFiltroCta('todos')} className="text-accent dark:text-dark-accent underline">
+            Ver todos
+          </button>
+        </p>
+      )}
+      {!loading && filtrados.length === 0 && !busqueda && filtroCta === 'todos' && (
         <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Todavía no tenés clientes cargados.</p>
       )}
 

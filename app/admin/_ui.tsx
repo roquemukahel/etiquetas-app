@@ -10,6 +10,7 @@
 // ============================================================
 
 import { StatCard, SeccionCard, EmptyState, Skeleton, SegmentedChips, InfoTip, TrendIndicator, formatMoneda } from '../estadisticas/ui';
+import CampoFecha from '../CampoFecha';
 
 export { StatCard, SeccionCard, EmptyState, Skeleton, SegmentedChips, InfoTip, TrendIndicator, formatMoneda };
 
@@ -114,18 +115,16 @@ export function PeriodoSelector({
       />
       {valor === 'personalizado' && (
         <div className="flex items-center gap-1.5">
-          <input
-            type="date"
+          <CampoFecha
             value={desdePersonalizado}
-            onChange={(e) => onCambiarPersonalizado(e.target.value, hastaPersonalizado)}
-            className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-1 text-xs"
+            onChange={(iso) => onCambiarPersonalizado(iso, hastaPersonalizado)}
+            classNameSelect="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-1.5 py-1 text-xs"
           />
           <span className="text-xs text-muted dark:text-dark-text-secondary">a</span>
-          <input
-            type="date"
+          <CampoFecha
             value={hastaPersonalizado}
-            onChange={(e) => onCambiarPersonalizado(desdePersonalizado, e.target.value)}
-            className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-1 text-xs"
+            onChange={(iso) => onCambiarPersonalizado(desdePersonalizado, iso)}
+            classNameSelect="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-1.5 py-1 text-xs"
           />
         </div>
       )}
