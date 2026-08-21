@@ -14,6 +14,7 @@ import { obtenerTodasLasFilas } from '../lib/db';
 import { asegurarModelo, normalizarNombreModelo } from '../lib/modelos';
 import { compararModelosPorSalida } from '../lib/catalogosMarcas';
 import { sanitizarDecimal } from '../lib/numeros';
+import { obtenerCategorias, type Categoria } from '../lib/categorias';
 import MiniaturaDispositivo from '../MiniaturaDispositivo';
 import { QoviState } from '../QoviState';
 import { ICONOS } from '../Iconos';
@@ -62,7 +63,7 @@ type Dispositivo = {
   agregado_por_nombre: string | null;
 };
 
-type Producto = { id: string; nombre: string; precio: number | null; costo: number | null; imagen_url: string | null; cantidad: number };
+type Producto = { id: string; nombre: string; precio: number | null; costo: number | null; imagen_url: string | null; cantidad: number; categoria_id?: string | null };
 
 // Catálogo inicial que se puede cargar con un toque desde "Agregar accesorios
 // por defecto" — se insertan sin precio/costo/cantidad (el dueño los completa
@@ -143,6 +144,12 @@ export default function Stock() {
   const [nombreProducto, setNombreProducto] = useState('');
   const [precioProducto, setPrecioProducto] = useState('');
   const [costoProducto, setCostoProducto] = useState('');
+  // Categorías de stock (app/lib/categorias.ts): si el negocio no corrió
+  // todavía la migración correspondiente, esta consulta simplemente vuelve
+  // vacía (la tabla no existe) y el selector no se muestra — agregar un
+  // accesorio sigue funcionando exactamente igual que antes.
+  const [categoriasStock, setCategoriasStock] = useState<Categoria[]>([]);
+  const [categoriaProducto, setCategoriaProducto] = useState('');
   const [guardandoProducto, setGuardandoProducto] = useState(false);
   const [errorProducto, setErrorProducto] = useState<string | null>(null);
   const [editandoCantidad, setEditandoCantidad] = useState<string | null>(null);
@@ -311,6 +318,25 @@ export default function Stock() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vista]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await obtenerCategorias(supabase, false);
+        setCategoriasStock(data);
+        // Default razonable: "Accesorios" (la migrada) si existe, si no la
+        // primera de perfil genérico — nunca "Celulares" por default acá,
+        // este formulario es el de accesorios.
+        const sugerida = data.find((c) => c.nombre.toLowerCase() === 'accesorios') ?? data.find((c) => c.perfil_default === 'generico');
+        if (sugerida) setCategoriaProducto(sugerida.id);
+      } catch {
+        // Tabla stock_categorias todavía no existe en este negocio (no se
+        // corrió la migración) — el formulario sigue funcionando igual que
+        // antes, simplemente sin selector de categoría.
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [exportandoDispositivos, setExportandoDispositivos] = useState(false);
   // No exporta lo que ya está en memoria: si "Vendidos" todavía no se
@@ -818,6 +844,7 @@ export default function Stock() {
       nombre: nombreProducto.trim(),
       precio: precioProducto ? Number(precioProducto) : null,
       costo: costoProducto ? Number(costoProducto) : null,
+      ...(categoriaProducto ? { categoria_id: categoriaProducto } : {}),
     });
     if (insertError) {
       setErrorProducto('No pudimos guardar: ' + insertError.message);
@@ -1598,6 +1625,20 @@ export default function Stock() {
                   className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
                 />
               </div>
+              {categoriasStock.length > 0 && (
+                <select
+                  value={categoriaProducto}
+                  onChange={(e) => setCategoriaProducto(e.target.value)}
+                  aria-label="Categoría"
+                  className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+                >
+                  {categoriasStock.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.nombre}
+                    </option>
+                  ))}
+                </select>
+              )}
               <button
                 disabled={!nombreProducto.trim() || guardandoProducto}
                 onClick={agregarProducto}
