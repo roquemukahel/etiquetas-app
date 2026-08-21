@@ -28,12 +28,14 @@ import {
   RepuestoUsoMetrica,
   RepuestoMetrica,
 } from '../metricasDatos';
+import { useT } from '../../lib/idioma';
 
 type Tecnico = { id: string; nombre: string };
 
 export default function MetricasServicioTecnico() {
   const supabase = crearClienteNavegador();
   const actor = useActor();
+  const t = useT();
   // Costos, márgenes y comparativas entre técnicos son información sensible
   // del negocio — mismo permiso que ya restringe esas mismas cifras en
   // Técnicos (Fase 3) y en el panel lateral de la ficha (Fase 6), en vez de
@@ -83,7 +85,7 @@ export default function MetricasServicioTecnico() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [puedeVerEstadisticas]);
 
-  const nombreTecnico = (id: string) => tecnicos.find((t) => t.id === id)?.nombre ?? 'Sin técnico';
+  const nombreTecnico = (id: string) => tecnicos.find((tec) => tec.id === id)?.nombre ?? t('Sin técnico');
 
   const reparacionesFiltradas = useMemo(
     () => (filtroTecnico ? reparaciones.filter((r) => r.tecnico_id === filtroTecnico) : reparaciones),
@@ -112,14 +114,14 @@ export default function MetricasServicioTecnico() {
     return (
       <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
         <header className="flex items-center gap-3">
-          <Link href="/servicio-tecnico" aria-label="Volver" className="text-2xl leading-none">
+          <Link href="/servicio-tecnico" aria-label={t('Volver')} className="text-2xl leading-none">
             &larr;
           </Link>
-          <span className="text-lg font-medium">Métricas</span>
+          <span className="text-lg font-medium">{t('Métricas')}</span>
         </header>
         <ServicioTecnicoTabs active="metricas" />
         <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">
-          No tenés permiso para ver las métricas de Servicio Técnico.
+          {t('No tenés permiso para ver las métricas de Servicio Técnico.')}
         </p>
       </main>
     );
@@ -128,7 +130,7 @@ export default function MetricasServicioTecnico() {
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center">
-        <p className="text-sm text-muted dark:text-dark-text-secondary">Cargando...</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t('Cargando...')}</p>
       </main>
     );
   }
@@ -139,33 +141,33 @@ export default function MetricasServicioTecnico() {
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
       <header className="flex items-start gap-3">
-        <Link href="/servicio-tecnico" aria-label="Volver" className="text-2xl leading-none mt-0.5">
+        <Link href="/servicio-tecnico" aria-label={t('Volver')} className="text-2xl leading-none mt-0.5">
           &larr;
         </Link>
         <div className="mr-auto">
-          <h1 className="text-lg font-medium leading-tight">Métricas</h1>
-          <p className="text-xs text-muted dark:text-dark-text-secondary">Rendimiento real del taller — nada estimado, todo sale de datos cargados</p>
+          <h1 className="text-lg font-medium leading-tight">{t('Métricas')}</h1>
+          <p className="text-xs text-muted dark:text-dark-text-secondary">{t('Rendimiento real del taller — nada estimado, todo sale de datos cargados')}</p>
         </div>
         <Link href="/estadisticas" className="text-xs text-accent dark:text-dark-accent underline shrink-0 self-center">
-          Estadísticas generales →
+          {t('Estadísticas generales')} →
         </Link>
       </header>
 
       <ServicioTecnicoTabs active="metricas" />
 
       <div className="flex flex-wrap items-center gap-2">
-        <SegmentedChips valor={periodo} opciones={PERIODOS_METRICAS.map((p) => ({ key: p.id, label: p.label }))} onChange={setPeriodo} size="sm" />
+        <SegmentedChips valor={periodo} opciones={PERIODOS_METRICAS.map((p) => ({ key: p.id, label: t(p.label) }))} onChange={setPeriodo} size="sm" />
         {tecnicos.length > 0 && (
           <select
             value={filtroTecnico}
             onChange={(e) => setFiltroTecnico(e.target.value)}
-            aria-label="Filtrar por técnico"
+            aria-label={t('Filtrar por técnico')}
             className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-1.5 text-xs"
           >
-            <option value="">Todos los técnicos</option>
-            {tecnicos.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.nombre}
+            <option value="">{t('Todos los técnicos')}</option>
+            {tecnicos.map((tec) => (
+              <option key={tec.id} value={tec.id}>
+                {tec.nombre}
               </option>
             ))}
           </select>
@@ -173,93 +175,93 @@ export default function MetricasServicioTecnico() {
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard etiqueta="Ingresadas" valor={kpis.ingresadas.toLocaleString('es-AR')} tooltip="Equipos que entraron en el período elegido." />
-        <StatCard etiqueta="Terminadas" valor={kpis.terminadas.toLocaleString('es-AR')} tooltip="Reparaciones entregadas en el período." tono="text-good" />
-        <StatCard etiqueta="Activas ahora" valor={kpis.activas.toLocaleString('es-AR')} tooltip="Todas las que no están entregadas ni canceladas, sin importar el período." />
+        <StatCard etiqueta={t('Ingresadas')} valor={kpis.ingresadas.toLocaleString('es-AR')} tooltip={t('Equipos que entraron en el período elegido.')} />
+        <StatCard etiqueta={t('Terminadas')} valor={kpis.terminadas.toLocaleString('es-AR')} tooltip={t('Reparaciones entregadas en el período.')} tono="text-good" />
+        <StatCard etiqueta={t('Activas ahora')} valor={kpis.activas.toLocaleString('es-AR')} tooltip={t('Todas las que no están entregadas ni canceladas, sin importar el período.')} />
         <StatCard
-          etiqueta="Demoradas"
+          etiqueta={t('Demoradas')}
           valor={kpis.demoradas.toLocaleString('es-AR')}
-          tooltip="Activas con más de 5 días desde el ingreso o con la fecha prometida vencida."
+          tooltip={t('Activas con más de 5 días desde el ingreso o con la fecha prometida vencida.')}
           tono={kpis.demoradas > 0 ? 'text-bad' : undefined}
         />
         <StatCard
-          etiqueta="Permanencia promedio"
+          etiqueta={t('Permanencia promedio')}
           valor={kpis.tiempoPermanenciaPromedioDias != null ? `${kpis.tiempoPermanenciaPromedioDias.toFixed(1).replace('.', ',')}d` : '—'}
-          tooltip="Días entre el ingreso y quedar reparado, promedio de las terminadas en el período."
+          tooltip={t('Días entre el ingreso y quedar reparado, promedio de las terminadas en el período.')}
         />
-        <StatCard etiqueta="Esperando aprobación" valor={pct(kpis.pctEsperandoAprobacion)} tooltip="Porcentaje de las activas esperando que el cliente apruebe el presupuesto." />
-        <StatCard etiqueta="Esperando repuesto" valor={pct(kpis.pctEsperandoRepuesto)} tooltip="Porcentaje de las activas frenadas por falta de un repuesto." />
+        <StatCard etiqueta={t('Esperando aprobación')} valor={pct(kpis.pctEsperandoAprobacion)} tooltip={t('Porcentaje de las activas esperando que el cliente apruebe el presupuesto.')} />
+        <StatCard etiqueta={t('Esperando repuesto')} valor={pct(kpis.pctEsperandoRepuesto)} tooltip={t('Porcentaje de las activas frenadas por falta de un repuesto.')} />
         <StatCard
-          etiqueta="Tasa de aprobación"
+          etiqueta={t('Tasa de aprobación')}
           valor={pct(kpis.tasaAprobacionPresupuestos)}
-          tooltip="De los presupuestos respondidos en el período (aprobados o rechazados), qué porcentaje se aprobó."
+          tooltip={t('De los presupuestos respondidos en el período (aprobados o rechazados), qué porcentaje se aprobó.')}
         />
-        <StatCard etiqueta="Tasa de solución" valor={pct(kpis.tasaSolucion)} tooltip="De lo que se cerró en el período (entregado o cancelado), qué porcentaje terminó entregado." />
+        <StatCard etiqueta={t('Tasa de solución')} valor={pct(kpis.tasaSolucion)} tooltip={t('De lo que se cerró en el período (entregado o cancelado), qué porcentaje terminó entregado.')} />
         <StatCard
-          etiqueta="Reincidencia"
+          etiqueta={t('Reincidencia')}
           valor={pct(kpis.tasaReincidencia)}
-          tooltip="Porcentaje de los ingresos del período clasificados como retrabajo o reincidencia no cubierta."
+          tooltip={t('Porcentaje de los ingresos del período clasificados como retrabajo o reincidencia no cubierta.')}
           tono={kpis.tasaReincidencia != null && kpis.tasaReincidencia > 0 ? 'text-warn' : undefined}
         />
-        <StatCard etiqueta="Garantías" valor={kpis.garantias.toLocaleString('es-AR')} tooltip="Ingresos del período clasificados como garantía." />
-        <StatCard etiqueta="Retrabajos" valor={kpis.retrabajos.toLocaleString('es-AR')} tooltip="Ingresos del período clasificados como retrabajo." />
+        <StatCard etiqueta={t('Garantías')} valor={kpis.garantias.toLocaleString('es-AR')} tooltip={t('Ingresos del período clasificados como garantía.')} />
+        <StatCard etiqueta={t('Retrabajos')} valor={kpis.retrabajos.toLocaleString('es-AR')} tooltip={t('Ingresos del período clasificados como retrabajo.')} />
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard etiqueta="Facturación" valor={fmt(kpis.facturacion)} tooltip="Importe total de las reparaciones entregadas en el período." />
-        <StatCard etiqueta="Costo de repuestos" valor={fmt(kpis.costoRepuestos)} tooltip="Costo histórico (congelado al momento de usarlo) de los repuestos de esas reparaciones." />
-        <StatCard etiqueta="Ganancia bruta" valor={fmt(kpis.gananciaBruta)} tono={kpis.gananciaBruta >= 0 ? 'text-good' : 'text-bad'} tooltip="Facturación menos costo de repuestos." />
-        <StatCard etiqueta="Margen" valor={pct(kpis.margenPct)} tono={kpis.margenPct != null && kpis.margenPct >= 0 ? 'text-good' : 'text-bad'} />
+        <StatCard etiqueta={t('Facturación')} valor={fmt(kpis.facturacion)} tooltip={t('Importe total de las reparaciones entregadas en el período.')} />
+        <StatCard etiqueta={t('Costo de repuestos')} valor={fmt(kpis.costoRepuestos)} tooltip={t('Costo histórico (congelado al momento de usarlo) de los repuestos de esas reparaciones.')} />
+        <StatCard etiqueta={t('Ganancia bruta')} valor={fmt(kpis.gananciaBruta)} tono={kpis.gananciaBruta >= 0 ? 'text-good' : 'text-bad'} tooltip={t('Facturación menos costo de repuestos.')} />
+        <StatCard etiqueta={t('Margen')} valor={pct(kpis.margenPct)} tono={kpis.margenPct != null && kpis.margenPct >= 0 ? 'text-good' : 'text-bad'} />
       </div>
 
-      <SeccionCard titulo="Reparaciones ingresadas por día" subtitulo={`Últimos ${diasEvolucionPara(periodo)} días.`}>
+      <SeccionCard titulo={t('Reparaciones ingresadas por día')} subtitulo={`${t('Últimos')} ${diasEvolucionPara(periodo)} ${t('días.')}`}>
         <EvolucionBarras datos={evolucion} moneda="" />
       </SeccionCard>
 
       <div className="grid md:grid-cols-2 gap-4">
-        <SeccionCard titulo="Reparaciones activas por estado" subtitulo="Embudo del taller ahora mismo.">
-          {embudo.every((e) => e.valor === 0) ? <EmptyState titulo="No hay reparaciones activas" /> : <EvolucionBarras datos={embudo.map((e) => ({ label: e.nombre, valor: e.valor }))} moneda="" />}
+        <SeccionCard titulo={t('Reparaciones activas por estado')} subtitulo={t('Embudo del taller ahora mismo.')}>
+          {embudo.every((e) => e.valor === 0) ? <EmptyState titulo={t('No hay reparaciones activas')} /> : <EvolucionBarras datos={embudo.map((e) => ({ label: t(e.nombre), valor: e.valor }))} moneda="" />}
         </SeccionCard>
-        <SeccionCard titulo="Antigüedad de las órdenes abiertas" subtitulo="Las más viejas primero.">
+        <SeccionCard titulo={t('Antigüedad de las órdenes abiertas')} subtitulo={t('Las más viejas primero.')}>
           {antiguedad.length === 0 ? (
-            <EmptyState titulo="No hay órdenes abiertas" />
+            <EmptyState titulo={t('No hay órdenes abiertas')} />
           ) : (
-            <RankingBarras datos={antiguedad.map((a) => ({ nombre: a.label, valor: a.dias }))} sufijo=" días" />
+            <RankingBarras datos={antiguedad.map((a) => ({ nombre: a.label, valor: a.dias }))} sufijo={` ${t('días')}`} />
           )}
         </SeccionCard>
       </div>
 
       <div className="grid md:grid-cols-2 gap-4">
-        <SeccionCard titulo="Servicios más solicitados" subtitulo="Según los trabajos realizados del período.">
-          {servicios.length === 0 ? <EmptyState titulo="Sin servicios registrados en el período" /> : <RankingBarras datos={servicios.map((s) => ({ nombre: s.nombre, valor: s.valor }))} sufijo=" vez(veces)" />}
+        <SeccionCard titulo={t('Servicios más solicitados')} subtitulo={t('Según los trabajos realizados del período.')}>
+          {servicios.length === 0 ? <EmptyState titulo={t('Sin servicios registrados en el período')} /> : <RankingBarras datos={servicios.map((s) => ({ nombre: s.nombre, valor: s.valor }))} sufijo={` ${t('vez(veces)')}`} />}
         </SeccionCard>
-        <SeccionCard titulo="Modelos más reparados">
-          {modelos.length === 0 ? <EmptyState titulo="Sin ingresos en el período" /> : <RankingBarras datos={modelos.map((m) => ({ nombre: m.nombre, valor: m.valor }))} />}
-        </SeccionCard>
-      </div>
-
-      <div className="grid md:grid-cols-2 gap-4">
-        <SeccionCard titulo="Repuestos más utilizados">
-          {repuestosUsados.length === 0 ? <EmptyState titulo="Sin repuestos usados en el período" /> : <RankingBarras datos={repuestosUsados.map((r) => ({ nombre: r.nombre, valor: r.valor }))} sufijo=" unid." />}
-        </SeccionCard>
-        <SeccionCard titulo="Carga por técnico" subtitulo="Reparaciones activas asignadas ahora mismo (todos los períodos).">
-          {carga.length === 0 ? <EmptyState titulo="Sin reparaciones activas asignadas" /> : <RankingBarras datos={carga.map((c) => ({ nombre: c.nombre, valor: c.valor }))} />}
+        <SeccionCard titulo={t('Modelos más reparados')}>
+          {modelos.length === 0 ? <EmptyState titulo={t('Sin ingresos en el período')} /> : <RankingBarras datos={modelos.map((m) => ({ nombre: m.nombre, valor: m.valor }))} />}
         </SeccionCard>
       </div>
 
       <div className="grid md:grid-cols-2 gap-4">
-        <SeccionCard titulo="Stock crítico" subtitulo="Repuestos en o por debajo del mínimo configurado.">
+        <SeccionCard titulo={t('Repuestos más utilizados')}>
+          {repuestosUsados.length === 0 ? <EmptyState titulo={t('Sin repuestos usados en el período')} /> : <RankingBarras datos={repuestosUsados.map((r) => ({ nombre: r.nombre, valor: r.valor }))} sufijo={` ${t('unid.')}`} />}
+        </SeccionCard>
+        <SeccionCard titulo={t('Carga por técnico')} subtitulo={t('Reparaciones activas asignadas ahora mismo (todos los períodos).')}>
+          {carga.length === 0 ? <EmptyState titulo={t('Sin reparaciones activas asignadas')} /> : <RankingBarras datos={carga.map((c) => ({ nombre: c.nombre, valor: c.valor }))} />}
+        </SeccionCard>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-4">
+        <SeccionCard titulo={t('Stock crítico')} subtitulo={t('Repuestos en o por debajo del mínimo configurado.')}>
           {stockCritico.length === 0 ? (
-            <EmptyState titulo="Sin repuestos en stock crítico" />
+            <EmptyState titulo={t('Sin repuestos en stock crítico')} />
           ) : (
-            <RankingBarras datos={stockCritico.map((s) => ({ nombre: s.nombre, valor: s.valor }))} sufijo=" disp." />
+            <RankingBarras datos={stockCritico.map((s) => ({ nombre: s.nombre, valor: s.valor }))} sufijo={` ${t('disp.')}`} />
           )}
         </SeccionCard>
-        <SeccionCard titulo="Repuestos con baja rotación" subtitulo="Con stock cargado pero sin uso en el período elegido.">
+        <SeccionCard titulo={t('Repuestos con baja rotación')} subtitulo={t('Con stock cargado pero sin uso en el período elegido.')}>
           {bajaRotacion.length === 0 ? (
-            <EmptyState titulo="Todo el stock tuvo movimiento en el período" />
+            <EmptyState titulo={t('Todo el stock tuvo movimiento en el período')} />
           ) : (
-            <RankingBarras datos={bajaRotacion.map((r) => ({ nombre: r.nombre, valor: r.valor }))} sufijo=" en stock" />
+            <RankingBarras datos={bajaRotacion.map((r) => ({ nombre: r.nombre, valor: r.valor }))} sufijo={` ${t('en stock')}`} />
           )}
         </SeccionCard>
       </div>
