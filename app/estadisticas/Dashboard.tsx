@@ -43,6 +43,7 @@ import { LineAreaChart } from './charts';
 import { QCard } from '../QCard';
 import { QoviState } from '../QoviState';
 import CampoFecha from '../CampoFecha';
+import { useT, useIdioma } from '../lib/idioma';
 
 type VistaRanking = 'barras' | 'torta';
 // Rankings separados por métrica, no un puntaje opaco de "producto/categoría
@@ -147,6 +148,8 @@ export default function Estadisticas() {
   const supabase = crearClienteNavegador();
   const router = useRouter();
   const actor = useActor();
+  const t = useT();
+  const idioma = useIdioma();
   const puedeVerEstadisticas = tienePermiso(actor, 'ver_estadisticas');
   // orden_items.costo existe en producción desde el módulo de Comisiones
   // (comisiones_supabase.sql) — acá solo faltaba pedirla y respetar el
@@ -755,10 +758,22 @@ export default function Estadisticas() {
     [evolucionMedios]
   );
 
+  const PERIODOS_T = useMemo(() => PERIODOS.map((p) => ({ ...p, label: t(p.label) })), [t]);
+  // La pestaña "Equipo" acá es de personal (vendedores/técnicos), no de
+  // dispositivo — "Equipo" ya está mapeado a "Aparelho" en el diccionario
+  // para los otros usos (mucho más frecuentes) de esa misma palabra, así que
+  // se resuelve a mano para no pisar esa traducción compartida.
+  const TABS_T = useMemo(
+    () => TABS.map((tb) => ({ ...tb, label: tb.key === 'equipo' ? (idioma === 'pt' ? 'Equipe' : 'Equipo') : t(tb.label) })),
+    [t, idioma]
+  );
+  const METRICAS_PRODUCTO_BASE_T = useMemo(() => METRICAS_PRODUCTO_BASE.map((o) => ({ ...o, label: t(o.label) })), [t]);
+  const METRICAS_PRODUCTO_COSTO_T = useMemo(() => METRICAS_PRODUCTO_COSTO.map((o) => ({ ...o, label: t(o.label) })), [t]);
+
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center">
-        <p className="text-sm text-muted dark:text-dark-text-secondary">Cargando analítica...</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t('Cargando analítica...')}</p>
       </main>
     );
   }
@@ -766,9 +781,9 @@ export default function Estadisticas() {
   if (!puedeVerEstadisticas) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
-        <p className="text-sm text-muted dark:text-dark-text-secondary">No tenés permiso para ver Estadísticas.</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t('No tenés permiso para ver Estadísticas.')}</p>
         <Link href="/" className="text-sm text-accent dark:text-dark-accent underline">
-          Volver al inicio
+          {t('Volver al inicio')}
         </Link>
       </main>
     );
@@ -778,10 +793,10 @@ export default function Estadisticas() {
   const hora = actualizado ? actualizado.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) : '';
 
   const metricasChart: { key: MetricaSerie; label: string }[] = [
-    { key: 'ventas', label: 'Ventas' },
-    { key: 'ingresado', label: 'Dinero ingresado' },
-    { key: 'credito', label: 'Fiado' },
-    ...(puedeVerCostos ? ([{ key: 'ganancia', label: 'Ganancia' }] as const) : []),
+    { key: 'ventas', label: t('Ventas') },
+    { key: 'ingresado', label: t('Dinero ingresado') },
+    { key: 'credito', label: t('Fiado') },
+    ...(puedeVerCostos ? ([{ key: 'ganancia', label: t('Ganancia') }] as const) : []),
   ];
 
   // "esta semana"/"el mes anterior" son para el botón "Volver a..." y el
@@ -793,7 +808,7 @@ export default function Estadisticas() {
   const etiquetaTramoActual = etiquetaTramo(periodo, rango);
   const etiquetaTramoAnterior = etiquetaTramo(periodo, { inicio: rango.inicioPrev, fin: rango.finPrev });
   const graficoOculto = (
-    <EmptyState icono="🙈" titulo="Montos ocultos" texto="Tocá 'Mostrar montos' arriba para ver el gráfico." />
+    <EmptyState icono="🙈" titulo={t('Montos ocultos')} texto={t("Tocá 'Mostrar montos' arriba para ver el gráfico.")} />
   );
 
   // Filtros de período + comparación (aplican a todas las pestañas salvo Stock,
@@ -801,17 +816,17 @@ export default function Estadisticas() {
   const filtros = (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <SegmentedChips valor={periodo} opciones={PERIODOS} onChange={cambiarPeriodo} />
+        <SegmentedChips valor={periodo} opciones={PERIODOS_T} onChange={cambiarPeriodo} />
         <label className="flex items-center gap-2 text-xs text-muted dark:text-dark-text-secondary cursor-pointer">
           <input type="checkbox" checked={comparar} onChange={(e) => setComparar(e.target.checked)} className="h-4 w-4 accent-ink" />
-          Comparar con {ETIQUETA_PERIODO_ANT[periodo]}
+          {t('Comparar con')} {t(ETIQUETA_PERIODO_ANT[periodo])}
         </label>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={() => navegarPeriodo(-1)}
-          aria-label="Tramo anterior"
+          aria-label={t('Tramo anterior')}
           className="rounded-lg border border-border dark:border-dark-border px-2.5 py-1 text-sm hover:bg-canvas dark:hover:bg-dark-bg"
         >
           ‹
@@ -821,7 +836,7 @@ export default function Estadisticas() {
           type="button"
           onClick={() => navegarPeriodo(1)}
           disabled={esPeriodoActual}
-          aria-label="Tramo siguiente"
+          aria-label={t('Tramo siguiente')}
           className="rounded-lg border border-border dark:border-dark-border px-2.5 py-1 text-sm hover:bg-canvas dark:hover:bg-dark-bg disabled:opacity-30 disabled:hover:bg-transparent"
         >
           ›
@@ -832,13 +847,13 @@ export default function Estadisticas() {
             onClick={() => setFechaReferencia(new Date())}
             className="text-xs text-accent dark:text-dark-accent underline"
           >
-            Volver a {etiquetaPeriodo}
+            {t('Volver a')} {t(etiquetaPeriodo)}
           </button>
         )}
         <CampoFecha
           value={aFechaInput(fechaReferencia)}
           onChange={(iso) => setFechaReferencia(new Date(iso + 'T12:00:00'))}
-          ariaLabel="Elegir una fecha específica"
+          ariaLabel={t('Elegir una fecha específica')}
           className="ml-auto"
           classNameSelect="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-1.5 py-1 text-xs"
         />
@@ -860,15 +875,15 @@ export default function Estadisticas() {
         return (
           <>
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-              <StatCard etiqueta="Ventas netas" valor={m(actualB.ventas)} tooltip="Todo lo que facturaste en el período (incluye lo vendido a cuenta corriente/fiado)." variacion={varSi(actualB.ventas, prevB.ventas)} moneda={moneda} sensible oculto={ocultarMontos} />
-              <StatCard etiqueta="Operaciones" valor={actualB.operaciones.toLocaleString('es-AR')} tooltip="Cantidad de ventas cobradas en el período." variacion={varSi(actualB.operaciones, prevB.operaciones)} />
-              <StatCard etiqueta="Ticket promedio" valor={m(ticket)} tooltip="Promedio facturado por operación (ventas ÷ operaciones)." variacion={varSi(ticket, ticketPrev)} moneda={moneda} sensible oculto={ocultarMontos} />
-              <StatCard etiqueta="Unidades vendidas" valor={actualB.unidades.toLocaleString('es-AR')} tooltip="Dispositivos y productos vendidos en el período." variacion={varSi(actualB.unidades, prevB.unidades)} />
+              <StatCard etiqueta={t('Ventas netas')} valor={m(actualB.ventas)} tooltip={t('Todo lo que facturaste en el período (incluye lo vendido a cuenta corriente/fiado).')} variacion={varSi(actualB.ventas, prevB.ventas)} moneda={moneda} sensible oculto={ocultarMontos} />
+              <StatCard etiqueta={t('Operaciones')} valor={actualB.operaciones.toLocaleString('es-AR')} tooltip={t('Cantidad de ventas cobradas en el período.')} variacion={varSi(actualB.operaciones, prevB.operaciones)} />
+              <StatCard etiqueta={t('Ticket promedio')} valor={m(ticket)} tooltip={t('Promedio facturado por operación (ventas ÷ operaciones).')} variacion={varSi(ticket, ticketPrev)} moneda={moneda} sensible oculto={ocultarMontos} />
+              <StatCard etiqueta={t('Unidades vendidas')} valor={actualB.unidades.toLocaleString('es-AR')} tooltip={t('Dispositivos y productos vendidos en el período.')} variacion={varSi(actualB.unidades, prevB.unidades)} />
               {puedeVerCostos && (
                 <StatCard
-                  etiqueta="Ganancia bruta"
+                  etiqueta={t('Ganancia bruta')}
                   valor={m(actualB.ganancia)}
-                  tooltip={`Ventas netas menos costo histórico de venta, en lo que tiene costo cargado (${Math.round(cobertura * 100)}% de las ventas del período).`}
+                  tooltip={`${t('Ventas netas menos costo histórico de venta, en lo que tiene costo cargado')} (${Math.round(cobertura * 100)}% ${t('de las ventas del período')}).`}
                   variacion={varSi(actualB.ganancia, prevB.ganancia)}
                   moneda={moneda}
                   tono="text-good"
@@ -877,14 +892,14 @@ export default function Estadisticas() {
                 >
                   {!ocultarMontos && actualB.ventasConCosto > 0 && (
                     <span className="text-[11px] text-muted dark:text-dark-text-secondary">
-                      Margen {Math.round((actualB.ganancia / actualB.ventasConCosto) * 100)}%
+                      {t('Margen')} {Math.round((actualB.ganancia / actualB.ventasConCosto) * 100)}%
                     </span>
                   )}
                 </StatCard>
               )}
-              <StatCard etiqueta="Vendido al contado" valor={m(contado)} tooltip="Ventas del período que NO se financiaron en cuenta corriente." moneda={moneda} tono="text-good" sensible oculto={ocultarMontos} />
-              <StatCard etiqueta="Vendido a crédito" valor={m(actualB.credito)} tooltip="Ventas que quedaron fiadas (cuenta corriente) en el período." moneda={moneda} tono={actualB.credito > 0 ? 'text-warn' : undefined} sensible oculto={ocultarMontos}>
-                {!ocultarMontos && actualB.ventas > 0 && <span className="text-[11px] text-muted dark:text-dark-text-secondary">{Math.round(pctFiado * 100)}% de las ventas</span>}
+              <StatCard etiqueta={t('Vendido al contado')} valor={m(contado)} tooltip={t('Ventas del período que NO se financiaron en cuenta corriente.')} moneda={moneda} tono="text-good" sensible oculto={ocultarMontos} />
+              <StatCard etiqueta={t('Vendido a crédito')} valor={m(actualB.credito)} tooltip={t('Ventas que quedaron fiadas (cuenta corriente) en el período.')} moneda={moneda} tono={actualB.credito > 0 ? 'text-warn' : undefined} sensible oculto={ocultarMontos}>
+                {!ocultarMontos && actualB.ventas > 0 && <span className="text-[11px] text-muted dark:text-dark-text-secondary">{Math.round(pctFiado * 100)}% {t('de las ventas')}</span>}
               </StatCard>
             </div>
             {/* Qovi solo aparece acá si la comparación real (ya calculada
@@ -897,66 +912,66 @@ export default function Estadisticas() {
                   escena="estadisticasPositivas"
                   tamano="sm"
                   alineacion="izquierda"
-                  titulo="Las ventas van en alza"
-                  descripcion={`${etiquetaTramoActual} vendiste ${
-                    evolucionVentas.pct != null ? `${Math.abs(evolucionVentas.pct).toFixed(1).replace('.', ',')}% más` : 'más'
-                  } que ${etiquetaTramoAnterior}.`}
+                  titulo={t('Las ventas van en alza')}
+                  descripcion={`${etiquetaTramoActual} ${t('vendiste')} ${
+                    evolucionVentas.pct != null ? `${Math.abs(evolucionVentas.pct).toFixed(1).replace('.', ',')}% ${t('más')}` : t('más')
+                  } ${t('que')} ${etiquetaTramoAnterior}.`}
                 />
               </QCard>
             )}
-            <SeccionCard titulo="Evolución de ventas" subtitulo={comparar ? `Línea llena: ${etiquetaTramoActual}. Punteada: ${etiquetaTramoAnterior}.` : undefined} accion={<SegmentedChips size="sm" valor={metricaChart} opciones={metricasChart} onChange={setMetricaChart} />}>
+            <SeccionCard titulo={t('Evolución de ventas')} subtitulo={comparar ? `${t('Línea llena:')} ${etiquetaTramoActual}. ${t('Punteada:')} ${etiquetaTramoAnterior}.` : undefined} accion={<SegmentedChips size="sm" valor={metricaChart} opciones={metricasChart} onChange={setMetricaChart} />}>
               {ocultarMontos ? graficoOculto : <LineAreaChart puntos={serie} moneda={moneda} compararActivo={comparar} />}
             </SeccionCard>
             <div className="grid md:grid-cols-2 gap-4">
-              <SeccionCard titulo="Ranking de vendedores" accion={<VistaToggle vista={vistaVendedores} onVista={setVistaVendedores} />}>
+              <SeccionCard titulo={t('Ranking de vendedores')} accion={<VistaToggle vista={vistaVendedores} onVista={setVistaVendedores} />}>
                 {vistaVendedores === 'barras' ? <RankingBarras datos={rankingVendedores} moneda={moneda} oculto={ocultarMontos} /> : <RankingTorta datos={rankingVendedores} moneda={moneda} oculto={ocultarMontos} />}
               </SeccionCard>
-              <SeccionCard titulo="Mejores compradores" accion={<VistaToggle vista={vistaCompradores} onVista={setVistaCompradores} />}>
+              <SeccionCard titulo={t('Mejores compradores')} accion={<VistaToggle vista={vistaCompradores} onVista={setVistaCompradores} />}>
                 {vistaCompradores === 'barras' ? <RankingBarras datos={rankingCompradores} moneda={moneda} oculto={ocultarMontos} /> : <RankingTorta datos={rankingCompradores} moneda={moneda} oculto={ocultarMontos} />}
               </SeccionCard>
             </div>
             <SeccionCard
-              titulo="Ranking de productos"
-              subtitulo="Por modelo o por producto de catálogo. Si borrás un modelo/producto de Stock después de haberlo vendido, sus ventas viejas pueden aparecer separadas en vez de agrupadas — no borres del historial algo que ya vendiste si querés conservar este ranking preciso."
+              titulo={t('Ranking de productos')}
+              subtitulo={t('Por modelo o por producto de catálogo. Si borrás un modelo/producto de Stock después de haberlo vendido, sus ventas viejas pueden aparecer separadas en vez de agrupadas — no borres del historial algo que ya vendiste si querés conservar este ranking preciso.')}
               accion={
                 <SegmentedChips
                   size="sm"
                   valor={metricaProductos}
-                  opciones={puedeVerCostos ? [...METRICAS_PRODUCTO_BASE, ...METRICAS_PRODUCTO_COSTO] : METRICAS_PRODUCTO_BASE}
+                  opciones={puedeVerCostos ? [...METRICAS_PRODUCTO_BASE_T, ...METRICAS_PRODUCTO_COSTO_T] : METRICAS_PRODUCTO_BASE_T}
                   onChange={setMetricaProductos}
                 />
               }
             >
               {rankingProductos.length === 0 ? (
-                <EmptyState titulo="Sin ventas de productos en el período" texto="Dispositivos y accesorios vendidos van a aparecer acá agrupados." />
+                <EmptyState titulo={t('Sin ventas de productos en el período')} texto={t('Dispositivos y accesorios vendidos van a aparecer acá agrupados.')} />
               ) : (
                 <RankingBarras
                   datos={filasADatos(rankingProductos, metricaProductos)}
                   moneda={metricaProductos === 'facturacion' || metricaProductos === 'ganancia' ? moneda : undefined}
-                  sufijo={metricaProductos === 'unidades' ? ' unid.' : metricaProductos === 'margen' ? '%' : undefined}
+                  sufijo={metricaProductos === 'unidades' ? t(' unid.') : metricaProductos === 'margen' ? '%' : undefined}
                   oculto={ocultarMontos}
                 />
               )}
             </SeccionCard>
             <SeccionCard
-              titulo="Ranking de categorías"
-              subtitulo="Mismas categorías que Configuración → Categorías de stock."
+              titulo={t('Ranking de categorías')}
+              subtitulo={t('Mismas categorías que Configuración → Categorías de stock.')}
               accion={
                 <SegmentedChips
                   size="sm"
                   valor={metricaCategorias}
-                  opciones={puedeVerCostos ? [...METRICAS_PRODUCTO_BASE, ...METRICAS_PRODUCTO_COSTO] : METRICAS_PRODUCTO_BASE}
+                  opciones={puedeVerCostos ? [...METRICAS_PRODUCTO_BASE_T, ...METRICAS_PRODUCTO_COSTO_T] : METRICAS_PRODUCTO_BASE_T}
                   onChange={setMetricaCategorias}
                 />
               }
             >
               {rankingCategoriasVenta.length === 0 ? (
-                <EmptyState titulo="Sin ventas categorizadas en el período" />
+                <EmptyState titulo={t('Sin ventas categorizadas en el período')} />
               ) : (
                 <RankingBarras
                   datos={filasADatos(rankingCategoriasVenta, metricaCategorias)}
                   moneda={metricaCategorias === 'facturacion' || metricaCategorias === 'ganancia' ? moneda : undefined}
-                  sufijo={metricaCategorias === 'unidades' ? ' unid.' : metricaCategorias === 'margen' ? '%' : undefined}
+                  sufijo={metricaCategorias === 'unidades' ? t(' unid.') : metricaCategorias === 'margen' ? '%' : undefined}
                   oculto={ocultarMontos}
                 />
               )}
@@ -969,25 +984,25 @@ export default function Estadisticas() {
         return (
           <>
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-              <StatCard etiqueta="Dinero ingresado" valor={m(actualB.ingresado)} tooltip="La plata que realmente entró a la caja en el período (incluye cobros de ventas anteriores fiadas)." variacion={varSi(actualB.ingresado, prevB.ingresado)} moneda={moneda} tono="text-good" sensible oculto={ocultarMontos} />
-              <StatCard etiqueta="Medios de pago" valor={cajaPorMedio.length.toLocaleString('es-AR')} tooltip="Cantidad de formas de pago distintas usadas en el período." />
-              <StatCard etiqueta="Vendido a crédito" valor={m(actualB.credito)} tooltip="Lo que se sumó a cuentas corrientes en el período (todavía no entró a la caja)." moneda={moneda} tono={actualB.credito > 0 ? 'text-warn' : undefined} sensible oculto={ocultarMontos} />
+              <StatCard etiqueta={t('Dinero ingresado')} valor={m(actualB.ingresado)} tooltip={t('La plata que realmente entró a la caja en el período (incluye cobros de ventas anteriores fiadas).')} variacion={varSi(actualB.ingresado, prevB.ingresado)} moneda={moneda} tono="text-good" sensible oculto={ocultarMontos} />
+              <StatCard etiqueta={t('Medios de pago')} valor={cajaPorMedio.length.toLocaleString('es-AR')} tooltip={t('Cantidad de formas de pago distintas usadas en el período.')} />
+              <StatCard etiqueta={t('Vendido a crédito')} valor={m(actualB.credito)} tooltip={t('Lo que se sumó a cuentas corrientes en el período (todavía no entró a la caja).')} moneda={moneda} tono={actualB.credito > 0 ? 'text-warn' : undefined} sensible oculto={ocultarMontos} />
             </div>
-            <SeccionCard titulo="Evolución del dinero ingresado" subtitulo={comparar ? `Línea llena: ${etiquetaTramoActual}. Punteada: ${etiquetaTramoAnterior}.` : undefined}>
+            <SeccionCard titulo={t('Evolución del dinero ingresado')} subtitulo={comparar ? `${t('Línea llena:')} ${etiquetaTramoActual}. ${t('Punteada:')} ${etiquetaTramoAnterior}.` : undefined}>
               {ocultarMontos ? graficoOculto : <LineAreaChart puntos={serieIngresado} moneda={moneda} compararActivo={comparar} />}
             </SeccionCard>
-            <SeccionCard titulo="Caja por medio de pago" accion={<VistaToggle vista={vistaFormaPago} onVista={setVistaFormaPago} />}>
+            <SeccionCard titulo={t('Caja por medio de pago')} accion={<VistaToggle vista={vistaFormaPago} onVista={setVistaFormaPago} />}>
               {cajaPorMedio.length === 0 ? (
-                <EmptyState titulo="Sin cobros en el período" texto="Cuando registres pagos, vas a ver acá cómo se reparten por medio." />
+                <EmptyState titulo={t('Sin cobros en el período')} texto={t('Cuando registres pagos, vas a ver acá cómo se reparten por medio.')} />
               ) : vistaFormaPago === 'barras' ? (
                 <RankingBarras datos={cajaPorMedio} moneda={moneda} oculto={ocultarMontos} />
               ) : (
                 <RankingTorta datos={cajaPorMedio} moneda={moneda} oculto={ocultarMontos} />
               )}
             </SeccionCard>
-            <SeccionCard titulo="Evolución por medio de pago" subtitulo={`Últimos ${HORIZONTE_MEDIOS_PAGO} meses, sin importar el período elegido arriba.`}>
+            <SeccionCard titulo={t('Evolución por medio de pago')} subtitulo={`${t('Últimos')} ${HORIZONTE_MEDIOS_PAGO} ${t('meses, sin importar el período elegido arriba.')}`}>
               {evolucionMedios.every((f) => f.total === 0) ? (
-                <EmptyState titulo="Sin cobros en los últimos meses" />
+                <EmptyState titulo={t('Sin cobros en los últimos meses')} />
               ) : ocultarMontos ? (
                 graficoOculto
               ) : (
@@ -995,13 +1010,13 @@ export default function Estadisticas() {
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="text-left text-muted dark:text-dark-text-secondary">
-                        <th className="py-1 pr-3 font-medium">Mes</th>
+                        <th className="py-1 pr-3 font-medium">{t('Mes')}</th>
                         {mediosEnEvolucion.map((medio) => (
                           <th key={medio} className="py-1 px-2 font-medium text-right whitespace-nowrap">
                             {medioLabel(medio)}
                           </th>
                         ))}
-                        <th className="py-1 pl-2 font-medium text-right">Total</th>
+                        <th className="py-1 pl-2 font-medium text-right">{t('Total')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1030,40 +1045,40 @@ export default function Estadisticas() {
         return (
           <>
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-              <StatCard etiqueta="Saldo por cobrar" valor={m(porCobrar)} tooltip="Lo que hoy te deben tus clientes en total (deuda actual, no del período). Tocá para ver el detalle." tono={vencidoTotal > 0 ? 'text-warn' : undefined} sensible oculto={ocultarMontos} onClick={() => router.push('/cuentas-por-cobrar')} />
-              <StatCard etiqueta="Vencido" valor={m(vencidoTotal)} tooltip="De lo que te deben, cuánto ya pasó su fecha de vencimiento. Tocá para ver el detalle." tono={vencidoTotal > 0 ? 'text-bad' : undefined} sensible oculto={ocultarMontos} onClick={() => router.push('/cuentas-por-cobrar')} />
-              <StatCard etiqueta="Fiado en el período" valor={m(actualB.credito)} tooltip="Cuánto sumaste a cuentas corrientes en el período elegido." variacion={varSi(actualB.credito, prevB.credito)} positivoEsBueno={false} moneda={moneda} sensible oculto={ocultarMontos} />
+              <StatCard etiqueta={t('Saldo por cobrar')} valor={m(porCobrar)} tooltip={t('Lo que hoy te deben tus clientes en total (deuda actual, no del período). Tocá para ver el detalle.')} tono={vencidoTotal > 0 ? 'text-warn' : undefined} sensible oculto={ocultarMontos} onClick={() => router.push('/cuentas-por-cobrar')} />
+              <StatCard etiqueta={t('Vencido')} valor={m(vencidoTotal)} tooltip={t('De lo que te deben, cuánto ya pasó su fecha de vencimiento. Tocá para ver el detalle.')} tono={vencidoTotal > 0 ? 'text-bad' : undefined} sensible oculto={ocultarMontos} onClick={() => router.push('/cuentas-por-cobrar')} />
+              <StatCard etiqueta={t('Fiado en el período')} valor={m(actualB.credito)} tooltip={t('Cuánto sumaste a cuentas corrientes en el período elegido.')} variacion={varSi(actualB.credito, prevB.credito)} positivoEsBueno={false} moneda={moneda} sensible oculto={ocultarMontos} />
             </div>
-            <SeccionCard titulo="Cuentas por cobrar">
+            <SeccionCard titulo={t('Cuentas por cobrar')}>
               <div className="flex flex-col gap-3">
                 <p className="text-sm text-muted dark:text-dark-text-secondary">
                   {ocultarMontos
-                    ? 'Tocá "Mostrar montos" arriba para ver los saldos por cobrar.'
+                    ? t('Tocá "Mostrar montos" arriba para ver los saldos por cobrar.')
                     : vencidoTotal > 0
-                      ? `Tenés ${m(vencidoTotal)} vencidos sobre ${m(porCobrar)} por cobrar. Conviene reclamar los vencidos primero.`
+                      ? `${t('Tenés')} ${m(vencidoTotal)} ${t('vencidos sobre')} ${m(porCobrar)} ${t('por cobrar. Conviene reclamar los vencidos primero.')}`
                       : porCobrar > 0
-                        ? `Te deben ${m(porCobrar)} en total y no hay saldo vencido. Todo al día.`
-                        : 'No hay saldos pendientes de cobro.'}
+                        ? `${t('Te deben')} ${m(porCobrar)} ${t('en total y no hay saldo vencido. Todo al día.')}`
+                        : t('No hay saldos pendientes de cobro.')}
                 </p>
                 <Link href="/cuentas-por-cobrar" className="self-start rounded-xl bg-accent dark:bg-dark-accent text-white text-sm font-medium px-4 py-2 hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors">
-                  Ver quién te debe →
+                  {t('Ver quién te debe →')}
                 </Link>
               </div>
             </SeccionCard>
 
             {resumenFinanciacion.hayDatos && (
-              <SeccionCard titulo="Financiación propia en cuotas" subtitulo="Ventas financiadas con cronograma propio — un crédito no es dinero cobrado hasta que se registra el pago.">
+              <SeccionCard titulo={t('Financiación propia en cuotas')} subtitulo={t('Ventas financiadas con cronograma propio — un crédito no es dinero cobrado hasta que se registra el pago.')}>
                 <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-                  <StatCard etiqueta="Financiado activo" valor={m(resumenFinanciacion.totalFinanciadoActivo)} tooltip="Importe financiado de los planes activos o completados (a hoy, no depende del período)." moneda={moneda} sensible oculto={ocultarMontos} />
-                  <StatCard etiqueta="Nuevos créditos" valor={m(resumenFinanciacion.nuevosCreditosPeriodo)} tooltip="Planes de financiación creados en el período elegido." moneda={moneda} sensible oculto={ocultarMontos} />
-                  <StatCard etiqueta="Cobrado en cuotas" valor={m(resumenFinanciacion.cobradoPeriodo)} tooltip="Pagos de cuotas recibidos en el período (por fecha real de pago, no de vencimiento)." moneda={moneda} tono="text-good" sensible oculto={ocultarMontos} />
-                  <StatCard etiqueta="Saldo en cuotas" valor={m(resumenFinanciacion.saldoPendiente)} tooltip="Lo que falta cobrar de cuotas pendientes (a hoy)." moneda={moneda} sensible oculto={ocultarMontos} />
-                  <StatCard etiqueta="Vencido en cuotas" valor={m(resumenFinanciacion.vencido)} tooltip="De las cuotas pendientes, cuánto ya pasó su vencimiento." tono={resumenFinanciacion.vencido > 0 ? 'text-bad' : undefined} moneda={moneda} sensible oculto={ocultarMontos}>
+                  <StatCard etiqueta={t('Financiado activo')} valor={m(resumenFinanciacion.totalFinanciadoActivo)} tooltip={t('Importe financiado de los planes activos o completados (a hoy, no depende del período).')} moneda={moneda} sensible oculto={ocultarMontos} />
+                  <StatCard etiqueta={t('Nuevos créditos')} valor={m(resumenFinanciacion.nuevosCreditosPeriodo)} tooltip={t('Planes de financiación creados en el período elegido.')} moneda={moneda} sensible oculto={ocultarMontos} />
+                  <StatCard etiqueta={t('Cobrado en cuotas')} valor={m(resumenFinanciacion.cobradoPeriodo)} tooltip={t('Pagos de cuotas recibidos en el período (por fecha real de pago, no de vencimiento).')} moneda={moneda} tono="text-good" sensible oculto={ocultarMontos} />
+                  <StatCard etiqueta={t('Saldo en cuotas')} valor={m(resumenFinanciacion.saldoPendiente)} tooltip={t('Lo que falta cobrar de cuotas pendientes (a hoy).')} moneda={moneda} sensible oculto={ocultarMontos} />
+                  <StatCard etiqueta={t('Vencido en cuotas')} valor={m(resumenFinanciacion.vencido)} tooltip={t('De las cuotas pendientes, cuánto ya pasó su vencimiento.')} tono={resumenFinanciacion.vencido > 0 ? 'text-bad' : undefined} moneda={moneda} sensible oculto={ocultarMontos}>
                     {!ocultarMontos && resumenFinanciacion.saldoPendiente > 0 && (
-                      <span className="text-[11px] text-muted dark:text-dark-text-secondary">{Math.round(resumenFinanciacion.pctMorosidad)}% de morosidad</span>
+                      <span className="text-[11px] text-muted dark:text-dark-text-secondary">{Math.round(resumenFinanciacion.pctMorosidad)}% {t('de morosidad')}</span>
                     )}
                   </StatCard>
-                  <StatCard etiqueta="Próximas a vencer" valor={resumenFinanciacion.proximasAVencer.toLocaleString('es-AR')} tooltip="Cuotas pendientes que vencen dentro de los próximos 7 días." tono={resumenFinanciacion.proximasAVencer > 0 ? 'text-warn' : undefined} />
+                  <StatCard etiqueta={t('Próximas a vencer')} valor={resumenFinanciacion.proximasAVencer.toLocaleString('es-AR')} tooltip={t('Cuotas pendientes que vencen dentro de los próximos 7 días.')} tono={resumenFinanciacion.proximasAVencer > 0 ? 'text-warn' : undefined} />
                 </div>
               </SeccionCard>
             )}
@@ -1074,31 +1089,31 @@ export default function Estadisticas() {
         return (
           <>
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-              <StatCard etiqueta="Equipos en stock" valor={stockResumen.unidades.toLocaleString('es-AR')} tooltip="Dispositivos disponibles para vender ahora mismo. Tocá para ver el detalle." onClick={() => router.push('/stock')} />
-              <StatCard etiqueta="Capital en stock" valor={m(stockResumen.capitalPrecio)} tooltip="Suma de los precios de venta de todo el stock actual." moneda={moneda} sensible oculto={ocultarMontos} />
-              {puedeVerCostos && <StatCard etiqueta="Capital a costo" valor={m(stockResumen.capitalCosto)} tooltip="Lo que te costó el stock que tenés (a precio de compra)." moneda={moneda} sensible oculto={ocultarMontos} />}
-              <StatCard etiqueta="Parados +30 días" valor={stockResumen.quietos.toLocaleString('es-AR')} tooltip="Equipos que llevan más de 30 días sin venderse." tono={stockResumen.quietos > 0 ? 'text-warn' : undefined} />
-              <StatCard etiqueta="Sin precio" valor={stockResumen.sinPrecio.toLocaleString('es-AR')} tooltip="Equipos cargados sin precio de venta (no se pueden vender así)." tono={stockResumen.sinPrecio > 0 ? 'text-warn' : undefined} />
+              <StatCard etiqueta={t('Equipos en stock')} valor={stockResumen.unidades.toLocaleString('es-AR')} tooltip={t('Dispositivos disponibles para vender ahora mismo. Tocá para ver el detalle.')} onClick={() => router.push('/stock')} />
+              <StatCard etiqueta={t('Capital en stock')} valor={m(stockResumen.capitalPrecio)} tooltip={t('Suma de los precios de venta de todo el stock actual.')} moneda={moneda} sensible oculto={ocultarMontos} />
+              {puedeVerCostos && <StatCard etiqueta={t('Capital a costo')} valor={m(stockResumen.capitalCosto)} tooltip={t('Lo que te costó el stock que tenés (a precio de compra).')} moneda={moneda} sensible oculto={ocultarMontos} />}
+              <StatCard etiqueta={t('Parados +30 días')} valor={stockResumen.quietos.toLocaleString('es-AR')} tooltip={t('Equipos que llevan más de 30 días sin venderse.')} tono={stockResumen.quietos > 0 ? 'text-warn' : undefined} />
+              <StatCard etiqueta={t('Sin precio')} valor={stockResumen.sinPrecio.toLocaleString('es-AR')} tooltip={t('Equipos cargados sin precio de venta (no se pueden vender así).')} tono={stockResumen.sinPrecio > 0 ? 'text-warn' : undefined} />
             </div>
-            <SeccionCard titulo="Stock por modelo" subtitulo="Foto del inventario de hoy (no depende del período).">
-              {stockPorModelo.length === 0 ? <EmptyState titulo="Sin equipos en stock" /> : <RankingBarras datos={stockPorModelo} sufijo=" equipo(s)" />}
+            <SeccionCard titulo={t('Stock por modelo')} subtitulo={t('Foto del inventario de hoy (no depende del período).')}>
+              {stockPorModelo.length === 0 ? <EmptyState titulo={t('Sin equipos en stock')} /> : <RankingBarras datos={stockPorModelo} sufijo={t(' equipo(s)')} />}
             </SeccionCard>
             {categoriasStock.length > 0 && (
-              <SeccionCard titulo="Stock por categoría" subtitulo="Mismas categorías que Configuración → Categorías de stock.">
-                <RankingBarras datos={stockPorCategoria} sufijo=" equipo(s)" />
+              <SeccionCard titulo={t('Stock por categoría')} subtitulo={t('Mismas categorías que Configuración → Categorías de stock.')}>
+                <RankingBarras datos={stockPorCategoria} sufijo={t(' equipo(s)')} />
               </SeccionCard>
             )}
             <SeccionCard
-              titulo="Quién registró más equipos"
-              subtitulo={`Altas de stock de ${etiquetaTramoActual}.`}
+              titulo={t('Quién registró más equipos')}
+              subtitulo={`${t('Altas de stock de')} ${etiquetaTramoActual}.`}
               accion={<VistaToggle vista={vistaRegistroStock} onVista={setVistaRegistroStock} />}
             >
               {rankingRegistroStock.length === 0 ? (
-                <EmptyState titulo="Sin equipos registrados en el período" />
+                <EmptyState titulo={t('Sin equipos registrados en el período')} />
               ) : vistaRegistroStock === 'barras' ? (
-                <RankingBarras datos={rankingRegistroStock} sufijo=" equipo(s)" />
+                <RankingBarras datos={rankingRegistroStock} sufijo={t(' equipo(s)')} />
               ) : (
-                <RankingTorta datos={rankingRegistroStock} sufijo=" equipo(s)" />
+                <RankingTorta datos={rankingRegistroStock} sufijo={t(' equipo(s)')} />
               )}
             </SeccionCard>
           </>
@@ -1108,24 +1123,24 @@ export default function Estadisticas() {
         return (
           <>
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-              <StatCard etiqueta="Equipos ingresados" valor={servicioIngresados.toLocaleString('es-AR')} tooltip="Equipos que entraron a Servicio Técnico en el período." />
-              <StatCard etiqueta="Equipos reparados" valor={servicioReparados.toLocaleString('es-AR')} tooltip="Reparaciones terminadas en el período." tono="text-good" />
-              <StatCard etiqueta="Técnicos activos" valor={rankingTecnicos.length.toLocaleString('es-AR')} tooltip="Técnicos con al menos un arreglo terminado en el período." />
+              <StatCard etiqueta={t('Equipos ingresados')} valor={servicioIngresados.toLocaleString('es-AR')} tooltip={t('Equipos que entraron a Servicio Técnico en el período.')} />
+              <StatCard etiqueta={t('Equipos reparados')} valor={servicioReparados.toLocaleString('es-AR')} tooltip={t('Reparaciones terminadas en el período.')} tono="text-good" />
+              <StatCard etiqueta={t('Técnicos activos')} valor={rankingTecnicos.length.toLocaleString('es-AR')} tooltip={t('Técnicos con al menos un arreglo terminado en el período.')} />
             </div>
             <div className="grid md:grid-cols-2 gap-4">
-              <SeccionCard titulo="Ranking de técnicos" accion={<VistaToggle vista={vistaTecnicos} onVista={setVistaTecnicos} />}>
-                {rankingTecnicos.length === 0 ? <EmptyState titulo="Sin reparaciones terminadas" /> : vistaTecnicos === 'barras' ? <RankingBarras datos={rankingTecnicos} sufijo=" arreglo(s)" /> : <RankingTorta datos={rankingTecnicos} sufijo=" arreglo(s)" />}
+              <SeccionCard titulo={t('Ranking de técnicos')} accion={<VistaToggle vista={vistaTecnicos} onVista={setVistaTecnicos} />}>
+                {rankingTecnicos.length === 0 ? <EmptyState titulo={t('Sin reparaciones terminadas')} /> : vistaTecnicos === 'barras' ? <RankingBarras datos={rankingTecnicos} sufijo={t(' arreglo(s)')} /> : <RankingTorta datos={rankingTecnicos} sufijo={t(' arreglo(s)')} />}
               </SeccionCard>
-              <SeccionCard titulo="Clientes de servicio técnico" accion={<VistaToggle vista={vistaClientesServicio} onVista={setVistaClientesServicio} />}>
-                {rankingClientesServicio.length === 0 ? <EmptyState titulo="Sin ingresos de servicio" /> : vistaClientesServicio === 'barras' ? <RankingBarras datos={rankingClientesServicio} sufijo=" equipo(s)" /> : <RankingTorta datos={rankingClientesServicio} sufijo=" equipo(s)" />}
+              <SeccionCard titulo={t('Clientes de servicio técnico')} accion={<VistaToggle vista={vistaClientesServicio} onVista={setVistaClientesServicio} />}>
+                {rankingClientesServicio.length === 0 ? <EmptyState titulo={t('Sin ingresos de servicio')} /> : vistaClientesServicio === 'barras' ? <RankingBarras datos={rankingClientesServicio} sufijo={t(' equipo(s)')} /> : <RankingTorta datos={rankingClientesServicio} sufijo={t(' equipo(s)')} />}
               </SeccionCard>
             </div>
-            <SeccionCard titulo="¿Buscás más profundidad?" subtitulo="Facturación, márgenes, reincidencia, embudo de estados, stock crítico y más, filtrable por técnico y período.">
+            <SeccionCard titulo={t('¿Buscás más profundidad?')} subtitulo={t('Facturación, márgenes, reincidencia, embudo de estados, stock crítico y más, filtrable por técnico y período.')}>
               <Link
                 href="/servicio-tecnico/metricas"
                 className="self-start rounded-xl bg-accent dark:bg-dark-accent text-white text-sm font-medium px-4 py-2 hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors inline-block"
               >
-                Ver Métricas de Servicio Técnico →
+                {t('Ver Métricas de Servicio Técnico →')}
               </Link>
             </SeccionCard>
           </>
@@ -1135,16 +1150,16 @@ export default function Estadisticas() {
         return (
           <>
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-              <StatCard etiqueta="Clientes que compraron" valor={clientesQueCompraron.toLocaleString('es-AR')} tooltip="Clientes distintos con al menos una compra en el período." />
-              <StatCard etiqueta="Ventas sin cliente" valor={opsSinCliente.toLocaleString('es-AR')} tooltip="Operaciones del período que no quedaron asociadas a un cliente." tono={opsSinCliente > 0 ? 'text-warn' : undefined} />
-              <StatCard etiqueta="Clientes que deben" valor={deudores.toLocaleString('es-AR')} tooltip="Clientes con saldo pendiente en su cuenta corriente (a hoy)." tono={deudores > 0 ? 'text-warn' : undefined} />
+              <StatCard etiqueta={t('Clientes que compraron')} valor={clientesQueCompraron.toLocaleString('es-AR')} tooltip={t('Clientes distintos con al menos una compra en el período.')} />
+              <StatCard etiqueta={t('Ventas sin cliente')} valor={opsSinCliente.toLocaleString('es-AR')} tooltip={t('Operaciones del período que no quedaron asociadas a un cliente.')} tono={opsSinCliente > 0 ? 'text-warn' : undefined} />
+              <StatCard etiqueta={t('Clientes que deben')} valor={deudores.toLocaleString('es-AR')} tooltip={t('Clientes con saldo pendiente en su cuenta corriente (a hoy).')} tono={deudores > 0 ? 'text-warn' : undefined} />
             </div>
             <div className="grid md:grid-cols-2 gap-4">
-              <SeccionCard titulo="Mejores compradores" accion={<VistaToggle vista={vistaCompradores} onVista={setVistaCompradores} />}>
-                {rankingCompradores.length === 0 ? <EmptyState titulo="Sin compras en el período" /> : vistaCompradores === 'barras' ? <RankingBarras datos={rankingCompradores} moneda={moneda} oculto={ocultarMontos} /> : <RankingTorta datos={rankingCompradores} moneda={moneda} oculto={ocultarMontos} />}
+              <SeccionCard titulo={t('Mejores compradores')} accion={<VistaToggle vista={vistaCompradores} onVista={setVistaCompradores} />}>
+                {rankingCompradores.length === 0 ? <EmptyState titulo={t('Sin compras en el período')} /> : vistaCompradores === 'barras' ? <RankingBarras datos={rankingCompradores} moneda={moneda} oculto={ocultarMontos} /> : <RankingTorta datos={rankingCompradores} moneda={moneda} oculto={ocultarMontos} />}
               </SeccionCard>
-              <SeccionCard titulo="Clientes de servicio técnico" accion={<VistaToggle vista={vistaClientesServicio} onVista={setVistaClientesServicio} />}>
-                {rankingClientesServicio.length === 0 ? <EmptyState titulo="Sin ingresos de servicio" /> : vistaClientesServicio === 'barras' ? <RankingBarras datos={rankingClientesServicio} sufijo=" equipo(s)" /> : <RankingTorta datos={rankingClientesServicio} sufijo=" equipo(s)" />}
+              <SeccionCard titulo={t('Clientes de servicio técnico')} accion={<VistaToggle vista={vistaClientesServicio} onVista={setVistaClientesServicio} />}>
+                {rankingClientesServicio.length === 0 ? <EmptyState titulo={t('Sin ingresos de servicio')} /> : vistaClientesServicio === 'barras' ? <RankingBarras datos={rankingClientesServicio} sufijo={t(' equipo(s)')} /> : <RankingTorta datos={rankingClientesServicio} sufijo={t(' equipo(s)')} />}
               </SeccionCard>
             </div>
           </>
@@ -1155,20 +1170,20 @@ export default function Estadisticas() {
           <>
             {puedeVerCostos && resumenComisiones.hayDatos && (
               <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-                <StatCard etiqueta="Comisión generada" valor={m(resumenComisiones.generada)} tooltip="Comisión generada por ventas del período, para todos los vendedores." moneda={moneda} sensible oculto={ocultarMontos} />
-                <StatCard etiqueta="Comisión pagada" valor={m(resumenComisiones.pagada)} tooltip="De la comisión generada en el período, cuánto ya se liquidó y pagó." moneda={moneda} tono="text-good" sensible oculto={ocultarMontos} />
-                <StatCard etiqueta="Comisión pendiente" valor={m(resumenComisiones.pendiente)} tooltip="Comisión generada en el período que todavía no se aprobó/liquidó/pagó." moneda={moneda} tono={resumenComisiones.pendiente > 0 ? 'text-warn' : undefined} sensible oculto={ocultarMontos} />
+                <StatCard etiqueta={t('Comisión generada')} valor={m(resumenComisiones.generada)} tooltip={t('Comisión generada por ventas del período, para todos los vendedores.')} moneda={moneda} sensible oculto={ocultarMontos} />
+                <StatCard etiqueta={t('Comisión pagada')} valor={m(resumenComisiones.pagada)} tooltip={t('De la comisión generada en el período, cuánto ya se liquidó y pagó.')} moneda={moneda} tono="text-good" sensible oculto={ocultarMontos} />
+                <StatCard etiqueta={t('Comisión pendiente')} valor={m(resumenComisiones.pendiente)} tooltip={t('Comisión generada en el período que todavía no se aprobó/liquidó/pagó.')} moneda={moneda} tono={resumenComisiones.pendiente > 0 ? 'text-warn' : undefined} sensible oculto={ocultarMontos} />
               </div>
             )}
-            <SeccionCard titulo="Rendimiento por vendedor" subtitulo={`Ventas de ${etiquetaTramoActual}.`}>
+            <SeccionCard titulo={t('Rendimiento por vendedor')} subtitulo={`${t('Ventas de')} ${etiquetaTramoActual}.`}>
               {tablaVendedores.length === 0 ? (
-                <EmptyState titulo="Sin ventas en el período" />
+                <EmptyState titulo={t('Sin ventas en el período')} />
               ) : (
                 <div className="flex flex-col divide-y divide-border dark:divide-dark-border">
                   <div className="grid grid-cols-[1fr_auto_auto] gap-3 pb-2 text-[11px] font-medium text-muted dark:text-dark-text-secondary">
-                    <span>Vendedor</span>
-                    <span className="text-right w-20">Operac.</span>
-                    <span className="text-right w-28">Ventas</span>
+                    <span>{t('Vendedor')}</span>
+                    <span className="text-right w-20">{t('Operac.')}</span>
+                    <span className="text-right w-28">{t('Ventas')}</span>
                   </div>
                   {tablaVendedores.map((v, i) => (
                     <div key={i} className="grid grid-cols-[1fr_auto_auto] gap-3 py-2 items-center text-sm">
@@ -1180,13 +1195,13 @@ export default function Estadisticas() {
                 </div>
               )}
             </SeccionCard>
-            <SeccionCard titulo="Ranking de técnicos" accion={<VistaToggle vista={vistaTecnicos} onVista={setVistaTecnicos} />}>
-              {rankingTecnicos.length === 0 ? <EmptyState titulo="Sin reparaciones terminadas" /> : vistaTecnicos === 'barras' ? <RankingBarras datos={rankingTecnicos} sufijo=" arreglo(s)" /> : <RankingTorta datos={rankingTecnicos} sufijo=" arreglo(s)" />}
+            <SeccionCard titulo={t('Ranking de técnicos')} accion={<VistaToggle vista={vistaTecnicos} onVista={setVistaTecnicos} />}>
+              {rankingTecnicos.length === 0 ? <EmptyState titulo={t('Sin reparaciones terminadas')} /> : vistaTecnicos === 'barras' ? <RankingBarras datos={rankingTecnicos} sufijo={t(' arreglo(s)')} /> : <RankingTorta datos={rankingTecnicos} sufijo={t(' arreglo(s)')} />}
             </SeccionCard>
             {resumenComisiones.hayDatos && (
-              <SeccionCard titulo="¿Buscás el detalle por vendedor?" subtitulo="Comisión por vendedor, planes, liquidaciones y pagos.">
+              <SeccionCard titulo={t('¿Buscás el detalle por vendedor?')} subtitulo={t('Comisión por vendedor, planes, liquidaciones y pagos.')}>
                 <Link href="/comisiones" className="self-start rounded-xl bg-accent dark:bg-dark-accent text-white text-sm font-medium px-4 py-2 hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors inline-block">
-                  Ver Comisiones →
+                  {t('Ver Comisiones →')}
                 </Link>
               </SeccionCard>
             )}
@@ -1197,35 +1212,35 @@ export default function Estadisticas() {
         return (
           <>
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-              <StatCard etiqueta="Comprado en el período" valor={m(comprasPeriodo.total)} tooltip="Total gastado en compras a proveedores (dispositivos + compras manuales) en el período. Esto es lo COMPRADO, no necesariamente lo pagado." moneda={moneda} sensible oculto={ocultarMontos} />
-              <StatCard etiqueta="Unidades compradas" valor={comprasPeriodo.cantidad.toLocaleString('es-AR')} tooltip="Cantidad de equipos/ítems comprados a proveedores en el período." />
-              <StatCard etiqueta="Proveedores activos" valor={rankingProveedores.length.toLocaleString('es-AR')} tooltip="Proveedores a los que les compraste en el período." />
+              <StatCard etiqueta={t('Comprado en el período')} valor={m(comprasPeriodo.total)} tooltip={t('Total gastado en compras a proveedores (dispositivos + compras manuales) en el período. Esto es lo COMPRADO, no necesariamente lo pagado.')} moneda={moneda} sensible oculto={ocultarMontos} />
+              <StatCard etiqueta={t('Unidades compradas')} valor={comprasPeriodo.cantidad.toLocaleString('es-AR')} tooltip={t('Cantidad de equipos/ítems comprados a proveedores en el período.')} />
+              <StatCard etiqueta={t('Proveedores activos')} valor={rankingProveedores.length.toLocaleString('es-AR')} tooltip={t('Proveedores a los que les compraste en el período.')} />
               {saldoProveedoresTotal != null && (
                 <>
-                  <StatCard etiqueta="Pagado a proveedores" valor={m(pagadoProveedoresPeriodo)} tooltip="Plata que efectivamente les pagaste a proveedores en el período (cuentas por pagar)." moneda={moneda} tono="text-good" sensible oculto={ocultarMontos} />
-                  <StatCard etiqueta="Saldo con proveedores" valor={m(saldoProveedoresTotal)} tooltip="Lo que hoy les debés a tus proveedores en total (deuda actual, no del período). Tocá para ver el detalle." tono={saldoProveedoresTotal > 0 ? 'text-warn' : undefined} moneda={moneda} sensible oculto={ocultarMontos} onClick={() => router.push('/proveedores')} />
+                  <StatCard etiqueta={t('Pagado a proveedores')} valor={m(pagadoProveedoresPeriodo)} tooltip={t('Plata que efectivamente les pagaste a proveedores en el período (cuentas por pagar).')} moneda={moneda} tono="text-good" sensible oculto={ocultarMontos} />
+                  <StatCard etiqueta={t('Saldo con proveedores')} valor={m(saldoProveedoresTotal)} tooltip={t('Lo que hoy les debés a tus proveedores en total (deuda actual, no del período). Tocá para ver el detalle.')} tono={saldoProveedoresTotal > 0 ? 'text-warn' : undefined} moneda={moneda} sensible oculto={ocultarMontos} onClick={() => router.push('/proveedores')} />
                 </>
               )}
             </div>
-            <SeccionCard titulo="Compras por proveedor" accion={<VistaToggle vista={vistaProveedores} onVista={setVistaProveedores} />}>
-              {rankingProveedores.length === 0 ? <EmptyState titulo="Sin compras en el período" texto="Cuando cargues compras a proveedores, vas a ver el detalle acá." /> : vistaProveedores === 'barras' ? <RankingBarras datos={rankingProveedores} moneda={moneda} oculto={ocultarMontos} /> : <RankingTorta datos={rankingProveedores} moneda={moneda} oculto={ocultarMontos} />}
+            <SeccionCard titulo={t('Compras por proveedor')} accion={<VistaToggle vista={vistaProveedores} onVista={setVistaProveedores} />}>
+              {rankingProveedores.length === 0 ? <EmptyState titulo={t('Sin compras en el período')} texto={t('Cuando cargues compras a proveedores, vas a ver el detalle acá.')} /> : vistaProveedores === 'barras' ? <RankingBarras datos={rankingProveedores} moneda={moneda} oculto={ocultarMontos} /> : <RankingTorta datos={rankingProveedores} moneda={moneda} oculto={ocultarMontos} />}
             </SeccionCard>
             {saldoProveedoresTotal != null && rankingProveedoresPagado.length > 0 && (
-              <SeccionCard titulo="Pagado por proveedor" subtitulo="Distinto de lo comprado — esto es la plata que realmente saliste a pagarles." accion={<VistaToggle vista={vistaProveedoresPagado} onVista={setVistaProveedoresPagado} />}>
+              <SeccionCard titulo={t('Pagado por proveedor')} subtitulo={t('Distinto de lo comprado — esto es la plata que realmente saliste a pagarles.')} accion={<VistaToggle vista={vistaProveedoresPagado} onVista={setVistaProveedoresPagado} />}>
                 {vistaProveedoresPagado === 'barras' ? <RankingBarras datos={rankingProveedoresPagado} moneda={moneda} oculto={ocultarMontos} /> : <RankingTorta datos={rankingProveedoresPagado} moneda={moneda} oculto={ocultarMontos} />}
               </SeccionCard>
             )}
             {saldoProveedoresTotal != null && (
-              <SeccionCard titulo="¿Buscás el detalle por proveedor?" subtitulo="Saldo, historial de pagos y comprobantes de cada proveedor.">
+              <SeccionCard titulo={t('¿Buscás el detalle por proveedor?')} subtitulo={t('Saldo, historial de pagos y comprobantes de cada proveedor.')}>
                 <Link href="/proveedores" className="self-start rounded-xl bg-accent dark:bg-dark-accent text-white text-sm font-medium px-4 py-2 hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors inline-block">
-                  Ver Proveedores →
+                  {t('Ver Proveedores →')}
                 </Link>
               </SeccionCard>
             )}
             {puedeVerEgresos && (
-              <SeccionCard titulo="¿Buscás egresos operativos?" subtitulo="Gasto operativo, retiros y ajustes — distinto de compras y pagos a proveedores.">
+              <SeccionCard titulo={t('¿Buscás egresos operativos?')} subtitulo={t('Gasto operativo, retiros y ajustes — distinto de compras y pagos a proveedores.')}>
                 <Link href="/egresos" className="self-start rounded-xl bg-accent dark:bg-dark-accent text-white text-sm font-medium px-4 py-2 hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors inline-block">
-                  Ver Egresos →
+                  {t('Ver Egresos →')}
                 </Link>
               </SeccionCard>
             )}
@@ -1246,10 +1261,10 @@ export default function Estadisticas() {
             &larr;
           </Link>
           <div>
-            <h1 className="text-2xl font-display font-semibold leading-tight">Analítica del negocio</h1>
+            <h1 className="text-2xl font-display font-semibold leading-tight">{t('Analítica del negocio')}</h1>
             <p className="text-sm text-muted dark:text-dark-text-secondary">
-              Rendimiento de {nombreNegocio || 'tu negocio'} · {etiquetaTramoActual}
-              {hora && <span className="text-[11px]"> · actualizado {hora}</span>}
+              {t('Rendimiento de')} {nombreNegocio || t('tu negocio')} · {etiquetaTramoActual}
+              {hora && <span className="text-[11px]"> · {t('actualizado')} {hora}</span>}
             </p>
           </div>
         </div>
@@ -1257,11 +1272,11 @@ export default function Estadisticas() {
           <button
             onClick={toggleOcultar}
             aria-pressed={ocultarMontos}
-            title={ocultarMontos ? 'Mostrar montos' : 'Ocultar montos'}
+            title={ocultarMontos ? t('Mostrar montos') : t('Ocultar montos')}
             className="inline-flex items-center gap-1.5 rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-3 py-2 text-xs font-medium hover:bg-canvas dark:hover:bg-dark-bg transition-colors"
           >
             <span aria-hidden>{ocultarMontos ? '🙈' : '👁️'}</span>
-            {ocultarMontos ? 'Mostrar' : 'Ocultar'} montos
+            {ocultarMontos ? t('Mostrar') : t('Ocultar')} {t('montos')}
           </button>
           <button
             onClick={exportarResumenCSV({
@@ -1318,7 +1333,7 @@ export default function Estadisticas() {
         <div className="rounded-xl bg-bad/10 border border-bad/30 text-bad px-4 py-3 text-sm">{errorCarga}</div>
       )}
 
-      <AnalyticsTabs valor={tab} tabs={TABS} onChange={setTab} />
+      <AnalyticsTabs valor={tab} tabs={TABS_T} onChange={setTab} />
 
       {/* Filtros de período (no aplican a Stock, que es la foto de hoy). */}
       {tab !== 'stock' && filtros}
@@ -1329,9 +1344,9 @@ export default function Estadisticas() {
           {/* KPIs */}
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
             <StatCard
-              etiqueta="Ventas netas"
+              etiqueta={t('Ventas netas')}
               valor={m(actualB.ventas)}
-              tooltip="Todo lo que facturaste en el período (incluye lo que se vendió a cuenta corriente/fiado)."
+              tooltip={t('Todo lo que facturaste en el período (incluye lo que se vendió a cuenta corriente/fiado).')}
               variacion={comparar ? variacion(actualB.ventas, prevB.ventas) : undefined}
               moneda={moneda}
               sensible
@@ -1339,9 +1354,9 @@ export default function Estadisticas() {
             />
             {puedeVerCostos && (
               <StatCard
-                etiqueta="Ganancia bruta"
+                etiqueta={t('Ganancia bruta')}
                 valor={m(actualB.ganancia)}
-                tooltip={`Ventas netas menos costo histórico de venta, en lo que tiene costo cargado (${Math.round(cobertura * 100)}% de las ventas del período). El resto no se puede calcular sin costo — nunca se usa el costo actual para recalcular ventas viejas.`}
+                tooltip={`${t('Ventas netas menos costo histórico de venta, en lo que tiene costo cargado')} (${Math.round(cobertura * 100)}% ${t('de las ventas del período')}). ${t('El resto no se puede calcular sin costo — nunca se usa el costo actual para recalcular ventas viejas.')}`}
                 variacion={comparar ? variacion(actualB.ganancia, prevB.ganancia) : undefined}
                 moneda={moneda}
                 tono="text-good"
@@ -1350,16 +1365,16 @@ export default function Estadisticas() {
               >
                 {!ocultarMontos && actualB.ventasConCosto > 0 && (
                   <span className="text-[11px] text-muted dark:text-dark-text-secondary">
-                    Margen {Math.round((actualB.ganancia / actualB.ventasConCosto) * 100)}% sobre lo que tiene costo
+                    {t('Margen')} {Math.round((actualB.ganancia / actualB.ventasConCosto) * 100)}% {t('sobre lo que tiene costo')}
                   </span>
                 )}
               </StatCard>
             )}
             {puedeVerEgresos && hayEgresos && (
               <StatCard
-                etiqueta="Egresos operativos"
+                etiqueta={t('Egresos operativos')}
                 valor={m(egresosPeriodo)}
-                tooltip="Gasto operativo, retiro de dinero y ajustes registrados en el período (no incluye compras de mercadería ni pagos a proveedores, esos ya tienen su propio total)."
+                tooltip={t('Gasto operativo, retiro de dinero y ajustes registrados en el período (no incluye compras de mercadería ni pagos a proveedores, esos ya tienen su propio total).')}
                 moneda={moneda}
                 tono="text-bad"
                 sensible
@@ -1369,9 +1384,9 @@ export default function Estadisticas() {
             )}
             {puedeVerCostos && puedeVerEgresos && hayEgresos && (
               <StatCard
-                etiqueta="Resultado operativo estimado"
+                etiqueta={t('Resultado operativo estimado')}
                 valor={m(resultadoOperativoEstimado)}
-                tooltip="Ganancia bruta menos egresos operativos del período. Es una ESTIMACIÓN: no incluye impuestos ni otras obligaciones contables, no lo confundas con una ganancia neta real."
+                tooltip={t('Ganancia bruta menos egresos operativos del período. Es una ESTIMACIÓN: no incluye impuestos ni otras obligaciones contables, no lo confundas con una ganancia neta real.')}
                 moneda={moneda}
                 tono={resultadoOperativoEstimado >= 0 ? 'text-good' : 'text-bad'}
                 sensible
@@ -1379,37 +1394,37 @@ export default function Estadisticas() {
               />
             )}
             <StatCard
-              etiqueta="Dinero ingresado"
+              etiqueta={t('Dinero ingresado')}
               valor={m(actualB.ingresado)}
-              tooltip="La plata que realmente entró a la caja en el período (puede incluir cobros de ventas anteriores fiadas)."
+              tooltip={t('La plata que realmente entró a la caja en el período (puede incluir cobros de ventas anteriores fiadas).')}
               variacion={comparar ? variacion(actualB.ingresado, prevB.ingresado) : undefined}
               moneda={moneda}
               sensible
               oculto={ocultarMontos}
             />
             <StatCard
-              etiqueta="Saldo por cobrar"
+              etiqueta={t('Saldo por cobrar')}
               valor={m(porCobrar)}
-              tooltip="Lo que hoy te deben tus clientes en total (deuda actual, no del período). Tocá para ver el detalle."
+              tooltip={t('Lo que hoy te deben tus clientes en total (deuda actual, no del período). Tocá para ver el detalle.')}
               tono={vencidoTotal > 0 ? 'text-warn' : undefined}
               sensible
               oculto={ocultarMontos}
               onClick={() => router.push('/cuentas-por-cobrar')}
             >
               {vencidoTotal > 0 && (
-                <span className="text-[11px] text-bad font-medium">{ocultarMontos ? '' : `${m(vencidoTotal)} vencidos`}</span>
+                <span className="text-[11px] text-bad font-medium">{ocultarMontos ? '' : `${m(vencidoTotal)} ${t('vencidos')}`}</span>
               )}
             </StatCard>
             <StatCard
-              etiqueta="Operaciones"
+              etiqueta={t('Operaciones')}
               valor={actualB.operaciones.toLocaleString('es-AR')}
-              tooltip="Cantidad de ventas cobradas en el período."
+              tooltip={t('Cantidad de ventas cobradas en el período.')}
               variacion={comparar ? variacion(actualB.operaciones, prevB.operaciones) : undefined}
             />
             <StatCard
-              etiqueta="Ticket promedio"
+              etiqueta={t('Ticket promedio')}
               valor={m(ticket)}
-              tooltip="Promedio facturado por operación (ventas ÷ operaciones)."
+              tooltip={t('Promedio facturado por operación (ventas ÷ operaciones).')}
               variacion={comparar ? variacion(ticket, ticketPrev) : undefined}
               moneda={moneda}
               sensible
@@ -1419,12 +1434,12 @@ export default function Estadisticas() {
 
           {/* Gráfico principal */}
           <SeccionCard
-            titulo="Evolución"
-            subtitulo={comparar ? `Línea llena: ${etiquetaTramoActual}. Punteada: ${etiquetaTramoAnterior}.` : undefined}
+            titulo={t('Evolución')}
+            subtitulo={comparar ? `${t('Línea llena:')} ${etiquetaTramoActual}. ${t('Punteada:')} ${etiquetaTramoAnterior}.` : undefined}
             accion={<SegmentedChips size="sm" valor={metricaChart} opciones={metricasChart} onChange={setMetricaChart} />}
           >
             {ocultarMontos ? (
-              <EmptyState icono="🙈" titulo="Montos ocultos" texto="Tocá 'Mostrar montos' arriba para ver el gráfico." />
+              <EmptyState icono="🙈" titulo={t('Montos ocultos')} texto={t("Tocá 'Mostrar montos' arriba para ver el gráfico.")} />
             ) : (
               <LineAreaChart puntos={serie} moneda={moneda} compararActivo={comparar} />
             )}
@@ -1432,23 +1447,23 @@ export default function Estadisticas() {
 
           {/* Rankings (se conservan; se rediseñan en detalle en la próxima etapa) */}
           <div className="grid md:grid-cols-2 gap-4">
-            <SeccionCard titulo="Ranking de vendedores" accion={<VistaToggle vista={vistaVendedores} onVista={setVistaVendedores} />}>
+            <SeccionCard titulo={t('Ranking de vendedores')} accion={<VistaToggle vista={vistaVendedores} onVista={setVistaVendedores} />}>
               {vistaVendedores === 'barras' ? <RankingBarras datos={rankingVendedores} moneda={moneda} oculto={ocultarMontos} /> : <RankingTorta datos={rankingVendedores} moneda={moneda} oculto={ocultarMontos} />}
             </SeccionCard>
-            <SeccionCard titulo="Caja por medio de pago" accion={<VistaToggle vista={vistaFormaPago} onVista={setVistaFormaPago} />}>
+            <SeccionCard titulo={t('Caja por medio de pago')} accion={<VistaToggle vista={vistaFormaPago} onVista={setVistaFormaPago} />}>
               {vistaFormaPago === 'barras' ? <RankingBarras datos={cajaPorMedio} moneda={moneda} oculto={ocultarMontos} /> : <RankingTorta datos={cajaPorMedio} moneda={moneda} oculto={ocultarMontos} />}
             </SeccionCard>
-            <SeccionCard titulo="Ranking de técnicos" accion={<VistaToggle vista={vistaTecnicos} onVista={setVistaTecnicos} />}>
-              {vistaTecnicos === 'barras' ? <RankingBarras datos={rankingTecnicos} sufijo=" arreglo(s)" /> : <RankingTorta datos={rankingTecnicos} sufijo=" arreglo(s)" />}
+            <SeccionCard titulo={t('Ranking de técnicos')} accion={<VistaToggle vista={vistaTecnicos} onVista={setVistaTecnicos} />}>
+              {vistaTecnicos === 'barras' ? <RankingBarras datos={rankingTecnicos} sufijo={t(' arreglo(s)')} /> : <RankingTorta datos={rankingTecnicos} sufijo={t(' arreglo(s)')} />}
             </SeccionCard>
-            <SeccionCard titulo="Mejores compradores" accion={<VistaToggle vista={vistaCompradores} onVista={setVistaCompradores} />}>
+            <SeccionCard titulo={t('Mejores compradores')} accion={<VistaToggle vista={vistaCompradores} onVista={setVistaCompradores} />}>
               {vistaCompradores === 'barras' ? <RankingBarras datos={rankingCompradores} moneda={moneda} oculto={ocultarMontos} /> : <RankingTorta datos={rankingCompradores} moneda={moneda} oculto={ocultarMontos} />}
             </SeccionCard>
-            <SeccionCard titulo="Clientes de servicio técnico" accion={<VistaToggle vista={vistaClientesServicio} onVista={setVistaClientesServicio} />}>
-              {vistaClientesServicio === 'barras' ? <RankingBarras datos={rankingClientesServicio} sufijo=" equipo(s)" /> : <RankingTorta datos={rankingClientesServicio} sufijo=" equipo(s)" />}
+            <SeccionCard titulo={t('Clientes de servicio técnico')} accion={<VistaToggle vista={vistaClientesServicio} onVista={setVistaClientesServicio} />}>
+              {vistaClientesServicio === 'barras' ? <RankingBarras datos={rankingClientesServicio} sufijo={t(' equipo(s)')} /> : <RankingTorta datos={rankingClientesServicio} sufijo={t(' equipo(s)')} />}
             </SeccionCard>
             {rankingProveedores.length > 0 && (
-              <SeccionCard titulo="Compras a proveedores" accion={<VistaToggle vista={vistaProveedores} onVista={setVistaProveedores} />}>
+              <SeccionCard titulo={t('Compras a proveedores')} accion={<VistaToggle vista={vistaProveedores} onVista={setVistaProveedores} />}>
                 {vistaProveedores === 'barras' ? <RankingBarras datos={rankingProveedores} moneda={moneda} oculto={ocultarMontos} /> : <RankingTorta datos={rankingProveedores} moneda={moneda} oculto={ocultarMontos} />}
               </SeccionCard>
             )}
@@ -1462,13 +1477,14 @@ export default function Estadisticas() {
 }
 
 function VistaToggle({ vista, onVista }: { vista: VistaRanking; onVista: (v: VistaRanking) => void }) {
+  const t = useT();
   return (
     <SegmentedChips
       size="sm"
       valor={vista}
       opciones={[
-        { key: 'barras', label: 'Barras' },
-        { key: 'torta', label: 'Torta' },
+        { key: 'barras', label: t('Barras') },
+        { key: 'torta', label: t('Torta') },
       ]}
       onChange={onVista}
     />
