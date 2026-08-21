@@ -34,6 +34,7 @@ import EstadoBadge from '../../EstadoBadge';
 import ControlCalidad, { ControlCalidadItem } from '../ControlCalidad';
 import { ICONOS } from '../../Iconos';
 import CampoFecha from '../../CampoFecha';
+import { useT } from '../../lib/idioma';
 
 // Mismo patrón que TarjetaReparacion/EstadoBadge para reescalar los SVG de
 // 24px a un tamaño chico inline junto a texto.
@@ -208,6 +209,7 @@ export default function FichaReparacion() {
   // agregar al Stock (esa tarea suele quedar en manos de otra persona, p.ej.
   // el administrador), así que se chequea con su propio permiso.
   const puedeAgregarStock = tienePermiso(actor, 'agregar_stock');
+  const t = useT();
 
   const [r, setR] = useState<Reparacion | null>(null);
   const [tecnicos, setTecnicos] = useState<Tecnico[]>([]);
@@ -356,8 +358,8 @@ export default function FichaReparacion() {
   }, [r?.imei, r?.id]);
 
   const nombreCliente = r?.clientes ? `${r.clientes.nombre} ${r.clientes.apellido || ''}`.trim() : null;
-  const nombreTecnico = (tid: string | null) => tecnicos.find((t) => t.id === tid)?.nombre;
-  const fotoTecnico = (tid: string | null) => tecnicos.find((t) => t.id === tid)?.foto_url ?? null;
+  const nombreTecnico = (tid: string | null) => tecnicos.find((tec) => tec.id === tid)?.nombre;
+  const fotoTecnico = (tid: string | null) => tecnicos.find((tec) => tec.id === tid)?.foto_url ?? null;
 
   // Costo histórico de repuestos y margen — mismo cálculo que antes, ahora
   // levantado para poder mostrarlo también en el panel lateral fijo, no
@@ -378,7 +380,7 @@ export default function FichaReparacion() {
     if (!r) return [];
     const deServicios = new Set<string>();
     for (const nombre of r.trabajos_realizados ?? []) {
-      const trabajo = trabajos.find((t) => t.nombre === nombre);
+      const trabajo = trabajos.find((tr) => tr.nombre === nombre);
       for (const item of trabajo?.checklist_tecnico ?? []) deServicios.add(item);
     }
     return deServicios.size > 0 ? Array.from(deServicios) : CHECKLIST_CALIDAD_GENERICO;
@@ -392,7 +394,7 @@ export default function FichaReparacion() {
   // ese caso puntual.
   const accionSiguiente =
     r?.estado === 'esperando_aprobacion' && r.presupuesto_estado === 'aprobado'
-      ? { label: 'Iniciar reparación', estado: 'en_reparacion' }
+      ? { label: t('Iniciar reparación'), estado: 'en_reparacion' }
       : r
         ? ACCION_SIGUIENTE[r.estado]
         : undefined;
@@ -544,7 +546,7 @@ export default function FichaReparacion() {
 
     const { error: updateError } = await supabase.from('reparaciones').update(payloadFinal).eq('id', r.id);
     if (updateError) {
-      setError('No pudimos guardar los cambios: ' + updateError.message);
+      setError(t('No pudimos guardar los cambios:') + ' ' + updateError.message);
       setGuardando(false);
       return;
     }
@@ -615,7 +617,7 @@ export default function FichaReparacion() {
     try {
       setFotoEvidenciaBase64(await comprimirImagen(file));
     } catch {
-      setError('No pudimos leer la foto.');
+      setError(t('No pudimos leer la foto.'));
     }
   };
 
@@ -631,7 +633,7 @@ export default function FichaReparacion() {
     });
     setSubiendoEvidencia(false);
     if (insError) {
-      setError('No pudimos guardar la evidencia: ' + insError.message);
+      setError(t('No pudimos guardar la evidencia:') + ' ' + insError.message);
       return;
     }
     setNotaEvidencia('');
@@ -672,7 +674,7 @@ export default function FichaReparacion() {
       if (
         stockActual == null ||
         !confirm(
-          `Solo quedan ${stockActual} de "${repuestoElegido.nombre}" en stock. ¿Usar ${cantidad} igual? El stock va a quedar en negativo.`
+          `${t('Solo quedan')} ${stockActual} ${t('de')} "${repuestoElegido.nombre}" ${t('en stock. ¿Usar')} ${cantidad} ${t('igual? El stock va a quedar en negativo.')}`
         )
       ) {
         setGuardandoRepuesto(false);
@@ -680,7 +682,7 @@ export default function FichaReparacion() {
       }
       ({ error: rpcError } = await intentar(true));
       if (rpcError) {
-        setError('No pudimos guardar el repuesto: ' + rpcError.message);
+        setError(t('No pudimos guardar el repuesto:') + ' ' + rpcError.message);
         setGuardandoRepuesto(false);
         return;
       }
@@ -704,14 +706,14 @@ export default function FichaReparacion() {
 
   const quitarRepuestoUsado = async (ru: RepuestoUsado) => {
     if (!puedeGestionar) return;
-    if (!confirm(`¿Quitar "${ru.nombre_repuesto}" de esta reparación? Vuelve a sumarse al stock.`)) return;
+    if (!confirm(`${t('¿Quitar')} "${ru.nombre_repuesto}" ${t('de esta reparación? Vuelve a sumarse al stock.')}`)) return;
     const actor = getActor();
     const { error: rpcError } = await supabase.rpc('repuesto_quitar_consumo', {
       p_reparacion_repuesto_id: ru.id,
       p_actor_nombre: actor?.nombre ?? null,
     });
     if (rpcError) {
-      setError('No pudimos quitar el repuesto: ' + rpcError.message);
+      setError(t('No pudimos quitar el repuesto:') + ' ' + rpcError.message);
       return;
     }
     await registrarAuditoria(supabase, {
@@ -763,7 +765,7 @@ export default function FichaReparacion() {
   // auditoría.
   const registrarRespuestaPresupuestoManual = async (aprobar: boolean) => {
     if (!r || !puedeGestionar) return;
-    if (!confirm(aprobar ? '¿Registrar que el cliente aprobó este presupuesto?' : '¿Registrar que el cliente rechazó este presupuesto?')) return;
+    if (!confirm(aprobar ? t('¿Registrar que el cliente aprobó este presupuesto?') : t('¿Registrar que el cliente rechazó este presupuesto?'))) return;
     setGuardando(true);
     const total = (r.presupuesto_mano_obra || 0) + (r.presupuesto_repuestos || 0);
     await supabase
@@ -791,7 +793,7 @@ export default function FichaReparacion() {
   // precio revisado después de un rechazo, primero hay que reabrirlo.
   const reabrirPresupuesto = async () => {
     if (!r || !puedeGestionar) return;
-    if (!confirm('¿Reabrir este presupuesto para pedirle una nueva respuesta al cliente?')) return;
+    if (!confirm(t('¿Reabrir este presupuesto para pedirle una nueva respuesta al cliente?'))) return;
     setGuardando(true);
     const actorActual = getActor();
     const { error: rpcError } = await supabase.rpc('reparacion_reabrir_presupuesto', {
@@ -799,7 +801,7 @@ export default function FichaReparacion() {
       p_actor_nombre: actorActual?.nombre ?? null,
     });
     if (rpcError) {
-      setError('No pudimos reabrir el presupuesto: ' + rpcError.message);
+      setError(t('No pudimos reabrir el presupuesto:') + ' ' + rpcError.message);
       setGuardando(false);
       return;
     }
@@ -814,12 +816,12 @@ export default function FichaReparacion() {
 
   const generarOrdenCobro = async () => {
     if (!r || !puedeGestionar) return;
-    if (!confirm('¿Generar la orden de cobro con el importe de esta reparación?')) return;
+    if (!confirm(t('¿Generar la orden de cobro con el importe de esta reparación?'))) return;
     setGuardando(true);
     // Misma lógica compartida que usa la sección "Listos para cobrar" de Órdenes.
     const { ordenId, total, error: genError } = await generarOrdenDeReparacion(supabase, r as any);
     if (genError || !ordenId) {
-      setError(genError || 'No pudimos generar la orden.');
+      setError(genError || t('No pudimos generar la orden.'));
       setGuardando(false);
       return;
     }
@@ -844,9 +846,9 @@ export default function FichaReparacion() {
     }
     if (r.imei) {
       const { data: existente } = await supabase.from('dispositivos').select('id').eq('imei', r.imei).maybeSingle();
-      if (existente && !confirm(`Ya hay un dispositivo en Stock con el IMEI ${r.imei}. ¿Agregarlo igual?`)) return;
+      if (existente && !confirm(`${t('Ya hay un dispositivo en Stock con el IMEI')} ${r.imei}. ${t('¿Agregarlo igual?')}`)) return;
     }
-    if (!confirm('¿Pasar este equipo al Stock como dispositivo disponible para vender?')) return;
+    if (!confirm(t('¿Pasar este equipo al Stock como dispositivo disponible para vender?'))) return;
     setGuardando(true);
     setAvisoAgregarStock(false);
     await supabase.from('dispositivos').insert({
@@ -880,7 +882,7 @@ export default function FichaReparacion() {
 
   const marcarEntregadoClienteFicha = async () => {
     if (!r || !puedeGestionar) return;
-    if (!confirm('¿Marcar este equipo como entregado al cliente?')) return;
+    if (!confirm(t('¿Marcar este equipo como entregado al cliente?'))) return;
     setGuardando(true);
     await supabase
       .from('reparaciones')
@@ -914,7 +916,7 @@ export default function FichaReparacion() {
       setLinkCopiado(true);
       setTimeout(() => setLinkCopiado(false), 2000);
     } catch {
-      setError('No pudimos copiar el link — copialo manualmente: ' + url);
+      setError(t('No pudimos copiar el link — copialo manualmente:') + ' ' + url);
     }
   };
 
@@ -935,7 +937,7 @@ export default function FichaReparacion() {
       { onConflict: 'reparacion_id,item' }
     );
     if (upsertError) {
-      setError('No pudimos guardar el control: ' + upsertError.message);
+      setError(t('No pudimos guardar el control:') + ' ' + upsertError.message);
       return;
     }
     const { data } = await supabase
@@ -957,15 +959,15 @@ export default function FichaReparacion() {
   const reparacionRelacionadaLabel = (rr: ReparacionRelacionada) => {
     const vencida = rr.fecha_entrega && rr.garantia_dias ? Date.now() > new Date(rr.fecha_entrega).getTime() + rr.garantia_dias * 86400000 : null;
     return {
-      titulo: `${rr.numero_orden ?? ''} — ${rr.trabajos_realizados?.join(', ') || 'sin trabajos registrados'}`,
+      titulo: `${rr.numero_orden ?? ''} — ${rr.trabajos_realizados?.join(', ') || t('sin trabajos registrados')}`,
       garantiaTexto:
         rr.fecha_entrega == null
-          ? 'todavía no se entregó'
+          ? t('todavía no se entregó')
           : rr.garantia_dias == null
-            ? 'sin garantía cargada'
+            ? t('sin garantía cargada')
             : vencida
-              ? 'garantía vencida'
-              : 'dentro de garantía',
+              ? t('garantía vencida')
+              : t('dentro de garantía'),
       vencida,
     };
   };
@@ -976,7 +978,7 @@ export default function FichaReparacion() {
     await supabase.from('reparaciones').update({ tipo_ingreso: tipo, reparacion_relacionada_id: relacionadaId }).eq('id', r.id);
     const relacionada = reparacionesRelacionadas.find((rr) => rr.id === relacionadaId);
     await registrarAuditoria(supabase, {
-      accion: `clasificó la reparación ${r.numero_orden || ''} como "${TIPOS_INGRESO.find((t) => t.id === tipo)?.label ?? tipo}"${
+      accion: `clasificó la reparación ${r.numero_orden || ''} como "${TIPOS_INGRESO.find((ti) => ti.id === tipo)?.label ?? tipo}"${
         relacionada ? ` (vinculada a ${relacionada.numero_orden || 'una reparación anterior'})` : ''
       }`,
       entidad: 'reparacion',
@@ -989,7 +991,7 @@ export default function FichaReparacion() {
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center">
-        <p className="text-sm text-muted dark:text-dark-text-secondary">Cargando...</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t('Cargando...')}</p>
       </main>
     );
   }
@@ -997,9 +999,9 @@ export default function FichaReparacion() {
   if (!r) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-3">
-        <p className="text-sm text-muted dark:text-dark-text-secondary">No encontramos esa reparación.</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t('No encontramos esa reparación.')}</p>
         <Link href="/servicio-tecnico" className="text-sm text-accent dark:text-dark-accent underline">
-          Volver a Servicio Técnico
+          {t('Volver a Servicio Técnico')}
         </Link>
       </main>
     );
@@ -1011,7 +1013,7 @@ export default function FichaReparacion() {
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
       {/* Encabezado persistente */}
       <header className="flex items-start gap-3">
-        <Link href="/servicio-tecnico" aria-label="Volver" className="text-2xl leading-none mt-0.5">
+        <Link href="/servicio-tecnico" aria-label={t('Volver')} className="text-2xl leading-none mt-0.5">
           &larr;
         </Link>
         <div className="min-w-0 mr-auto">
@@ -1022,24 +1024,24 @@ export default function FichaReparacion() {
           <p className="text-xs text-muted dark:text-dark-text-secondary flex items-center gap-1.5 flex-wrap">
             <span className="flex items-center gap-1">
               <IconoChico nombre={nombreCliente ? 'clientes' : 'local'} />
-              {nombreCliente || 'Equipo propio del local'}
+              {nombreCliente || t('Equipo propio del local')}
             </span>
-            <span>· Ingresó {hace(r.fecha_ingreso_servicio)}</span>
-            {demorado && <span className="text-bad font-medium">· Demorada</span>}
+            <span>· {t('Ingresó')} {hace(r.fecha_ingreso_servicio)}</span>
+            {demorado && <span className="text-bad font-medium">· {t('Demorada')}</span>}
           </p>
         </div>
         <Link
           href={`/servicio-tecnico/etiqueta/${r.id}`}
           className="flex items-center gap-1 text-xs text-accent dark:text-dark-accent underline shrink-0"
         >
-          <IconoChico nombre="etiqueta" /> Etiqueta
+          <IconoChico nombre="etiqueta" /> {t('Etiqueta')}
         </Link>
         {puedeGestionar && (
           <button
             onClick={() => (editando ? setEditando(false) : abrirEdicion())}
             className="text-xs text-accent dark:text-dark-accent underline shrink-0"
           >
-            {editando ? 'Cancelar' : 'Editar'}
+            {editando ? t('Cancelar') : t('Editar')}
           </button>
         )}
       </header>
@@ -1054,7 +1056,7 @@ export default function FichaReparacion() {
         >
           {ESTADOS_REPARACION.map((e) => (
             <option key={e.id} value={e.id}>
-              {e.label}
+              {t(e.label)}
             </option>
           ))}
         </select>
@@ -1066,12 +1068,12 @@ export default function FichaReparacion() {
         )}
         {r.prioridad !== 'normal' && (
           <span className={`text-xs font-medium ${PRIORIDADES.find((p) => p.id === r.prioridad)?.color}`}>
-            {PRIORIDADES.find((p) => p.id === r.prioridad)?.label}
+            {t(PRIORIDADES.find((p) => p.id === r.prioridad)?.label ?? '')}
           </span>
         )}
         {r.fecha_estimada && (
           <span className="text-xs text-muted dark:text-dark-text-secondary">
-            Prometida: {new Date(r.fecha_estimada + 'T00:00:00').toLocaleDateString('es-AR')}
+            {t('Prometida:')} {new Date(r.fecha_estimada + 'T00:00:00').toLocaleDateString('es-AR')}
           </span>
         )}
       </div>
@@ -1096,7 +1098,7 @@ export default function FichaReparacion() {
                       completada || activa ? 'text-ink dark:text-dark-text font-medium' : 'text-muted dark:text-dark-text-secondary'
                     }`}
                   >
-                    {etapa.label}
+                    {t(etapa.label)}
                   </span>
                 </div>
                 {idx < ETAPAS_PROGRESO.length - 1 && (
@@ -1111,14 +1113,14 @@ export default function FichaReparacion() {
       {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
       {!puedeGestionar && (
         <p className="text-xs text-muted dark:text-dark-text-secondary text-center">
-          No tenés permiso para gestionar Servicio Técnico — solo podés ver esta ficha.
+          {t('No tenés permiso para gestionar Servicio Técnico — solo podés ver esta ficha.')}
         </p>
       )}
 
       {avisoWhatsApp && (
         <div className="rounded-xl border border-good/30 bg-good/10 p-3 flex flex-col gap-2">
           <p className="text-sm">
-            ¡Equipo marcado como listo! ¿Le avisamos a <strong>{avisoWhatsApp.nombre}</strong> por WhatsApp?
+            {t('¡Equipo marcado como listo!')} {t('¿Le avisamos a')} <strong>{avisoWhatsApp.nombre}</strong> {t('por WhatsApp?')}
           </p>
           <div className="flex gap-2">
             <a
@@ -1128,13 +1130,13 @@ export default function FichaReparacion() {
               onClick={() => setAvisoWhatsApp(null)}
               className="flex-1 rounded-lg bg-good text-white text-center py-2 text-sm font-medium"
             >
-              Enviar WhatsApp
+              {t('Enviar WhatsApp')}
             </a>
             <button
               onClick={() => setAvisoWhatsApp(null)}
               className="rounded-lg border border-border dark:border-dark-border px-3 py-2 text-sm font-medium"
             >
-              Ahora no
+              {t('Ahora no')}
             </button>
           </div>
         </div>
@@ -1144,16 +1146,16 @@ export default function FichaReparacion() {
       <div className="flex flex-col lg:flex-row gap-4 items-start">
         <div className="min-w-0 flex-1 flex flex-col gap-3 w-full">
           <nav
-            aria-label="Secciones de la reparación"
+            aria-label={t('Secciones de la reparación')}
             className="flex gap-1 overflow-x-auto -mx-6 px-6 lg:mx-0 lg:px-0 border-b border-border dark:border-dark-border"
           >
-            {TABS.map((t) => {
-              const activo = tab === t.id;
+            {TABS.map((tabItem) => {
+              const activo = tab === tabItem.id;
               return (
                 <button
-                  key={t.id}
+                  key={tabItem.id}
                   type="button"
-                  onClick={() => setTab(t.id)}
+                  onClick={() => setTab(tabItem.id)}
                   aria-current={activo ? 'page' : undefined}
                   className={`shrink-0 px-3 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
                     activo
@@ -1161,7 +1163,7 @@ export default function FichaReparacion() {
                       : 'border-transparent text-muted dark:text-dark-text-secondary hover:text-ink dark:hover:text-dark-text'
                   }`}
                 >
-                  {t.label}
+                  {t(tabItem.label)}
                 </button>
               );
             })}
@@ -1169,10 +1171,10 @@ export default function FichaReparacion() {
 
           {tab === 'resumen' && (
             <>
-            <Seccion titulo="Identificación">
+            <Seccion titulo={t('Identificación')}>
               {editando ? (
                 <div className="flex flex-col gap-2">
-                  <Campo label="Modelo" valor={f.modelo} onChange={(v) => setFm((p) => ({ ...p, modelo: v }))} />
+                  <Campo label={t('Modelo')} valor={f.modelo} onChange={(v) => setFm((p) => ({ ...p, modelo: v }))} />
                   <div className="flex gap-2">
                     {STORAGE_OPTIONS.map((gb) => (
                       <button
@@ -1187,11 +1189,11 @@ export default function FichaReparacion() {
                     ))}
                   </div>
                   <SelectorColorAuto modelo={f.modelo} value={f.color} onChange={(v) => setFm((p) => ({ ...p, color: v }))} />
-                  <Campo label="IMEI" valor={f.imei} onChange={(v) => setFm((p) => ({ ...p, imei: v }))} mono />
-                  <Campo label="Código de desbloqueo (opcional)" valor={f.codigo_desbloqueo} onChange={(v) => setFm((p) => ({ ...p, codigo_desbloqueo: v }))} />
-                  <Campo label="Ubicación física (ej. Estante A-3)" valor={f.ubicacion_fisica} onChange={(v) => setFm((p) => ({ ...p, ubicacion_fisica: v }))} />
+                  <Campo label={t('IMEI')} valor={f.imei} onChange={(v) => setFm((p) => ({ ...p, imei: v }))} mono />
+                  <Campo label={t('Código de desbloqueo (opcional)')} valor={f.codigo_desbloqueo} onChange={(v) => setFm((p) => ({ ...p, codigo_desbloqueo: v }))} />
+                  <Campo label={t('Ubicación física (ej. Estante A-3)')} valor={f.ubicacion_fisica} onChange={(v) => setFm((p) => ({ ...p, ubicacion_fisica: v }))} />
                   <div>
-                    <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Accesorios entregados</label>
+                    <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Accesorios entregados')}</label>
                     <div className="flex flex-wrap gap-2">
                       {ACCESORIOS_OPCIONES.map((a) => (
                         <button
@@ -1201,7 +1203,7 @@ export default function FichaReparacion() {
                             f.accesorios.includes(a) ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                           }`}
                         >
-                          {a}
+                          {t(a)}
                         </button>
                       ))}
                     </div>
@@ -1212,50 +1214,50 @@ export default function FichaReparacion() {
                   <p className="text-xs">
                     {r.cliente_id ? (
                       <span className="flex items-center gap-1 text-accent dark:text-dark-accent">
-                        <IconoChico nombre="clientes" /> Equipo de un cliente
+                        <IconoChico nombre="clientes" /> {t('Equipo de un cliente')}
                       </span>
                     ) : (
                       <span className="flex items-center gap-1 text-muted dark:text-dark-text-secondary">
-                        <IconoChico nombre="local" /> Equipo propio del local
+                        <IconoChico nombre="local" /> {t('Equipo propio del local')}
                       </span>
                     )}
                   </p>
                   {nombreCliente && (
                     <p>
-                      <span className="text-muted dark:text-dark-text-secondary">Cliente: </span>
+                      <span className="text-muted dark:text-dark-text-secondary">{t('Cliente:')} </span>
                       {nombreCliente} {r.clientes?.telefono ? `· ${r.clientes.telefono}` : ''}
                     </p>
                   )}
                   <p>
-                    <span className="text-muted dark:text-dark-text-secondary">Equipo: </span>
+                    <span className="text-muted dark:text-dark-text-secondary">{t('Equipo:')} </span>
                     {r.modelo}
                     {r.capacidad_gb ? ` · ${r.capacidad_gb}GB` : ''}
                     {r.color ? ` · ${r.color}` : ''}
                   </p>
                   {r.imei && (
                     <p>
-                      <span className="text-muted dark:text-dark-text-secondary">IMEI: </span>
+                      <span className="text-muted dark:text-dark-text-secondary">{t('IMEI:')} </span>
                       <span className="font-mono font-bold">{r.imei}</span>
                     </p>
                   )}
                   {r.codigo_desbloqueo && (
                     <p className="flex items-center gap-2">
-                      <span className="text-muted dark:text-dark-text-secondary">Código de desbloqueo: </span>
+                      <span className="text-muted dark:text-dark-text-secondary">{t('Código de desbloqueo:')} </span>
                       <span className="font-mono">{codigoVisible ? r.codigo_desbloqueo : '••••••'}</span>
                       <button onClick={() => setCodigoVisible((v) => !v)} className="text-xs text-accent dark:text-dark-accent underline">
-                        {codigoVisible ? 'ocultar' : 'mostrar'}
+                        {codigoVisible ? t('ocultar') : t('mostrar')}
                       </button>
                     </p>
                   )}
                   {r.accesorios?.length > 0 && (
                     <p>
-                      <span className="text-muted dark:text-dark-text-secondary">Accesorios: </span>
+                      <span className="text-muted dark:text-dark-text-secondary">{t('Accesorios:')} </span>
                       {r.accesorios.join(', ')}
                     </p>
                   )}
                   {r.ubicacion_fisica && (
                     <p className="flex items-center gap-1">
-                      <span className="text-muted dark:text-dark-text-secondary">Ubicación: </span>
+                      <span className="text-muted dark:text-dark-text-secondary">{t('Ubicación:')} </span>
                       <IconoChico nombre="ubicacion" /> {r.ubicacion_fisica}
                     </p>
                   )}
@@ -1264,9 +1266,9 @@ export default function FichaReparacion() {
             </Seccion>
 
             {reparacionesRelacionadas.length > 0 && (
-              <Seccion titulo="Garantías y retrabajos">
+              <Seccion titulo={t('Garantías y retrabajos')}>
                 <p className="text-xs text-muted dark:text-dark-text-secondary -mt-1 mb-1">
-                  Este equipo (mismo IMEI) ya pasó antes por el taller:
+                  {t('Este equipo (mismo IMEI) ya pasó antes por el taller:')}
                 </p>
                 <div className="flex flex-col gap-1.5 mb-2">
                   {reparacionesRelacionadas.map((rr) => {
@@ -1285,7 +1287,7 @@ export default function FichaReparacion() {
                             name="reparacion-relacionada"
                             checked={elegida}
                             onChange={() => setReparacionRelacionadaElegida(rr.id)}
-                            aria-label={`Vincular a ${info.titulo}`}
+                            aria-label={`${t('Vincular a')} ${info.titulo}`}
                             className="shrink-0 accent-ink"
                           />
                         )}
@@ -1302,25 +1304,24 @@ export default function FichaReparacion() {
                 {puedeGestionar && (
                   <div className="flex flex-col gap-1.5">
                     <label className="text-xs text-muted dark:text-dark-text-secondary">
-                      ¿Cómo clasificamos este ingreso{reparacionesRelacionadas.length > 1 ? ', respecto de la reparación marcada arriba' : ''}?
+                      {t('¿Cómo clasificamos este ingreso')}{reparacionesRelacionadas.length > 1 ? t(', respecto de la reparación marcada arriba') : ''}?
                     </label>
                     <div className="flex flex-wrap gap-1.5">
-                      {TIPOS_INGRESO.map((t) => (
+                      {TIPOS_INGRESO.map((ti) => (
                         <button
-                          key={t.id}
+                          key={ti.id}
                           disabled={guardandoClasificacion}
-                          onClick={() => guardarClasificacionIngreso(t.id, reparacionRelacionadaElegida)}
+                          onClick={() => guardarClasificacionIngreso(ti.id, reparacionRelacionadaElegida)}
                           className={`rounded-lg px-3 py-1.5 text-xs font-medium disabled:opacity-40 ${
-                            r.tipo_ingreso === t.id ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
+                            r.tipo_ingreso === ti.id ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                           }`}
                         >
-                          {t.label}
+                          {t(ti.label)}
                         </button>
                       ))}
                     </div>
                     <p className="text-[10px] text-muted dark:text-dark-text-secondary">
-                      No reutiliza el margen ni el costo de la reparación anterior — esta reparación calcula el suyo
-                      propio siempre.
+                      {t('No reutiliza el margen ni el costo de la reparación anterior — esta reparación calcula el suyo propio siempre.')}
                     </p>
                   </div>
                 )}
@@ -1330,34 +1331,33 @@ export default function FichaReparacion() {
           )}
 
           {tab === 'recepcion' && (
-            <Seccion titulo="Recepción">
+            <Seccion titulo={t('Recepción')}>
               {editando ? (
                 <div className="flex flex-col gap-2">
-                  <Campo label="Falla declarada por el cliente" valor={f.falla_declarada} onChange={(v) => setFm((p) => ({ ...p, falla_declarada: v }))} textarea />
-                  <Campo label="Estado estético" valor={f.estado_estetico} onChange={(v) => setFm((p) => ({ ...p, estado_estetico: v }))} />
-                  <CheckTri label="Enciende" valor={f.enciende} onChange={(v) => setFm((p) => ({ ...p, enciende: v }))} />
+                  <Campo label={t('Falla declarada por el cliente')} valor={f.falla_declarada} onChange={(v) => setFm((p) => ({ ...p, falla_declarada: v }))} textarea />
+                  <Campo label={t('Estado estético')} valor={f.estado_estetico} onChange={(v) => setFm((p) => ({ ...p, estado_estetico: v }))} />
+                  <CheckTri label={t('Enciende')} valor={f.enciende} onChange={(v) => setFm((p) => ({ ...p, enciende: v }))} />
                   {ITEMS_CHECKLIST_INGRESO.map((item) => {
                     const deshabilitado = CAMPOS_DEPENDEN_MODULO.includes(item.campo) && f.modulo_ok === false;
                     return (
                       <CheckTri
                         key={item.campo}
-                        label={item.label}
+                        label={t(item.label)}
                         disabled={deshabilitado}
                         valor={deshabilitado ? null : f[item.campo]}
                         onChange={(v) => setFm((p) => ({ ...p, [item.campo]: v }))}
                       />
                     );
                   })}
-                  <CheckTri label="Humedad / manipulación" valor={f.humedad} onChange={(v) => setFm((p) => ({ ...p, humedad: v }))} invertido />
+                  <CheckTri label={t('Humedad / manipulación')} valor={f.humedad} onChange={(v) => setFm((p) => ({ ...p, humedad: v }))} invertido />
                   <Campo
-                    label="Excepción adicional a la garantía (opcional)"
+                    label={t('Excepción adicional a la garantía (opcional)')}
                     valor={f.garantia_excepcion_manual}
                     onChange={(v) => setFm((p) => ({ ...p, garantia_excepcion_manual: v }))}
                     textarea
                   />
                   <p className="text-[10px] text-muted dark:text-dark-text-secondary -mt-1">
-                    Para excluir algo que hoy funciona pero quedó en duda (ej.: "por golpe fuerte, no garantizamos Face ID").
-                    Lo que ya marcaste como falla arriba se excluye solo, no hace falta repetirlo acá.
+                    {t('Para excluir algo que hoy funciona pero quedó en duda (ej.: "por golpe fuerte, no garantizamos Face ID"). Lo que ya marcaste como falla arriba se excluye solo, no hace falta repetirlo acá.')}
                   </p>
                   <label className="flex items-center gap-2 text-sm cursor-pointer mt-1">
                     <input
@@ -1366,7 +1366,7 @@ export default function FichaReparacion() {
                       onChange={(e) => setFm((p) => ({ ...p, garantia_condiciones_aceptadas: e.target.checked }))}
                       className="h-4 w-4 accent-ink"
                     />
-                    El cliente aceptó las condiciones de garantía y diagnóstico
+                    {t('El cliente aceptó las condiciones de garantía y diagnóstico')}
                   </label>
                   <TextoCondicionGenerado datos={f as any} />
                 </div>
@@ -1374,30 +1374,30 @@ export default function FichaReparacion() {
                 <div className="text-sm flex flex-col gap-1">
                   {r.falla_declarada && (
                     <p>
-                      <span className="text-muted dark:text-dark-text-secondary">Falla declarada: </span>
+                      <span className="text-muted dark:text-dark-text-secondary">{t('Falla declarada:')} </span>
                       {r.falla_declarada}
                     </p>
                   )}
                   {r.estado_estetico && (
                     <p>
-                      <span className="text-muted dark:text-dark-text-secondary">Estado estético: </span>
+                      <span className="text-muted dark:text-dark-text-secondary">{t('Estado estético:')} </span>
                       {r.estado_estetico}
                     </p>
                   )}
                   <p className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted dark:text-dark-text-secondary">
-                    {itemChecklist('Enciende', r.enciende)}
-                    {ITEMS_CHECKLIST_INGRESO.map((item) => itemChecklist(item.label, (r as any)[item.campo]))}
+                    {itemChecklist(t('Enciende'), r.enciende)}
+                    {ITEMS_CHECKLIST_INGRESO.map((item) => itemChecklist(t(item.label), (r as any)[item.campo]))}
                     {/* Reparaciones cargadas antes de este cambio: si nunca se usó la checklist nueva, mostramos la vieja para no perder ese historial. */}
-                    {r.camara_frontal_ok == null && r.camara_trasera_ok == null && itemChecklist('Cámaras', r.camaras_ok)}
-                    {r.boton_power_ok == null && r.boton_volumen_ok == null && itemChecklist('Botones', r.botones_ok)}
+                    {r.camara_frontal_ok == null && r.camara_trasera_ok == null && itemChecklist(t('Cámaras'), r.camaras_ok)}
+                    {r.boton_power_ok == null && r.boton_volumen_ok == null && itemChecklist(t('Botones'), r.botones_ok)}
                     {r.humedad != null && (
                       <span className="flex items-center gap-1">
                         <IconoChico nombre={r.humedad ? 'alerta' : 'check'} className={r.humedad ? 'text-warn' : 'text-good'} />
-                        {r.humedad ? 'Con humedad/manipulación' : 'Sin humedad'}
+                        {r.humedad ? t('Con humedad/manipulación') : t('Sin humedad')}
                       </span>
                     )}
                   </p>
-                  {r.garantia_condiciones_aceptadas && <p className="text-xs text-good">✓ Cliente aceptó condiciones de garantía</p>}
+                  {r.garantia_condiciones_aceptadas && <p className="text-xs text-good">✓ {t('Cliente aceptó condiciones de garantía')}</p>}
                   <TextoCondicionGenerado datos={r as any} />
                 </div>
               )}
@@ -1405,27 +1405,27 @@ export default function FichaReparacion() {
           )}
 
           {tab === 'diagnostico' && (
-            <Seccion titulo="Diagnóstico">
+            <Seccion titulo={t('Diagnóstico')}>
               {editando ? (
                 <div className="flex flex-col gap-2">
-                  <Campo label="Diagnóstico técnico" valor={f.diagnostico} onChange={(v) => setFm((p) => ({ ...p, diagnostico: v }))} textarea />
+                  <Campo label={t('Diagnóstico técnico')} valor={f.diagnostico} onChange={(v) => setFm((p) => ({ ...p, diagnostico: v }))} textarea />
                   <div>
-                    <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Técnico asignado</label>
+                    <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Técnico asignado')}</label>
                     <select
                       value={f.tecnico_id}
                       onChange={(e) => setFm((p) => ({ ...p, tecnico_id: e.target.value }))}
                       className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                     >
-                      <option value="">Sin asignar</option>
-                      {tecnicos.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.nombre}
+                      <option value="">{t('Sin asignar')}</option>
+                      {tecnicos.map((tec) => (
+                        <option key={tec.id} value={tec.id}>
+                          {tec.nombre}
                         </option>
                       ))}
                     </select>
                   </div>
                   <div>
-                    <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Prioridad</label>
+                    <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Prioridad')}</label>
                     <div className="flex gap-2">
                       {PRIORIDADES.map((p) => (
                         <button
@@ -1435,14 +1435,14 @@ export default function FichaReparacion() {
                             f.prioridad === p.id ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                           }`}
                         >
-                          {p.label}
+                          {t(p.label)}
                         </button>
                       ))}
                     </div>
                   </div>
-                  <Campo label="Trabajo recomendado" valor={f.trabajo_recomendado} onChange={(v) => setFm((p) => ({ ...p, trabajo_recomendado: v }))} textarea />
+                  <Campo label={t('Trabajo recomendado')} valor={f.trabajo_recomendado} onChange={(v) => setFm((p) => ({ ...p, trabajo_recomendado: v }))} textarea />
                   <div>
-                    <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Fecha estimada de entrega</label>
+                    <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Fecha estimada de entrega')}</label>
                     <CampoFecha
                       value={f.fecha_estimada}
                       onChange={(iso) => setFm((p) => ({ ...p, fecha_estimada: iso }))}
@@ -1450,33 +1450,33 @@ export default function FichaReparacion() {
                       classNameSelect="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-2 py-3 text-sm"
                     />
                   </div>
-                  <Campo label="Observaciones internas (no las ve el cliente)" valor={f.observaciones_internas} onChange={(v) => setFm((p) => ({ ...p, observaciones_internas: v }))} textarea />
+                  <Campo label={t('Observaciones internas (no las ve el cliente)')} valor={f.observaciones_internas} onChange={(v) => setFm((p) => ({ ...p, observaciones_internas: v }))} textarea />
                 </div>
               ) : (
                 <div className="text-sm flex flex-col gap-1">
                   {r.diagnostico && (
                     <p>
-                      <span className="text-muted dark:text-dark-text-secondary">Diagnóstico: </span>
+                      <span className="text-muted dark:text-dark-text-secondary">{t('Diagnóstico:')} </span>
                       {r.diagnostico}
                     </p>
                   )}
                   {r.trabajo_recomendado && (
                     <p>
-                      <span className="text-muted dark:text-dark-text-secondary">Trabajo recomendado: </span>
+                      <span className="text-muted dark:text-dark-text-secondary">{t('Trabajo recomendado:')} </span>
                       {r.trabajo_recomendado}
                     </p>
                   )}
                   {r.fecha_estimada && (
                     <p>
-                      <span className="text-muted dark:text-dark-text-secondary">Fecha estimada: </span>
+                      <span className="text-muted dark:text-dark-text-secondary">{t('Fecha estimada:')} </span>
                       {new Date(r.fecha_estimada + 'T00:00:00').toLocaleDateString('es-AR')}
                     </p>
                   )}
                   {r.observaciones_internas && (
-                    <p className="text-xs text-muted dark:text-dark-text-secondary italic">Nota interna: {r.observaciones_internas}</p>
+                    <p className="text-xs text-muted dark:text-dark-text-secondary italic">{t('Nota interna:')} {r.observaciones_internas}</p>
                   )}
                   {!r.diagnostico && !r.trabajo_recomendado && (
-                    <p className="text-xs text-muted dark:text-dark-text-secondary">Todavía no se cargó un diagnóstico.</p>
+                    <p className="text-xs text-muted dark:text-dark-text-secondary">{t('Todavía no se cargó un diagnóstico.')}</p>
                   )}
                 </div>
               )}
@@ -1484,25 +1484,25 @@ export default function FichaReparacion() {
           )}
 
           {tab === 'presupuesto' && (
-            <Seccion titulo="Presupuesto">
+            <Seccion titulo={t('Presupuesto')}>
               {editando ? (
                 <div className="flex gap-2">
-                  <Campo label="Mano de obra ($)" valor={f.presupuesto_mano_obra} onChange={(v) => setFm((p) => ({ ...p, presupuesto_mano_obra: v }))} numerico />
-                  <Campo label="Repuestos ($)" valor={f.presupuesto_repuestos} onChange={(v) => setFm((p) => ({ ...p, presupuesto_repuestos: v }))} numerico />
+                  <Campo label={t('Mano de obra ($)')} valor={f.presupuesto_mano_obra} onChange={(v) => setFm((p) => ({ ...p, presupuesto_mano_obra: v }))} numerico />
+                  <Campo label={t('Repuestos ($)')} valor={f.presupuesto_repuestos} onChange={(v) => setFm((p) => ({ ...p, presupuesto_repuestos: v }))} numerico />
                 </div>
               ) : (
                 <div className="text-sm flex flex-col gap-2">
                   {r.presupuesto_mano_obra != null || r.presupuesto_repuestos != null ? (
                     <p>
-                      <span className="text-muted dark:text-dark-text-secondary">Total presupuestado: </span>$
+                      <span className="text-muted dark:text-dark-text-secondary">{t('Total presupuestado:')} </span>$
                       {((r.presupuesto_mano_obra || 0) + (r.presupuesto_repuestos || 0)).toLocaleString('es-AR')}{' '}
                       <span className="text-xs text-muted dark:text-dark-text-secondary">
-                        (mano de obra ${(r.presupuesto_mano_obra || 0).toLocaleString('es-AR')} + repuestos $
+                        ({t('mano de obra')} ${(r.presupuesto_mano_obra || 0).toLocaleString('es-AR')} + {t('repuestos')} $
                         {(r.presupuesto_repuestos || 0).toLocaleString('es-AR')})
                       </span>
                     </p>
                   ) : (
-                    <p className="text-xs text-muted dark:text-dark-text-secondary">Todavía no se cargó un presupuesto.</p>
+                    <p className="text-xs text-muted dark:text-dark-text-secondary">{t('Todavía no se cargó un presupuesto.')}</p>
                   )}
 
                   {(r.presupuesto_mano_obra != null || r.presupuesto_repuestos != null) && (
@@ -1510,32 +1510,32 @@ export default function FichaReparacion() {
                       <p className="text-xs font-medium flex items-center gap-1.5">
                         {r.presupuesto_estado === 'aprobado' && (
                           <span className="flex items-center gap-1 text-good">
-                            <IconoChico nombre="check" /> Aprobado
+                            <IconoChico nombre="check" /> {t('Aprobado')}
                           </span>
                         )}
                         {r.presupuesto_estado === 'rechazado' && (
                           <span className="flex items-center gap-1 text-bad">
-                            <IconoChico nombre="cerrar" /> Rechazado
+                            <IconoChico nombre="cerrar" /> {t('Rechazado')}
                           </span>
                         )}
                         {r.presupuesto_estado === 'enviado' && (
                           <span className="flex items-center gap-1 text-warn">
-                            <IconoChico nombre="enviar" /> Enviado, sin responder
+                            <IconoChico nombre="enviar" /> {t('Enviado, sin responder')}
                           </span>
                         )}
-                        {!r.presupuesto_estado && <span className="text-muted dark:text-dark-text-secondary">Sin enviar</span>}
+                        {!r.presupuesto_estado && <span className="text-muted dark:text-dark-text-secondary">{t('Sin enviar')}</span>}
                       </p>
                       {r.presupuesto_enviado_at && (
-                        <p className="text-[11px] text-muted dark:text-dark-text-secondary">Enviado {fmt(r.presupuesto_enviado_at)}</p>
+                        <p className="text-[11px] text-muted dark:text-dark-text-secondary">{t('Enviado')} {fmt(r.presupuesto_enviado_at)}</p>
                       )}
                       {r.presupuesto_respondido_at && (
                         <p className="text-[11px] text-muted dark:text-dark-text-secondary">
-                          Respondido {fmt(r.presupuesto_respondido_at)} · vía {r.presupuesto_medio === 'portal' ? 'link de seguimiento' : r.presupuesto_medio === 'whatsapp' ? 'WhatsApp' : 'registro manual'}
+                          {t('Respondido')} {fmt(r.presupuesto_respondido_at)} · {t('vía')} {r.presupuesto_medio === 'portal' ? t('link de seguimiento') : r.presupuesto_medio === 'whatsapp' ? 'WhatsApp' : t('registro manual')}
                         </p>
                       )}
                       {r.presupuesto_importe_aceptado != null && (
                         <p className="text-[11px] text-muted dark:text-dark-text-secondary">
-                          Importe que se aceptó: ${r.presupuesto_importe_aceptado.toLocaleString('es-AR')} (queda fijo aunque el presupuesto cambie después)
+                          {t('Importe que se aceptó:')} ${r.presupuesto_importe_aceptado.toLocaleString('es-AR')} {t('(queda fijo aunque el presupuesto cambie después)')}
                         </p>
                       )}
                       {r.presupuesto_estado !== 'aprobado' && r.presupuesto_estado !== 'rechazado' && puedeGestionar && (
@@ -1545,20 +1545,20 @@ export default function FichaReparacion() {
                             onClick={() => registrarRespuestaPresupuestoManual(true)}
                             className="flex-1 rounded-lg bg-good text-white py-1.5 text-xs font-medium disabled:opacity-40"
                           >
-                            Registrar aprobación
+                            {t('Registrar aprobación')}
                           </button>
                           <button
                             disabled={guardando}
                             onClick={() => registrarRespuestaPresupuestoManual(false)}
                             className="flex-1 rounded-lg border border-bad/40 text-bad py-1.5 text-xs font-medium disabled:opacity-40"
                           >
-                            Registrar rechazo
+                            {t('Registrar rechazo')}
                           </button>
                         </div>
                       )}
                       {r.presupuesto_estado === 'rechazado' && puedeGestionar && (
                         <button disabled={guardando} onClick={reabrirPresupuesto} className="rounded-lg border border-border dark:border-dark-border py-1.5 text-xs font-medium mt-1 disabled:opacity-40">
-                          Reabrir para pedir una nueva respuesta
+                          {t('Reabrir para pedir una nueva respuesta')}
                         </button>
                       )}
                     </div>
@@ -1570,30 +1570,30 @@ export default function FichaReparacion() {
 
           {tab === 'servicios' && (
             <>
-              <Seccion titulo="Trabajo realizado">
+              <Seccion titulo={t('Trabajo realizado')}>
                 {editando ? (
                   <div className="flex flex-col gap-2">
                     <div>
-                      <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Servicios realizados</label>
+                      <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Servicios realizados')}</label>
                       <div className="flex flex-wrap gap-2">
-                        {trabajos.map((t) => (
+                        {trabajos.map((tr) => (
                           <button
-                            key={t.id}
-                            onClick={() => toggleTrabajo(t.nombre)}
+                            key={tr.id}
+                            onClick={() => toggleTrabajo(tr.nombre)}
                             className={`rounded-lg px-3 py-1.5 text-xs font-medium ${
-                              f.trabajos_realizados.includes(t.nombre) ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
+                              f.trabajos_realizados.includes(tr.nombre) ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                             }`}
                           >
-                            {t.nombre}
+                            {tr.nombre}
                           </button>
                         ))}
                       </div>
                     </div>
-                    <Campo label="Repuestos utilizados (nota libre)" valor={f.repuestos_utilizados} onChange={(v) => setFm((p) => ({ ...p, repuestos_utilizados: v }))} textarea />
-                    <Campo label="Resultado final / pruebas" valor={f.resultado_final} onChange={(v) => setFm((p) => ({ ...p, resultado_final: v }))} textarea />
-                    <Campo label="Importe total ($)" valor={f.importe_total} onChange={(v) => setFm((p) => ({ ...p, importe_total: v }))} numerico />
+                    <Campo label={t('Repuestos utilizados (nota libre)')} valor={f.repuestos_utilizados} onChange={(v) => setFm((p) => ({ ...p, repuestos_utilizados: v }))} textarea />
+                    <Campo label={t('Resultado final / pruebas')} valor={f.resultado_final} onChange={(v) => setFm((p) => ({ ...p, resultado_final: v }))} textarea />
+                    <Campo label={t('Importe total ($)')} valor={f.importe_total} onChange={(v) => setFm((p) => ({ ...p, importe_total: v }))} numerico />
                     <div>
-                      <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Forma de pago</label>
+                      <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Forma de pago')}</label>
                       <div className="flex gap-2">
                         {FORMAS_PAGO.map((fp) => (
                           <button
@@ -1603,53 +1603,53 @@ export default function FichaReparacion() {
                               f.forma_pago === fp ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                             }`}
                           >
-                            {fp}
+                            {t(fp)}
                           </button>
                         ))}
                       </div>
                     </div>
-                    <Campo label="Garantía de la reparación (días)" valor={f.garantia_dias} onChange={(v) => setFm((p) => ({ ...p, garantia_dias: v }))} numerico />
+                    <Campo label={t('Garantía de la reparación (días)')} valor={f.garantia_dias} onChange={(v) => setFm((p) => ({ ...p, garantia_dias: v }))} numerico />
                   </div>
                 ) : (
                   <div className="text-sm flex flex-col gap-1">
                     {r.trabajos_realizados?.length > 0 && (
                       <p>
-                        <span className="text-muted dark:text-dark-text-secondary">Trabajos realizados: </span>
+                        <span className="text-muted dark:text-dark-text-secondary">{t('Trabajos realizados:')} </span>
                         {r.trabajos_realizados.join(', ')}
                       </p>
                     )}
                     {r.repuestos_utilizados && (
                       <p>
-                        <span className="text-muted dark:text-dark-text-secondary">Nota de repuestos: </span>
+                        <span className="text-muted dark:text-dark-text-secondary">{t('Nota de repuestos:')} </span>
                         {r.repuestos_utilizados}
                       </p>
                     )}
                     {r.resultado_final && (
                       <p>
-                        <span className="text-muted dark:text-dark-text-secondary">Resultado: </span>
+                        <span className="text-muted dark:text-dark-text-secondary">{t('Resultado:')} </span>
                         {r.resultado_final}
                       </p>
                     )}
                     {r.importe_total != null && (
                       <p>
-                        <span className="text-muted dark:text-dark-text-secondary">Importe total: </span>${r.importe_total.toLocaleString('es-AR')}
+                        <span className="text-muted dark:text-dark-text-secondary">{t('Importe total:')} </span>${r.importe_total.toLocaleString('es-AR')}
                       </p>
                     )}
                     {r.forma_pago && (
                       <p>
-                        <span className="text-muted dark:text-dark-text-secondary">Forma de pago: </span>
-                        {r.forma_pago}
+                        <span className="text-muted dark:text-dark-text-secondary">{t('Forma de pago:')} </span>
+                        {t(r.forma_pago)}
                       </p>
                     )}
                     {r.garantia_dias != null && (
                       <p>
-                        <span className="text-muted dark:text-dark-text-secondary">Garantía: </span>
-                        {r.garantia_dias} días
+                        <span className="text-muted dark:text-dark-text-secondary">{t('Garantía:')} </span>
+                        {r.garantia_dias} {t('días')}
                       </p>
                     )}
                     {r.fecha_entrega && (
                       <p>
-                        <span className="text-muted dark:text-dark-text-secondary">Entregado: </span>
+                        <span className="text-muted dark:text-dark-text-secondary">{t('Entregado:')} </span>
                         {fmt(r.fecha_entrega)}
                       </p>
                     )}
@@ -1657,10 +1657,9 @@ export default function FichaReparacion() {
                 )}
               </Seccion>
 
-              <Seccion titulo="Repuestos usados (del stock)">
+              <Seccion titulo={t('Repuestos usados (del stock)')}>
                 <p className="text-xs text-muted dark:text-dark-text-secondary -mt-1 mb-2">
-                  Distinto de la nota de arriba: acá se descuenta stock real y queda el costo de verdad, para calcular
-                  la ganancia de esta reparación.
+                  {t('Distinto de la nota de arriba: acá se descuenta stock real y queda el costo de verdad, para calcular la ganancia de esta reparación.')}
                 </p>
 
                 {repuestosUsados.length > 0 && (
@@ -1672,11 +1671,11 @@ export default function FichaReparacion() {
                         </span>
                         <span className="flex items-center gap-2 shrink-0">
                           <span className="text-muted dark:text-dark-text-secondary">
-                            {ru.costo_unitario != null ? `$${(ru.costo_unitario * ru.cantidad).toLocaleString('es-AR')}` : 'sin costo'}
+                            {ru.costo_unitario != null ? `$${(ru.costo_unitario * ru.cantidad).toLocaleString('es-AR')}` : t('sin costo')}
                           </span>
                           {puedeGestionar && (
                             <button onClick={() => quitarRepuestoUsado(ru)} className="text-xs text-bad underline">
-                              Quitar
+                              {t('Quitar')}
                             </button>
                           )}
                         </span>
@@ -1684,12 +1683,12 @@ export default function FichaReparacion() {
                     ))}
                     <div className="flex flex-col gap-0.5 pt-1 text-xs">
                       <div className="flex justify-between">
-                        <span className="text-muted dark:text-dark-text-secondary">Costo repuestos {hayCostosFaltantes && '(parcial)'}</span>
+                        <span className="text-muted dark:text-dark-text-secondary">{t('Costo repuestos')} {hayCostosFaltantes && t('(parcial)')}</span>
                         <span className="font-medium">${costoRepuestosTotal.toLocaleString('es-AR')}</span>
                       </div>
                       {margen != null && (
                         <div className="flex justify-between">
-                          <span className="text-muted dark:text-dark-text-secondary">Margen (cobrado − repuestos)</span>
+                          <span className="text-muted dark:text-dark-text-secondary">{t('Margen (cobrado − repuestos)')}</span>
                           <span className={`font-medium ${margen >= 0 ? 'text-good' : 'text-bad'}`}>${margen.toLocaleString('es-AR')}</span>
                         </div>
                       )}
@@ -1703,7 +1702,7 @@ export default function FichaReparacion() {
                       <div className="rounded-lg border border-accent/40 dark:border-dark-accent/40 bg-accent-soft dark:bg-dark-accent-soft px-3 py-2 flex items-center justify-between gap-2">
                         <span className="text-sm truncate">{repuestoElegido.nombre}</span>
                         <button onClick={() => setRepuestoElegido(null)} className="text-xs text-accent dark:text-dark-accent underline shrink-0">
-                          Cambiar
+                          {t('Cambiar')}
                         </button>
                       </div>
                     ) : (
@@ -1711,16 +1710,16 @@ export default function FichaReparacion() {
                         <input
                           value={buscarRepuesto}
                           onChange={(e) => setBuscarRepuesto(e.target.value)}
-                          placeholder="Buscar repuesto en stock..."
+                          placeholder={t('Buscar repuesto en stock...')}
                           className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                         />
                         {buscarRepuesto && (
                           <div className="flex flex-col gap-1 max-h-40 overflow-y-auto">
                             {repuestosFiltrados.length === 0 && (
                               <p className="text-xs text-muted dark:text-dark-text-secondary px-1">
-                                Sin resultados con stock disponible.{' '}
+                                {t('Sin resultados con stock disponible.')}{' '}
                                 <Link href="/servicio-tecnico/stock" className="underline">
-                                  Cargar en Stock de repuestos
+                                  {t('Cargar en Stock de repuestos')}
                                 </Link>
                               </p>
                             )}
@@ -1731,7 +1730,7 @@ export default function FichaReparacion() {
                                 className="rounded-lg border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-3 py-2 text-left text-xs flex items-center justify-between gap-2"
                               >
                                 <span>{rp.nombre}</span>
-                                <span className="text-muted dark:text-dark-text-secondary shrink-0">Stock: {rp.cantidad_stock}</span>
+                                <span className="text-muted dark:text-dark-text-secondary shrink-0">{t('Stock:')} {rp.cantidad_stock}</span>
                               </button>
                             ))}
                           </div>
@@ -1744,7 +1743,7 @@ export default function FichaReparacion() {
                           value={cantidadRepuesto}
                           onChange={(e) => setCantidadRepuesto(e.target.value.replace(/[^\d]/g, ''))}
                           inputMode="numeric"
-                          placeholder="Cantidad"
+                          placeholder={t('Cantidad')}
                           className="w-24 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                         />
                         <button
@@ -1752,7 +1751,7 @@ export default function FichaReparacion() {
                           onClick={agregarRepuestoUsado}
                           className="flex-1 rounded-lg bg-accent dark:bg-dark-accent text-white py-2 text-sm font-medium disabled:opacity-40"
                         >
-                          {guardandoRepuesto ? 'Guardando...' : 'Usar en esta reparación'}
+                          {guardandoRepuesto ? t('Guardando...') : t('Usar en esta reparación')}
                         </button>
                       </div>
                     )}
@@ -1763,15 +1762,15 @@ export default function FichaReparacion() {
           )}
 
           {tab === 'control' && (
-            <Seccion titulo="Control de calidad">
+            <Seccion titulo={t('Control de calidad')}>
               <p className="text-xs text-muted dark:text-dark-text-secondary -mt-1 mb-1">
                 {checklistAplicable === CHECKLIST_CALIDAD_GENERICO
-                  ? 'Checklist genérico (ninguno de los servicios realizados tiene uno propio cargado).'
-                  : 'Checklist tomado de los servicios realizados en esta reparación.'}
+                  ? t('Checklist genérico (ninguno de los servicios realizados tiene uno propio cargado).')
+                  : t('Checklist tomado de los servicios realizados en esta reparación.')}
               </p>
               {r.control_calidad_override && (
                 <p className="flex items-center gap-1 text-xs text-warn mb-1">
-                  <IconoChico nombre="alerta" /> Se marcó "Listo para entregar" con controles pendientes (override registrado en el historial).
+                  <IconoChico nombre="alerta" /> {t('Se marcó "Listo para entregar" con controles pendientes (override registrado en el historial).')}
                 </p>
               )}
               <ControlCalidad
@@ -1785,11 +1784,11 @@ export default function FichaReparacion() {
 
           {tab === 'evidencias' &&
             (editando ? (
-              <p className="text-xs text-muted dark:text-dark-text-secondary text-center py-6">Guardá o cancelá la edición para usar esta sección.</p>
+              <p className="text-xs text-muted dark:text-dark-text-secondary text-center py-6">{t('Guardá o cancelá la edición para usar esta sección.')}</p>
             ) : (
-              <Seccion titulo="Evidencia para el cliente">
+              <Seccion titulo={t('Evidencia para el cliente')}>
                 <p className="text-xs text-muted dark:text-dark-text-secondary -mt-1 mb-2">
-                  Fotos y notas que el cliente ve en /seguimiento (ej. daños encontrados al abrir el equipo).
+                  {t('Fotos y notas que el cliente ve en /seguimiento (ej. daños encontrados al abrir el equipo).')}
                 </p>
                 <div className="flex flex-col gap-2 mb-3">
                   {fotoEvidenciaBase64 && (
@@ -1798,13 +1797,13 @@ export default function FichaReparacion() {
                   )}
                   <label className="self-start flex items-center gap-1 rounded-lg border border-border dark:border-dark-border px-3 py-2 text-xs font-medium cursor-pointer">
                     <IconoChico nombre="camara" />
-                    {fotoEvidenciaBase64 ? 'Cambiar foto' : 'Sacar/elegir foto (opcional)'}
+                    {fotoEvidenciaBase64 ? t('Cambiar foto') : t('Sacar/elegir foto (opcional)')}
                     <input type="file" accept="image/*" capture="environment" className="hidden" onChange={elegirFotoEvidencia} />
                   </label>
                   <textarea
                     value={notaEvidencia}
                     onChange={(e) => setNotaEvidencia(e.target.value)}
-                    placeholder="Ej: al abrir el equipo encontramos el módulo roto y faltaban 3 tornillos"
+                    placeholder={t('Ej: al abrir el equipo encontramos el módulo roto y faltaban 3 tornillos')}
                     rows={2}
                     className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                   />
@@ -1813,7 +1812,7 @@ export default function FichaReparacion() {
                     onClick={agregarEvidencia}
                     className="self-start rounded-lg bg-accent dark:bg-dark-accent text-white px-4 py-2 text-xs font-medium disabled:opacity-40"
                   >
-                    {subiendoEvidencia ? 'Guardando...' : 'Agregar evidencia'}
+                    {subiendoEvidencia ? t('Guardando...') : t('Agregar evidencia')}
                   </button>
                 </div>
 
@@ -1841,32 +1840,32 @@ export default function FichaReparacion() {
 
           {tab === 'comunicacion' &&
             (editando ? (
-              <p className="text-xs text-muted dark:text-dark-text-secondary text-center py-6">Guardá o cancelá la edición para usar esta sección.</p>
+              <p className="text-xs text-muted dark:text-dark-text-secondary text-center py-6">{t('Guardá o cancelá la edición para usar esta sección.')}</p>
             ) : (
-              <Seccion titulo="Comunicación">
+              <Seccion titulo={t('Comunicación')}>
                 {r.cliente_id && r.clientes?.telefono ? (
                   <>
                     <p className="text-xs text-muted dark:text-dark-text-secondary -mt-1 mb-1">
-                      Genera el mensaje y abre WhatsApp — no confirma que el cliente lo haya recibido, solo que se abrió para enviarlo.
+                      {t('Genera el mensaje y abre WhatsApp — no confirma que el cliente lo haya recibido, solo que se abrió para enviarlo.')}
                     </p>
                     <div className="flex flex-wrap gap-2">
                       <button disabled={guardando} onClick={() => enviarWhatsApp('recibido')} className="rounded-lg border border-good/30 text-good px-3 py-1.5 text-xs font-medium disabled:opacity-40">
-                        Recibimos tu equipo
+                        {t('Recibimos tu equipo')}
                       </button>
                       <button disabled={guardando} onClick={() => enviarWhatsApp('presupuesto')} className="rounded-lg border border-good/30 text-good px-3 py-1.5 text-xs font-medium disabled:opacity-40">
-                        Presupuesto
+                        {t('Presupuesto')}
                       </button>
                       <button disabled={guardando} onClick={() => enviarWhatsApp('repuesto')} className="rounded-lg border border-good/30 text-good px-3 py-1.5 text-xs font-medium disabled:opacity-40">
-                        Esperando repuesto
+                        {t('Esperando repuesto')}
                       </button>
                       <button disabled={guardando} onClick={() => enviarWhatsApp('listo')} className="rounded-lg border border-good/30 text-good px-3 py-1.5 text-xs font-medium disabled:opacity-40">
-                        Ya está listo
+                        {t('Ya está listo')}
                       </button>
                     </div>
                   </>
                 ) : (
                   <p className="text-xs text-muted dark:text-dark-text-secondary">
-                    {r.cliente_id ? 'Este cliente no tiene teléfono cargado.' : 'Equipo propio del local — sin cliente para contactar.'}
+                    {r.cliente_id ? t('Este cliente no tiene teléfono cargado.') : t('Equipo propio del local — sin cliente para contactar.')}
                   </p>
                 )}
                 <div className="flex flex-col gap-1.5 mt-3">
@@ -1885,7 +1884,7 @@ export default function FichaReparacion() {
                       </div>
                     ))}
                   {eventos.filter((ev) => ev.tipo === 'mensaje_cliente').length === 0 && (
-                    <p className="text-xs text-muted dark:text-dark-text-secondary">Todavía no se envió ningún mensaje.</p>
+                    <p className="text-xs text-muted dark:text-dark-text-secondary">{t('Todavía no se envió ningún mensaje.')}</p>
                   )}
                 </div>
               </Seccion>
@@ -1893,14 +1892,14 @@ export default function FichaReparacion() {
 
           {tab === 'historial' &&
             (editando ? (
-              <p className="text-xs text-muted dark:text-dark-text-secondary text-center py-6">Guardá o cancelá la edición para usar esta sección.</p>
+              <p className="text-xs text-muted dark:text-dark-text-secondary text-center py-6">{t('Guardá o cancelá la edición para usar esta sección.')}</p>
             ) : (
-              <Seccion titulo="Historial">
+              <Seccion titulo={t('Historial')}>
                 <div className="flex flex-col gap-2 mb-2">
                   <textarea
                     value={notaTexto}
                     onChange={(e) => setNotaTexto(e.target.value)}
-                    placeholder="Agregar nota interna (solo la ve el personal)..."
+                    placeholder={t('Agregar nota interna (solo la ve el personal)...')}
                     rows={2}
                     className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                   />
@@ -1909,7 +1908,7 @@ export default function FichaReparacion() {
                     onClick={agregarNota}
                     className="self-start rounded-lg bg-accent dark:bg-dark-accent text-white px-3 py-1.5 text-xs font-medium disabled:opacity-40"
                   >
-                    Agregar nota
+                    {t('Agregar nota')}
                   </button>
                 </div>
                 <div className="flex flex-col gap-2">
@@ -1936,22 +1935,22 @@ export default function FichaReparacion() {
         {/* Panel lateral fijo */}
         <aside className="w-full lg:w-72 shrink-0 flex flex-col gap-3">
           <div className="rounded-xl border border-accent/30 dark:border-dark-accent/30 bg-accent-soft/40 dark:bg-dark-accent-soft/40 p-3 flex flex-col gap-1.5">
-            <p className="text-xs font-semibold text-accent dark:text-dark-accent">Próxima acción</p>
+            <p className="text-xs font-semibold text-accent dark:text-dark-accent">{t('Próxima acción')}</p>
             {accionSiguiente ? (
               <button
                 disabled={guardando || !puedeGestionar}
                 onClick={() => cambiarEstado(accionSiguiente.estado)}
                 className="rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
               >
-                {accionSiguiente.label}
+                {t(accionSiguiente.label)}
               </button>
             ) : (
               <p className="text-xs text-muted dark:text-dark-text-secondary">
-                {r.estado === 'esperando_aprobacion' && 'Esperando aprobación del cliente.'}
-                {r.estado === 'esperando_repuesto' && 'Esperando que llegue un repuesto.'}
-                {r.estado === 'listo_para_entregar' && 'Lista para entregar — usá las acciones de abajo.'}
-                {r.estado === 'entregado' && 'Ya se entregó al cliente.'}
-                {r.estado === 'cancelado' && 'Cancelada / sin solución.'}
+                {r.estado === 'esperando_aprobacion' && t('Esperando aprobación del cliente.')}
+                {r.estado === 'esperando_repuesto' && t('Esperando que llegue un repuesto.')}
+                {r.estado === 'listo_para_entregar' && t('Lista para entregar — usá las acciones de abajo.')}
+                {r.estado === 'entregado' && t('Ya se entregó al cliente.')}
+                {r.estado === 'cancelado' && t('Cancelada / sin solución.')}
               </p>
             )}
           </div>
@@ -1959,34 +1958,34 @@ export default function FichaReparacion() {
           <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-3 flex flex-col gap-1.5 text-xs">
             {(r.presupuesto_mano_obra != null || r.presupuesto_repuestos != null) && (
               <div className="flex justify-between">
-                <span className="text-muted dark:text-dark-text-secondary">Presupuestado</span>
+                <span className="text-muted dark:text-dark-text-secondary">{t('Presupuestado')}</span>
                 <span className="font-medium">${presupuestoSuma.toLocaleString('es-AR')}</span>
               </div>
             )}
             {r.importe_total != null && (
               <div className="flex justify-between">
-                <span className="text-muted dark:text-dark-text-secondary">Cobrado</span>
+                <span className="text-muted dark:text-dark-text-secondary">{t('Cobrado')}</span>
                 <span className="font-medium">${r.importe_total.toLocaleString('es-AR')}</span>
               </div>
             )}
             {puedeGestionar && repuestosUsados.length > 0 && (
               <>
                 <div className="flex justify-between">
-                  <span className="text-muted dark:text-dark-text-secondary">Costo repuestos</span>
+                  <span className="text-muted dark:text-dark-text-secondary">{t('Costo repuestos')}</span>
                   <span className="font-medium">${costoRepuestosTotal.toLocaleString('es-AR')}</span>
                 </div>
                 {margen != null && (
                   <div className="flex justify-between">
-                    <span className="text-muted dark:text-dark-text-secondary">Margen</span>
+                    <span className="text-muted dark:text-dark-text-secondary">{t('Margen')}</span>
                     <span className={`font-medium ${margen >= 0 ? 'text-good' : 'text-bad'}`}>${margen.toLocaleString('es-AR')}</span>
                   </div>
                 )}
               </>
             )}
             <div className="flex justify-between">
-              <span className="text-muted dark:text-dark-text-secondary">Pago</span>
+              <span className="text-muted dark:text-dark-text-secondary">{t('Pago')}</span>
               <span className="font-medium">
-                {r.orden_cobro_id ? '✓ Con orden de cobro' : r.importe_total != null ? '✓ Cobrado' : 'Pendiente'}
+                {r.orden_cobro_id ? `✓ ${t('Con orden de cobro')}` : r.importe_total != null ? `✓ ${t('Cobrado')}` : t('Pendiente')}
               </span>
             </div>
           </div>
@@ -2000,7 +1999,7 @@ export default function FichaReparacion() {
             }`}
           >
             <span className="flex items-center gap-1 font-medium">
-              <IconoChico nombre="lupa" /> Control de calidad
+              <IconoChico nombre="lupa" /> {t('Control de calidad')}
             </span>
             <span>
               {checklistAplicable.length - controlesFaltantes.length}/{checklistAplicable.length}
@@ -2014,10 +2013,10 @@ export default function FichaReparacion() {
             >
               {linkCopiado ? (
                 <span className="flex items-center justify-center gap-1">
-                  <IconoChico nombre="check" /> Copiado
+                  <IconoChico nombre="check" /> {t('Copiado')}
                 </span>
               ) : (
-                'Copiar link de seguimiento'
+                t('Copiar link de seguimiento')
               )}
             </button>
           )}
@@ -2025,7 +2024,7 @@ export default function FichaReparacion() {
             href={`/servicio-tecnico/etiqueta/${r.id}`}
             className="flex items-center justify-center gap-1 rounded-xl border border-border dark:border-dark-border py-2.5 text-center text-xs font-medium"
           >
-            <IconoChico nombre="etiqueta" /> Imprimir etiqueta
+            <IconoChico nombre="etiqueta" /> {t('Imprimir etiqueta')}
           </Link>
 
           {!editando && (
@@ -2041,7 +2040,7 @@ export default function FichaReparacion() {
                         onClick={marcarEntregadoClienteFicha}
                         className="rounded-xl bg-good hover:opacity-90 transition-opacity py-2.5 text-center text-xs font-medium text-white disabled:opacity-40"
                       >
-                        Marcar entregado al cliente
+                        {t('Marcar entregado al cliente')}
                       </button>
                     )}
                     <button
@@ -2051,7 +2050,7 @@ export default function FichaReparacion() {
                         r.estado === 'listo_para_entregar' ? 'border border-border dark:border-dark-border' : 'bg-good hover:opacity-90 transition-opacity text-white'
                       }`}
                     >
-                      Generar orden de cobro
+                      {t('Generar orden de cobro')}
                     </button>
                   </div>
                 )}
@@ -2063,38 +2062,38 @@ export default function FichaReparacion() {
                     onClick={agregarAlStockFicha}
                     className="rounded-xl bg-good hover:opacity-90 transition-opacity py-2.5 text-center text-xs font-medium text-white disabled:opacity-40"
                   >
-                    Agregar al Stock
+                    {t('Agregar al Stock')}
                   </button>
                 ) : (
                   r.estado === 'entregado' && (
                     <p className="text-xs text-muted dark:text-dark-text-secondary text-center">
-                      Entregado — el agregado al Stock lo hace quien tiene ese permiso.
+                      {t('Entregado — el agregado al Stock lo hace quien tiene ese permiso.')}
                     </p>
                   )
                 )
               )}
               {!r.cliente_id && r.agregado_a_stock && (
                 <p className="flex items-center justify-center gap-1 text-xs text-good text-center">
-                  <IconoChico nombre="check" /> Ya se agregó al Stock
+                  <IconoChico nombre="check" /> {t('Ya se agregó al Stock')}
                 </p>
               )}
 
               {avisoAgregarStock && (
                 <div className="rounded-xl border border-good/30 bg-good/10 p-3 flex flex-col gap-2">
-                  <p className="text-xs">¿Agregamos este equipo al Stock ahora?</p>
+                  <p className="text-xs">{t('¿Agregamos este equipo al Stock ahora?')}</p>
                   <div className="flex gap-2">
                     <button
                       disabled={guardando}
                       onClick={agregarAlStockFicha}
                       className="flex-1 rounded-lg bg-good text-white text-center py-2 text-xs font-medium disabled:opacity-40"
                     >
-                      Agregar al Stock
+                      {t('Agregar al Stock')}
                     </button>
                     <button
                       onClick={() => setAvisoAgregarStock(false)}
                       className="rounded-lg border border-border dark:border-dark-border px-3 py-2 text-xs font-medium"
                     >
-                      Ahora no
+                      {t('Ahora no')}
                     </button>
                   </div>
                 </div>
@@ -2102,7 +2101,7 @@ export default function FichaReparacion() {
 
               {r.orden_cobro_id && (
                 <Link href={`/ordenes/${r.orden_cobro_id}`} className="rounded-xl border border-border dark:border-dark-border py-2.5 text-center text-xs font-medium">
-                  Ver orden de cobro
+                  {t('Ver orden de cobro')}
                 </Link>
               )}
             </>
@@ -2116,7 +2115,7 @@ export default function FichaReparacion() {
           onClick={guardar}
           className="w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40 sticky bottom-4"
         >
-          {guardando ? 'Guardando...' : 'Guardar cambios'}
+          {guardando ? t('Guardando...') : t('Guardar cambios')}
         </button>
       )}
     </main>
