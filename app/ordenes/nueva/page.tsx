@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { asegurarModelo } from '../../lib/modelos';
 import { obtenerTodasLasFilas } from '../../lib/db';
@@ -149,12 +149,6 @@ function InputDecimal({
 
 export default function NuevaOrden() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  // Si se llega acá desde "Nueva venta" en la ficha de un cliente
-  // (?clienteId=...), ese cliente ya viene elegido — no tiene sentido
-  // hacerlo elegir de nuevo. Se resuelve en cuanto termina de cargar la
-  // lista de clientes (más abajo).
-  const clienteIdPreseleccionado = searchParams.get('clienteId');
   const supabase = crearClienteNavegador();
   const actorActual = useActor();
   const puedeVender = tienePermiso(actorActual, 'vender');
@@ -325,6 +319,12 @@ export default function NuevaOrden() {
         'id, nombre, apellido, telefono, cta_cte_habilitada, limite_credito, plazo_dias, suspendido'
       );
       setClientes(data);
+      // Si se llega acá desde "Nueva venta" en la ficha de un cliente
+      // (?clienteId=...), ese cliente ya viene elegido — no tiene sentido
+      // hacerlo elegir de nuevo. Se lee de window (no useSearchParams) para
+      // no depender de un Suspense boundary, mismo criterio ya usado en
+      // stock/nuevo, servicio-tecnico y admin/negocios.
+      const clienteIdPreseleccionado = new URLSearchParams(window.location.search).get('clienteId');
       if (clienteIdPreseleccionado) {
         const match = data.find((c) => c.id === clienteIdPreseleccionado);
         if (match) {
