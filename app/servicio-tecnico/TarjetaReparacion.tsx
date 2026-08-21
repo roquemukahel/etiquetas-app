@@ -8,6 +8,7 @@ import MiniaturaDispositivo from '../MiniaturaDispositivo';
 import EstadoBadge from '../EstadoBadge';
 import { ICONOS } from '../Iconos';
 import { Boton, BotonLink } from '../Boton';
+import { useT } from '../lib/idioma';
 
 // Ícono chico reutilizado inline en esta tarjeta (etiqueta, cliente/local,
 // ubicación) — mismo patrón de EstadoBadge para reescalar los SVG de 24px.
@@ -66,15 +67,15 @@ const COLOR_ACENTO: Record<string, string> = {
   bad: '#DC2626',
 };
 
-function hace(iso: string) {
+function hace(iso: string, t: (texto: string) => string) {
   const ms = Date.now() - new Date(iso).getTime();
   const min = Math.floor(ms / 60000);
-  if (min < 1) return 'recién';
-  if (min < 60) return `hace ${min} min`;
+  if (min < 1) return t('recién');
+  if (min < 60) return `${t('hace')} ${min} min`;
   const horas = Math.floor(min / 60);
-  if (horas < 24) return `hace ${horas}h`;
+  if (horas < 24) return `${t('hace')} ${horas}h`;
   const dias = Math.floor(horas / 24);
-  return `hace ${dias}d`;
+  return `${t('hace')} ${dias}d`;
 }
 
 // Tarjeta de reparación reutilizada en la lista principal de Reparaciones,
@@ -116,11 +117,12 @@ export default function TarjetaReparacion({
   puedeAgregarStock: boolean;
   extra?: React.ReactNode;
 }) {
+  const t = useT();
   const est = infoEstado(r.estado);
   const presupuesto =
     r.presupuesto_mano_obra != null || r.presupuesto_repuestos != null
       ? `$${((r.presupuesto_mano_obra || 0) + (r.presupuesto_repuestos || 0)).toLocaleString('es-AR')}`
-      : 'pendiente';
+      : t('pendiente');
   const nombreCliente = r.clientes ? `${r.clientes.nombre} ${r.clientes.apellido || ''}`.trim() : null;
 
   return (
@@ -137,7 +139,7 @@ export default function TarjetaReparacion({
             {r.color ? ` · ${r.color}` : ''}
           </p>
           <p className="text-xs text-muted dark:text-dark-text-secondary truncate">
-            {nombreTecnico(r.tecnico_id) || 'Sin técnico'}
+            {nombreTecnico(r.tecnico_id) || t('Sin técnico')}
             {nombreCliente ? ` · ${nombreCliente}` : ''}
           </p>
           {r.imei && (
@@ -149,7 +151,7 @@ export default function TarjetaReparacion({
         <div className="relative shrink-0">
           <button
             onClick={() => setMenuAbierto(menuAbierto === r.id ? null : r.id)}
-            aria-label="Más acciones"
+            aria-label={t('Más acciones')}
             aria-haspopup="true"
             aria-expanded={menuAbierto === r.id}
             className="text-lg leading-none px-1 text-muted dark:text-dark-text-secondary"
@@ -162,19 +164,19 @@ export default function TarjetaReparacion({
                 href={`/servicio-tecnico/etiqueta/${r.id}`}
                 className="flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-canvas dark:hover:bg-dark-bg"
               >
-                <IconoChico nombre="etiqueta" /> Imprimir etiqueta
+                <IconoChico nombre="etiqueta" /> {t('Imprimir etiqueta')}
               </Link>
               <button
                 onClick={() => onArchivar(r)}
                 className="px-3 py-2 text-xs text-left hover:bg-canvas dark:hover:bg-dark-bg"
               >
-                Cancelar / archivar
+                {t('Cancelar / archivar')}
               </button>
               <button
                 onClick={() => onEliminar(r)}
                 className="flex items-center gap-2 px-3 py-2 text-xs text-left text-bad hover:bg-bad/10"
               >
-                <IconoChico nombre="papelera" /> Eliminar definitivamente
+                <IconoChico nombre="papelera" /> {t('Eliminar definitivamente')}
               </button>
             </div>
           )}
@@ -184,11 +186,11 @@ export default function TarjetaReparacion({
       <p className="flex items-center gap-1 text-xs">
         {r.cliente_id ? (
           <span className="flex items-center gap-1 text-accent dark:text-dark-accent">
-            <IconoChico nombre="clientes" /> Cliente
+            <IconoChico nombre="clientes" /> {t('Cliente')}
           </span>
         ) : (
           <span className="flex items-center gap-1 text-muted dark:text-dark-text-secondary">
-            <IconoChico nombre="local" /> Propio del local
+            <IconoChico nombre="local" /> {t('Propio del local')}
           </span>
         )}
       </p>
@@ -199,7 +201,7 @@ export default function TarjetaReparacion({
         <EstadoBadge estado={r.estado} />
         {r.prioridad !== 'normal' && (
           <span className={`font-medium ${PRIORIDADES.find((p) => p.id === r.prioridad)?.color}`}>
-            {PRIORIDADES.find((p) => p.id === r.prioridad)?.label}
+            {t(PRIORIDADES.find((p) => p.id === r.prioridad)?.label ?? '')}
           </span>
         )}
         {r.ubicacion_fisica && (
@@ -207,10 +209,10 @@ export default function TarjetaReparacion({
             <IconoChico nombre="ubicacion" /> {r.ubicacion_fisica}
           </span>
         )}
-        <span className="text-muted dark:text-dark-text-secondary">Ingresó {hace(r.fecha_ingreso_servicio)}</span>
+        <span className="text-muted dark:text-dark-text-secondary">{t('Ingresó')} {hace(r.fecha_ingreso_servicio, t)}</span>
       </div>
 
-      <p className="text-xs text-muted dark:text-dark-text-secondary">Presupuesto: {presupuesto}</p>
+      <p className="text-xs text-muted dark:text-dark-text-secondary">{t('Presupuesto:')} {presupuesto}</p>
 
       {extra}
 
@@ -228,7 +230,7 @@ export default function TarjetaReparacion({
             onClick={() => onEntregadoCliente(r)}
             iconoIzq={<IconoChico nombre="check" />}
           >
-            Marcar entregado al cliente
+            {t('Marcar entregado al cliente')}
           </Boton>
         )
       ) : (
@@ -249,12 +251,12 @@ export default function TarjetaReparacion({
             onClick={() => onAgregarAlStock(r)}
             iconoIzq={<IconoChico nombre="check" />}
           >
-            Agregar al Stock
+            {t('Agregar al Stock')}
           </Boton>
         ) : (
           r.estado === 'entregado' && (
             <span className="inline-flex items-center justify-center rounded-lg bg-muted/10 h-9 text-xs font-medium text-muted dark:text-dark-text-secondary">
-              Entregado
+              {t('Entregado')}
             </span>
           )
         ))
@@ -263,13 +265,13 @@ export default function TarjetaReparacion({
       {r.estado === 'entregado' && (r.cliente_id || r.agregado_a_stock) && (
         <span className="inline-flex items-center justify-center gap-1 rounded-lg bg-muted/10 h-9 text-xs font-medium text-muted dark:text-dark-text-secondary">
           <IconoChico nombre="check" />
-          {r.cliente_id ? 'Entregado al cliente' : 'Ya está en Stock'}
+          {r.cliente_id ? t('Entregado al cliente') : t('Ya está en Stock')}
         </span>
       )}
 
       <div className="flex gap-2">
         <BotonLink href={`/servicio-tecnico/${r.id}`} variante="secundario" tamano="sm" className="flex-1">
-          Abrir ficha
+          {t('Abrir ficha')}
         </BotonLink>
         {r.cliente_id && (
           <Boton
@@ -293,10 +295,10 @@ export default function TarjetaReparacion({
           onChange={(ev) => onAsignarTecnico(r.id, ev.target.value)}
           className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-2 text-xs disabled:opacity-40"
         >
-          <option value="">Sin asignar</option>
-          {tecnicos.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.nombre}
+          <option value="">{t('Sin asignar')}</option>
+          {tecnicos.map((tec) => (
+            <option key={tec.id} value={tec.id}>
+              {tec.nombre}
             </option>
           ))}
         </select>
@@ -308,7 +310,7 @@ export default function TarjetaReparacion({
         >
           {ESTADOS_REPARACION.map((e) => (
             <option key={e.id} value={e.id}>
-              {e.label}
+              {t(e.label)}
             </option>
           ))}
         </select>

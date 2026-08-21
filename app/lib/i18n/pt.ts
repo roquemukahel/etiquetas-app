@@ -777,4 +777,65 @@ export const PT: Record<string, string> = {
   '¿Derivar este dispositivo a Servicio Técnico?': 'Encaminhar este aparelho para a Assistência Técnica?',
   '¿Eliminar este dispositivo de Plan Canje? Esta acción no se puede deshacer.':
     'Excluir este aparelho do Plano de Troca? Esta ação não pode ser desfeita.',
+
+  // Servicio Técnico — ControlCalidad
+  Correcto: 'Correto',
+  Falla: 'Falha',
+  'No aplica': 'Não se aplica',
+  controlados: 'verificados',
+  'Foto de': 'Foto de',
+
+  // Servicio Técnico — MiBanco
+  'Abrir ficha': 'Abrir ficha',
+  'Banco de': 'Banco de',
+  'Crítica': 'Crítica',
+  'Mi banco': 'Meu banco',
+  'No hay reparaciones en este filtro.': 'Não há reparos neste filtro.',
+  'No tenés nada pendiente de tu parte ahora mismo. Hay': 'Você não tem nada pendente da sua parte agora. Há',
+  'Próxima acción': 'Próxima ação',
+  'Tu día de trabajo, ordenado por prioridad': 'Seu dia de trabalho, ordenado por prioridade',
+  Urgente: 'Urgente',
+  'Vista personalizada de este técnico': 'Vista personalizada deste técnico',
+  'reparaciones esperando al cliente o a un repuesto — no depende de vos por el momento.':
+    'reparos esperando o cliente ou uma peça — não depende de você no momento.',
+  'reparación esperando al cliente o a un repuesto — no depende de vos por el momento.':
+    'reparo esperando o cliente ou uma peça — não depende de você no momento.',
+  técnico: 'técnico',
+  '¡Estás al día! No tenés próximas acciones pendientes.': 'Você está em dia! Não tem próximas ações pendentes.',
+  // ACCION_POR_ESTADO / INDICADORES (labels dinámicos)
+  'Iniciar diagnóstico': 'Iniciar diagnóstico',
+  'Enviar presupuesto': 'Enviar orçamento',
+  'Marcar listo para entregar': 'Marcar pronto para entrega',
+  Activas: 'Ativos',
+  Demoradas: 'Atrasados',
+  'En diagnóstico': 'Em diagnóstico',
+  'Esp. aprobación': 'Aguard. aprovação',
+  'Esp. repuesto': 'Aguard. peça',
+  'En reparación': 'Em reparo',
+  Listas: 'Prontos',
+  'Hoy completó': 'Concluiu hoje',
+
+  // Servicio Técnico — TarjetaReparacion
+  'Cancelar / archivar': 'Cancelar / arquivar',
+  Cliente: 'Cliente',
+  'Eliminar definitivamente': 'Excluir definitivamente',
+  Entregado: 'Entregue',
+  'Entregado al cliente': 'Entregue ao cliente',
+  'Imprimir etiqueta': 'Imprimir etiqueta',
+  'Marcar entregado al cliente': 'Marcar entregue ao cliente',
+  'Presupuesto:': 'Orçamento:',
+  'Propio del local': 'Da própria loja',
+  'Sin asignar': 'Sem atribuição',
+  'Sin técnico': 'Sem técnico',
+  'Ya está en Stock': 'Já está no Estoque',
+  hace: 'há',
+  recién: 'agora mesmo',
+  // ESTADOS_REPARACION (app/lib/reparaciones.ts) — labels dinámicos
+  Recibido: 'Recebido',
+  'Esperando diagnóstico': 'Aguardando diagnóstico',
+  'Esperando aprobación': 'Aguardando aprovação',
+  'Esperando repuesto': 'Aguardando peça',
+  'Listo para entregar': 'Pronto para entrega',
+  'Cancelado / sin solución': 'Cancelado / sem solução',
+  Normal: 'Normal',
 };
