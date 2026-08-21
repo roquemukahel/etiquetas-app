@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { crearClienteNavegador } from './lib/supabase/client';
 import { USDT_RED, USDT_DIRECCION, PRECIO_USDT_MENSUAL, PRECIO_USDT_ANUAL } from './lib/pagoManual';
+import { useT } from './lib/idioma';
 
 type Comprobante = {
   id: string;
@@ -25,6 +26,7 @@ export default function PagoUSDT({
   onEnviado: () => void;
   abiertoPorDefecto?: boolean;
 }) {
+  const t = useT();
   const supabase = crearClienteNavegador();
   const [abierto, setAbierto] = useState(abiertoPorDefecto);
   const [plan, setPlan] = useState<'mensual' | 'anual'>('mensual');
@@ -54,7 +56,7 @@ export default function PagoUSDT({
 
   const enviar = async () => {
     if (!imagen) {
-      setError('Subí una foto o captura de pantalla del comprobante.');
+      setError(t('Subí una foto o captura de pantalla del comprobante.'));
       return;
     }
     setEnviando(true);
@@ -68,7 +70,7 @@ export default function PagoUSDT({
       referencia: referencia.trim() || null,
     });
     if (insertError) {
-      setError('No pudimos enviar el comprobante: ' + insertError.message);
+      setError(t('No pudimos enviar el comprobante:') + ' ' + insertError.message);
       setEnviando(false);
       return;
     }
@@ -82,12 +84,12 @@ export default function PagoUSDT({
   if (comprobante?.estado === 'pendiente') {
     return (
       <div className="rounded-2xl border border-warn/30 bg-warn/10 p-4 flex flex-col gap-1">
-        <p className="text-sm font-medium text-warn">Tu comprobante está en revisión</p>
+        <p className="text-sm font-medium text-warn">{t('Tu comprobante está en revisión')}</p>
         <p className="text-xs text-muted dark:text-dark-text-secondary">
-          Enviado el {new Date(comprobante.created_at).toLocaleDateString('es-AR')} — {comprobante.moneda} {comprobante.monto}
+          {t('Enviado el')} {new Date(comprobante.created_at).toLocaleDateString('es-AR')} — {comprobante.moneda} {comprobante.monto}
         </p>
         <p className="text-xs text-muted dark:text-dark-text-secondary">
-          Te vamos a activar la cuenta apenas lo revisemos. Puede demorar unas horas.
+          {t('Te vamos a activar la cuenta apenas lo revisemos. Puede demorar unas horas.')}
         </p>
       </div>
     );
@@ -97,7 +99,7 @@ export default function PagoUSDT({
     <div className="rounded-2xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-4 flex flex-col gap-3">
       {comprobante?.estado === 'rechazado' && (
         <p className="text-xs text-bad bg-bad/10 rounded-lg px-3 py-2">
-          Tu último comprobante fue rechazado{comprobante.nota_admin ? `: ${comprobante.nota_admin}` : '.'} Podés enviar uno nuevo.
+          {t('Tu último comprobante fue rechazado')}{comprobante.nota_admin ? `: ${comprobante.nota_admin}` : '.'} {t('Podés enviar uno nuevo.')}
         </p>
       )}
 
@@ -105,7 +107,7 @@ export default function PagoUSDT({
         onClick={() => setAbierto((v) => !v)}
         className="text-sm font-medium text-accent dark:text-dark-accent underline self-start"
       >
-        {abierto ? 'Ocultar' : '¿Preferís pagar con USDT (cripto)?'}
+        {abierto ? t('Ocultar') : t('¿Preferís pagar con USDT (cripto)?')}
       </button>
 
       {abierto && (
@@ -113,7 +115,7 @@ export default function PagoUSDT({
           {error && <p className="text-xs text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
 
           <div>
-            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Plan</label>
+            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Plan')}</label>
             <div className="flex gap-2">
               <button
                 onClick={() => setPlan('mensual')}
@@ -121,7 +123,7 @@ export default function PagoUSDT({
                   plan === 'mensual' ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                 }`}
               >
-                Mensual · US${PRECIO_USDT_MENSUAL}
+                {t('Mensual')} · US${PRECIO_USDT_MENSUAL}
               </button>
               <button
                 onClick={() => setPlan('anual')}
@@ -129,7 +131,7 @@ export default function PagoUSDT({
                   plan === 'anual' ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                 }`}
               >
-                Anual · US${PRECIO_USDT_ANUAL}
+                {t('Anual')} · US${PRECIO_USDT_ANUAL}
               </button>
             </div>
           </div>
@@ -137,32 +139,32 @@ export default function PagoUSDT({
           <div className="rounded-xl bg-canvas dark:bg-dark-bg p-3 flex gap-3 items-start">
             {qr && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={qr} alt="Código QR de la dirección" className="w-24 h-24 rounded-lg shrink-0 bg-white p-1" />
+              <img src={qr} alt={t('Código QR de la dirección')} className="w-24 h-24 rounded-lg shrink-0 bg-white p-1" />
             )}
             <div className="flex flex-col gap-1 min-w-0">
-              <p className="text-xs text-muted dark:text-dark-text-secondary">Red: {USDT_RED}</p>
+              <p className="text-xs text-muted dark:text-dark-text-secondary">{t('Red:')} {USDT_RED}</p>
               <p className="text-sm font-mono break-all">{USDT_DIRECCION}</p>
               <p className="text-xs text-muted dark:text-dark-text-secondary mt-1">
-                Monto a transferir: {plan === 'mensual' ? PRECIO_USDT_MENSUAL : PRECIO_USDT_ANUAL} USDT
+                {t('Monto a transferir:')} {plan === 'mensual' ? PRECIO_USDT_MENSUAL : PRECIO_USDT_ANUAL} USDT
               </p>
             </div>
           </div>
 
           <div>
             <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">
-              Comprobante (foto o captura de la transferencia)
+              {t('Comprobante (foto o captura de la transferencia)')}
             </label>
             <input type="file" accept="image/*" onChange={handleArchivo} className="text-sm" />
             {imagen && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={imagen} alt="Comprobante" className="mt-2 max-h-48 rounded-lg border border-border dark:border-dark-border" />
+              <img src={imagen} alt={t('Comprobante')} className="mt-2 max-h-48 rounded-lg border border-border dark:border-dark-border" />
             )}
           </div>
 
           <input
             value={referencia}
             onChange={(e) => setReferencia(e.target.value)}
-            placeholder="Hash de la transacción (opcional)"
+            placeholder={t('Hash de la transacción (opcional)')}
             className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
           />
 
@@ -171,7 +173,7 @@ export default function PagoUSDT({
             onClick={enviar}
             className="w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-3 text-center text-sm font-medium text-white disabled:opacity-40"
           >
-            {enviando ? 'Enviando...' : 'Enviar comprobante'}
+            {enviando ? t('Enviando...') : t('Enviar comprobante')}
           </button>
         </div>
       )}

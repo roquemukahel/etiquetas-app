@@ -2147,4 +2147,44 @@ export const PT: Record<string, string> = {
   'Esta cuenta está desactivada': 'Esta conta está desativada',
   'Tu acceso a Qovento fue desactivado. Si creés que es un error, contactá a quien te dio de alta el servicio.':
     'Seu acesso ao Qovento foi desativado. Se você acha que é um erro, entre em contato com quem ativou o serviço para você.',
+
+  // Grupo 2 — Suscripción / pagos manuales (PagoTransferenciaARS, PagoUSDT, PlanesCheckout, suscripcion-vencida)
+  'Subí una foto o captura de pantalla del comprobante.': 'Envie uma foto ou captura de tela do comprovante.',
+  'No pudimos enviar el comprobante:': 'Não conseguimos enviar o comprovante:',
+  'Tu comprobante está en revisión': 'Seu comprovante está em análise',
+  'Enviado el': 'Enviado em',
+  'Te vamos a activar la cuenta apenas lo revisemos. Puede demorar unas horas.':
+    'Vamos ativar sua conta assim que revisarmos. Pode demorar algumas horas.',
+  'Tu último comprobante fue rechazado': 'Seu último comprovante foi rejeitado',
+  'Podés enviar uno nuevo.': 'Você pode enviar um novo.',
+  '¿Preferís pagar por transferencia (Argentina)?': 'Prefere pagar por transferência (Argentina)?',
+  Plan: 'Plano',
+  Mensual: 'Mensal',
+  Anual: 'Anual',
+  Alias: 'Alias',
+  Titular: 'Titular',
+  'Monto a transferir:': 'Valor a transferir:',
+  'Comprobante (foto o captura de la transferencia)': 'Comprovante (foto ou captura da transferência)',
+  'Número de operación (opcional)': 'Número de operação (opcional)',
+  'Enviar comprobante': 'Enviar comprovante',
+  '¿Preferís pagar con USDT (cripto)?': 'Prefere pagar com USDT (cripto)?',
+  'Código QR de la dirección': 'Código QR do endereço',
+  'Red:': 'Rede:',
+  'Hash de la transacción (opcional)': 'Hash da transação (opcional)',
+  'Pago con tarjeta — no disponible por el momento': 'Pagamento com cartão — indisponível no momento',
+  'Estamos terminando de habilitar esta opción (US$12.50/mes · US$125/año). Mientras tanto, podés suscribirte pagando con USDT (cripto) o por transferencia bancaria (Argentina) más abajo.':
+    'Estamos terminando de habilitar esta opção (US$12,50/mês · US$125/ano). Enquanto isso, você pode assinar pagando com USDT (cripto) ou por transferência bancária (Argentina) mais abaixo.',
+  'tu negocio': 'seu negócio',
+  'Estimado equipo de': 'Prezada equipe de',
+  'Antes que nada, ¡gracias por darle una oportunidad a Qovento! Esperamos que estos días de prueba te hayan servido y que el sistema ya se haya vuelto parte de tu rutina diaria. Para nosotros es un gusto que formes parte de esta comunidad, que crece gracias a locales como el tuyo.':
+    'Antes de mais nada, obrigado por dar uma chance ao Qovento! Esperamos que estes dias de teste tenham sido úteis e que o sistema já tenha se tornado parte da sua rotina diária. Para nós é um prazer que você faça parte desta comunidade, que cresce graças a estabelecimentos como o seu.',
+  'Qovento está en desarrollo constante: seguimos sumando funciones nuevas todo el tiempo, y tus sugerencias siempre son bienvenidas.':
+    'O Qovento está em desenvolvimento constante: continuamos adicionando novas funções o tempo todo, e suas sugestões são sempre bem-vindas.',
+  'Tu período de prueba gratuita llegó a su fin. Para seguir usando el sistema te pedimos que actives tu suscripción — ese aporte es lo que nos permite seguir manteniendo y mejorando la plataforma.':
+    'Seu período de teste gratuito chegou ao fim. Para continuar usando o sistema, pedimos que ative sua assinatura — essa contribuição é o que nos permite continuar mantendo e melhorando a plataforma.',
+  'Tu suscripción no está activa': 'Sua assinatura não está ativa',
+  'Hubo un problema con el pago o tu acceso venció. Regularizá tu suscripción para seguir usando Qovento.':
+    'Houve um problema com o pagamento ou seu acesso venceu. Regularize sua assinatura para continuar usando o Qovento.',
+  'Por el momento, el pago con tarjeta está temporalmente no disponible mientras terminamos un trámite de verificación. Podés suscribirte fácilmente pagando con USDT (cripto) o por transferencia bancaria (Argentina) acá abajo:':
+    'No momento, o pagamento com cartão está temporariamente indisponível enquanto finalizamos um trâmite de verificação. Você pode assinar facilmente pagando com USDT (cripto) ou por transferência bancária (Argentina) logo abaixo:',
 };

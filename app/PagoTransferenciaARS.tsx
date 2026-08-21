@@ -9,6 +9,7 @@ import {
   PRECIO_ARS_MENSUAL,
   PRECIO_ARS_ANUAL,
 } from './lib/pagoManual';
+import { useT } from './lib/idioma';
 
 type Comprobante = {
   id: string;
@@ -30,6 +31,7 @@ export default function PagoTransferenciaARS({
   onEnviado: () => void;
   abiertoPorDefecto?: boolean;
 }) {
+  const t = useT();
   const supabase = crearClienteNavegador();
   const [abierto, setAbierto] = useState(abiertoPorDefecto);
   const [plan, setPlan] = useState<'mensual' | 'anual'>('mensual');
@@ -48,7 +50,7 @@ export default function PagoTransferenciaARS({
 
   const enviar = async () => {
     if (!imagen) {
-      setError('Subí una foto o captura de pantalla del comprobante.');
+      setError(t('Subí una foto o captura de pantalla del comprobante.'));
       return;
     }
     setEnviando(true);
@@ -62,7 +64,7 @@ export default function PagoTransferenciaARS({
       referencia: referencia.trim() || null,
     });
     if (insertError) {
-      setError('No pudimos enviar el comprobante: ' + insertError.message);
+      setError(t('No pudimos enviar el comprobante:') + ' ' + insertError.message);
       setEnviando(false);
       return;
     }
@@ -76,12 +78,12 @@ export default function PagoTransferenciaARS({
   if (comprobante?.estado === 'pendiente') {
     return (
       <div className="rounded-2xl border border-warn/30 bg-warn/10 p-4 flex flex-col gap-1">
-        <p className="text-sm font-medium text-warn">Tu comprobante está en revisión</p>
+        <p className="text-sm font-medium text-warn">{t('Tu comprobante está en revisión')}</p>
         <p className="text-xs text-muted dark:text-dark-text-secondary">
-          Enviado el {new Date(comprobante.created_at).toLocaleDateString('es-AR')} — {comprobante.moneda} {comprobante.monto}
+          {t('Enviado el')} {new Date(comprobante.created_at).toLocaleDateString('es-AR')} — {comprobante.moneda} {comprobante.monto}
         </p>
         <p className="text-xs text-muted dark:text-dark-text-secondary">
-          Te vamos a activar la cuenta apenas lo revisemos. Puede demorar unas horas.
+          {t('Te vamos a activar la cuenta apenas lo revisemos. Puede demorar unas horas.')}
         </p>
       </div>
     );
@@ -91,7 +93,7 @@ export default function PagoTransferenciaARS({
     <div className="rounded-2xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-4 flex flex-col gap-3">
       {comprobante?.estado === 'rechazado' && (
         <p className="text-xs text-bad bg-bad/10 rounded-lg px-3 py-2">
-          Tu último comprobante fue rechazado{comprobante.nota_admin ? `: ${comprobante.nota_admin}` : '.'} Podés enviar uno nuevo.
+          {t('Tu último comprobante fue rechazado')}{comprobante.nota_admin ? `: ${comprobante.nota_admin}` : '.'} {t('Podés enviar uno nuevo.')}
         </p>
       )}
 
@@ -99,7 +101,7 @@ export default function PagoTransferenciaARS({
         onClick={() => setAbierto((v) => !v)}
         className="text-sm font-medium text-accent dark:text-dark-accent underline self-start"
       >
-        {abierto ? 'Ocultar' : '¿Preferís pagar por transferencia (Argentina)?'}
+        {abierto ? t('Ocultar') : t('¿Preferís pagar por transferencia (Argentina)?')}
       </button>
 
       {abierto && (
@@ -107,7 +109,7 @@ export default function PagoTransferenciaARS({
           {error && <p className="text-xs text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
 
           <div>
-            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Plan</label>
+            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Plan')}</label>
             <div className="flex gap-2">
               <button
                 onClick={() => setPlan('mensual')}
@@ -115,7 +117,7 @@ export default function PagoTransferenciaARS({
                   plan === 'mensual' ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                 }`}
               >
-                Mensual · ${PRECIO_ARS_MENSUAL.toLocaleString('es-AR')}
+                {t('Mensual')} · ${PRECIO_ARS_MENSUAL.toLocaleString('es-AR')}
               </button>
               <button
                 onClick={() => setPlan('anual')}
@@ -123,38 +125,38 @@ export default function PagoTransferenciaARS({
                   plan === 'anual' ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                 }`}
               >
-                Anual · ${PRECIO_ARS_ANUAL.toLocaleString('es-AR')}
+                {t('Anual')} · ${PRECIO_ARS_ANUAL.toLocaleString('es-AR')}
               </button>
             </div>
           </div>
 
           <div className="rounded-xl bg-canvas dark:bg-dark-bg p-3 flex flex-col gap-1">
-            <p className="text-xs text-muted dark:text-dark-text-secondary">Alias</p>
+            <p className="text-xs text-muted dark:text-dark-text-secondary">{t('Alias')}</p>
             <p className="text-sm font-mono break-all">{TRANSFERENCIA_ALIAS}</p>
             <p className="text-xs text-muted dark:text-dark-text-secondary mt-2">CVU</p>
             <p className="text-sm font-mono break-all">{TRANSFERENCIA_CVU}</p>
-            <p className="text-xs text-muted dark:text-dark-text-secondary mt-2">Titular</p>
+            <p className="text-xs text-muted dark:text-dark-text-secondary mt-2">{t('Titular')}</p>
             <p className="text-sm">{TRANSFERENCIA_TITULAR}</p>
             <p className="text-xs text-muted dark:text-dark-text-secondary mt-2">
-              Monto a transferir: ${(plan === 'mensual' ? PRECIO_ARS_MENSUAL : PRECIO_ARS_ANUAL).toLocaleString('es-AR')}
+              {t('Monto a transferir:')} ${(plan === 'mensual' ? PRECIO_ARS_MENSUAL : PRECIO_ARS_ANUAL).toLocaleString('es-AR')}
             </p>
           </div>
 
           <div>
             <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">
-              Comprobante (foto o captura de la transferencia)
+              {t('Comprobante (foto o captura de la transferencia)')}
             </label>
             <input type="file" accept="image/*" onChange={handleArchivo} className="text-sm" />
             {imagen && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={imagen} alt="Comprobante" className="mt-2 max-h-48 rounded-lg border border-border dark:border-dark-border" />
+              <img src={imagen} alt={t('Comprobante')} className="mt-2 max-h-48 rounded-lg border border-border dark:border-dark-border" />
             )}
           </div>
 
           <input
             value={referencia}
             onChange={(e) => setReferencia(e.target.value)}
-            placeholder="Número de operación (opcional)"
+            placeholder={t('Número de operación (opcional)')}
             className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
           />
 
@@ -163,7 +165,7 @@ export default function PagoTransferenciaARS({
             onClick={enviar}
             className="w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-3 text-center text-sm font-medium text-white disabled:opacity-40"
           >
-            {enviando ? 'Enviando...' : 'Enviar comprobante'}
+            {enviando ? t('Enviando...') : t('Enviar comprobante')}
           </button>
         </div>
       )}

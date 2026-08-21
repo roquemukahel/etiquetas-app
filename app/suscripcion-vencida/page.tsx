@@ -6,6 +6,7 @@ import { crearClienteNavegador } from '../lib/supabase/client';
 import PlanesCheckout from '../PlanesCheckout';
 import PagoUSDT from '../PagoUSDT';
 import PagoTransferenciaARS from '../PagoTransferenciaARS';
+import { useT } from '../lib/idioma';
 
 type Comprobante = {
   id: string;
@@ -24,6 +25,7 @@ type Datos = {
 };
 
 export default function SuscripcionVencida() {
+  const t = useT();
   const supabase = crearClienteNavegador();
   const [datos, setDatos] = useState<Datos | null>(null);
   const [comprobante, setComprobante] = useState<Comprobante | null>(null);
@@ -57,7 +59,7 @@ export default function SuscripcionVencida() {
         setDatos({
           negocioId: perfil.negocio_id,
           email: user.email ?? null,
-          nombreNegocio: negocio?.nombre || 'tu negocio',
+          nombreNegocio: negocio?.nombre || t('tu negocio'),
           eraPrueba: negocio?.estado_suscripcion === 'trialing',
         });
         await cargarComprobante(perfil.negocio_id);
@@ -72,28 +74,23 @@ export default function SuscripcionVencida() {
       {datos?.eraPrueba ? (
         <div className="max-w-sm flex flex-col gap-3 text-left">
           <h1 className="text-lg font-display font-semibold text-center">
-            Estimado equipo de {datos.nombreNegocio}
+            {t('Estimado equipo de')} {datos.nombreNegocio}
           </h1>
           <p className="text-sm text-muted dark:text-dark-text-secondary">
-            Antes que nada, ¡gracias por darle una oportunidad a Qovento! Esperamos que estos días de prueba te
-            hayan servido y que el sistema ya se haya vuelto parte de tu rutina diaria. Para nosotros es un
-            gusto que formes parte de esta comunidad, que crece gracias a locales como el tuyo.
+            {t('Antes que nada, ¡gracias por darle una oportunidad a Qovento! Esperamos que estos días de prueba te hayan servido y que el sistema ya se haya vuelto parte de tu rutina diaria. Para nosotros es un gusto que formes parte de esta comunidad, que crece gracias a locales como el tuyo.')}
           </p>
           <p className="text-sm text-muted dark:text-dark-text-secondary">
-            Qovento está en desarrollo constante: seguimos sumando funciones nuevas todo el tiempo, y tus
-            sugerencias siempre son bienvenidas.
+            {t('Qovento está en desarrollo constante: seguimos sumando funciones nuevas todo el tiempo, y tus sugerencias siempre son bienvenidas.')}
           </p>
           <p className="text-sm text-muted dark:text-dark-text-secondary">
-            Tu período de prueba gratuita llegó a su fin. Para seguir usando el sistema te pedimos que
-            actives tu suscripción — ese aporte es lo que nos permite seguir manteniendo y mejorando la
-            plataforma.
+            {t('Tu período de prueba gratuita llegó a su fin. Para seguir usando el sistema te pedimos que actives tu suscripción — ese aporte es lo que nos permite seguir manteniendo y mejorando la plataforma.')}
           </p>
         </div>
       ) : (
         <>
-          <h1 className="text-xl font-display font-semibold">Tu suscripción no está activa</h1>
+          <h1 className="text-xl font-display font-semibold">{t('Tu suscripción no está activa')}</h1>
           <p className="text-sm text-muted dark:text-dark-text-secondary max-w-xs">
-            Hubo un problema con el pago o tu acceso venció. Regularizá tu suscripción para seguir usando Qovento.
+            {t('Hubo un problema con el pago o tu acceso venció. Regularizá tu suscripción para seguir usando Qovento.')}
           </p>
         </>
       )}
@@ -102,8 +99,7 @@ export default function SuscripcionVencida() {
         <div className="w-full max-w-xs flex flex-col gap-3">
           <PlanesCheckout negocioId={datos.negocioId} email={datos.email} />
           <p className="text-xs text-muted dark:text-dark-text-secondary -mb-1">
-            Por el momento, el pago con tarjeta está temporalmente no disponible mientras terminamos un
-            trámite de verificación. Podés suscribirte fácilmente pagando con USDT (cripto) o por transferencia bancaria (Argentina) acá abajo:
+            {t('Por el momento, el pago con tarjeta está temporalmente no disponible mientras terminamos un trámite de verificación. Podés suscribirte fácilmente pagando con USDT (cripto) o por transferencia bancaria (Argentina) acá abajo:')}
           </p>
           <PagoUSDT
             negocioId={datos.negocioId}
