@@ -2174,7 +2174,6 @@ export const PT: Record<string, string> = {
   'Pago con tarjeta — no disponible por el momento': 'Pagamento com cartão — indisponível no momento',
   'Estamos terminando de habilitar esta opción (US$12.50/mes · US$125/año). Mientras tanto, podés suscribirte pagando con USDT (cripto) o por transferencia bancaria (Argentina) más abajo.':
     'Estamos terminando de habilitar esta opção (US$12,50/mês · US$125/ano). Enquanto isso, você pode assinar pagando com USDT (cripto) ou por transferência bancária (Argentina) mais abaixo.',
-  'tu negocio': 'seu negócio',
   'Estimado equipo de': 'Prezada equipe de',
   'Antes que nada, ¡gracias por darle una oportunidad a Qovento! Esperamos que estos días de prueba te hayan servido y que el sistema ya se haya vuelto parte de tu rutina diaria. Para nosotros es un gusto que formes parte de esta comunidad, que crece gracias a locales como el tuyo.':
     'Antes de mais nada, obrigado por dar uma chance ao Qovento! Esperamos que estes dias de teste tenham sido úteis e que o sistema já tenha se tornado parte da sua rotina diária. Para nós é um prazer que você faça parte desta comunidade, que cresce graças a estabelecimentos como o seu.',
@@ -2224,16 +2223,13 @@ export const PT: Record<string, string> = {
   'Elegí al menos 1 cuota.': 'Escolha ao menos 1 parcela.',
   'Importe de la venta': 'Valor da venda',
   'Entrega inicial (opcional)': 'Entrada inicial (opcional)',
-  'Observaciones (opcional)': 'Observações (opcional)',
   'Vista previa del cronograma — financiado:': 'Prévia do cronograma — financiado:',
-  'Poné un monto mayor a cero.': 'Coloque um valor maior que zero.',
   'El ajuste necesita un motivo.': 'O ajuste precisa de um motivo.',
   'Ajustar plan de financiación': 'Ajustar plano de financiamento',
   'Reduce deuda futura sin tocar cuotas ya pagadas. Si no elegís cuotas puntuales, se aplica desde las últimas cuotas impagas hacia atrás.':
     'Reduz a dívida futura sem alterar parcelas já pagas. Se você não escolher parcelas específicas, é aplicado a partir das últimas parcelas não pagas para trás.',
   'Monto a descontar': 'Valor a descontar',
   'Aplicar a cuotas puntuales (opcional)': 'Aplicar a parcelas específicas (opcional)',
-  'La anulación necesita un motivo.': 'O cancelamento precisa de um motivo.',
   'Anular plan de financiación': 'Anular plano de financiamento',
   'Se anulan las cuotas que todavía no se pagaron (las ya pagadas quedan intactas). No se puede deshacer.':
     'São anuladas as parcelas que ainda não foram pagas (as já pagas permanecem intactas). Não pode ser desfeito.',
@@ -2270,8 +2266,6 @@ export const PT: Record<string, string> = {
   Repuesto: 'Peça',
   'c/u': 'cada',
   'entrega en': 'entrega em',
-  garantía: 'garantia',
-  '¿Eliminar a': 'Excluir',
   '¿Eliminar este repuesto de la lista de este proveedor?': 'Excluir esta peça da lista deste fornecedor?',
 
   // Servicio Técnico — Etiqueta del equipo (chrome de la página; el contenido impreso de EtiquetaServicio no se traduce)
@@ -2290,7 +2284,6 @@ export const PT: Record<string, string> = {
 
   // Nueva Etiqueta — página completa (chrome; el contenido impreso de Etiqueta.tsx no se traduce)
   'Agregar este dispositivo al stock': 'Adicionar este aparelho ao estoque',
-  Almacenamiento: 'Armazenamento',
   'Capacidad (GB)': 'Capacidade (GB)',
   'Continuar al diseño de la etiqueta': 'Continuar para o design da etiqueta',
   'Guardando en stock...': 'Adicionando ao estoque...',
@@ -2319,7 +2312,6 @@ export const PT: Record<string, string> = {
   'No encontramos este seguimiento. Revisá el link que te mandaron.': 'Não encontramos este acompanhamento. Verifique o link que te enviaram.',
   ', así va tu reparación:': ', assim está seu reparo:',
   'Ingresó:': 'Entrou em:',
-  'Arreglo:': 'Reparo:',
   'Reparado:': 'Reparado:',
   'Aprobaste este presupuesto': 'Você aprovou este orçamento',
   el: 'em',
