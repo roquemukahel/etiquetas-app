@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { rangoDe, resumenFinanciacionDe, resumenComisionesDe } from './datos';
+import { rangoDe, resumenFinanciacionDe, resumenComisionesDe, egresosPeriodoDe } from './datos';
 
 // "Ahora" fijo para que los tests sean deterministas: miércoles 19 de
 // agosto de 2026, 15:00.
@@ -188,5 +188,35 @@ describe('resumenComisionesDe', () => {
     const r = resumenComisionesDe(movs, INICIO_MES, FIN_MES);
     expect(r.generada).toBe(0);
     expect(r.hayDatos).toBe(true); // el array no está vacío, aunque nada caiga en el período
+  });
+});
+
+describe('egresosPeriodoDe', () => {
+  // Rango de "agosto 2026 completo" en fechas LOCALES (00:00 del 1° al
+  // 23:59:59.999 del 31) — mismo tipo de límites que arma rangoDe().
+  const INICIO_AGOSTO = new Date(2026, 7, 1, 0, 0, 0, 0);
+  const FIN_AGOSTO = new Date(2026, 7, 31, 23, 59, 59, 999);
+
+  it('suma los egresos con fecha dentro del rango', () => {
+    const egresos = [
+      { importe: 1000, fecha: '2026-08-15' },
+      { importe: 2000, fecha: '2026-08-01' },
+      { importe: 500, fecha: '2026-07-31' }, // afuera, mes anterior
+    ];
+    expect(egresosPeriodoDe(egresos, INICIO_AGOSTO, FIN_AGOSTO)).toBe(3000);
+  });
+
+  it('un egreso cargado el último día del mes cuenta en ESE mes, no se corre al día siguiente por huso horario', () => {
+    // Esto es justo lo que fallaba comparando new Date('2026-08-31') (UTC
+    // medianoche) contra un rango armado con Date locales: en husos
+    // horarios "atrás" de UTC (ej. Argentina, UTC-3), esa fecha cae ANTES
+    // de las 21:00 hora local del 30/8, no en el 31 — se perdía del total
+    // del mes. Acá se fuerza medianoche LOCAL antes de comparar.
+    const egresos = [{ importe: 777, fecha: '2026-08-31' }];
+    expect(egresosPeriodoDe(egresos, INICIO_AGOSTO, FIN_AGOSTO)).toBe(777);
+  });
+
+  it('sin egresos en el rango, devuelve 0', () => {
+    expect(egresosPeriodoDe([], INICIO_AGOSTO, FIN_AGOSTO)).toBe(0);
   });
 });

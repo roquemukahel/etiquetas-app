@@ -51,6 +51,7 @@ const NAV = [
   { href: '/servicio-tecnico', label: 'Servicio Técnico', icono: 'servicio' },
   { href: '/compras', label: 'Compras', icono: 'compra' },
   { href: '/proveedores', label: 'Proveedores', icono: 'proveedores' },
+  { href: '/egresos', label: 'Egresos', icono: 'documento' },
   { href: '/plan-ahorro', label: 'Plan de ahorro', icono: 'ahorro' },
   { href: '/estadisticas', label: 'Estadísticas', icono: 'estadisticas' },
   { href: '/configuracion', label: 'Configuración', icono: 'configuracion' },
