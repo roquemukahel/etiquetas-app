@@ -14,6 +14,7 @@ import {
   crearPlanFinanciacion,
   ajustarCuotasFinanciacion,
   anularPlanFinanciacion,
+  reprogramarFinanciacion,
   type PlanFinanciacion,
   type CuotaFinanciacion,
 } from './lib/financiacion/servicio';
@@ -70,6 +71,7 @@ export default function FinanciacionCliente({
   const [modalNuevo, setModalNuevo] = useState(false);
   const [modalAjuste, setModalAjuste] = useState<PlanFinanciacion | null>(null);
   const [modalAnular, setModalAnular] = useState<PlanFinanciacion | null>(null);
+  const [modalReprogramar, setModalReprogramar] = useState<PlanFinanciacion | null>(null);
   const [guardando, setGuardando] = useState(false);
 
   const cargar = async () => {
@@ -217,9 +219,12 @@ export default function FinanciacionCliente({
                     </div>
 
                     {p.estado === 'activo' && puedeAjustar && (
-                      <div className="flex gap-2 mt-1">
+                      <div className="flex gap-2 mt-1 flex-wrap">
                         <Boton variante="secundario" tamano="sm" onClick={() => setModalAjuste(p)}>
                           Ajustar
+                        </Boton>
+                        <Boton variante="secundario" tamano="sm" onClick={() => setModalReprogramar(p)}>
+                          Reprogramar
                         </Boton>
                         <Boton variante="peligro" tamano="sm" onClick={() => setModalAnular(p)}>
                           Anular plan
@@ -267,6 +272,22 @@ export default function FinanciacionCliente({
           onClose={() => setModalAnular(null)}
           onAnulado={async () => {
             setModalAnular(null);
+            await cargar();
+            onCambio();
+          }}
+        />
+      )}
+
+      {modalReprogramar && (
+        <ModalReprogramar
+          plan={modalReprogramar}
+          clienteId={clienteId}
+          saldoPendiente={(cuotasPorPlan.get(modalReprogramar.id) ?? [])
+            .filter((c) => c.estado === 'pendiente')
+            .reduce((acc, c) => acc + (c.importe_original - c.importe_pagado), 0)}
+          onClose={() => setModalReprogramar(null)}
+          onReprogramado={async () => {
+            setModalReprogramar(null);
             await cargar();
             onCambio();
           }}
@@ -548,6 +569,130 @@ function ModalAnular({ plan, onClose, onAnulado }: { plan: PlanFinanciacion; onC
           </Boton>
           <Boton variante="peligro" tamano="md" cargando={guardando} onClick={confirmar} className="flex-1">
             Sí, anular
+          </Boton>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ---------- Modal: reprogramar ----------
+// Crea un plan NUEVO con un cronograma nuevo a partir del saldo pendiente;
+// el plan viejo queda con estado 'reprogramado' y su historial intacto (no
+// se borra ni se reescribe — ver reprogramarFinanciacion() en servicio.ts).
+function ModalReprogramar({
+  plan,
+  clienteId,
+  saldoPendiente,
+  onClose,
+  onReprogramado,
+}: {
+  plan: PlanFinanciacion;
+  clienteId: string;
+  saldoPendiente: number;
+  onClose: () => void;
+  onReprogramado: () => void;
+}) {
+  const supabase = crearClienteNavegador();
+  const [cantidadCuotas, setCantidadCuotas] = useState('3');
+  const [primeraFecha, setPrimeraFecha] = useState(() => aFechaISO(new Date()));
+  const [observaciones, setObservaciones] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [guardando, setGuardando] = useState(false);
+  const moneda = simboloMoneda(plan.moneda);
+
+  const cuotas = Math.max(0, Math.floor(Number(cantidadCuotas) || 0));
+
+  const preview = useMemo(() => {
+    if (saldoPendiente <= 0 || cuotas <= 0 || !primeraFecha) return null;
+    try {
+      return generarCronograma({ importeFinanciado: saldoPendiente, cantidadCuotas: cuotas, primeraFecha, decimales: decimalesMoneda(plan.moneda) });
+    } catch {
+      return null;
+    }
+  }, [saldoPendiente, cuotas, primeraFecha, plan.moneda]);
+
+  const confirmar = async () => {
+    if (saldoPendiente <= 0) {
+      setError('Este plan no tiene saldo pendiente para reprogramar.');
+      return;
+    }
+    if (cuotas <= 0) {
+      setError('Elegí al menos 1 cuota.');
+      return;
+    }
+    setGuardando(true);
+    setError(null);
+    const resultado = await reprogramarFinanciacion(supabase, {
+      planAnteriorId: plan.id,
+      clienteId,
+      ordenId: plan.orden_id,
+      moneda: plan.moneda,
+      saldoARepgramar: saldoPendiente,
+      cantidadCuotas: cuotas,
+      primeraFecha,
+      observaciones,
+    });
+    setGuardando(false);
+    if ('error' in resultado) {
+      setError(resultado.error);
+      return;
+    }
+    onReprogramado();
+  };
+
+  return (
+    <Modal titulo="Reprogramar financiación" onClose={onClose} maxWidth="max-w-lg">
+      <div className="flex flex-col gap-3">
+        {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
+        <p className="text-xs text-muted dark:text-dark-text-secondary">
+          Arma un cronograma nuevo con el saldo pendiente ({moneda}
+          {Math.round(saldoPendiente).toLocaleString('es-AR')}). El plan actual queda marcado como "Reprogramado" y su
+          historial se conserva completo — las cuotas ya pagadas no se tocan.
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          <CampoNumero label="Cantidad de cuotas nuevas" valor={cantidadCuotas} onChange={setCantidadCuotas} />
+          <div>
+            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Fecha de la 1ª cuota</label>
+            <input
+              type="date"
+              value={primeraFecha}
+              onChange={(e) => setPrimeraFecha(e.target.value)}
+              className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+            />
+          </div>
+        </div>
+        <div>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Motivo / observaciones (opcional)</label>
+          <textarea
+            value={observaciones}
+            onChange={(e) => setObservaciones(e.target.value)}
+            rows={2}
+            className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+          />
+        </div>
+
+        {preview && (
+          <div className="rounded-lg bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border p-2.5">
+            <p className="text-xs font-medium mb-1.5">Nuevo cronograma</p>
+            <div className="flex flex-col gap-0.5 max-h-40 overflow-y-auto">
+              {preview.map((c) => (
+                <div key={c.numero} className="flex items-center justify-between text-xs text-muted dark:text-dark-text-secondary">
+                  <span>Cuota {c.numero}/{cuotas}</span>
+                  <span>{new Date(c.fecha_vencimiento + 'T00:00:00').toLocaleDateString('es-AR')}</span>
+                  <span className="font-medium text-ink dark:text-dark-text">{moneda}{Math.round(c.importe).toLocaleString('es-AR')}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="flex gap-2 mt-1">
+          <Boton variante="secundario" tamano="md" onClick={onClose} className="flex-1">
+            Cancelar
+          </Boton>
+          <Boton variante="primario" tamano="md" disabled={!preview} cargando={guardando} onClick={confirmar} className="flex-1">
+            Reprogramar
           </Boton>
         </div>
       </div>

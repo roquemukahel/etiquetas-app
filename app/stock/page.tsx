@@ -63,7 +63,18 @@ type Dispositivo = {
   agregado_por_nombre: string | null;
 };
 
-type Producto = { id: string; nombre: string; precio: number | null; costo: number | null; imagen_url: string | null; cantidad: number; categoria_id?: string | null };
+type Producto = {
+  id: string;
+  nombre: string;
+  precio: number | null;
+  costo: number | null;
+  imagen_url: string | null;
+  cantidad: number;
+  categoria_id?: string | null;
+  modalidad?: string | null;
+  marca?: string | null;
+  numero_serie?: string | null;
+};
 
 // Catálogo inicial que se puede cargar con un toque desde "Agregar accesorios
 // por defecto" — se insertan sin precio/costo/cantidad (el dueño los completa
@@ -150,6 +161,15 @@ export default function Stock() {
   // accesorio sigue funcionando exactamente igual que antes.
   const [categoriasStock, setCategoriasStock] = useState<Categoria[]>([]);
   const [categoriaProducto, setCategoriaProducto] = useState('');
+  // Modalidad del producto que se está por agregar: la sugiere la categoría
+  // elegida (modalidad_default), pero queda editable — la spec pide que sea
+  // "explícitamente seleccionable por producto", no fija por categoría.
+  const [modalidadProducto, setModalidadProducto] = useState<'cantidad' | 'serializado'>('cantidad');
+  const [marcaProducto, setMarcaProducto] = useState('');
+  const [numeroSerieProducto, setNumeroSerieProducto] = useState('');
+  const [cantidadInicialProducto, setCantidadInicialProducto] = useState('1');
+  // Filtro de la grilla de accesorios por categoría — '' = todas.
+  const [filtroCategoriaProducto, setFiltroCategoriaProducto] = useState('');
   const [guardandoProducto, setGuardandoProducto] = useState(false);
   const [errorProducto, setErrorProducto] = useState<string | null>(null);
   const [editandoCantidad, setEditandoCantidad] = useState<string | null>(null);
@@ -328,7 +348,10 @@ export default function Stock() {
         // primera de perfil genérico — nunca "Celulares" por default acá,
         // este formulario es el de accesorios.
         const sugerida = data.find((c) => c.nombre.toLowerCase() === 'accesorios') ?? data.find((c) => c.perfil_default === 'generico');
-        if (sugerida) setCategoriaProducto(sugerida.id);
+        if (sugerida) {
+          setCategoriaProducto(sugerida.id);
+          setModalidadProducto(sugerida.modalidad_default);
+        }
       } catch {
         // Tabla stock_categorias todavía no existe en este negocio (no se
         // corrió la migración) — el formulario sigue funcionando igual que
@@ -836,15 +859,40 @@ export default function Stock() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dispositivos, productos]);
 
+  // Cuántos productos hay por categoría — para los chips de filtro. Los
+  // productos sin categoria_id (negocios que todavía no corrieron la
+  // migración, o productos de antes del backfill) cuentan como "Sin
+  // categoría", nunca se pierden de la cuenta total.
+  const conteoPorCategoria = useMemo(() => {
+    const mapa = new Map<string, number>();
+    for (const p of productos) {
+      const clave = p.categoria_id || '__sin_categoria__';
+      mapa.set(clave, (mapa.get(clave) || 0) + 1);
+    }
+    return mapa;
+  }, [productos]);
+
+  const productosFiltrados = useMemo(() => {
+    if (!filtroCategoriaProducto) return productos;
+    if (filtroCategoriaProducto === '__sin_categoria__') return productos.filter((p) => !p.categoria_id);
+    return productos.filter((p) => p.categoria_id === filtroCategoriaProducto);
+  }, [productos, filtroCategoriaProducto]);
+
   const agregarProducto = async () => {
     if (!nombreProducto.trim() || !puedeAgregarStock) return;
     setGuardandoProducto(true);
     setErrorProducto(null);
+    // Serializado = un registro es UNA unidad con identidad propia (como un
+    // celular): cantidad siempre 1, no tiene sentido pedir "cantidad inicial".
+    // Por cantidad = varias unidades idénticas bajo el mismo registro.
+    const esSerializado = categoriasStock.length > 0 && modalidadProducto === 'serializado';
     const { error: insertError } = await supabase.from('productos').insert({
       nombre: nombreProducto.trim(),
       precio: precioProducto ? Number(precioProducto) : null,
       costo: costoProducto ? Number(costoProducto) : null,
-      ...(categoriaProducto ? { categoria_id: categoriaProducto } : {}),
+      cantidad: esSerializado ? 1 : Math.max(0, Math.floor(Number(cantidadInicialProducto) || 0)),
+      ...(categoriaProducto ? { categoria_id: categoriaProducto, modalidad: modalidadProducto } : {}),
+      ...(esSerializado ? { marca: marcaProducto.trim() || null, numero_serie: numeroSerieProducto.trim() || null } : {}),
     });
     if (insertError) {
       setErrorProducto('No pudimos guardar: ' + insertError.message);
@@ -854,6 +902,9 @@ export default function Stock() {
     setNombreProducto('');
     setPrecioProducto('');
     setCostoProducto('');
+    setMarcaProducto('');
+    setNumeroSerieProducto('');
+    setCantidadInicialProducto('1');
     setGuardandoProducto(false);
     cargarProductos();
   };
@@ -1626,18 +1677,64 @@ export default function Stock() {
                 />
               </div>
               {categoriasStock.length > 0 && (
-                <select
-                  value={categoriaProducto}
-                  onChange={(e) => setCategoriaProducto(e.target.value)}
-                  aria-label="Categoría"
-                  className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
-                >
-                  {categoriasStock.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.nombre}
-                    </option>
-                  ))}
-                </select>
+                <>
+                  <select
+                    value={categoriaProducto}
+                    onChange={(e) => {
+                      setCategoriaProducto(e.target.value);
+                      const cat = categoriasStock.find((c) => c.id === e.target.value);
+                      if (cat) setModalidadProducto(cat.modalidad_default);
+                    }}
+                    aria-label="Categoría"
+                    className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+                  >
+                    {categoriasStock.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.nombre}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="inline-flex items-center gap-1 rounded-xl bg-canvas dark:bg-dark-bg p-0.5 self-start">
+                    {(['cantidad', 'serializado'] as const).map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setModalidadProducto(m)}
+                        className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                          modalidadProducto === m
+                            ? 'bg-white dark:bg-dark-surface-elevated text-ink dark:text-dark-text shadow-card'
+                            : 'text-muted dark:text-dark-text-secondary'
+                        }`}
+                      >
+                        {m === 'cantidad' ? 'Por cantidad' : 'Individual (serializado)'}
+                      </button>
+                    ))}
+                  </div>
+                  {modalidadProducto === 'serializado' ? (
+                    <div className="flex gap-2">
+                      <input
+                        value={marcaProducto}
+                        onChange={(e) => setMarcaProducto(e.target.value)}
+                        placeholder="Marca (opcional)"
+                        className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+                      />
+                      <input
+                        value={numeroSerieProducto}
+                        onChange={(e) => setNumeroSerieProducto(e.target.value)}
+                        placeholder="Número de serie (opcional)"
+                        className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+                      />
+                    </div>
+                  ) : (
+                    <input
+                      value={cantidadInicialProducto}
+                      onChange={(e) => setCantidadInicialProducto(e.target.value.replace(/[^\d]/g, ''))}
+                      inputMode="numeric"
+                      placeholder="Cantidad inicial"
+                      className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+                    />
+                  )}
+                </>
               )}
               <button
                 disabled={!nombreProducto.trim() || guardandoProducto}
@@ -1646,6 +1743,42 @@ export default function Stock() {
               >
                 Agregar al catálogo
               </button>
+            </div>
+          )}
+
+          {categoriasStock.length > 0 && productos.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                onClick={() => setFiltroCategoriaProducto('')}
+                className={`rounded-full px-3 py-1.5 text-xs font-medium ${
+                  !filtroCategoriaProducto ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-canvas dark:bg-dark-bg text-muted dark:text-dark-text-secondary'
+                }`}
+              >
+                Todas ({productos.length})
+              </button>
+              {categoriasStock
+                .filter((c) => (conteoPorCategoria.get(c.id) || 0) > 0)
+                .map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => setFiltroCategoriaProducto(c.id)}
+                    className={`rounded-full px-3 py-1.5 text-xs font-medium ${
+                      filtroCategoriaProducto === c.id ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-canvas dark:bg-dark-bg text-muted dark:text-dark-text-secondary'
+                    }`}
+                  >
+                    {c.nombre} ({conteoPorCategoria.get(c.id) || 0})
+                  </button>
+                ))}
+              {(conteoPorCategoria.get('__sin_categoria__') || 0) > 0 && (
+                <button
+                  onClick={() => setFiltroCategoriaProducto('__sin_categoria__')}
+                  className={`rounded-full px-3 py-1.5 text-xs font-medium ${
+                    filtroCategoriaProducto === '__sin_categoria__' ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-canvas dark:bg-dark-bg text-muted dark:text-dark-text-secondary'
+                  }`}
+                >
+                  Sin categoría ({conteoPorCategoria.get('__sin_categoria__') || 0})
+                </button>
+              )}
             </div>
           )}
 
@@ -1658,9 +1791,14 @@ export default function Stock() {
               descripcion="Cargá tu primer accesorio con el formulario de arriba."
             />
           )}
+          {!loadingProductos && productos.length > 0 && productosFiltrados.length === 0 && (
+            <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-4">
+              No hay productos en esta categoría todavía.
+            </p>
+          )}
 
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {productos.map((p, i) => (
+            {productosFiltrados.map((p, i) => (
               <div
                 key={p.id}
                 className="group relative rounded-2xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-3 flex flex-col items-center gap-1.5 text-center overflow-hidden"
@@ -1689,6 +1827,11 @@ export default function Stock() {
                 </label>
 
                 <p className="text-sm font-medium leading-tight">{p.nombre}</p>
+                {(p.marca || p.numero_serie) && (
+                  <p className="text-[10px] text-muted dark:text-dark-text-secondary leading-tight -mt-1">
+                    {[p.marca, p.numero_serie].filter(Boolean).join(' · ')}
+                  </p>
+                )}
                 <div className="leading-tight min-h-[2.2em]">
                   {p.precio != null && <p className="text-sm font-medium">${p.precio.toLocaleString('es-AR')}</p>}
                   {p.costo != null && (
