@@ -1,0 +1,242 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { crearClienteNavegador } from '../../lib/supabase/client';
+import { useActor } from '../../lib/actor';
+import { tienePermiso } from '../../lib/permisos';
+import { registrarAuditoria } from '../../lib/auditoria';
+import {
+  obtenerCategoriasEgresos,
+  crearCategoriaEgreso,
+  renombrarCategoriaEgreso,
+  reordenarCategoriasEgresos,
+  activarCategoriaEgreso,
+  archivarCategoriaEgreso,
+  restaurarCategoriaEgreso,
+  contarEnCategoriaEgreso,
+  type CategoriaEgreso,
+} from '../../lib/egresos';
+import { Boton, BotonIcono } from '../../Boton';
+import { ICONOS } from '../../Iconos';
+
+export default function CategoriasEgresos() {
+  const supabase = crearClienteNavegador();
+  const actor = useActor();
+  const puede = tienePermiso(actor, 'gestionar_egresos');
+
+  const [categorias, setCategorias] = useState<CategoriaEgreso[]>([]);
+  const [archivadas, setArchivadas] = useState<CategoriaEgreso[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [verArchivadas, setVerArchivadas] = useState(false);
+
+  const [nombreNueva, setNombreNueva] = useState('');
+  const [creando, setCreando] = useState(false);
+
+  const [editandoId, setEditandoId] = useState<string | null>(null);
+  const [nombreEdit, setNombreEdit] = useState('');
+  const [procesando, setProcesando] = useState<string | null>(null);
+
+  const cargar = async () => {
+    setLoading(true);
+    const [activasData, todasData] = await Promise.all([obtenerCategoriasEgresos(supabase, false), obtenerCategoriasEgresos(supabase, true)]);
+    setCategorias(activasData);
+    setArchivadas(todasData.filter((c) => c.archivada));
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    if (puede) cargar();
+    else setLoading(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [puede]);
+
+  const crear = async () => {
+    if (!nombreNueva.trim()) return;
+    setCreando(true);
+    setError(null);
+    const resultado = await crearCategoriaEgreso(supabase, nombreNueva, categorias.length);
+    setCreando(false);
+    if ('error' in resultado) {
+      setError(resultado.error);
+      return;
+    }
+    await registrarAuditoria(supabase, { accion: `creó la categoría de egresos "${nombreNueva.trim()}"`, entidad: 'egreso_categoria', entidadId: resultado.id });
+    setNombreNueva('');
+    await cargar();
+  };
+
+  const guardarNombre = async (c: CategoriaEgreso) => {
+    if (!nombreEdit.trim() || nombreEdit.trim() === c.nombre) {
+      setEditandoId(null);
+      return;
+    }
+    setProcesando(c.id);
+    setError(null);
+    const resultado = await renombrarCategoriaEgreso(supabase, c.id, nombreEdit);
+    setProcesando(null);
+    if ('error' in resultado) {
+      setError(resultado.error);
+      return;
+    }
+    await registrarAuditoria(supabase, { accion: `renombró la categoría de egresos "${c.nombre}" a "${nombreEdit.trim()}"`, entidad: 'egreso_categoria', entidadId: c.id, valorAnterior: { nombre: c.nombre } });
+    setEditandoId(null);
+    await cargar();
+  };
+
+  const mover = async (idx: number, direccion: -1 | 1) => {
+    const destino = idx + direccion;
+    if (destino < 0 || destino >= categorias.length) return;
+    const copia = [...categorias];
+    [copia[idx], copia[destino]] = [copia[destino], copia[idx]];
+    setCategorias(copia);
+    await reordenarCategoriasEgresos(supabase, copia.map((c) => c.id));
+  };
+
+  const toggleActiva = async (c: CategoriaEgreso) => {
+    setProcesando(c.id);
+    await activarCategoriaEgreso(supabase, c.id, !c.activa);
+    setProcesando(null);
+    await cargar();
+  };
+
+  const archivar = async (c: CategoriaEgreso) => {
+    const conteo = await contarEnCategoriaEgreso(supabase, c.id);
+    const detalle = conteo > 0 ? ` Tiene ${conteo} egreso(s) cargados — se conservan intactos, solo deja de ofrecerse para elegir en formularios nuevos.` : '';
+    if (!confirm(`¿Archivar la categoría "${c.nombre}"?${detalle}`)) return;
+    setProcesando(c.id);
+    setError(null);
+    const resultado = await archivarCategoriaEgreso(supabase, c.id);
+    setProcesando(null);
+    if ('error' in resultado) {
+      setError(resultado.error);
+      return;
+    }
+    await registrarAuditoria(supabase, { accion: `archivó la categoría de egresos "${c.nombre}"`, entidad: 'egreso_categoria', entidadId: c.id });
+    await cargar();
+  };
+
+  const restaurar = async (c: CategoriaEgreso) => {
+    setProcesando(c.id);
+    setError(null);
+    const resultado = await restaurarCategoriaEgreso(supabase, c.id, c.nombre);
+    setProcesando(null);
+    if ('error' in resultado) {
+      setError(resultado.error);
+      return;
+    }
+    await registrarAuditoria(supabase, { accion: `restauró la categoría de egresos "${c.nombre}"`, entidad: 'egreso_categoria', entidadId: c.id });
+    await cargar();
+  };
+
+  if (!loading && !puede) {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
+        <p className="text-sm text-muted dark:text-dark-text-secondary">No tenés permiso para gestionar categorías de egresos.</p>
+        <Link href="/configuracion" className="text-sm text-accent dark:text-dark-accent underline">
+          Volver
+        </Link>
+      </main>
+    );
+  }
+
+  return (
+    <main className="flex min-h-screen flex-col px-6 py-6 gap-4 max-w-2xl mx-auto w-full">
+      <header className="flex items-center gap-3">
+        <Link href="/configuracion" className="text-2xl leading-none">
+          &larr;
+        </Link>
+        <span className="text-lg font-medium">Categorías de egresos</span>
+      </header>
+
+      <p className="text-xs text-muted dark:text-dark-text-secondary">
+        Estas son las categorías que vas a poder elegir al registrar un egreso. Te dejamos algunas cargadas para arrancar —
+        renombralas, agregá las que te sirvan, o archivá las que no uses.
+      </p>
+
+      {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
+
+      <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-4 flex flex-col gap-3">
+        <p className="text-sm font-medium">Nueva categoría</p>
+        <div className="flex gap-2">
+          <input
+            value={nombreNueva}
+            onChange={(e) => setNombreNueva(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && crear()}
+            placeholder="Ej. Marketing"
+            className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+          />
+          <Boton variante="primario" tamano="sm" cargando={creando} disabled={!nombreNueva.trim()} onClick={crear}>
+            + Crear
+          </Boton>
+        </div>
+      </div>
+
+      {loading ? (
+        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-4">Cargando...</p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {categorias.map((c, idx) => (
+            <div key={c.id} className={`rounded-xl border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex items-center gap-2 ${c.activa ? 'border-border dark:border-dark-border' : 'border-border dark:border-dark-border opacity-60'}`}>
+              <div className="flex flex-col shrink-0">
+                <button onClick={() => mover(idx, -1)} disabled={idx === 0} className="text-muted dark:text-dark-text-secondary disabled:opacity-30 text-xs leading-none py-0.5">
+                  ▴
+                </button>
+                <button onClick={() => mover(idx, 1)} disabled={idx === categorias.length - 1} className="text-muted dark:text-dark-text-secondary disabled:opacity-30 text-xs leading-none py-0.5">
+                  ▾
+                </button>
+              </div>
+              <div className="min-w-0 flex-1">
+                {editandoId === c.id ? (
+                  <input
+                    value={nombreEdit}
+                    onChange={(e) => setNombreEdit(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && guardarNombre(c)}
+                    autoFocus
+                    className="w-full bg-white dark:bg-dark-surface border border-accent dark:border-dark-accent rounded-lg px-2 py-1 text-sm"
+                  />
+                ) : (
+                  <button onClick={() => { setEditandoId(c.id); setNombreEdit(c.nombre); }} className="text-sm font-medium text-left">
+                    {c.nombre}
+                  </button>
+                )}
+                {!c.activa && <p className="text-[11px] text-muted dark:text-dark-text-secondary">Inactiva</p>}
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                {editandoId === c.id ? (
+                  <BotonIcono icono={ICONOS.check} ariaLabel="Guardar nombre" variante="ghost" tamano="sm" disabled={procesando === c.id} onClick={() => guardarNombre(c)} />
+                ) : (
+                  <BotonIcono icono={ICONOS.editar} ariaLabel="Renombrar" variante="ghost" tamano="sm" onClick={() => { setEditandoId(c.id); setNombreEdit(c.nombre); }} />
+                )}
+                <label className="flex items-center gap-1 text-[11px] text-muted dark:text-dark-text-secondary px-1 cursor-pointer">
+                  <input type="checkbox" checked={c.activa} disabled={procesando === c.id} onChange={() => toggleActiva(c)} className="h-3.5 w-3.5 accent-ink" />
+                  Activa
+                </label>
+                <BotonIcono icono={ICONOS.papelera} ariaLabel={`Archivar ${c.nombre}`} variante="peligro" tamano="sm" disabled={procesando === c.id} onClick={() => archivar(c)} />
+              </div>
+            </div>
+          ))}
+          {categorias.length === 0 && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-2">Todavía no creaste ninguna categoría.</p>}
+        </div>
+      )}
+
+      {archivadas.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <button onClick={() => setVerArchivadas((v) => !v)} className="text-xs text-accent dark:text-dark-accent underline self-start">
+            {verArchivadas ? 'Ocultar' : 'Ver'} archivadas ({archivadas.length})
+          </button>
+          {verArchivadas &&
+            archivadas.map((c) => (
+              <div key={c.id} className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-4 py-3 flex items-center justify-between gap-2 opacity-70">
+                <p className="text-sm">{c.nombre}</p>
+                <Boton variante="secundario" tamano="sm" disabled={procesando === c.id} onClick={() => restaurar(c)}>
+                  Restaurar
+                </Boton>
+              </div>
+            ))}
+        </div>
+      )}
+    </main>
+  );
+}

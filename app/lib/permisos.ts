@@ -41,7 +41,13 @@ export type Permiso =
   // y 'gestionar_comisiones': sin columna propia, cae en el default de abajo
   // (solo accesoCompleto o administrador). Un vendedor sin acceso completo
   // no tiene por qué ver la rentabilidad global del negocio.
-  | 'ver_costos';
+  | 'ver_costos'
+  // Egresos (gasto operativo, retiro, ajuste): mismo nivel que
+  // 'ver_proveedores' — solo accesoCompleto/administrador, sin columna
+  // propia. Ver y gestionar quedan juntos a propósito (a diferencia de
+  // financiación, acá no hay un caso de uso de "vendedor autorizado que
+  // registra egresos en el día a día" — es info sensible de caja).
+  | 'gestionar_egresos';
 
 // Sin actor elegido todavía, o un actor sin datos de permisos (guardado
 // antes de que existiera esto): no restringimos — mantiene el

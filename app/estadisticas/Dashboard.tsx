@@ -25,10 +25,12 @@ import {
   ESTADOS_COBRADOS,
   resumenFinanciacionDe,
   resumenComisionesDe,
+  egresosPeriodoDe,
   PlanFinR,
   CuotaFinR,
   PagoFinR,
   ComisionMovR,
+  EgresoR,
 } from './datos';
 import { StatCard, SeccionCard, EmptyState, SegmentedChips, AnalyticsTabs, formatMoneda } from './ui';
 import { LineAreaChart } from './charts';
@@ -120,6 +122,7 @@ export default function Estadisticas() {
   // permiso 'ver_costos' (accesoCompleto/administrador, igual que
   // ver_proveedores) en vez de tenerlo apagado a mano.
   const puedeVerCostos = tienePermiso(actor, 'ver_costos');
+  const puedeVerEgresos = tienePermiso(actor, 'gestionar_egresos');
 
   const [tab, setTab] = useState<Tab>('resumen');
   const [periodo, setPeriodo] = useState<Periodo>('mes');
@@ -175,6 +178,10 @@ export default function Estadisticas() {
   const [pagosFinanciacion, setPagosFinanciacion] = useState<PagoFinR[]>([]);
   // Comisiones — igual, opcional según si el negocio activó el módulo.
   const [comisionMovs, setComisionMovs] = useState<ComisionMovR[]>([]);
+  // Egresos operativos — opcional según si el negocio ya corrió esa
+  // migración. Mismo criterio de agregación (sin separar por moneda) que ya
+  // usan ventas/ingresado/ganancia en este mismo dashboard.
+  const [egresos, setEgresos] = useState<EgresoR[]>([]);
   const [moneda, setMoneda] = useState('$');
   const [loading, setLoading] = useState(true);
   const [actualizado, setActualizado] = useState<Date | null>(null);
@@ -231,6 +238,7 @@ export default function Estadisticas() {
           { data: planesFinData },
           { data: pagosFinData },
           { data: comisionData },
+          { data: egresosData },
         ],
         // Estas 3 son de "dispositivos" aparte (no en el Promise.all de
         // arriba): con miles de dispositivos cargados, un select() común se
@@ -277,6 +285,7 @@ export default function Estadisticas() {
             .eq('tipo', 'pago')
             .gte('created_at', desde.toISOString()),
           supabase.from('comision_movimientos').select('comision, estado, fecha_hecho, created_at').neq('estado', 'revertida').gte('created_at', desde.toISOString()),
+          supabase.from('egresos').select('importe, fecha').eq('anulado', false).gte('fecha', desde.toISOString().slice(0, 10)),
         ]),
         obtenerTodasLasFilas<DispositivoCompra>(supabase, 'dispositivos', 'proveedor_id, costo, created_at', [], (q) =>
           q.not('proveedor_id', 'is', null).gte('created_at', desde.toISOString())
@@ -319,6 +328,7 @@ export default function Estadisticas() {
       setPlanesFinanciacion((planesFinData as PlanFinR[]) ?? []);
       setPagosFinanciacion((pagosFinData as PagoFinR[]) ?? []);
       setComisionMovs((comisionData as ComisionMovR[]) ?? []);
+      setEgresos((egresosData as EgresoR[]) ?? []);
 
       // Nombres SOLO de los clientes que aparecen en órdenes/servicio (no los
       // miles). Un pedido acotado por ids en vez de traer toda la tabla.
@@ -594,6 +604,16 @@ export default function Estadisticas() {
     [planesFinanciacion, cuotasFinanciacion, pagosFinanciacion, inicio, rango.fin, ahora]
   );
   const resumenComisiones = useMemo(() => resumenComisionesDe(comisionMovs, inicio, rango.fin), [comisionMovs, inicio, rango.fin]);
+
+  // Egresos operativos del período (gasto operativo/retiro/ajuste/otro —
+  // nunca compras ni pagos a proveedores, esos tienen sus propias tarjetas y
+  // sumarlos acá los contaría dos veces). "Resultado operativo estimado" =
+  // ganancia bruta − egresos operativos; solo tiene sentido si hay costo
+  // cargado (si no, ganancia sería 0 falso, no "sin datos") y requiere
+  // ver_costos igual que ganancia bruta.
+  const egresosPeriodo = useMemo(() => egresosPeriodoDe(egresos, inicio, rango.fin), [egresos, inicio, rango.fin]);
+  const hayEgresos = egresos.length > 0;
+  const resultadoOperativoEstimado = actualB.ganancia - egresosPeriodo;
 
   if (loading) {
     return (
@@ -972,6 +992,13 @@ export default function Estadisticas() {
                 </Link>
               </SeccionCard>
             )}
+            {puedeVerEgresos && (
+              <SeccionCard titulo="¿Buscás egresos operativos?" subtitulo="Gasto operativo, retiros y ajustes — distinto de compras y pagos a proveedores.">
+                <Link href="/egresos" className="self-start rounded-xl bg-accent dark:bg-dark-accent text-white text-sm font-medium px-4 py-2 hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors inline-block">
+                  Ver Egresos →
+                </Link>
+              </SeccionCard>
+            )}
           </>
         );
 
@@ -1020,7 +1047,11 @@ export default function Estadisticas() {
               resumenFinanciacion,
               saldoProveedoresTotal,
               pagadoProveedoresPeriodo,
-              resumenComisiones
+              resumenComisiones,
+              puedeVerEgresos,
+              egresosPeriodo,
+              hayEgresos,
+              resultadoOperativoEstimado
             )}
             className="inline-flex items-center gap-1.5 rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-3 py-2 text-xs font-medium hover:bg-canvas dark:hover:bg-dark-bg transition-colors"
           >
@@ -1069,6 +1100,29 @@ export default function Estadisticas() {
                   </span>
                 )}
               </StatCard>
+            )}
+            {puedeVerEgresos && hayEgresos && (
+              <StatCard
+                etiqueta="Egresos operativos"
+                valor={m(egresosPeriodo)}
+                tooltip="Gasto operativo, retiro de dinero y ajustes registrados en el período (no incluye compras de mercadería ni pagos a proveedores, esos ya tienen su propio total)."
+                moneda={moneda}
+                tono="text-bad"
+                sensible
+                oculto={ocultarMontos}
+                onClick={() => router.push('/egresos')}
+              />
+            )}
+            {puedeVerCostos && puedeVerEgresos && hayEgresos && (
+              <StatCard
+                etiqueta="Resultado operativo estimado"
+                valor={m(resultadoOperativoEstimado)}
+                tooltip="Ganancia bruta menos egresos operativos del período. Es una ESTIMACIÓN: no incluye impuestos ni otras obligaciones contables, no lo confundas con una ganancia neta real."
+                moneda={moneda}
+                tono={resultadoOperativoEstimado >= 0 ? 'text-good' : 'text-bad'}
+                sensible
+                oculto={ocultarMontos}
+              />
             )}
             <StatCard
               etiqueta="Dinero ingresado"
@@ -1192,7 +1246,11 @@ function exportarResumen(
   resumenFinanciacion: { totalFinanciadoActivo: number; cobradoPeriodo: number; saldoPendiente: number; vencido: number; hayDatos: boolean },
   saldoProveedoresTotal: number | null,
   pagadoProveedoresPeriodo: number,
-  resumenComisiones: { generada: number; pagada: number; pendiente: number; hayDatos: boolean }
+  resumenComisiones: { generada: number; pagada: number; pendiente: number; hayDatos: boolean },
+  puedeVerEgresos: boolean,
+  egresosPeriodo: number,
+  hayEgresos: boolean,
+  resultadoOperativoEstimado: number
 ) {
   return () => {
     const ahora = new Date();
@@ -1229,6 +1287,12 @@ function exportarResumen(
             ['Comisiones — generada en el período', String(Math.round(resumenComisiones.generada))],
             ['Comisiones — pagada en el período', String(Math.round(resumenComisiones.pagada))],
             ['Comisiones — pendiente', String(Math.round(resumenComisiones.pendiente))],
+          ] as [string, string][])
+        : []),
+      ...(puedeVerEgresos && hayEgresos
+        ? ([
+            ['Egresos operativos del período', String(Math.round(egresosPeriodo))],
+            ...(puedeVerCostos ? ([['Resultado operativo estimado', String(Math.round(resultadoOperativoEstimado))]] as [string, string][]) : []),
           ] as [string, string][])
         : []),
     ];

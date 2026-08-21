@@ -344,3 +344,17 @@ export function resumenComisionesDe(movimientos: ComisionMovR[], inicio: Date, f
     .reduce((a, c) => a + c.comision, 0);
   return { generada, pagada, pendiente, hayDatos: movimientos.length > 0 };
 }
+
+// ---------- Egresos operativos del período (para Estadísticas) ----------
+// `fecha` en egresos es 'YYYY-MM-DD' (fecha, sin hora) — a diferencia de
+// fecha_hecho/created_at de arriba (timestamptz), acá SÍ hace falta forzar
+// medianoche LOCAL antes de comparar (mismo idioma que
+// app/lib/financiacion/motor.ts fechaLocal()): `entre()` usa
+// `new Date(fechaISO)`, que para una fecha "pelada" cae en medianoche UTC, no
+// local — podía correr un egreso al mes de al lado cerca del límite del
+// período según el huso horario del que mira la pantalla.
+export type EgresoR = { importe: number; fecha: string };
+
+export function egresosPeriodoDe(egresos: EgresoR[], inicio: Date, fin: Date): number {
+  return egresos.filter((e) => entre(e.fecha + 'T00:00:00', inicio, fin)).reduce((a, e) => a + e.importe, 0);
+}
