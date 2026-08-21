@@ -1600,7 +1600,7 @@ function exportarResumenPDF(p: ParametrosExport) {
 
     doc.setFontSize(10);
     doc.text('Métrica', 14, y);
-    doc.text('Valor', 196, y, { align: 'right' } as any);
+    doc.text('Valor', 196, y, { align: 'right' });
     y += 2;
     doc.line(14, y, 196, y);
     y += 6;
@@ -1611,9 +1611,15 @@ function exportarResumenPDF(p: ParametrosExport) {
         y = 16;
       }
       const numero = Number(valor);
-      const texto = clave === 'Período' || Number.isNaN(numero) ? valor : `${p.moneda}${numero.toLocaleString('es-AR')}`;
+      // El signo va ANTES del símbolo de moneda ("-$500", no "$-500") — un
+      // resultado operativo o una ganancia bruta negativos son casos reales
+      // que el propio dashboard ya contempla (los pinta en rojo).
+      const texto =
+        clave === 'Período' || Number.isNaN(numero)
+          ? valor
+          : `${numero < 0 ? '-' : ''}${p.moneda}${Math.abs(numero).toLocaleString('es-AR')}`;
       doc.text(clave, 14, y);
-      doc.text(texto, 196, y, { align: 'right' } as any);
+      doc.text(texto, 196, y, { align: 'right' });
       y += 6;
     }
 
