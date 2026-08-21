@@ -838,4 +838,20 @@ export const PT: Record<string, string> = {
   'Listo para entregar': 'Pronto para entrega',
   'Cancelado / sin solución': 'Cancelado / sem solução',
   Normal: 'Normal',
+
+  // Servicio Técnico — Repuestos (proveedores + comparar precios)
+  'Agregar proveedor': 'Adicionar fornecedor',
+  'Buscar repuesto...': 'Buscar peça...',
+  'Comparar precios': 'Comparar preços',
+  'Entrá a cada proveedor para cargar los repuestos y precios que maneja.': 'Entre em cada fornecedor para cadastrar as peças e preços que ele tem.',
+  'No encontramos repuestos con esa búsqueda.': 'Não encontramos peças com essa busca.',
+  'Nombre del proveedor': 'Nome do fornecedor',
+  'Proveedor eliminado': 'Fornecedor excluído',
+  'Repuesto eliminado': 'Peça excluída',
+  'Teléfono (opcional)': 'Telefone (opcional)',
+  'Todavía no cargaste proveedores.': 'Você ainda não cadastrou fornecedores.',
+  'Todavía no hay precios cargados en ningún proveedor.': 'Ainda não há preços cadastrados em nenhum fornecedor.',
+  'hace 1 día': 'há 1 dia',
+  mes: 'mês',
+  'sin stock': 'sem estoque',
 };

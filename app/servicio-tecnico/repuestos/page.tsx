@@ -9,23 +9,25 @@ import { tienePermiso } from '../../lib/permisos';
 import { registrarAuditoria } from '../../lib/auditoria';
 import ServicioTecnicoTabs from '../../ServicioTecnicoTabs';
 import { ICONOS } from '../../Iconos';
+import { useT } from '../../lib/idioma';
 
 type Proveedor = { id: string; nombre: string; telefono: string | null };
 type Repuesto = { id: string; nombre: string };
 type Precio = { id: string; repuesto_id: string; proveedor_id: string; precio: number; disponible: boolean; actualizado_at: string };
 
-function antiguedad(iso: string): string {
+function antiguedad(iso: string, t: (texto: string) => string): string {
   const dias = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
-  if (dias <= 0) return 'hoy';
-  if (dias === 1) return 'hace 1 día';
-  if (dias < 30) return `hace ${dias} días`;
+  if (dias <= 0) return t('hoy');
+  if (dias === 1) return t('hace 1 día');
+  if (dias < 30) return `${t('hace')} ${dias} ${t('días')}`;
   const meses = Math.floor(dias / 30);
-  return `hace ${meses} mes${meses === 1 ? '' : 'es'}`;
+  return `${t('hace')} ${meses} ${meses === 1 ? t('mes') : t('meses')}`;
 }
 
 export default function Repuestos() {
   const supabase = crearClienteNavegador();
   const actor = useActor();
+  const t = useT();
   const puedeGestionar = tienePermiso(actor, 'gestionar_servicio_tecnico');
 
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
@@ -84,7 +86,7 @@ export default function Repuestos() {
     cargar();
   };
 
-  const nombreProveedorDe = (proveedorId: string) => proveedores.find((p) => p.id === proveedorId)?.nombre ?? 'Proveedor eliminado';
+  const nombreProveedorDe = (proveedorId: string) => proveedores.find((p) => p.id === proveedorId)?.nombre ?? t('Proveedor eliminado');
 
   // Agrupa precios por repuesto para poder comparar entre proveedores en
   // una sola fila — solo repuestos que tienen al menos un precio cargado.
@@ -98,7 +100,7 @@ export default function Repuestos() {
     const q = busquedaComparar.trim().toLowerCase();
     return Array.from(porRepuesto.entries())
       .map(([repuestoId, lista]) => {
-        const nombre = repuestos.find((r) => r.id === repuestoId)?.nombre ?? 'Repuesto eliminado';
+        const nombre = repuestos.find((r) => r.id === repuestoId)?.nombre ?? t('Repuesto eliminado');
         const ordenados = [...lista].sort((a, b) => {
           if (a.disponible !== b.disponible) return a.disponible ? -1 : 1;
           return a.precio - b.precio;
@@ -112,7 +114,7 @@ export default function Repuestos() {
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center">
-        <p className="text-sm text-muted dark:text-dark-text-secondary">Cargando...</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t('Cargando...')}</p>
       </main>
     );
   }
@@ -120,10 +122,10 @@ export default function Repuestos() {
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
       <header className="flex items-center gap-3">
-        <Link href="/servicio-tecnico" aria-label="Volver" className="text-2xl leading-none">
+        <Link href="/servicio-tecnico" aria-label={t('Volver')} className="text-2xl leading-none">
           &larr;
         </Link>
-        <span className="text-lg font-medium">Proveedores</span>
+        <span className="text-lg font-medium">{t('Proveedores')}</span>
       </header>
 
       <ServicioTecnicoTabs active="proveedores" />
@@ -135,7 +137,7 @@ export default function Repuestos() {
             vista === 'proveedores' ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border'
           }`}
         >
-          Proveedores
+          {t('Proveedores')}
         </button>
         <button
           onClick={() => setVista('comparar')}
@@ -143,18 +145,18 @@ export default function Repuestos() {
             vista === 'comparar' ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border'
           }`}
         >
-          Comparar precios
+          {t('Comparar precios')}
         </button>
       </div>
 
       {vista === 'proveedores' ? (
         <>
           <p className="text-xs text-muted dark:text-dark-text-secondary -mt-2">
-            Entrá a cada proveedor para cargar los repuestos y precios que maneja.
+            {t('Entrá a cada proveedor para cargar los repuestos y precios que maneja.')}
           </p>
 
           {proveedores.length === 0 && (
-            <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-4">Todavía no cargaste proveedores.</p>
+            <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-4">{t('Todavía no cargaste proveedores.')}</p>
           )}
 
           <div className="flex flex-col gap-2">
@@ -179,13 +181,13 @@ export default function Repuestos() {
                 <input
                   value={nombreProveedor}
                   onChange={(e) => setNombreProveedor(e.target.value)}
-                  placeholder="Nombre del proveedor"
+                  placeholder={t('Nombre del proveedor')}
                   className="flex-1 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                 />
                 <input
                   value={telefonoProveedor}
                   onChange={(e) => setTelefonoProveedor(e.target.value)}
-                  placeholder="Teléfono (opcional)"
+                  placeholder={t('Teléfono (opcional)')}
                   className="w-32 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                 />
               </div>
@@ -194,7 +196,7 @@ export default function Repuestos() {
                 onClick={agregarProveedor}
                 className="rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
               >
-                + Agregar proveedor
+                + {t('Agregar proveedor')}
               </button>
             </div>
           )}
@@ -204,13 +206,13 @@ export default function Repuestos() {
           <input
             value={busquedaComparar}
             onChange={(e) => setBusquedaComparar(e.target.value)}
-            placeholder="Buscar repuesto..."
+            placeholder={t('Buscar repuesto...')}
             className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-2.5 text-sm"
           />
 
           {comparacion.length === 0 && (
             <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-4">
-              {precios.length === 0 ? 'Todavía no hay precios cargados en ningún proveedor.' : 'No encontramos repuestos con esa búsqueda.'}
+              {precios.length === 0 ? t('Todavía no hay precios cargados en ningún proveedor.') : t('No encontramos repuestos con esa búsqueda.')}
             </p>
           )}
 
@@ -234,10 +236,10 @@ export default function Repuestos() {
                           </span>
                         )}
                         <span className="truncate">{nombreProveedorDe(p.proveedor_id)}</span>
-                        {!p.disponible && <span className="text-bad shrink-0">(sin stock)</span>}
+                        {!p.disponible && <span className="text-bad shrink-0">({t('sin stock')})</span>}
                       </span>
                       <span className="flex items-center gap-2 shrink-0">
-                        <span className="text-muted dark:text-dark-text-secondary">{antiguedad(p.actualizado_at)}</span>
+                        <span className="text-muted dark:text-dark-text-secondary">{antiguedad(p.actualizado_at, t)}</span>
                         <span className={`font-medium tabular-nums ${idx === 0 && p.disponible ? 'text-good' : ''}`}>
                           {moneda}
                           {p.precio.toLocaleString('es-AR')}
