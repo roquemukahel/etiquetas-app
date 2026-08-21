@@ -25,11 +25,17 @@ import CampoFecha from '../CampoFecha';
 
 type Proveedor = { id: string; nombre: string };
 
+// 'YYYY-MM-DD' a partir de los componentes LOCALES de la fecha — nunca
+// toISOString() (convierte a UTC): con la hora avanzada de la noche, eso
+// hacía que "hoy" en el formulario apareciera como el día siguiente.
+function aFechaLocal(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 function primerDiaMes(d: Date): string {
-  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
+  return aFechaLocal(new Date(d.getFullYear(), d.getMonth(), 1));
 }
 function ultimoDiaMes(d: Date): string {
-  return new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10);
+  return aFechaLocal(new Date(d.getFullYear(), d.getMonth() + 1, 0));
 }
 
 export default function Egresos() {
@@ -229,7 +235,7 @@ function ModalNuevoEgreso({
   onCreado: () => void;
 }) {
   const supabase = crearClienteNavegador();
-  const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
+  const [fecha, setFecha] = useState(() => aFechaLocal(new Date()));
   const [categoriaId, setCategoriaId] = useState(categorias[0]?.id ?? '');
   const [tipo, setTipo] = useState<TipoEgreso>('gasto_operativo');
   const [descripcion, setDescripcion] = useState('');
