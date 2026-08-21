@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { crearClienteNavegador } from './lib/supabase/client';
 import { obtenerTodasLasFilas } from './lib/db';
 import { infoEstado } from './lib/reparaciones';
+import { useT } from './lib/idioma';
 
 type Cliente = { id: string; nombre: string; apellido: string | null; telefono: string | null; dni: string | null };
 type Dispositivo = {
@@ -62,6 +63,7 @@ function nombreCompleto(c: { nombre: string; apellido: string | null } | null | 
 }
 
 export default function BuscadorUniversal() {
+  const t = useT();
   const supabase = crearClienteNavegador();
   const [query, setQuery] = useState('');
   const [abierto, setAbierto] = useState(false);
@@ -199,7 +201,7 @@ export default function BuscadorUniversal() {
           cargarDatos();
           setAbierto(true);
         }}
-        placeholder="Buscar cliente, teléfono, IMEI, orden o reparación…"
+        placeholder={t('Buscar cliente, teléfono, IMEI, orden o reparación…')}
         className="qv-search w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-2xl pl-11 pr-4 py-4 text-[15px] shadow-card focus:outline-none focus:ring-2 focus:ring-accent/40 dark:focus:ring-dark-accent/40 transition-shadow"
       />
 
@@ -207,53 +209,53 @@ export default function BuscadorUniversal() {
         <div className="absolute z-40 mt-2 w-full max-h-[70vh] overflow-y-auto rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-elevated p-2 flex flex-col gap-1">
           {sinResultados && (
             <p className="text-sm text-muted dark:text-dark-text-secondary text-center py-4">
-              No encontramos nada con &quot;{query}&quot;.
+              {t('No encontramos nada con')} &quot;{query}&quot;.
             </p>
           )}
 
-          <Grupo titulo="Clientes" cantidad={clientesCoincidentes.length}>
+          <Grupo titulo={t('Clientes')} cantidad={clientesCoincidentes.length}>
             {clientesCoincidentes.map((c) => (
               <Resultado
                 key={c.id}
                 href={`/clientes/${c.id}`}
                 titulo={`${c.nombre} ${c.apellido || ''}`.trim()}
-                subtitulo={[c.telefono, c.dni ? `DNI ${c.dni}` : null].filter(Boolean).join(' · ')}
+                subtitulo={[c.telefono, c.dni ? `${t('DNI')} ${c.dni}` : null].filter(Boolean).join(' · ')}
                 onClick={() => setAbierto(false)}
               />
             ))}
           </Grupo>
 
-          <Grupo titulo="Stock" cantidad={dispositivosCoincidentes.length}>
+          <Grupo titulo={t('Stock')} cantidad={dispositivosCoincidentes.length}>
             {dispositivosCoincidentes.map((d) => (
               <Resultado
                 key={d.id}
                 href={`/stock/${d.id}`}
-                titulo={`${d.modelo || 'Dispositivo'}${d.capacidad_gb ? ` · ${d.capacidad_gb}GB` : ''}`}
-                subtitulo={[d.imei ? `IMEI ${d.imei}` : null, d.en_stock ? 'En stock' : 'Fuera de stock'].filter(Boolean).join(' · ')}
+                titulo={`${d.modelo || t('Dispositivo')}${d.capacidad_gb ? ` · ${d.capacidad_gb}GB` : ''}`}
+                subtitulo={[d.imei ? `${t('IMEI')} ${d.imei}` : null, d.en_stock ? t('En stock') : t('Fuera de stock')].filter(Boolean).join(' · ')}
                 onClick={() => setAbierto(false)}
               />
             ))}
           </Grupo>
 
-          <Grupo titulo="Plan Canje" cantidad={canjesCoincidentes.length}>
+          <Grupo titulo={t('Plan Canje')} cantidad={canjesCoincidentes.length}>
             {canjesCoincidentes.map((c) => (
               <Resultado
                 key={c.id}
                 href="/canje"
-                titulo={c.modelo || 'Dispositivo'}
-                subtitulo={[nombreCompleto(c.clientes), c.imei ? `IMEI ${c.imei}` : null].filter(Boolean).join(' · ')}
+                titulo={c.modelo || t('Dispositivo')}
+                subtitulo={[nombreCompleto(c.clientes), c.imei ? `${t('IMEI')} ${c.imei}` : null].filter(Boolean).join(' · ')}
                 onClick={() => setAbierto(false)}
               />
             ))}
           </Grupo>
 
-          <Grupo titulo="Servicio Técnico" cantidad={reparacionesCoincidentes.length}>
+          <Grupo titulo={t('Servicio Técnico')} cantidad={reparacionesCoincidentes.length}>
             {reparacionesCoincidentes.map((r) => (
               <Resultado
                 key={r.id}
                 href={`/servicio-tecnico/${r.id}`}
-                titulo={`${r.numero_orden ? `${r.numero_orden} · ` : ''}${r.modelo || 'Dispositivo'}`}
-                subtitulo={[nombreCompleto(r.clientes), r.imei ? `IMEI ${r.imei}` : null, infoEstado(r.estado).label]
+                titulo={`${r.numero_orden ? `${r.numero_orden} · ` : ''}${r.modelo || t('Dispositivo')}`}
+                subtitulo={[nombreCompleto(r.clientes), r.imei ? `${t('IMEI')} ${r.imei}` : null, infoEstado(r.estado).label]
                   .filter(Boolean)
                   .join(' · ')}
                 onClick={() => setAbierto(false)}
@@ -261,24 +263,24 @@ export default function BuscadorUniversal() {
             ))}
           </Grupo>
 
-          <Grupo titulo="Compras (a individuos)" cantidad={comprasCoincidentes.length}>
+          <Grupo titulo={t('Compras (a individuos)')} cantidad={comprasCoincidentes.length}>
             {comprasCoincidentes.map((c) => (
               <Resultado
                 key={c.id}
                 href={`/compras/${c.id}`}
-                titulo={c.modelo || 'Dispositivo'}
-                subtitulo={[nombreCompleto(c.clientes), c.imei ? `IMEI ${c.imei}` : null].filter(Boolean).join(' · ')}
+                titulo={c.modelo || t('Dispositivo')}
+                subtitulo={[nombreCompleto(c.clientes), c.imei ? `${t('IMEI')} ${c.imei}` : null].filter(Boolean).join(' · ')}
                 onClick={() => setAbierto(false)}
               />
             ))}
           </Grupo>
 
-          <Grupo titulo="Órdenes" cantidad={ordenesCoincidentes.length}>
+          <Grupo titulo={t('Órdenes')} cantidad={ordenesCoincidentes.length}>
             {ordenesCoincidentes.map((o) => (
               <Resultado
                 key={o.id}
                 href={`/ordenes/${o.id}`}
-                titulo={nombreCompleto(o.clientes) || 'Orden sin cliente'}
+                titulo={nombreCompleto(o.clientes) || t('Orden sin cliente')}
                 subtitulo={[
                   o.orden_items[0]?.descripcion,
                   o.total != null ? `$${o.total.toLocaleString('es-AR')}` : null,

@@ -23,6 +23,7 @@ import { QCard } from './QCard';
 import { Boton } from './Boton';
 import Modal from './Modal';
 import CampoFecha from './CampoFecha';
+import { useT } from './lib/idioma';
 
 const ETIQUETA_ESTADO: Record<EstadoVisualCuota, string> = {
   pendiente: 'Pendiente',
@@ -57,6 +58,7 @@ export default function FinanciacionCliente({
   recargar: number;
   onCambio: () => void;
 }) {
+  const t = useT();
   const supabase = crearClienteNavegador();
   const actor = useActor();
   const puedeGestionar = tienePermiso(actor, 'gestionar_financiacion');
@@ -84,7 +86,7 @@ export default function FinanciacionCliente({
       .eq('cliente_id', clienteId)
       .order('created_at', { ascending: false });
     if (planesErr) {
-      setError('No pudimos cargar las financiaciones: ' + planesErr.message);
+      setError(t('No pudimos cargar las financiaciones:') + ' ' + planesErr.message);
       setLoading(false);
       return;
     }
@@ -98,7 +100,7 @@ export default function FinanciacionCliente({
         .in('plan_id', listaPlanes.map((p) => p.id))
         .order('numero', { ascending: true });
       if (cuotasErr) {
-        setError('No pudimos cargar las cuotas: ' + cuotasErr.message);
+        setError(t('No pudimos cargar las cuotas:') + ' ' + cuotasErr.message);
       } else {
         const mapa = new Map<string, CuotaFinanciacion[]>();
         for (const c of (cuotasData as CuotaFinanciacion[]) ?? []) {
@@ -140,7 +142,7 @@ export default function FinanciacionCliente({
 
   const fmt = (n: number) => `${moneda}${Math.round(n).toLocaleString('es-AR')}`;
 
-  if (loading) return <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Cargando...</p>;
+  if (loading) return <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{t('Cargando...')}</p>;
 
   return (
     <div className="flex flex-col gap-4">
@@ -148,23 +150,23 @@ export default function FinanciacionCliente({
 
       {planesActivos.length > 0 && (
         <QCard firma padding="sm" className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          <Resumen etiqueta="Total financiado" valor={fmt(resumen.totalFinanciado)} />
-          <Resumen etiqueta="Total pagado" valor={fmt(resumen.totalPagado)} tono="text-good" />
-          <Resumen etiqueta="Saldo pendiente" valor={fmt(resumen.saldoPendiente)} tono={resumen.saldoPendiente > 0 ? 'text-warn' : undefined} />
-          <Resumen etiqueta="Próximo vencimiento" valor={resumen.proximoVencimiento ? new Date(resumen.proximoVencimiento + 'T00:00:00').toLocaleDateString('es-AR') : 'Sin pendientes'} />
-          <Resumen etiqueta="Cuotas vencidas" valor={String(resumen.cuotasVencidas)} tono={resumen.cuotasVencidas > 0 ? 'text-bad' : undefined} />
-          <Resumen etiqueta="Progreso de pago" valor={`${resumen.progreso}%`} />
+          <Resumen etiqueta={t('Total financiado')} valor={fmt(resumen.totalFinanciado)} />
+          <Resumen etiqueta={t('Total pagado')} valor={fmt(resumen.totalPagado)} tono="text-good" />
+          <Resumen etiqueta={t('Saldo pendiente')} valor={fmt(resumen.saldoPendiente)} tono={resumen.saldoPendiente > 0 ? 'text-warn' : undefined} />
+          <Resumen etiqueta={t('Próximo vencimiento')} valor={resumen.proximoVencimiento ? new Date(resumen.proximoVencimiento + 'T00:00:00').toLocaleDateString('es-AR') : t('Sin pendientes')} />
+          <Resumen etiqueta={t('Cuotas vencidas')} valor={String(resumen.cuotasVencidas)} tono={resumen.cuotasVencidas > 0 ? 'text-bad' : undefined} />
+          <Resumen etiqueta={t('Progreso de pago')} valor={`${resumen.progreso}%`} />
         </QCard>
       )}
 
       {puedeGestionar && (
         <Boton variante="primario" tamano="sm" onClick={() => setModalNuevo(true)} className="self-start">
-          + Nuevo plan de financiación
+          + {t('Nuevo plan de financiación')}
         </Boton>
       )}
 
       {planes.length === 0 ? (
-        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-4">Este cliente todavía no tiene ninguna financiación en cuotas.</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-4">{t('Este cliente todavía no tiene ninguna financiación en cuotas.')}</p>
       ) : (
         <div className="flex flex-col gap-2">
           {planes.map((p) => {
@@ -177,11 +179,11 @@ export default function FinanciacionCliente({
                 <button onClick={() => setPlanAbierto(abierto ? null : p.id)} className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left">
                   <div className="min-w-0">
                     <p className="text-sm font-medium">
-                      {p.cantidad_cuotas} cuota{p.cantidad_cuotas === 1 ? '' : 's'} · {simboloMoneda(p.moneda)}
+                      {p.cantidad_cuotas} {p.cantidad_cuotas === 1 ? t('cuota') : t('cuotas')} · {simboloMoneda(p.moneda)}
                       {Math.round(p.importe_financiado).toLocaleString('es-AR')}
                     </p>
                     <p className="text-xs text-muted dark:text-dark-text-secondary">
-                      Creado el {new Date(p.created_at).toLocaleDateString('es-AR')} · {ETIQUETA_ESTADO_PLAN[p.estado]} · {progresoPlan}% pagado
+                      {t('Creado el')} {new Date(p.created_at).toLocaleDateString('es-AR')} · {t(ETIQUETA_ESTADO_PLAN[p.estado])} · {progresoPlan}% {t('pagado')}
                     </p>
                   </div>
                   <span aria-hidden="true" className="shrink-0 text-muted dark:text-dark-text-secondary text-xs">
@@ -191,9 +193,9 @@ export default function FinanciacionCliente({
                 {abierto && (
                   <div className="border-t border-border dark:border-dark-border px-4 py-3 flex flex-col gap-3">
                     <div className="grid grid-cols-2 gap-2 text-xs text-muted dark:text-dark-text-secondary">
-                      <p>Importe de la venta: {simboloMoneda(p.moneda)}{Math.round(p.importe_original).toLocaleString('es-AR')}</p>
-                      {p.entrega_inicial > 0 && <p>Entrega inicial: {simboloMoneda(p.moneda)}{Math.round(p.entrega_inicial).toLocaleString('es-AR')}</p>}
-                      {p.observaciones && <p className="col-span-2">Obs: {p.observaciones}</p>}
+                      <p>{t('Importe de la venta:')} {simboloMoneda(p.moneda)}{Math.round(p.importe_original).toLocaleString('es-AR')}</p>
+                      {p.entrega_inicial > 0 && <p>{t('Entrega inicial:')} {simboloMoneda(p.moneda)}{Math.round(p.entrega_inicial).toLocaleString('es-AR')}</p>}
+                      {p.observaciones && <p className="col-span-2">{t('Obs:')} {p.observaciones}</p>}
                     </div>
 
                     <div className="flex flex-col gap-1">
@@ -210,10 +212,10 @@ export default function FinanciacionCliente({
                               {simboloMoneda(p.moneda)}
                               {Math.round(c.importe_original).toLocaleString('es-AR')}
                               {c.importe_pagado > 0 && c.estado !== 'pagada' && (
-                                <span className="text-muted dark:text-dark-text-secondary font-normal"> (falta {simboloMoneda(p.moneda)}{Math.round(saldoCuota).toLocaleString('es-AR')})</span>
+                                <span className="text-muted dark:text-dark-text-secondary font-normal"> ({t('falta')} {simboloMoneda(p.moneda)}{Math.round(saldoCuota).toLocaleString('es-AR')})</span>
                               )}
                             </span>
-                            <span className={`shrink-0 rounded-full px-2 py-0.5 font-medium ${COLOR_ESTADO[estadoVisual]}`}>{ETIQUETA_ESTADO[estadoVisual]}</span>
+                            <span className={`shrink-0 rounded-full px-2 py-0.5 font-medium ${COLOR_ESTADO[estadoVisual]}`}>{t(ETIQUETA_ESTADO[estadoVisual])}</span>
                           </div>
                         );
                       })}
@@ -222,13 +224,13 @@ export default function FinanciacionCliente({
                     {p.estado === 'activo' && puedeAjustar && (
                       <div className="flex gap-2 mt-1 flex-wrap">
                         <Boton variante="secundario" tamano="sm" onClick={() => setModalAjuste(p)}>
-                          Ajustar
+                          {t('Ajustar')}
                         </Boton>
                         <Boton variante="secundario" tamano="sm" onClick={() => setModalReprogramar(p)}>
-                          Reprogramar
+                          {t('Reprogramar')}
                         </Boton>
                         <Boton variante="peligro" tamano="sm" onClick={() => setModalAnular(p)}>
-                          Anular plan
+                          {t('Anular plan')}
                         </Boton>
                       </div>
                     )}
@@ -319,6 +321,7 @@ function ModalNuevoPlan({
   onClose: () => void;
   onCreado: () => void;
 }) {
+  const t = useT();
   const supabase = crearClienteNavegador();
   const [importeOriginal, setImporteOriginal] = useState('');
   const [entregaInicial, setEntregaInicial] = useState('');
@@ -345,11 +348,11 @@ function ModalNuevoPlan({
 
   const confirmar = async () => {
     if (financiado <= 0) {
-      setError('El importe financiado tiene que ser mayor a 0 (la entrega inicial no puede cubrir toda la venta).');
+      setError(t('El importe financiado tiene que ser mayor a 0 (la entrega inicial no puede cubrir toda la venta).'));
       return;
     }
     if (cuotas <= 0) {
-      setError('Elegí al menos 1 cuota.');
+      setError(t('Elegí al menos 1 cuota.'));
       return;
     }
     setGuardando(true);
@@ -373,22 +376,22 @@ function ModalNuevoPlan({
   };
 
   return (
-    <Modal titulo="Nuevo plan de financiación" onClose={onClose} maxWidth="max-w-lg">
+    <Modal titulo={t('Nuevo plan de financiación')} onClose={onClose} maxWidth="max-w-lg">
       <div className="flex flex-col gap-3">
         {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
         <div className="grid grid-cols-2 gap-3">
-          <CampoNumero label={`Importe de la venta (${moneda})`} valor={importeOriginal} onChange={setImporteOriginal} />
-          <CampoNumero label="Entrega inicial (opcional)" valor={entregaInicial} onChange={setEntregaInicial} />
+          <CampoNumero label={`${t('Importe de la venta')} (${moneda})`} valor={importeOriginal} onChange={setImporteOriginal} />
+          <CampoNumero label={t('Entrega inicial (opcional)')} valor={entregaInicial} onChange={setEntregaInicial} />
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <CampoNumero label="Cantidad de cuotas" valor={cantidadCuotas} onChange={setCantidadCuotas} />
+          <CampoNumero label={t('Cantidad de cuotas')} valor={cantidadCuotas} onChange={setCantidadCuotas} />
           <div>
-            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Fecha de la 1ª cuota</label>
+            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Fecha de la 1ª cuota')}</label>
             <CampoFecha value={primeraFecha} onChange={setPrimeraFecha} ancho="completo" />
           </div>
         </div>
         <div>
-          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Observaciones (opcional)</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Observaciones (opcional)')}</label>
           <textarea
             value={observaciones}
             onChange={(e) => setObservaciones(e.target.value)}
@@ -399,11 +402,11 @@ function ModalNuevoPlan({
 
         {preview && (
           <div className="rounded-lg bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border p-2.5">
-            <p className="text-xs font-medium mb-1.5">Vista previa del cronograma — financiado: {moneda}{Math.round(financiado).toLocaleString('es-AR')}</p>
+            <p className="text-xs font-medium mb-1.5">{t('Vista previa del cronograma — financiado:')} {moneda}{Math.round(financiado).toLocaleString('es-AR')}</p>
             <div className="flex flex-col gap-0.5 max-h-40 overflow-y-auto">
               {preview.map((c) => (
                 <div key={c.numero} className="flex items-center justify-between text-xs text-muted dark:text-dark-text-secondary">
-                  <span>Cuota {c.numero}/{cuotas}</span>
+                  <span>{t('Cuota')} {c.numero}/{cuotas}</span>
                   <span>{new Date(c.fecha_vencimiento + 'T00:00:00').toLocaleDateString('es-AR')}</span>
                   <span className="font-medium text-ink dark:text-dark-text">{moneda}{Math.round(c.importe).toLocaleString('es-AR')}</span>
                 </div>
@@ -414,10 +417,10 @@ function ModalNuevoPlan({
 
         <div className="flex gap-2 mt-1">
           <Boton variante="secundario" tamano="md" onClick={onClose} className="flex-1">
-            Cancelar
+            {t('Cancelar')}
           </Boton>
           <Boton variante="primario" tamano="md" disabled={!preview} cargando={guardando} onClick={confirmar} className="flex-1">
-            Crear plan
+            {t('Crear plan')}
           </Boton>
         </div>
       </div>
@@ -439,6 +442,7 @@ function ModalAjuste({
   onClose: () => void;
   onGuardado: () => void;
 }) {
+  const t = useT();
   const supabase = crearClienteNavegador();
   const [monto, setMonto] = useState('');
   const [motivo, setMotivo] = useState('');
@@ -456,11 +460,11 @@ function ModalAjuste({
   const confirmar = async () => {
     const m = Number(monto);
     if (!m || m <= 0) {
-      setError('Poné un monto mayor a cero.');
+      setError(t('Poné un monto mayor a cero.'));
       return;
     }
     if (!motivo.trim()) {
-      setError('El ajuste necesita un motivo.');
+      setError(t('El ajuste necesita un motivo.'));
       return;
     }
     setGuardando(true);
@@ -480,15 +484,15 @@ function ModalAjuste({
   };
 
   return (
-    <Modal titulo="Ajustar plan de financiación" onClose={onClose} maxWidth="max-w-md">
+    <Modal titulo={t('Ajustar plan de financiación')} onClose={onClose} maxWidth="max-w-md">
       <div className="flex flex-col gap-3">
         {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
         <p className="text-xs text-muted dark:text-dark-text-secondary">
-          Reduce deuda futura sin tocar cuotas ya pagadas. Si no elegís cuotas puntuales, se aplica desde las últimas cuotas impagas hacia atrás.
+          {t('Reduce deuda futura sin tocar cuotas ya pagadas. Si no elegís cuotas puntuales, se aplica desde las últimas cuotas impagas hacia atrás.')}
         </p>
-        <CampoNumero label={`Monto a descontar (${moneda})`} valor={monto} onChange={setMonto} />
+        <CampoNumero label={`${t('Monto a descontar')} (${moneda})`} valor={monto} onChange={setMonto} />
         <div>
-          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Motivo (obligatorio)</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Motivo (obligatorio)')}</label>
           <input
             value={motivo}
             onChange={(e) => setMotivo(e.target.value)}
@@ -497,12 +501,12 @@ function ModalAjuste({
         </div>
         {cuotas.length > 0 && (
           <div>
-            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Aplicar a cuotas puntuales (opcional)</label>
+            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Aplicar a cuotas puntuales (opcional)')}</label>
             <div className="flex flex-col gap-1 max-h-36 overflow-y-auto">
               {cuotas.map((c) => (
                 <label key={c.id} className="flex items-center gap-2 text-xs cursor-pointer">
                   <input type="checkbox" checked={cuotasElegidas.has(c.id)} onChange={() => toggleCuota(c.id)} className="h-4 w-4 accent-ink" />
-                  Cuota {c.numero} — {moneda}{Math.round(c.importe_original - c.importe_pagado).toLocaleString('es-AR')} pendiente
+                  {t('Cuota')} {c.numero} — {moneda}{Math.round(c.importe_original - c.importe_pagado).toLocaleString('es-AR')} {t('pendiente')}
                 </label>
               ))}
             </div>
@@ -510,10 +514,10 @@ function ModalAjuste({
         )}
         <div className="flex gap-2 mt-1">
           <Boton variante="secundario" tamano="md" onClick={onClose} className="flex-1">
-            Cancelar
+            {t('Cancelar')}
           </Boton>
           <Boton variante="primario" tamano="md" cargando={guardando} onClick={confirmar} className="flex-1">
-            Aplicar ajuste
+            {t('Aplicar ajuste')}
           </Boton>
         </div>
       </div>
@@ -523,6 +527,7 @@ function ModalAjuste({
 
 // ---------- Modal: anular plan ----------
 function ModalAnular({ plan, onClose, onAnulado }: { plan: PlanFinanciacion; onClose: () => void; onAnulado: () => void }) {
+  const t = useT();
   const supabase = crearClienteNavegador();
   const [motivo, setMotivo] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -530,7 +535,7 @@ function ModalAnular({ plan, onClose, onAnulado }: { plan: PlanFinanciacion; onC
 
   const confirmar = async () => {
     if (!motivo.trim()) {
-      setError('La anulación necesita un motivo.');
+      setError(t('La anulación necesita un motivo.'));
       return;
     }
     setGuardando(true);
@@ -545,14 +550,14 @@ function ModalAnular({ plan, onClose, onAnulado }: { plan: PlanFinanciacion; onC
   };
 
   return (
-    <Modal titulo="Anular plan de financiación" onClose={onClose} maxWidth="max-w-sm">
+    <Modal titulo={t('Anular plan de financiación')} onClose={onClose} maxWidth="max-w-sm">
       <div className="flex flex-col gap-3">
         {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
         <p className="text-sm text-muted dark:text-dark-text-secondary">
-          Se anulan las cuotas que todavía no se pagaron (las ya pagadas quedan intactas). No se puede deshacer.
+          {t('Se anulan las cuotas que todavía no se pagaron (las ya pagadas quedan intactas). No se puede deshacer.')}
         </p>
         <div>
-          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Motivo (obligatorio)</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Motivo (obligatorio)')}</label>
           <input
             value={motivo}
             onChange={(e) => setMotivo(e.target.value)}
@@ -561,10 +566,10 @@ function ModalAnular({ plan, onClose, onAnulado }: { plan: PlanFinanciacion; onC
         </div>
         <div className="flex gap-2 mt-1">
           <Boton variante="secundario" tamano="md" onClick={onClose} className="flex-1">
-            Cancelar
+            {t('Cancelar')}
           </Boton>
           <Boton variante="peligro" tamano="md" cargando={guardando} onClick={confirmar} className="flex-1">
-            Sí, anular
+            {t('Sí, anular')}
           </Boton>
         </div>
       </div>
@@ -589,6 +594,7 @@ function ModalReprogramar({
   onClose: () => void;
   onReprogramado: () => void;
 }) {
+  const t = useT();
   const supabase = crearClienteNavegador();
   const [cantidadCuotas, setCantidadCuotas] = useState('3');
   const [primeraFecha, setPrimeraFecha] = useState(() => aFechaISO(new Date()));
@@ -610,15 +616,15 @@ function ModalReprogramar({
 
   const confirmar = async () => {
     if (saldoPendiente <= 0) {
-      setError('Este plan no tiene saldo pendiente para reprogramar.');
+      setError(t('Este plan no tiene saldo pendiente para reprogramar.'));
       return;
     }
     if (cuotas <= 0) {
-      setError('Elegí al menos 1 cuota.');
+      setError(t('Elegí al menos 1 cuota.'));
       return;
     }
     if (!motivo.trim()) {
-      setError('La reprogramación necesita un motivo.');
+      setError(t('La reprogramación necesita un motivo.'));
       return;
     }
     setGuardando(true);
@@ -642,23 +648,22 @@ function ModalReprogramar({
   };
 
   return (
-    <Modal titulo="Reprogramar financiación" onClose={onClose} maxWidth="max-w-lg">
+    <Modal titulo={t('Reprogramar financiación')} onClose={onClose} maxWidth="max-w-lg">
       <div className="flex flex-col gap-3">
         {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
         <p className="text-xs text-muted dark:text-dark-text-secondary">
-          Arma un cronograma nuevo con el saldo pendiente ({moneda}
-          {Math.round(saldoPendiente).toLocaleString('es-AR')}). El plan actual queda marcado como "Reprogramado" y su
-          historial se conserva completo — las cuotas ya pagadas no se tocan.
+          {t('Arma un cronograma nuevo con el saldo pendiente')} ({moneda}
+          {Math.round(saldoPendiente).toLocaleString('es-AR')}). {t('El plan actual queda marcado como')} &quot;{t('Reprogramado')}&quot; {t('y su historial se conserva completo — las cuotas ya pagadas no se tocan.')}
         </p>
         <div className="grid grid-cols-2 gap-3">
-          <CampoNumero label="Cantidad de cuotas nuevas" valor={cantidadCuotas} onChange={setCantidadCuotas} />
+          <CampoNumero label={t('Cantidad de cuotas nuevas')} valor={cantidadCuotas} onChange={setCantidadCuotas} />
           <div>
-            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Fecha de la 1ª cuota</label>
+            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Fecha de la 1ª cuota')}</label>
             <CampoFecha value={primeraFecha} onChange={setPrimeraFecha} ancho="completo" />
           </div>
         </div>
         <div>
-          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Motivo (obligatorio)</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Motivo (obligatorio)')}</label>
           <textarea
             value={motivo}
             onChange={(e) => setMotivo(e.target.value)}
@@ -669,11 +674,11 @@ function ModalReprogramar({
 
         {preview && (
           <div className="rounded-lg bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border p-2.5">
-            <p className="text-xs font-medium mb-1.5">Nuevo cronograma</p>
+            <p className="text-xs font-medium mb-1.5">{t('Nuevo cronograma')}</p>
             <div className="flex flex-col gap-0.5 max-h-40 overflow-y-auto">
               {preview.map((c) => (
                 <div key={c.numero} className="flex items-center justify-between text-xs text-muted dark:text-dark-text-secondary">
-                  <span>Cuota {c.numero}/{cuotas}</span>
+                  <span>{t('Cuota')} {c.numero}/{cuotas}</span>
                   <span>{new Date(c.fecha_vencimiento + 'T00:00:00').toLocaleDateString('es-AR')}</span>
                   <span className="font-medium text-ink dark:text-dark-text">{moneda}{Math.round(c.importe).toLocaleString('es-AR')}</span>
                 </div>
@@ -684,10 +689,10 @@ function ModalReprogramar({
 
         <div className="flex gap-2 mt-1">
           <Boton variante="secundario" tamano="md" onClick={onClose} className="flex-1">
-            Cancelar
+            {t('Cancelar')}
           </Boton>
           <Boton variante="primario" tamano="md" disabled={!preview || !motivo.trim()} cargando={guardando} onClick={confirmar} className="flex-1">
-            Reprogramar
+            {t('Reprogramar')}
           </Boton>
         </div>
       </div>
