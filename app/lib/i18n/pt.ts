@@ -176,4 +176,41 @@ export const PT: Record<string, string> = {
     'Obrigado por confiar em nós! Que você tenha um ótimo dia de trabalho.',
   'Esto recién empieza — Qovento sigue creciendo. 🚀': 'Isso é só o começo — o Qovento continua crescendo. 🚀',
   '¡Gracias, Qovi!': 'Obrigado, Qovi!',
+
+  // Login / Registro
+  'No pudimos verificar que sos una persona (venció la verificación). Volvé a intentar.':
+    'Não conseguimos verificar que você é uma pessoa (a verificação venceu). Tente de novo.',
+  'Demasiados intentos seguidos. Esperá un minuto y volvé a intentar.':
+    'Muitas tentativas seguidas. Espere um minuto e tente de novo.',
+  'Email o contraseña incorrectos': 'Email ou senha incorretos',
+  'No pudimos iniciar sesión:': 'Não conseguimos entrar:',
+  'Iniciá sesión': 'Entrar',
+  Contraseña: 'Senha',
+  'Entrando...': 'Entrando...',
+  'Iniciar sesión': 'Entrar',
+  '¿No tenés cuenta?': 'Não tem uma conta?',
+  Registrate: 'Cadastre-se',
+  'No pudimos terminar de crear el negocio:': 'Não conseguimos terminar de criar o negócio:',
+  'sin datos': 'sem dados',
+  'No se pudo crear la cuenta': 'Não foi possível criar a conta',
+  'La cuenta ya existía o no se generó sesión automáticamente. Probá borrar el usuario en Supabase y registrarte de nuevo, o iniciá sesión si ya tenés cuenta.':
+    'A conta já existia ou a sessão não foi gerada automaticamente. Tente apagar o usuário no Supabase e se cadastrar de novo, ou entre se já tem conta.',
+  'La cuenta se creó, pero hubo un problema configurando el negocio:':
+    'A conta foi criada, mas houve um problema ao configurar o negócio:',
+  'Falta terminar de crear tu negocio': 'Falta terminar de criar seu negócio',
+  'Tu cuenta ya existe, pero no llegamos a configurar el negocio la vez pasada. Poné el nombre y seguimos.':
+    'Sua conta já existe, mas não conseguimos configurar o negócio da última vez. Coloque o nome e continuamos.',
+  'Nombre de tu negocio': 'Nome do seu negócio',
+  'Mi local de celulares': 'Minha loja de celulares',
+  'Creando...': 'Criando...',
+  'Terminar de crear mi negocio': 'Terminar de criar meu negócio',
+  'Creá tu cuenta': 'Crie sua conta',
+  'El sistema móvil más rápido para recibir, documentar, etiquetar y comercializar celulares.':
+    'O sistema móvel mais rápido para receber, documentar, etiquetar e vender celulares.',
+  'Acepto los': 'Aceito os',
+  'Términos y Condiciones': 'Termos e Condições',
+  'y la': 'e a',
+  'Política de Privacidad': 'Política de Privacidade',
+  'Crear cuenta': 'Criar conta',
+  '¿Ya tenés cuenta?': 'Já tem uma conta?',
 };

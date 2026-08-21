@@ -5,12 +5,15 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../lib/supabase/client';
 import Turnstile from '../Turnstile';
+import { useT } from '../lib/idioma';
+import SelectorIdiomaFlotante from '../SelectorIdiomaFlotante';
 
 const REQUIERE_CAPTCHA = !!process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
 export default function Registro() {
   const router = useRouter();
   const supabase = crearClienteNavegador();
+  const t = useT();
 
   const [nombreNegocio, setNombreNegocio] = useState('');
   const [email, setEmail] = useState('');
@@ -55,7 +58,7 @@ export default function Registro() {
       nombre_negocio: nombreNegocioRecuperar,
     });
     if (rpcError || !negocioId) {
-      setError(`No pudimos terminar de crear el negocio: ${rpcError?.message || 'sin datos'}`);
+      setError(`${t('No pudimos terminar de crear el negocio:')} ${rpcError?.message || t('sin datos')}`);
       setCargando(false);
       return;
     }
@@ -75,14 +78,16 @@ export default function Registro() {
     });
 
     if (authError || !authData.user) {
-      setError(authError?.message || 'No se pudo crear la cuenta');
+      setError(authError?.message || t('No se pudo crear la cuenta'));
       setCargando(false);
       return;
     }
 
     if (!authData.session) {
       setError(
-        'La cuenta ya existía o no se generó sesión automáticamente. Probá borrar el usuario en Supabase y registrarte de nuevo, o iniciá sesión si ya tenés cuenta.'
+        t(
+          'La cuenta ya existía o no se generó sesión automáticamente. Probá borrar el usuario en Supabase y registrarte de nuevo, o iniciá sesión si ya tenés cuenta.'
+        )
       );
       setCargando(false);
       return;
@@ -94,7 +99,7 @@ export default function Registro() {
     });
 
     if (rpcError || !negocioId) {
-      setError(`La cuenta se creó, pero hubo un problema configurando el negocio: ${rpcError?.message || 'sin datos'}`);
+      setError(`${t('La cuenta se creó, pero hubo un problema configurando el negocio:')} ${rpcError?.message || t('sin datos')}`);
       setCargando(false);
       return;
     }
@@ -106,7 +111,8 @@ export default function Registro() {
   if (cuentaSinNegocio === 'revisando') {
     return (
       <main className="flex min-h-screen items-center justify-center">
-        <p className="text-sm text-muted dark:text-dark-text-secondary">Cargando...</p>
+        <SelectorIdiomaFlotante />
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t('Cargando...')}</p>
       </main>
     );
   }
@@ -114,32 +120,33 @@ export default function Registro() {
   if (cuentaSinNegocio === 'si') {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center px-6 py-10">
+        <SelectorIdiomaFlotante />
         <div className="flex flex-col items-center gap-3 mb-6">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/qovento-logo.png" alt="Qovento" className="h-32 w-auto object-contain" />
-          <h1 className="text-2xl font-display font-semibold text-center">Falta terminar de crear tu negocio</h1>
+          <h1 className="text-2xl font-display font-semibold text-center">{t('Falta terminar de crear tu negocio')}</h1>
           <p className="text-sm text-muted dark:text-dark-text-secondary text-center max-w-xs">
-            Tu cuenta ya existe, pero no llegamos a configurar el negocio la vez pasada. Poné el nombre y seguimos.
+            {t('Tu cuenta ya existe, pero no llegamos a configurar el negocio la vez pasada. Poné el nombre y seguimos.')}
           </p>
         </div>
 
         <form onSubmit={completarNegocio} className="w-full max-w-xs flex flex-col gap-4">
           {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
           <div>
-            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Nombre de tu negocio</label>
+            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Nombre de tu negocio')}</label>
             <input
               required
               value={nombreNegocioRecuperar}
               onChange={(e) => setNombreNegocioRecuperar(e.target.value)}
               className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
-              placeholder="Mi local de celulares"
+              placeholder={t('Mi local de celulares')}
             />
           </div>
           <button
             disabled={cargando}
             className="mt-2 w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
           >
-            {cargando ? 'Creando...' : 'Terminar de crear mi negocio'}
+            {cargando ? t('Creando...') : t('Terminar de crear mi negocio')}
           </button>
         </form>
       </main>
@@ -148,12 +155,13 @@ export default function Registro() {
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center px-6 py-10">
+      <SelectorIdiomaFlotante />
       <div className="flex flex-col items-center gap-3 mb-6">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/qovento-logo.png" alt="Qovento" className="h-32 w-auto object-contain" />
-        <h1 className="text-2xl font-display font-semibold">Creá tu cuenta</h1>
+        <h1 className="text-2xl font-display font-semibold">{t('Creá tu cuenta')}</h1>
         <p className="text-sm text-muted dark:text-dark-text-secondary text-center max-w-xs">
-          El sistema móvil más rápido para recibir, documentar, etiquetar y comercializar celulares.
+          {t('El sistema móvil más rápido para recibir, documentar, etiquetar y comercializar celulares.')}
         </p>
       </div>
 
@@ -161,13 +169,13 @@ export default function Registro() {
         {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
 
         <div>
-          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Nombre de tu negocio</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Nombre de tu negocio')}</label>
           <input
             required
             value={nombreNegocio}
             onChange={(e) => setNombreNegocio(e.target.value)}
             className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
-            placeholder="Mi local de celulares"
+            placeholder={t('Mi local de celulares')}
           />
         </div>
 
@@ -183,7 +191,7 @@ export default function Registro() {
         </div>
 
         <div>
-          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Contraseña</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Contraseña')}</label>
           <input
             required
             type="password"
@@ -204,13 +212,13 @@ export default function Registro() {
             className="h-4 w-4 mt-0.5 accent-ink shrink-0"
           />
           <span>
-            Acepto los{' '}
+            {t('Acepto los')}{' '}
             <Link href="/terminos" target="_blank" className="text-accent dark:text-dark-accent underline">
-              Términos y Condiciones
+              {t('Términos y Condiciones')}
             </Link>{' '}
-            y la{' '}
+            {t('y la')}{' '}
             <Link href="/privacidad" target="_blank" className="text-accent dark:text-dark-accent underline">
-              Política de Privacidad
+              {t('Política de Privacidad')}
             </Link>
             .
           </span>
@@ -220,13 +228,13 @@ export default function Registro() {
           disabled={cargando || !aceptaTerminos || (REQUIERE_CAPTCHA && !captchaToken)}
           className="mt-2 w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
         >
-          {cargando ? 'Creando...' : 'Crear cuenta'}
+          {cargando ? t('Creando...') : t('Crear cuenta')}
         </button>
 
         <p className="text-center text-sm text-muted dark:text-dark-text-secondary">
-          ¿Ya tenés cuenta?{' '}
+          {t('¿Ya tenés cuenta?')}{' '}
           <Link href="/login" className="text-accent dark:text-dark-accent underline">
-            Iniciar sesión
+            {t('Iniciar sesión')}
           </Link>
         </p>
       </form>

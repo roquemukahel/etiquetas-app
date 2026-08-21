@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../lib/supabase/client';
 import Turnstile from '../Turnstile';
+import { useT } from '../lib/idioma';
+import SelectorIdiomaFlotante from '../SelectorIdiomaFlotante';
 
 const REQUIERE_CAPTCHA = !!process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
@@ -14,23 +16,24 @@ const REQUIERE_CAPTCHA = !!process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 // contraseña cuando en realidad era otra cosa (y ni "reintentar con la
 // misma contraseña" ni cambiarla solucionaba nada, solo esperar o refrescar
 // la página para conseguir un captcha nuevo).
-function mensajeErrorLogin(authError: { message: string; status?: number }) {
+function mensajeErrorLogin(authError: { message: string; status?: number }, t: (texto: string) => string) {
   const msg = authError.message?.toLowerCase() || '';
   if (msg.includes('captcha')) {
-    return 'No pudimos verificar que sos una persona (venció la verificación). Volvé a intentar.';
+    return t('No pudimos verificar que sos una persona (venció la verificación). Volvé a intentar.');
   }
   if (authError.status === 429 || msg.includes('rate limit') || msg.includes('too many')) {
-    return 'Demasiados intentos seguidos. Esperá un minuto y volvé a intentar.';
+    return t('Demasiados intentos seguidos. Esperá un minuto y volvé a intentar.');
   }
   if (msg.includes('invalid login credentials') || msg.includes('invalid credentials')) {
-    return 'Email o contraseña incorrectos';
+    return t('Email o contraseña incorrectos');
   }
-  return `No pudimos iniciar sesión: ${authError.message}`;
+  return `${t('No pudimos iniciar sesión:')} ${authError.message}`;
 }
 
 export default function Login() {
   const router = useRouter();
   const supabase = crearClienteNavegador();
+  const t = useT();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -50,7 +53,7 @@ export default function Login() {
     });
 
     if (authError) {
-      setError(mensajeErrorLogin(authError));
+      setError(mensajeErrorLogin(authError, t));
       setCargando(false);
       return;
     }
@@ -67,6 +70,7 @@ export default function Login() {
     <main
       className="min-h-screen w-full flex items-center justify-center lg:justify-end overflow-x-hidden bg-cover bg-center bg-no-repeat bg-gradient-to-br from-[#0b2a5e] via-[#103a78] to-[#0a1c40] lg:bg-[url('/fondo-login.webp')] px-4 sm:px-6 lg:pr-[7vw] py-10"
     >
+      <SelectorIdiomaFlotante />
       <div className="relative w-full max-w-[400px]">
         {/* Qobi, la mascota, agarrando el borde izquierdo del formulario
             (solo en computadora, donde el sector azul da lugar). Va ADELANTE
@@ -83,7 +87,7 @@ export default function Login() {
           <div className="flex flex-col items-center gap-1">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/qovento-icon.png" alt="Qovento" className="h-14 w-14 object-contain" />
-            <p className="text-lg font-display font-semibold text-ink">Iniciá sesión</p>
+            <p className="text-lg font-display font-semibold text-ink">{t('Iniciá sesión')}</p>
           </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -101,7 +105,7 @@ export default function Login() {
           </div>
 
           <div>
-            <label className="text-xs text-muted block mb-1">Contraseña</label>
+            <label className="text-xs text-muted block mb-1">{t('Contraseña')}</label>
             <input
               required
               type="password"
@@ -117,13 +121,13 @@ export default function Login() {
             disabled={cargando || (REQUIERE_CAPTCHA && !captchaToken)}
             className="mt-1 w-full rounded-2xl bg-accent hover:bg-accent-hover transition-colors py-3.5 text-center text-base font-medium text-white disabled:opacity-40"
           >
-            {cargando ? 'Entrando...' : 'Iniciar sesión'}
+            {cargando ? t('Entrando...') : t('Iniciar sesión')}
           </button>
 
           <p className="text-center text-sm text-muted">
-            ¿No tenés cuenta?{' '}
+            {t('¿No tenés cuenta?')}{' '}
             <Link href="/registro" className="text-accent underline">
-              Registrate
+              {t('Registrate')}
             </Link>
           </p>
         </form>
