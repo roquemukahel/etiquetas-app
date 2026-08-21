@@ -1,3 +1,7 @@
+'use client';
+
+import { useT } from './lib/idioma';
+
 // Toggle (switch) verde para el checklist de ingreso: encendido = funciona.
 // - Normal: arranca ENCENDIDO (verde) por defecto; el técnico lo apaga (gris)
 //   en lo que falla. Verde = funciona, gris = no funciona.
@@ -18,13 +22,14 @@ export default function CheckTri({
   invertido?: boolean;
   disabled?: boolean;
 }) {
+  const t = useT();
   const on = disabled ? false : invertido ? valor === true : valor !== false;
   const colorOn = invertido ? 'bg-warn' : 'bg-good';
   return (
     <div className={`flex items-center justify-between gap-2 py-1 ${disabled ? 'opacity-50' : ''}`}>
       <span className="text-sm">
         {label}
-        {disabled && <span className="text-[11px] text-muted dark:text-dark-text-secondary"> · no se pudo probar</span>}
+        {disabled && <span className="text-[11px] text-muted dark:text-dark-text-secondary"> · {t('no se pudo probar')}</span>}
       </span>
       <button
         type="button"

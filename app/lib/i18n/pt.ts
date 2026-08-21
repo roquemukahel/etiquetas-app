@@ -2336,4 +2336,7 @@ export const PT: Record<string, string> = {
   'Stock disponible en tiempo real': 'Estoque disponível em tempo real',
   'No hay equipos disponibles en este momento.': 'Não há aparelhos disponíveis neste momento.',
   disponibles: 'disponíveis',
+
+  // CheckTri (componente compartido de checklist)
+  'no se pudo probar': 'não foi possível testar',
 };
