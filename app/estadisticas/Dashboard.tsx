@@ -615,7 +615,11 @@ export default function Estadisticas() {
       let categoriaNombre: string;
       if (it.dispositivo_id) {
         const info = dispositivosInfo.get(it.dispositivo_id);
-        clave = `disp:${info?.modelo || 'Sin modelo'}`;
+        // Si no tiene modelo cargado, se agrupa por su PROPIO id (no por el
+        // texto fijo "Sin modelo") — si no, dos celulares sin modelo que no
+        // tienen nada que ver entre sí terminaban sumados en una sola fila
+        // como si fueran el mismo producto.
+        clave = info?.modelo ? `disp:${info.modelo}` : `disp-sin-modelo:${it.dispositivo_id}`;
         nombre = info?.modelo || 'Sin modelo';
         categoriaNombre = nombreCategoria(info?.categoria_id ?? null);
       } else if (it.producto_id) {
@@ -913,7 +917,7 @@ export default function Estadisticas() {
             </div>
             <SeccionCard
               titulo="Ranking de productos"
-              subtitulo="Por modelo o por producto de catálogo — nunca por el texto de la línea de venta, para no partir un mismo producto en dos filas."
+              subtitulo="Por modelo o por producto de catálogo. Si borrás un modelo/producto de Stock después de haberlo vendido, sus ventas viejas pueden aparecer separadas en vez de agrupadas — no borres del historial algo que ya vendiste si querés conservar este ranking preciso."
               accion={
                 <SegmentedChips
                   size="sm"
