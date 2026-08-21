@@ -6,6 +6,8 @@
 // fáciles de testear y de razonar. El fetching vive en la página.
 // ============================================================
 
+import { sumarMesConClamp } from '../lib/financiacion/motor';
+
 export type Periodo = 'hoy' | 'semana' | 'mes' | 'anio';
 
 // Un rango de análisis + su período anterior EQUIVALENTE (misma duración,
@@ -198,14 +200,14 @@ export function variacion(actual: number, anterior: number): { pct: number | nul
 
 // ---------- Serie de evolución (actual + anterior superpuesto) ----------
 export type PuntoSerie = { label: string; actual: number; anterior: number | null };
-export type MetricaSerie = 'ventas' | 'ingresado' | 'ganancia';
+export type MetricaSerie = 'ventas' | 'ingresado' | 'ganancia' | 'credito';
 
 function valorOrdenPara(o: OrdenR, items: ItemR[], metrica: MetricaSerie): number {
   if (metrica === 'ventas') return montoVenta(o);
   if (metrica === 'ganancia') {
     return items.reduce((a, it) => a + (it.costo != null && it.precio_unitario != null ? (it.precio_unitario - it.costo) * (it.cantidad || 0) : 0), 0);
   }
-  return 0; // 'ingresado' se calcula aparte (viene de pagos, no de órdenes)
+  return 0; // 'ingresado'/'credito' se calculan aparte (vienen de pagos/cta_cte, no de órdenes)
 }
 
 // Genera los buckets del gráfico según el rango, con la serie del período
@@ -214,6 +216,7 @@ export function serieEvolucion(
   ordenes: OrdenR[],
   itemsPorOrden: Map<string, ItemR[]>,
   pagos: PagoR[],
+  credito: CreditoR[],
   rango: Rango,
   metrica: MetricaSerie
 ): PuntoSerie[] {
@@ -258,6 +261,13 @@ export function serieEvolucion(
   const sumaEnTramo = (desde: Date, hasta: Date): number => {
     if (metrica === 'ingresado') {
       return pagos.filter((p) => entre(p.fecha, desde, hasta)).reduce((a, p) => a + (p.monto || 0), 0);
+    }
+    if (metrica === 'credito') {
+      // Mismo criterio que bloqueVentas() para "credito otorgado": cargos
+      // de venta en cuenta corriente, por fecha del cargo (no de la orden).
+      return credito
+        .filter((m) => m.tipo === 'cargo' && m.concepto === 'venta' && entre(m.fecha, desde, hasta))
+        .reduce((a, m) => a + (m.monto || 0), 0);
     }
     return cobradas(desde, hasta).reduce((a, o) => a + valorOrdenPara(o, itemsPorOrden.get(o.id) ?? [], metrica), 0);
   };
@@ -357,4 +367,107 @@ export type EgresoR = { importe: number; fecha: string };
 
 export function egresosPeriodoDe(egresos: EgresoR[], inicio: Date, fin: Date): number {
   return egresos.filter((e) => entre(e.fecha + 'T00:00:00', inicio, fin)).reduce((a, e) => a + e.importe, 0);
+}
+
+// ---------- Ranking por producto y por categoría (para Estadísticas) ----------
+// Pedido real de dos clientes ("no es lo mismo el margen de accesorios que
+// el de teléfonos", "cuáles son mis productos/categorías estrella"). Se
+// agrupa por una CLAVE estable que arma quien llama (modelo normalizado de
+// dispositivos, producto_id de catálogo, o el texto de la línea como último
+// recurso para ítems manuales sin catálogo) — nunca por el texto libre de la
+// línea de venta a secas, para no partir un mismo modelo/producto en dos
+// filas del ranking por una diferencia de redacción. Nunca se usa el costo
+// ACTUAL de un producto para recalcular ventas viejas: el costo ya viene
+// congelado en cada línea (orden_items.costo, snapshot al vender).
+export type ItemProductoR = {
+  clave: string;
+  nombre: string;
+  categoriaNombre: string;
+  cantidad: number;
+  precio_unitario: number;
+  costo: number | null;
+};
+
+export type FilaRankingProducto = {
+  nombre: string;
+  unidades: number;
+  facturacion: number;
+  ganancia: number | null; // null = NINGUNA unidad de este grupo tiene costo cargado (no es lo mismo que $0)
+  margen: number | null; // % ganancia sobre la facturación QUE TIENE costo, null si no hay cobertura
+};
+
+function agruparItemsPor(items: ItemProductoR[], clave: (it: ItemProductoR) => string, nombre: (it: ItemProductoR) => string): FilaRankingProducto[] {
+  const mapa = new Map<string, { nombre: string; unidades: number; facturacion: number; ganancia: number; facturacionConCosto: number; tieneCosto: boolean }>();
+  for (const it of items) {
+    const k = clave(it);
+    const e = mapa.get(k) ?? { nombre: nombre(it), unidades: 0, facturacion: 0, ganancia: 0, facturacionConCosto: 0, tieneCosto: false };
+    e.unidades += it.cantidad;
+    e.facturacion += it.precio_unitario * it.cantidad;
+    if (it.costo != null) {
+      e.ganancia += (it.precio_unitario - it.costo) * it.cantidad;
+      e.facturacionConCosto += it.precio_unitario * it.cantidad;
+      e.tieneCosto = true;
+    }
+    mapa.set(k, e);
+  }
+  return Array.from(mapa.values()).map((e) => ({
+    nombre: e.nombre,
+    unidades: e.unidades,
+    facturacion: e.facturacion,
+    ganancia: e.tieneCosto ? e.ganancia : null,
+    margen: e.tieneCosto && e.facturacionConCosto > 0.009 ? (e.ganancia / e.facturacionConCosto) * 100 : null,
+  }));
+}
+
+export function rankingProductosDe(items: ItemProductoR[]): FilaRankingProducto[] {
+  return agruparItemsPor(items, (it) => it.clave, (it) => it.nombre);
+}
+
+export function rankingCategoriasDe(items: ItemProductoR[]): FilaRankingProducto[] {
+  return agruparItemsPor(items, (it) => it.categoriaNombre, (it) => it.categoriaNombre);
+}
+
+// ---------- Pagado por proveedor (para Estadísticas) ----------
+// Reutiliza proveedor_movimientos (cuentas por pagar) — distinto del ranking
+// de COMPRADO que ya existía (comprasProveedor/comprasManuales). Un cliente
+// pidió puntualmente "a qué proveedor le pagué más", que no es lo mismo que
+// "a quién le compré más" (comprar a crédito no es lo mismo que pagarle).
+export type MovProveedorR = { proveedor_id: string; tipo: string; monto: number; fecha: string };
+
+export function pagadoPorProveedorDe(movs: MovProveedorR[], inicio: Date, fin: Date): { proveedor_id: string; monto: number }[] {
+  const mapa = new Map<string, number>();
+  for (const m of movs) {
+    if (m.tipo !== 'abono' || !entre(m.fecha, inicio, fin)) continue;
+    mapa.set(m.proveedor_id, (mapa.get(m.proveedor_id) ?? 0) + m.monto);
+  }
+  return Array.from(mapa.entries()).map(([proveedor_id, monto]) => ({ proveedor_id, monto }));
+}
+
+// ---------- Evolución mensual por medio de pago (para Estadísticas) ----------
+// Pedido real: "quiero ver cómo evoluciona mes a mes el efectivo, la
+// tarjeta, la transferencia" — hoy solo había una foto del período elegido
+// (Caja por medio de pago), no una serie en el tiempo. Reutiliza
+// sumarMesConClamp del motor de financiación (mismo criterio de fin de mes)
+// en vez de reimplementar aritmética de meses por tercera vez en el repo.
+export type FilaEvolucionMedio = { mes: string; porMedio: Record<string, number>; total: number };
+
+export function evolucionMediosPagoDe(pagos: PagoR[], horizonteMeses: number, hoy: Date): FilaEvolucionMedio[] {
+  const hoyMedianoche = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+  const meses: { clave: string; ini: Date; fin: Date }[] = [];
+  for (let i = horizonteMeses - 1; i >= 0; i--) {
+    const base = sumarMesConClamp(hoyMedianoche, -i);
+    const ini = new Date(base.getFullYear(), base.getMonth(), 1);
+    const fin = new Date(base.getFullYear(), base.getMonth() + 1, 0, 23, 59, 59, 999);
+    meses.push({ clave: `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, '0')}`, ini, fin });
+  }
+  return meses.map(({ clave, ini, fin }) => {
+    const delMes = pagos.filter((p) => entre(p.fecha, ini, fin));
+    const porMedio: Record<string, number> = {};
+    let total = 0;
+    for (const p of delMes) {
+      porMedio[p.medio] = (porMedio[p.medio] ?? 0) + (p.monto || 0);
+      total += p.monto || 0;
+    }
+    return { mes: clave, porMedio, total };
+  });
 }
