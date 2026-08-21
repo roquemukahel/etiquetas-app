@@ -988,4 +988,11 @@ export const PT: Record<string, string> = {
   'Limpieza y mantenimiento': 'Limpeza e manutenção',
   Diagnóstico: 'Diagnóstico',
   Otros: 'Outros',
+
+  // Compras — lista
+  'Buscar por modelo o cliente...': 'Buscar por modelo ou cliente...',
+  'No hay compras para mostrar.': 'Não há compras para mostrar.',
+  'Nueva compra': 'Nova compra',
+  compra: 'compra',
+  compras: 'compras',
 };
