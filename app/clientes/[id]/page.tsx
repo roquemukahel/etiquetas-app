@@ -11,6 +11,8 @@ import { simboloMoneda } from '../../lib/monedas';
 import { armarLinkWhatsApp } from '../../lib/whatsapp';
 import { codigoLlamada } from '../../lib/paises';
 import { MEDIOS_PAGO, calcularSaldo, estadoCuenta, ESTADO_INFO, diasDeMora } from '../../lib/cuentaCorriente';
+import { aplicarPagoAFinanciacion } from '../../lib/financiacion/servicio';
+import FinanciacionCliente from '../../FinanciacionCliente';
 
 type Cliente = {
   id: string;
@@ -67,7 +69,11 @@ export default function DetalleCliente() {
   const [loading, setLoading] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<'cuenta' | 'compras' | 'servicio' | 'datos'>('cuenta');
+  const [tab, setTab] = useState<'cuenta' | 'financiacion' | 'compras' | 'servicio' | 'datos'>('cuenta');
+  // Sube cada vez que algo desde afuera (ej. registrar un pago en la
+  // pestaña "Cuenta cte.") pudo haber afectado las cuotas — le avisa a
+  // FinanciacionCliente que tiene que recargar, sin acoplar sus datos acá.
+  const [recargarFinanciacion, setRecargarFinanciacion] = useState(0);
 
   // Registrar pago
   const [registrandoPago, setRegistrandoPago] = useState(false);
@@ -233,9 +239,23 @@ export default function DetalleCliente() {
       setGuardandoPago(false);
       return;
     }
+    // Si este cliente tiene financiaciones activas, el pago se reparte solo
+    // entre sus cuotas pendientes (vencidas primero) — no hace falta elegir
+    // nada a mano. El pago YA quedó asentado en la cuenta corriente arriba
+    // pase lo que pase acá; esto solo decide a qué cuota se le atribuye.
+    const resultadoCuotas = await aplicarPagoAFinanciacion(supabase, {
+      pagoId: pago.id,
+      clienteId: String(id),
+      monto,
+      moneda: monedaCodigo,
+    });
+    if ('error' in resultadoCuotas) {
+      setError('El pago se registró, pero no pudimos aplicarlo a las cuotas: ' + resultadoCuotas.error);
+    }
     setGuardandoPago(false);
     setRegistrandoPago(false);
     await cargarMovimientos();
+    setRecargarFinanciacion((n) => n + 1);
   };
 
   const abrirAjuste = () => {
@@ -456,7 +476,7 @@ export default function DetalleCliente() {
       )}
 
       <div className="flex items-center gap-1.5 text-sm overflow-x-auto">
-        {(['cuenta', 'compras', 'servicio', 'datos'] as const).map((t) => (
+        {(['cuenta', 'financiacion', 'compras', 'servicio', 'datos'] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -466,7 +486,7 @@ export default function DetalleCliente() {
                 : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
             }`}
           >
-            {t === 'cuenta' ? 'Cuenta cte.' : t === 'compras' ? 'Compras' : t === 'servicio' ? 'Servicio Téc.' : 'Datos'}
+            {t === 'cuenta' ? 'Cuenta cte.' : t === 'financiacion' ? 'Financiaciones' : t === 'compras' ? 'Compras' : t === 'servicio' ? 'Servicio Téc.' : 'Datos'}
           </button>
         ))}
       </div>
@@ -628,6 +648,10 @@ export default function DetalleCliente() {
             )}
           </div>
         </div>
+      )}
+
+      {tab === 'financiacion' && (
+        <FinanciacionCliente clienteId={String(id)} monedaCodigo={monedaCodigo} recargar={recargarFinanciacion} onCambio={() => cargarMovimientos()} />
       )}
 
       {tab === 'compras' && (

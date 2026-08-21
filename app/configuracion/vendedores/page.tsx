@@ -24,6 +24,7 @@ type Vendedor = {
   puede_ver_estadisticas: boolean;
   puede_recibir_servicio_tecnico: boolean;
   puede_gestionar_servicio_tecnico: boolean;
+  puede_gestionar_financiacion: boolean;
 };
 
 const PERMISOS_DEFAULT: PermisosForm = {
@@ -35,6 +36,7 @@ const PERMISOS_DEFAULT: PermisosForm = {
   puedeVerEstadisticas: true,
   puedeRecibirServicioTecnico: true,
   puedeGestionarServicioTecnico: true,
+  puedeGestionarFinanciacion: true,
 };
 
 export default function Vendedores() {
@@ -106,6 +108,7 @@ export default function Vendedores() {
       puedeVerEstadisticas: v.puede_ver_estadisticas,
       puedeRecibirServicioTecnico: v.puede_recibir_servicio_tecnico,
       puedeGestionarServicioTecnico: v.puede_gestionar_servicio_tecnico,
+      puedeGestionarFinanciacion: v.puede_gestionar_financiacion,
     });
     setError(null);
   };
@@ -142,6 +145,7 @@ export default function Vendedores() {
         puede_ver_estadisticas: permisosEdit.puedeVerEstadisticas,
         puede_recibir_servicio_tecnico: permisosEdit.puedeRecibirServicioTecnico,
         puede_gestionar_servicio_tecnico: permisosEdit.puedeGestionarServicioTecnico,
+        puede_gestionar_financiacion: permisosEdit.puedeGestionarFinanciacion,
       })
       .eq('id', v.id);
     setGuardandoPerfil(false);

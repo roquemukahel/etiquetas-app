@@ -23,6 +23,7 @@ export type Permisos = {
   puedeVerEstadisticas: boolean;
   puedeRecibirServicioTecnico: boolean;
   puedeGestionarServicioTecnico: boolean;
+  puedeGestionarFinanciacion: boolean;
 };
 
 export type Actor = {
