@@ -14,6 +14,7 @@ import { simboloMoneda } from '../../lib/monedas';
 import { sanitizarDecimal } from '../../lib/numeros';
 import SelectorColorAuto from '../../SelectorColorAuto';
 import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
+import { useT } from '../../lib/idioma';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 
@@ -21,6 +22,7 @@ export default function NuevoDispositivo() {
   const router = useRouter();
   const supabase = crearClienteNavegador();
   const actorActual = useActor();
+  const t = useT();
   const puedeAgregarStock = tienePermiso(actorActual, 'agregar_stock');
 
   const [carpetas, setCarpetas] = useState<string[]>([]);
@@ -101,7 +103,7 @@ export default function NuevoDispositivo() {
     });
 
     if (insertError) {
-      setError('No pudimos guardar el dispositivo: ' + insertError.message);
+      setError(`${t('No pudimos guardar el dispositivo:')} ` + insertError.message);
       setGuardando(false);
       return;
     }
@@ -118,16 +120,16 @@ export default function NuevoDispositivo() {
         <Link href="/stock" className="text-2xl leading-none">
           &larr;
         </Link>
-        <span className="text-lg font-medium">Cargar dispositivo</span>
+        <span className="text-lg font-medium">{t('Cargar dispositivo')}</span>
       </header>
 
       {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
       {!puedeAgregarStock && (
-        <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">No tenés permiso para agregar dispositivos al stock.</p>
+        <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{t('No tenés permiso para agregar dispositivos al stock.')}</p>
       )}
 
       <div className="flex flex-col gap-3">
-        <Campo label="Modelo (carpeta)" valor={modelo} onChange={setModelo} placeholder="iPhone 13" listaId="carpetas-stock" />
+        <Campo label={t('Modelo (carpeta)')} valor={modelo} onChange={setModelo} placeholder="iPhone 13" listaId="carpetas-stock" />
         <datalist id="carpetas-stock">
           {carpetas.map((c) => (
             <option key={c} value={c} />
@@ -136,7 +138,7 @@ export default function NuevoDispositivo() {
         {sugerirCarpetas(modelo, carpetas).length > 0 && (
           <div className="-mt-1 rounded-lg bg-warn/10 border border-warn/30 px-3 py-2 flex flex-col gap-1.5">
             <p className="text-xs text-ink dark:text-dark-text">
-              Ya existe una carpeta parecida. Para no crear una repetida, ¿usás una de estas?
+              {t('Ya existe una carpeta parecida. Para no crear una repetida, ¿usás una de estas?')}
             </p>
             <div className="flex flex-wrap gap-1.5">
               {sugerirCarpetas(modelo, carpetas).map((c) => (
@@ -146,7 +148,7 @@ export default function NuevoDispositivo() {
                   onClick={() => setModelo(c)}
                   className="rounded-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border px-3 py-1 text-xs font-medium"
                 >
-                  Usar «{c}»
+                  {t('Usar')} «{c}»
                 </button>
               ))}
             </div>
@@ -154,7 +156,7 @@ export default function NuevoDispositivo() {
         )}
 
         <div>
-          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Almacenamiento</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Almacenamiento')}</label>
           <div className="flex gap-2">
             {STORAGE_OPTIONS.map((gb) => (
               <button
@@ -172,9 +174,9 @@ export default function NuevoDispositivo() {
         </div>
 
         <Campo label="IMEI" valor={imei} onChange={setImei} mono />
-        <Campo label="Salud de batería (%)" valor={bateria} onChange={setBateria} numerico />
-        <SelectorColorAuto label="Color" modelo={modelo} value={color} onChange={setColor} />
-        <Campo label="Precio" valor={precio} onChange={setPrecio} numerico />
+        <Campo label={t('Salud de batería (%)')} valor={bateria} onChange={setBateria} numerico />
+        <SelectorColorAuto label={t('Color')} modelo={modelo} value={color} onChange={setColor} />
+        <Campo label={t('Precio')} valor={precio} onChange={setPrecio} numerico />
         {(() => {
           const planes = planesActivos(interesCuotas);
           const base = Number(precio);
@@ -182,19 +184,19 @@ export default function NuevoDispositivo() {
           const mon = simboloMoneda(monedaCodigo);
           return (
             <div className="rounded-xl bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border px-4 py-3 text-xs text-muted dark:text-dark-text-secondary flex flex-col gap-1">
-              <span className="font-medium text-ink dark:text-dark-text">Precio en cuotas (según tu financiación):</span>
+              <span className="font-medium text-ink dark:text-dark-text">{t('Precio en cuotas (según tu financiación):')}</span>
               {planes.map((p) => (
                 <span key={p.cuotas}>
-                  {etiquetaCuotas(p.cuotas)} de {mon}
-                  {Math.round(valorCuota(base, p.cuotas, p.interes)).toLocaleString('es-AR')} · total {mon}
+                  {etiquetaCuotas(p.cuotas)} {t('de')} {mon}
+                  {Math.round(valorCuota(base, p.cuotas, p.interes)).toLocaleString('es-AR')} · {t('total')} {mon}
                   {Math.round(base * (1 + p.interes / 100)).toLocaleString('es-AR')}
                 </span>
               ))}
             </div>
           );
         })()}
-        <Campo label="Costo (lo que le pagaste al proveedor, opcional)" valor={costo} onChange={setCosto} numerico />
-        <Campo label="Proveedor (opcional)" valor={proveedor} onChange={setProveedor} listaId="proveedores-stock" />
+        <Campo label={t('Costo (lo que le pagaste al proveedor, opcional)')} valor={costo} onChange={setCosto} numerico />
+        <Campo label={t('Proveedor (opcional)')} valor={proveedor} onChange={setProveedor} listaId="proveedores-stock" />
         <datalist id="proveedores-stock">
           {proveedores.map((p) => (
             <option key={p} value={p} />
@@ -203,13 +205,13 @@ export default function NuevoDispositivo() {
 
         <div>
           <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">
-            Detalles del equipo (opcional)
+            {t('Detalles del equipo (opcional)')}
           </label>
           <textarea
             value={detalles}
             onChange={(e) => setDetalles(e.target.value)}
             rows={2}
-            placeholder="Ej. módulo con detalle, carcasa con un rayón, no anda el flash…"
+            placeholder={t('Ej. módulo con detalle, carcasa con un rayón, no anda el flash…')}
             className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
           />
         </div>
@@ -222,7 +224,7 @@ export default function NuevoDispositivo() {
         onClick={handleGuardar}
         className="mt-auto w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
       >
-        {guardando ? 'Guardando...' : 'Agregar al stock'}
+        {guardando ? t('Guardando...') : t('Agregar al stock')}
       </button>
     </main>
   );

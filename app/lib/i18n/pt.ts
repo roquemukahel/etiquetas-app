@@ -400,4 +400,87 @@ export const PT: Record<string, string> = {
   '¿Eliminar': 'Excluir',
   '¿Eliminar este producto?': 'Excluir este produto?',
   '¿Eliminar la carpeta': 'Excluir a pasta',
+
+  // Stock — Cargar dispositivo a mano
+  Almacenamiento: 'Armazenamento',
+  'Cargar dispositivo': 'Cadastrar aparelho',
+  Color: 'Cor',
+  'Costo (lo que le pagaste al proveedor, opcional)': 'Custo (o que você pagou ao fornecedor, opcional)',
+  'Detalles del equipo (opcional)': 'Detalhes do aparelho (opcional)',
+  'Ej. módulo con detalle, carcasa con un rayón, no anda el flash…': 'Ex. módulo com defeito, carcaça arranhada, o flash não funciona…',
+  'Guardando...': 'Salvando...',
+  'Modelo (carpeta)': 'Modelo (pasta)',
+  'No pudimos guardar el dispositivo:': 'Não conseguimos salvar o aparelho:',
+  'No tenés permiso para agregar dispositivos al stock.': 'Você não tem permissão para adicionar aparelhos ao estoque.',
+  'Precio en cuotas (según tu financiación):': 'Preço parcelado (conforme seu financiamento):',
+  'Salud de batería (%)': 'Saúde da bateria (%)',
+  Usar: 'Usar',
+  'Ya existe una carpeta parecida. Para no crear una repetida, ¿usás una de estas?':
+    'Já existe uma pasta parecida. Para não criar uma repetida, você usa uma destas?',
+  total: 'total',
+
+  // Stock — Carpetas
+  'No pudimos renombrar:': 'Não conseguimos renomear:',
+  '¿Eliminar esta carpeta? Los dispositivos que tenga no se borran, solo dejan de tener carpeta asignada explícitamente.':
+    'Excluir esta pasta? Os aparelhos que ela tiver não são apagados, só deixam de ter uma pasta atribuída.',
+  'Carpetas de Stock': 'Pastas do Estoque',
+  'Nombre (ej. iPhone 14)': 'Nome (ex. iPhone 14)',
+  Crear: 'Criar',
+  'Todavía no creaste ninguna carpeta.': 'Você ainda não criou nenhuma pasta.',
+  Renombrar: 'Renomear',
+
+  // Stock — Cargar con foto
+  'Agregado al stock. Ya podés cargar el siguiente.': 'Adicionado ao estoque. Já pode cadastrar o próximo.',
+  Dictar: 'Ditar',
+  'Info del dispositivo': 'Informações do aparelho',
+  'Ir al Stock': 'Ir ao Estoque',
+  'Leyendo la foto...': 'Lendo a foto...',
+  'No pudimos leer datos de esta foto. Podés completar los campos a mano.':
+    'Não conseguimos ler dados desta foto. Você pode preencher os campos manualmente.',
+  'No pudimos leer la foto. Podés completar los campos a mano.':
+    'Não conseguimos ler a foto. Você pode preencher os campos manualmente.',
+  'Precio (opcional)': 'Preço (opcional)',
+  'Ya hay un dispositivo en Stock con el IMEI': 'Já existe um aparelho no Estoque com o IMEI',
+  'foto leída': 'foto lida',
+  'fotos leídas': 'fotos lidas',
+  'por voz': 'por voz',
+  'tocá para sacar foto de la etiqueta, pantalla o caja': 'toque para tirar foto da etiqueta, tela ou caixa',
+  'tocá para sacar otra (ej. la parte de atrás)': 'toque para tirar outra (ex. a parte de trás)',
+  '¿Agregarlo igual?': 'Adicionar mesmo assim?',
+
+  // Stock — ficha del dispositivo
+  'Cambiar estado': 'Trocar status',
+  'Cambios sin guardar': 'Alterações não salvas',
+  Características: 'Características',
+  'Costo (opcional)': 'Custo (opcional)',
+  'Costo y proveedor son visibles solo para quienes pueden ver estadísticas.':
+    'Custo e fornecedor são visíveis só para quem pode ver estatísticas.',
+  'Derivando...': 'Encaminhando...',
+  'Detalles (ej. no enciende, pantalla rota)': 'Detalhes (ex. não liga, tela quebrada)',
+  Disponible: 'Disponível',
+  Dispositivo: 'Aparelho',
+  'Ej. módulo con detalle, carcasa con un rayón…': 'Ex. módulo com defeito, carcaça arranhada…',
+  'Eliminar este dispositivo lo saca para siempre del historial de Stock. No se puede deshacer.':
+    'Excluir este aparelho o tira para sempre do histórico do Estoque. Não pode ser desfeito.',
+  'Este dispositivo va a salir de Stock y va a aparecer en Servicio Técnico.':
+    'Este aparelho vai sair do Estoque e vai aparecer na Assistência Técnica.',
+  'Fuera de stock': 'Fora de estoque',
+  'Garantía hasta el': 'Garantia até',
+  'Guardar cambios': 'Salvar alterações',
+  Identificación: 'Identificação',
+  'Información comercial': 'Informações comerciais',
+  'Mostrar en el stock público (si está activado en Configuración)':
+    'Mostrar no estoque público (se estiver ativado em Configurações)',
+  'No encontramos ese dispositivo.': 'Não encontramos esse aparelho.',
+  'No pudimos eliminar:': 'Não conseguimos excluir:',
+  'No pudimos guardar los cambios:': 'Não conseguimos salvar as alterações:',
+  'Observaciones y operación': 'Observações e operação',
+  'Otro valor en GB': 'Outro valor em GB',
+  'Se borra': 'Será excluído',
+  'Serie / código (opcional)': 'Série / código (opcional)',
+  'Sí, eliminar': 'Sim, excluir',
+  'Tenés cambios sin guardar. ¿Salir igual?': 'Você tem alterações não salvas. Sair mesmo assim?',
+  'Volver al stock': 'Voltar ao estoque',
+  'Zona de peligro': 'Zona de perigo',
+  'del historial de Stock. Esta acción no se puede deshacer.': 'do histórico do Estoque. Essa ação não pode ser desfeita.',
 };

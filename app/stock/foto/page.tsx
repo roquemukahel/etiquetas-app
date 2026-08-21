@@ -12,6 +12,7 @@ import { tienePermiso } from '../../lib/permisos';
 import SelectorColorAuto from '../../SelectorColorAuto';
 import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
 import { sanitizarDecimal } from '../../lib/numeros';
+import { useT } from '../../lib/idioma';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 
@@ -30,6 +31,7 @@ function fileToBase64(file: File): Promise<string> {
 export default function StockPorFoto() {
   const supabase = crearClienteNavegador();
   const actorActual = useActor();
+  const t = useT();
   const puedeAgregarStock = tienePermiso(actorActual, 'agregar_stock');
 
   const [carpetas, setCarpetas] = useState<string[]>([]);
@@ -108,10 +110,10 @@ export default function StockPorFoto() {
       }
       setFotosLeidas((n) => n + 1);
       if (!data?.modelo && !data?.capacidad_gb && !data?.imei && !data?.color && data?.salud_bateria == null) {
-        setError('No pudimos leer datos de esta foto. Podés completar los campos a mano.');
+        setError(t('No pudimos leer datos de esta foto. Podés completar los campos a mano.'));
       }
     } catch {
-      setError('No pudimos leer la foto. Podés completar los campos a mano.');
+      setError(t('No pudimos leer la foto. Podés completar los campos a mano.'));
     } finally {
       setLeyendoFoto(false);
     }
@@ -132,7 +134,7 @@ export default function StockPorFoto() {
       // Con carga por foto es fácil escanear el mismo equipo dos veces sin
       // querer (ej. sacarle otra foto pensando que era el siguiente) — se
       // avisa antes de duplicarlo en Stock, igual que en Servicio Técnico.
-      if (existente && !confirm(`Ya hay un dispositivo en Stock con el IMEI ${imeiLimpio}. ¿Agregarlo igual?`)) return;
+      if (existente && !confirm(`${t('Ya hay un dispositivo en Stock con el IMEI')} ${imeiLimpio}. ${t('¿Agregarlo igual?')}`)) return;
     }
     setGuardando(true);
     setError(null);
@@ -155,7 +157,7 @@ export default function StockPorFoto() {
     });
 
     if (insertError) {
-      setError('No pudimos guardar el dispositivo: ' + insertError.message);
+      setError(`${t('No pudimos guardar el dispositivo:')} ` + insertError.message);
       setGuardando(false);
       return;
     }
@@ -191,18 +193,18 @@ export default function StockPorFoto() {
         <Link href="/stock" className="text-2xl leading-none">
           &larr;
         </Link>
-        <span className="text-lg font-medium mr-auto">Cargar con foto</span>
+        <span className="text-lg font-medium mr-auto">{t('Cargar con foto')}</span>
         <Link href="/stock" className="text-xs text-accent dark:text-dark-accent underline">
-          Ir al Stock
+          {t('Ir al Stock')}
         </Link>
       </header>
 
       {guardadoOk && (
-        <p className="text-sm text-good bg-good/10 rounded-lg px-3 py-2">✓ Agregado al stock. Ya podés cargar el siguiente.</p>
+        <p className="text-sm text-good bg-good/10 rounded-lg px-3 py-2">✓ {t('Agregado al stock. Ya podés cargar el siguiente.')}</p>
       )}
       {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
       {!puedeAgregarStock && (
-        <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">No tenés permiso para agregar dispositivos al stock.</p>
+        <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{t('No tenés permiso para agregar dispositivos al stock.')}</p>
       )}
 
       <label className="flex items-center gap-3 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 cursor-pointer shadow-card">
@@ -211,20 +213,20 @@ export default function StockPorFoto() {
           {photoPreview ? '✓' : '📷'}
         </div>
         <div className="flex-1">
-          <p className="text-sm font-medium">Info del dispositivo</p>
+          <p className="text-sm font-medium">{t('Info del dispositivo')}</p>
           <p className="text-xs text-muted dark:text-dark-text-secondary">
             {leyendoFoto
-              ? 'Leyendo la foto...'
+              ? t('Leyendo la foto...')
               : fotosLeidas > 0
-              ? `${fotosLeidas} foto${fotosLeidas > 1 ? 's' : ''} leída${fotosLeidas > 1 ? 's' : ''} — tocá para sacar otra (ej. la parte de atrás)`
-              : 'tocá para sacar foto de la etiqueta, pantalla o caja'}
+              ? `${fotosLeidas} ${fotosLeidas > 1 ? t('fotos leídas') : t('foto leída')} — ${t('tocá para sacar otra (ej. la parte de atrás)')}`
+              : t('tocá para sacar foto de la etiqueta, pantalla o caja')}
           </p>
         </div>
       </label>
 
       <div className="flex flex-col gap-3">
         <Campo
-          label="Modelo (carpeta)"
+          label={t('Modelo (carpeta)')}
           valor={modelo}
           onChange={setModelo}
           placeholder="iPhone 13"
@@ -240,7 +242,7 @@ export default function StockPorFoto() {
         {sugerirCarpetas(modelo, carpetas).length > 0 && (
           <div className="-mt-1 rounded-lg bg-warn/10 border border-warn/30 px-3 py-2 flex flex-col gap-1.5">
             <p className="text-xs text-ink dark:text-dark-text">
-              Ya existe una carpeta parecida. Para no crear una repetida, ¿usás una de estas?
+              {t('Ya existe una carpeta parecida. Para no crear una repetida, ¿usás una de estas?')}
             </p>
             <div className="flex flex-wrap gap-1.5">
               {sugerirCarpetas(modelo, carpetas).map((c) => (
@@ -250,7 +252,7 @@ export default function StockPorFoto() {
                   onClick={() => setModelo(c)}
                   className="rounded-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border px-3 py-1 text-xs font-medium"
                 >
-                  Usar «{c}»
+                  {t('Usar')} «{c}»
                 </button>
               ))}
             </div>
@@ -258,7 +260,7 @@ export default function StockPorFoto() {
         )}
 
         <div>
-          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Almacenamiento</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Almacenamiento')}</label>
           <div className="flex gap-2">
             {STORAGE_OPTIONS.map((gb) => (
               <button
@@ -277,7 +279,7 @@ export default function StockPorFoto() {
 
         <Campo label="IMEI" valor={imei} onChange={setImei} mono />
         <Campo
-          label="Salud de batería (%)"
+          label={t('Salud de batería (%)')}
           valor={bateria}
           onChange={setBateria}
           numerico
@@ -292,10 +294,10 @@ export default function StockPorFoto() {
           }
           dictando={campoDictando === 'bateria'}
         />
-        <SelectorColorAuto label="Color" modelo={modelo} value={color} onChange={setColor} />
-        <Campo label="Precio (opcional)" valor={precio} onChange={setPrecio} numerico />
-        <Campo label="Costo (lo que le pagaste al proveedor, opcional)" valor={costo} onChange={setCosto} numerico />
-        <Campo label="Proveedor (opcional)" valor={proveedor} onChange={setProveedor} listaId="proveedores-stock-foto" />
+        <SelectorColorAuto label={t('Color')} modelo={modelo} value={color} onChange={setColor} />
+        <Campo label={t('Precio (opcional)')} valor={precio} onChange={setPrecio} numerico />
+        <Campo label={t('Costo (lo que le pagaste al proveedor, opcional)')} valor={costo} onChange={setCosto} numerico />
+        <Campo label={t('Proveedor (opcional)')} valor={proveedor} onChange={setProveedor} listaId="proveedores-stock-foto" />
         <datalist id="proveedores-stock-foto">
           {proveedores.map((p) => (
             <option key={p} value={p} />
@@ -310,7 +312,7 @@ export default function StockPorFoto() {
         onClick={handleGuardar}
         className="mt-auto w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
       >
-        {guardando ? 'Guardando...' : 'Agregar al stock'}
+        {guardando ? t('Guardando...') : t('Agregar al stock')}
       </button>
     </main>
   );
@@ -337,6 +339,7 @@ function Campo({
   onDictar?: () => void;
   dictando?: boolean;
 }) {
+  const t = useT();
   return (
     <div>
       <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{label}</label>
@@ -353,7 +356,7 @@ function Campo({
           <button
             type="button"
             onClick={onDictar}
-            aria-label={`Dictar ${label} por voz`}
+            aria-label={`${t('Dictar')} ${label} ${t('por voz')}`}
             className={`shrink-0 w-11 rounded-xl border flex items-center justify-center text-lg transition-colors ${
               dictando
                 ? 'bg-bad/10 border-bad text-bad animate-pulse'

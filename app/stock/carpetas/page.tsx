@@ -5,11 +5,13 @@ import Link from 'next/link';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { registrarAuditoria } from '../../lib/auditoria';
 import { compararModelosPorSalida } from '../../lib/catalogosMarcas';
+import { useT } from '../../lib/idioma';
 
 type Carpeta = { id: string; nombre: string; imagen_url: string | null };
 
 export default function Carpetas() {
   const supabase = crearClienteNavegador();
+  const t = useT();
   const [carpetas, setCarpetas] = useState<Carpeta[]>([]);
   const [loading, setLoading] = useState(true);
   const [nombre, setNombre] = useState('');
@@ -38,7 +40,7 @@ export default function Carpetas() {
     setError(null);
     const { error: insertError } = await supabase.from('modelos_stock').insert({ nombre: nombre.trim() });
     if (insertError) {
-      setError('No pudimos guardar: ' + insertError.message);
+      setError(`${t('No pudimos guardar:')} ` + insertError.message);
       setGuardando(false);
       return;
     }
@@ -62,7 +64,7 @@ export default function Carpetas() {
     setError(null);
     const { error: updateError } = await supabase.from('modelos_stock').update({ nombre: nuevoNombre }).eq('id', c.id);
     if (updateError) {
-      setError('No pudimos renombrar: ' + updateError.message);
+      setError(`${t('No pudimos renombrar:')} ` + updateError.message);
       setGuardando(false);
       return;
     }
@@ -73,7 +75,7 @@ export default function Carpetas() {
   };
 
   const eliminar = async (id: string) => {
-    if (!confirm('¿Eliminar esta carpeta? Los dispositivos que tenga no se borran, solo dejan de tener carpeta asignada explícitamente.')) return;
+    if (!confirm(t('¿Eliminar esta carpeta? Los dispositivos que tenga no se borran, solo dejan de tener carpeta asignada explícitamente.'))) return;
     const carpeta = carpetas.find((c) => c.id === id);
     await supabase.from('modelos_stock').delete().eq('id', id);
     await registrarAuditoria(supabase, {
@@ -103,7 +105,7 @@ export default function Carpetas() {
         <Link href="/stock" className="text-2xl leading-none">
           &larr;
         </Link>
-        <span className="text-lg font-medium">Carpetas de Stock</span>
+        <span className="text-lg font-medium">{t('Carpetas de Stock')}</span>
       </header>
 
       {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
@@ -112,7 +114,7 @@ export default function Carpetas() {
         <input
           value={nombre}
           onChange={(e) => setNombre(e.target.value)}
-          placeholder="Nombre (ej. iPhone 14)"
+          placeholder={t('Nombre (ej. iPhone 14)')}
           className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
         />
         <button
@@ -120,13 +122,13 @@ export default function Carpetas() {
           onClick={agregar}
           className="rounded-xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors px-5 text-sm font-medium text-white disabled:opacity-40"
         >
-          Crear
+          {t('Crear')}
         </button>
       </div>
 
-      {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Cargando...</p>}
+      {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{t('Cargando...')}</p>}
       {!loading && carpetas.length === 0 && (
-        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Todavía no creaste ninguna carpeta.</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{t('Todavía no creaste ninguna carpeta.')}</p>
       )}
 
       <div className="flex flex-col gap-2">
@@ -166,15 +168,15 @@ export default function Carpetas() {
                   onClick={() => guardarEdicion(c)}
                   className="text-xs text-accent dark:text-dark-accent underline disabled:opacity-40"
                 >
-                  Guardar
+                  {t('Guardar')}
                 </button>
               ) : (
                 <button onClick={() => empezarEdicion(c)} className="text-xs text-accent dark:text-dark-accent underline">
-                  Renombrar
+                  {t('Renombrar')}
                 </button>
               )}
               <button onClick={() => eliminar(c.id)} className="text-xs text-bad underline">
-                Eliminar
+                {t('Eliminar')}
               </button>
             </div>
             </div>
