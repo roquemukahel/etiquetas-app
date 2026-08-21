@@ -8,6 +8,7 @@ import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import Avatar from '../../Avatar';
 import PermisosEditor, { PermisosForm } from '../../PermisosEditor';
+import { useT } from '../../lib/idioma';
 
 type Tecnico = {
   id: string;
@@ -42,6 +43,7 @@ const PERMISOS_DEFAULT: PermisosForm = {
 export default function Tecnicos() {
   const supabase = crearClienteNavegador();
   const actor = useActor();
+  const t = useT();
   const puedeGestionarUsuarios = tienePermiso(actor, 'gestionar_usuarios');
   const [tecnicos, setTecnicos] = useState<Tecnico[]>([]);
   const [loading, setLoading] = useState(true);
@@ -72,7 +74,7 @@ export default function Tecnicos() {
     setError(null);
     const { error: insertError } = await supabase.from('tecnicos').insert({ nombre: nombre.trim() });
     if (insertError) {
-      setError('No pudimos guardar: ' + insertError.message);
+      setError(t('No pudimos guardar:') + ' ' + insertError.message);
       setGuardando(false);
       return;
     }
@@ -82,8 +84,8 @@ export default function Tecnicos() {
   };
 
   const eliminar = async (id: string) => {
-    if (!confirm('¿Eliminar este técnico?')) return;
-    const tecnico = tecnicos.find((t) => t.id === id);
+    if (!confirm(t('¿Eliminar este técnico?'))) return;
+    const tecnico = tecnicos.find((tec) => tec.id === id);
     await supabase.from('tecnicos').delete().eq('id', id);
     await registrarAuditoria(supabase, {
       accion: `eliminó un técnico (${tecnico?.nombre || 'sin nombre'})`,
@@ -94,40 +96,40 @@ export default function Tecnicos() {
     cargar();
   };
 
-  const abrirPerfil = (t: Tecnico) => {
-    setEditando(editando === t.id ? null : t.id);
-    setTelefonoEdit(t.telefono ?? '');
-    setEdadEdit(t.edad != null ? String(t.edad) : '');
-    setPinEdit(t.pin ?? '');
+  const abrirPerfil = (tec: Tecnico) => {
+    setEditando(editando === tec.id ? null : tec.id);
+    setTelefonoEdit(tec.telefono ?? '');
+    setEdadEdit(tec.edad != null ? String(tec.edad) : '');
+    setPinEdit(tec.pin ?? '');
     setPermisosEdit({
-      esAdministrador: t.es_administrador,
-      accesoCompleto: t.acceso_completo,
-      puedeVender: t.puede_vender,
-      puedeEliminar: t.puede_eliminar,
-      puedeAgregarStock: t.puede_agregar_stock,
-      puedeVerEstadisticas: t.puede_ver_estadisticas,
-      puedeRecibirServicioTecnico: t.puede_recibir_servicio_tecnico,
-      puedeGestionarServicioTecnico: t.puede_gestionar_servicio_tecnico,
-      puedeGestionarFinanciacion: t.puede_gestionar_financiacion,
+      esAdministrador: tec.es_administrador,
+      accesoCompleto: tec.acceso_completo,
+      puedeVender: tec.puede_vender,
+      puedeEliminar: tec.puede_eliminar,
+      puedeAgregarStock: tec.puede_agregar_stock,
+      puedeVerEstadisticas: tec.puede_ver_estadisticas,
+      puedeRecibirServicioTecnico: tec.puede_recibir_servicio_tecnico,
+      puedeGestionarServicioTecnico: tec.puede_gestionar_servicio_tecnico,
+      puedeGestionarFinanciacion: tec.puede_gestionar_financiacion,
     });
     setError(null);
   };
 
-  const cambiarFoto = (t: Tecnico, e: React.ChangeEvent<HTMLInputElement>) => {
+  const cambiarFoto = (tec: Tecnico, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = async () => {
       const dataUrl = reader.result as string;
-      setTecnicos((ts) => ts.map((x) => (x.id === t.id ? { ...x, foto_url: dataUrl } : x)));
-      await supabase.from('tecnicos').update({ foto_url: dataUrl }).eq('id', t.id);
+      setTecnicos((ts) => ts.map((x) => (x.id === tec.id ? { ...x, foto_url: dataUrl } : x)));
+      await supabase.from('tecnicos').update({ foto_url: dataUrl }).eq('id', tec.id);
     };
     reader.readAsDataURL(file);
   };
 
-  const guardarPerfil = async (t: Tecnico) => {
+  const guardarPerfil = async (tec: Tecnico) => {
     if (pinEdit.trim() && !/^\d{4,6}$/.test(pinEdit.trim())) {
-      setError('El PIN tiene que ser de 4 a 6 números, o dejarlo vacío para no pedir ninguno');
+      setError(t('El PIN tiene que ser de 4 a 6 números, o dejarlo vacío para no pedir ninguno'));
       return;
     }
     setGuardandoPerfil(true);
@@ -147,7 +149,7 @@ export default function Tecnicos() {
         puede_gestionar_servicio_tecnico: permisosEdit.puedeGestionarServicioTecnico,
         puede_gestionar_financiacion: permisosEdit.puedeGestionarFinanciacion,
       })
-      .eq('id', t.id);
+      .eq('id', tec.id);
     setGuardandoPerfil(false);
     setEditando(null);
     cargar();
@@ -156,9 +158,9 @@ export default function Tecnicos() {
   if (!puedeGestionarUsuarios) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
-        <p className="text-sm text-muted dark:text-dark-text-secondary">No tenés permiso para gestionar técnicos.</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t('No tenés permiso para gestionar técnicos.')}</p>
         <Link href="/configuracion" className="text-sm text-accent dark:text-dark-accent underline">
-          Volver
+          {t('Volver')}
         </Link>
       </main>
     );
@@ -170,7 +172,7 @@ export default function Tecnicos() {
         <Link href="/configuracion" className="text-2xl leading-none">
           &larr;
         </Link>
-        <span className="text-lg font-medium">Técnicos</span>
+        <span className="text-lg font-medium">{t('Técnicos')}</span>
       </header>
 
       {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
@@ -179,7 +181,7 @@ export default function Tecnicos() {
         <input
           value={nombre}
           onChange={(e) => setNombre(e.target.value)}
-          placeholder="Nombre del técnico"
+          placeholder={t('Nombre del técnico')}
           className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
         />
         <button
@@ -187,54 +189,54 @@ export default function Tecnicos() {
           onClick={agregar}
           className="rounded-xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors px-5 text-sm font-medium text-white disabled:opacity-40"
         >
-          Agregar
+          {t('Agregar')}
         </button>
       </div>
 
-      {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Cargando...</p>}
+      {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{t('Cargando...')}</p>}
       {!loading && tecnicos.length === 0 && (
-        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Todavía no cargaste técnicos.</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{t('Todavía no cargaste técnicos.')}</p>
       )}
 
       <div className="flex flex-col gap-2">
-        {tecnicos.map((t) => (
-          <div key={t.id} className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex flex-col gap-3">
+        {tecnicos.map((tec) => (
+          <div key={tec.id} className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex flex-col gap-3">
             <div className="flex items-center gap-3">
               <label className="shrink-0 cursor-pointer">
-                <Avatar src={t.foto_url} nombre={t.nombre} size={68} />
-                <input type="file" accept="image/*" className="hidden" onChange={(e) => cambiarFoto(t, e)} />
+                <Avatar src={tec.foto_url} nombre={tec.nombre} size={68} />
+                <input type="file" accept="image/*" className="hidden" onChange={(e) => cambiarFoto(tec, e)} />
               </label>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{t.nombre}</p>
-                {(t.telefono || t.edad) && (
+                <p className="text-sm font-medium truncate">{tec.nombre}</p>
+                {(tec.telefono || tec.edad) && (
                   <p className="text-xs text-muted dark:text-dark-text-secondary">
-                    {t.telefono}
-                    {t.telefono && t.edad ? ' · ' : ''}
-                    {t.edad ? `${t.edad} años` : ''}
+                    {tec.telefono}
+                    {tec.telefono && tec.edad ? ' · ' : ''}
+                    {tec.edad ? `${tec.edad} ${t('años')}` : ''}
                   </p>
                 )}
               </div>
-              <button onClick={() => abrirPerfil(t)} className="shrink-0 text-xs text-accent dark:text-dark-accent underline">
-                {editando === t.id ? 'Cerrar' : 'Editar'}
+              <button onClick={() => abrirPerfil(tec)} className="shrink-0 text-xs text-accent dark:text-dark-accent underline">
+                {editando === tec.id ? t('Cerrar') : t('Editar')}
               </button>
-              <button onClick={() => eliminar(t.id)} className="shrink-0 text-xs text-bad underline">
-                Eliminar
+              <button onClick={() => eliminar(tec.id)} className="shrink-0 text-xs text-bad underline">
+                {t('Eliminar')}
               </button>
             </div>
 
-            {editando === t.id && (
+            {editando === tec.id && (
               <div className="flex flex-col gap-2 pt-2 border-t border-border dark:border-dark-border">
                 <div className="flex gap-2">
                   <input
                     value={telefonoEdit}
                     onChange={(e) => setTelefonoEdit(e.target.value)}
-                    placeholder="Teléfono"
+                    placeholder={t('Teléfono')}
                     className="flex-1 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                   />
                   <input
                     value={edadEdit}
                     onChange={(e) => setEdadEdit(e.target.value)}
-                    placeholder="Edad"
+                    placeholder={t('Edad')}
                     inputMode="numeric"
                     className="w-20 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                   />
@@ -243,14 +245,13 @@ export default function Tecnicos() {
                   <input
                     value={pinEdit}
                     onChange={(e) => setPinEdit(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                    placeholder="PIN de 4 a 6 dígitos (opcional)"
+                    placeholder={t('PIN de 4 a 6 dígitos (opcional)')}
                     inputMode="numeric"
                     maxLength={6}
                     className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                   />
                   <p className="text-[10px] text-muted dark:text-dark-text-secondary mt-1">
-                    Si le ponés un PIN, va a tener que escribirlo al elegirse en "Cambiar". Dejalo vacío para que no
-                    pida nada.
+                    {t('Si le ponés un PIN, va a tener que escribirlo al elegirse en "Cambiar". Dejalo vacío para que no pida nada.')}
                   </p>
                 </div>
 
@@ -258,10 +259,10 @@ export default function Tecnicos() {
 
                 <button
                   disabled={guardandoPerfil}
-                  onClick={() => guardarPerfil(t)}
+                  onClick={() => guardarPerfil(tec)}
                   className="rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
                 >
-                  Guardar
+                  {t('Guardar')}
                 </button>
               </div>
             )}

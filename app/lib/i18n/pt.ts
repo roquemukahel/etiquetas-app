@@ -1539,6 +1539,33 @@ export const PT: Record<string, string> = {
     'produto(s) cadastrado(s) — permanecem intactos, apenas deixa de ser oferecida para escolher em formulários novos.',
   '¿Archivar la categoría': 'Arquivar a categoria',
 
+  // Configuración — Técnicos / PermisosEditor
+  'Acceso completo (todas las tareas del día a día, pero no Auditoría ni gestión de usuarios)':
+    'Acesso completo (todas as tarefas do dia a dia, mas não Auditoria nem gerenciamento de usuários)',
+  'Administrador (acceso total: Estadísticas, Proveedores, Auditoría y gestión de otros usuarios)':
+    'Administrador (acesso total: Estatísticas, Fornecedores, Auditoria e gerenciamento de outros usuários)',
+  'El PIN tiene que ser de 4 a 6 números, o dejarlo vacío para no pedir ninguno': 'O PIN tem que ter de 4 a 6 números, ou deixe vazio para não pedir nenhum',
+  'Esta cuenta no tiene PIN. Como tiene acceso alto, cualquiera puede elegirse como esta persona desde "Cambiar" (arriba a la derecha) y quedar con todos los permisos. Ponele un PIN de 4 a 6 dígitos para que nadie se pueda hacer pasar por ella.':
+    'Esta conta não tem PIN. Como tem acesso alto, qualquer um pode se escolher como esta pessoa em "Trocar" (acima à direita) e ficar com todas as permissões. Coloque um PIN de 4 a 6 dígitos para que ninguém possa se passar por ela.',
+  'No tenés permiso para gestionar técnicos.': 'Você não tem permissão para gerenciar técnicos.',
+  'Nombre del técnico': 'Nome do técnico',
+  'PIN de 4 a 6 dígitos (opcional)': 'PIN de 4 a 6 dígitos (opcional)',
+  Permisos: 'Permissões',
+  'Puede agregar dispositivos al stock': 'Pode adicionar aparelhos ao estoque',
+  'Puede crear financiaciones en cuotas y registrar sus pagos': 'Pode criar financiamentos em parcelas e registrar seus pagamentos',
+  'Puede eliminar (órdenes, clientes, stock, canjes, compras)': 'Pode excluir (pedidos, clientes, estoque, trocas, compras)',
+  'Puede gestionar Servicio Técnico (cambiar estado, cobrar, entregar)': 'Pode gerenciar Assistência Técnica (mudar estado, cobrar, entregar)',
+  'Puede recibir equipos de Servicio Técnico': 'Pode receber aparelhos de Assistência Técnica',
+  'Puede vender (crear órdenes)': 'Pode vender (criar pedidos)',
+  'Puede ver Estadísticas': 'Pode ver Estatísticas',
+  'Si le ponés un PIN, va a tener que escribirlo al elegirse en "Cambiar". Dejalo vacío para que no pida nada.':
+    'Se você colocar um PIN, ela vai ter que digitá-lo ao se escolher em "Trocar". Deixe vazio para que não peça nada.',
+  'Sin un PIN cargado, cualquiera puede elegirse como esta persona sin escribir nada — para que el límite tenga efecto, cargale también un PIN.':
+    'Sem um PIN cadastrado, qualquer um pode se escolher como esta pessoa sem digitar nada — para que o limite tenha efeito, cadastre também um PIN.',
+  'Todavía no cargaste técnicos.': 'Você ainda não cadastrou técnicos.',
+  años: 'anos',
+  '¿Eliminar este técnico?': 'Excluir este técnico?',
+
   // Estadísticas — Dashboard: tabs, períodos, métricas (labels de arrays)
   'esta semana': 'esta semana',
   'este mes': 'este mês',
