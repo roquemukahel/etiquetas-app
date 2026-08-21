@@ -5,8 +5,12 @@ import { useEffect, useRef } from 'react';
 // Qovi asomándose por el borde izquierdo de la tarjeta de Resumen financiero
 // de Inicio (public/qovi-lateral.png, tal cual la subió el dueño — el borde
 // derecho de la imagen YA ES el borde del panel que agarra con las manos,
-// sin margen transparente, así que "right-full" alcanza para que quede
-// pegado al borde real de la tarjeta).
+// sin margen transparente). "right-full" solo lo deja tocando el borde de
+// afuera de la tarjeta, lo que se ve como un hueco entre el borde dibujado
+// en la imagen y el borde real de la tarjeta (dos tonos de oscuro distintos
+// quedaban pegados uno al lado del otro en vez de superpuestos). El
+// "translate-x-[18%]" adicional lo mete un poco hacia adentro para que los
+// dedos realmente entren en la tarjeta y el borde de la imagen quede tapado.
 //
 // Las pupilas rojas son dos <span> propios superpuestos sobre los ojos
 // celestes de la imagen (no se edita el PNG). Sus posiciones (ojoIzq/ojoDer)
@@ -57,7 +61,7 @@ export default function QoviLateral() {
     <div
       ref={contenedorRef}
       aria-hidden="true"
-      className="hidden lg:block pointer-events-none select-none absolute right-full top-1/2 -translate-y-1/2 w-36 xl:w-44 z-20 drop-shadow-2xl"
+      className="hidden lg:block pointer-events-none select-none absolute right-full top-1/2 -translate-y-1/2 translate-x-[18%] w-36 xl:w-44 z-20 drop-shadow-2xl"
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src="/qovi-lateral.png" alt="" className="block w-full h-auto" />
