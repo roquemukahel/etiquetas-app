@@ -1465,6 +1465,44 @@ export const PT: Record<string, string> = {
     'uma marca, vamos perguntar se você quer excluir suas pastas e os aparelhos que estiverem cadastrados dentro delas (útil se você ativou uma marca por engano). "Outras marcas" é para quando você vende algo que não está nas listas (por exemplo, acessórios ou consoles): essas você continua criando pelo Estoque',
   'y los': 'e os',
 
+  // Configuración — Auditoría
+  'Acciones sensibles (precios, IMEI, eliminaciones) con quién las hizo y cuándo. Este registro no se puede editar ni borrar desde la app.':
+    'Ações sensíveis (preços, IMEI, exclusões) com quem as fez e quando. Este registro não pode ser editado nem excluído pelo aplicativo.',
+  'Buscar por persona, acción o entidad...': 'Buscar por pessoa, ação ou entidade...',
+  'Ninguna acción coincide con': 'Nenhuma ação corresponde a',
+  'No tenés permiso para ver Auditoría.': 'Você não tem permissão para ver Auditoria.',
+  'Registro de auditoría': 'Registro de auditoria',
+  'Todavía no hay acciones registradas.': 'Ainda não há ações registradas.',
+
+  // Configuración — Exportar y eliminar datos
+  'Descargá un CSV de respaldo, o borrá en bloque para limpiar la base. Un cliente o dispositivo con ventas, órdenes u otro historial vinculado NO se puede eliminar (queda protegido automáticamente) — solo se borran los que no tienen nada enganchado.':
+    'Baixe um CSV de backup, ou exclua em lote para limpar a base. Um cliente ou aparelho com vendas, pedidos ou outro histórico vinculado NÃO pode ser excluído (fica protegido automaticamente) — só são excluídos os que não têm nada vinculado.',
+  'Dispositivos (Stock)': 'Aparelhos (Estoque)',
+  'Exportar y eliminar': 'Exportar e excluir',
+  'Exportar únicamente': 'Exportar somente',
+  'No había': 'Não havia',
+  'No tenés permiso para ver esta sección.': 'Você não tem permissão para ver esta seção.',
+  'Para confirmar, escribí': 'Para confirmar, digite',
+  'Se descarga primero el CSV de respaldo y después se borran del sistema. No hay retorno atrás. Los que tengan ventas u otro historial vinculado quedan protegidos y no se tocan.':
+    'Primeiro o CSV de backup é baixado e depois eles são excluídos do sistema. Não há como voltar atrás. Os que tiverem vendas ou outro histórico vinculado ficam protegidos e não são tocados.',
+  'Se descargó el CSV y se eliminaron': 'O CSV foi baixado e foram excluídos',
+  'no se pudieron eliminar porque tienen ventas u otro historial vinculado (quedaron intactos).':
+    'não puderam ser excluídos porque têm vendas ou outro histórico vinculado (ficaram intactos).',
+  'para eliminar.': 'para excluir.',
+  '¿Eliminar TODOS los': 'Excluir TODOS os',
+
+  // Configuración — Soporte
+  'Contanos qué pasó o qué te gustaría que agreguemos...': 'Conte o que aconteceu ou o que você gostaria que adicionássemos...',
+  'Enviando...': 'Enviando...',
+  'Enviar mensaje': 'Enviar mensagem',
+  'Ese email no parece válido.': 'Esse e-mail não parece válido.',
+  Mensaje: 'Mensagem',
+  'No pudimos enviar tu mensaje. Probá de nuevo en un rato.': 'Não conseguimos enviar sua mensagem. Tente de novo daqui a pouco.',
+  'Recibimos tu mensaje y te vamos a responder a la brevedad.': 'Recebemos sua mensagem e vamos responder em breve.',
+  '¡Gracias por escribirnos!': 'Obrigado por escrever para nós!',
+  '¿Tuviste algún problema, tenés alguna sugerencia o querés dejarnos un mensaje? Escribinos acá abajo.':
+    'Teve algum problema, tem alguma sugestão ou quer nos deixar uma mensagem? Escreva para nós aqui embaixo.',
+
   // Estadísticas — Dashboard: tabs, períodos, métricas (labels de arrays)
   'esta semana': 'esta semana',
   'este mes': 'este mês',

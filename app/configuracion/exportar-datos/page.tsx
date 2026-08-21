@@ -10,6 +10,7 @@ import { registrarAuditoria } from '../../lib/auditoria';
 import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import { ICONOS } from '../../Iconos';
+import { useT } from '../../lib/idioma';
 
 type Entidad = 'clientes' | 'dispositivos';
 
@@ -53,6 +54,7 @@ const COLUMNAS_SELECT: Record<Entidad, string> = {
 export default function ExportarDatos() {
   const supabase = crearClienteNavegador();
   const actor = useActor();
+  const t = useT();
   const puedeAcceder = tienePermiso(actor, 'exportar_eliminar_datos');
 
   const [exportando, setExportando] = useState<Entidad | null>(null);
@@ -90,7 +92,7 @@ export default function ExportarDatos() {
     if (filas.length === 0) {
       setEliminando(false);
       setConfirmando(null);
-      setResultado(`No había ${cfg.titulo.toLowerCase()} para eliminar.`);
+      setResultado(`${t('No había')} ${t(cfg.titulo).toLowerCase()} ${t('para eliminar.')}`);
       return;
     }
 
@@ -116,9 +118,9 @@ export default function ExportarDatos() {
     setEliminando(false);
     setConfirmando(null);
     setResultado(
-      `Se descargó el CSV y se eliminaron ${eliminados.length} de ${filas.length} ${cfg.titulo.toLowerCase()}.` +
+      `${t('Se descargó el CSV y se eliminaron')} ${eliminados.length} ${t('de')} ${filas.length} ${t(cfg.titulo).toLowerCase()}.` +
         (bloqueados.length > 0
-          ? ` ${bloqueados.length} no se pudieron eliminar porque tienen ventas u otro historial vinculado (quedaron intactos).`
+          ? ` ${bloqueados.length} ${t('no se pudieron eliminar porque tienen ventas u otro historial vinculado (quedaron intactos).')}`
           : '')
     );
   };
@@ -126,9 +128,9 @@ export default function ExportarDatos() {
   if (!puedeAcceder) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
-        <p className="text-sm text-muted dark:text-dark-text-secondary">No tenés permiso para ver esta sección.</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t('No tenés permiso para ver esta sección.')}</p>
         <Link href="/configuracion" className="text-sm text-accent dark:text-dark-accent underline">
-          Volver
+          {t('Volver')}
         </Link>
       </main>
     );
@@ -140,13 +142,11 @@ export default function ExportarDatos() {
         <Link href="/configuracion" className="text-2xl leading-none">
           &larr;
         </Link>
-        <span className="text-lg font-medium">Exportar y eliminar datos</span>
+        <span className="text-lg font-medium">{t('Exportar y eliminar datos')}</span>
       </header>
 
       <p className="text-xs text-muted dark:text-dark-text-secondary -mt-2">
-        Descargá un CSV de respaldo, o borrá en bloque para limpiar la base. Un cliente o dispositivo con ventas, órdenes
-        u otro historial vinculado NO se puede eliminar (queda protegido automáticamente) — solo se borran los que no
-        tienen nada enganchado.
+        {t('Descargá un CSV de respaldo, o borrá en bloque para limpiar la base. Un cliente o dispositivo con ventas, órdenes u otro historial vinculado NO se puede eliminar (queda protegido automáticamente) — solo se borran los que no tienen nada enganchado.')}
       </p>
 
       {resultado && <p className="text-sm bg-canvas dark:bg-dark-bg rounded-lg px-3 py-2">{resultado}</p>}
@@ -156,7 +156,7 @@ export default function ExportarDatos() {
           key={entidad}
           className="rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-4 flex flex-col gap-3"
         >
-          <p className="text-sm font-medium">{CONFIG[entidad].titulo}</p>
+          <p className="text-sm font-medium">{t(CONFIG[entidad].titulo)}</p>
           <div className="flex gap-2">
             <button
               onClick={() => exportarSolo(entidad)}
@@ -164,11 +164,11 @@ export default function ExportarDatos() {
               className="flex-1 rounded-xl border border-border dark:border-dark-border py-2.5 text-center text-xs font-medium disabled:opacity-40"
             >
               {exportando === entidad ? (
-                'Exportando...'
+                t('Exportando...')
               ) : (
                 <span className="inline-flex items-center justify-center gap-1">
                   <span aria-hidden="true" className="[&_svg]:h-3.5 [&_svg]:w-3.5 inline-flex shrink-0">{ICONOS.descargar}</span>
-                  Exportar únicamente
+                  {t('Exportar únicamente')}
                 </span>
               )}
             </button>
@@ -178,7 +178,7 @@ export default function ExportarDatos() {
             >
               <span className="inline-flex items-center justify-center gap-1">
                 <span aria-hidden="true" className="[&_svg]:h-3.5 [&_svg]:w-3.5 inline-flex shrink-0">{ICONOS.alerta}</span>
-                Exportar y eliminar
+                {t('Exportar y eliminar')}
               </span>
             </button>
           </div>
@@ -194,13 +194,12 @@ export default function ExportarDatos() {
             onClick={(e) => e.stopPropagation()}
             className="w-full sm:max-w-sm rounded-2xl bg-white dark:bg-dark-surface shadow-elevated p-5 flex flex-col gap-3"
           >
-            <p className="text-base font-semibold text-bad">¿Eliminar TODOS los {CONFIG[confirmando].titulo.toLowerCase()}?</p>
+            <p className="text-base font-semibold text-bad">{t('¿Eliminar TODOS los')} {t(CONFIG[confirmando].titulo).toLowerCase()}?</p>
             <p className="text-sm text-muted dark:text-dark-text-secondary">
-              Se descarga primero el CSV de respaldo y después se borran del sistema. No hay retorno atrás. Los que tengan
-              ventas u otro historial vinculado quedan protegidos y no se tocan.
+              {t('Se descarga primero el CSV de respaldo y después se borran del sistema. No hay retorno atrás. Los que tengan ventas u otro historial vinculado quedan protegidos y no se tocan.')}
             </p>
             <p className="text-xs font-medium">
-              Para confirmar, escribí <span className="font-mono">ELIMINAR</span>:
+              {t('Para confirmar, escribí')} <span className="font-mono">ELIMINAR</span>:
             </p>
             <input
               value={textoConfirmacion}
@@ -215,14 +214,14 @@ export default function ExportarDatos() {
                 onClick={() => setConfirmando(null)}
                 className="flex-1 rounded-xl border border-border dark:border-dark-border py-2.5 text-sm font-medium disabled:opacity-40"
               >
-                Cancelar
+                {t('Cancelar')}
               </button>
               <button
                 disabled={eliminando || textoConfirmacion.trim().toUpperCase() !== 'ELIMINAR'}
                 onClick={exportarYEliminar}
                 className="flex-1 rounded-xl bg-bad text-white py-2.5 text-sm font-medium disabled:opacity-40"
               >
-                {eliminando ? 'Eliminando...' : 'Exportar y eliminar'}
+                {eliminando ? t('Eliminando...') : t('Exportar y eliminar')}
               </button>
             </div>
           </div>
