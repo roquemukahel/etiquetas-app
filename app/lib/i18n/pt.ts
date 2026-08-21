@@ -1077,6 +1077,39 @@ export const PT: Record<string, string> = {
   '¿Anular este movimiento? Deja de contar para el saldo.': 'Anular esta movimentação? Deixa de contar para o saldo.',
   '¿Eliminar a': 'Excluir',
   '¿Eliminar esta compra?': 'Excluir esta compra?',
+
+  // Plan de ahorro — lista
+  Activos: 'Ativos',
+  'Buscar por cliente o modelo...': 'Buscar por cliente ou modelo...',
+  Cancelados: 'Cancelados',
+  Completados: 'Concluídos',
+  'No hay planes en esta categoría.': 'Não há planos nesta categoria.',
+  'No tenés permiso para ver Plan de ahorro.': 'Você não tem permissão para ver o Plano de poupança.',
+  'Nuevo plan': 'Novo plano',
+  SEÑA: 'SINAL',
+  'Un cliente va pagando en cuotas hasta juntar el monto de un equipo puntual. Cuando llega al objetivo, se le entrega.':
+    'Um cliente vai pagando em parcelas até juntar o valor de um aparelho específico. Quando atinge a meta, é entregue a ele.',
+
+  // Plan de ahorro — nuevo
+  'Ahorro (modelo a definir)': 'Poupança (modelo a definir)',
+  'Buscar por modelo, color o IMEI...': 'Buscar por modelo, cor ou IMEI...',
+  'Color (opcional)': 'Cor (opcional)',
+  'Crear plan': 'Criar plano',
+  'Ej. condiciones acordadas con el cliente': 'Ex. condições combinadas com o cliente',
+  'Equipo a reservar (queda apartado hasta que se complete la venta)':
+    'Aparelho a reservar (fica separado até que a venda seja concluída)',
+  'Este equipo ya no está disponible en Stock — puede que se haya vendido o señado recién. Elegí otro.':
+    'Este aparelho não está mais disponível no Estoque — pode ter sido vendido ou reservado agora. Escolha outro.',
+  'Modelo deseado (opcional)': 'Modelo desejado (opcional)',
+  'Monto a cobrar por el equipo': 'Valor a cobrar pelo aparelho',
+  'Monto objetivo': 'Valor objetivo',
+  'No hay equipos en Stock disponibles con esa búsqueda.': 'Não há aparelhos no Estoque disponíveis com essa busca.',
+  'No pudimos guardar el plan:': 'Não conseguimos salvar o plano:',
+  'Nuevo plan de ahorro': 'Novo plano de poupança',
+  Objetivo: 'Meta',
+  'Precio del equipo a juntar': 'Preço do aparelho a juntar',
+  'Señar un equipo del Stock': 'Reservar um aparelho do Estoque',
+  'no se pudo crear el plan': 'não foi possível criar o plano',
   'no se pudo crear la compra': 'não foi possível criar a compra',
   '¿Presenta algún detalle? Ej. pantalla con manchas, batería al 70%...':
     'Apresenta algum detalhe? Ex. tela com manchas, bateria a 70%...',

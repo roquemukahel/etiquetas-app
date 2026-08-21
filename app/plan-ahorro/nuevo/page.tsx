@@ -7,6 +7,7 @@ import { crearClienteNavegador } from '../../lib/supabase/client';
 import { obtenerTodasLasFilas } from '../../lib/db';
 import { sanitizarDecimal } from '../../lib/numeros';
 import SelectorColorAuto from '../../SelectorColorAuto';
+import { useT } from '../../lib/idioma';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 
@@ -29,6 +30,7 @@ type DispositivoStock = {
 export default function NuevoPlanAhorro() {
   const router = useRouter();
   const supabase = crearClienteNavegador();
+  const t = useT();
 
   const [step, setStep] = useState<'cliente' | 'plan'>('cliente');
 
@@ -137,7 +139,7 @@ export default function NuevoPlanAhorro() {
           .eq('id', dispositivoElegido.id)
           .single();
         if (!actual?.en_stock) {
-          throw new Error('Este equipo ya no está disponible en Stock — puede que se haya vendido o señado recién. Elegí otro.');
+          throw new Error(t('Este equipo ya no está disponible en Stock — puede que se haya vendido o señado recién. Elegí otro.'));
         }
       }
 
@@ -152,7 +154,7 @@ export default function NuevoPlanAhorro() {
           })
           .select()
           .single();
-        if (cErr || !data) throw new Error(cErr?.message || 'no se pudo cargar el cliente');
+        if (cErr || !data) throw new Error(cErr?.message || t('no se pudo cargar el cliente'));
         clienteId = data.id;
       }
 
@@ -169,11 +171,11 @@ export default function NuevoPlanAhorro() {
         })
         .select()
         .single();
-      if (planErr || !plan) throw new Error(planErr?.message || 'no se pudo crear el plan');
+      if (planErr || !plan) throw new Error(planErr?.message || t('no se pudo crear el plan'));
 
       router.push(`/plan-ahorro/${plan.id}`);
     } catch (err: any) {
-      setError('No pudimos guardar el plan: ' + (err?.message || 'error desconocido'));
+      setError(t('No pudimos guardar el plan:') + ' ' + (err?.message || t('error desconocido')));
       setGuardando(false);
     }
   };
@@ -185,7 +187,7 @@ export default function NuevoPlanAhorro() {
           <Link href="/plan-ahorro" className="text-2xl leading-none">
             &larr;
           </Link>
-          <span className="text-lg font-medium">Nuevo plan de ahorro · Cliente</span>
+          <span className="text-lg font-medium">{t('Nuevo plan de ahorro')} · {t('Cliente')}</span>
         </header>
 
         <div className="flex items-center gap-2 text-sm">
@@ -195,7 +197,7 @@ export default function NuevoPlanAhorro() {
               modoCliente === 'existente' ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
             }`}
           >
-            Cliente existente
+            {t('Cliente existente')}
           </button>
           <button
             onClick={() => setModoCliente('nuevo')}
@@ -203,7 +205,7 @@ export default function NuevoPlanAhorro() {
               modoCliente === 'nuevo' ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
             }`}
           >
-            Cargar nuevo
+            {t('Cargar nuevo')}
           </button>
         </div>
 
@@ -212,12 +214,12 @@ export default function NuevoPlanAhorro() {
             <input
               value={buscarCliente}
               onChange={(e) => setBuscarCliente(e.target.value)}
-              placeholder="Buscar por nombre o teléfono..."
+              placeholder={t('Buscar por nombre o teléfono...')}
               className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
             />
             <div className="flex flex-col gap-2">
               {clientesFiltrados.length === 0 && (
-                <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-4">No encontramos clientes con esa búsqueda.</p>
+                <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-4">{t('No encontramos clientes con esa búsqueda.')}</p>
               )}
               {clientesFiltrados.map((c) => (
                 <button
@@ -236,7 +238,7 @@ export default function NuevoPlanAhorro() {
         ) : (
           <div className="flex flex-col gap-3">
             <div>
-              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Nombre</label>
+              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Nombre')}</label>
               <input
                 value={nuevoNombre}
                 onChange={(e) => setNuevoNombre(e.target.value)}
@@ -244,7 +246,7 @@ export default function NuevoPlanAhorro() {
               />
             </div>
             <div>
-              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Apellido</label>
+              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Apellido')}</label>
               <input
                 value={nuevoApellido}
                 onChange={(e) => setNuevoApellido(e.target.value)}
@@ -252,7 +254,7 @@ export default function NuevoPlanAhorro() {
               />
             </div>
             <div>
-              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Teléfono</label>
+              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Teléfono')}</label>
               <input
                 value={nuevoTelefono}
                 onChange={(e) => setNuevoTelefono(e.target.value)}
@@ -264,7 +266,7 @@ export default function NuevoPlanAhorro() {
               onClick={confirmarClienteNuevo}
               className="mt-2 w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
             >
-              Continuar
+              {t('Continuar')}
             </button>
           </div>
         )}
@@ -278,13 +280,13 @@ export default function NuevoPlanAhorro() {
         <button onClick={() => setStep('cliente')} className="text-2xl leading-none">
           &larr;
         </button>
-        <span className="text-lg font-medium">Nuevo plan de ahorro · Objetivo</span>
+        <span className="text-lg font-medium">{t('Nuevo plan de ahorro')} · {t('Objetivo')}</span>
       </header>
 
       {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
 
       <div className="rounded-xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card px-4 py-3 text-sm">
-        <span className="text-muted dark:text-dark-text-secondary">Cliente: </span>
+        <span className="text-muted dark:text-dark-text-secondary">{t('Cliente:')} </span>
         {modoCliente === 'existente' ? `${clienteElegido?.nombre} ${clienteElegido?.apellido || ''}` : nuevoNombre}
       </div>
 
@@ -298,7 +300,7 @@ export default function NuevoPlanAhorro() {
             !esSena ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
           }`}
         >
-          Ahorro (modelo a definir)
+          {t('Ahorro (modelo a definir)')}
         </button>
         <button
           onClick={() => setEsSena(true)}
@@ -306,7 +308,7 @@ export default function NuevoPlanAhorro() {
             esSena ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
           }`}
         >
-          Señar un equipo del Stock
+          {t('Señar un equipo del Stock')}
         </button>
       </div>
 
@@ -314,7 +316,7 @@ export default function NuevoPlanAhorro() {
         {esSena ? (
           <div>
             <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">
-              Equipo a reservar (queda apartado hasta que se complete la venta)
+              {t('Equipo a reservar (queda apartado hasta que se complete la venta)')}
             </label>
             {dispositivoElegido ? (
               <div className="rounded-xl border border-accent/40 dark:border-dark-accent/40 bg-accent-soft dark:bg-dark-accent-soft px-4 py-3 flex items-center justify-between gap-2">
@@ -325,7 +327,7 @@ export default function NuevoPlanAhorro() {
                   {dispositivoElegido.imei ? ` · IMEI ${dispositivoElegido.imei}` : ''}
                 </p>
                 <button onClick={() => setDispositivoElegido(null)} className="text-xs text-accent dark:text-dark-accent underline shrink-0">
-                  Cambiar
+                  {t('Cambiar')}
                 </button>
               </div>
             ) : (
@@ -333,13 +335,13 @@ export default function NuevoPlanAhorro() {
                 <input
                   value={buscarDispositivo}
                   onChange={(e) => setBuscarDispositivo(e.target.value)}
-                  placeholder="Buscar por modelo, color o IMEI..."
+                  placeholder={t('Buscar por modelo, color o IMEI...')}
                   className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
                 />
                 <div className="flex flex-col gap-2 mt-2 max-h-64 overflow-y-auto">
                   {dispositivosFiltrados.length === 0 && (
                     <p className="text-xs text-muted dark:text-dark-text-secondary text-center py-2">
-                      No hay equipos en Stock disponibles con esa búsqueda.
+                      {t('No hay equipos en Stock disponibles con esa búsqueda.')}
                     </p>
                   )}
                   {dispositivosFiltrados.map((d) => (
@@ -371,7 +373,7 @@ export default function NuevoPlanAhorro() {
         ) : (
           <>
             <div>
-              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Modelo deseado (opcional)</label>
+              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Modelo deseado (opcional)')}</label>
               <input
                 value={modelo}
                 onChange={(e) => setModelo(e.target.value)}
@@ -387,7 +389,7 @@ export default function NuevoPlanAhorro() {
             </div>
 
             <div>
-              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Almacenamiento</label>
+              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Almacenamiento')}</label>
               <div className="flex gap-2">
                 {STORAGE_OPTIONS.map((gb) => (
                   <button
@@ -403,29 +405,29 @@ export default function NuevoPlanAhorro() {
               </div>
             </div>
 
-            <SelectorColorAuto label="Color (opcional)" modelo={modelo} value={color} onChange={setColor} />
+            <SelectorColorAuto label={t('Color (opcional)')} modelo={modelo} value={color} onChange={setColor} />
           </>
         )}
 
         <div>
           <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">
-            {esSena ? 'Monto a cobrar por el equipo' : 'Monto objetivo'}
+            {esSena ? t('Monto a cobrar por el equipo') : t('Monto objetivo')}
           </label>
           <input
             value={montoObjetivo}
             onChange={(e) => setMontoObjetivo(sanitizarDecimal(e.target.value))}
             inputMode="decimal"
-            placeholder="Precio del equipo a juntar"
+            placeholder={t('Precio del equipo a juntar')}
             className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
           />
         </div>
 
         <div>
-          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Detalles (opcional)</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Detalles (opcional)')}</label>
           <textarea
             value={detalles}
             onChange={(e) => setDetalles(e.target.value)}
-            placeholder="Ej. condiciones acordadas con el cliente"
+            placeholder={t('Ej. condiciones acordadas con el cliente')}
             rows={3}
             className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
           />
@@ -437,7 +439,7 @@ export default function NuevoPlanAhorro() {
         onClick={handleConfirmar}
         className="mt-auto w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
       >
-        {guardando ? 'Guardando...' : 'Crear plan'}
+        {guardando ? t('Guardando...') : t('Crear plan')}
       </button>
     </main>
   );

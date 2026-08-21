@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { crearClienteNavegador } from '../lib/supabase/client';
 import { useActor } from '../lib/actor';
 import { tienePermiso } from '../lib/permisos';
+import { useT } from '../lib/idioma';
 
 type Plan = {
   id: string;
@@ -18,6 +19,7 @@ type Plan = {
   clientes: { nombre: string; apellido: string | null } | null;
 };
 
+// Los labels se traducen en el punto de uso con t(), no acá.
 const TABS: { id: string; label: string }[] = [
   { id: 'activo', label: 'Activos' },
   { id: 'completado', label: 'Completados' },
@@ -27,6 +29,7 @@ const TABS: { id: string; label: string }[] = [
 export default function PlanAhorro() {
   const supabase = crearClienteNavegador();
   const actor = useActor();
+  const t = useT();
   const puedeVer = tienePermiso(actor, 'ver_plan_ahorro');
   const [planes, setPlanes] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
@@ -71,9 +74,9 @@ export default function PlanAhorro() {
   if (!puedeVer) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
-        <p className="text-sm text-muted dark:text-dark-text-secondary">No tenés permiso para ver Plan de ahorro.</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t('No tenés permiso para ver Plan de ahorro.')}</p>
         <Link href="/" className="text-sm text-accent dark:text-dark-accent underline">
-          Volver al inicio
+          {t('Volver al inicio')}
         </Link>
       </main>
     );
@@ -85,31 +88,31 @@ export default function PlanAhorro() {
         <Link href="/" className="text-2xl leading-none">
           &larr;
         </Link>
-        <span className="text-lg font-medium mr-auto">Plan de ahorro</span>
+        <span className="text-lg font-medium mr-auto">{t('Plan de ahorro')}</span>
         <Link
           href="/plan-ahorro/nuevo"
           className="rounded-xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors px-4 py-2 text-sm font-medium text-white"
         >
-          + Nuevo plan
+          + {t('Nuevo plan')}
         </Link>
       </header>
 
       <p className="text-xs text-muted dark:text-dark-text-secondary -mt-2">
-        Un cliente va pagando en cuotas hasta juntar el monto de un equipo puntual. Cuando llega al objetivo, se le entrega.
+        {t('Un cliente va pagando en cuotas hasta juntar el monto de un equipo puntual. Cuando llega al objetivo, se le entrega.')}
       </p>
 
       <div className="flex items-center gap-1.5 text-sm">
-        {TABS.map((t) => (
+        {TABS.map((tabItem) => (
           <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
+            key={tabItem.id}
+            onClick={() => setTab(tabItem.id)}
             className={`flex-1 whitespace-nowrap rounded-xl py-2 px-2 font-medium ${
-              tab === t.id
+              tab === tabItem.id
                 ? 'bg-accent dark:bg-dark-accent text-white'
                 : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
             }`}
           >
-            {t.label}
+            {t(tabItem.label)}
           </button>
         ))}
       </div>
@@ -117,19 +120,19 @@ export default function PlanAhorro() {
       <input
         value={busqueda}
         onChange={(e) => setBusqueda(e.target.value)}
-        placeholder="Buscar por cliente o modelo..."
+        placeholder={t('Buscar por cliente o modelo...')}
         className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
       />
 
-      {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Cargando...</p>}
+      {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{t('Cargando...')}</p>}
       {!loading && filtrados.length === 0 && (
-        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">No hay planes en esta categoría.</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{t('No hay planes en esta categoría.')}</p>
       )}
 
       <div className="flex flex-col gap-2">
         {filtrados.map((p) => {
           const pct = p.monto_objetivo > 0 ? Math.min(100, Math.round((p.pagado / p.monto_objetivo) * 100)) : 0;
-          const nombreCliente = p.clientes ? `${p.clientes.nombre} ${p.clientes.apellido || ''}`.trim() : 'Sin cliente';
+          const nombreCliente = p.clientes ? `${p.clientes.nombre} ${p.clientes.apellido || ''}`.trim() : t('Sin cliente');
           return (
             <Link
               key={p.id}
@@ -142,12 +145,12 @@ export default function PlanAhorro() {
                     {nombreCliente}
                     {p.dispositivo_id && (
                       <span className="ml-1.5 text-[9px] font-semibold text-accent dark:text-dark-accent bg-accent-soft dark:bg-dark-accent-soft rounded-full px-1.5 py-0.5 align-middle">
-                        SEÑA
+                        {t('SEÑA')}
                       </span>
                     )}
                   </p>
                   <p className="text-xs text-muted dark:text-dark-text-secondary truncate">
-                    {p.modelo || 'Sin modelo'}
+                    {p.modelo || t('Sin modelo')}
                     {p.capacidad_gb ? ` · ${p.capacidad_gb}GB` : ''}
                     {p.color ? ` · ${p.color}` : ''}
                   </p>
