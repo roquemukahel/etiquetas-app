@@ -6,6 +6,7 @@ import {
   estadoVisualCuota,
   aplicarPagoACuotas,
   proyeccionMensual,
+  alertasCuotas,
   aFechaISO,
   type CuotaParaAplicar,
   type CuotaProyeccion,
@@ -260,6 +261,58 @@ describe('proyeccionMensual — ejemplo obligatorio de la spec', () => {
     const res = proyeccionMensual({ cuotas, pagosAplicados: [], horizonteMeses: 1, hoy: HOY, decimales: 0 });
     expect(res[0].cantidadCuotas).toBe(3);
     expect(res[0].cantidadClientes).toBe(2);
+  });
+});
+
+describe('alertasCuotas', () => {
+  const HOY = new Date(2026, 7, 19); // 19/8/2026
+  function cuota(over: any = {}) {
+    return {
+      id: 'c1',
+      cliente_id: 'cl1',
+      clienteNombre: 'Juan Pérez',
+      plan_id: 'p1',
+      numero: 1,
+      cuotaTotal: 3,
+      moneda: 'ARS',
+      fecha_vencimiento: '2026-09-01',
+      importe_original: 1000,
+      importe_pagado: 0,
+      estado: 'pendiente' as const,
+      ...over,
+    };
+  }
+
+  it('incluye vence-hoy, próxima a vencer y vencida; ignora pendiente lejana/pagada/anulada', () => {
+    const cuotas = [
+      cuota({ id: 'a', fecha_vencimiento: '2026-08-19' }), // vence hoy
+      cuota({ id: 'b', fecha_vencimiento: '2026-08-22' }), // próxima a vencer
+      cuota({ id: 'c', fecha_vencimiento: '2026-08-01' }), // vencida
+      cuota({ id: 'd', fecha_vencimiento: '2026-12-01' }), // lejana, no alerta
+      cuota({ id: 'e', fecha_vencimiento: '2026-08-01', estado: 'pagada', importe_pagado: 1000 }), // pagada, no alerta
+      cuota({ id: 'f', fecha_vencimiento: '2026-08-01', estado: 'anulada' }), // anulada, no alerta
+    ];
+    const alertas = alertasCuotas(cuotas, HOY);
+    expect(alertas.map((a) => a.id).sort()).toEqual(['a', 'b', 'c']);
+  });
+
+  it('las vencidas van primero, con los días de atraso calculados', () => {
+    const cuotas = [cuota({ id: 'a', fecha_vencimiento: '2026-08-19' }), cuota({ id: 'b', fecha_vencimiento: '2026-08-09' })];
+    const alertas = alertasCuotas(cuotas, HOY);
+    expect(alertas[0].id).toBe('b');
+    expect(alertas[0].categoria).toBe('vencida');
+    expect(alertas[0].diasAtraso).toBe(10);
+    expect(alertas[1].diasAtraso).toBeNull();
+  });
+
+  it('cada alerta trae cliente, importe (saldo pendiente, no el original), número de cuota y total', () => {
+    const alertas = alertasCuotas([cuota({ id: 'a', fecha_vencimiento: '2026-08-01', importe_pagado: 400 })], HOY);
+    expect(alertas[0]).toMatchObject({ clienteNombre: 'Juan Pérez', importe: 600, cuotaNumero: 1, cuotaTotal: 3 });
+  });
+
+  it('nunca duplica: una cuota aparece como máximo una vez (id = cuota_id)', () => {
+    const alertas = alertasCuotas([cuota({ id: 'a', fecha_vencimiento: '2026-08-01' })], HOY);
+    expect(new Set(alertas.map((a) => a.id)).size).toBe(alertas.length);
   });
 });
 

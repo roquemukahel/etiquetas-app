@@ -9,6 +9,8 @@ import { simboloMoneda } from '../lib/monedas';
 import { estadoCuenta, ESTADO_INFO } from '../lib/cuentaCorriente';
 import { obtenerTodasLasFilas } from '../lib/db';
 import { QCard } from '../QCard';
+import { EvolucionBarras } from '../estadisticas/graficos';
+import { proyeccionMensual, alertasCuotas, aFechaISO, type CuotaProyeccion, type PagoAplicadoProyeccion, type AlertaCuota } from '../lib/financiacion/motor';
 
 type Cliente = { id: string; nombre: string; apellido: string | null; suspendido: boolean | null };
 type Saldo = { cliente_id: string; saldo: number; vencido: number };
@@ -19,6 +21,19 @@ type Fila = {
   saldo: number;
   vencido: number;
   suspendido: boolean;
+};
+
+type CuotaFila = {
+  id: string;
+  plan_id: string;
+  numero: number;
+  cantidad_cuotas: number;
+  fecha_vencimiento: string;
+  importe_original: number;
+  importe_pagado: number;
+  estado: 'pendiente' | 'pagada' | 'anulada';
+  cliente_id: string;
+  moneda: string;
 };
 
 export default function CuentasPorCobrar() {
@@ -32,6 +47,15 @@ export default function CuentasPorCobrar() {
   const [loading, setLoading] = useState(true);
   const [orden, setOrden] = useState<'saldo' | 'vencido' | 'nombre'>('saldo');
 
+  // ---------- Proyección de cobranzas (financiación en cuotas) ----------
+  const [cuotas, setCuotas] = useState<CuotaFila[]>([]);
+  const [pagosAplicados, setPagosAplicados] = useState<PagoAplicadoProyeccion[]>([]);
+  const [nombresClientes, setNombresClientes] = useState<Map<string, string>>(new Map());
+  const [monedaProyeccion, setMonedaProyeccion] = useState<string | null>(null);
+  const [horizonte, setHorizonte] = useState<6 | 12>(6);
+  const [alertasDescartadas, setAlertasDescartadas] = useState<Set<string>>(new Set());
+  const [alertasAbiertas, setAlertasAbiertas] = useState(false);
+
   const moneda = useMemo(() => simboloMoneda(monedaCodigo), [monedaCodigo]);
 
   useEffect(() => {
@@ -44,10 +68,19 @@ export default function CuentasPorCobrar() {
       // clientes, un select() común se corta en 1000 filas sin avisar y los
       // deudores que quedaran afuera de esa página aparecerían como
       // "Cliente eliminado" sin estarlo de verdad.
-      const [{ data: saldosData }, clientesData, { data: userData }] = await Promise.all([
+      const [{ data: saldosData }, clientesData, { data: userData }, { data: cuotasData }, { data: pagosData }] = await Promise.all([
         supabase.rpc('saldos_cuenta_corriente'),
         obtenerTodasLasFilas<Cliente>(supabase, 'clientes', 'id, nombre, apellido, suspendido'),
         supabase.auth.getUser(),
+        supabase
+          .from('financiacion_cuotas')
+          .select('id, plan_id, numero, fecha_vencimiento, importe_original, importe_pagado, estado, financiacion_planes!inner(cliente_id, moneda, cantidad_cuotas)'),
+        // Solo pagos reales (tipo='pago', no 'ajuste' — un ajuste no es plata
+        // que entró, no cuenta como "cobrado" en la proyección).
+        supabase
+          .from('financiacion_pagos')
+          .select('monto_aplicado, tipo, pagos!inner(fecha), financiacion_cuotas!inner(plan_id, financiacion_planes!inner(cliente_id, moneda))')
+          .eq('tipo', 'pago'),
       ]);
       const clientes = new Map(clientesData.map((c) => [c.id, c]));
       const armadas: Fila[] = ((saldosData as Saldo[]) ?? [])
@@ -65,6 +98,33 @@ export default function CuentasPorCobrar() {
         .filter((f) => f.saldo > 0.009);
       setFilas(armadas);
 
+      setNombresClientes(new Map(clientesData.map((c) => [c.id, `${c.nombre} ${c.apellido || ''}`.trim()])));
+      setCuotas(
+        ((cuotasData as any[]) ?? []).map((c) => ({
+          id: c.id,
+          plan_id: c.plan_id,
+          numero: c.numero,
+          cantidad_cuotas: c.financiacion_planes?.cantidad_cuotas ?? 1,
+          fecha_vencimiento: c.fecha_vencimiento,
+          importe_original: c.importe_original,
+          importe_pagado: c.importe_pagado,
+          estado: c.estado,
+          cliente_id: c.financiacion_planes?.cliente_id,
+          moneda: c.financiacion_planes?.moneda ?? 'ARS',
+        }))
+      );
+      setPagosAplicados(
+        ((pagosData as any[]) ?? []).map((p) => ({
+          cliente_id: p.financiacion_cuotas?.financiacion_planes?.cliente_id,
+          moneda: p.financiacion_cuotas?.financiacion_planes?.moneda ?? 'ARS',
+          // Fecha REAL local del pago (no un slice de un timestamptz en UTC,
+          // que podría correrse un día según la hora) — mismo criterio de
+          // fechas locales que el resto del motor.
+          fecha_pago: p.pagos?.fecha ? aFechaISO(new Date(p.pagos.fecha)) : '',
+          monto: p.monto_aplicado,
+        }))
+      );
+
       if (userData?.user) {
         const { data: perfil } = await supabase
           .from('perfiles')
@@ -78,6 +138,69 @@ export default function CuentasPorCobrar() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [puedeVer]);
+
+  // Descartar una alerta es una preferencia de ESTE navegador, no un cambio
+  // real en la base (no existe una tabla de alertas) — mismo criterio que
+  // las alertas de Servicio Técnico.
+  const KEY_DESCARTADAS = 'qovento:cxc-alertas-descartadas';
+  useEffect(() => {
+    try {
+      const guardado = localStorage.getItem(KEY_DESCARTADAS);
+      if (guardado) setAlertasDescartadas(new Set(JSON.parse(guardado)));
+    } catch {}
+  }, []);
+  const descartarAlerta = (id: string) => {
+    setAlertasDescartadas((prev) => {
+      const nuevo = new Set(prev).add(id);
+      try {
+        localStorage.setItem(KEY_DESCARTADAS, JSON.stringify(Array.from(nuevo)));
+      } catch {}
+      return nuevo;
+    });
+  };
+
+  // Monedas con financiación real (nunca se mezclan en la proyección).
+  const monedasConCuotas = useMemo(() => Array.from(new Set(cuotas.filter((c) => c.estado !== 'anulada').map((c) => c.moneda))), [cuotas]);
+  useEffect(() => {
+    if (monedaProyeccion === null && monedasConCuotas.length > 0) {
+      setMonedaProyeccion(monedasConCuotas.includes(monedaCodigo) ? monedaCodigo : monedasConCuotas[0]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [monedasConCuotas, monedaCodigo]);
+
+  const cuotasParaMotor: CuotaProyeccion[] = useMemo(
+    () => cuotas.map((c) => ({ cliente_id: c.cliente_id, moneda: c.moneda, fecha_vencimiento: c.fecha_vencimiento, importe_original: c.importe_original, importe_pagado: c.importe_pagado, estado: c.estado })),
+    [cuotas]
+  );
+
+  const proyeccion = useMemo(() => {
+    if (!monedaProyeccion) return [];
+    const filtradas = cuotasParaMotor.filter((c) => c.moneda === monedaProyeccion);
+    const pagosFiltrados = pagosAplicados.filter((p) => p.moneda === monedaProyeccion);
+    return proyeccionMensual({ cuotas: filtradas, pagosAplicados: pagosFiltrados, horizonteMeses: horizonte, hoy: new Date(), decimales: 0 });
+  }, [cuotasParaMotor, pagosAplicados, monedaProyeccion, horizonte]);
+
+  const mesActual = proyeccion[0];
+  const pctCobradoMes = mesActual && mesActual.programado > 0.009 ? Math.round((mesActual.cobrado / mesActual.programado) * 100) : null;
+
+  const alertas: AlertaCuota[] = useMemo(() => {
+    const conNombre = cuotas
+      .filter((c) => c.estado === 'pendiente')
+      .map((c) => ({
+        id: c.id,
+        cliente_id: c.cliente_id,
+        clienteNombre: nombresClientes.get(c.cliente_id) ?? 'Cliente eliminado',
+        plan_id: c.plan_id,
+        numero: c.numero,
+        cuotaTotal: c.cantidad_cuotas,
+        moneda: c.moneda,
+        fecha_vencimiento: c.fecha_vencimiento,
+        importe_original: c.importe_original,
+        importe_pagado: c.importe_pagado,
+        estado: c.estado,
+      }));
+    return alertasCuotas(conNombre, new Date()).filter((a) => !alertasDescartadas.has(a.id));
+  }, [cuotas, nombresClientes, alertasDescartadas]);
 
   const ordenadas = useMemo(() => {
     const copia = [...filas];
@@ -111,6 +234,39 @@ export default function CuentasPorCobrar() {
         <span className="text-lg font-medium">Cuentas por cobrar</span>
       </header>
 
+      {alertas.length > 0 && (
+        <div className="rounded-xl border border-warn/30 bg-warn/10 flex flex-col overflow-hidden">
+          <button onClick={() => setAlertasAbiertas((v) => !v)} className="flex items-center justify-between px-4 py-3 text-sm font-medium">
+            <span>
+              {alertas.length} cuota{alertas.length === 1 ? '' : 's'} para atender (vencidas o por vencer)
+            </span>
+            <span className="text-xs text-muted dark:text-dark-text-secondary">{alertasAbiertas ? 'Ocultar' : 'Ver'}</span>
+          </button>
+          {alertasAbiertas && (
+            <div className="flex flex-col border-t border-warn/20">
+              {alertas.map((a) => (
+                <div key={a.id} className="flex items-center gap-2 px-4 py-2 text-xs hover:bg-white/40 dark:hover:bg-black/10">
+                  <span className={`h-2 w-2 rounded-full shrink-0 ${a.categoria === 'proxima_a_vencer' ? 'bg-warn' : 'bg-bad'}`} />
+                  <Link href={`/clientes/${a.clienteId}`} className="flex-1 min-w-0 truncate">
+                    <span className="font-medium">{a.clienteNombre}</span> · cuota {a.cuotaNumero}/{a.cuotaTotal} ·{' '}
+                    {simboloMoneda(a.moneda)}
+                    {Math.round(a.importe).toLocaleString('es-AR')} ·{' '}
+                    {a.categoria === 'vencida'
+                      ? `vencida hace ${a.diasAtraso} día${a.diasAtraso === 1 ? '' : 's'}`
+                      : a.categoria === 'vence_hoy'
+                      ? 'vence hoy'
+                      : `vence el ${new Date(a.fechaVencimiento + 'T00:00:00').toLocaleDateString('es-AR')}`}
+                  </Link>
+                  <button onClick={() => descartarAlerta(a.id)} className="shrink-0 text-muted dark:text-dark-text-secondary underline">
+                    Descartar
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-3">
         <QCard firma microetiqueta="Total">
           <p className="text-2xl font-display font-semibold leading-none text-warn">{fmt(totalPorCobrar)}</p>
@@ -121,6 +277,86 @@ export default function CuentasPorCobrar() {
           <p className="text-[11px] text-muted dark:text-dark-text-secondary mt-1.5">Vencido (a gestionar)</p>
         </QCard>
       </div>
+
+      {/* Proyección de cobranzas: SOLO ingresos previstos de financiaciones en
+          cuotas, no un flujo de caja completo — no se muestra si el negocio
+          no tiene ninguna financiación cargada todavía (nada de datos
+          inventados). */}
+      {!loading && monedasConCuotas.length > 0 && monedaProyeccion && (
+        <QCard padding="sm" className="flex flex-col gap-3">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <p className="text-sm font-medium" title="Ingresos previstos de tus cuotas por cobrar — no garantiza que el cliente pague, y no incluye ventas fuera de un plan de financiación.">
+              Proyección de cobranzas
+            </p>
+            <div className="flex items-center gap-1.5">
+              {monedasConCuotas.length > 1 && (
+                <select
+                  value={monedaProyeccion}
+                  onChange={(e) => setMonedaProyeccion(e.target.value)}
+                  className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-1 text-xs"
+                >
+                  {monedasConCuotas.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {([6, 12] as const).map((h) => (
+                <button
+                  key={h}
+                  onClick={() => setHorizonte(h)}
+                  className={`rounded-lg px-2.5 py-1 text-xs font-medium ${
+                    horizonte === h ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border'
+                  }`}
+                >
+                  {h} meses
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {mesActual && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+              <ResumenMes etiqueta="A cobrar este mes" valor={`${simboloMoneda(monedaProyeccion)}${Math.round(mesActual.programado).toLocaleString('es-AR')}`} />
+              <ResumenMes etiqueta="Cobrado este mes" valor={`${simboloMoneda(monedaProyeccion)}${Math.round(mesActual.cobrado).toLocaleString('es-AR')}`} tono="text-good" />
+              <ResumenMes etiqueta="Pendiente del mes" valor={`${simboloMoneda(monedaProyeccion)}${Math.round(mesActual.pendiente).toLocaleString('es-AR')}`} tono={mesActual.pendiente > 0 ? 'text-warn' : undefined} />
+              <ResumenMes etiqueta="% cobrado del mes" valor={pctCobradoMes != null ? `${pctCobradoMes}%` : '—'} />
+            </div>
+          )}
+
+          <EvolucionBarras datos={proyeccion.map((m) => ({ label: etiquetaMesCorta(m.mes), valor: m.pendiente }))} moneda={simboloMoneda(monedaProyeccion)} />
+
+          <div className="overflow-x-auto -mx-1">
+            <table className="w-full text-xs min-w-[420px]">
+              <thead>
+                <tr className="text-left text-muted dark:text-dark-text-secondary border-b border-border dark:border-dark-border">
+                  <th className="py-1.5 pr-2 font-medium">Mes</th>
+                  <th className="py-1.5 px-2 font-medium text-right">Programado</th>
+                  <th className="py-1.5 px-2 font-medium text-right">Cobrado</th>
+                  <th className="py-1.5 px-2 font-medium text-right">Pendiente</th>
+                  <th className="py-1.5 px-2 font-medium text-right">Vencido</th>
+                  <th className="py-1.5 pl-2 font-medium text-right">Cuotas</th>
+                  <th className="py-1.5 pl-2 font-medium text-right">Clientes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {proyeccion.map((m) => (
+                  <tr key={m.mes} className="border-b border-border/60 dark:border-dark-border/60 last:border-0">
+                    <td className="py-1.5 pr-2">{etiquetaMesCorta(m.mes)}</td>
+                    <td className="py-1.5 px-2 text-right tabular-nums">{simboloMoneda(monedaProyeccion)}{Math.round(m.programado).toLocaleString('es-AR')}</td>
+                    <td className="py-1.5 px-2 text-right tabular-nums text-good">{simboloMoneda(monedaProyeccion)}{Math.round(m.cobrado).toLocaleString('es-AR')}</td>
+                    <td className="py-1.5 px-2 text-right tabular-nums">{simboloMoneda(monedaProyeccion)}{Math.round(m.pendiente).toLocaleString('es-AR')}</td>
+                    <td className={`py-1.5 px-2 text-right tabular-nums ${m.vencido > 0 ? 'text-bad' : ''}`}>{simboloMoneda(monedaProyeccion)}{Math.round(m.vencido).toLocaleString('es-AR')}</td>
+                    <td className="py-1.5 pl-2 text-right tabular-nums">{m.cantidadCuotas}</td>
+                    <td className="py-1.5 pl-2 text-right tabular-nums">{m.cantidadClientes}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </QCard>
+      )}
 
       {loading ? (
         <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Cargando...</p>
@@ -171,4 +407,21 @@ export default function CuentasPorCobrar() {
       )}
     </main>
   );
+}
+
+function ResumenMes({ etiqueta, valor, tono }: { etiqueta: string; valor: string; tono?: string }) {
+  return (
+    <div>
+      <p className={`text-sm font-display font-semibold leading-none ${tono ?? ''}`}>{valor}</p>
+      <p className="text-[10px] text-muted dark:text-dark-text-secondary mt-1">{etiqueta}</p>
+    </div>
+  );
+}
+
+// 'YYYY-MM' -> "ago" (mes corto en español, sin depender de que el navegador
+// tenga el locale 'es' cargado igual en todos lados: se arma a mano).
+const MESES_CORTOS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+function etiquetaMesCorta(mesISO: string): string {
+  const [anio, mes] = mesISO.split('-').map(Number);
+  return `${MESES_CORTOS[mes - 1]} ${String(anio).slice(2)}`;
 }

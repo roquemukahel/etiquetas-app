@@ -294,3 +294,56 @@ export function porcentajeCobrado(programado: number, cobrado: number): number |
   if (programado <= 0.009) return null;
   return redondear((cobrado / programado) * 100, 1);
 }
+
+// ---------- Alertas de vencimiento (internas, sin correo/WhatsApp) ----------
+// Mismo criterio que calcularAlertas() de Servicio Técnico
+// (app/lib/reparaciones.ts): función pura que devuelve una lista, la UI la
+// filtra contra un set de "descartadas" en localStorage (no hay tabla de
+// alertas en la base, así que "descartar" es una preferencia del
+// navegador, no un cambio de estado real).
+export type CategoriaAlertaCuota = 'vence_hoy' | 'proxima_a_vencer' | 'vencida';
+export type AlertaCuota = {
+  id: string; // = cuota_id, único por diseño → nunca se duplica
+  categoria: CategoriaAlertaCuota;
+  clienteId: string;
+  clienteNombre: string;
+  planId: string;
+  cuotaNumero: number;
+  cuotaTotal: number;
+  importe: number;
+  moneda: string;
+  fechaVencimiento: string;
+  diasAtraso: number | null;
+};
+
+export function alertasCuotas(
+  cuotas: (CuotaEstado & { id: string; cliente_id: string; clienteNombre: string; plan_id: string; numero: number; cuotaTotal: number; moneda: string })[],
+  hoy: Date
+): AlertaCuota[] {
+  const hoyMedianoche = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+  const alertas: AlertaCuota[] = [];
+  for (const c of cuotas) {
+    const visual = estadoVisualCuota(c, hoy);
+    if (visual !== 'vence_hoy' && visual !== 'proxima_a_vencer' && visual !== 'vencida' && visual !== 'parcial_y_vencida') continue;
+    const categoria: CategoriaAlertaCuota = visual === 'proxima_a_vencer' ? 'proxima_a_vencer' : visual === 'vence_hoy' ? 'vence_hoy' : 'vencida';
+    const vencimiento = fechaLocal(c.fecha_vencimiento);
+    const diasAtraso = categoria === 'vencida' ? Math.round((hoyMedianoche.getTime() - vencimiento.getTime()) / 86400000) : null;
+    alertas.push({
+      id: c.id,
+      categoria,
+      clienteId: c.cliente_id,
+      clienteNombre: c.clienteNombre,
+      planId: c.plan_id,
+      cuotaNumero: c.numero,
+      cuotaTotal: c.cuotaTotal,
+      importe: redondear(c.importe_original - c.importe_pagado, 2),
+      moneda: c.moneda,
+      fechaVencimiento: c.fecha_vencimiento,
+      diasAtraso,
+    });
+  }
+  // Vencidas primero (las más atrasadas arriba), después vence-hoy, después
+  // próximas a vencer — mismo criterio de prioridad que aplicarPagoACuotas.
+  const orden: Record<CategoriaAlertaCuota, number> = { vencida: 0, vence_hoy: 1, proxima_a_vencer: 2 };
+  return alertas.sort((a, b) => orden[a.categoria] - orden[b.categoria] || (b.diasAtraso ?? 0) - (a.diasAtraso ?? 0) || a.fechaVencimiento.localeCompare(b.fechaVencimiento));
+}
