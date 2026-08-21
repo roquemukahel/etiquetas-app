@@ -1340,6 +1340,53 @@ export const PT: Record<string, string> = {
   '¿Buscás el detalle por vendedor?': 'Está procurando o detalhe por vendedor?',
   '¿Buscás más profundidad?': 'Está procurando mais profundidade?',
 
+  // Configuración — Suscripción
+  'Antes de que termine la prueba — Anual': 'Antes que a avaliação termine — Anual',
+  'Antes de que termine la prueba — Mensual': 'Antes que a avaliação termine — Mensal',
+  'No encontramos tu negocio.': 'Não encontramos seu negócio.',
+  'Suscribirme — Anual': 'Assinar — Anual',
+  'Suscribirme — Mensual': 'Assinar — Mensal',
+  'Tu prueba gratis termina el': 'Sua avaliação gratuita termina em',
+  'En período de prueba': 'Em período de avaliação',
+  'Todavía no se te cobró nada.': 'Ainda não foi cobrado nada.',
+  'Suscripción activa': 'Assinatura ativa',
+  'Todo en orden.': 'Tudo em ordem.',
+  'Pago pendiente': 'Pagamento pendente',
+  'Hubo un problema con el último cobro. Vamos a reintentarlo.': 'Houve um problema com a última cobrança. Vamos tentar novamente.',
+  'Sin pagar': 'Não pago',
+  'No se pudo procesar el pago.': 'Não foi possível processar o pagamento.',
+  Cancelada: 'Cancelada',
+  'Tu suscripción fue cancelada.': 'Sua assinatura foi cancelada.',
+  Vencida: 'Vencida',
+  'Tu suscripción venció.': 'Sua assinatura venceu.',
+  Pausada: 'Pausada',
+  'Tu suscripción está en pausa.': 'Sua assinatura está em pausa.',
+
+  // Configuración — Financiación en cuotas
+  '% de interés': '% de juros',
+  '(pago en el momento) NO tiene recargo y es aparte — no se configura acá.':
+    '(pagamento no momento) NÃO tem acréscimo e é à parte — não se configura aqui.',
+  '1 cuota': '1 parcela',
+  Guardado: 'Salvo',
+  'NO es contado: es cuando el cliente paga todo junto pero': 'NÃO é à vista: é quando o cliente paga tudo junto, mas',
+  'No tenés permiso para configurar la financiación.': 'Você não tem permissão para configurar o financiamento.',
+  'Ojo:': 'Atenção:',
+  'Poné el': 'Coloque o',
+  'Sin ofrecer': 'Sem oferecer',
+  'a ~': 'a ~',
+  'a ~1 mes': 'a ~1 mês',
+  'así que sí lleva su recargo. 3 cuotas = 3 meses, 6 = 6 meses, 12 = 12 meses.':
+    'então sim leva acréscimo. 3 parcelas = 3 meses, 6 = 6 meses, 12 = 12 meses.',
+  'cada una.': 'cada uma.',
+  'con 3 cuotas al': 'com 3 parcelas a',
+  cuotas: 'parcelas',
+  'de cada plan. Dejá un plan vacío para no ofrecerlo. Al vender, elegís el plan y el recargo se calcula sobre el precio de contado.':
+    'de cada plano. Deixe um plano vazio para não oferecê-lo. Ao vender, você escolhe o plano e o acréscimo é calculado sobre o preço à vista.',
+  'en total, o sea 3 de': 'no total, ou seja 3 de',
+  'interés (%)': 'juros (%)',
+  'Ejemplo: un equipo de': 'Exemplo: um aparelho de',
+  Contado: 'À vista',
+
   // Estadísticas — Dashboard: tabs, períodos, métricas (labels de arrays)
   'esta semana': 'esta semana',
   'este mes': 'este mês',

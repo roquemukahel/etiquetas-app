@@ -5,11 +5,13 @@ import Link from 'next/link';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
-import { PLANES_CUOTAS, etiquetaCuotas } from '../../lib/cuotas';
+import { PLANES_CUOTAS } from '../../lib/cuotas';
+import { useT } from '../../lib/idioma';
 
 export default function Financiacion() {
   const supabase = crearClienteNavegador();
   const actor = useActor();
+  const t = useT();
   // Configurar financiación es cosa del dueño/administrador.
   const puede = tienePermiso(actor, 'gestionar_usuarios');
 
@@ -65,7 +67,7 @@ export default function Financiacion() {
       .eq('id', negocioId);
     setGuardando(false);
     if (upErr) {
-      setError('No pudimos guardar: ' + upErr.message);
+      setError(t('No pudimos guardar:') + ' ' + upErr.message);
       return;
     }
     setOk(true);
@@ -75,9 +77,9 @@ export default function Financiacion() {
   if (!loading && !puede) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
-        <p className="text-sm text-muted dark:text-dark-text-secondary">No tenés permiso para configurar la financiación.</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t('No tenés permiso para configurar la financiación.')}</p>
         <Link href="/configuracion" className="text-sm text-accent dark:text-dark-accent underline">
-          Volver
+          {t('Volver')}
         </Link>
       </main>
     );
@@ -89,30 +91,28 @@ export default function Financiacion() {
         <Link href="/configuracion" className="text-2xl leading-none">
           &larr;
         </Link>
-        <span className="text-lg font-medium">Financiación en cuotas</span>
+        <span className="text-lg font-medium">{t('Financiación en cuotas')}</span>
       </header>
 
       {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
 
       <p className="text-sm text-muted dark:text-dark-text-secondary">
-        Poné el <strong>interés (%)</strong> de cada plan. Dejá un plan vacío para no ofrecerlo. Al vender, elegís el
-        plan y el recargo se calcula sobre el precio de contado.
+        {t('Poné el')} <strong>{t('interés (%)')}</strong> {t('de cada plan. Dejá un plan vacío para no ofrecerlo. Al vender, elegís el plan y el recargo se calcula sobre el precio de contado.')}
       </p>
       <p className="text-xs text-muted dark:text-dark-text-secondary bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2">
-        Ojo: <strong>Contado</strong> (pago en el momento) NO tiene recargo y es aparte — no se configura acá.{' '}
-        <strong>1 cuota</strong> NO es contado: es cuando el cliente paga todo junto pero <strong>a ~1 mes</strong>, así
-        que sí lleva su recargo. 3 cuotas = 3 meses, 6 = 6 meses, 12 = 12 meses.
+        {t('Ojo:')} <strong>{t('Contado')}</strong> {t('(pago en el momento) NO tiene recargo y es aparte — no se configura acá.')}{' '}
+        <strong>{t('1 cuota')}</strong> {t('NO es contado: es cuando el cliente paga todo junto pero')} <strong>{t('a ~1 mes')}</strong>, {t('así que sí lleva su recargo. 3 cuotas = 3 meses, 6 = 6 meses, 12 = 12 meses.')}
       </p>
 
       {loading ? (
-        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Cargando...</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{t('Cargando...')}</p>
       ) : (
         <div className="flex flex-col gap-3">
           {PLANES_CUOTAS.map((c) => (
             <div key={c} className="flex items-center gap-3 rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3">
               <span className="w-24 leading-tight">
-                <span className="block text-sm font-medium">{etiquetaCuotas(c)}</span>
-                <span className="block text-[10px] text-muted dark:text-dark-text-secondary">a ~{c} {c === 1 ? 'mes' : 'meses'}</span>
+                <span className="block text-sm font-medium">{c} {c === 1 ? t('cuota') : t('cuotas')}</span>
+                <span className="block text-[10px] text-muted dark:text-dark-text-secondary">{t('a ~')}{c} {c === 1 ? t('mes') : t('meses')}</span>
               </span>
               <div className="flex-1 flex items-center gap-2">
                 <input
@@ -121,17 +121,17 @@ export default function Financiacion() {
                     setInteres((p) => ({ ...p, [String(c)]: e.target.value.replace(',', '.').replace(/[^\d.]/g, '') }))
                   }
                   inputMode="decimal"
-                  placeholder="Sin ofrecer"
+                  placeholder={t('Sin ofrecer')}
                   className="w-28 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                 />
-                <span className="text-sm text-muted dark:text-dark-text-secondary">% de interés</span>
+                <span className="text-sm text-muted dark:text-dark-text-secondary">{t('% de interés')}</span>
               </div>
             </div>
           ))}
 
           <div className="rounded-xl bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border px-4 py-3 text-xs text-muted dark:text-dark-text-secondary">
-            Ejemplo: un equipo de <strong>100.000</strong> con 3 cuotas al <strong>10%</strong> →{' '}
-            <strong>110.000</strong> en total, o sea 3 de <strong>36.667</strong> cada una.
+            {t('Ejemplo: un equipo de')} <strong>100.000</strong> {t('con 3 cuotas al')} <strong>10%</strong> →{' '}
+            <strong>110.000</strong> {t('en total, o sea 3 de')} <strong>36.667</strong> {t('cada una.')}
           </div>
 
           <button
@@ -139,7 +139,7 @@ export default function Financiacion() {
             onClick={guardar}
             className="w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
           >
-            {guardando ? 'Guardando...' : ok ? '✓ Guardado' : 'Guardar'}
+            {guardando ? t('Guardando...') : ok ? `✓ ${t('Guardado')}` : t('Guardar')}
           </button>
         </div>
       )}

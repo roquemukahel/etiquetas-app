@@ -6,6 +6,7 @@ import { crearClienteNavegador } from '../../lib/supabase/client';
 import PlanesCheckout from '../../PlanesCheckout';
 import PagoUSDT from '../../PagoUSDT';
 import PagoTransferenciaARS from '../../PagoTransferenciaARS';
+import { useT } from '../../lib/idioma';
 
 type EstadoSuscripcion = 'trialing' | 'active' | 'past_due' | 'unpaid' | 'cancelled' | 'expired' | 'paused';
 
@@ -36,6 +37,7 @@ const TEXTOS: Record<EstadoSuscripcion, { titulo: string; detalle: string; color
 
 export default function Suscripcion() {
   const supabase = crearClienteNavegador();
+  const t = useT();
   const [negocio, setNegocio] = useState<Negocio | null>(null);
   const [email, setEmail] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -76,7 +78,7 @@ export default function Suscripcion() {
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center">
-        <p className="text-sm text-muted dark:text-dark-text-secondary">Cargando...</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t('Cargando...')}</p>
       </main>
     );
   }
@@ -84,9 +86,9 @@ export default function Suscripcion() {
   if (!negocio) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-3">
-        <p className="text-sm text-muted dark:text-dark-text-secondary">No encontramos tu negocio.</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t('No encontramos tu negocio.')}</p>
         <Link href="/configuracion" className="text-sm text-accent dark:text-dark-accent underline">
-          Volver
+          {t('Volver')}
         </Link>
       </main>
     );
@@ -102,15 +104,15 @@ export default function Suscripcion() {
         <Link href="/configuracion" className="text-2xl leading-none">
           &larr;
         </Link>
-        <span className="text-lg font-medium">Suscripción</span>
+        <span className="text-lg font-medium">{t('Suscripción')}</span>
       </header>
 
       <div className="rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-5 flex flex-col gap-1">
-        <span className={`text-base font-medium ${info.color}`}>{info.titulo}</span>
-        <span className="text-xs text-muted dark:text-dark-text-secondary">{info.detalle}</span>
+        <span className={`text-base font-medium ${info.color}`}>{t(info.titulo)}</span>
+        <span className="text-xs text-muted dark:text-dark-text-secondary">{t(info.detalle)}</span>
         {enPrueba && (
           <span className="text-xs text-muted dark:text-dark-text-secondary mt-2">
-            Tu prueba gratis termina el{' '}
+            {t('Tu prueba gratis termina el')}{' '}
             {new Date(negocio.fecha_fin_prueba!).toLocaleDateString('es-AR', {
               day: 'numeric',
               month: 'long',
@@ -126,8 +128,8 @@ export default function Suscripcion() {
           <PlanesCheckout
             negocioId={negocio.id}
             email={email}
-            textoBotonMensual={necesitaPagar ? 'Suscribirme — Mensual' : 'Antes de que termine la prueba — Mensual'}
-            textoBotonAnual={necesitaPagar ? 'Suscribirme — Anual' : 'Antes de que termine la prueba — Anual'}
+            textoBotonMensual={necesitaPagar ? t('Suscribirme — Mensual') : t('Antes de que termine la prueba — Mensual')}
+            textoBotonAnual={necesitaPagar ? t('Suscribirme — Anual') : t('Antes de que termine la prueba — Anual')}
           />
           <PagoUSDT negocioId={negocio.id} comprobante={comprobante} onEnviado={() => cargarComprobante(negocio.id)} />
           <PagoTransferenciaARS
