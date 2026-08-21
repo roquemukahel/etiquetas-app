@@ -13,6 +13,7 @@ import MiniaturaDispositivo from '../MiniaturaDispositivo';
 import Avatar from '../Avatar';
 import { ICONOS } from '../Iconos';
 import { Boton, BotonIcono } from '../Boton';
+import { useT } from '../lib/idioma';
 
 type Canje = {
   id: string;
@@ -45,6 +46,7 @@ type Vista = 'en_canje' | 'derivados' | 'historial';
 export default function PlanCanje() {
   const supabase = crearClienteNavegador();
   const actor = useActor();
+  const t = useT();
   const puedeEliminar = tienePermiso(actor, 'eliminar');
   const puedeRecibirServicioTecnico = tienePermiso(actor, 'recibir_servicio_tecnico');
   const puedeAgregarStock = tienePermiso(actor, 'agregar_stock');
@@ -85,7 +87,7 @@ export default function PlanCanje() {
   // canje original para las estadísticas de Plan Canje.
   const derivar = async (c: Canje) => {
     if (!puedeRecibirServicioTecnico) return;
-    if (!confirm('¿Derivar este dispositivo a Servicio Técnico?')) return;
+    if (!confirm(t('¿Derivar este dispositivo a Servicio Técnico?'))) return;
     setProcesando(c.id);
     const { data: nueva } = await supabase
       .from('reparaciones')
@@ -118,9 +120,9 @@ export default function PlanCanje() {
     }
     if (c.imei) {
       const { data: existente } = await supabase.from('dispositivos').select('id').eq('imei', c.imei).maybeSingle();
-      if (existente && !confirm(`Ya hay un dispositivo en Stock con el IMEI ${c.imei}. ¿Agregarlo igual?`)) return;
+      if (existente && !confirm(`${t('Ya hay un dispositivo en Stock con el IMEI')} ${c.imei}. ${t('¿Agregarlo igual?')}`)) return;
     }
-    if (!confirm('¿Agregar este dispositivo al Stock para venderlo?')) return;
+    if (!confirm(t('¿Agregar este dispositivo al Stock para venderlo?'))) return;
     setProcesando(c.id);
 
     // Igual que en Compras: se reserva el canje ANTES de crear el
@@ -134,12 +136,12 @@ export default function PlanCanje() {
       .eq('agregado_a_stock', false)
       .select('id');
     if (estadoErr) {
-      alert('No pudimos agregar al stock: ' + estadoErr.message);
+      alert(`${t('No pudimos agregar al stock:')} ` + estadoErr.message);
       setProcesando(null);
       return;
     }
     if (!actualizado || actualizado.length === 0) {
-      alert('Este canje ya había sido agregado al stock (quizás desde otra pestaña).');
+      alert(t('Este canje ya había sido agregado al stock (quizás desde otra pestaña).'));
       setProcesando(null);
       cargar();
       return;
@@ -159,7 +161,7 @@ export default function PlanCanje() {
     });
     if (insertError) {
       await supabase.from('canjes').update({ agregado_a_stock: false }).eq('id', c.id);
-      alert('No pudimos agregar al stock: ' + insertError.message);
+      alert(`${t('No pudimos agregar al stock:')} ` + insertError.message);
       setProcesando(null);
       return;
     }
@@ -170,7 +172,7 @@ export default function PlanCanje() {
 
   const eliminar = async (c: Canje) => {
     if (!puedeEliminar) return;
-    if (!confirm('¿Eliminar este dispositivo de Plan Canje? Esta acción no se puede deshacer.')) return;
+    if (!confirm(t('¿Eliminar este dispositivo de Plan Canje? Esta acción no se puede deshacer.'))) return;
     setProcesando(c.id);
     await supabase.from('canjes').delete().eq('id', c.id);
     await registrarAuditoria(supabase, {
@@ -189,7 +191,7 @@ export default function PlanCanje() {
         <Link href="/" className="text-2xl leading-none">
           &larr;
         </Link>
-        <span className="text-lg font-medium">Plan Canje</span>
+        <span className="text-lg font-medium">{t('Plan Canje')}</span>
       </header>
 
       <div className="flex items-center gap-2 text-sm">
@@ -199,7 +201,7 @@ export default function PlanCanje() {
             vista === 'en_canje' ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
           }`}
         >
-          En canje
+          {t('En canje')}
         </button>
         <button
           onClick={() => setVista('derivados')}
@@ -207,7 +209,7 @@ export default function PlanCanje() {
             vista === 'derivados' ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
           }`}
         >
-          Derivados
+          {t('Derivados')}
         </button>
         <button
           onClick={() => setVista('historial')}
@@ -215,17 +217,17 @@ export default function PlanCanje() {
             vista === 'historial' ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
           }`}
         >
-          Historial
+          {t('Historial')}
         </button>
       </div>
 
-      {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">Cargando...</p>}
+      {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{t('Cargando...')}</p>}
 
       {vista === 'derivados' ? (
         <>
           {!loading && derivados.length === 0 && (
             <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">
-              Todavía no derivaste ningún canje a Servicio Técnico.
+              {t('Todavía no derivaste ningún canje a Servicio Técnico.')}
             </p>
           )}
           <div className="flex flex-col gap-2">
@@ -262,7 +264,7 @@ export default function PlanCanje() {
         <>
           {!loading && filtrados.length === 0 && (
             <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">
-              {vista === 'historial' ? 'Todavía no agregaste ningún canje al stock.' : 'No hay dispositivos para mostrar acá.'}
+              {vista === 'historial' ? t('Todavía no agregaste ningún canje al stock.') : t('No hay dispositivos para mostrar acá.')}
             </p>
           )}
 
@@ -283,16 +285,16 @@ export default function PlanCanje() {
                           IMEI: <span className="font-bold font-mono text-ink dark:text-dark-text">{c.imei}</span>
                         </p>
                       )}
-                      {c.salud_bateria != null && <p className="text-xs text-muted dark:text-dark-text-secondary">Batería: {c.salud_bateria}%</p>}
+                      {c.salud_bateria != null && <p className="text-xs text-muted dark:text-dark-text-secondary">{t('Batería:')} {c.salud_bateria}%</p>}
                     </div>
                   </div>
                   {c.monto != null && <p className="text-sm font-medium">${c.monto.toLocaleString('es-AR')}</p>}
                 </div>
                 <div className="text-xs text-muted dark:text-dark-text-secondary flex flex-col gap-0.5">
-                  {c.detalles && <p>Detalles: {c.detalles}</p>}
+                  {c.detalles && <p>{t('Detalles:')} {c.detalles}</p>}
                   {c.vendedores?.nombre && (
                     <p className="flex items-center gap-1.5">
-                      Recibido por: <Avatar src={c.vendedores.foto_url} nombre={c.vendedores.nombre} size={34} /> {c.vendedores.nombre}
+                      {t('Recibido por:')} <Avatar src={c.vendedores.foto_url} nombre={c.vendedores.nombre} size={34} /> {c.vendedores.nombre}
                     </p>
                   )}
                 </div>
@@ -306,7 +308,7 @@ export default function PlanCanje() {
                         onClick={() => agregarAlStock(c)}
                         className="flex-1"
                       >
-                        Agregar al Stock
+                        {t('Agregar al Stock')}
                       </Boton>
                     )}
                     {puedeRecibirServicioTecnico && (
@@ -317,7 +319,7 @@ export default function PlanCanje() {
                         onClick={() => derivar(c)}
                         className="flex-1"
                       >
-                        Derivar a Servicio Técnico
+                        {t('Derivar a Servicio Técnico')}
                       </Boton>
                     )}
                     {puedeEliminar && (
@@ -325,7 +327,7 @@ export default function PlanCanje() {
                         variante="peligro"
                         tamano="sm"
                         icono={ICONOS.papelera}
-                        ariaLabel="Eliminar de Plan Canje"
+                        ariaLabel={t('Eliminar de Plan Canje')}
                         disabled={procesando === c.id}
                         onClick={() => eliminar(c)}
                       />

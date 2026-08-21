@@ -757,4 +757,24 @@ export const PT: Record<string, string> = {
   'Total a pagar': 'Total a pagar',
   'Total neto:': 'Total líquido:',
   hoy: 'hoje',
+
+  // Plan Canje
+  'Agregar al Stock': 'Adicionar ao Estoque',
+  'Batería:': 'Bateria:',
+  Derivados: 'Encaminhados',
+  'Detalles:': 'Detalhes:',
+  'Eliminar de Plan Canje': 'Excluir do Plano de Troca',
+  'En canje': 'Em troca',
+  'Este canje ya había sido agregado al stock (quizás desde otra pestaña).':
+    'Esta troca já tinha sido adicionada ao estoque (talvez em outra aba).',
+  Historial: 'Histórico',
+  'No hay dispositivos para mostrar acá.': 'Não há aparelhos para mostrar aqui.',
+  'No pudimos agregar al stock:': 'Não conseguimos adicionar ao estoque:',
+  'Recibido por:': 'Recebido por:',
+  'Todavía no agregaste ningún canje al stock.': 'Você ainda não adicionou nenhuma troca ao estoque.',
+  'Todavía no derivaste ningún canje a Servicio Técnico.': 'Você ainda não encaminhou nenhuma troca para a Assistência Técnica.',
+  '¿Agregar este dispositivo al Stock para venderlo?': 'Adicionar este aparelho ao Estoque para vendê-lo?',
+  '¿Derivar este dispositivo a Servicio Técnico?': 'Encaminhar este aparelho para a Assistência Técnica?',
+  '¿Eliminar este dispositivo de Plan Canje? Esta acción no se puede deshacer.':
+    'Excluir este aparelho do Plano de Troca? Esta ação não pode ser desfeita.',
 };
