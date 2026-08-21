@@ -1503,6 +1503,42 @@ export const PT: Record<string, string> = {
   '¿Tuviste algún problema, tenés alguna sugerencia o querés dejarnos un mensaje? Escribinos acá abajo.':
     'Teve algum problema, tem alguma sugestão ou quer nos deixar uma mensagem? Escreva para nós aqui embaixo.',
 
+  // Configuración — Stock público
+  'Copiar link': 'Copiar link',
+  'Enlace activo': 'Link ativo',
+  'No pudimos cargar la configuración.': 'Não conseguimos carregar a configuração.',
+  'Parece que falta correr la migración SQL de Stock público (stock_publico_supabase.sql).':
+    'Parece que falta rodar a migração SQL de Estoque público (stock_publico_supabase.sql).',
+  'Por defecto se muestran todos los equipos "en stock". Para ocultar uno puntual (ej. uno reservado), entrá a su ficha en Stock y destildá "Mostrar en el stock público".':
+    'Por padrão são mostrados todos os aparelhos "em estoque". Para ocultar um específico (ex. um reservado), entre na ficha dele em Estoque e desmarque "Mostrar no estoque público".',
+  'Un enlace que le podés mandar a cualquier cliente para que vea, sin necesidad de cuenta, qué equipos tenés disponibles en este momento (modelo, capacidad, color y cuántos hay de cada uno — sin precios, IMEI ni costos). Se actualiza solo, en tiempo real.':
+    'Um link que você pode mandar para qualquer cliente para que veja, sem precisar de conta, quais aparelhos você tem disponíveis neste momento (modelo, capacidade, cor e quantos há de cada um — sem preços, IMEI nem custos). Se atualiza sozinho, em tempo real.',
+
+  // Configuración — Categorías de stock
+  Activa: 'Ativa',
+  'Control de stock': 'Controle de estoque',
+  'Crear categoría': 'Criar categoria',
+  'Dispositivo (como celulares)': 'Aparelho (como celulares)',
+  'Ej. Electrodomésticos': 'Ex. Eletrodomésticos',
+  'El stock ya no está limitado a celulares — creá las categorías que necesites (electrodomésticos, artículos del hogar, lo que vendas). "Celulares" y "Accesorios" son las que ya tenías, migradas automáticamente sin perder nada.':
+    'O estoque não está mais limitado a celulares — crie as categorias que precisar (eletrodomésticos, artigos para casa, o que você vender). "Celulares" e "Acessórios" são as que você já tinha, migradas automaticamente sem perder nada.',
+  Genérico: 'Genérico',
+  'Guardar nombre': 'Salvar nome',
+  Inactiva: 'Inativa',
+  Individual: 'Individual',
+  'No tenés permiso para gestionar categorías de stock.': 'Você não tem permissão para gerenciar categorias de estoque.',
+  'Nueva categoría': 'Nova categoria',
+  'Perfil de formulario': 'Perfil de formulário',
+  'Perfil dispositivo': 'Perfil aparelho',
+  'Perfil genérico': 'Perfil genérico',
+  Restaurar: 'Restaurar',
+  'Todavía no creaste ninguna categoría.': 'Você ainda não criou nenhuma categoria.',
+  archivadas: 'arquivadas',
+  'dispositivo(s) y': 'aparelho(s) e',
+  'producto(s) cargados — se conservan intactos, solo deja de ofrecerse para elegir en formularios nuevos.':
+    'produto(s) cadastrado(s) — permanecem intactos, apenas deixa de ser oferecida para escolher em formulários novos.',
+  '¿Archivar la categoría': 'Arquivar a categoria',
+
   // Estadísticas — Dashboard: tabs, períodos, métricas (labels de arrays)
   'esta semana': 'esta semana',
   'este mes': 'este mês',
