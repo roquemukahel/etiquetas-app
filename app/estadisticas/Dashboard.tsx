@@ -26,11 +26,17 @@ import {
   resumenFinanciacionDe,
   resumenComisionesDe,
   egresosPeriodoDe,
+  rankingProductosDe,
+  rankingCategoriasDe,
+  pagadoPorProveedorDe,
+  evolucionMediosPagoDe,
   PlanFinR,
   CuotaFinR,
   PagoFinR,
   ComisionMovR,
   EgresoR,
+  ItemProductoR,
+  FilaRankingProducto,
 } from './datos';
 import { StatCard, SeccionCard, EmptyState, SegmentedChips, AnalyticsTabs, formatMoneda } from './ui';
 import { LineAreaChart } from './charts';
@@ -39,6 +45,28 @@ import { QoviState } from '../QoviState';
 import CampoFecha from '../CampoFecha';
 
 type VistaRanking = 'barras' | 'torta';
+// Rankings separados por métrica, no un puntaje opaco de "producto/categoría
+// estrella" — el más vendido, el que más factura, el que más ganancia deja
+// y el de mejor margen pueden ser productos distintos, y mezclarlos en un
+// solo número escondería justo lo que dos clientes pidieron ver por separado.
+type MetricaProducto = 'unidades' | 'facturacion' | 'ganancia' | 'margen';
+const METRICAS_PRODUCTO_BASE: { key: MetricaProducto; label: string }[] = [
+  { key: 'unidades', label: 'Unidades' },
+  { key: 'facturacion', label: 'Facturación' },
+];
+const METRICAS_PRODUCTO_COSTO: { key: MetricaProducto; label: string }[] = [
+  { key: 'ganancia', label: 'Ganancia' },
+  { key: 'margen', label: 'Margen %' },
+];
+// Ganancia/margen quedan null (no 0) cuando ninguna unidad del grupo tiene
+// costo cargado — se descartan acá en vez de mostrar un cero engañoso.
+function filasADatos(filas: FilaRankingProducto[], metrica: MetricaProducto): Dato[] {
+  return filas
+    .filter((f) => f[metrica] != null)
+    .map((f) => ({ nombre: f.nombre, valor: f[metrica] as number }))
+    .sort((a, b) => b.valor - a.valor)
+    .slice(0, 10);
+}
 type Tab = 'resumen' | 'ventas' | 'caja' | 'cobrar' | 'stock' | 'servicio' | 'clientes' | 'equipo' | 'proveedores';
 
 const TABS: { key: Tab; label: string }[] = [
@@ -100,6 +128,9 @@ function etiquetaTramo(periodo: Periodo, rango: { inicio: Date; fin: Date }): st
 
 type Persona = { id: string; nombre: string; foto_url: string | null };
 type Cliente = { id: string; nombre: string; apellido: string | null };
+type ItemPeriodoR = ItemR & { created_at: string; dispositivo_id: string | null; producto_id: string | null; descripcion: string; tipo: string };
+type DispositivoInfo = { modelo: string | null; categoria_id: string | null };
+type ProductoInfo = { nombre: string; categoria_id: string | null };
 type Proveedor = { id: string; nombre: string };
 type Reparacion = { tecnico_id: string | null; fecha_reparado: string };
 type IngresoServicio = { cliente_id: string | null; fecha_ingreso_servicio: string };
@@ -142,6 +173,9 @@ export default function Estadisticas() {
   const [vistaCompradores, setVistaCompradores] = useState<VistaRanking>('barras');
   const [vistaClientesServicio, setVistaClientesServicio] = useState<VistaRanking>('barras');
   const [vistaRegistroStock, setVistaRegistroStock] = useState<VistaRanking>('barras');
+  const [vistaProveedoresPagado, setVistaProveedoresPagado] = useState<VistaRanking>('barras');
+  const [metricaProductos, setMetricaProductos] = useState<MetricaProducto>('unidades');
+  const [metricaCategorias, setMetricaCategorias] = useState<MetricaProducto>('unidades');
 
   const [nombreNegocio, setNombreNegocio] = useState('');
   const [vendedores, setVendedores] = useState<Persona[]>([]);
@@ -151,7 +185,9 @@ export default function Estadisticas() {
   const [nombresClientes, setNombresClientes] = useState<Map<string, string>>(new Map());
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [ordenes, setOrdenes] = useState<OrdenR[]>([]);
-  const [ordenItems, setOrdenItems] = useState<(ItemR & { created_at: string })[]>([]);
+  const [ordenItems, setOrdenItems] = useState<ItemPeriodoR[]>([]);
+  const [dispositivosInfo, setDispositivosInfo] = useState<Map<string, DispositivoInfo>>(new Map());
+  const [productosInfo, setProductosInfo] = useState<Map<string, ProductoInfo>>(new Map());
   const [pagos, setPagos] = useState<PagoR[]>([]);
   const [credito, setCredito] = useState<CreditoR[]>([]);
   const [porCobrar, setPorCobrar] = useState(0);
@@ -258,7 +294,10 @@ export default function Estadisticas() {
             .from('ordenes')
             .select('id, vendedor_id, cliente_id, total, anticipo, monto_canje, estado, forma_pago, created_at')
             .gte('created_at', desde.toISOString()),
-          supabase.from('orden_items').select('orden_id, cantidad, precio_unitario, costo, created_at').gte('created_at', desde.toISOString()),
+          supabase
+            .from('orden_items')
+            .select('orden_id, cantidad, precio_unitario, costo, created_at, dispositivo_id, producto_id, descripcion, tipo')
+            .gte('created_at', desde.toISOString()),
           supabase.from('reparaciones').select('tecnico_id, fecha_reparado').not('fecha_reparado', 'is', null).gte('fecha_reparado', desde.toISOString()),
           supabase
             .from('reparaciones')
@@ -306,7 +345,8 @@ export default function Estadisticas() {
       setTecnicos(tec ?? []);
       setProveedores((prov as Proveedor[]) ?? []);
       setOrdenes((ord as OrdenR[]) ?? []);
-      setOrdenItems((items as (ItemR & { created_at: string })[]) ?? []);
+      const itemsPeriodo = (items as ItemPeriodoR[]) ?? [];
+      setOrdenItems(itemsPeriodo);
       setReparaciones((rep as Reparacion[]) ?? []);
       setIngresosServicio((ing as IngresoServicio[]) ?? []);
       setComprasProveedor(compras);
@@ -346,6 +386,27 @@ export default function Estadisticas() {
         for (const c of (cs as Cliente[] | null) ?? []) nombres.set(c.id, `${c.nombre} ${c.apellido || ''}`.trim());
       }
       setNombresClientes(nombres);
+
+      // Modelo/categoría SOLO de los dispositivos/productos vendidos en el
+      // período (no todo el catálogo) — para el ranking por producto y por
+      // categoría de la pestaña Ventas. Se busca por id, no por texto libre
+      // (la descripción de la línea puede variar), así un mismo modelo o
+      // producto de catálogo nunca se parte en dos filas del ranking por
+      // pequeñas diferencias de redacción.
+      const idsDispositivos = Array.from(new Set(itemsPeriodo.map((it) => it.dispositivo_id).filter(Boolean) as string[]));
+      const idsProductos = Array.from(new Set(itemsPeriodo.map((it) => it.producto_id).filter(Boolean) as string[]));
+      const dispInfo = new Map<string, DispositivoInfo>();
+      for (let i = 0; i < idsDispositivos.length; i += 300) {
+        const { data: ds } = await supabase.from('dispositivos').select('id, modelo, categoria_id').in('id', idsDispositivos.slice(i, i + 300));
+        for (const d of (ds as ({ id: string } & DispositivoInfo)[] | null) ?? []) dispInfo.set(d.id, { modelo: d.modelo, categoria_id: d.categoria_id });
+      }
+      setDispositivosInfo(dispInfo);
+      const prodInfo = new Map<string, ProductoInfo>();
+      for (let i = 0; i < idsProductos.length; i += 300) {
+        const { data: ps } = await supabase.from('productos').select('id, nombre, categoria_id').in('id', idsProductos.slice(i, i + 300));
+        for (const p of (ps as ({ id: string } & ProductoInfo)[] | null) ?? []) prodInfo.set(p.id, { nombre: p.nombre, categoria_id: p.categoria_id });
+      }
+      setProductosInfo(prodInfo);
 
       setActualizado(new Date());
       } catch (e) {
@@ -402,14 +463,14 @@ export default function Estadisticas() {
   );
 
   const serie = useMemo(
-    () => serieEvolucion(ordenes, itemsPorOrden, pagos, rango, metricaChart),
-    [ordenes, itemsPorOrden, pagos, rango, metricaChart]
+    () => serieEvolucion(ordenes, itemsPorOrden, pagos, credito, rango, metricaChart),
+    [ordenes, itemsPorOrden, pagos, credito, rango, metricaChart]
   );
   // Serie fija de "dinero ingresado" (para la pestaña Caja, sin depender del
   // selector de métrica del Resumen).
   const serieIngresado = useMemo(
-    () => serieEvolucion(ordenes, itemsPorOrden, pagos, rango, 'ingresado'),
-    [ordenes, itemsPorOrden, pagos, rango]
+    () => serieEvolucion(ordenes, itemsPorOrden, pagos, credito, rango, 'ingresado'),
+    [ordenes, itemsPorOrden, pagos, credito, rango]
   );
 
   const ticket = actualB.operaciones > 0 ? actualB.ventas / actualB.operaciones : 0;
@@ -418,9 +479,16 @@ export default function Estadisticas() {
 
   // --- Rankings (se conservan, filtrando por el período elegido) ---
   const inicio = rango.inicio;
+  // OJO: siempre inicio Y fin. Antes varios de estos filtros solo chequeaban
+  // ">= inicio" sin techo — al navegar a un período YA CERRADO (ej. "el mes
+  // pasado"), seguían sumando todo hasta HOY en vez de cortar a fin de ese
+  // mes, así que rankings/tablas mostraban de más apenas se miraba algo que
+  // no fuera el tramo actual. Bug real, encontrado al construir los rankings
+  // nuevos de abajo (que hubieran heredado el mismo error).
+  const fin = rango.fin;
   const ordenesPeriodo = useMemo(
-    () => ordenes.filter((o) => ESTADOS_COBRADOS.includes(o.estado) && new Date(o.created_at) >= inicio),
-    [ordenes, inicio]
+    () => ordenes.filter((o) => ESTADOS_COBRADOS.includes(o.estado) && new Date(o.created_at) >= inicio && new Date(o.created_at) <= fin),
+    [ordenes, inicio, fin]
   );
   const nombreDe = (lista: Persona[], id: string | null, tipo: string) =>
     !id ? 'Sin asignar' : lista.find((p) => p.id === id)?.nombre ?? `${tipo} eliminado`;
@@ -437,12 +505,12 @@ export default function Estadisticas() {
 
   const rankingTecnicos: Dato[] = useMemo(() => {
     const mapa = new Map<string, number>();
-    for (const r of reparaciones.filter((r) => new Date(r.fecha_reparado) >= inicio)) mapa.set(r.tecnico_id ?? '-', (mapa.get(r.tecnico_id ?? '-') ?? 0) + 1);
+    for (const r of reparaciones.filter((r) => new Date(r.fecha_reparado) >= inicio && new Date(r.fecha_reparado) <= fin)) mapa.set(r.tecnico_id ?? '-', (mapa.get(r.tecnico_id ?? '-') ?? 0) + 1);
     return Array.from(mapa.entries())
       .map(([id, valor]) => ({ nombre: nombreDe(tecnicos, id === '-' ? null : id, 'Técnico'), fotoUrl: fotoDe(tecnicos, id === '-' ? null : id), valor }))
       .filter((d) => d.valor > 0)
       .sort((a, b) => b.valor - a.valor);
-  }, [reparaciones, tecnicos, inicio]);
+  }, [reparaciones, tecnicos, inicio, fin]);
 
   const nombreClienteDe = (id: string | null) => {
     if (!id) return 'Sin cliente';
@@ -464,7 +532,7 @@ export default function Estadisticas() {
 
   const rankingClientesServicio: Dato[] = useMemo(() => {
     const mapa = new Map<string, number>();
-    for (const i of ingresosServicio.filter((i) => new Date(i.fecha_ingreso_servicio) >= inicio)) {
+    for (const i of ingresosServicio.filter((i) => new Date(i.fecha_ingreso_servicio) >= inicio && new Date(i.fecha_ingreso_servicio) <= fin)) {
       if (!i.cliente_id) continue;
       mapa.set(i.cliente_id, (mapa.get(i.cliente_id) ?? 0) + 1);
     }
@@ -472,43 +540,108 @@ export default function Estadisticas() {
       .map(([id, valor]) => ({ nombre: nombreClienteDe(id), valor }))
       .sort((a, b) => b.valor - a.valor)
       .slice(0, 10);
-  }, [ingresosServicio, nombresClientes, inicio]);
+  }, [ingresosServicio, nombresClientes, inicio, fin]);
 
   const cajaPorMedio: Dato[] = useMemo(() => {
     const mapa = new Map<string, number>();
-    for (const p of pagos.filter((p) => new Date(p.fecha) >= inicio)) mapa.set(p.medio, (mapa.get(p.medio) ?? 0) + (p.monto || 0));
+    for (const p of pagos.filter((p) => new Date(p.fecha) >= inicio && new Date(p.fecha) <= fin)) mapa.set(p.medio, (mapa.get(p.medio) ?? 0) + (p.monto || 0));
     return Array.from(mapa.entries())
       .map(([medio, valor]) => ({ nombre: medioLabel(medio), valor }))
       .filter((d) => d.valor > 0)
       .sort((a, b) => b.valor - a.valor);
-  }, [pagos, inicio]);
+  }, [pagos, inicio, fin]);
 
   const rankingProveedores: Dato[] = useMemo(() => {
     const mapa = new Map<string, number>();
-    for (const d of comprasProveedor.filter((d) => new Date(d.created_at) >= inicio)) {
+    for (const d of comprasProveedor.filter((d) => new Date(d.created_at) >= inicio && new Date(d.created_at) <= fin)) {
       if (!d.proveedor_id) continue;
       mapa.set(d.proveedor_id, (mapa.get(d.proveedor_id) ?? 0) + (d.costo || 0));
     }
-    for (const c of comprasManuales.filter((c) => new Date(c.created_at) >= inicio)) mapa.set(c.proveedor_id, (mapa.get(c.proveedor_id) ?? 0) + (c.precio_unitario || 0) * c.cantidad);
+    for (const c of comprasManuales.filter((c) => new Date(c.created_at) >= inicio && new Date(c.created_at) <= fin)) mapa.set(c.proveedor_id, (mapa.get(c.proveedor_id) ?? 0) + (c.precio_unitario || 0) * c.cantidad);
     return Array.from(mapa.entries())
       .map(([id, valor]) => ({ nombre: proveedores.find((p) => p.id === id)?.nombre ?? 'Proveedor eliminado', valor }))
       .filter((d) => d.valor > 0)
       .sort((a, b) => b.valor - a.valor);
-  }, [comprasProveedor, comprasManuales, proveedores, inicio]);
+  }, [comprasProveedor, comprasManuales, proveedores, inicio, fin]);
+
+  // Pagado por proveedor — distinto de "comprado" (arriba): reutiliza
+  // pagadoPorProveedorDe() de datos.ts sobre proveedor_movimientos, mismos
+  // datos que ya alimentan la tarjeta "Pagado a proveedores".
+  const rankingProveedoresPagado: Dato[] = useMemo(() => {
+    const filas = pagadoPorProveedorDe(movsProveedor, inicio, fin);
+    return filas
+      .map((f) => ({ nombre: proveedores.find((p) => p.id === f.proveedor_id)?.nombre ?? 'Proveedor eliminado', valor: f.monto }))
+      .filter((d) => d.valor > 0)
+      .sort((a, b) => b.valor - a.valor);
+  }, [movsProveedor, proveedores, inicio, fin]);
 
   // --- Derivados por pestaña ---
   const pctFiado = actualB.ventas > 0 ? actualB.credito / actualB.ventas : 0;
   const contado = Math.max(0, actualB.ventas - actualB.credito);
 
   const comprasPeriodo = useMemo(() => {
-    const disp = comprasProveedor.filter((d) => new Date(d.created_at) >= inicio).reduce((a, d) => a + (d.costo || 0), 0);
-    const man = comprasManuales.filter((c) => new Date(c.created_at) >= inicio).reduce((a, c) => a + (c.precio_unitario || 0) * c.cantidad, 0);
-    const cant = comprasProveedor.filter((d) => new Date(d.created_at) >= inicio).length + comprasManuales.filter((c) => new Date(c.created_at) >= inicio).reduce((a, c) => a + c.cantidad, 0);
+    const disp = comprasProveedor.filter((d) => new Date(d.created_at) >= inicio && new Date(d.created_at) <= fin).reduce((a, d) => a + (d.costo || 0), 0);
+    const man = comprasManuales.filter((c) => new Date(c.created_at) >= inicio && new Date(c.created_at) <= fin).reduce((a, c) => a + (c.precio_unitario || 0) * c.cantidad, 0);
+    const cant =
+      comprasProveedor.filter((d) => new Date(d.created_at) >= inicio && new Date(d.created_at) <= fin).length +
+      comprasManuales.filter((c) => new Date(c.created_at) >= inicio && new Date(c.created_at) <= fin).reduce((a, c) => a + c.cantidad, 0);
     return { total: disp + man, cantidad: cant };
-  }, [comprasProveedor, comprasManuales, inicio]);
+  }, [comprasProveedor, comprasManuales, inicio, fin]);
 
-  const servicioIngresados = useMemo(() => ingresosServicio.filter((i) => new Date(i.fecha_ingreso_servicio) >= inicio).length, [ingresosServicio, inicio]);
-  const servicioReparados = useMemo(() => reparaciones.filter((r) => new Date(r.fecha_reparado) >= inicio).length, [reparaciones, inicio]);
+  const servicioIngresados = useMemo(
+    () => ingresosServicio.filter((i) => new Date(i.fecha_ingreso_servicio) >= inicio && new Date(i.fecha_ingreso_servicio) <= fin).length,
+    [ingresosServicio, inicio, fin]
+  );
+  const servicioReparados = useMemo(
+    () => reparaciones.filter((r) => new Date(r.fecha_reparado) >= inicio && new Date(r.fecha_reparado) <= fin).length,
+    [reparaciones, inicio, fin]
+  );
+
+  // Ranking por producto y por categoría — reutiliza rankingProductosDe/
+  // rankingCategoriasDe de datos.ts. Solo dispositivos y productos de
+  // catálogo/manuales (tipo 'trabajo' de Servicio Técnico queda afuera: eso
+  // ya tiene su propio detalle en /servicio-tecnico/metricas, no se duplica
+  // acá). La clave de agrupación es el modelo normalizado o el id de
+  // catálogo — nunca el texto libre de la línea — para no partir un mismo
+  // producto en dos filas por una diferencia de redacción.
+  const itemsVendidosPeriodo: ItemProductoR[] = useMemo(() => {
+    const idsOrdenesPeriodo = new Set(ordenesPeriodo.map((o) => o.id));
+    const nombreCategoria = (categoriaId: string | null) => (categoriaId ? categoriasStock.find((c) => c.id === categoriaId)?.nombre ?? 'Categoría eliminada' : 'Sin categoría');
+    const out: ItemProductoR[] = [];
+    for (const it of ordenItems) {
+      if (!idsOrdenesPeriodo.has(it.orden_id) || (it.tipo !== 'dispositivo' && it.tipo !== 'producto')) continue;
+      let clave: string;
+      let nombre: string;
+      let categoriaNombre: string;
+      if (it.dispositivo_id) {
+        const info = dispositivosInfo.get(it.dispositivo_id);
+        // Si no tiene modelo cargado, se agrupa por su PROPIO id (no por el
+        // texto fijo "Sin modelo") — si no, dos celulares sin modelo que no
+        // tienen nada que ver entre sí terminaban sumados en una sola fila
+        // como si fueran el mismo producto.
+        clave = info?.modelo ? `disp:${info.modelo}` : `disp-sin-modelo:${it.dispositivo_id}`;
+        nombre = info?.modelo || 'Sin modelo';
+        categoriaNombre = nombreCategoria(info?.categoria_id ?? null);
+      } else if (it.producto_id) {
+        const info = productosInfo.get(it.producto_id);
+        clave = `prod:${it.producto_id}`;
+        nombre = info?.nombre || it.descripcion;
+        categoriaNombre = nombreCategoria(info?.categoria_id ?? null);
+      } else {
+        // Ítem manual sin catálogo (ej. "Funda" cargada a mano en Nueva
+        // Orden): no hay id estable, se agrupa por su propio texto — es lo
+        // más fiel que se puede hacer sin inventar una identidad que no existe.
+        clave = `manual:${it.descripcion.trim().toLowerCase()}`;
+        nombre = it.descripcion;
+        categoriaNombre = 'Sin categoría';
+      }
+      out.push({ clave, nombre, categoriaNombre, cantidad: it.cantidad, precio_unitario: it.precio_unitario ?? 0, costo: it.costo });
+    }
+    return out;
+  }, [ordenItems, ordenesPeriodo, dispositivosInfo, productosInfo, categoriasStock]);
+
+  const rankingProductos = useMemo(() => rankingProductosDe(itemsVendidosPeriodo), [itemsVendidosPeriodo]);
+  const rankingCategoriasVenta = useMemo(() => rankingCategoriasDe(itemsVendidosPeriodo), [itemsVendidosPeriodo]);
 
   const clientesQueCompraron = useMemo(() => new Set(ordenesPeriodo.map((o) => o.cliente_id).filter(Boolean)).size, [ordenesPeriodo]);
   const opsSinCliente = useMemo(() => ordenesPeriodo.filter((o) => !o.cliente_id).length, [ordenesPeriodo]);
@@ -559,7 +692,7 @@ export default function Estadisticas() {
   // Quién registró más equipos en el stock durante el período elegido.
   const rankingRegistroStock: Dato[] = useMemo(() => {
     const mapa = new Map<string, { valor: number; fotoUrl: string | null }>();
-    for (const d of registrosDispositivos.filter((d) => new Date(d.created_at) >= inicio)) {
+    for (const d of registrosDispositivos.filter((d) => new Date(d.created_at) >= inicio && new Date(d.created_at) <= fin)) {
       const nombre = d.agregado_por_nombre || 'Sin registrar';
       const e = mapa.get(nombre) ?? { valor: 0, fotoUrl: null };
       e.valor += 1;
@@ -569,7 +702,7 @@ export default function Estadisticas() {
     return Array.from(mapa.entries())
       .map(([nombre, e]) => ({ nombre, valor: e.valor, fotoUrl: e.fotoUrl }))
       .sort((a, b) => b.valor - a.valor);
-  }, [registrosDispositivos, inicio]);
+  }, [registrosDispositivos, inicio, fin]);
 
   // Stock por categoría (reutiliza stock_categorias, mismas categorías que
   // Configuración → Categorías de stock — no se inventa una agrupación nueva).
@@ -587,13 +720,10 @@ export default function Estadisticas() {
       .sort((a, b) => b.valor - a.valor);
   }, [stock, categoriasStock]);
 
-  // Pagado a proveedores en el período — reutiliza proveedor_movimientos
-  // (cuentas por pagar), no se recalcula ni se inventa: mismo criterio
-  // "cargo/abono" que la cuenta corriente de clientes, del otro lado.
-  const pagadoProveedoresPeriodo = useMemo(
-    () => movsProveedor.filter((m) => m.tipo === 'abono' && new Date(m.fecha) >= inicio).reduce((a, m) => a + (m.monto || 0), 0),
-    [movsProveedor, inicio]
-  );
+  // Pagado a proveedores en el período — se deriva del mismo ranking de
+  // arriba (pagadoPorProveedorDe), para que la tarjeta total y el ranking
+  // por proveedor nunca puedan desacordar entre sí.
+  const pagadoProveedoresPeriodo = useMemo(() => rankingProveedoresPagado.reduce((a, r) => a + r.valor, 0), [rankingProveedoresPagado]);
 
   // Resumen de financiación propia en cuotas y de comisiones — funciones
   // puras de datos.ts (resumenFinanciacionDe/resumenComisionesDe, con sus
@@ -614,6 +744,16 @@ export default function Estadisticas() {
   const egresosPeriodo = useMemo(() => egresosPeriodoDe(egresos, inicio, rango.fin), [egresos, inicio, rango.fin]);
   const hayEgresos = egresos.length > 0;
   const resultadoOperativoEstimado = actualB.ganancia - egresosPeriodo;
+
+  // Evolución mensual por medio de pago (efectivo/tarjeta/transferencia a lo
+  // largo del tiempo, no solo la foto del período elegido) — pedido real de
+  // un cliente. Horizonte fijo de 6 meses, terminando en el mes actual.
+  const HORIZONTE_MEDIOS_PAGO = 6;
+  const evolucionMedios = useMemo(() => evolucionMediosPagoDe(pagos, HORIZONTE_MEDIOS_PAGO, ahora), [pagos, ahora]);
+  const mediosEnEvolucion = useMemo(
+    () => Array.from(new Set(evolucionMedios.flatMap((f) => Object.keys(f.porMedio)))).sort(),
+    [evolucionMedios]
+  );
 
   if (loading) {
     return (
@@ -640,6 +780,7 @@ export default function Estadisticas() {
   const metricasChart: { key: MetricaSerie; label: string }[] = [
     { key: 'ventas', label: 'Ventas' },
     { key: 'ingresado', label: 'Dinero ingresado' },
+    { key: 'credito', label: 'Fiado' },
     ...(puedeVerCostos ? ([{ key: 'ganancia', label: 'Ganancia' }] as const) : []),
   ];
 
@@ -774,6 +915,52 @@ export default function Estadisticas() {
                 {vistaCompradores === 'barras' ? <RankingBarras datos={rankingCompradores} moneda={moneda} oculto={ocultarMontos} /> : <RankingTorta datos={rankingCompradores} moneda={moneda} oculto={ocultarMontos} />}
               </SeccionCard>
             </div>
+            <SeccionCard
+              titulo="Ranking de productos"
+              subtitulo="Por modelo o por producto de catálogo. Si borrás un modelo/producto de Stock después de haberlo vendido, sus ventas viejas pueden aparecer separadas en vez de agrupadas — no borres del historial algo que ya vendiste si querés conservar este ranking preciso."
+              accion={
+                <SegmentedChips
+                  size="sm"
+                  valor={metricaProductos}
+                  opciones={puedeVerCostos ? [...METRICAS_PRODUCTO_BASE, ...METRICAS_PRODUCTO_COSTO] : METRICAS_PRODUCTO_BASE}
+                  onChange={setMetricaProductos}
+                />
+              }
+            >
+              {rankingProductos.length === 0 ? (
+                <EmptyState titulo="Sin ventas de productos en el período" texto="Dispositivos y accesorios vendidos van a aparecer acá agrupados." />
+              ) : (
+                <RankingBarras
+                  datos={filasADatos(rankingProductos, metricaProductos)}
+                  moneda={metricaProductos === 'facturacion' || metricaProductos === 'ganancia' ? moneda : undefined}
+                  sufijo={metricaProductos === 'unidades' ? ' unid.' : metricaProductos === 'margen' ? '%' : undefined}
+                  oculto={ocultarMontos}
+                />
+              )}
+            </SeccionCard>
+            <SeccionCard
+              titulo="Ranking de categorías"
+              subtitulo="Mismas categorías que Configuración → Categorías de stock."
+              accion={
+                <SegmentedChips
+                  size="sm"
+                  valor={metricaCategorias}
+                  opciones={puedeVerCostos ? [...METRICAS_PRODUCTO_BASE, ...METRICAS_PRODUCTO_COSTO] : METRICAS_PRODUCTO_BASE}
+                  onChange={setMetricaCategorias}
+                />
+              }
+            >
+              {rankingCategoriasVenta.length === 0 ? (
+                <EmptyState titulo="Sin ventas categorizadas en el período" />
+              ) : (
+                <RankingBarras
+                  datos={filasADatos(rankingCategoriasVenta, metricaCategorias)}
+                  moneda={metricaCategorias === 'facturacion' || metricaCategorias === 'ganancia' ? moneda : undefined}
+                  sufijo={metricaCategorias === 'unidades' ? ' unid.' : metricaCategorias === 'margen' ? '%' : undefined}
+                  oculto={ocultarMontos}
+                />
+              )}
+            </SeccionCard>
           </>
         );
       }
@@ -796,6 +983,44 @@ export default function Estadisticas() {
                 <RankingBarras datos={cajaPorMedio} moneda={moneda} oculto={ocultarMontos} />
               ) : (
                 <RankingTorta datos={cajaPorMedio} moneda={moneda} oculto={ocultarMontos} />
+              )}
+            </SeccionCard>
+            <SeccionCard titulo="Evolución por medio de pago" subtitulo={`Últimos ${HORIZONTE_MEDIOS_PAGO} meses, sin importar el período elegido arriba.`}>
+              {evolucionMedios.every((f) => f.total === 0) ? (
+                <EmptyState titulo="Sin cobros en los últimos meses" />
+              ) : ocultarMontos ? (
+                graficoOculto
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-left text-muted dark:text-dark-text-secondary">
+                        <th className="py-1 pr-3 font-medium">Mes</th>
+                        {mediosEnEvolucion.map((medio) => (
+                          <th key={medio} className="py-1 px-2 font-medium text-right whitespace-nowrap">
+                            {medioLabel(medio)}
+                          </th>
+                        ))}
+                        <th className="py-1 pl-2 font-medium text-right">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {evolucionMedios.map((f) => (
+                        <tr key={f.mes} className="border-t border-border dark:border-dark-border">
+                          <td className="py-1.5 pr-3 whitespace-nowrap capitalize">
+                            {new Date(f.mes + '-01T00:00:00').toLocaleDateString('es-AR', { month: 'short', year: '2-digit' })}
+                          </td>
+                          {mediosEnEvolucion.map((medio) => (
+                            <td key={medio} className="py-1.5 px-2 text-right tabular-nums">
+                              {f.porMedio[medio] ? m(f.porMedio[medio]) : '—'}
+                            </td>
+                          ))}
+                          <td className="py-1.5 pl-2 text-right tabular-nums font-medium">{m(f.total)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </SeccionCard>
           </>
@@ -985,6 +1210,11 @@ export default function Estadisticas() {
             <SeccionCard titulo="Compras por proveedor" accion={<VistaToggle vista={vistaProveedores} onVista={setVistaProveedores} />}>
               {rankingProveedores.length === 0 ? <EmptyState titulo="Sin compras en el período" texto="Cuando cargues compras a proveedores, vas a ver el detalle acá." /> : vistaProveedores === 'barras' ? <RankingBarras datos={rankingProveedores} moneda={moneda} oculto={ocultarMontos} /> : <RankingTorta datos={rankingProveedores} moneda={moneda} oculto={ocultarMontos} />}
             </SeccionCard>
+            {saldoProveedoresTotal != null && rankingProveedoresPagado.length > 0 && (
+              <SeccionCard titulo="Pagado por proveedor" subtitulo="Distinto de lo comprado — esto es la plata que realmente saliste a pagarles." accion={<VistaToggle vista={vistaProveedoresPagado} onVista={setVistaProveedoresPagado} />}>
+                {vistaProveedoresPagado === 'barras' ? <RankingBarras datos={rankingProveedoresPagado} moneda={moneda} oculto={ocultarMontos} /> : <RankingTorta datos={rankingProveedoresPagado} moneda={moneda} oculto={ocultarMontos} />}
+              </SeccionCard>
+            )}
             {saldoProveedoresTotal != null && (
               <SeccionCard titulo="¿Buscás el detalle por proveedor?" subtitulo="Saldo, historial de pagos y comprobantes de cada proveedor.">
                 <Link href="/proveedores" className="self-start rounded-xl bg-accent dark:bg-dark-accent text-white text-sm font-medium px-4 py-2 hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors inline-block">

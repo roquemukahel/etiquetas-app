@@ -1,5 +1,15 @@
 import { describe, it, expect } from 'vitest';
-import { rangoDe, resumenFinanciacionDe, resumenComisionesDe, egresosPeriodoDe } from './datos';
+import {
+  rangoDe,
+  resumenFinanciacionDe,
+  resumenComisionesDe,
+  egresosPeriodoDe,
+  rankingProductosDe,
+  rankingCategoriasDe,
+  pagadoPorProveedorDe,
+  evolucionMediosPagoDe,
+  type ItemProductoR,
+} from './datos';
 
 // "Ahora" fijo para que los tests sean deterministas: miércoles 19 de
 // agosto de 2026, 15:00.
@@ -218,5 +228,95 @@ describe('egresosPeriodoDe', () => {
 
   it('sin egresos en el rango, devuelve 0', () => {
     expect(egresosPeriodoDe([], INICIO_AGOSTO, FIN_AGOSTO)).toBe(0);
+  });
+});
+
+describe('rankingProductosDe / rankingCategoriasDe', () => {
+  const items: ItemProductoR[] = [
+    // 3 unidades de "iPhone 11" (categoría Celulares), con costo cargado.
+    { clave: 'disp:iPhone 11', nombre: 'iPhone 11', categoriaNombre: 'Celulares', cantidad: 2, precio_unitario: 500000, costo: 350000 },
+    { clave: 'disp:iPhone 11', nombre: 'iPhone 11', categoriaNombre: 'Celulares', cantidad: 1, precio_unitario: 480000, costo: 340000 },
+    // Funda (categoría Accesorios), SIN costo cargado.
+    { clave: 'manual:funda', nombre: 'Funda', categoriaNombre: 'Accesorios', cantidad: 5, precio_unitario: 10000, costo: null },
+  ];
+
+  it('rankingProductosDe agrupa por clave, no por nombre repetido a mano', () => {
+    const r = rankingProductosDe(items);
+    const iphone = r.find((f) => f.nombre === 'iPhone 11')!;
+    expect(iphone.unidades).toBe(3); // 2 + 1, misma clave
+    expect(iphone.facturacion).toBe(2 * 500000 + 1 * 480000);
+  });
+
+  it('ganancia y margen son null (no 0) cuando el grupo no tiene NINGÚN costo cargado', () => {
+    const r = rankingProductosDe(items);
+    const funda = r.find((f) => f.nombre === 'Funda')!;
+    expect(funda.ganancia).toBeNull();
+    expect(funda.margen).toBeNull();
+    expect(funda.unidades).toBe(5); // unidades/facturación SÍ se pueden calcular sin costo
+  });
+
+  it('ganancia y margen se calculan bien cuando el grupo SÍ tiene costo', () => {
+    const r = rankingProductosDe(items);
+    const iphone = r.find((f) => f.nombre === 'iPhone 11')!;
+    const gananciaEsperada = 2 * (500000 - 350000) + 1 * (480000 - 340000);
+    expect(iphone.ganancia).toBe(gananciaEsperada);
+    expect(iphone.margen).toBeCloseTo((gananciaEsperada / iphone.facturacion) * 100, 5);
+  });
+
+  it('rankingCategoriasDe agrupa por categoría, sumando distintos productos de la misma categoría', () => {
+    const r = rankingCategoriasDe(items);
+    const celulares = r.find((f) => f.nombre === 'Celulares')!;
+    expect(celulares.unidades).toBe(3);
+    const accesorios = r.find((f) => f.nombre === 'Accesorios')!;
+    expect(accesorios.unidades).toBe(5);
+    expect(accesorios.ganancia).toBeNull();
+  });
+});
+
+describe('pagadoPorProveedorDe', () => {
+  const INICIO = new Date(2026, 7, 1, 0, 0, 0, 0);
+  const FIN = new Date(2026, 7, 31, 23, 59, 59, 999);
+
+  it('solo suma movimientos tipo "abono" (pagos), no "cargo" (deuda nueva)', () => {
+    const movs = [
+      { proveedor_id: 'p1', tipo: 'abono', monto: 1000, fecha: '2026-08-10T00:00:00Z' },
+      { proveedor_id: 'p1', tipo: 'cargo', monto: 5000, fecha: '2026-08-10T00:00:00Z' }, // no cuenta
+      { proveedor_id: 'p2', tipo: 'abono', monto: 2000, fecha: '2026-08-15T00:00:00Z' },
+    ];
+    const r = pagadoPorProveedorDe(movs, INICIO, FIN);
+    expect(r.find((f) => f.proveedor_id === 'p1')?.monto).toBe(1000);
+    expect(r.find((f) => f.proveedor_id === 'p2')?.monto).toBe(2000);
+  });
+
+  it('ignora pagos fuera del rango', () => {
+    const movs = [{ proveedor_id: 'p1', tipo: 'abono', monto: 999, fecha: '2026-06-01T00:00:00Z' }];
+    expect(pagadoPorProveedorDe(movs, INICIO, FIN)).toEqual([]);
+  });
+});
+
+describe('evolucionMediosPagoDe', () => {
+  const HOY = new Date(2026, 7, 19, 12, 0, 0, 0); // 19/8/2026
+
+  it('devuelve exactamente N meses, terminando en el mes de "hoy"', () => {
+    const r = evolucionMediosPagoDe([], 6, HOY);
+    expect(r).toHaveLength(6);
+    expect(r[r.length - 1].mes).toBe('2026-08');
+    expect(r[0].mes).toBe('2026-03');
+  });
+
+  it('agrupa por medio dentro de cada mes, y el total del mes es la suma de todos los medios', () => {
+    const pagos = [
+      { medio: 'efectivo', monto: 1000, fecha: '2026-08-05T00:00:00Z' },
+      { medio: 'transferencia', monto: 500, fecha: '2026-08-10T00:00:00Z' },
+      { medio: 'efectivo', monto: 200, fecha: '2026-07-15T12:00:00Z' }, // mes anterior (mediodía, sin ambigüedad de huso horario)
+    ];
+    const r = evolucionMediosPagoDe(pagos, 3, HOY);
+    const agosto = r.find((f) => f.mes === '2026-08')!;
+    expect(agosto.porMedio.efectivo).toBe(1000);
+    expect(agosto.porMedio.transferencia).toBe(500);
+    expect(agosto.total).toBe(1500);
+    const julio = r.find((f) => f.mes === '2026-07')!;
+    expect(julio.porMedio.efectivo).toBe(200);
+    expect(julio.total).toBe(200);
   });
 });
