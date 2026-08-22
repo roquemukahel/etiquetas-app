@@ -126,7 +126,7 @@ export default function BoletaPublica() {
             <img src="/qovento-icon.png" alt="" className="h-2.5 w-2.5 object-contain" />
             <span className="text-[8px] font-semibold text-muted tracking-wide">Qovento</span>
           </div>
-          <p className="text-[7px] text-muted text-center max-w-xs leading-tight">{ESLOGAN}</p>
+          <p className="text-[7px] text-muted text-center max-w-xs leading-tight">{t(ESLOGAN)}</p>
         </div>
 
         <div className="flex items-center gap-3">
