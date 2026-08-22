@@ -198,6 +198,22 @@ export default function ConfiguracionSucursales() {
             {t('Asigná a cada vendedor/técnico su sucursal desde Configuración → Vendedores/Técnicos. Quien no tenga una asignada (ej. el dueño) puede elegir en qué sucursal está trabajando desde el botón 🏬 que aparece abajo a la izquierda.')}
           </p>
 
+          {/* Re-sincronizar: activar() es idempotente (activar_multisucursal
+             solo toca filas con sucursal_id null) — si algún alta vieja quedó
+             sin etiquetar (ej. antes de conectar un flujo nuevo al filtrado),
+             este botón la agrupa en la Sucursal principal sin tocar nada ya
+             etiquetado. Se deja visible siempre (no solo antes de activar)
+             para que el dueño lo pueda volver a correr él mismo si algo
+             aparece "vacío" donde no debería, sin necesitar SQL. */}
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-border dark:border-dark-border bg-canvas dark:bg-dark-bg px-4 py-3">
+            <p className="text-xs text-muted dark:text-dark-text-secondary">
+              {t('¿Algo aparece vacío en una sucursal donde no debería? Volvé a sincronizar: agrupa en la Sucursal principal todo lo que haya quedado sin asignar.')}
+            </p>
+            <Boton variante="secundario" tamano="sm" cargando={activando} onClick={activar} className="shrink-0">
+              {t('Volver a sincronizar')}
+            </Boton>
+          </div>
+
           <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-4 flex flex-col gap-3">
             <p className="text-sm font-medium">{t('Nueva sucursal')}</p>
             <input

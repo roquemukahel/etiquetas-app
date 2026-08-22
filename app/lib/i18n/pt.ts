@@ -2545,4 +2545,10 @@ export const PT: Record<string, string> = {
   'Te confirmamos tu pago de': 'Confirmamos seu pagamento de',
   'para el plan de ahorro de': 'para o plano de poupança de',
   'Acá tenés tu comprobante:': 'Aqui está seu comprovante:',
+
+  // Re-sincronizar sucursales (2026-08-22) — botón para volver a agrupar en
+  // la Sucursal principal cualquier alta que haya quedado sin etiquetar.
+  '¿Algo aparece vacío en una sucursal donde no debería? Volvé a sincronizar: agrupa en la Sucursal principal todo lo que haya quedado sin asignar.':
+    'Algo aparece vazio numa filial onde não deveria? Sincronize de novo: agrupa na Filial principal tudo o que tenha ficado sem atribuir.',
+  'Volver a sincronizar': 'Sincronizar de novo',
 };

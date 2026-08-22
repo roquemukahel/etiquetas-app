@@ -2544,4 +2544,10 @@ export const EN: Record<string, string> = {
   'Te confirmamos tu pago de': "We've confirmed your payment of",
   'para el plan de ahorro de': 'for the savings plan for',
   'Acá tenés tu comprobante:': "Here's your receipt:",
+
+  // Re-sincronizar sucursales (2026-08-22) — botón para volver a agrupar en
+  // la Sucursal principal cualquier alta que haya quedado sin etiquetar.
+  '¿Algo aparece vacío en una sucursal donde no debería? Volvé a sincronizar: agrupa en la Sucursal principal todo lo que haya quedado sin asignar.':
+    "Something showing up empty in a branch where it shouldn't? Re-sync: groups anything left unassigned into the Main branch.",
+  'Volver a sincronizar': 'Re-sync',
 };
