@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { crearClienteNavegador } from './lib/supabase/client';
 import { Actor, getActor, setActor as guardarActor, clearActor } from './lib/actor';
-import { useIdioma, setIdioma, useT, IDIOMAS_DISPONIBLES, siguienteIdioma } from './lib/idioma';
+import { useIdioma, setIdioma, useT, IDIOMAS_DISPONIBLES, type Idioma } from './lib/idioma';
 import { sincronizarCookieSucursal, getSucursalManual } from './lib/sucursal';
 import Avatar from './Avatar';
 import BotonSalir from './BotonSalir';
@@ -82,6 +82,11 @@ export default function SelectorDeActor() {
   const [pinIngresado, setPinIngresado] = useState('');
   const [errorPin, setErrorPin] = useState<string | null>(null);
   const [verificandoPin, setVerificandoPin] = useState(false);
+  // Selector de idioma desplegable — antes era un botón que rotaba entre
+  // los 3 idiomas; el dueño pidió poder elegir directo sin ir apretando
+  // hasta que aparezca el que quiere.
+  const [menuIdiomaAbierto, setMenuIdiomaAbierto] = useState(false);
+  const refMenuIdioma = useRef<HTMLDivElement>(null);
   // La raíz ("/") muestra la landing pública a quien no tiene sesión, así
   // que ahí necesitamos saber si hay usuario logueado antes de decidir si
   // corresponde mostrar el cartel (no tiene sentido preguntarle "con quién
@@ -115,6 +120,17 @@ export default function SelectorDeActor() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [actor?.id]);
+
+  useEffect(() => {
+    if (!menuIdiomaAbierto) return;
+    const cerrar = (e: MouseEvent) => {
+      if (refMenuIdioma.current && !refMenuIdioma.current.contains(e.target as Node)) {
+        setMenuIdiomaAbierto(false);
+      }
+    };
+    document.addEventListener('mousedown', cerrar);
+    return () => document.removeEventListener('mousedown', cerrar);
+  }, [menuIdiomaAbierto]);
 
   useEffect(() => {
     if (!esRaiz) return;
@@ -261,6 +277,14 @@ export default function SelectorDeActor() {
     setEditandoPerfil(false);
   };
 
+  const elegirIdioma = (valor: Idioma) => {
+    setIdioma(valor);
+    setMenuIdiomaAbierto(false);
+    // Inicio (app/page.tsx) es un Server Component: sin este refresh, la
+    // cookie nueva no se nota hasta la próxima navegación entera.
+    router.refresh();
+  };
+
   const posponer = () => {
     window.sessionStorage.setItem(KEY_POSTERGADO, '1');
     setPostergado(true);
@@ -285,23 +309,35 @@ export default function SelectorDeActor() {
             </span>
           </span>
           <span className="flex items-center gap-3 shrink-0">
-            {/* Selector de idioma — un botón que rota español/portugués/
-               inglés (ver app/lib/idioma.ts). Visible en todas las
-               pantallas porque esta barra es la única franja que aparece
-               siempre, en celular y en escritorio. */}
-            <button
-              onClick={() => {
-                setIdioma(siguienteIdioma(idioma));
-                // Inicio (app/page.tsx) es un Server Component: sin este
-                // refresh, la cookie nueva no se nota hasta la próxima
-                // navegación entera.
-                router.refresh();
-              }}
-              title={t('Cambiar idioma')}
-              className="rounded-full border border-white/30 px-2 py-0.5 font-medium opacity-80 hover:opacity-100"
-            >
-              {IDIOMAS_DISPONIBLES.find((i) => i.valor === idioma)?.etiqueta ?? idioma}
-            </button>
+            {/* Selector de idioma desplegable (ver app/lib/idioma.ts).
+               Visible en todas las pantallas porque esta barra es la única
+               franja que aparece siempre, en celular y en escritorio. */}
+            <div className="relative" ref={refMenuIdioma}>
+              <button
+                onClick={() => setMenuIdiomaAbierto((v) => !v)}
+                title={t('Cambiar idioma')}
+                className="flex items-center gap-1 rounded-full border border-white/30 px-2 py-0.5 font-medium opacity-80 hover:opacity-100"
+              >
+                {IDIOMAS_DISPONIBLES.find((i) => i.valor === idioma)?.etiqueta ?? idioma}
+                <span className="text-[8px]">▾</span>
+              </button>
+              {menuIdiomaAbierto && (
+                <div className="absolute right-0 top-full mt-1 min-w-[110px] rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-elevated py-1 z-30">
+                  {IDIOMAS_DISPONIBLES.map((i) => (
+                    <button
+                      key={i.valor}
+                      type="button"
+                      onClick={() => elegirIdioma(i.valor)}
+                      className={`block w-full text-left px-3 py-1.5 text-sm text-ink dark:text-dark-text hover:bg-canvas dark:hover:bg-dark-bg ${
+                        i.valor === idioma ? 'font-medium text-accent dark:text-dark-accent' : ''
+                      }`}
+                    >
+                      {i.etiqueta}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <button onClick={abrirMiPerfil} className="underline opacity-80 hover:opacity-100">
               {t('Mi perfil')}
             </button>
