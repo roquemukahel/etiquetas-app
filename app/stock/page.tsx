@@ -1077,7 +1077,7 @@ export default function Stock() {
               ? vista === 'stock'
                 ? `${capital.unidadesCel} ${capital.unidadesCel === 1 ? t('dispositivo disponible') : t('dispositivos disponibles')}`
                 : `${totalVendidos} ${totalVendidos === 1 ? t('dispositivo vendido') : t('dispositivos vendidos')}`
-              : `${productos.length} ${productos.length === 1 ? t('accesorio en catálogo') : t('accesorios en catálogo')}`}
+              : `${productos.length} ${productos.length === 1 ? t('producto en catálogo') : t('productos en catálogo')}`}
           </p>
         </div>
 
@@ -1235,7 +1235,7 @@ export default function Stock() {
           </div>
           <p className="text-[11px] text-muted dark:text-dark-text-secondary mt-2.5 text-center">
             {capital.unidadesCel} {capital.unidadesCel === 1 ? t('dispositivo en stock') : t('dispositivos en stock')} · {capital.unidadesAcc}{' '}
-            {capital.unidadesAcc === 1 ? t('accesorio') : t('accesorios')}. {t('Cada indicador cuenta solo los ítems con ese dato cargado.')}
+            {capital.unidadesAcc === 1 ? t('producto') : t('productos')}. {t('Cada indicador cuenta solo los ítems con ese dato cargado.')}
           </p>
         </div>
       )}

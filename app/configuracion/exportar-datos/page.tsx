@@ -227,6 +227,9 @@ export default function ExportarDatos() {
       <p className="text-xs text-muted dark:text-dark-text-secondary -mt-2">
         {t('Descargá un CSV de respaldo, o borrá en bloque para limpiar la base. Un cliente o dispositivo con ventas, órdenes u otro historial vinculado NO se puede eliminar (queda protegido automáticamente) — solo se borran los que no tienen nada enganchado.')}
       </p>
+      <p className="text-xs text-warn -mt-2">
+        {t('Los Productos son la excepción: a diferencia de Clientes y Dispositivos, sí se pueden eliminar aunque tengan ventas registradas (la venta en sí queda intacta en la orden, pero se pierde el historial de movimientos de stock de ese producto). Exportá antes si te importa conservar ese detalle.')}
+      </p>
 
       {resultado && <p className="text-sm bg-canvas dark:bg-dark-bg rounded-lg px-3 py-2">{resultado}</p>}
 
