@@ -523,9 +523,11 @@ export default function Stock() {
     setImportando(true);
     setProgresoImport(null);
 
-    const filasConCategoria = categoriaImportId
-      ? planImport.filas.map((f) => ({ ...f, categoria_id: categoriaImportId }))
-      : planImport.filas;
+    const filasConCategoria = planImport.filas.map((f) => ({
+      ...f,
+      ...(categoriaImportId ? { categoria_id: categoriaImportId } : {}),
+      ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
+    }));
     const { guardadas, error } = await insertarEnTandas(
       (tanda) => supabase.from('dispositivos').insert(tanda),
       filasConCategoria,
@@ -757,7 +759,7 @@ export default function Stock() {
       if (data.length === 0 && puedeAgregarStock) {
         const { error: insertError } = await supabase
           .from('productos')
-          .insert(ACCESORIOS_DEFAULT.map((a) => ({ nombre: a.nombre, imagen_url: a.imagen })));
+          .insert(ACCESORIOS_DEFAULT.map((a) => ({ nombre: a.nombre, imagen_url: a.imagen, ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}) })));
         if (!insertError) {
           await registrarAuditoria(supabase, {
             accion: `cargó el catálogo de accesorios por defecto (${ACCESORIOS_DEFAULT.length} accesorios)`,

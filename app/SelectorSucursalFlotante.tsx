@@ -22,7 +22,12 @@ export default function SelectorSucursalFlotante() {
   const [cargado, setCargado] = useState(false);
 
   useEffect(() => {
-    if (fija || cargado) return;
+    // Sin actor elegido (ej. login, la landing, o cualquiera de las rutas
+    // públicas que ya excluye SelectorDeActor) no tiene sentido esta
+    // consulta: nunca hay nada que mostrar sin un actor, y evita pedirle a
+    // Supabase datos de negocio en páginas donde todavía no hay sesión de
+    // ese tipo o el actor ni se eligió.
+    if (fija || cargado || !actor) return;
     (async () => {
       try {
         setSucursales(await obtenerSucursales(supabase, false));
@@ -32,7 +37,7 @@ export default function SelectorSucursalFlotante() {
       setCargado(true);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fija, cargado]);
+  }, [fija, cargado, actor]);
 
   if (fija || sucursales.length === 0 || !actor) return null;
 
