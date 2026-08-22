@@ -17,6 +17,7 @@ import { liberarRepuestosDeReparaciones } from '../../lib/repuestos';
 import Avatar from '../../Avatar';
 import SelectorColorAuto from '../../SelectorColorAuto';
 import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
+import { useSucursalActual } from '../../lib/sucursal';
 
 const ESTADOS = ['pendiente', 'pagado', 'entregado'];
 const FORMAS_PAGO = ['Efectivo', 'Transferencia', 'Tarjeta'];
@@ -134,6 +135,7 @@ export default function DetalleOrden() {
   const puedeEliminar = tienePermiso(actor, 'eliminar');
   const puedeRecibirServicioTecnico = tienePermiso(actor, 'recibir_servicio_tecnico');
   const t = useT();
+  const sucursalActual = useSucursalActual();
 
   const [orden, setOrden] = useState<Orden | null>(null);
   const [canjes, setCanjes] = useState<Canje[]>([]);
@@ -316,6 +318,7 @@ export default function DetalleOrden() {
         conectores_ok: ci.conectores_ok ?? null,
         humedad: ci.humedad ?? null,
         garantia_excepcion_manual: ci.garantia_excepcion_manual ?? null,
+        ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
       })
       .select('id, numero_orden')
       .single();

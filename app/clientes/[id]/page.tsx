@@ -14,6 +14,7 @@ import { MEDIOS_PAGO, calcularSaldo, estadoCuenta, ESTADO_INFO, diasDeMora } fro
 import { aplicarPagoAFinanciacion } from '../../lib/financiacion/servicio';
 import FinanciacionCliente from '../../FinanciacionCliente';
 import { useT } from '../../lib/idioma';
+import { useSucursalActual } from '../../lib/sucursal';
 
 type Cliente = {
   id: string;
@@ -57,6 +58,7 @@ export default function DetalleCliente() {
   const supabase = crearClienteNavegador();
   const actor = useActor();
   const t = useT();
+  const sucursalActual = useSucursalActual();
   const puedeEliminar = tienePermiso(actor, 'eliminar');
 
   const [c, setC] = useState<Cliente | null>(null);
@@ -217,6 +219,7 @@ export default function DetalleCliente() {
         observacion: pagoObs.trim() || null,
         registrado_por_nombre: a?.nombre ?? null,
         registrado_por_foto_url: a?.fotoUrl ?? null,
+        ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
       })
       .select()
       .single();
@@ -235,6 +238,7 @@ export default function DetalleCliente() {
       observacion: pagoObs.trim() || null,
       registrado_por_nombre: a?.nombre ?? null,
       registrado_por_foto_url: a?.fotoUrl ?? null,
+      ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
     });
     if (mErr) {
       setError(`${t('El pago se guardó pero no se pudo asentar en la cuenta:')} ` + mErr.message);
@@ -289,6 +293,7 @@ export default function DetalleCliente() {
       observacion: ajusteObs.trim() || null,
       registrado_por_nombre: a?.nombre ?? null,
       registrado_por_foto_url: a?.fotoUrl ?? null,
+      ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
     });
     if (mErr) {
       setError(`${t('No pudimos registrar el ajuste:')} ` + mErr.message);

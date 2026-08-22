@@ -44,6 +44,7 @@ import { QCard } from '../QCard';
 import { QoviState } from '../QoviState';
 import CampoFecha from '../CampoFecha';
 import { useT, useIdioma } from '../lib/idioma';
+import { useSucursalActual } from '../lib/sucursal';
 
 type VistaRanking = 'barras' | 'torta';
 // Rankings separados por métrica, no un puntaje opaco de "producto/categoría
@@ -133,12 +134,12 @@ type ItemPeriodoR = ItemR & { created_at: string; dispositivo_id: string | null;
 type DispositivoInfo = { modelo: string | null; categoria_id: string | null };
 type ProductoInfo = { nombre: string; categoria_id: string | null };
 type Proveedor = { id: string; nombre: string };
-type Reparacion = { tecnico_id: string | null; fecha_reparado: string };
-type IngresoServicio = { cliente_id: string | null; fecha_ingreso_servicio: string };
-type DispositivoCompra = { proveedor_id: string | null; costo: number | null; created_at: string };
+type Reparacion = { tecnico_id: string | null; fecha_reparado: string; sucursal_id: string | null };
+type IngresoServicio = { cliente_id: string | null; fecha_ingreso_servicio: string; sucursal_id: string | null };
+type DispositivoCompra = { proveedor_id: string | null; costo: number | null; created_at: string; sucursal_id: string | null };
 type CompraManual = { proveedor_id: string; cantidad: number; precio_unitario: number | null; created_at: string };
-type StockR = { modelo: string | null; precio: number | null; costo: number | null; en_stock_desde: string | null; categoria_id: string | null };
-type RegistroDispositivo = { agregado_por_nombre: string | null; agregado_por_foto_url: string | null; created_at: string };
+type StockR = { modelo: string | null; precio: number | null; costo: number | null; en_stock_desde: string | null; categoria_id: string | null; sucursal_id: string | null };
+type RegistroDispositivo = { agregado_por_nombre: string | null; agregado_por_foto_url: string | null; created_at: string; sucursal_id: string | null };
 type CategoriaStockR = { id: string; nombre: string };
 type MovProveedorR = { proveedor_id: string; tipo: string; monto: number; fecha: string };
 
@@ -187,23 +188,23 @@ export default function Estadisticas() {
   // período (no los 6000+ clientes enteros), para no saturar la carga.
   const [nombresClientes, setNombresClientes] = useState<Map<string, string>>(new Map());
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
-  const [ordenes, setOrdenes] = useState<OrdenR[]>([]);
+  const [ordenesRaw, setOrdenesRaw] = useState<OrdenR[]>([]);
   const [ordenItems, setOrdenItems] = useState<ItemPeriodoR[]>([]);
   const [dispositivosInfo, setDispositivosInfo] = useState<Map<string, DispositivoInfo>>(new Map());
   const [productosInfo, setProductosInfo] = useState<Map<string, ProductoInfo>>(new Map());
-  const [pagos, setPagos] = useState<PagoR[]>([]);
-  const [credito, setCredito] = useState<CreditoR[]>([]);
+  const [pagosRaw, setPagosRaw] = useState<PagoR[]>([]);
+  const [creditoRaw, setCreditoRaw] = useState<CreditoR[]>([]);
   const [porCobrar, setPorCobrar] = useState(0);
   const [vencidoTotal, setVencidoTotal] = useState(0);
   const [deudores, setDeudores] = useState(0);
-  const [reparaciones, setReparaciones] = useState<Reparacion[]>([]);
-  const [ingresosServicio, setIngresosServicio] = useState<IngresoServicio[]>([]);
-  const [comprasProveedor, setComprasProveedor] = useState<DispositivoCompra[]>([]);
+  const [reparacionesRaw, setReparacionesRaw] = useState<Reparacion[]>([]);
+  const [ingresosServicioRaw, setIngresosServicioRaw] = useState<IngresoServicio[]>([]);
+  const [comprasProveedorRaw, setComprasProveedorRaw] = useState<DispositivoCompra[]>([]);
   const [comprasManuales, setComprasManuales] = useState<CompraManual[]>([]);
   // Stock ACTUAL (foto de hoy, no depende del período): capital, antigüedad, por modelo.
-  const [stock, setStock] = useState<StockR[]>([]);
+  const [stockRaw, setStockRaw] = useState<StockR[]>([]);
   // Altas de stock (quién cargó cada equipo), para el ranking por período.
-  const [registrosDispositivos, setRegistrosDispositivos] = useState<RegistroDispositivo[]>([]);
+  const [registrosDispositivosRaw, setRegistrosDispositivosRaw] = useState<RegistroDispositivo[]>([]);
   const [categoriasStock, setCategoriasStock] = useState<CategoriaStockR[]>([]);
   // Cuentas por pagar (proveedor_movimientos + saldos_proveedores) — si el
   // negocio no corrió esa migración, quedan vacíos y esas tarjetas puntuales
@@ -220,11 +221,38 @@ export default function Estadisticas() {
   // Egresos operativos — opcional según si el negocio ya corrió esa
   // migración. Mismo criterio de agregación (sin separar por moneda) que ya
   // usan ventas/ingresado/ganancia en este mismo dashboard.
-  const [egresos, setEgresos] = useState<EgresoR[]>([]);
+  const [egresosRaw, setEgresosRaw] = useState<EgresoR[]>([]);
   const [moneda, setMoneda] = useState('$');
   const [loading, setLoading] = useState(true);
   const [actualizado, setActualizado] = useState<Date | null>(null);
   const [errorCarga, setErrorCarga] = useState<string | null>(null);
+
+  // Selección global del panel lateral — filtra las 7 tablas que Fase 1
+  // etiquetó por sucursal (ordenes, reparaciones, pagos, cta_cte_movimientos,
+  // egresos, y dispositivos vía stock/compras/altas). Clientes, proveedores,
+  // comisiones y cuentas por pagar quedan compartidos, sin filtrar.
+  const { id: sucursalId } = useSucursalActual();
+  const ordenes = useMemo(() => (sucursalId ? ordenesRaw.filter((o) => o.sucursal_id === sucursalId) : ordenesRaw), [ordenesRaw, sucursalId]);
+  const pagos = useMemo(() => (sucursalId ? pagosRaw.filter((p) => p.sucursal_id === sucursalId) : pagosRaw), [pagosRaw, sucursalId]);
+  const credito = useMemo(() => (sucursalId ? creditoRaw.filter((c) => c.sucursal_id === sucursalId) : creditoRaw), [creditoRaw, sucursalId]);
+  const reparaciones = useMemo(
+    () => (sucursalId ? reparacionesRaw.filter((r) => r.sucursal_id === sucursalId) : reparacionesRaw),
+    [reparacionesRaw, sucursalId]
+  );
+  const ingresosServicio = useMemo(
+    () => (sucursalId ? ingresosServicioRaw.filter((i) => i.sucursal_id === sucursalId) : ingresosServicioRaw),
+    [ingresosServicioRaw, sucursalId]
+  );
+  const comprasProveedor = useMemo(
+    () => (sucursalId ? comprasProveedorRaw.filter((c) => c.sucursal_id === sucursalId) : comprasProveedorRaw),
+    [comprasProveedorRaw, sucursalId]
+  );
+  const stock = useMemo(() => (sucursalId ? stockRaw.filter((s) => s.sucursal_id === sucursalId) : stockRaw), [stockRaw, sucursalId]);
+  const registrosDispositivos = useMemo(
+    () => (sucursalId ? registrosDispositivosRaw.filter((r) => r.sucursal_id === sucursalId) : registrosDispositivosRaw),
+    [registrosDispositivosRaw, sucursalId]
+  );
+  const egresos = useMemo(() => (sucursalId ? egresosRaw.filter((e) => e.sucursal_id === sucursalId) : egresosRaw), [egresosRaw, sucursalId]);
 
   // Preferencia de "ocultar montos" (ojito), recordada en este dispositivo.
   useEffect(() => {
@@ -295,22 +323,26 @@ export default function Estadisticas() {
           supabase.from('proveedores').select('id, nombre').order('nombre'),
           supabase
             .from('ordenes')
-            .select('id, vendedor_id, cliente_id, total, anticipo, monto_canje, estado, forma_pago, created_at')
+            .select('id, vendedor_id, cliente_id, total, anticipo, monto_canje, estado, forma_pago, created_at, sucursal_id')
             .gte('created_at', desde.toISOString()),
           supabase
             .from('orden_items')
             .select('orden_id, cantidad, precio_unitario, costo, created_at, dispositivo_id, producto_id, descripcion, tipo')
             .gte('created_at', desde.toISOString()),
-          supabase.from('reparaciones').select('tecnico_id, fecha_reparado').not('fecha_reparado', 'is', null).gte('fecha_reparado', desde.toISOString()),
           supabase
             .from('reparaciones')
-            .select('cliente_id, fecha_ingreso_servicio')
+            .select('tecnico_id, fecha_reparado, sucursal_id')
+            .not('fecha_reparado', 'is', null)
+            .gte('fecha_reparado', desde.toISOString()),
+          supabase
+            .from('reparaciones')
+            .select('cliente_id, fecha_ingreso_servicio, sucursal_id')
             .not('cliente_id', 'is', null)
             .not('fecha_ingreso_servicio', 'is', null)
             .gte('fecha_ingreso_servicio', desde.toISOString()),
           supabase.from('compras_proveedor').select('proveedor_id, cantidad, precio_unitario, created_at').gte('created_at', desde.toISOString()),
-          supabase.from('pagos').select('medio, monto, fecha').eq('anulado', false).gte('fecha', desde.toISOString()),
-          supabase.from('cta_cte_movimientos').select('concepto, tipo, monto, fecha').eq('anulado', false).gte('fecha', desde.toISOString()),
+          supabase.from('pagos').select('medio, monto, fecha, sucursal_id').eq('anulado', false).gte('fecha', desde.toISOString()),
+          supabase.from('cta_cte_movimientos').select('concepto, tipo, monto, fecha, sucursal_id').eq('anulado', false).gte('fecha', desde.toISOString()),
           supabase.rpc('saldos_cuenta_corriente'),
           // Todas estas son opcionales — si el negocio no corrió esa
           // migración (o no activó el módulo), Supabase devuelve error y
@@ -327,16 +359,16 @@ export default function Estadisticas() {
             .eq('tipo', 'pago')
             .gte('created_at', desde.toISOString()),
           supabase.from('comision_movimientos').select('comision, estado, fecha_hecho, created_at').neq('estado', 'revertida').gte('created_at', desde.toISOString()),
-          supabase.from('egresos').select('importe, fecha').eq('anulado', false).gte('fecha', desde.toISOString().slice(0, 10)),
+          supabase.from('egresos').select('importe, fecha, sucursal_id').eq('anulado', false).gte('fecha', desde.toISOString().slice(0, 10)),
         ]),
-        obtenerTodasLasFilas<DispositivoCompra>(supabase, 'dispositivos', 'proveedor_id, costo, created_at', [], (q) =>
+        obtenerTodasLasFilas<DispositivoCompra>(supabase, 'dispositivos', 'proveedor_id, costo, created_at, sucursal_id', [], (q) =>
           q.not('proveedor_id', 'is', null).gte('created_at', desde.toISOString())
         ),
         // Foto del inventario de HOY (no depende del período), para capital y stock por modelo.
-        obtenerTodasLasFilas<StockR>(supabase, 'dispositivos', 'modelo, precio, costo, en_stock_desde, categoria_id', [], (q) => q.eq('en_stock', true)),
+        obtenerTodasLasFilas<StockR>(supabase, 'dispositivos', 'modelo, precio, costo, en_stock_desde, categoria_id, sucursal_id', [], (q) => q.eq('en_stock', true)),
         // Todas las altas de stock (no solo lo que sigue en stock hoy), para
         // poder rankear quién cargó más equipos en el período.
-        obtenerTodasLasFilas<RegistroDispositivo>(supabase, 'dispositivos', 'agregado_por_nombre, agregado_por_foto_url, created_at', [], (q) =>
+        obtenerTodasLasFilas<RegistroDispositivo>(supabase, 'dispositivos', 'agregado_por_nombre, agregado_por_foto_url, created_at, sucursal_id', [], (q) =>
           q.gte('created_at', desde.toISOString())
         ),
       ]);
@@ -347,17 +379,17 @@ export default function Estadisticas() {
       setVendedores(vend ?? []);
       setTecnicos(tec ?? []);
       setProveedores((prov as Proveedor[]) ?? []);
-      setOrdenes((ord as OrdenR[]) ?? []);
+      setOrdenesRaw((ord as OrdenR[]) ?? []);
       const itemsPeriodo = (items as ItemPeriodoR[]) ?? [];
       setOrdenItems(itemsPeriodo);
-      setReparaciones((rep as Reparacion[]) ?? []);
-      setIngresosServicio((ing as IngresoServicio[]) ?? []);
-      setComprasProveedor(compras);
+      setReparacionesRaw((rep as Reparacion[]) ?? []);
+      setIngresosServicioRaw((ing as IngresoServicio[]) ?? []);
+      setComprasProveedorRaw(compras);
       setComprasManuales((comprasManual as CompraManual[]) ?? []);
-      setStock(stockData);
-      setRegistrosDispositivos(registrosData);
-      setPagos((pagosData as PagoR[]) ?? []);
-      setCredito((creditoData as CreditoR[]) ?? []);
+      setStockRaw(stockData);
+      setRegistrosDispositivosRaw(registrosData);
+      setPagosRaw((pagosData as PagoR[]) ?? []);
+      setCreditoRaw((creditoData as CreditoR[]) ?? []);
       const saldos = (saldosData as { saldo: number; vencido: number }[]) ?? [];
       setPorCobrar(saldos.reduce((acc, s) => acc + Math.max(0, Number(s.saldo) || 0), 0));
       setVencidoTotal(saldos.reduce((acc, s) => acc + Math.max(0, Number(s.vencido) || 0), 0));
@@ -371,7 +403,7 @@ export default function Estadisticas() {
       setPlanesFinanciacion((planesFinData as PlanFinR[]) ?? []);
       setPagosFinanciacion((pagosFinData as PagoFinR[]) ?? []);
       setComisionMovs((comisionData as ComisionMovR[]) ?? []);
-      setEgresos((egresosData as EgresoR[]) ?? []);
+      setEgresosRaw((egresosData as EgresoR[]) ?? []);
 
       // Nombres SOLO de los clientes que aparecen en órdenes/servicio (no los
       // miles). Un pedido acotado por ids en vez de traer toda la tabla.

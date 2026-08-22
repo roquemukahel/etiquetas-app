@@ -18,6 +18,12 @@ import { useActor } from './actor';
 const KEY = 'qovento:sucursal_manual';
 const EVENTO_CAMBIO = 'qovento:sucursal-manual-changed';
 
+// Cookie espejo del id RESUELTO (fijo del actor, o manual) — no reemplaza el
+// localStorage de arriba, es solo para que Inicio (app/page.tsx, Server
+// Component) pueda leer "en qué sucursal estoy" sin hooks. Mismo patrón que
+// app/lib/idioma.ts / app/lib/idiomaServidor.ts.
+const COOKIE = 'qovento_sucursal';
+
 function leerManual(): string | null {
   if (typeof window === 'undefined') return null;
   return window.localStorage.getItem(KEY);
@@ -31,6 +37,10 @@ export function setSucursalManual(id: string | null) {
   if (id) window.localStorage.setItem(KEY, id);
   else window.localStorage.removeItem(KEY);
   window.dispatchEvent(new Event(EVENTO_CAMBIO));
+}
+
+function escribirCookie(id: string | null) {
+  document.cookie = `${COOKIE}=${id ?? ''}; path=/; max-age=31536000; SameSite=Lax`;
 }
 
 // Solo el id — el nombre para mostrar lo resuelve quien llama contra su
@@ -50,6 +60,12 @@ export function useSucursalActual(): { id: string | null; fija: boolean } {
     };
   }, []);
 
-  if (actor?.sucursalId) return { id: actor.sucursalId, fija: true };
-  return { id: manual, fija: false };
+  const resuelto = actor?.sucursalId ? { id: actor.sucursalId, fija: true } : { id: manual, fija: false };
+
+  useEffect(() => {
+    escribirCookie(resuelto.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resuelto.id]);
+
+  return resuelto;
 }

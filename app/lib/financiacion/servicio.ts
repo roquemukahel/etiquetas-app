@@ -55,6 +55,7 @@ export async function crearPlanFinanciacion(
     cantidadCuotas: number;
     primeraFecha: string; // YYYY-MM-DD
     observaciones?: string;
+    sucursalId?: string | null;
   }
 ): Promise<{ planId: string; cuotas: ReturnType<typeof generarCronograma> } | { error: string }> {
   const importeFinanciado = params.importeOriginal - params.entregaInicial;
@@ -83,6 +84,7 @@ export async function crearPlanFinanciacion(
     p_cuotas: cuotas,
     p_observaciones: params.observaciones?.trim() || null,
     p_usuario: actor?.nombre ?? null,
+    p_sucursal_id: params.sucursalId ?? null,
   });
   if (error) return { error: error.message };
 

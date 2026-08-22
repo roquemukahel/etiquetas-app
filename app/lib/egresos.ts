@@ -141,6 +141,7 @@ export async function crearEgreso(
     medioPago: string | null;
     proveedorId: string | null;
     notas?: string;
+    sucursalId?: string | null;
   }
 ): Promise<{ id: string } | { error: string }> {
   const descripcion = params.descripcion.trim();
@@ -162,6 +163,7 @@ export async function crearEgreso(
       notas: params.notas?.trim() || null,
       registrado_por_nombre: actor?.nombre ?? null,
       registrado_por_foto_url: actor?.fotoUrl ?? null,
+      ...(params.sucursalId ? { sucursal_id: params.sucursalId } : {}),
     })
     .select('id')
     .single();

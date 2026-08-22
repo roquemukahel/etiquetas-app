@@ -23,6 +23,7 @@ import { Boton } from '../Boton';
 import Modal from '../Modal';
 import CampoFecha from '../CampoFecha';
 import { useT } from '../lib/idioma';
+import { useSucursalActual } from '../lib/sucursal';
 
 type Proveedor = { id: string; nombre: string };
 
@@ -237,6 +238,7 @@ function ModalNuevoEgreso({
 }) {
   const supabase = crearClienteNavegador();
   const t = useT();
+  const sucursalActual = useSucursalActual();
   const [fecha, setFecha] = useState(() => aFechaLocal(new Date()));
   const [categoriaId, setCategoriaId] = useState(categorias[0]?.id ?? '');
   const [tipo, setTipo] = useState<TipoEgreso>('gasto_operativo');
@@ -271,6 +273,7 @@ function ModalNuevoEgreso({
       medioPago: medioPago || null,
       proveedorId: proveedorId || null,
       notas,
+      sucursalId: sucursalActual.id,
     });
     setGuardando(false);
     if ('error' in resultado) {

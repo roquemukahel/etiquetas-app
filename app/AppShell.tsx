@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { crearClienteNavegador } from './lib/supabase/client';
 import { ICONOS } from './Iconos';
 import QMark from './QMark';
@@ -64,6 +64,7 @@ const NAV = [
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const supabase = crearClienteNavegador();
   const t = useT();
   const [sesion, setSesion] = useState<'cargando' | 'si' | 'no'>('cargando');
@@ -122,6 +123,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const esActivo = (href: string) => (href === '/' ? pathname === '/' : (pathname?.startsWith(href) ?? false));
   const mostrarAvisoPrueba = diasPrueba !== null && !pathname?.startsWith('/configuracion/suscripcion');
 
+  // Inicio, Estadísticas y Órdenes leen esta selección (cookie/localStorage
+  // de app/lib/sucursal.ts) para filtrar lo que muestran — sin el refresh,
+  // Inicio (Server Component) no se entera hasta la próxima navegación
+  // entera, igual que pasa con el selector de idioma.
+  const elegirSucursal = (id: string | null) => {
+    setSucursalManual(id);
+    setMenuSucursalAbierto(false);
+    router.refresh();
+  };
+
   return (
     <div>
       {mostrarAvisoPrueba && (
@@ -174,7 +185,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 {ICONOS.local}
               </span>
               <span className="min-w-0 flex-1 text-left truncate font-medium">
-                {sucursales.find((s) => s.id === sucursalActualId)?.nombre || t('Elegí tu sucursal')}
+                {sucursalActualId ? sucursales.find((s) => s.id === sucursalActualId)?.nombre : t('Todas las sucursales')}
               </span>
               {!sucursalFija && (
                 <span className="text-muted dark:text-dark-text-secondary shrink-0">▾</span>
@@ -185,14 +196,20 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             )}
             {menuSucursalAbierto && (
               <div className="absolute left-3 right-3 top-full mt-1 rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-elevated py-1 z-30">
+                <button
+                  type="button"
+                  onClick={() => elegirSucursal(null)}
+                  className={`block w-full text-left px-3 py-2 text-sm hover:bg-canvas dark:hover:bg-dark-bg ${
+                    !sucursalActualId ? 'font-medium text-accent dark:text-dark-accent' : ''
+                  }`}
+                >
+                  🏬 {t('Todas las sucursales')}
+                </button>
                 {sucursales.map((s) => (
                   <button
                     key={s.id}
                     type="button"
-                    onClick={() => {
-                      setSucursalManual(s.id);
-                      setMenuSucursalAbierto(false);
-                    }}
+                    onClick={() => elegirSucursal(s.id)}
                     className={`block w-full text-left px-3 py-2 text-sm hover:bg-canvas dark:hover:bg-dark-bg ${
                       s.id === sucursalActualId ? 'font-medium text-accent dark:text-dark-accent' : ''
                     }`}
@@ -245,14 +262,20 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <div className="no-print lg:hidden fixed bottom-3 left-3 z-40">
           {menuSucursalAbierto && (
             <div className="absolute bottom-full left-0 mb-1.5 w-52 rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-elevated py-1">
+              <button
+                type="button"
+                onClick={() => elegirSucursal(null)}
+                className={`block w-full text-left px-3.5 py-2.5 text-sm hover:bg-canvas dark:hover:bg-dark-bg ${
+                  !sucursalActualId ? 'font-medium text-accent dark:text-dark-accent' : ''
+                }`}
+              >
+                🏬 {t('Todas las sucursales')}
+              </button>
               {sucursales.map((s) => (
                 <button
                   key={s.id}
                   type="button"
-                  onClick={() => {
-                    setSucursalManual(s.id);
-                    setMenuSucursalAbierto(false);
-                  }}
+                  onClick={() => elegirSucursal(s.id)}
                   className={`block w-full text-left px-3.5 py-2.5 text-sm hover:bg-canvas dark:hover:bg-dark-bg ${
                     s.id === sucursalActualId ? 'font-medium text-accent dark:text-dark-accent' : ''
                   }`}
@@ -267,7 +290,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             onClick={() => setMenuSucursalAbierto((v) => !v)}
             className="rounded-full border border-white/30 bg-ink/70 text-white text-xs font-medium px-2.5 py-1 backdrop-blur-sm hover:bg-ink/90 transition-colors"
           >
-            🏬 {sucursales.find((s) => s.id === sucursalActualId)?.nombre || t('Elegí tu sucursal')}
+            🏬 {sucursalActualId ? sucursales.find((s) => s.id === sucursalActualId)?.nombre : t('Todas las sucursales')}
           </button>
         </div>
       )}
