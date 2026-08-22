@@ -103,6 +103,7 @@ type Reparacion = {
   id: string;
   numero_orden: string | null;
   cliente_id: string | null;
+  sucursal_id: string | null;
   modelo: string | null;
   capacidad_gb: number | null;
   color: string | null;
@@ -863,7 +864,9 @@ export default function FichaReparacion() {
       en_stock: true,
       agregado_por_nombre: actor?.nombre ?? null,
       agregado_por_foto_url: actor?.fotoUrl ?? null,
-      ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
+      // Hereda la sucursal de esta misma reparación, no la que esté
+      // eligiendo ahora quien aprieta el botón.
+      ...(r.sucursal_id ? { sucursal_id: r.sucursal_id } : {}),
     });
     await asegurarModelo(supabase, modeloNormalizado);
     await supabase
