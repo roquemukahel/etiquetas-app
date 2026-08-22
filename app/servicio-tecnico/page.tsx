@@ -680,6 +680,10 @@ export default function ServicioTecnico() {
       en_stock: true,
       agregado_por_nombre: actor?.nombre ?? null,
       agregado_por_foto_url: actor?.fotoUrl ?? null,
+      // Hereda la sucursal de la reparación de origen, no la que esté
+      // eligiendo ahora quien aprieta el botón — quien agrega al Stock
+      // puede estar viendo "Todas las sucursales" en ese momento.
+      ...(r.sucursal_id ? { sucursal_id: r.sucursal_id } : {}),
     });
     await asegurarModelo(supabase, modeloNormalizado);
     await supabase

@@ -447,6 +447,7 @@ function ModalAjuste({
 }) {
   const t = useT();
   const supabase = crearClienteNavegador();
+  const sucursalActual = useSucursalActual();
   const [monto, setMonto] = useState('');
   const [motivo, setMotivo] = useState('');
   const [cuotasElegidas, setCuotasElegidas] = useState<Set<string>>(new Set());
@@ -477,6 +478,7 @@ function ModalAjuste({
       monto: m,
       motivo,
       cuotaIds: cuotasElegidas.size > 0 ? Array.from(cuotasElegidas) : undefined,
+      sucursalId: sucursalActual.id,
     });
     setGuardando(false);
     if ('error' in resultado) {

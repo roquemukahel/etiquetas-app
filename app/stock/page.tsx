@@ -710,7 +710,16 @@ export default function Stock() {
     setProcesandoAccion(d.id);
     const { data: nueva, error: insertError } = await supabase
       .from('reparaciones')
-      .insert({ modelo: d.modelo, capacidad_gb: d.capacidad_gb, color: d.color, imei: d.imei, estado: 'recibido' })
+      .insert({
+        modelo: d.modelo,
+        capacidad_gb: d.capacidad_gb,
+        color: d.color,
+        imei: d.imei,
+        estado: 'recibido',
+        // Hereda la sucursal del propio dispositivo que se deriva, no la
+        // que esté eligiendo ahora quien aprieta el botón.
+        ...(d.sucursal_id ? { sucursal_id: d.sucursal_id } : {}),
+      })
       .select('id, numero_orden')
       .single();
     // Si esto falla no seguimos: si igual marcáramos el dispositivo fuera de

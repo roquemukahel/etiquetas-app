@@ -154,7 +154,7 @@ export async function aplicarPagoAFinanciacion(
 // ---------- Ajuste (reduce deuda futura, sin tocar cuotas pagadas) ----------
 export async function ajustarCuotasFinanciacion(
   supabase: SupabaseClient,
-  params: { planId: string; monto: number; motivo: string; cuotaIds?: string[] }
+  params: { planId: string; monto: number; motivo: string; cuotaIds?: string[]; sucursalId?: string | null }
 ): Promise<{ ok: true } | { error: string }> {
   const actor = getActor();
   const { error } = await supabase.rpc('financiacion_ajustar_cuotas', {
@@ -163,6 +163,7 @@ export async function ajustarCuotasFinanciacion(
     p_motivo: params.motivo.trim(),
     p_cuota_ids: params.cuotaIds && params.cuotaIds.length > 0 ? params.cuotaIds : null,
     p_usuario: actor?.nombre ?? null,
+    p_sucursal_id: params.sucursalId ?? null,
   });
   if (error) return { error: error.message };
 
