@@ -22,6 +22,8 @@ import {
   generarTextoCondicionIngreso,
   ChecklistIngreso,
   RepuestoParaAlerta,
+  FINALIZADOS,
+  esDemorado,
 } from '../lib/reparaciones';
 import Avatar from '../Avatar';
 import SelectorColorAuto from '../SelectorColorAuto';
@@ -63,9 +65,6 @@ function formatearFecha(iso: string | null) {
   if (!iso) return null;
   return new Date(iso).toLocaleDateString('es-AR');
 }
-
-const FINALIZADOS = ['entregado', 'cancelado'];
-const DIAS_DEMORA = 5;
 
 export default function ServicioTecnico() {
   const supabase = crearClienteNavegador();
@@ -248,14 +247,6 @@ export default function ServicioTecnico() {
 
   const nombreTecnico = (tecnicoId: string | null) => tecnicos.find((tec) => tec.id === tecnicoId)?.nombre;
   const fotoTecnico = (tecnicoId: string | null) => tecnicos.find((tec) => tec.id === tecnicoId)?.foto_url ?? null;
-
-  const esDemorado = (r: Reparacion) => {
-    if (FINALIZADOS.includes(r.estado)) return false;
-    const dias = (Date.now() - new Date(r.fecha_ingreso_servicio).getTime()) / 86400000;
-    if (dias > DIAS_DEMORA) return true;
-    if (r.fecha_estimada && new Date(r.fecha_estimada) < new Date()) return true;
-    return false;
-  };
 
   // Filtro central por sucursal — TODO lo demás de esta pantalla (lista,
   // indicadores, alertas, Mi banco, estadísticas por técnico) deriva de

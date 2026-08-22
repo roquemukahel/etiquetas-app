@@ -873,10 +873,19 @@ export default function DetalleOrden() {
     await supabase.from('pagos').update({ anulado: true }).eq('orden_id', id).eq('anulado', false);
     // Comisiones: revertir las de esta venta ANTES de borrar la orden (después
     // orden_id queda en null). Si el módulo no está activo o no había
-    // comisiones, la función no hace nada. No rompe la cancelación si falla.
+    // comisiones, la función no hace nada. No rompe la cancelación si falla,
+    // pero el error queda en la auditoría en vez de perderse: antes este catch
+    // solo atrapaba una excepción de red — revertirComisionesOrden nunca tira,
+    // devuelve { error } en un objeto, así que un fallo real de la RPC pasaba
+    // completamente desapercibido y el vendedor podía seguir cobrando comisión
+    // por una venta ya cancelada.
+    let comisionError: string | null = null;
     try {
-      await revertirComisionesOrden(supabase, id, 'Venta cancelada', null);
-    } catch {}
+      const revertido = await revertirComisionesOrden(supabase, id, 'Venta cancelada', null);
+      if (revertido.error) comisionError = revertido.error;
+    } catch (e) {
+      comisionError = e instanceof Error ? e.message : String(e);
+    }
     // Si esta orden derivó un equipo a Servicio Técnico, se borra también la
     // reparación para que desaparezca de ahí (pedido del usuario). Antes de
     // borrarla hay que devolver al stock lo que tuviera consumido/reservado
@@ -912,8 +921,9 @@ export default function DetalleOrden() {
       return;
     }
     const nombreCliente = orden.clientes ? `${orden.clientes.nombre} ${orden.clientes.apellido || ''}`.trim() : 'sin cliente';
+    const avisoComision = comisionError ? ` (no se pudo revertir la comisión: ${comisionError})` : '';
     await registrarAuditoria(supabase, {
-      accion: `eliminó/canceló una orden (${nombreCliente}, total $${orden.total?.toLocaleString('es-AR') ?? 0})`,
+      accion: `eliminó/canceló una orden (${nombreCliente}, total $${orden.total?.toLocaleString('es-AR') ?? 0})${avisoComision}`,
       entidad: 'orden',
       entidadId: orden.id,
       valorAnterior: { estado: orden.estado, total: orden.total },

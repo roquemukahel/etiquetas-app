@@ -3,6 +3,7 @@
 // veces sobre la misma venta no duplica movimientos (idempotency_key + upsert).
 import { calcularComisionVenta, type Regla, type Venta } from './motor';
 import { decimalesMoneda } from './tipos';
+import { ESTADOS_COBRADOS } from '../../estadisticas/datos';
 
 export type ResultadoGeneracion = { generadas: number; error: string | null; motivo?: string };
 
@@ -30,7 +31,7 @@ export async function generarComisionesDeOrden(supabase: any, ordenId: string): 
   //    genera igual. Solo el modo 'cobrada' (opcional, aún sin UI) exige que la
   //    venta esté pagada/entregada.
   const generarEn = negocio.comisiones_generar_en || 'confirmada';
-  if (generarEn === 'cobrada' && !['pagado', 'entregado'].includes(orden.estado)) {
+  if (generarEn === 'cobrada' && !ESTADOS_COBRADOS.includes(orden.estado)) {
     return { generadas: 0, error: null, motivo: 'La venta todavía no está cobrada' };
   }
 

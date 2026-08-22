@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { crearClienteServidor } from './lib/supabase/server';
 import { obtenerTodasLasFilas } from './lib/db';
+import { ESTADOS_COBRADOS } from './estadisticas/datos';
 import QMark from './QMark';
 import BuscadorUniversal from './BuscadorUniversal';
 import LandingPublica from './LandingPublica';
@@ -251,7 +252,7 @@ export default async function Home() {
     totalClientes = countClientes ?? 0;
     esAdmin = !!esAdminData;
 
-    const cobradas = (ordenesRecientes ?? []).filter((o) => o.estado === 'pagado' || o.estado === 'entregado');
+    const cobradas = (ordenesRecientes ?? []).filter((o) => ESTADOS_COBRADOS.includes(o.estado));
     ingresosMes = cobradas
       .filter((o) => new Date(o.created_at) >= inicioMes)
       .reduce((acc, o) => acc + (o.total || 0), 0);
