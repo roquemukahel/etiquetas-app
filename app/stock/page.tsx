@@ -15,6 +15,8 @@ import { asegurarModelo, normalizarNombreModelo } from '../lib/modelos';
 import { compararModelosPorSalida } from '../lib/catalogosMarcas';
 import { sanitizarDecimal } from '../lib/numeros';
 import { obtenerCategorias, type Categoria } from '../lib/categorias';
+import { obtenerSucursales, type Sucursal } from '../lib/sucursales';
+import { useSucursalActual } from '../lib/sucursal';
 import { asegurarProveedor } from '../lib/proveedores';
 import { useT } from '../lib/idioma';
 import MiniaturaDispositivo from '../MiniaturaDispositivo';
@@ -83,6 +85,7 @@ type Producto = {
   garantia_dias?: number | null;
   descripcion?: string | null;
   notas?: string | null;
+  sucursal_id?: string | null;
 };
 
 // Catálogo inicial que se puede cargar con un toque desde "Agregar accesorios
@@ -125,6 +128,7 @@ export default function Stock() {
   const supabase = crearClienteNavegador();
   const actor = useActor();
   const t = useT();
+  const sucursalActual = useSucursalActual();
   const puedeEliminar = tienePermiso(actor, 'eliminar');
   const puedeAgregarStock = tienePermiso(actor, 'agregar_stock');
   const puedeRecibirServicioTecnico = tienePermiso(actor, 'recibir_servicio_tecnico');
@@ -171,6 +175,8 @@ export default function Stock() {
   // accesorio sigue funcionando exactamente igual que antes.
   const [categoriasStock, setCategoriasStock] = useState<Categoria[]>([]);
   const [categoriaProducto, setCategoriaProducto] = useState('');
+  const [sucursales, setSucursales] = useState<Sucursal[]>([]);
+  const [filtroSucursal, setFiltroSucursal] = useState('');
   // Modalidad del producto que se está por agregar: la sugiere la categoría
   // elegida (modalidad_default), pero queda editable — la spec pide que sea
   // "explícitamente seleccionable por producto", no fija por categoría.
@@ -383,6 +389,13 @@ export default function Stock() {
         // Tabla stock_categorias todavía no existe en este negocio (no se
         // corrió la migración) — el formulario sigue funcionando igual que
         // antes, simplemente sin selector de categoría.
+      }
+    })();
+    (async () => {
+      try {
+        setSucursales(await obtenerSucursales(supabase, false));
+      } catch {
+        // Tabla sucursales todavía no existe en este negocio.
       }
     })();
     // Mismo patrón que Proveedor en app/stock/nuevo/page.tsx: nombres
@@ -922,10 +935,12 @@ export default function Stock() {
   }, [productos]);
 
   const productosFiltrados = useMemo(() => {
-    if (!filtroCategoriaProducto) return productos;
-    if (filtroCategoriaProducto === '__sin_categoria__') return productos.filter((p) => !p.categoria_id);
-    return productos.filter((p) => p.categoria_id === filtroCategoriaProducto);
-  }, [productos, filtroCategoriaProducto]);
+    let lista = productos;
+    if (filtroCategoriaProducto === '__sin_categoria__') lista = lista.filter((p) => !p.categoria_id);
+    else if (filtroCategoriaProducto) lista = lista.filter((p) => p.categoria_id === filtroCategoriaProducto);
+    if (filtroSucursal) lista = lista.filter((p) => p.sucursal_id === filtroSucursal);
+    return lista;
+  }, [productos, filtroCategoriaProducto, filtroSucursal]);
 
   const agregarProducto = async () => {
     if (!nombreProducto.trim() || !puedeAgregarStock) return;
@@ -942,6 +957,7 @@ export default function Stock() {
       costo: costoProducto ? Number(costoProducto) : null,
       cantidad: esSerializado ? 1 : Math.max(0, Math.floor(Number(cantidadInicialProducto) || 0)),
       ...(categoriaProducto ? { categoria_id: categoriaProducto, modalidad: modalidadProducto } : {}),
+      ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
       ...(esSerializado ? { marca: marcaProducto.trim() || null, numero_serie: numeroSerieProducto.trim() || null } : {}),
       ...(mostrarMasCamposProducto
         ? {
@@ -1986,6 +2002,22 @@ export default function Stock() {
                 </button>
               )}
             </div>
+          )}
+
+          {sucursales.length > 1 && (
+            <select
+              value={filtroSucursal}
+              onChange={(e) => setFiltroSucursal(e.target.value)}
+              aria-label={t('Filtrar por sucursal')}
+              className="self-start bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2.5 py-1.5 text-xs"
+            >
+              <option value="">🏬 {t('Todas las sucursales')}</option>
+              {sucursales.map((s) => (
+                <option key={s.id} value={s.id}>
+                  🏬 {s.nombre}
+                </option>
+              ))}
+            </select>
           )}
 
           {loadingProductos && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{t('Cargando...')}</p>}

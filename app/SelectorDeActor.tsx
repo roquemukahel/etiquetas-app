@@ -45,6 +45,11 @@ type Persona = {
   puede_recibir_servicio_tecnico?: boolean;
   puede_gestionar_servicio_tecnico?: boolean;
   puede_gestionar_financiacion?: boolean;
+  // Sucursal asignada (Configuración > Vendedores/Técnicos) — misma
+  // consulta aparte que los permisos de arriba, por el mismo motivo: si
+  // sucursales_supabase.sql todavía no se corrió, esta columna no existe
+  // y esa consulta puede fallar sola sin romper nombre/foto/PIN.
+  sucursal_id?: string | null;
 };
 
 const COLUMNAS_PERMISOS =
@@ -127,13 +132,20 @@ export default function SelectorDeActor() {
     if (esRutaExcluida || !mostrarOverlay || cargando) return;
     setCargando(true);
     (async () => {
-      const [{ data: vend }, { data: tec }, { data: idsVend }, { data: idsTec }, permVendRes, permTecRes] = await Promise.all([
+      const [{ data: vend }, { data: tec }, { data: idsVend }, { data: idsTec }, permVendRes, permTecRes, sucVendRes, sucTecRes] = await Promise.all([
         supabase.from('vendedores').select('id, nombre, foto_url, telefono, edad').order('nombre'),
         supabase.from('tecnicos').select('id, nombre, foto_url, telefono, edad').order('nombre'),
         supabase.rpc('ids_vendedores_con_pin'),
         supabase.rpc('ids_tecnicos_con_pin'),
         supabase.from('vendedores').select(COLUMNAS_PERMISOS),
         supabase.from('tecnicos').select(COLUMNAS_PERMISOS),
+        // sucursal_id en su PROPIA consulta (no en COLUMNAS_PERMISOS): si
+        // sucursales_supabase.sql todavía no se corrió para este negocio, la
+        // columna no existe y esta consulta puntual falla sola — sin eso,
+        // un error acá tumbaría también la consulta de permisos de arriba,
+        // que sí existe siempre.
+        supabase.from('vendedores').select('id, sucursal_id'),
+        supabase.from('tecnicos').select('id, sucursal_id'),
       ]);
       const conPinVend = new Set(((idsVend as { id: string }[]) ?? []).map((r) => r.id));
       const conPinTec = new Set(((idsTec as { id: string }[]) ?? []).map((r) => r.id));
@@ -143,8 +155,10 @@ export default function SelectorDeActor() {
       // de permisos (los defaults "?? true" de más abajo se hacen cargo).
       const permisosVend = new Map(((permVendRes.data as any[]) ?? []).map((p) => [p.id, p]));
       const permisosTec = new Map(((permTecRes.data as any[]) ?? []).map((p) => [p.id, p]));
-      setVendedores((vend ?? []).map((v) => ({ ...v, tienePin: conPinVend.has(v.id), ...permisosVend.get(v.id) })));
-      setTecnicos((tec ?? []).map((t) => ({ ...t, tienePin: conPinTec.has(t.id), ...permisosTec.get(t.id) })));
+      const sucursalVend = new Map(((sucVendRes.data as { id: string; sucursal_id: string | null }[]) ?? []).map((p) => [p.id, p.sucursal_id]));
+      const sucursalTec = new Map(((sucTecRes.data as { id: string; sucursal_id: string | null }[]) ?? []).map((p) => [p.id, p.sucursal_id]));
+      setVendedores((vend ?? []).map((v) => ({ ...v, tienePin: conPinVend.has(v.id), ...permisosVend.get(v.id), sucursal_id: sucursalVend.get(v.id) ?? null })));
+      setTecnicos((tec ?? []).map((tc) => ({ ...tc, tienePin: conPinTec.has(tc.id), ...permisosTec.get(tc.id), sucursal_id: sucursalTec.get(tc.id) ?? null })));
       setCargando(false);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -169,6 +183,7 @@ export default function SelectorDeActor() {
         puedeGestionarServicioTecnico: persona.puede_gestionar_servicio_tecnico ?? true,
         puedeGestionarFinanciacion: persona.puede_gestionar_financiacion ?? true,
       },
+      sucursalId: persona.sucursal_id ?? null,
     };
     guardarActor(nuevo);
     setActorState(nuevo);
