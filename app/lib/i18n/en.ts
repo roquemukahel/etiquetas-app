@@ -2550,4 +2550,9 @@ export const EN: Record<string, string> = {
   '¿Algo aparece vacío en una sucursal donde no debería? Volvé a sincronizar: agrupa en la Sucursal principal todo lo que haya quedado sin asignar.':
     "Something showing up empty in a branch where it shouldn't? Re-sync: groups anything left unassigned into the Main branch.",
   'Volver a sincronizar': 'Re-sync',
+
+  // Auditoría exhaustiva (2026-08-22) — proteger el borrado de clientes con
+  // historial real (ventas, cuenta corriente, reparaciones, etc.).
+  'Este cliente tiene ventas, reparaciones, cuenta corriente u otras operaciones registradas — no se puede eliminar para no perder ese historial. Si ya no lo usás, podés dejarlo así: no molesta en la lista.':
+    "This client has sales, repairs, a running balance, or other recorded operations — it can't be deleted to avoid losing that history. If you don't use it anymore, you can just leave it — it won't get in the way in the list.",
 };

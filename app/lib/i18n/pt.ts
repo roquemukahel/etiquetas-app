@@ -2551,4 +2551,9 @@ export const PT: Record<string, string> = {
   '¿Algo aparece vacío en una sucursal donde no debería? Volvé a sincronizar: agrupa en la Sucursal principal todo lo que haya quedado sin asignar.':
     'Algo aparece vazio numa filial onde não deveria? Sincronize de novo: agrupa na Filial principal tudo o que tenha ficado sem atribuir.',
   'Volver a sincronizar': 'Sincronizar de novo',
+
+  // Auditoría exhaustiva (2026-08-22) — proteger el borrado de clientes con
+  // historial real (ventas, cuenta corriente, reparaciones, etc.).
+  'Este cliente tiene ventas, reparaciones, cuenta corriente u otras operaciones registradas — no se puede eliminar para no perder ese historial. Si ya no lo usás, podés dejarlo así: no molesta en la lista.':
+    'Este cliente tem vendas, reparos, conta corrente ou outras operações registradas — não é possível excluí-lo para não perder esse histórico. Se não usa mais, pode deixá-lo assim: não atrapalha na lista.',
 };

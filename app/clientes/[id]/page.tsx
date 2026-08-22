@@ -12,6 +12,7 @@ import { armarLinkWhatsApp } from '../../lib/whatsapp';
 import { codigoLlamada } from '../../lib/paises';
 import { MEDIOS_PAGO, calcularSaldo, estadoCuenta, ESTADO_INFO, diasDeMora } from '../../lib/cuentaCorriente';
 import { aplicarPagoAFinanciacion } from '../../lib/financiacion/servicio';
+import { ESTADOS_COBRADOS } from '../../estadisticas/datos';
 import FinanciacionCliente from '../../FinanciacionCliente';
 import { useT } from '../../lib/idioma';
 import { useSucursalActual } from '../../lib/sucursal';
@@ -187,7 +188,12 @@ export default function DetalleCliente() {
 
   const ordenesServicio = ordenes.filter((o) => o.orden_items.some((i) => i.tipo === 'trabajo'));
   const ordenesCompra = ordenes.filter((o) => !o.orden_items.some((i) => i.tipo === 'trabajo'));
-  const totalComprado = ordenes.reduce((acc, o) => acc + (o.total || 0), 0);
+  // Mismo criterio que Estadísticas (ESTADOS_COBRADOS): una orden pendiente
+  // o cancelada no es una compra "cumplida" — sumarla acá infla el total
+  // histórico que se le muestra al vendedor sobre este cliente.
+  const totalComprado = ordenes
+    .filter((o) => ESTADOS_COBRADOS.includes(o.estado))
+    .reduce((acc, o) => acc + (o.total || 0), 0);
 
   const campo = (k: keyof Cliente, valor: string) => setC((prev) => (prev ? { ...prev, [k]: valor } : prev));
 
@@ -390,6 +396,36 @@ export default function DetalleCliente() {
     if (!c || !puedeEliminar) return;
     if (!confirm(t('¿Eliminar este cliente? No se puede deshacer.'))) return;
     setGuardando(true);
+    setError(null);
+
+    // cta_cte_movimientos.cliente_id es "on delete cascade" — borrar un
+    // cliente con cuenta corriente borraría TODO su historial de cargos y
+    // pagos para siempre, sin aviso. Antes de intentar el delete, nos
+    // fijamos si tiene cualquier operación registrada (no solo cuenta
+    // corriente — un cliente "usado" en cualquier lado no debería poder
+    // borrarse) y frenamos acá, con un mensaje claro, en vez de dejar que
+    // la base lo haga en silencio o tire un error de Postgres en crudo.
+    const [{ count: cOrdenes }, { count: cMovs }, { count: cRep }, { count: cCanjes }, { count: cPlanAhorro }, { count: cFinanciacion }] =
+      await Promise.all([
+        supabase.from('ordenes').select('id', { count: 'exact', head: true }).eq('cliente_id', id),
+        supabase.from('cta_cte_movimientos').select('id', { count: 'exact', head: true }).eq('cliente_id', id),
+        supabase.from('reparaciones').select('id', { count: 'exact', head: true }).eq('cliente_id', id),
+        supabase.from('canjes').select('id', { count: 'exact', head: true }).eq('cliente_id', id),
+        supabase.from('planes_ahorro').select('id', { count: 'exact', head: true }).eq('cliente_id', id),
+        supabase.from('financiacion_planes').select('id', { count: 'exact', head: true }).eq('cliente_id', id),
+      ]);
+    const tieneOperaciones =
+      (cOrdenes ?? 0) > 0 || (cMovs ?? 0) > 0 || (cRep ?? 0) > 0 || (cCanjes ?? 0) > 0 || (cPlanAhorro ?? 0) > 0 || (cFinanciacion ?? 0) > 0;
+    if (tieneOperaciones) {
+      setError(
+        t(
+          'Este cliente tiene ventas, reparaciones, cuenta corriente u otras operaciones registradas — no se puede eliminar para no perder ese historial. Si ya no lo usás, podés dejarlo así: no molesta en la lista.'
+        )
+      );
+      setGuardando(false);
+      return;
+    }
+
     const { error: deleteError } = await supabase.from('clientes').delete().eq('id', id);
     if (deleteError) {
       setError(`${t('No pudimos eliminar:')} ` + deleteError.message);
