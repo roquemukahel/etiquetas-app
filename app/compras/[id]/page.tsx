@@ -78,6 +78,10 @@ export default function DetalleCompra() {
       return;
     }
     if (!confirm(t('¿Agregar este dispositivo al Stock para venderlo?'))) return;
+    if (compra.imei) {
+      const { data: existente } = await supabase.from('dispositivos').select('id').eq('imei', compra.imei).maybeSingle();
+      if (existente && !confirm(`${t('Ya hay un dispositivo en Stock con el IMEI')} ${compra.imei}. ${t('¿Agregarlo igual?')}`)) return;
+    }
     setProcesando(true);
     setError(null);
 

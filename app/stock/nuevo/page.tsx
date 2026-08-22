@@ -102,6 +102,11 @@ export default function NuevoDispositivo() {
       setError(t(MENSAJE_ACTOR_REQUERIDO));
       return;
     }
+    const imeiLimpio = limpiarImei(imei);
+    if (imeiLimpio) {
+      const { data: existente } = await supabase.from('dispositivos').select('id').eq('imei', imeiLimpio).maybeSingle();
+      if (existente && !confirm(`${t('Ya hay un dispositivo en Stock con el IMEI')} ${imeiLimpio}. ${t('¿Agregarlo igual?')}`)) return;
+    }
     setGuardando(true);
     setError(null);
 
@@ -110,7 +115,7 @@ export default function NuevoDispositivo() {
     const { error: insertError } = await supabase.from('dispositivos').insert({
       modelo: modeloNormalizado,
       capacidad_gb: capacidad,
-      imei: limpiarImei(imei),
+      imei: imeiLimpio,
       salud_bateria: bateria ? Number(bateria) : null,
       color: color.trim() || null,
       precio: precio ? Number(precio) : null,

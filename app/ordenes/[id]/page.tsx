@@ -474,6 +474,11 @@ export default function DetalleOrden() {
 
   const agregarDispositivoNuevoEdit = async () => {
     if (!nuevoModeloDispEdit.trim()) return;
+    const imeiLimpio = limpiarImei(nuevoImeiDispEdit);
+    if (imeiLimpio) {
+      const { data: existente } = await supabase.from('dispositivos').select('id').eq('imei', imeiLimpio).maybeSingle();
+      if (existente && !confirm(`${t('Ya hay un dispositivo en Stock con el IMEI')} ${imeiLimpio}. ${t('¿Agregarlo igual?')}`)) return;
+    }
     setCargandoDispositivoEdit(true);
     setError(null);
     const modeloNormalizado = normalizarNombreModelo(nuevoModeloDispEdit.trim());
@@ -483,7 +488,7 @@ export default function DetalleOrden() {
         modelo: modeloNormalizado,
         capacidad_gb: nuevaCapacidadDispEdit,
         color: nuevoColorDispEdit.trim() || null,
-        imei: limpiarImei(nuevoImeiDispEdit),
+        imei: imeiLimpio,
         precio: nuevoPrecioDispEdit ? Number(nuevoPrecioDispEdit) : null,
         estado: nuevoEstadoDispEdit,
         en_stock: true,

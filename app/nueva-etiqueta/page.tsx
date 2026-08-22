@@ -173,12 +173,17 @@ export default function NuevaEtiqueta() {
         setError(t(MENSAJE_ACTOR_REQUERIDO));
         return;
       }
+      const imeiLimpio = limpiarImei(datos.imei);
+      if (imeiLimpio) {
+        const { data: existente } = await supabase.from('dispositivos').select('id').eq('imei', imeiLimpio).maybeSingle();
+        if (existente && !confirm(`${t('Ya hay un dispositivo en Stock con el IMEI')} ${imeiLimpio}. ${t('¿Agregarlo igual?')}`)) return;
+      }
       setGuardandoStock(true);
       const modeloNormalizado = datos.modelo ? normalizarNombreModelo(datos.modelo.trim()) : datos.modelo;
       await supabase.from('dispositivos').insert({
         modelo: modeloNormalizado,
         capacidad_gb: datos.capacidad_gb,
-        imei: limpiarImei(datos.imei),
+        imei: imeiLimpio,
         numero_serie: datos.numero_serie,
         salud_bateria: bateria ? Number(bateria) : null,
         color: color.trim() || null,
