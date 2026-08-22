@@ -7,7 +7,7 @@ import { crearClienteNavegador } from '../../lib/supabase/client';
 import { registrarAuditoria } from '../../lib/auditoria';
 import { revertirComisionesOrden } from '../../lib/comisiones/operaciones';
 import { limpiarImei } from '../../lib/imei';
-import { asegurarModelo } from '../../lib/modelos';
+import { asegurarModelo, normalizarNombreModelo } from '../../lib/modelos';
 import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import { useT } from '../../lib/idioma';
@@ -473,10 +473,11 @@ export default function DetalleOrden() {
     if (!nuevoModeloDispEdit.trim()) return;
     setCargandoDispositivoEdit(true);
     setError(null);
+    const modeloNormalizado = normalizarNombreModelo(nuevoModeloDispEdit.trim());
     const { data, error: dErr } = await supabase
       .from('dispositivos')
       .insert({
-        modelo: nuevoModeloDispEdit.trim(),
+        modelo: modeloNormalizado,
         capacidad_gb: nuevaCapacidadDispEdit,
         color: nuevoColorDispEdit.trim() || null,
         imei: limpiarImei(nuevoImeiDispEdit),
@@ -493,7 +494,7 @@ export default function DetalleOrden() {
       setError(t('No pudimos cargar el dispositivo:') + ' ' + (dErr?.message || ''));
       return;
     }
-    await asegurarModelo(supabase, nuevoModeloDispEdit);
+    await asegurarModelo(supabase, modeloNormalizado);
     agregarDispositivoDelStockEdit(data as DispositivoStockEdit);
     setNuevoModeloDispEdit('');
     setNuevaCapacidadDispEdit(null);
@@ -743,7 +744,7 @@ export default function DetalleOrden() {
       const { error: canjesInsError } = await supabase.from('canjes').insert(
         canjesNuevos.map((c) => ({
           orden_id: id,
-          modelo: c.modelo.trim() || null,
+          modelo: c.modelo.trim() ? normalizarNombreModelo(c.modelo.trim()) : null,
           capacidad_gb: c.capacidad_gb,
           color: c.color.trim() || null,
           imei: limpiarImei(c.imei),

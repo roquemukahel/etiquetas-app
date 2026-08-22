@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { obtenerTodasLasFilas } from '../../lib/db';
@@ -9,20 +9,30 @@ import { eliminarEnBloque } from '../../lib/eliminarEnBloque';
 import { registrarAuditoria } from '../../lib/auditoria';
 import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
+import { obtenerCategorias, type Categoria } from '../../lib/categorias';
 import { ICONOS } from '../../Iconos';
 import { useT } from '../../lib/idioma';
 
-type Entidad = 'clientes' | 'dispositivos';
+type Entidad = 'clientes' | 'dispositivos' | 'productos';
 
+// perfilCategoria: qué categorías (stock_categorias) tienen sentido como
+// filtro para esta entidad — null para "clientes" (no tiene categoría).
 const CONFIG: Record<
   Entidad,
-  { titulo: string; archivo: string; columnas: string[]; orden: { columna: string; ascending?: boolean }[] }
+  {
+    titulo: string;
+    archivo: string;
+    columnas: string[];
+    orden: { columna: string; ascending?: boolean }[];
+    perfilCategoria: 'dispositivo' | 'generico' | null;
+  }
 > = {
   clientes: {
     titulo: 'Clientes',
     archivo: 'clientes-qovento.csv',
     columnas: ['nombre', 'apellido', 'email', 'telefono', 'dni', 'domicilio'],
     orden: [{ columna: 'nombre' }],
+    perfilCategoria: null,
   },
   dispositivos: {
     titulo: 'Dispositivos (Stock)',
@@ -39,16 +49,43 @@ const CONFIG: Record<
       'proveedor',
       'estado',
       'en_stock',
+      'categoria',
       'created_at',
     ],
     orden: [{ columna: 'modelo' }, { columna: 'created_at', ascending: false }],
+    perfilCategoria: 'dispositivo',
+  },
+  productos: {
+    titulo: 'Productos (otros rubros)',
+    archivo: 'stock-productos-qovento.csv',
+    columnas: [
+      'nombre',
+      'categoria',
+      'marca',
+      'sku',
+      'codigo_barras',
+      'numero_serie',
+      'modalidad',
+      'cantidad',
+      'precio',
+      'costo',
+      'stock_minimo',
+      'garantia_dias',
+      'descripcion',
+      'notas',
+      'created_at',
+    ],
+    orden: [{ columna: 'nombre' }],
+    perfilCategoria: 'generico',
   },
 };
 
 const COLUMNAS_SELECT: Record<Entidad, string> = {
   clientes: 'id, nombre, apellido, domicilio, email, telefono, dni',
   dispositivos:
-    'id, modelo, capacidad_gb, imei, numero_serie, salud_bateria, color, precio, costo, proveedor, estado, en_stock, created_at',
+    'id, modelo, capacidad_gb, imei, numero_serie, salud_bateria, color, precio, costo, proveedor, estado, en_stock, categoria_id, created_at',
+  productos:
+    'id, nombre, categoria_id, marca, sku, codigo_barras, numero_serie, modalidad, cantidad, precio, costo, stock_minimo, garantia_dias, descripcion, notas, created_at',
 };
 
 export default function ExportarDatos() {
@@ -62,11 +99,55 @@ export default function ExportarDatos() {
   const [textoConfirmacion, setTextoConfirmacion] = useState('');
   const [eliminando, setEliminando] = useState(false);
   const [resultado, setResultado] = useState<string | null>(null);
+  const [categorias, setCategorias] = useState<Categoria[]>([]);
+  // Un filtro de categoría por entidad — así elegir una categoría para
+  // Dispositivos no afecta lo que se vaya a exportar/eliminar de Productos.
+  const [categoriaFiltro, setCategoriaFiltro] = useState<Record<Entidad, string>>({
+    clientes: '',
+    dispositivos: '',
+    productos: '',
+  });
+
+  useEffect(() => {
+    (async () => {
+      try {
+        setCategorias(await obtenerCategorias(supabase, false));
+      } catch {
+        // Tabla stock_categorias todavía no existe en este negocio — las
+        // secciones de Dispositivos/Productos siguen funcionando igual,
+        // simplemente sin selector de categoría (exportan/borran todo).
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const categoriasDe = (entidad: Entidad) => {
+    const perfil = CONFIG[entidad].perfilCategoria;
+    return perfil ? categorias.filter((c) => c.perfil_default === perfil) : [];
+  };
+
+  const nombreCategoria = (id: string | null | undefined) => categorias.find((c) => c.id === id)?.nombre ?? '';
+
+  const traerFilas = async (entidad: Entidad) => {
+    const cfg = CONFIG[entidad];
+    const catId = categoriaFiltro[entidad];
+    const filas = await obtenerTodasLasFilas<{ id: string; categoria_id?: string | null } & Record<string, unknown>>(
+      supabase,
+      entidad,
+      COLUMNAS_SELECT[entidad],
+      cfg.orden,
+      catId ? (q) => q.eq('categoria_id', catId) : undefined
+    );
+    // La categoría se resuelve acá (de id a nombre legible) porque el CSV
+    // no sabe mostrar columnas anidadas — mismo criterio que el resto de
+    // esta pantalla, que ya trabaja con filas planas.
+    return filas.map((f) => (cfg.perfilCategoria ? { ...f, categoria: nombreCategoria(f.categoria_id) } : f));
+  };
 
   const exportarSolo = async (entidad: Entidad) => {
     setExportando(entidad);
     const cfg = CONFIG[entidad];
-    const filas = await obtenerTodasLasFilas<Record<string, unknown>>(supabase, entidad, COLUMNAS_SELECT[entidad], cfg.orden);
+    const filas = await traerFilas(entidad);
     descargarCSV(cfg.archivo, cfg.columnas, filas);
     setExportando(null);
   };
@@ -83,12 +164,7 @@ export default function ExportarDatos() {
     const cfg = CONFIG[entidad];
     setEliminando(true);
 
-    const filas = await obtenerTodasLasFilas<{ id: string } & Record<string, unknown>>(
-      supabase,
-      entidad,
-      COLUMNAS_SELECT[entidad],
-      cfg.orden
-    );
+    const filas = await traerFilas(entidad);
     if (filas.length === 0) {
       setEliminando(false);
       setConfirmando(null);
@@ -104,15 +180,18 @@ export default function ExportarDatos() {
     const ids = filas.map((f) => f.id);
     const { eliminados, bloqueados } = await eliminarEnBloque(supabase, entidad, ids);
 
+    const catId = categoriaFiltro[entidad];
+    const sufijoCategoria = catId ? ` de la categoría "${nombreCategoria(catId)}"` : '';
+
     // Un resumen único (no uno por fila) — acá estamos hablando de
     // potencialmente miles de filas, y un registro de auditoría por cada
     // una sería lentísimo para nada más que un detalle que ya queda en el
     // CSV descargado.
     await registrarAuditoria(supabase, {
-      accion: `exportó y eliminó en bloque ${eliminados.length} ${cfg.titulo.toLowerCase()}${
+      accion: `exportó y eliminó en bloque ${eliminados.length} ${cfg.titulo.toLowerCase()}${sufijoCategoria}${
         bloqueados.length > 0 ? ` (${bloqueados.length} no se pudieron eliminar por tener historial vinculado)` : ''
       }`,
-      entidad: entidad === 'clientes' ? 'cliente' : 'dispositivo',
+      entidad: entidad === 'clientes' ? 'cliente' : entidad === 'dispositivos' ? 'dispositivo' : 'producto',
     });
 
     setEliminando(false);
@@ -148,6 +227,9 @@ export default function ExportarDatos() {
       <p className="text-xs text-muted dark:text-dark-text-secondary -mt-2">
         {t('Descargá un CSV de respaldo, o borrá en bloque para limpiar la base. Un cliente o dispositivo con ventas, órdenes u otro historial vinculado NO se puede eliminar (queda protegido automáticamente) — solo se borran los que no tienen nada enganchado.')}
       </p>
+      <p className="text-xs text-warn -mt-2">
+        {t('Los Productos son la excepción: a diferencia de Clientes y Dispositivos, sí se pueden eliminar aunque tengan ventas registradas (la venta en sí queda intacta en la orden, pero se pierde el historial de movimientos de stock de ese producto). Exportá antes si te importa conservar ese detalle.')}
+      </p>
 
       {resultado && <p className="text-sm bg-canvas dark:bg-dark-bg rounded-lg px-3 py-2">{resultado}</p>}
 
@@ -157,6 +239,23 @@ export default function ExportarDatos() {
           className="rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-4 flex flex-col gap-3"
         >
           <p className="text-sm font-medium">{t(CONFIG[entidad].titulo)}</p>
+          {categoriasDe(entidad).length > 0 && (
+            <div>
+              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Filtrar por categoría')}</label>
+              <select
+                value={categoriaFiltro[entidad]}
+                onChange={(e) => setCategoriaFiltro((prev) => ({ ...prev, [entidad]: e.target.value }))}
+                className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+              >
+                <option value="">{t('Todas las categorías')}</option>
+                {categoriasDe(entidad).map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className="flex gap-2">
             <button
               onClick={() => exportarSolo(entidad)}
@@ -194,7 +293,11 @@ export default function ExportarDatos() {
             onClick={(e) => e.stopPropagation()}
             className="w-full sm:max-w-sm rounded-2xl bg-white dark:bg-dark-surface shadow-elevated p-5 flex flex-col gap-3"
           >
-            <p className="text-base font-semibold text-bad">{t('¿Eliminar TODOS los')} {t(CONFIG[confirmando].titulo).toLowerCase()}?</p>
+            <p className="text-base font-semibold text-bad">
+              {categoriaFiltro[confirmando]
+                ? `${t('¿Eliminar los')} ${t(CONFIG[confirmando].titulo).toLowerCase()} ${t('de la categoría')} "${nombreCategoria(categoriaFiltro[confirmando])}"?`
+                : `${t('¿Eliminar TODOS los')} ${t(CONFIG[confirmando].titulo).toLowerCase()}?`}
+            </p>
             <p className="text-sm text-muted dark:text-dark-text-secondary">
               {t('Se descarga primero el CSV de respaldo y después se borran del sistema. No hay retorno atrás. Los que tengan ventas u otro historial vinculado quedan protegidos y no se tocan.')}
             </p>

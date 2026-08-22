@@ -2339,4 +2339,31 @@ export const PT: Record<string, string> = {
 
   // CheckTri (componente compartido de checklist)
   'no se pudo probar': 'não foi possível testar',
+
+  // Stock — alta por rubro/categoría (celular vs. otro producto)
+  Celular: 'Celular',
+  Productos: 'Produtos',
+  'Otro producto (no celular)': 'Outro produto (não celular)',
+
+  // Nueva Orden — Consumidor final
+  'Consumidor final (sin cargar datos)': 'Consumidor final (sem cadastrar dados)',
+  'Consumidor final': 'Consumidor final',
+
+  // Configuración — Exportar/eliminar datos, por categoría
+  'Productos (otros rubros)': 'Produtos (outros ramos)',
+  '¿Eliminar los': 'Excluir os',
+  'de la categoría': 'da categoria',
+
+  // Stock — importar CSV, asignar categoría al lote
+  'Categoría para todo lo importado': 'Categoria para tudo o que for importado',
+
+  // Stock — pestaña "Productos" (antes "Accesorios"), consistencia con el
+  // renombre del tab
+  'producto en catálogo': 'produto no catálogo',
+  'productos en catálogo': 'produtos no catálogo',
+  producto: 'produto',
+  productos: 'produtos',
+
+  'Los Productos son la excepción: a diferencia de Clientes y Dispositivos, sí se pueden eliminar aunque tengan ventas registradas (la venta en sí queda intacta en la orden, pero se pierde el historial de movimientos de stock de ese producto). Exportá antes si te importa conservar ese detalle.':
+    'Os Produtos são a exceção: diferente de Clientes e Dispositivos, podem ser excluídos mesmo com vendas registradas (a venda em si continua intacta no pedido, mas se perde o histórico de movimentações de estoque desse produto). Exporte antes se quiser guardar esse detalhe.',
 };

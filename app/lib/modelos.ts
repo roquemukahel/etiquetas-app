@@ -1,13 +1,36 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { CATALOGO_MODELOS } from './catalogosMarcas';
 
-// "iPhone" siempre con esa capitalización exacta (i minúscula, P mayúscula,
-// resto minúscula), sin importar cómo se haya tipeado — si no, "iphone 13"
-// y "iPhone 13" quedan como dos carpetas distintas en vez de una sola. La
-// base de datos también normaliza esto solo (ver trigger en schema.sql),
-// esto es la primera línea de defensa para no ni siquiera intentar crear
-// la carpeta duplicada.
+// Índice de todos los modelos "de catálogo" (iPhone/Samsung/Xiaomi), armado
+// una sola vez: de un nombre normalizado para comparar (minúsculas, un solo
+// espacio) al nombre canónico exacto tal como está escrito en el catálogo.
+const squishComparar = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');
+const CANONICO_POR_COMPARACION: Map<string, string> = new Map(
+  Object.values(CATALOGO_MODELOS)
+    .flat()
+    .map((nombre) => [squishComparar(nombre), nombre])
+);
+
+// Si alguien escribe "iphone 13 pro", "IPHONE 13 PRO" o "iPhone 13 pro", las
+// tres deben terminar siendo la MISMA carpeta — no una por cada forma de
+// tipear mayúsculas/minúsculas. Para los modelos que están en el catálogo
+// (ver catalogosMarcas.ts) usamos ese nombre canónico tal cual está escrito
+// ahí (que ya contempla casos como "iPhone 12 mini" en minúscula o
+// "iPhone XS"/"Galaxy S21 FE" con siglas en mayúscula — un simple "poner en
+// mayúscula la primera letra de cada palabra" rompería esas siglas). Para
+// texto libre que no matchea ningún modelo del catálogo (otra marca, o una
+// carpeta genérica tipo "Televisores"), solo corregimos "iPhone" y dejamos
+// el resto tal como se escribió, para no inventar mayúsculas en siglas que
+// no conocemos (ej. "4K", "5G").
+//
+// La base de datos también normaliza "iPhone" solo (ver trigger en
+// schema.sql) como red de seguridad final; esto es la primera línea de
+// defensa, y además es la única capa que conoce el catálogo completo.
 export function normalizarNombreModelo(nombre: string): string {
-  return nombre.replace(/\biphone\b/gi, 'iPhone');
+  const limpio = nombre.trim().replace(/\s+/g, ' ');
+  const canonico = CANONICO_POR_COMPARACION.get(squishComparar(limpio));
+  if (canonico) return canonico;
+  return limpio.replace(/\biphone\b/gi, 'iPhone');
 }
 
 // Sugiere carpetas EXISTENTES parecidas a lo que se está tipeando, para

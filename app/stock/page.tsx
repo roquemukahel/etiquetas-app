@@ -209,6 +209,7 @@ export default function Stock() {
     omitidosDuplicado: number;
   } | null>(null);
   const inputImportRef = useRef<HTMLInputElement>(null);
+  const [categoriaImportId, setCategoriaImportId] = useState('');
 
   const [menuAbierto, setMenuAbierto] = useState<'agregar' | 'mas' | null>(null);
 
@@ -374,6 +375,10 @@ export default function Stock() {
           setCategoriaProducto(sugerida.id);
           setModalidadProducto(sugerida.modalidad_default);
         }
+        // Mismo criterio para la importación por CSV, pero de perfil
+        // "dispositivo" — esto importa celulares.
+        const sugeridaDispositivo = data.find((c) => c.nombre.toLowerCase() === 'celulares') ?? data.find((c) => c.perfil_default === 'dispositivo');
+        if (sugeridaDispositivo) setCategoriaImportId(sugeridaDispositivo.id);
       } catch {
         // Tabla stock_categorias todavía no existe en este negocio (no se
         // corrió la migración) — el formulario sigue funcionando igual que
@@ -422,7 +427,8 @@ export default function Stock() {
 
       const nuevos = filas
         .map((fila) => {
-          const modelo = valorDe(fila, 'modelo', 'category') || null;
+          const modeloTexto = valorDe(fila, 'modelo', 'category');
+          const modelo = modeloTexto ? normalizarNombreModelo(modeloTexto) : null;
           const textoLibre = [valorDe(fila, 'name'), valorDe(fila, 'description')].filter(Boolean).join(' ');
 
           const imeiDirecto = valorDe(fila, 'imei');
@@ -504,9 +510,12 @@ export default function Stock() {
     setImportando(true);
     setProgresoImport(null);
 
+    const filasConCategoria = categoriaImportId
+      ? planImport.filas.map((f) => ({ ...f, categoria_id: categoriaImportId }))
+      : planImport.filas;
     const { guardadas, error } = await insertarEnTandas(
       (tanda) => supabase.from('dispositivos').insert(tanda),
-      planImport.filas,
+      filasConCategoria,
       500,
       (hechas, total) => setProgresoImport({ hechas, total })
     );
@@ -1068,7 +1077,7 @@ export default function Stock() {
               ? vista === 'stock'
                 ? `${capital.unidadesCel} ${capital.unidadesCel === 1 ? t('dispositivo disponible') : t('dispositivos disponibles')}`
                 : `${totalVendidos} ${totalVendidos === 1 ? t('dispositivo vendido') : t('dispositivos vendidos')}`
-              : `${productos.length} ${productos.length === 1 ? t('accesorio en catálogo') : t('accesorios en catálogo')}`}
+              : `${productos.length} ${productos.length === 1 ? t('producto en catálogo') : t('productos en catálogo')}`}
           </p>
         </div>
 
@@ -1083,7 +1092,10 @@ export default function Stock() {
                   + {t('Agregar')}
                 </button>
                 {menuAbierto === 'agregar' && (
-                  <div className="absolute right-0 top-full mt-1.5 w-44 rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-elevated py-1 z-30">
+                  <div className="absolute right-0 top-full mt-1.5 w-56 rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-elevated py-1 z-30">
+                    <p className="px-3.5 pt-1.5 pb-1 text-[10px] font-semibold uppercase tracking-wide text-muted dark:text-dark-text-secondary">
+                      {t('Celular')}
+                    </p>
                     <Link
                       href="/stock/nuevo"
                       onClick={() => setMenuAbierto(null)}
@@ -1098,6 +1110,17 @@ export default function Stock() {
                     >
                       {t('Cargar con foto')}
                     </Link>
+                    <div className="my-1 border-t border-border dark:border-dark-border" />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMenuAbierto(null);
+                        setTab('accesorios');
+                      }}
+                      className="block w-full text-left px-3.5 py-2.5 text-sm hover:bg-canvas dark:hover:bg-dark-bg"
+                    >
+                      {t('Otro producto (no celular)')}
+                    </button>
                   </div>
                 )}
               </div>
@@ -1212,7 +1235,7 @@ export default function Stock() {
           </div>
           <p className="text-[11px] text-muted dark:text-dark-text-secondary mt-2.5 text-center">
             {capital.unidadesCel} {capital.unidadesCel === 1 ? t('dispositivo en stock') : t('dispositivos en stock')} · {capital.unidadesAcc}{' '}
-            {capital.unidadesAcc === 1 ? t('accesorio') : t('accesorios')}. {t('Cada indicador cuenta solo los ítems con ese dato cargado.')}
+            {capital.unidadesAcc === 1 ? t('producto') : t('productos')}. {t('Cada indicador cuenta solo los ítems con ese dato cargado.')}
           </p>
         </div>
       )}
@@ -1232,7 +1255,7 @@ export default function Stock() {
             tab === 'accesorios' ? 'bg-accent dark:bg-dark-accent text-white' : 'text-ink dark:text-dark-text'
           }`}
         >
-          {t('Accesorios')} <span className="opacity-70">{productos.length}</span>
+          {t('Productos')} <span className="opacity-70">{productos.length}</span>
         </button>
       </div>
 
@@ -1320,6 +1343,26 @@ export default function Stock() {
                   </li>
                 )}
               </ul>
+              {categoriasStock.filter((c) => c.perfil_default === 'dispositivo').length > 1 && (
+                <div>
+                  <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">
+                    {t('Categoría para todo lo importado')}
+                  </label>
+                  <select
+                    value={categoriaImportId}
+                    onChange={(e) => setCategoriaImportId(e.target.value)}
+                    className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                  >
+                    {categoriasStock
+                      .filter((c) => c.perfil_default === 'dispositivo')
+                      .map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.nombre}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              )}
               <div className="flex gap-2">
                 <button
                   onClick={cancelarImportacion}

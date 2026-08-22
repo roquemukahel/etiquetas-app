@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { useT } from '../../lib/idioma';
-import { asegurarModelo } from '../../lib/modelos';
+import { asegurarModelo, normalizarNombreModelo } from '../../lib/modelos';
 import { obtenerTodasLasFilas } from '../../lib/db';
 import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../../lib/carpetas';
 import { simboloMoneda } from '../../lib/monedas';
@@ -160,7 +160,7 @@ export default function NuevaOrden() {
   const [step, setStep] = useState<'cliente' | 'carrito' | 'confirmar'>('cliente');
 
   // --- cliente ---
-  const [modoCliente, setModoCliente] = useState<'existente' | 'nuevo'>('existente');
+  const [modoCliente, setModoCliente] = useState<'existente' | 'nuevo' | 'consumidor_final'>('existente');
   const [buscarCliente, setBuscarCliente] = useState('');
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [clienteElegido, setClienteElegido] = useState<Cliente | null>(null);
@@ -541,12 +541,23 @@ export default function NuevaOrden() {
   }, [financiarActivo, montoCuentaCorriente, financiarCuotasNum, financiarPrimeraFecha, monedaOrden]);
 
   const elegirCliente = (c: Cliente) => {
+    setModoCliente('existente');
     setClienteElegido(c);
     setStep('carrito');
   };
 
   const confirmarClienteNuevo = () => {
     if (!nuevoNombre.trim()) return;
+    setStep('carrito');
+  };
+
+  // Venta rápida sin cargar datos de cliente (ej. un cargador o un chip
+  // suelto) — no se le puede ofrecer cuenta corriente/financiación después
+  // porque ctaCteDisponible y el resto de esa lógica dependen de
+  // clienteElegido, que acá queda en null a propósito.
+  const elegirConsumidorFinal = () => {
+    setModoCliente('consumidor_final');
+    setClienteElegido(null);
     setStep('carrito');
   };
 
@@ -574,10 +585,11 @@ export default function NuevaOrden() {
     setCargandoDispositivo(true);
     setError(null);
     const actorDispositivo = getActor();
+    const modeloNormalizado = normalizarNombreModelo(nuevoModelo.trim());
     const { data, error: dErr } = await supabase
       .from('dispositivos')
       .insert({
-        modelo: nuevoModelo.trim(),
+        modelo: modeloNormalizado,
         capacidad_gb: nuevaCapacidad,
         color: nuevoColor.trim() || null,
         imei: limpiarImei(nuevoImeiDispositivo),
@@ -594,7 +606,7 @@ export default function NuevaOrden() {
       setError(t('No pudimos cargar el dispositivo:') + ' ' + (dErr?.message || ''));
       return;
     }
-    await asegurarModelo(supabase, nuevoModelo);
+    await asegurarModelo(supabase, modeloNormalizado);
     setDispositivosStock((s) => [...s, data as Dispositivo]);
     agregarDispositivoDelStock(data as Dispositivo);
     setNuevoModelo('');
@@ -969,7 +981,7 @@ export default function NuevaOrden() {
         const { error: canjesErr } = await supabase.from('canjes').insert(
           canjesEfectivos.map((c) => ({
             orden_id: orden.id,
-            modelo: c.modelo,
+            modelo: c.modelo ? normalizarNombreModelo(c.modelo) : c.modelo,
             capacidad_gb: c.capacidad_gb,
             color: c.color.trim() || null,
             imei: limpiarImei(c.imei),
@@ -1168,6 +1180,13 @@ export default function NuevaOrden() {
             {t('Cargar nuevo')}
           </button>
         </div>
+
+        <button
+          onClick={elegirConsumidorFinal}
+          className="w-full rounded-xl py-2 text-sm font-medium border border-dashed border-border dark:border-dark-border text-muted dark:text-dark-text-secondary hover:text-ink dark:hover:text-dark-text hover:border-accent dark:hover:border-dark-accent transition-colors"
+        >
+          {t('Consumidor final (sin cargar datos)')}
+        </button>
 
         {modoCliente === 'existente' ? (
           <>
@@ -1662,7 +1681,11 @@ export default function NuevaOrden() {
       <div className="rounded-xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border px-4 py-3 text-sm flex flex-col gap-1">
         <p>
           <span className="text-muted dark:text-dark-text-secondary">{t('Cliente:')}</span>{' '}
-          {modoCliente === 'existente' ? `${clienteElegido?.nombre} ${clienteElegido?.apellido || ''}` : nuevoNombre}
+          {modoCliente === 'existente'
+            ? `${clienteElegido?.nombre} ${clienteElegido?.apellido || ''}`
+            : modoCliente === 'consumidor_final'
+              ? t('Consumidor final')
+              : nuevoNombre}
         </p>
         <p>
           <span className="text-muted dark:text-dark-text-secondary">{t('Ítems:')}</span> {carrito.length}

@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import Etiqueta, { TAMANOS, type FormatoEtiqueta } from './Etiqueta';
 import { crearClienteNavegador } from '../lib/supabase/client';
-import { asegurarModelo } from '../lib/modelos';
+import { asegurarModelo, normalizarNombreModelo } from '../lib/modelos';
 import { limpiarImei } from '../lib/imei';
 import { getActor, MENSAJE_ACTOR_REQUERIDO } from '../lib/actor';
 import SelectorColorAuto from '../SelectorColorAuto';
@@ -172,8 +172,9 @@ export default function NuevaEtiqueta() {
         return;
       }
       setGuardandoStock(true);
+      const modeloNormalizado = datos.modelo ? normalizarNombreModelo(datos.modelo.trim()) : datos.modelo;
       await supabase.from('dispositivos').insert({
-        modelo: datos.modelo,
+        modelo: modeloNormalizado,
         capacidad_gb: datos.capacidad_gb,
         imei: limpiarImei(datos.imei),
         numero_serie: datos.numero_serie,
@@ -186,7 +187,7 @@ export default function NuevaEtiqueta() {
         agregado_por_nombre: actor?.nombre ?? null,
         agregado_por_foto_url: actor?.fotoUrl ?? null,
       });
-      await asegurarModelo(supabase, datos.modelo);
+      await asegurarModelo(supabase, modeloNormalizado);
       setGuardandoStock(false);
     }
     setStep('etiqueta');

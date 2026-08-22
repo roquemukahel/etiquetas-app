@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
-import { asegurarModelo } from '../../lib/modelos';
+import { asegurarModelo, normalizarNombreModelo } from '../../lib/modelos';
 import { limpiarImei } from '../../lib/imei';
 import { registrarAuditoria } from '../../lib/auditoria';
 import { getActor, useActor, MENSAJE_ACTOR_REQUERIDO } from '../../lib/actor';
@@ -470,7 +470,7 @@ export default function FichaReparacion() {
     setError(null);
 
     const nuevo = {
-      modelo: f.modelo.trim() || null,
+      modelo: f.modelo.trim() ? normalizarNombreModelo(f.modelo.trim()) : null,
       capacidad_gb: f.capacidad_gb,
       color: f.color.trim() || null,
       imei: limpiarImei(f.imei) || null,
@@ -851,8 +851,9 @@ export default function FichaReparacion() {
     if (!confirm(t('¿Pasar este equipo al Stock como dispositivo disponible para vender?'))) return;
     setGuardando(true);
     setAvisoAgregarStock(false);
+    const modeloNormalizado = r.modelo ? normalizarNombreModelo(r.modelo) : r.modelo;
     await supabase.from('dispositivos').insert({
-      modelo: r.modelo,
+      modelo: modeloNormalizado,
       capacidad_gb: r.capacidad_gb,
       color: r.color,
       imei: r.imei,
@@ -861,7 +862,7 @@ export default function FichaReparacion() {
       agregado_por_nombre: actor?.nombre ?? null,
       agregado_por_foto_url: actor?.fotoUrl ?? null,
     });
-    await asegurarModelo(supabase, r.modelo);
+    await asegurarModelo(supabase, modeloNormalizado);
     await supabase
       .from('reparaciones')
       .update({
