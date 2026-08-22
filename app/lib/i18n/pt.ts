@@ -2344,4 +2344,8 @@ export const PT: Record<string, string> = {
   Celular: 'Celular',
   Productos: 'Produtos',
   'Otro producto (no celular)': 'Outro produto (não celular)',
+
+  // Nueva Orden — Consumidor final
+  'Consumidor final (sin cargar datos)': 'Consumidor final (sem cadastrar dados)',
+  'Consumidor final': 'Consumidor final',
 };
