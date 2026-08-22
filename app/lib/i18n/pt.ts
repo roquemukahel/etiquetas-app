@@ -2348,4 +2348,12 @@ export const PT: Record<string, string> = {
   // Nueva Orden — Consumidor final
   'Consumidor final (sin cargar datos)': 'Consumidor final (sem cadastrar dados)',
   'Consumidor final': 'Consumidor final',
+
+  // Configuración — Exportar/eliminar datos, por categoría
+  'Productos (otros rubros)': 'Produtos (outros ramos)',
+  '¿Eliminar los': 'Excluir os',
+  'de la categoría': 'da categoria',
+
+  // Stock — importar CSV, asignar categoría al lote
+  'Categoría para todo lo importado': 'Categoria para tudo o que for importado',
 };

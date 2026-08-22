@@ -209,6 +209,7 @@ export default function Stock() {
     omitidosDuplicado: number;
   } | null>(null);
   const inputImportRef = useRef<HTMLInputElement>(null);
+  const [categoriaImportId, setCategoriaImportId] = useState('');
 
   const [menuAbierto, setMenuAbierto] = useState<'agregar' | 'mas' | null>(null);
 
@@ -374,6 +375,10 @@ export default function Stock() {
           setCategoriaProducto(sugerida.id);
           setModalidadProducto(sugerida.modalidad_default);
         }
+        // Mismo criterio para la importación por CSV, pero de perfil
+        // "dispositivo" — esto importa celulares.
+        const sugeridaDispositivo = data.find((c) => c.nombre.toLowerCase() === 'celulares') ?? data.find((c) => c.perfil_default === 'dispositivo');
+        if (sugeridaDispositivo) setCategoriaImportId(sugeridaDispositivo.id);
       } catch {
         // Tabla stock_categorias todavía no existe en este negocio (no se
         // corrió la migración) — el formulario sigue funcionando igual que
@@ -505,9 +510,12 @@ export default function Stock() {
     setImportando(true);
     setProgresoImport(null);
 
+    const filasConCategoria = categoriaImportId
+      ? planImport.filas.map((f) => ({ ...f, categoria_id: categoriaImportId }))
+      : planImport.filas;
     const { guardadas, error } = await insertarEnTandas(
       (tanda) => supabase.from('dispositivos').insert(tanda),
-      planImport.filas,
+      filasConCategoria,
       500,
       (hechas, total) => setProgresoImport({ hechas, total })
     );
@@ -1335,6 +1343,26 @@ export default function Stock() {
                   </li>
                 )}
               </ul>
+              {categoriasStock.filter((c) => c.perfil_default === 'dispositivo').length > 1 && (
+                <div>
+                  <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">
+                    {t('Categoría para todo lo importado')}
+                  </label>
+                  <select
+                    value={categoriaImportId}
+                    onChange={(e) => setCategoriaImportId(e.target.value)}
+                    className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                  >
+                    {categoriasStock
+                      .filter((c) => c.perfil_default === 'dispositivo')
+                      .map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.nombre}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              )}
               <div className="flex gap-2">
                 <button
                   onClick={cancelarImportacion}
