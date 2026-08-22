@@ -2473,4 +2473,10 @@ export const PT: Record<string, string> = {
   // Selector de idioma (ahora 3: español/portugués/inglés — un solo botón
   // que rota entre los tres).
   'Cambiar idioma': 'Mudar idioma',
+
+  // Auditoría exhaustiva final (2026-08-22) — cobertura de traducción en
+  // Configuración > Datos del negocio / Soporte / Clientes nuevo.
+  'en boleta': 'no recibo',
+  '@usuario': '@usuário',
+  'No tenés permiso para configurar reglas.': 'Você não tem permissão para configurar regras.',
 };

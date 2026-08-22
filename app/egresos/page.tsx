@@ -24,6 +24,7 @@ import Modal from '../Modal';
 import CampoFecha from '../CampoFecha';
 import { useT } from '../lib/idioma';
 import { useSucursalActual } from '../lib/sucursal';
+import { obtenerSucursales, type Sucursal } from '../lib/sucursales';
 
 type Proveedor = { id: string; nombre: string };
 
@@ -44,9 +45,18 @@ export default function Egresos() {
   const supabase = crearClienteNavegador();
   const actor = useActor();
   const t = useT();
+  const sucursalActual = useSucursalActual();
   const puede = tienePermiso(actor, 'gestionar_egresos');
 
   const [egresos, setEgresos] = useState<Egreso[]>([]);
+  const [sucursales, setSucursales] = useState<Sucursal[]>([]);
+  // Arranca en la sucursal elegida en el panel — se puede "espiar" otra acá
+  // adentro sin tocar la selección global; un useEffect la sigue si el
+  // dueño cambia de sucursal MIENTRAS ya está en esta pantalla.
+  const [filtroSucursal, setFiltroSucursal] = useState(sucursalActual.id ?? '');
+  useEffect(() => {
+    setFiltroSucursal(sucursalActual.id ?? '');
+  }, [sucursalActual.id]);
   const [categorias, setCategorias] = useState<CategoriaEgreso[]>([]);
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [monedaCodigo, setMonedaCodigo] = useState('ARS');
@@ -97,14 +107,30 @@ export default function Egresos() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [puede, desde, hasta]);
 
+  useEffect(() => {
+    (async () => {
+      try {
+        setSucursales(await obtenerSucursales(supabase, false));
+      } catch {
+        // Tabla sucursales todavía no existe en este negocio.
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const nombreCategoria = (id: string | null) => (id ? categorias.find((c) => c.id === id)?.nombre ?? t('Categoría eliminada') : t('Sin categoría'));
+
+  const egresosFiltrados = useMemo(
+    () => (filtroSucursal ? egresos.filter((e) => e.sucursal_id === filtroSucursal) : egresos),
+    [egresos, filtroSucursal]
+  );
 
   // Total por moneda — nunca se suman monedas distintas.
   const totalesPorMoneda = useMemo(() => {
     const mapa = new Map<string, number>();
-    for (const e of egresos) mapa.set(e.moneda, (mapa.get(e.moneda) ?? 0) + e.importe);
+    for (const e of egresosFiltrados) mapa.set(e.moneda, (mapa.get(e.moneda) ?? 0) + e.importe);
     return Array.from(mapa.entries());
-  }, [egresos]);
+  }, [egresosFiltrados]);
 
   if (!loading && !puede) {
     return (
@@ -143,6 +169,22 @@ export default function Egresos() {
         </div>
       </div>
 
+      {sucursales.length > 1 && (
+        <select
+          value={filtroSucursal}
+          onChange={(e) => setFiltroSucursal(e.target.value)}
+          aria-label={t('Filtrar por sucursal')}
+          className="self-start bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2.5 py-1.5 text-xs"
+        >
+          <option value="">🏬 {t('Todas las sucursales')}</option>
+          {sucursales.map((s) => (
+            <option key={s.id} value={s.id}>
+              🏬 {s.nombre}
+            </option>
+          ))}
+        </select>
+      )}
+
       <QCard firma padding="sm" className="flex flex-wrap gap-4">
         {totalesPorMoneda.length === 0 ? (
           <p className="text-sm text-muted dark:text-dark-text-secondary">{t('Sin egresos en este rango.')}</p>
@@ -165,11 +207,11 @@ export default function Egresos() {
 
       {loading ? (
         <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{t('Cargando...')}</p>
-      ) : egresos.length === 0 ? (
+      ) : egresosFiltrados.length === 0 ? (
         <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{t('No hay egresos cargados en este rango.')}</p>
       ) : (
         <div className="flex flex-col gap-2">
-          {egresos.map((e) => (
+          {egresosFiltrados.map((e) => (
             <div key={e.id} className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-sm font-medium truncate">{e.descripcion}</p>

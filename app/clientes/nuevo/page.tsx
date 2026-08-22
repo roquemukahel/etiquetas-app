@@ -65,9 +65,9 @@ export default function NuevoCliente() {
         <Campo label={t('Nombre')} valor={nombre} onChange={setNombre} />
         <Campo label={t('Apellido')} valor={apellido} onChange={setApellido} />
         <Campo label={t('Domicilio')} valor={domicilio} onChange={setDomicilio} />
-        <Campo label="Email" valor={email} onChange={setEmail} />
+        <Campo label={t('Email')} valor={email} onChange={setEmail} />
         <Campo label={t('Teléfono')} valor={telefono} onChange={setTelefono} />
-        <Campo label="DNI" valor={dni} onChange={setDni} />
+        <Campo label={t('DNI')} valor={dni} onChange={setDni} />
       </div>
 
       <button

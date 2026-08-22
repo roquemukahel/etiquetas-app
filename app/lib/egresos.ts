@@ -43,6 +43,7 @@ export type Egreso = {
   registrado_por_nombre: string | null;
   registrado_por_foto_url: string | null;
   created_at: string;
+  sucursal_id?: string | null;
 };
 
 // ---------- Categorías ----------
@@ -119,7 +120,7 @@ export async function obtenerEgresos(
 ): Promise<Egreso[]> {
   let query = supabase
     .from('egresos')
-    .select('id, fecha, categoria_id, tipo, descripcion, importe, moneda, medio_pago, proveedor_id, notas, anulado, registrado_por_nombre, registrado_por_foto_url, created_at')
+    .select('id, fecha, categoria_id, tipo, descripcion, importe, moneda, medio_pago, proveedor_id, notas, anulado, registrado_por_nombre, registrado_por_foto_url, created_at, sucursal_id')
     .eq('anulado', false)
     .order('fecha', { ascending: false })
     .order('created_at', { ascending: false });

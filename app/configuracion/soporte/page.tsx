@@ -74,7 +74,7 @@ export default function Soporte() {
         <Campo label={t('Nombre')} valor={nombre} onChange={setNombre} />
         <Campo label={t('Apellido')} valor={apellido} onChange={setApellido} />
         <div>
-          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">Email</label>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Email')}</label>
           <input
             value={email}
             onChange={(e) => setEmail(e.target.value)}

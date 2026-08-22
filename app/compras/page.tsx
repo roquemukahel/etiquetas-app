@@ -184,7 +184,7 @@ export default function Compras() {
                   </p>
                   {c.imei && (
                     <p className="text-xs text-muted dark:text-dark-text-secondary">
-                      IMEI: <span className="font-bold font-mono text-ink dark:text-dark-text">{c.imei}</span>
+                      {t('IMEI:')} <span className="font-bold font-mono text-ink dark:text-dark-text">{c.imei}</span>
                     </p>
                   )}
                   <p className="text-xs text-muted dark:text-dark-text-secondary">

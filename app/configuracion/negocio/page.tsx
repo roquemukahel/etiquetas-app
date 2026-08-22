@@ -630,7 +630,7 @@ function RedSocial({
         <input
           value={valor}
           onChange={(e) => onChange(e.target.value)}
-          placeholder="@usuario"
+          placeholder={t('@usuario')}
           className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
         />
       </div>
