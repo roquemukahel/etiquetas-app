@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
-import { asegurarModelo } from '../../lib/modelos';
+import { asegurarModelo, normalizarNombreModelo } from '../../lib/modelos';
 import { registrarAuditoria } from '../../lib/auditoria';
 import { getActor, useActor, MENSAJE_ACTOR_REQUERIDO } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
@@ -102,8 +102,9 @@ export default function DetalleCompra() {
     }
 
     const actor = getActor();
+    const modeloNormalizado = compra.modelo ? normalizarNombreModelo(compra.modelo) : compra.modelo;
     const { error: insertError } = await supabase.from('dispositivos').insert({
-      modelo: compra.modelo,
+      modelo: modeloNormalizado,
       capacidad_gb: compra.capacidad_gb,
       color: compra.color,
       imei: compra.imei,
@@ -118,7 +119,7 @@ export default function DetalleCompra() {
       setProcesando(false);
       return;
     }
-    await asegurarModelo(supabase, compra.modelo);
+    await asegurarModelo(supabase, modeloNormalizado);
     await registrarAuditoria(supabase, {
       accion: `agregó al Stock un dispositivo comprado (${compra.modelo || 'sin modelo'}${compra.imei ? `, IMEI ${compra.imei}` : ''}) de ${nombreCliente(compra)}`,
       entidad: 'compra',
@@ -217,7 +218,7 @@ export default function DetalleCompra() {
     setGuardandoEdicion(true);
     setError(null);
 
-    const nuevoModelo = editModelo.trim() || null;
+    const nuevoModelo = editModelo.trim() ? normalizarNombreModelo(editModelo.trim()) : null;
     const nuevoColor = editColor.trim() || null;
     const nuevoImei = limpiarImei(editImei);
     const nuevosDetalles = editDetalles.trim() || null;

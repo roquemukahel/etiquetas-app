@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
-import { asegurarModelo, sugerirCarpetas } from '../../lib/modelos';
+import { asegurarModelo, normalizarNombreModelo, sugerirCarpetas } from '../../lib/modelos';
 import { asegurarProveedor } from '../../lib/proveedores';
 import { limpiarImei } from '../../lib/imei';
 import { getActor, useActor, MENSAJE_ACTOR_REQUERIDO } from '../../lib/actor';
@@ -84,9 +84,10 @@ export default function NuevoDispositivo() {
     setGuardando(true);
     setError(null);
 
+    const modeloNormalizado = normalizarNombreModelo(modelo.trim());
     const proveedorId = await asegurarProveedor(supabase, proveedor);
     const { error: insertError } = await supabase.from('dispositivos').insert({
-      modelo: modelo.trim(),
+      modelo: modeloNormalizado,
       capacidad_gb: capacidad,
       imei: limpiarImei(imei),
       salud_bateria: bateria ? Number(bateria) : null,
@@ -108,7 +109,7 @@ export default function NuevoDispositivo() {
       return;
     }
 
-    await asegurarModelo(supabase, modelo);
+    await asegurarModelo(supabase, modeloNormalizado);
 
     router.push('/stock');
     router.refresh();

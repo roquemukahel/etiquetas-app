@@ -422,7 +422,8 @@ export default function Stock() {
 
       const nuevos = filas
         .map((fila) => {
-          const modelo = valorDe(fila, 'modelo', 'category') || null;
+          const modeloTexto = valorDe(fila, 'modelo', 'category');
+          const modelo = modeloTexto ? normalizarNombreModelo(modeloTexto) : null;
           const textoLibre = [valorDe(fila, 'name'), valorDe(fila, 'description')].filter(Boolean).join(' ');
 
           const imeiDirecto = valorDe(fila, 'imei');

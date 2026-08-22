@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../../lib/supabase/client';
-import { asegurarModelo, sugerirCarpetas } from '../../lib/modelos';
+import { asegurarModelo, normalizarNombreModelo, sugerirCarpetas } from '../../lib/modelos';
 import { asegurarProveedor } from '../../lib/proveedores';
 import { limpiarImei } from '../../lib/imei';
 import { useDictado } from '../../lib/dictado';
@@ -139,9 +139,10 @@ export default function StockPorFoto() {
     setGuardando(true);
     setError(null);
 
+    const modeloNormalizado = normalizarNombreModelo(modelo.trim());
     const proveedorId = await asegurarProveedor(supabase, proveedor);
     const { error: insertError } = await supabase.from('dispositivos').insert({
-      modelo: modelo.trim(),
+      modelo: modeloNormalizado,
       capacidad_gb: capacidad,
       imei: limpiarImei(imei),
       salud_bateria: bateria ? Number(bateria) : null,
@@ -162,7 +163,7 @@ export default function StockPorFoto() {
       return;
     }
 
-    await asegurarModelo(supabase, modelo);
+    await asegurarModelo(supabase, modeloNormalizado);
 
     // Antes redirigía a Stock después de cada carga — con varios equipos
     // seguidos (que es el caso de uso de "Cargar con foto") obligaba a

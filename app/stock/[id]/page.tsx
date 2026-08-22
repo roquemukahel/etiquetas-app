@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
-import { asegurarModelo } from '../../lib/modelos';
+import { asegurarModelo, normalizarNombreModelo } from '../../lib/modelos';
 import { asegurarProveedor } from '../../lib/proveedores';
 import { registrarAuditoria } from '../../lib/auditoria';
 import { useActor } from '../../lib/actor';
@@ -114,11 +114,12 @@ export default function DetalleDispositivo() {
 
     const volvioAStock = !original.en_stock && d.en_stock;
     const proveedorId = await asegurarProveedor(supabase, d.proveedor);
+    const modeloNormalizado = d.modelo?.trim() ? normalizarNombreModelo(d.modelo.trim()) : null;
 
     const { error: updateError } = await supabase
       .from('dispositivos')
       .update({
-        modelo: d.modelo?.trim() || null,
+        modelo: modeloNormalizado,
         capacidad_gb: d.capacidad_gb,
         imei: limpiarImei(d.imei),
         numero_serie: d.numero_serie?.trim() || null,
@@ -174,7 +175,7 @@ export default function DetalleDispositivo() {
       });
     }
 
-    await asegurarModelo(supabase, d.modelo);
+    await asegurarModelo(supabase, modeloNormalizado);
 
     router.push('/stock');
     router.refresh();

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { registrarAuditoria } from '../../lib/auditoria';
 import { compararModelosPorSalida } from '../../lib/catalogosMarcas';
+import { normalizarNombreModelo } from '../../lib/modelos';
 import { useT } from '../../lib/idioma';
 
 type Carpeta = { id: string; nombre: string; imagen_url: string | null };
@@ -55,7 +56,7 @@ export default function Carpetas() {
   };
 
   const guardarEdicion = async (c: Carpeta) => {
-    const nuevoNombre = nombreEditado.trim();
+    const nuevoNombre = normalizarNombreModelo(nombreEditado.trim());
     if (!nuevoNombre || nuevoNombre === c.nombre) {
       setEditandoId(null);
       return;

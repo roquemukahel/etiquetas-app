@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { useT } from '../../lib/idioma';
-import { asegurarModelo } from '../../lib/modelos';
+import { asegurarModelo, normalizarNombreModelo } from '../../lib/modelos';
 import { obtenerTodasLasFilas } from '../../lib/db';
 import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../../lib/carpetas';
 import { simboloMoneda } from '../../lib/monedas';
@@ -574,10 +574,11 @@ export default function NuevaOrden() {
     setCargandoDispositivo(true);
     setError(null);
     const actorDispositivo = getActor();
+    const modeloNormalizado = normalizarNombreModelo(nuevoModelo.trim());
     const { data, error: dErr } = await supabase
       .from('dispositivos')
       .insert({
-        modelo: nuevoModelo.trim(),
+        modelo: modeloNormalizado,
         capacidad_gb: nuevaCapacidad,
         color: nuevoColor.trim() || null,
         imei: limpiarImei(nuevoImeiDispositivo),
@@ -594,7 +595,7 @@ export default function NuevaOrden() {
       setError(t('No pudimos cargar el dispositivo:') + ' ' + (dErr?.message || ''));
       return;
     }
-    await asegurarModelo(supabase, nuevoModelo);
+    await asegurarModelo(supabase, modeloNormalizado);
     setDispositivosStock((s) => [...s, data as Dispositivo]);
     agregarDispositivoDelStock(data as Dispositivo);
     setNuevoModelo('');
@@ -969,7 +970,7 @@ export default function NuevaOrden() {
         const { error: canjesErr } = await supabase.from('canjes').insert(
           canjesEfectivos.map((c) => ({
             orden_id: orden.id,
-            modelo: c.modelo,
+            modelo: c.modelo ? normalizarNombreModelo(c.modelo) : c.modelo,
             capacidad_gb: c.capacidad_gb,
             color: c.color.trim() || null,
             imei: limpiarImei(c.imei),

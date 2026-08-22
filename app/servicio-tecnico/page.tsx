@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../lib/supabase/client';
-import { asegurarModelo } from '../lib/modelos';
+import { asegurarModelo, normalizarNombreModelo } from '../lib/modelos';
 import { limpiarImei } from '../lib/imei';
 import { armarLinkWhatsApp, mensajeSeguimientoServicio, mensajeListoServicio } from '../lib/whatsapp';
 import { codigoLlamada } from '../lib/paises';
@@ -484,7 +484,7 @@ export default function ServicioTecnico() {
       .from('reparaciones')
       .insert(
         equiposEfectivos.map((eq) => ({
-          modelo: eq.modelo,
+          modelo: eq.modelo ? normalizarNombreModelo(eq.modelo) : eq.modelo,
           capacidad_gb: eq.capacidad_gb,
           color: eq.color || null,
           imei: limpiarImei(eq.imei),
@@ -633,8 +633,9 @@ export default function ServicioTecnico() {
     if (!confirm(t('¿Pasar este equipo al Stock como dispositivo disponible para vender?'))) return;
     setGuardando(r.id);
     setAvisoAgregarStockPara(null);
+    const modeloNormalizado = r.modelo ? normalizarNombreModelo(r.modelo) : r.modelo;
     await supabase.from('dispositivos').insert({
-      modelo: r.modelo,
+      modelo: modeloNormalizado,
       capacidad_gb: r.capacidad_gb,
       color: r.color,
       imei: r.imei,
@@ -643,7 +644,7 @@ export default function ServicioTecnico() {
       agregado_por_nombre: actor?.nombre ?? null,
       agregado_por_foto_url: actor?.fotoUrl ?? null,
     });
-    await asegurarModelo(supabase, r.modelo);
+    await asegurarModelo(supabase, modeloNormalizado);
     await supabase
       .from('reparaciones')
       .update({

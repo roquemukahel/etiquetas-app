@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../lib/supabase/client';
-import { asegurarModelo } from '../lib/modelos';
+import { asegurarModelo, normalizarNombreModelo } from '../lib/modelos';
 import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../lib/carpetas';
 import { registrarAuditoria } from '../lib/auditoria';
 import { getActor, useActor, MENSAJE_ACTOR_REQUERIDO } from '../lib/actor';
@@ -148,8 +148,9 @@ export default function PlanCanje() {
     }
 
     const actor = getActor();
+    const modeloNormalizado = c.modelo ? normalizarNombreModelo(c.modelo) : c.modelo;
     const { error: insertError } = await supabase.from('dispositivos').insert({
-      modelo: c.modelo,
+      modelo: modeloNormalizado,
       capacidad_gb: c.capacidad_gb,
       color: c.color,
       imei: c.imei,
@@ -165,7 +166,7 @@ export default function PlanCanje() {
       setProcesando(null);
       return;
     }
-    await asegurarModelo(supabase, c.modelo);
+    await asegurarModelo(supabase, modeloNormalizado);
     setProcesando(null);
     cargar();
   };

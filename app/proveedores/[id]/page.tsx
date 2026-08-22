@@ -8,6 +8,7 @@ import { registrarAuditoria } from '../../lib/auditoria';
 import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import { sanitizarDecimal } from '../../lib/numeros';
+import { normalizarNombreModelo } from '../../lib/modelos';
 import SelectorColorAuto from '../../SelectorColorAuto';
 import { hexColorDe } from '../../lib/coloresIphone';
 import { useT } from '../../lib/idioma';
@@ -312,7 +313,7 @@ export default function DetalleProveedor() {
     setGuardandoCompra(true);
     setError(null);
     const datos = {
-      modelo: modelo.trim(),
+      modelo: normalizarNombreModelo(modelo.trim()),
       capacidad_gb: capacidad,
       color: color.trim() || null,
       cantidad: Math.max(1, Number(cantidad) || 1),

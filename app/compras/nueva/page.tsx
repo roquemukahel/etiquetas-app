@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
-import { asegurarModelo } from '../../lib/modelos';
+import { asegurarModelo, normalizarNombreModelo } from '../../lib/modelos';
 import { obtenerTodasLasFilas } from '../../lib/db';
 import { sanitizarDecimal } from '../../lib/numeros';
 import { limpiarImei } from '../../lib/imei';
@@ -105,11 +105,12 @@ export default function NuevaCompra() {
         clienteId = data.id;
       }
 
+      const modeloNormalizado = normalizarNombreModelo(modelo.trim());
       const { data: compra, error: compraErr } = await supabase
         .from('compras')
         .insert({
           cliente_id: clienteId,
-          modelo: modelo.trim(),
+          modelo: modeloNormalizado,
           capacidad_gb: capacidad,
           color: color.trim() || null,
           condicion,
@@ -121,7 +122,7 @@ export default function NuevaCompra() {
         .single();
       if (compraErr || !compra) throw new Error(compraErr?.message || t('no se pudo crear la compra'));
 
-      await asegurarModelo(supabase, modelo);
+      await asegurarModelo(supabase, modeloNormalizado);
 
       router.push(`/compras/${compra.id}/boleta`);
     } catch (err: any) {
