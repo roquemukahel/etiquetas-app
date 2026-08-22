@@ -7,7 +7,7 @@ import { crearClienteNavegador } from './lib/supabase/client';
 import { ICONOS } from './Iconos';
 import QMark from './QMark';
 import { useT } from './lib/idioma';
-import { useSucursalActual, setSucursalManual } from './lib/sucursal';
+import { useSucursalActual, setSucursalManual, getSucursalManual } from './lib/sucursal';
 import { obtenerSucursales, type Sucursal } from './lib/sucursales';
 
 // El sidebar solo existe en pantallas grandes (ver <aside className="hidden
@@ -93,7 +93,25 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           setDiasPrueba(Math.max(restantes, 0));
         }
         try {
-          setSucursales(await obtenerSucursales(supabase, false));
+          const listaSucursales = await obtenerSucursales(supabase, false);
+          setSucursales(listaSucursales);
+          // qovento:sucursal_manual vive en localStorage DE ESTE NAVEGADOR,
+          // no de la cuenta — si roque (u otra persona) usa dos negocios
+          // distintos en el mismo navegador y en uno eligió una sucursal a
+          // mano, esa selección quedaba pegada al cambiar de cuenta. Para un
+          // negocio que nunca activó sucursales (listaSucursales vacía) o
+          // que activó pero no tiene ESA sucursal, filtraba todo por un id
+          // que no existe acá y dejaba Stock/Órdenes/Servicio Técnico vacíos
+          // — mismo bug que ya se blindó para el actor (ver el useEffect de
+          // validación en SelectorDeActor.tsx), pero nunca se replicó acá.
+          const manualId = getSucursalManual();
+          if (manualId && !listaSucursales.some((s) => s.id === manualId)) {
+            setSucursalManual(null);
+            // Inicio ya se renderizó en el servidor con la cookie vieja
+            // (el id que no existe acá) — sin este refresh, seguiría
+            // mostrando todo vacío hasta la próxima navegación completa.
+            router.refresh();
+          }
         } catch {
           // Tabla sucursales todavía no existe en este negocio (no se
           // corrió sucursales_supabase.sql) — el sidebar sigue funcionando
