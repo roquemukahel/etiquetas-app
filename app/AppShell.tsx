@@ -7,6 +7,8 @@ import { crearClienteNavegador } from './lib/supabase/client';
 import { ICONOS } from './Iconos';
 import QMark from './QMark';
 import { useT } from './lib/idioma';
+import { useSucursalActual, setSucursalManual } from './lib/sucursal';
+import { obtenerSucursales, type Sucursal } from './lib/sucursales';
 
 // El sidebar solo existe en pantallas grandes (ver <aside className="hidden
 // lg:flex">) — en el celular la navegación sigue exactamente igual que
@@ -55,6 +57,7 @@ const NAV = [
   { href: '/egresos', label: 'Egresos', icono: 'documento' },
   { href: '/plan-ahorro', label: 'Plan de ahorro', icono: 'ahorro' },
   { href: '/estadisticas', label: 'Estadísticas', icono: 'estadisticas' },
+  { href: '/configuracion/sucursales', label: 'Sucursales', icono: 'local' },
   { href: '/configuracion', label: 'Configuración', icono: 'configuracion' },
   { href: '/configuracion/soporte', label: 'Soporte', icono: 'soporte' },
 ];
@@ -66,6 +69,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [sesion, setSesion] = useState<'cargando' | 'si' | 'no'>('cargando');
   const [negocio, setNegocio] = useState<{ nombre: string; logo_url: string | null } | null>(null);
   const [diasPrueba, setDiasPrueba] = useState<number | null>(null);
+  const [sucursales, setSucursales] = useState<Sucursal[]>([]);
+  const [menuSucursalAbierto, setMenuSucursalAbierto] = useState(false);
+  const { id: sucursalActualId, fija: sucursalFija } = useSucursalActual();
 
   useEffect(() => {
     (async () => {
@@ -84,6 +90,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         if (neg?.estado_suscripcion === 'trialing' && neg?.fecha_fin_prueba) {
           const restantes = Math.ceil((new Date(neg.fecha_fin_prueba).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
           setDiasPrueba(Math.max(restantes, 0));
+        }
+        try {
+          setSucursales(await obtenerSucursales(supabase, false));
+        } catch {
+          // Tabla sucursales todavía no existe en este negocio (no se
+          // corrió sucursales_supabase.sql) — el sidebar sigue funcionando
+          // exactamente igual, simplemente sin el bloque de sucursal.
         }
       }
     })();
@@ -147,6 +160,51 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <p className="text-sm font-display font-semibold truncate">{negocio?.nombre || 'Qovento'}</p>
         </div>
 
+        {sucursales.length > 0 && (
+          <div className="relative px-3 pt-3">
+            <button
+              type="button"
+              onClick={() => !sucursalFija && setMenuSucursalAbierto((v) => !v)}
+              disabled={sucursalFija}
+              className={`w-full flex items-center gap-2 rounded-xl border border-border dark:border-dark-border px-3 py-2 text-xs ${
+                sucursalFija ? 'cursor-default' : 'hover:bg-canvas dark:hover:bg-dark-bg'
+              }`}
+            >
+              <span aria-hidden="true" className="[&_svg]:h-4 [&_svg]:w-4 shrink-0 text-muted dark:text-dark-text-secondary">
+                {ICONOS.local}
+              </span>
+              <span className="min-w-0 flex-1 text-left truncate font-medium">
+                {sucursales.find((s) => s.id === sucursalActualId)?.nombre || t('Elegí tu sucursal')}
+              </span>
+              {!sucursalFija && (
+                <span className="text-muted dark:text-dark-text-secondary shrink-0">▾</span>
+              )}
+            </button>
+            {sucursalFija && (
+              <p className="px-1 pt-1 text-[10px] text-muted dark:text-dark-text-secondary">{t('Sucursal fija (Configuración → Vendedores/Técnicos)')}</p>
+            )}
+            {menuSucursalAbierto && (
+              <div className="absolute left-3 right-3 top-full mt-1 rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-elevated py-1 z-30">
+                {sucursales.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => {
+                      setSucursalManual(s.id);
+                      setMenuSucursalAbierto(false);
+                    }}
+                    className={`block w-full text-left px-3 py-2 text-sm hover:bg-canvas dark:hover:bg-dark-bg ${
+                      s.id === sucursalActualId ? 'font-medium text-accent dark:text-dark-accent' : ''
+                    }`}
+                  >
+                    {s.nombre}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         <nav className="flex-1 overflow-y-auto px-3 py-4 flex flex-col gap-1">
           {NAV.map((item) => {
             const activo = esActivo(item.href);
@@ -175,6 +233,44 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </p>
         </div>
       </aside>
+
+      {/* Versión celular del bloque de arriba: el aside completo es
+         hidden lg:flex (ver comentario al principio del archivo — en
+         pantallas chicas no hay sidebar), así que acá va un botón
+         flotante equivalente. Vive DENTRO de este componente (no en un
+         componente aparte) para heredar gratis las mismas exclusiones de
+         ruta/sesión que ya resolvió el "if (ocultar || sesion !== 'si')"
+         de arriba, en vez de duplicar esa lista en otro lado. */}
+      {sucursales.length > 0 && !sucursalFija && (
+        <div className="no-print lg:hidden fixed bottom-3 left-3 z-40">
+          {menuSucursalAbierto && (
+            <div className="absolute bottom-full left-0 mb-1.5 w-52 rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-elevated py-1">
+              {sucursales.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => {
+                    setSucursalManual(s.id);
+                    setMenuSucursalAbierto(false);
+                  }}
+                  className={`block w-full text-left px-3.5 py-2.5 text-sm hover:bg-canvas dark:hover:bg-dark-bg ${
+                    s.id === sucursalActualId ? 'font-medium text-accent dark:text-dark-accent' : ''
+                  }`}
+                >
+                  {s.nombre}
+                </button>
+              ))}
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => setMenuSucursalAbierto((v) => !v)}
+            className="rounded-full border border-white/30 bg-ink/70 text-white text-xs font-medium px-2.5 py-1 backdrop-blur-sm hover:bg-ink/90 transition-colors"
+          >
+            🏬 {sucursales.find((s) => s.id === sucursalActualId)?.nombre || t('Elegí tu sucursal')}
+          </button>
+        </div>
+      )}
 
       <div className="lg:pl-64">{children}</div>
     </div>

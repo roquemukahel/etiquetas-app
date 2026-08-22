@@ -2397,4 +2397,5 @@ export const PT: Record<string, string> = {
   'Elegí tu sucursal': 'Escolha sua filial',
   'Filtrar por sucursal': 'Filtrar por filial',
   'Todas las sucursales': 'Todas as filiais',
+  'Sucursal fija (Configuración → Vendedores/Técnicos)': 'Filial fixa (Configurações → Vendedores/Técnicos)',
 };

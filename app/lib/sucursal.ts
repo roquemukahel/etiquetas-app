@@ -12,7 +12,9 @@ import { useActor } from './actor';
 // 2. Si no tiene sucursal fija (típicamente el dueño/administrador, que
 //    circula entre locales), se usa la que eligió a mano en este
 //    navegador — puede cambiar de sesión en sesión, a diferencia de la
-//    fija. Ver SelectorSucursalFlotante.tsx para el selector.
+//    fija. Ver app/AppShell.tsx (bloque arriba del menú, en el sidebar de
+//    escritorio, y el botón flotante 🏬 equivalente en celular) para el
+//    selector.
 const KEY = 'qovento:sucursal_manual';
 const EVENTO_CAMBIO = 'qovento:sucursal-manual-changed';
 
