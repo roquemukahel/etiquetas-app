@@ -533,6 +533,17 @@ export default function Estadisticas() {
       .slice(0, 10);
   }, [ordenesPeriodo, nombresClientes]);
 
+  // Ventas sin cliente cargado ("Consumidor final" en Nueva Orden) — quedan
+  // afuera de rankingCompradores a propósito (no hay a quién rankear), pero
+  // el pedido fue verlas contadas en algún lado en vez de desaparecer sin
+  // dejar rastro. Ya están incluidas en "Ventas netas"/"Operaciones" de
+  // arriba (bloqueVentas no filtra por cliente_id) — esto es solo el
+  // desglose de cuánto de eso fue sin cliente.
+  const ventasConsumidorFinal = useMemo(() => {
+    const sinCliente = ordenesPeriodo.filter((o) => !o.cliente_id);
+    return { operaciones: sinCliente.length, monto: sinCliente.reduce((a, o) => a + montoVenta(o), 0) };
+  }, [ordenesPeriodo]);
+
   const rankingClientesServicio: Dato[] = useMemo(() => {
     const mapa = new Map<string, number>();
     for (const i of ingresosServicio.filter((i) => new Date(i.fecha_ingreso_servicio) >= inicio && new Date(i.fecha_ingreso_servicio) <= fin)) {
@@ -900,6 +911,15 @@ export default function Estadisticas() {
               <StatCard etiqueta={t('Vendido al contado')} valor={m(contado)} tooltip={t('Ventas del período que NO se financiaron en cuenta corriente.')} moneda={moneda} tono="text-good" sensible oculto={ocultarMontos} />
               <StatCard etiqueta={t('Vendido a crédito')} valor={m(actualB.credito)} tooltip={t('Ventas que quedaron fiadas (cuenta corriente) en el período.')} moneda={moneda} tono={actualB.credito > 0 ? 'text-warn' : undefined} sensible oculto={ocultarMontos}>
                 {!ocultarMontos && actualB.ventas > 0 && <span className="text-[11px] text-muted dark:text-dark-text-secondary">{Math.round(pctFiado * 100)}% {t('de las ventas')}</span>}
+              </StatCard>
+              <StatCard
+                etiqueta={t('Ventas a consumidor final')}
+                valor={ventasConsumidorFinal.operaciones.toLocaleString('es-AR')}
+                tooltip={t('Ventas del período sin cliente cargado (opción "Consumidor final" en Nueva Orden). Ya están sumadas en Ventas netas y Operaciones — esto es solo el desglose.')}
+              >
+                {!ocultarMontos && ventasConsumidorFinal.monto > 0 && (
+                  <span className="text-[11px] text-muted dark:text-dark-text-secondary">{m(ventasConsumidorFinal.monto)}</span>
+                )}
               </StatCard>
             </div>
             {/* Qovi solo aparece acá si la comparación real (ya calculada

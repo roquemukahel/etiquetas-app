@@ -2366,4 +2366,9 @@ export const PT: Record<string, string> = {
 
   'Los Productos son la excepción: a diferencia de Clientes y Dispositivos, sí se pueden eliminar aunque tengan ventas registradas (la venta en sí queda intacta en la orden, pero se pierde el historial de movimientos de stock de ese producto). Exportá antes si te importa conservar ese detalle.':
     'Os Produtos são a exceção: diferente de Clientes e Dispositivos, podem ser excluídos mesmo com vendas registradas (a venda em si continua intacta no pedido, mas se perde o histórico de movimentações de estoque desse produto). Exporte antes se quiser guardar esse detalhe.',
+
+  // Estadísticas — Ventas a consumidor final
+  'Ventas a consumidor final': 'Vendas a consumidor final',
+  'Ventas del período sin cliente cargado (opción "Consumidor final" en Nueva Orden). Ya están sumadas en Ventas netas y Operaciones — esto es solo el desglose.':
+    'Vendas do período sem cliente cadastrado (opção "Consumidor final" em Nova Venda). Já estão somadas em Vendas líquidas e Operações — isto é só o detalhamento.',
 };
