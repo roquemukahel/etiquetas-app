@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { asegurarModelo, normalizarNombreModelo, sugerirCarpetas } from '../../lib/modelos';
 import { asegurarProveedor } from '../../lib/proveedores';
+import { obtenerCategorias, type Categoria } from '../../lib/categorias';
 import { limpiarImei } from '../../lib/imei';
 import { getActor, useActor, MENSAJE_ACTOR_REQUERIDO } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
@@ -29,6 +30,8 @@ export default function NuevoDispositivo() {
   const [proveedores, setProveedores] = useState<string[]>([]);
   const [interesCuotas, setInteresCuotas] = useState<Record<string, number> | null>(null);
   const [monedaCodigo, setMonedaCodigo] = useState('ARS');
+  const [categoriasDispositivo, setCategoriasDispositivo] = useState<Categoria[]>([]);
+  const [categoriaId, setCategoriaId] = useState('');
   useEffect(() => {
     (async () => {
       const { data } = await supabase.from('modelos_stock').select('nombre').order('nombre');
@@ -37,6 +40,22 @@ export default function NuevoDispositivo() {
     (async () => {
       const { data } = await supabase.from('proveedores').select('nombre').order('nombre');
       setProveedores((data ?? []).map((p) => p.nombre));
+    })();
+    (async () => {
+      try {
+        const data = await obtenerCategorias(supabase, false);
+        const deDispositivo = data.filter((c) => c.perfil_default === 'dispositivo');
+        setCategoriasDispositivo(deDispositivo);
+        // Default razonable: "Celulares" (la migrada) si existe, si no la
+        // primera de perfil dispositivo — mismo criterio que el default de
+        // "Accesorios" en el formulario de Productos (app/stock/page.tsx).
+        const sugerida = deDispositivo.find((c) => c.nombre.toLowerCase() === 'celulares') ?? deDispositivo[0];
+        if (sugerida) setCategoriaId(sugerida.id);
+      } catch {
+        // Tabla stock_categorias todavía no existe en este negocio (no se
+        // corrió la migración) — el formulario sigue funcionando igual que
+        // antes, simplemente sin selector de categoría.
+      }
     })();
     (async () => {
       const {
@@ -98,6 +117,7 @@ export default function NuevoDispositivo() {
       proveedor_id: proveedorId,
       detalles: detalles.trim() || null,
       estado,
+      ...(categoriaId ? { categoria_id: categoriaId } : {}),
       en_stock: true,
       agregado_por_nombre: actor?.nombre ?? null,
       agregado_por_foto_url: actor?.fotoUrl ?? null,
@@ -130,6 +150,22 @@ export default function NuevoDispositivo() {
       )}
 
       <div className="flex flex-col gap-3">
+        {categoriasDispositivo.length > 1 && (
+          <div>
+            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Categoría')}</label>
+            <select
+              value={categoriaId}
+              onChange={(e) => setCategoriaId(e.target.value)}
+              className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+            >
+              {categoriasDispositivo.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nombre}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <Campo label={t('Modelo (carpeta)')} valor={modelo} onChange={setModelo} placeholder="iPhone 13" listaId="carpetas-stock" />
         <datalist id="carpetas-stock">
           {carpetas.map((c) => (

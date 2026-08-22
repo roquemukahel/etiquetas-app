@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { asegurarModelo, normalizarNombreModelo, sugerirCarpetas } from '../../lib/modelos';
 import { asegurarProveedor } from '../../lib/proveedores';
+import { obtenerCategorias } from '../../lib/categorias';
 import { limpiarImei } from '../../lib/imei';
 import { useDictado } from '../../lib/dictado';
 import { getActor, useActor, MENSAJE_ACTOR_REQUERIDO } from '../../lib/actor';
@@ -36,6 +37,7 @@ export default function StockPorFoto() {
 
   const [carpetas, setCarpetas] = useState<string[]>([]);
   const [proveedores, setProveedores] = useState<string[]>([]);
+  const [categoriaId, setCategoriaId] = useState('');
   useEffect(() => {
     (async () => {
       const { data } = await supabase.from('modelos_stock').select('nombre').order('nombre');
@@ -44,6 +46,21 @@ export default function StockPorFoto() {
     (async () => {
       const { data } = await supabase.from('proveedores').select('nombre').order('nombre');
       setProveedores((data ?? []).map((p) => p.nombre));
+    })();
+    (async () => {
+      try {
+        // Sin selector visible acá (a propósito: este flujo es para cargar
+        // varios celulares seguido lo más rápido posible) — se asigna sola
+        // la categoría "Celulares" (o la primera de perfil dispositivo) para
+        // que estos equipos no queden sin categoría como los que se
+        // cargaban antes de este cambio.
+        const data = await obtenerCategorias(supabase, false);
+        const deDispositivo = data.filter((c) => c.perfil_default === 'dispositivo');
+        const sugerida = deDispositivo.find((c) => c.nombre.toLowerCase() === 'celulares') ?? deDispositivo[0];
+        if (sugerida) setCategoriaId(sugerida.id);
+      } catch {
+        // Tabla stock_categorias todavía no existe en este negocio.
+      }
     })();
   }, []);
 
@@ -152,6 +169,7 @@ export default function StockPorFoto() {
       proveedor: proveedor.trim() || null,
       proveedor_id: proveedorId,
       estado,
+      ...(categoriaId ? { categoria_id: categoriaId } : {}),
       en_stock: true,
       agregado_por_nombre: actor?.nombre ?? null,
       agregado_por_foto_url: actor?.fotoUrl ?? null,

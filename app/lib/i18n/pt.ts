@@ -2339,4 +2339,9 @@ export const PT: Record<string, string> = {
 
   // CheckTri (componente compartido de checklist)
   'no se pudo probar': 'não foi possível testar',
+
+  // Stock — alta por rubro/categoría (celular vs. otro producto)
+  Celular: 'Celular',
+  Productos: 'Produtos',
+  'Otro producto (no celular)': 'Outro produto (não celular)',
 };

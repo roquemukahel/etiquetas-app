@@ -1084,7 +1084,10 @@ export default function Stock() {
                   + {t('Agregar')}
                 </button>
                 {menuAbierto === 'agregar' && (
-                  <div className="absolute right-0 top-full mt-1.5 w-44 rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-elevated py-1 z-30">
+                  <div className="absolute right-0 top-full mt-1.5 w-56 rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-elevated py-1 z-30">
+                    <p className="px-3.5 pt-1.5 pb-1 text-[10px] font-semibold uppercase tracking-wide text-muted dark:text-dark-text-secondary">
+                      {t('Celular')}
+                    </p>
                     <Link
                       href="/stock/nuevo"
                       onClick={() => setMenuAbierto(null)}
@@ -1099,6 +1102,17 @@ export default function Stock() {
                     >
                       {t('Cargar con foto')}
                     </Link>
+                    <div className="my-1 border-t border-border dark:border-dark-border" />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMenuAbierto(null);
+                        setTab('accesorios');
+                      }}
+                      className="block w-full text-left px-3.5 py-2.5 text-sm hover:bg-canvas dark:hover:bg-dark-bg"
+                    >
+                      {t('Otro producto (no celular)')}
+                    </button>
                   </div>
                 )}
               </div>
@@ -1233,7 +1247,7 @@ export default function Stock() {
             tab === 'accesorios' ? 'bg-accent dark:bg-dark-accent text-white' : 'text-ink dark:text-dark-text'
           }`}
         >
-          {t('Accesorios')} <span className="opacity-70">{productos.length}</span>
+          {t('Productos')} <span className="opacity-70">{productos.length}</span>
         </button>
       </div>
 
