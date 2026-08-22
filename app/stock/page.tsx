@@ -1952,7 +1952,7 @@ export default function Stock() {
             </div>
           )}
 
-          {categoriasStock.length > 0 && productos.length > 0 && (
+          {categoriasStock.some((c) => c.perfil_default === 'generico') && (
             <div className="flex flex-wrap gap-1.5">
               <button
                 onClick={() => setFiltroCategoriaProducto('')}
@@ -1963,7 +1963,7 @@ export default function Stock() {
                 {t('Todas')} ({productos.length})
               </button>
               {categoriasStock
-                .filter((c) => (conteoPorCategoria.get(c.id) || 0) > 0)
+                .filter((c) => c.perfil_default === 'generico')
                 .map((c) => (
                   <button
                     key={c.id}
