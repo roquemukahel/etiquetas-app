@@ -43,7 +43,7 @@ import { LineAreaChart } from './charts';
 import { QCard } from '../QCard';
 import { QoviState } from '../QoviState';
 import CampoFecha from '../CampoFecha';
-import { useT, useIdioma } from '../lib/idioma';
+import { useT, useIdioma, type Idioma } from '../lib/idioma';
 import { useSucursalActual } from '../lib/sucursal';
 
 type VistaRanking = 'barras' | 'torta';
@@ -803,11 +803,13 @@ export default function Estadisticas() {
 
   const PERIODOS_T = useMemo(() => PERIODOS.map((p) => ({ ...p, label: t(p.label) })), [t]);
   // La pestaña "Equipo" acá es de personal (vendedores/técnicos), no de
-  // dispositivo — "Equipo" ya está mapeado a "Aparelho" en el diccionario
-  // para los otros usos (mucho más frecuentes) de esa misma palabra, así que
-  // se resuelve a mano para no pisar esa traducción compartida.
+  // dispositivo — "Equipo"/"Equipment" ya está mapeado a "Aparelho"/"Device"
+  // en el diccionario para los otros usos (mucho más frecuentes) de esa
+  // misma palabra, así que se resuelve a mano para no pisar esa traducción
+  // compartida.
+  const ETIQUETA_TAB_EQUIPO: Record<Idioma, string> = { es: 'Equipo', pt: 'Equipe', en: 'Team' };
   const TABS_T = useMemo(
-    () => TABS.map((tb) => ({ ...tb, label: tb.key === 'equipo' ? (idioma === 'pt' ? 'Equipe' : 'Equipo') : t(tb.label) })),
+    () => TABS.map((tb) => ({ ...tb, label: tb.key === 'equipo' ? ETIQUETA_TAB_EQUIPO[idioma] : t(tb.label) })),
     [t, idioma]
   );
   const METRICAS_PRODUCTO_BASE_T = useMemo(() => METRICAS_PRODUCTO_BASE.map((o) => ({ ...o, label: t(o.label) })), [t]);

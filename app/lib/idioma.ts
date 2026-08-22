@@ -33,6 +33,20 @@ export function setIdioma(idioma: Idioma) {
   window.dispatchEvent(new Event(EVENTO_CAMBIO));
 }
 
+// Orden fijo del selector (un solo botón que rota, ver SelectorDeActor.tsx
+// y SelectorIdiomaFlotante.tsx) — agregar un idioma nuevo acá alcanza para
+// que ambos selectores lo sumen al ciclo automáticamente.
+export const IDIOMAS_DISPONIBLES: { valor: Idioma; etiqueta: string }[] = [
+  { valor: 'es', etiqueta: '🇦🇷 ES' },
+  { valor: 'pt', etiqueta: '🇧🇷 PT' },
+  { valor: 'en', etiqueta: '🇺🇸 EN' },
+];
+
+export function siguienteIdioma(actual: Idioma): Idioma {
+  const idx = IDIOMAS_DISPONIBLES.findIndex((i) => i.valor === actual);
+  return IDIOMAS_DISPONIBLES[(idx + 1) % IDIOMAS_DISPONIBLES.length].valor;
+}
+
 // Reactivo (mismo patrón que useActor): componentes que llaman a t() se
 // vuelven a renderizar apenas alguien cambia el idioma en esta pestaña. Un
 // Server Component ya renderizado (ej. Inicio) necesita además un

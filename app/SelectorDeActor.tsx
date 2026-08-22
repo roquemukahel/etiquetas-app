@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { crearClienteNavegador } from './lib/supabase/client';
 import { Actor, getActor, setActor as guardarActor, clearActor } from './lib/actor';
-import { useIdioma, setIdioma, useT } from './lib/idioma';
+import { useIdioma, setIdioma, useT, IDIOMAS_DISPONIBLES, siguienteIdioma } from './lib/idioma';
 import { sincronizarCookieSucursal, getSucursalManual } from './lib/sucursal';
 import Avatar from './Avatar';
 
@@ -284,21 +284,22 @@ export default function SelectorDeActor() {
             </span>
           </span>
           <span className="flex items-center gap-3 shrink-0">
-            {/* Selector de idioma — PRUEBA (ver app/lib/idioma.ts). Visible
-               en todas las pantallas porque esta barra es la única franja
-               que aparece siempre, en celular y en escritorio. */}
+            {/* Selector de idioma — un botón que rota español/portugués/
+               inglés (ver app/lib/idioma.ts). Visible en todas las
+               pantallas porque esta barra es la única franja que aparece
+               siempre, en celular y en escritorio. */}
             <button
               onClick={() => {
-                setIdioma(idioma === 'es' ? 'pt' : 'es');
+                setIdioma(siguienteIdioma(idioma));
                 // Inicio (app/page.tsx) es un Server Component: sin este
                 // refresh, la cookie nueva no se nota hasta la próxima
                 // navegación entera.
                 router.refresh();
               }}
-              title={idioma === 'es' ? 'Mudar para português' : 'Cambiar a español'}
+              title={t('Cambiar idioma')}
               className="rounded-full border border-white/30 px-2 py-0.5 font-medium opacity-80 hover:opacity-100"
             >
-              {idioma === 'es' ? '🇧🇷 PT' : '🇦🇷 ES'}
+              {IDIOMAS_DISPONIBLES.find((i) => i.valor === idioma)?.etiqueta ?? idioma}
             </button>
             <button onClick={abrirMiPerfil} className="underline opacity-80 hover:opacity-100">
               {t('Mi perfil')}

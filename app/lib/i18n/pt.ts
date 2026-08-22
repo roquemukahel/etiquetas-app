@@ -2469,4 +2469,8 @@ export const PT: Record<string, string> = {
   'dispositivos.': 'aparelhos.',
   'Ajustar': 'Ajustar',
   'Reprogramar': 'Reprogramar',
+
+  // Selector de idioma (ahora 3: español/portugués/inglés — un solo botón
+  // que rota entre los tres).
+  'Cambiar idioma': 'Mudar idioma',
 };
