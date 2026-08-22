@@ -8,6 +8,7 @@ import { Actor, getActor, setActor as guardarActor, clearActor } from './lib/act
 import { useIdioma, setIdioma, useT, IDIOMAS_DISPONIBLES, siguienteIdioma } from './lib/idioma';
 import { sincronizarCookieSucursal, getSucursalManual } from './lib/sucursal';
 import Avatar from './Avatar';
+import BotonSalir from './BotonSalir';
 
 const RUTAS_SIN_SELECTOR = [
   '/login',
@@ -307,6 +308,7 @@ export default function SelectorDeActor() {
             <button onClick={() => setCambiando(true)} className="underline opacity-80 hover:opacity-100">
               {t('Cambiar')}
             </button>
+            <BotonSalir className="underline opacity-80 hover:opacity-100" />
           </span>
         </div>
       )}
@@ -362,9 +364,12 @@ export default function SelectorDeActor() {
       {!actor && postergado && !cambiando && (
         <div className="no-print sticky top-0 z-40 w-full bg-ink text-white text-xs px-4 py-1.5 flex items-center justify-between">
           <span>{t('Sin elegir quién trabaja')}</span>
-          <button onClick={retomarEleccion} className="underline opacity-80 hover:opacity-100">
-            {t('Elegir')}
-          </button>
+          <span className="flex items-center gap-3 shrink-0">
+            <button onClick={retomarEleccion} className="underline opacity-80 hover:opacity-100">
+              {t('Elegir')}
+            </button>
+            <BotonSalir className="underline opacity-80 hover:opacity-100" />
+          </span>
         </div>
       )}
 

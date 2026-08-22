@@ -2,7 +2,6 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { crearClienteServidor } from './lib/supabase/server';
 import { obtenerTodasLasFilas } from './lib/db';
-import BotonSalir from './BotonSalir';
 import QMark from './QMark';
 import BuscadorUniversal from './BuscadorUniversal';
 import LandingPublica from './LandingPublica';
@@ -539,7 +538,6 @@ export default async function Home() {
           <Link href="/configuracion" className="text-xs text-muted dark:text-dark-text-secondary hover:text-ink dark:hover:text-dark-text transition-colors">
             {t('Configuración')}
           </Link>
-          <BotonSalir />
         </div>
       </header>
 
