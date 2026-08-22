@@ -1048,7 +1048,7 @@ export default function NuevaOrden() {
             observaciones: 'Financiación generada al confirmar la orden.',
             sucursalId: sucursalActual.id,
           });
-          if ('error' in resultadoPlan) throw new Error(t('No pudimos crear el plan de financiación:') + ' ' + resultadoPlan.error);
+          if ('error' in resultadoPlan) throw new Error(t('No pudimos crear el plan de financiación:') + ' ' + t(resultadoPlan.error));
         } else {
           const { error: movErr } = await supabase.from('cta_cte_movimientos').insert({
             cliente_id: clienteId,
@@ -2197,7 +2197,7 @@ export default function NuevaOrden() {
                     value={c.monto}
                     onChange={(e) => actualizarMontoCanje(c.tempId, sanitizarDecimal(e.target.value))}
                     inputMode="decimal"
-                    placeholder="Monto"
+                    placeholder={t('Monto')}
                     className="w-24 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded px-2 py-1 text-sm"
                   />
                   <button onClick={() => quitarCanje(c.tempId)} className="text-bad text-xs font-medium">

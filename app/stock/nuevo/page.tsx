@@ -227,7 +227,7 @@ export default function NuevoDispositivo() {
               <span className="font-medium text-ink dark:text-dark-text">{t('Precio en cuotas (según tu financiación):')}</span>
               {planes.map((p) => (
                 <span key={p.cuotas}>
-                  {etiquetaCuotas(p.cuotas)} {t('de')} {mon}
+                  {t(etiquetaCuotas(p.cuotas))} {t('de')} {mon}
                   {Math.round(valorCuota(base, p.cuotas, p.interes)).toLocaleString('es-AR')} · {t('total')} {mon}
                   {Math.round(base * (1 + p.interes / 100)).toLocaleString('es-AR')}
                 </span>

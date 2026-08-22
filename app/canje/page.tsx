@@ -259,7 +259,7 @@ export default function PlanCanje() {
                       )}
                     </div>
                   </div>
-                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${est.color}`}>{est.label}</span>
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${est.color}`}>{t(est.label)}</span>
                 </Link>
               );
             })}

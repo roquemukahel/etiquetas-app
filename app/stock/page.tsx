@@ -521,7 +521,7 @@ export default function Stock() {
 
       setPlanImport({ filas: nuevos, totalCSV: filas.length, omitidosSinModelo, omitidosDuplicado });
     } catch (err: any) {
-      setResultadoImport('No pudimos leer el archivo: ' + (err?.message ?? 'error desconocido'));
+      setResultadoImport(t('No pudimos leer el archivo:') + ' ' + (err?.message ?? t('error desconocido')));
     }
 
     setPreparando(false);
@@ -547,8 +547,8 @@ export default function Stock() {
 
     setResultadoImport(
       error
-        ? `Se guardaron ${guardadas} de ${planImport.filas.length} antes de un error: ${error}`
-        : `Listo: se importaron ${guardadas} dispositivos.`
+        ? `${t('Se guardaron')} ${guardadas} ${t('de')} ${planImport.filas.length} ${t('antes de un error:')} ${error}`
+        : `${t('Listo: se importaron')} ${guardadas} ${t('dispositivos.')}`
     );
     setPlanImport(null);
     setImportando(false);
@@ -1371,10 +1371,9 @@ export default function Stock() {
             <div className="rounded-xl border border-accent/30 dark:border-dark-accent/30 bg-accent-soft dark:bg-dark-accent-soft p-3.5 flex flex-col gap-2.5">
               <p className="text-sm font-medium">{t('Revisá antes de confirmar')}</p>
               <ul className="text-xs text-muted dark:text-dark-text-secondary flex flex-col gap-1">
-                <li>El archivo tiene {planImport.totalCSV} filas.</li>
+                <li>{t('El archivo tiene')} {planImport.totalCSV} {t('filas.')}</li>
                 <li>
-                  Se van a importar <strong className="text-ink dark:text-dark-text">{planImport.filas.length}</strong> dispositivos
-                  nuevos.
+                  {t('Se van a importar')} <strong className="text-ink dark:text-dark-text">{planImport.filas.length}</strong> {t('dispositivos nuevos.')}
                 </li>
                 {planImport.omitidosDuplicado > 0 && (
                   <li>
