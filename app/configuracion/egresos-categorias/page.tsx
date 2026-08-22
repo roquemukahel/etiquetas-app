@@ -61,7 +61,7 @@ export default function CategoriasEgresos() {
     const resultado = await crearCategoriaEgreso(supabase, nombreNueva, categorias.length);
     setCreando(false);
     if ('error' in resultado) {
-      setError(resultado.error);
+      setError(t(resultado.error));
       return;
     }
     await registrarAuditoria(supabase, { accion: `creó la categoría de egresos "${nombreNueva.trim()}"`, entidad: 'egreso_categoria', entidadId: resultado.id });
@@ -79,7 +79,7 @@ export default function CategoriasEgresos() {
     const resultado = await renombrarCategoriaEgreso(supabase, c.id, nombreEdit);
     setProcesando(null);
     if ('error' in resultado) {
-      setError(resultado.error);
+      setError(t(resultado.error));
       return;
     }
     await registrarAuditoria(supabase, { accion: `renombró la categoría de egresos "${c.nombre}" a "${nombreEdit.trim()}"`, entidad: 'egreso_categoria', entidadId: c.id, valorAnterior: { nombre: c.nombre } });
@@ -112,7 +112,7 @@ export default function CategoriasEgresos() {
     const resultado = await archivarCategoriaEgreso(supabase, c.id);
     setProcesando(null);
     if ('error' in resultado) {
-      setError(resultado.error);
+      setError(t(resultado.error));
       return;
     }
     await registrarAuditoria(supabase, { accion: `archivó la categoría de egresos "${c.nombre}"`, entidad: 'egreso_categoria', entidadId: c.id });
@@ -125,7 +125,7 @@ export default function CategoriasEgresos() {
     const resultado = await restaurarCategoriaEgreso(supabase, c.id, c.nombre);
     setProcesando(null);
     if ('error' in resultado) {
-      setError(resultado.error);
+      setError(t(resultado.error));
       return;
     }
     await registrarAuditoria(supabase, { accion: `restauró la categoría de egresos "${c.nombre}"`, entidad: 'egreso_categoria', entidadId: c.id });

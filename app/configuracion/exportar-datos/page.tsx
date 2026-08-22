@@ -159,7 +159,7 @@ export default function ExportarDatos() {
   };
 
   const exportarYEliminar = async () => {
-    if (!confirmando || textoConfirmacion.trim().toUpperCase() !== 'ELIMINAR') return;
+    if (!confirmando || textoConfirmacion.trim().toUpperCase() !== t('ELIMINAR').toUpperCase()) return;
     const entidad = confirmando;
     const cfg = CONFIG[entidad];
     setEliminando(true);
@@ -302,12 +302,12 @@ export default function ExportarDatos() {
               {t('Se descarga primero el CSV de respaldo y después se borran del sistema. No hay retorno atrás. Los que tengan ventas u otro historial vinculado quedan protegidos y no se tocan.')}
             </p>
             <p className="text-xs font-medium">
-              {t('Para confirmar, escribí')} <span className="font-mono">ELIMINAR</span>:
+              {t('Para confirmar, escribí')} <span className="font-mono">{t('ELIMINAR')}</span>:
             </p>
             <input
               value={textoConfirmacion}
               onChange={(e) => setTextoConfirmacion(e.target.value)}
-              placeholder="ELIMINAR"
+              placeholder={t('ELIMINAR')}
               autoFocus
               className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm font-mono"
             />
@@ -320,7 +320,7 @@ export default function ExportarDatos() {
                 {t('Cancelar')}
               </button>
               <button
-                disabled={eliminando || textoConfirmacion.trim().toUpperCase() !== 'ELIMINAR'}
+                disabled={eliminando || textoConfirmacion.trim().toUpperCase() !== t('ELIMINAR').toUpperCase()}
                 onClick={exportarYEliminar}
                 className="flex-1 rounded-xl bg-bad text-white py-2.5 text-sm font-medium disabled:opacity-40"
               >

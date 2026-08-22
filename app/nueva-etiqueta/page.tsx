@@ -9,6 +9,7 @@ import { limpiarImei } from '../lib/imei';
 import { getActor, MENSAJE_ACTOR_REQUERIDO } from '../lib/actor';
 import SelectorColorAuto from '../SelectorColorAuto';
 import { useT } from '../lib/idioma';
+import { useSucursalActual } from '../lib/sucursal';
 
 type ExtractedData = {
   modelo: string | null;
@@ -34,6 +35,7 @@ function fileToBase64(file: File): Promise<string> {
 
 export default function NuevaEtiqueta() {
   const t = useT();
+  const sucursalActual = useSucursalActual();
   const supabase = crearClienteNavegador();
   const [step, setStep] = useState<'captura' | 'revision' | 'etiqueta'>('captura');
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
@@ -168,7 +170,7 @@ export default function NuevaEtiqueta() {
     if (agregarAlStock && datos) {
       const actor = getActor();
       if (!actor) {
-        setError(MENSAJE_ACTOR_REQUERIDO);
+        setError(t(MENSAJE_ACTOR_REQUERIDO));
         return;
       }
       setGuardandoStock(true);
@@ -186,6 +188,7 @@ export default function NuevaEtiqueta() {
         en_stock: true,
         agregado_por_nombre: actor?.nombre ?? null,
         agregado_por_foto_url: actor?.fotoUrl ?? null,
+        ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
       });
       await asegurarModelo(supabase, modeloNormalizado);
       setGuardandoStock(false);

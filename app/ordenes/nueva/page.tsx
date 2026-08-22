@@ -600,6 +600,7 @@ export default function NuevaOrden() {
         en_stock: true,
         agregado_por_nombre: actorDispositivo?.nombre ?? null,
         agregado_por_foto_url: actorDispositivo?.fotoUrl ?? null,
+        ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
       })
       .select()
       .single();

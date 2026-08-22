@@ -36,10 +36,23 @@ export function getSucursalManual(): string | null {
 export function setSucursalManual(id: string | null) {
   if (id) window.localStorage.setItem(KEY, id);
   else window.localStorage.removeItem(KEY);
+  // Síncrono, ANTES del evento: quien llama a esto normalmente sigue con un
+  // router.refresh() en el mismo tick (ver AppShell.tsx), y ese refresh
+  // necesita la cookie ya actualizada — no alcanza a esperar a que el
+  // useEffect reactivo de abajo la escriba.
+  sincronizarCookieSucursal(id);
   window.dispatchEvent(new Event(EVENTO_CAMBIO));
 }
 
-function escribirCookie(id: string | null) {
+// Exportada porque hay DOS lugares que cambian la sucursal resuelta y
+// necesitan que la cookie quede al día ANTES de pedir router.refresh(): el
+// switcher del panel (setSucursalManual, acá abajo) y elegir un
+// vendedor/técnico con sucursal FIJA (SelectorDeActor.tsx, que no pasa por
+// setSucursalManual). Escribirla acá — síncrono, vía document.cookie — evita
+// depender del useEffect reactivo de useSucursalActual(), que puede no
+// haber corrido todavía en el mismo tick que el refresh (setState desde un
+// listener de evento no es síncrono).
+export function sincronizarCookieSucursal(id: string | null) {
   document.cookie = `${COOKIE}=${id ?? ''}; path=/; max-age=31536000; SameSite=Lax`;
 }
 
@@ -63,7 +76,7 @@ export function useSucursalActual(): { id: string | null; fija: boolean } {
   const resuelto = actor?.sucursalId ? { id: actor.sucursalId, fija: true } : { id: manual, fija: false };
 
   useEffect(() => {
-    escribirCookie(resuelto.id);
+    sincronizarCookieSucursal(resuelto.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resuelto.id]);
 

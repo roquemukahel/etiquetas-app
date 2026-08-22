@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { crearClienteNavegador } from './lib/supabase/client';
 import { Actor, getActor, setActor as guardarActor, clearActor } from './lib/actor';
 import { useIdioma, setIdioma, useT } from './lib/idioma';
+import { sincronizarCookieSucursal, getSucursalManual } from './lib/sucursal';
 import Avatar from './Avatar';
 
 const RUTAS_SIN_SELECTOR = [
@@ -190,6 +191,13 @@ export default function SelectorDeActor() {
     setEligiendoTipo(null);
     setCambiando(false);
     setPersonaPin(null);
+    // Si esta persona tiene sucursal fija, Inicio (Server Component) tiene
+    // que enterarse YA — si no, hasta que no haya otra navegación completa
+    // sigue mostrando datos de la sucursal anterior (o sin filtrar). Si NO
+    // tiene fija, se respeta la manual que ya hubiera elegida en este
+    // navegador (mismo criterio de useSucursalActual): no pisarla con null.
+    sincronizarCookieSucursal(nuevo.sucursalId ?? getSucursalManual());
+    router.refresh();
   };
 
   const tocarPersona = (tipo: 'vendedor' | 'tecnico', persona: Persona) => {

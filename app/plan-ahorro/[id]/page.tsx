@@ -11,6 +11,7 @@ import { sanitizarDecimal } from '../../lib/numeros';
 import SelectorColorAuto from '../../SelectorColorAuto';
 import { ICONOS } from '../../Iconos';
 import { useT } from '../../lib/idioma';
+import { useSucursalActual } from '../../lib/sucursal';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 
@@ -41,6 +42,7 @@ export default function DetallePlanAhorro() {
   const supabase = crearClienteNavegador();
   const actor = useActor();
   const t = useT();
+  const sucursalActual = useSucursalActual();
   const puedeVer = tienePermiso(actor, 'ver_plan_ahorro');
   const puedeEliminar = tienePermiso(actor, 'eliminar');
 
@@ -210,6 +212,7 @@ export default function DetallePlanAhorro() {
         total: plan.monto_objetivo,
         estado: 'pagado',
         forma_pago: 'Plan de ahorro / seña',
+        ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
       })
       .select()
       .single();

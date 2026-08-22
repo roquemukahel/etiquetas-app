@@ -31,7 +31,7 @@ export async function generarOrdenDeReparacion(
   // le genera una boleta (ej. costo de diagnóstico) — no tiene sentido que
   // eso la pase a "Entregado": el equipo sigue sin repararse, solo se está
   // cobrando (o dejando constancia con $0) el diagnóstico.
-  opciones: { marcarEntregado?: boolean } = {}
+  opciones: { marcarEntregado?: boolean; sucursalId?: string | null } = {}
 ): Promise<{ ordenId: string | null; total: number; error: string | null }> {
   const marcarEntregado = opciones.marcarEntregado ?? true;
   const total = r.importe_total ?? (r.presupuesto_mano_obra || 0) + (r.presupuesto_repuestos || 0);
@@ -89,6 +89,7 @@ export async function generarOrdenDeReparacion(
         estado: 'pendiente',
         nota: notaCondicion,
         aclaraciones_tecnico: aclaracionesTecnico,
+        ...(opciones.sucursalId ? { sucursal_id: opciones.sucursalId } : {}),
       })
       .select()
       .single();

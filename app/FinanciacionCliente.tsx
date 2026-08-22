@@ -24,6 +24,7 @@ import { Boton } from './Boton';
 import Modal from './Modal';
 import CampoFecha from './CampoFecha';
 import { useT } from './lib/idioma';
+import { useSucursalActual } from './lib/sucursal';
 
 const ETIQUETA_ESTADO: Record<EstadoVisualCuota, string> = {
   pendiente: 'Pendiente',
@@ -323,6 +324,7 @@ function ModalNuevoPlan({
 }) {
   const t = useT();
   const supabase = crearClienteNavegador();
+  const sucursalActual = useSucursalActual();
   const [importeOriginal, setImporteOriginal] = useState('');
   const [entregaInicial, setEntregaInicial] = useState('');
   const [cantidadCuotas, setCantidadCuotas] = useState('3');
@@ -366,10 +368,11 @@ function ModalNuevoPlan({
       cantidadCuotas: cuotas,
       primeraFecha,
       observaciones,
+      sucursalId: sucursalActual.id,
     });
     setGuardando(false);
     if ('error' in resultado) {
-      setError(resultado.error);
+      setError(t(resultado.error));
       return;
     }
     onCreado();
@@ -477,7 +480,7 @@ function ModalAjuste({
     });
     setGuardando(false);
     if ('error' in resultado) {
-      setError(resultado.error);
+      setError(t(resultado.error));
       return;
     }
     onGuardado();
@@ -543,7 +546,7 @@ function ModalAnular({ plan, onClose, onAnulado }: { plan: PlanFinanciacion; onC
     const resultado = await anularPlanFinanciacion(supabase, { planId: plan.id, motivo });
     setGuardando(false);
     if ('error' in resultado) {
-      setError(resultado.error);
+      setError(t(resultado.error));
       return;
     }
     onAnulado();
@@ -596,6 +599,7 @@ function ModalReprogramar({
 }) {
   const t = useT();
   const supabase = crearClienteNavegador();
+  const sucursalActual = useSucursalActual();
   const [cantidadCuotas, setCantidadCuotas] = useState('3');
   const [primeraFecha, setPrimeraFecha] = useState(() => aFechaISO(new Date()));
   const [motivo, setMotivo] = useState('');
@@ -638,10 +642,11 @@ function ModalReprogramar({
       cantidadCuotas: cuotas,
       primeraFecha,
       motivo,
+      sucursalId: sucursalActual.id,
     });
     setGuardando(false);
     if ('error' in resultado) {
-      setError(resultado.error);
+      setError(t(resultado.error));
       return;
     }
     onReprogramado();

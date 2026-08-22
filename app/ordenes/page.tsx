@@ -93,6 +93,13 @@ export default function Ordenes() {
   // Arranca en la sucursal elegida en el panel — si el dueño la cambia acá
   // adentro puede "espiar" otra sin tocar la selección global.
   const [filtroSucursal, setFiltroSucursal] = useState(sucursalActual.id ?? '');
+  // useState solo toma el valor inicial una vez — si el dueño cambia de
+  // sucursal en el panel MIENTRAS ya está en esta pantalla, hay que
+  // seguirlo (si no, el filtro local queda pegado a la sucursal vieja hasta
+  // que se navegue afuera y de vuelta).
+  useEffect(() => {
+    setFiltroSucursal(sucursalActual.id ?? '');
+  }, [sucursalActual.id]);
 
   const cargar = async () => {
     const [{ data: ordenesData }, { data: listasData }, { data: canceladasData }, { data: canjesData }] = await Promise.all([
@@ -147,7 +154,7 @@ export default function Ordenes() {
     if (!puedeVender || generando) return;
     if (!confirm(`${t('¿Generar la boleta de')} ${r.modelo || t('este equipo')}? ${t('Se cobra el importe de la reparación.')}`)) return;
     setGenerando(r.id);
-    const { ordenId, total, error } = await generarOrdenDeReparacion(supabase, r as any);
+    const { ordenId, total, error } = await generarOrdenDeReparacion(supabase, r as any, { sucursalId: sucursalActual.id });
     if (error || !ordenId) {
       alert(error || t('No pudimos generar la boleta.'));
       setGenerando(null);
@@ -171,7 +178,7 @@ export default function Ordenes() {
     )
       return;
     setGenerando(r.id);
-    const { ordenId, total, error } = await generarOrdenDeReparacion(supabase, r as any, { marcarEntregado: false });
+    const { ordenId, total, error } = await generarOrdenDeReparacion(supabase, r as any, { marcarEntregado: false, sucursalId: sucursalActual.id });
     if (error || !ordenId) {
       alert(error || t('No pudimos generar la boleta.'));
       setGenerando(null);

@@ -35,6 +35,7 @@ import ControlCalidad, { ControlCalidadItem } from '../ControlCalidad';
 import { ICONOS } from '../../Iconos';
 import CampoFecha from '../../CampoFecha';
 import { useT } from '../../lib/idioma';
+import { useSucursalActual } from '../../lib/sucursal';
 
 // Mismo patrón que TarjetaReparacion/EstadoBadge para reescalar los SVG de
 // 24px a un tamaño chico inline junto a texto.
@@ -210,6 +211,7 @@ export default function FichaReparacion() {
   // el administrador), así que se chequea con su propio permiso.
   const puedeAgregarStock = tienePermiso(actor, 'agregar_stock');
   const t = useT();
+  const sucursalActual = useSucursalActual();
 
   const [r, setR] = useState<Reparacion | null>(null);
   const [tecnicos, setTecnicos] = useState<Tecnico[]>([]);
@@ -819,7 +821,7 @@ export default function FichaReparacion() {
     if (!confirm(t('¿Generar la orden de cobro con el importe de esta reparación?'))) return;
     setGuardando(true);
     // Misma lógica compartida que usa la sección "Listos para cobrar" de Órdenes.
-    const { ordenId, total, error: genError } = await generarOrdenDeReparacion(supabase, r as any);
+    const { ordenId, total, error: genError } = await generarOrdenDeReparacion(supabase, r as any, { sucursalId: sucursalActual.id });
     if (genError || !ordenId) {
       setError(genError || t('No pudimos generar la orden.'));
       setGuardando(false);
@@ -841,7 +843,7 @@ export default function FichaReparacion() {
     if (!r || !puedeAgregarStock) return;
     const actor = getActor();
     if (!actor) {
-      setError(MENSAJE_ACTOR_REQUERIDO);
+      setError(t(MENSAJE_ACTOR_REQUERIDO));
       return;
     }
     if (r.imei) {
@@ -861,6 +863,7 @@ export default function FichaReparacion() {
       en_stock: true,
       agregado_por_nombre: actor?.nombre ?? null,
       agregado_por_foto_url: actor?.fotoUrl ?? null,
+      ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
     });
     await asegurarModelo(supabase, modeloNormalizado);
     await supabase

@@ -34,6 +34,7 @@ type Dispositivo = {
   garantia_vencimiento: string | null;
   agregado_por_nombre: string | null;
   mostrar_en_stock_publico: boolean;
+  sucursal_id?: string | null;
 };
 
 export default function DetalleDispositivo() {
@@ -193,6 +194,7 @@ export default function DetalleDispositivo() {
         imei: d.imei,
         falla_declarada: derivarDetalles.trim() || null,
         estado: 'recibido',
+        ...(d.sucursal_id ? { sucursal_id: d.sucursal_id } : {}),
       })
       .select('id, numero_orden')
       .single();

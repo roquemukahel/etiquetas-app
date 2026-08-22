@@ -13,6 +13,7 @@ import { limpiarImei } from '../../lib/imei';
 import SelectorColorAuto from '../../SelectorColorAuto';
 import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
 import { useT } from '../../lib/idioma';
+import { useSucursalActual } from '../../lib/sucursal';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 
@@ -36,6 +37,7 @@ export default function DetalleCompra() {
   const supabase = crearClienteNavegador();
   const actor = useActor();
   const t = useT();
+  const sucursalActual = useSucursalActual();
   const puedeEliminar = tienePermiso(actor, 'eliminar');
   const puedeRecibirServicioTecnico = tienePermiso(actor, 'recibir_servicio_tecnico');
   const puedeAgregarStock = tienePermiso(actor, 'agregar_stock');
@@ -72,7 +74,7 @@ export default function DetalleCompra() {
   const agregarAlStock = async () => {
     if (!compra || procesando || !puedeAgregarStock) return;
     if (!getActor()) {
-      setError(MENSAJE_ACTOR_REQUERIDO);
+      setError(t(MENSAJE_ACTOR_REQUERIDO));
       return;
     }
     if (!confirm(t('¿Agregar este dispositivo al Stock para venderlo?'))) return;
@@ -112,6 +114,7 @@ export default function DetalleCompra() {
       en_stock: true,
       agregado_por_nombre: actor?.nombre ?? null,
       agregado_por_foto_url: actor?.fotoUrl ?? null,
+      ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
     });
     if (insertError) {
       await supabase.from('compras').update({ estado: 'pendiente' }).eq('id', id);
@@ -148,6 +151,7 @@ export default function DetalleCompra() {
         imei: compra.imei,
         falla_declarada: compra.detalles,
         estado: 'recibido',
+        ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
       })
       .select('id, numero_orden')
       .single();

@@ -14,6 +14,7 @@ import Avatar from '../Avatar';
 import { ICONOS } from '../Iconos';
 import { Boton, BotonIcono } from '../Boton';
 import { useT } from '../lib/idioma';
+import { useSucursalActual } from '../lib/sucursal';
 
 type Canje = {
   id: string;
@@ -47,6 +48,7 @@ export default function PlanCanje() {
   const supabase = crearClienteNavegador();
   const actor = useActor();
   const t = useT();
+  const sucursalActual = useSucursalActual();
   const puedeEliminar = tienePermiso(actor, 'eliminar');
   const puedeRecibirServicioTecnico = tienePermiso(actor, 'recibir_servicio_tecnico');
   const puedeAgregarStock = tienePermiso(actor, 'agregar_stock');
@@ -99,6 +101,7 @@ export default function PlanCanje() {
         falla_declarada: c.detalles,
         estado: 'recibido',
         canje_origen_id: c.id,
+        ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
       })
       .select('id, numero_orden')
       .single();
@@ -115,7 +118,7 @@ export default function PlanCanje() {
   const agregarAlStock = async (c: Canje) => {
     if (procesando || !puedeAgregarStock) return;
     if (!getActor()) {
-      alert(MENSAJE_ACTOR_REQUERIDO);
+      alert(t(MENSAJE_ACTOR_REQUERIDO));
       return;
     }
     if (c.imei) {
@@ -159,6 +162,7 @@ export default function PlanCanje() {
       en_stock: true,
       agregado_por_nombre: actor?.nombre ?? null,
       agregado_por_foto_url: actor?.fotoUrl ?? null,
+      ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
     });
     if (insertError) {
       await supabase.from('canjes').update({ agregado_a_stock: false }).eq('id', c.id);

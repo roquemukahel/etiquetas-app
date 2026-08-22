@@ -2398,4 +2398,14 @@ export const PT: Record<string, string> = {
   'Filtrar por sucursal': 'Filtrar por filial',
   'Todas las sucursales': 'Todas as filiais',
   'Sucursal fija (Configuración → Vendedores/Técnicos)': 'Filial fixa (Configurações → Vendedores/Técnicos)',
+
+  // Multisucursal Fase 2 — auditoría de errores/inconsistencias.
+  'El nombre no puede estar vacío.': 'O nome não pode estar vazio.',
+  'La descripción no puede estar vacía.': 'A descrição não pode estar vazia.',
+  'Elegí primero quién sos (arriba, donde dice "Cambiar") antes de continuar.':
+    'Escolha primeiro quem você é (acima, onde diz "Trocar") antes de continuar.',
+  'ELIMINAR': 'EXCLUIR',
+  'La entrega inicial no puede ser mayor o igual al importe de la venta.':
+    'A entrada inicial não pode ser maior ou igual ao valor da venda.',
+  'No se pudo armar el cronograma.': 'Não foi possível montar o cronograma.',
 };

@@ -89,7 +89,7 @@ export default function ConfiguracionSucursales() {
     const resultado = await crearSucursal(supabase, nombreNueva);
     setCreando(false);
     if ('error' in resultado) {
-      setError(resultado.error);
+      setError(t(resultado.error));
       return;
     }
     await registrarAuditoria(supabase, { accion: `creó la sucursal "${nombreNueva.trim()}"`, entidad: 'sucursal', entidadId: resultado.id });
@@ -107,7 +107,7 @@ export default function ConfiguracionSucursales() {
     const resultado = await renombrarSucursal(supabase, s.id, nombreEdit);
     setProcesando(null);
     if ('error' in resultado) {
-      setError(resultado.error);
+      setError(t(resultado.error));
       return;
     }
     await registrarAuditoria(supabase, { accion: `renombró la sucursal "${s.nombre}" a "${nombreEdit.trim()}"`, entidad: 'sucursal', entidadId: s.id, valorAnterior: { nombre: s.nombre } });
@@ -134,7 +134,7 @@ export default function ConfiguracionSucursales() {
     const resultado = await archivarSucursal(supabase, s.id);
     setProcesando(null);
     if ('error' in resultado) {
-      setError(resultado.error);
+      setError(t(resultado.error));
       return;
     }
     await registrarAuditoria(supabase, { accion: `archivó la sucursal "${s.nombre}"`, entidad: 'sucursal', entidadId: s.id });
@@ -147,7 +147,7 @@ export default function ConfiguracionSucursales() {
     const resultado = await restaurarSucursal(supabase, s.id, s.nombre);
     setProcesando(null);
     if ('error' in resultado) {
-      setError(resultado.error);
+      setError(t(resultado.error));
       return;
     }
     await registrarAuditoria(supabase, { accion: `restauró la sucursal "${s.nombre}"`, entidad: 'sucursal', entidadId: s.id });

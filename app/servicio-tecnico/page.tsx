@@ -632,7 +632,7 @@ export default function ServicioTecnico() {
     if (guardando || !puedeAgregarStock) return;
     const actor = getActor();
     if (!actor) {
-      alert(MENSAJE_ACTOR_REQUERIDO);
+      alert(t(MENSAJE_ACTOR_REQUERIDO));
       return;
     }
     if (r.imei) {
@@ -1042,7 +1042,7 @@ export default function ServicioTecnico() {
             esPropio
           />
         ) : (
-          <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{MENSAJE_ACTOR_REQUERIDO}</p>
+          <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{t(MENSAJE_ACTOR_REQUERIDO)}</p>
         ))}
 
       {tab === 'tecnicos' ? (

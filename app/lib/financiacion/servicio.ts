@@ -215,6 +215,7 @@ export async function reprogramarFinanciacion(
     cantidadCuotas: number;
     primeraFecha: string;
     motivo: string;
+    sucursalId?: string | null;
   }
 ): Promise<{ planId: string } | { error: string }> {
   let cuotas;
@@ -239,6 +240,7 @@ export async function reprogramarFinanciacion(
     p_cuotas: cuotas,
     p_motivo: params.motivo.trim(),
     p_usuario: actor?.nombre ?? null,
+    p_sucursal_id: params.sucursalId ?? null,
   });
   if (error) return { error: error.message };
 

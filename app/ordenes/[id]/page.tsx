@@ -489,6 +489,7 @@ export default function DetalleOrden() {
         en_stock: true,
         agregado_por_nombre: actor?.nombre ?? null,
         agregado_por_foto_url: actor?.fotoUrl ?? null,
+        ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
       })
       .select()
       .single();

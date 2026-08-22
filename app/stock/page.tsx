@@ -180,6 +180,13 @@ export default function Stock() {
   // Arranca en la sucursal elegida en el panel — se puede "espiar" otra acá
   // adentro sin tocar la selección global.
   const [filtroSucursal, setFiltroSucursal] = useState(sucursalActual.id ?? '');
+  // useState solo toma el valor inicial una vez — si el dueño cambia de
+  // sucursal en el panel MIENTRAS ya está en Stock, hay que seguirlo (si
+  // no, el filtro local queda pegado a la sucursal vieja hasta que se
+  // navegue afuera y de vuelta).
+  useEffect(() => {
+    setFiltroSucursal(sucursalActual.id ?? '');
+  }, [sucursalActual.id]);
   // Modalidad del producto que se está por agregar: la sugiere la categoría
   // elegida (modalidad_default), pero queda editable — la spec pide que sea
   // "explícitamente seleccionable por producto", no fija por categoría.

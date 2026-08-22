@@ -99,7 +99,7 @@ export default function NuevoDispositivo() {
     if (!puedeGuardar) return;
     const actor = getActor();
     if (!actor) {
-      setError(MENSAJE_ACTOR_REQUERIDO);
+      setError(t(MENSAJE_ACTOR_REQUERIDO));
       return;
     }
     setGuardando(true);
