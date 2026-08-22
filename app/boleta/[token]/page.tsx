@@ -6,6 +6,7 @@ import { crearClienteNavegador } from '../../lib/supabase/client';
 import { simboloMoneda } from '../../lib/monedas';
 import { ESLOGAN } from '../../lib/eslogan';
 import EtiquetaSeccion from '../../EtiquetaSeccion';
+import { useT } from '../../lib/idioma';
 
 type Item = {
   descripcion: string;
@@ -69,6 +70,7 @@ function Divisor() {
 export default function BoletaPublica() {
   const { token } = useParams<{ token: string }>();
   const supabase = crearClienteNavegador();
+  const t = useT();
   const [boleta, setBoleta] = useState<Boleta | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -83,7 +85,7 @@ export default function BoletaPublica() {
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center">
-        <p className="text-sm text-muted">Cargando...</p>
+        <p className="text-sm text-muted">{t('Cargando...')}</p>
       </main>
     );
   }
@@ -92,7 +94,7 @@ export default function BoletaPublica() {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
         <p className="text-2xl">🔍</p>
-        <p className="text-sm text-muted">No encontramos esta boleta. Revisá el link o el código QR.</p>
+        <p className="text-sm text-muted">{t('No encontramos esta boleta. Revisá el link o el código QR.')}</p>
       </main>
     );
   }
@@ -130,7 +132,7 @@ export default function BoletaPublica() {
         <div className="flex items-center gap-3">
           {boleta.negocio.logo_url && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={boleta.negocio.logo_url} alt="Logo" className="h-32 w-32 object-contain rounded-lg" />
+            <img src={boleta.negocio.logo_url} alt={t('Logo')} className="h-32 w-32 object-contain rounded-lg" />
           )}
           <div>
             <p className="text-2xl font-display font-semibold leading-tight">{boleta.negocio.nombre}</p>
@@ -141,9 +143,9 @@ export default function BoletaPublica() {
         </div>
 
         <div className="text-sm text-muted leading-relaxed">
-          <p className="font-medium text-ink">Orden #{boleta.id.slice(0, 8)}</p>
+          <p className="font-medium text-ink">{t('Orden #')}{boleta.id.slice(0, 8)}</p>
           <p>{formatearFecha(boleta.created_at)}</p>
-          {boleta.fecha_entrega && <p>Entregado: {formatearFecha(boleta.fecha_entrega)}</p>}
+          {boleta.fecha_entrega && <p>{t('Entregado:')} {formatearFecha(boleta.fecha_entrega)}</p>}
           <span
             className={`inline-block mt-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
               boleta.estado === 'entregado'
@@ -153,14 +155,14 @@ export default function BoletaPublica() {
                   : 'bg-warn/15 text-warn'
             }`}
           >
-            {boleta.estado}
+            {t(boleta.estado)}
           </span>
         </div>
 
         <Divisor />
 
         <div className="flex flex-col gap-1">
-          <EtiquetaSeccion>Negocio</EtiquetaSeccion>
+          <EtiquetaSeccion>{t('Negocio')}</EtiquetaSeccion>
           <p className="font-medium">{boleta.negocio.nombre}</p>
           {boleta.negocio.telefono && <p className="text-muted">{boleta.negocio.telefono}</p>}
           {boleta.negocio.direccion && <p className="text-muted">{boleta.negocio.direccion}</p>}
@@ -168,7 +170,7 @@ export default function BoletaPublica() {
 
         {boleta.cliente_nombre && (
           <div className="flex flex-col gap-1">
-            <EtiquetaSeccion>Cliente</EtiquetaSeccion>
+            <EtiquetaSeccion>{t('Cliente')}</EtiquetaSeccion>
             <p className="font-medium">{boleta.cliente_nombre}</p>
           </div>
         )}
@@ -178,7 +180,7 @@ export default function BoletaPublica() {
             {boleta.canjes.map((c, idx) => (
               <div key={idx} className="rounded-xl bg-accent-soft p-4 flex flex-col gap-1">
                 <p className="text-xs font-semibold uppercase tracking-wide text-accent mb-1">
-                  Plan canje — dispositivo entregado{boleta.canjes.length > 1 ? ` (${idx + 1} de ${boleta.canjes.length})` : ''}
+                  {t('Plan canje — dispositivo entregado')}{boleta.canjes.length > 1 ? ` (${idx + 1} ${t('de')} ${boleta.canjes.length})` : ''}
                 </p>
                 <p className="font-medium">
                   {c.modelo}
@@ -187,12 +189,12 @@ export default function BoletaPublica() {
                 </p>
                 {c.imei && (
                   <p className="text-muted">
-                    IMEI: <span className="font-bold text-ink">{c.imei}</span>
+                    {t('IMEI:')} <span className="font-bold text-ink">{c.imei}</span>
                   </p>
                 )}
                 {c.monto != null && (
                   <p className="font-medium mt-1">
-                    Monto reconocido: {fmt(c.monto)}
+                    {t('Monto reconocido:')} {fmt(c.monto)}
                   </p>
                 )}
               </div>
@@ -205,9 +207,9 @@ export default function BoletaPublica() {
         <table className="w-full text-sm border-separate border-spacing-0">
           <thead>
             <tr className="bg-ink text-white text-left text-xs font-semibold uppercase tracking-wide">
-              <th className="py-1.5 px-3 rounded-l-lg">Producto</th>
-              <th className="py-1.5 px-3 text-center border-l border-white/20">Cant.</th>
-              <th className="py-1.5 px-3 text-right rounded-r-lg border-l border-white/20">Precio</th>
+              <th className="py-1.5 px-3 rounded-l-lg">{t('Producto')}</th>
+              <th className="py-1.5 px-3 text-center border-l border-white/20">{t('Cant.')}</th>
+              <th className="py-1.5 px-3 text-right rounded-r-lg border-l border-white/20">{t('Precio')}</th>
             </tr>
           </thead>
           <tbody>
@@ -217,12 +219,12 @@ export default function BoletaPublica() {
                   {i.descripcion}
                   {i.estado_dispositivo === 'sellado' && (
                     <span className="ml-1.5 inline-block text-[10px] font-bold text-black bg-gradient-to-b from-amber-300 to-amber-500 border border-black/40 rounded-full px-2 py-0.5 align-middle">
-                      ✦ SELLADO
+                      ✦ {t('SELLADO')}
                     </span>
                   )}
                   {i.garantia_vencimiento && (
                     <p className="text-xs text-muted mt-0.5">
-                      🛡️ Garantía hasta el {new Date(i.garantia_vencimiento + 'T00:00:00').toLocaleDateString('es-AR')}
+                      🛡️ {t('Garantía hasta el')} {new Date(i.garantia_vencimiento + 'T00:00:00').toLocaleDateString('es-AR')}
                     </p>
                   )}
                 </td>
@@ -238,23 +240,23 @@ export default function BoletaPublica() {
         <div className="self-end w-full max-w-[280px] flex flex-col gap-2 text-sm">
           {boleta.anticipo != null && boleta.anticipo > 0 && (
             <div className="flex justify-between text-muted">
-              <span>Anticipo</span>
+              <span>{t('Anticipo')}</span>
               <span>{fmt(boleta.anticipo)}</span>
             </div>
           )}
           <div className="flex justify-between text-muted">
-            <span>Subtotal</span>
+            <span>{t('Subtotal')}</span>
             <span>{fmt(subtotal)}</span>
           </div>
           {boleta.monto_canje != null && boleta.monto_canje > 0 && (
             <div className="flex justify-between text-muted">
-              <span>Plan canje</span>
+              <span>{t('Plan canje')}</span>
               <span>-{fmt(boleta.monto_canje)}</span>
             </div>
           )}
           <div className="flex justify-between items-baseline font-display font-semibold text-lg rounded-lg bg-ink text-white px-3 py-2 mt-1">
             <span className="text-sm font-sans font-medium opacity-80">
-              {totalNum < 0 ? 'SALDO A FAVOR DEL CLIENTE' : 'TOTAL'}
+              {totalNum < 0 ? t('SALDO A FAVOR DEL CLIENTE') : t('TOTAL')}
             </span>
             <span>
               {totalNum < 0 ? '-' : ''}
@@ -264,28 +266,28 @@ export default function BoletaPublica() {
           {modo === 'ambas' && boleta.monto_secundario != null && boleta.moneda_secundaria && (
             <p className="text-xs text-muted italic text-right">
               ≈ {simboloMoneda(boleta.moneda_secundaria)}
-              {boleta.monto_secundario.toLocaleString('es-AR')} {boleta.moneda_secundaria} (valor informativo)
+              {boleta.monto_secundario.toLocaleString('es-AR')} {boleta.moneda_secundaria} ({t('valor informativo')})
             </p>
           )}
         </div>
 
         {boleta.forma_pago && (
           <p className="text-sm">
-            <span className="text-muted">Método de pago </span>
+            <span className="text-muted">{t('Método de pago')} </span>
             <span className="font-medium">{boleta.forma_pago}</span>
           </p>
         )}
 
         {boleta.nota && (
           <div className="rounded-xl bg-canvas p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">Nota</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">{t('Nota')}</p>
             <p className="whitespace-pre-wrap text-muted">{boleta.nota}</p>
           </div>
         )}
 
         {boleta.incluir_aclaraciones_tecnico && boleta.aclaraciones_tecnico && (
           <div className="rounded-xl bg-canvas p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">Aclaraciones del técnico</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">{t('Aclaraciones del técnico')}</p>
             <p className="whitespace-pre-wrap text-muted">{boleta.aclaraciones_tecnico}</p>
           </div>
         )}
@@ -296,7 +298,7 @@ export default function BoletaPublica() {
 
         {boleta.incluir_garantia && tieneProductos && boleta.negocio.texto_garantia && (
           <div className="rounded-xl bg-canvas p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">Garantía de productos</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">{t('Garantía de productos')}</p>
             <p className="whitespace-pre-wrap text-ink font-medium" style={{ fontSize: boleta.negocio.texto_garantia_tamano }}>
               {boleta.negocio.texto_garantia}
             </p>
@@ -305,7 +307,7 @@ export default function BoletaPublica() {
 
         {boleta.incluir_garantia && tieneTrabajos && boleta.negocio.texto_garantia_servicio && (
           <div className="rounded-xl bg-canvas p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">Garantía de servicio técnico</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">{t('Garantía de servicio técnico')}</p>
             <p
               className="whitespace-pre-wrap text-ink font-medium"
               style={{ fontSize: boleta.negocio.texto_garantia_servicio_tamano }}

@@ -8,6 +8,7 @@ import { ESLOGAN } from '../../../../lib/eslogan';
 import EtiquetaSeccion from '../../../../EtiquetaSeccion';
 import { armarLinkWhatsApp, mensajeComprobantePlanAhorro } from '../../../../lib/whatsapp';
 import { codigoLlamada } from '../../../../lib/paises';
+import { useT } from '../../../../lib/idioma';
 
 type Movimiento = {
   id: string;
@@ -50,6 +51,7 @@ function Divisor() {
 export default function ComprobantePlanAhorro() {
   const { id, movId } = useParams<{ id: string; movId: string }>();
   const supabase = crearClienteNavegador();
+  const t = useT();
 
   const [plan, setPlan] = useState<Plan | null>(null);
   const [movimiento, setMovimiento] = useState<Movimiento | null>(null);
@@ -101,7 +103,7 @@ export default function ComprobantePlanAhorro() {
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center">
-        <p className="text-sm text-muted">Cargando...</p>
+        <p className="text-sm text-muted">{t('Cargando...')}</p>
       </main>
     );
   }
@@ -109,10 +111,10 @@ export default function ComprobantePlanAhorro() {
   if (!movimiento || !plan) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
-        <p className="text-sm text-muted">No encontramos ese comprobante.</p>
+        <p className="text-sm text-muted">{t('No encontramos ese comprobante.')}</p>
         {error && <p className="text-xs text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
         <Link href={`/plan-ahorro/${id}`} className="text-sm text-accent underline">
-          Volver al plan
+          {t('Volver al plan')}
         </Link>
       </main>
     );
@@ -126,10 +128,11 @@ export default function ComprobantePlanAhorro() {
     ? armarLinkWhatsApp(
         plan.clientes.telefono,
         mensajeComprobantePlanAhorro(
-          clienteNombre || 'estimado/a',
+          clienteNombre || t('estimado/a'),
           `$${Math.round(movimiento.monto).toLocaleString('es-AR')}`,
-          plan.modelo || 'tu equipo',
-          `${typeof window !== 'undefined' ? window.location.origin : ''}/comprobante-plan-ahorro/${movimiento.token_publico}`
+          plan.modelo || t('tu equipo'),
+          `${typeof window !== 'undefined' ? window.location.origin : ''}/comprobante-plan-ahorro/${movimiento.token_publico}`,
+          t
         ),
         codigoPais
       )
@@ -141,7 +144,7 @@ export default function ComprobantePlanAhorro() {
         <Link href={`/plan-ahorro/${id}`} className="text-2xl leading-none text-ink">
           &larr;
         </Link>
-        <span className="text-lg font-display font-semibold mr-auto">Comprobante de pago</span>
+        <span className="text-lg font-display font-semibold mr-auto">{t('Comprobante de pago')}</span>
         {linkWhatsApp && (
           <a
             href={linkWhatsApp}
@@ -149,14 +152,14 @@ export default function ComprobantePlanAhorro() {
             rel="noopener noreferrer"
             className="rounded-lg border border-good/30 text-good bg-white dark:bg-dark-surface px-3 py-2 text-xs font-medium hover:bg-good/10 transition-colors"
           >
-            Enviar por WhatsApp
+            {t('Enviar por WhatsApp')}
           </a>
         )}
         <button
           onClick={() => window.print()}
           className="rounded-lg border border-border dark:border-dark-border bg-white dark:bg-dark-surface text-ink dark:text-dark-text px-3 py-2 text-xs font-medium hover:bg-canvas dark:hover:bg-dark-bg transition-colors"
         >
-          Imprimir
+          {t('Imprimir')}
         </button>
       </header>
 
@@ -175,7 +178,7 @@ export default function ComprobantePlanAhorro() {
 
         {movimiento.anulado && (
           <div className="rounded-xl bg-bad/10 border-2 border-bad text-bad text-center py-2 font-display font-semibold tracking-wide">
-            ⚠ ESTE PAGO FUE ANULADO — no es válido como comprobante
+            ⚠ {t('ESTE PAGO FUE ANULADO — no es válido como comprobante')}
           </div>
         )}
 
@@ -183,7 +186,7 @@ export default function ComprobantePlanAhorro() {
           <div className="flex items-center gap-3">
             {negocio?.logo_url && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={negocio.logo_url} alt="Logo" className="h-32 w-32 print:h-24 print:w-24 object-contain rounded-lg" />
+              <img src={negocio.logo_url} alt={t('Logo')} className="h-32 w-32 print:h-24 print:w-24 object-contain rounded-lg" />
             )}
             <div>
               <p className="text-2xl print:text-lg font-display font-semibold leading-tight">{negocio?.nombre}</p>
@@ -191,7 +194,7 @@ export default function ComprobantePlanAhorro() {
             </div>
           </div>
           <div className="text-right text-sm text-muted leading-relaxed">
-            <p className="font-medium text-ink">Comprobante de pago</p>
+            <p className="font-medium text-ink">{t('Comprobante de pago')}</p>
             <p>{formatearFecha(movimiento.fecha)}</p>
           </div>
         </div>
@@ -200,13 +203,13 @@ export default function ComprobantePlanAhorro() {
 
         <div className="grid grid-cols-2 gap-8 print:gap-4">
           <div className="flex flex-col gap-1">
-            <EtiquetaSeccion>Negocio</EtiquetaSeccion>
+            <EtiquetaSeccion>{t('Negocio')}</EtiquetaSeccion>
             <p className="font-medium">{negocio?.nombre}</p>
             {negocio?.telefono && <p className="text-muted">{negocio.telefono}</p>}
             {negocio?.direccion && <p className="text-muted">{negocio.direccion}</p>}
           </div>
           <div className="flex flex-col gap-1">
-            <EtiquetaSeccion>Cliente</EtiquetaSeccion>
+            <EtiquetaSeccion>{t('Cliente')}</EtiquetaSeccion>
             <p className="font-medium">{clienteNombre}</p>
             {plan.clientes?.telefono && <p className="text-muted">{plan.clientes.telefono}</p>}
           </div>
@@ -215,34 +218,34 @@ export default function ComprobantePlanAhorro() {
         <Divisor />
 
         <div className="rounded-xl bg-canvas p-4 print:p-2 flex flex-col gap-1">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-1">Plan de ahorro</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-1">{t('Plan de ahorro')}</p>
           <p className="font-medium">
-            {plan.modelo || 'Equipo a definir'}
+            {plan.modelo || t('Equipo a definir')}
             {plan.capacidad_gb ? ` · ${plan.capacidad_gb}GB` : ''}
             {plan.color ? ` · ${plan.color}` : ''}
           </p>
-          {movimiento.medio && <p className="text-muted">Medio: {movimiento.medio}</p>}
-          {movimiento.observacion && <p className="text-muted">Observación: {movimiento.observacion}</p>}
-          {movimiento.registrado_por_nombre && <p className="text-muted">Registrado por: {movimiento.registrado_por_nombre}</p>}
+          {movimiento.medio && <p className="text-muted">{t('Medio:')} {movimiento.medio}</p>}
+          {movimiento.observacion && <p className="text-muted">{t('Observación:')} {movimiento.observacion}</p>}
+          {movimiento.registrado_por_nombre && <p className="text-muted">{t('Registrado por:')} {movimiento.registrado_por_nombre}</p>}
         </div>
 
         <div className="self-end w-full max-w-[320px] flex flex-col gap-2">
           <div className="flex justify-between items-baseline font-display font-semibold text-xl rounded-lg bg-ink text-white px-3 py-2.5">
-            <span className="text-sm font-sans font-medium opacity-80">PAGO DE HOY</span>
+            <span className="text-sm font-sans font-medium opacity-80">{t('PAGO DE HOY')}</span>
             <span>${Math.round(movimiento.monto).toLocaleString('es-AR')}</span>
           </div>
           {totalPagadoError ? (
-            <p className="text-xs text-bad text-right">No pudimos confirmar el total juntado hasta ahora — no lo tomes de este comprobante.</p>
+            <p className="text-xs text-bad text-right">{t('No pudimos confirmar el total juntado hasta ahora — no lo tomes de este comprobante.')}</p>
           ) : (
             <>
               <div className="flex justify-between text-sm px-1">
-                <span className="text-muted">Total juntado</span>
+                <span className="text-muted">{t('Total juntado')}</span>
                 <span className="font-medium">
                   ${Math.round(totalPagado).toLocaleString('es-AR')} / ${Math.round(plan.monto_objetivo).toLocaleString('es-AR')}
                 </span>
               </div>
               <div className="flex justify-between text-sm px-1">
-                <span className="text-muted">{completo ? '¡Objetivo completado!' : 'Falta para completar'}</span>
+                <span className="text-muted">{completo ? t('¡Objetivo completado!') : t('Falta para completar')}</span>
                 {!completo && <span className="font-medium">${Math.round(falta).toLocaleString('es-AR')}</span>}
               </div>
             </>
@@ -251,7 +254,7 @@ export default function ComprobantePlanAhorro() {
 
         {negocio?.texto_declaracion_plan_ahorro && (
           <div className="rounded-xl bg-canvas p-4 print:p-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">Términos y condiciones</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">{t('Términos y condiciones')}</p>
             <p
               className="whitespace-pre-wrap text-ink font-medium print:font-semibold"
               style={{ fontSize: negocio.texto_declaracion_plan_ahorro_tamano }}
@@ -263,9 +266,9 @@ export default function ComprobantePlanAhorro() {
 
         <div className="mt-4 print:mt-2 flex flex-col items-center gap-1 self-center">
           <div className="w-64 border-t border-border" />
-          <p className="text-sm text-muted">Firma</p>
+          <p className="text-sm text-muted">{t('Firma')}</p>
           <div className="w-64 border-t border-border mt-4" />
-          <p className="text-sm text-muted">Aclaración</p>
+          <p className="text-sm text-muted">{t('Aclaración')}</p>
         </div>
       </div>
 

@@ -10,6 +10,7 @@ import { ESLOGAN } from '../../../lib/eslogan';
 import { armarLinkWhatsApp } from '../../../lib/whatsapp';
 import { codigoLlamada } from '../../../lib/paises';
 import EtiquetaSeccion from '../../../EtiquetaSeccion';
+import { useT } from '../../../lib/idioma';
 
 type Item = {
   descripcion: string;
@@ -119,6 +120,7 @@ function Divisor() {
 export default function Boleta() {
   const { id } = useParams<{ id: string }>();
   const supabase = crearClienteNavegador();
+  const t = useT();
 
   const [orden, setOrden] = useState<Orden | null>(null);
   const [canjes, setCanjes] = useState<CanjeEntregado[]>([]);
@@ -173,7 +175,7 @@ export default function Boleta() {
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center">
-        <p className="text-sm text-muted">Cargando...</p>
+        <p className="text-sm text-muted">{t('Cargando...')}</p>
       </main>
     );
   }
@@ -181,10 +183,10 @@ export default function Boleta() {
   if (!orden) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
-        <p className="text-sm text-muted">No encontramos esa orden.</p>
+        <p className="text-sm text-muted">{t('No encontramos esa orden.')}</p>
         {error && <p className="text-xs text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
         <Link href="/ordenes" className="text-sm text-accent underline">
-          Volver a órdenes
+          {t('Volver a órdenes')}
         </Link>
       </main>
     );
@@ -215,13 +217,13 @@ export default function Boleta() {
   // y "no llegaba la boleta".
   const urlBoleta = typeof window !== 'undefined' && orden.token_boleta ? `${window.location.origin}/boleta/${orden.token_boleta}` : '';
   const mensajeWhatsapp =
-    `Hola ${orden.clientes?.nombre || ''}! Te paso la boleta de tu compra en ${negocio?.nombre || ''}.\n` +
+    `${t('Hola')} ${orden.clientes?.nombre || ''}! ${t('Te paso la boleta de tu compra en')} ${negocio?.nombre || ''}.\n` +
     orden.orden_items.map((i) => `- ${i.descripcion} x${i.cantidad}: ${fmt(i.cantidad * i.precio_unitario)}`).join('\n') +
-    `\nTotal: ${fmt(totalNum)}` +
+    `\n${t('Total')}: ${fmt(totalNum)}` +
     (orden.cuotas && orden.cuotas > 1
-      ? `\nEn ${orden.cuotas} cuotas de ${fmt(totalNum / orden.cuotas)}`
+      ? `\n${t('En')} ${orden.cuotas} ${t('cuotas de')} ${fmt(totalNum / orden.cuotas)}`
       : '') +
-    (urlBoleta ? `\n\nPodés ver y descargar tu boleta acá:\n${urlBoleta}` : '');
+    (urlBoleta ? `\n\n${t('Podés ver y descargar tu boleta acá:')}\n${urlBoleta}` : '');
   const linkWhatsapp = orden.clientes?.telefono
     ? armarLinkWhatsApp(orden.clientes.telefono, mensajeWhatsapp, codigoLlamada(negocio?.pais))
     : null;
@@ -232,12 +234,12 @@ export default function Boleta() {
         <Link href="/ordenes" className="text-2xl leading-none text-ink">
           &larr;
         </Link>
-        <span className="text-lg font-display font-semibold mr-auto">Boleta</span>
+        <span className="text-lg font-display font-semibold mr-auto">{t('Boleta')}</span>
         <button
           onClick={() => window.print()}
           className="rounded-lg border border-border dark:border-dark-border bg-white dark:bg-dark-surface text-ink dark:text-dark-text px-3 py-2 text-xs font-medium hover:bg-canvas dark:hover:bg-dark-bg transition-colors"
         >
-          Imprimir
+          {t('Imprimir')}
         </button>
         {linkWhatsapp && (
           <a
@@ -253,13 +255,13 @@ export default function Boleta() {
           href={`/ordenes/${orden.id}?editar=1`}
           className="rounded-lg border border-border dark:border-dark-border bg-white dark:bg-dark-surface text-ink dark:text-dark-text px-3 py-2 text-xs font-medium hover:bg-canvas dark:hover:bg-dark-bg transition-colors"
         >
-          Editar boleta
+          {t('Editar boleta')}
         </Link>
         <Link
           href="/ordenes"
           className="rounded-lg bg-accent hover:bg-accent-hover transition-colors text-white px-3 py-2 text-xs font-medium"
         >
-          Guardar
+          {t('Guardar')}
         </Link>
       </header>
 
@@ -280,7 +282,7 @@ export default function Boleta() {
           <div className="flex items-center gap-3">
             {negocio?.logo_url && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={negocio.logo_url} alt="Logo" className="h-32 w-32 print:h-24 print:w-24 object-contain rounded-lg" />
+              <img src={negocio.logo_url} alt={t('Logo')} className="h-32 w-32 print:h-24 print:w-24 object-contain rounded-lg" />
             )}
             <div>
               <p className="text-2xl print:text-lg font-display font-semibold leading-tight">{negocio?.nombre}</p>
@@ -291,9 +293,9 @@ export default function Boleta() {
           </div>
           <div className="flex items-start gap-3">
             <div className="text-right text-sm text-muted leading-relaxed mt-1">
-              <p className="font-medium text-ink">Orden #{orden.id.slice(0, 8)}</p>
+              <p className="font-medium text-ink">{t('Orden #')}{orden.id.slice(0, 8)}</p>
               <p>{formatearFecha(orden.created_at)}</p>
-              {orden.fecha_entrega && <p>Entregado: {formatearFecha(orden.fecha_entrega)}</p>}
+              {orden.fecha_entrega && <p>{t('Entregado:')} {formatearFecha(orden.fecha_entrega)}</p>}
               <span
                 className={`inline-block mt-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
                   orden.estado === 'entregado'
@@ -303,12 +305,12 @@ export default function Boleta() {
                       : 'bg-warn/15 text-warn'
                 }`}
               >
-                {orden.estado}
+                {t(orden.estado)}
               </span>
             </div>
             {qr && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={qr} alt="Código QR de la boleta" className="h-20 w-20 print:h-16 print:w-16 shrink-0 -mt-1" />
+              <img src={qr} alt={t('Código QR de la boleta')} className="h-20 w-20 print:h-16 print:w-16 shrink-0 -mt-1" />
             )}
           </div>
         </div>
@@ -317,7 +319,7 @@ export default function Boleta() {
 
         <div className="grid grid-cols-2 gap-8 print:gap-4">
           <div className="flex flex-col gap-1">
-            <EtiquetaSeccion>Negocio</EtiquetaSeccion>
+            <EtiquetaSeccion>{t('Negocio')}</EtiquetaSeccion>
             <p className="font-medium">{negocio?.nombre}</p>
             {negocio?.telefono && <p className="text-muted">{negocio.telefono}</p>}
             {negocio?.direccion && <p className="text-muted">{negocio.direccion}</p>}
@@ -342,11 +344,11 @@ export default function Boleta() {
             )}
           </div>
           <div className="flex flex-col gap-1">
-            <EtiquetaSeccion>Cliente</EtiquetaSeccion>
+            <EtiquetaSeccion>{t('Cliente')}</EtiquetaSeccion>
             <p className="font-medium">{clienteNombre}</p>
             {orden.clientes?.telefono && <p className="text-muted">{orden.clientes.telefono}</p>}
             {orden.clientes?.email && <p className="text-muted">{orden.clientes.email}</p>}
-            {orden.clientes?.dni && <p className="text-muted">DNI: {orden.clientes.dni}</p>}
+            {orden.clientes?.dni && <p className="text-muted">{t('DNI:')} {orden.clientes.dni}</p>}
             {orden.clientes?.domicilio && <p className="text-muted">{orden.clientes.domicilio}</p>}
           </div>
         </div>
@@ -356,7 +358,7 @@ export default function Boleta() {
             {canjes.map((c, idx) => (
               <div key={idx} className="rounded-xl bg-accent-soft p-4 flex flex-col gap-1">
                 <p className="text-xs font-semibold uppercase tracking-wide text-accent mb-1">
-                  Plan canje — dispositivo entregado{canjes.length > 1 ? ` (${idx + 1} de ${canjes.length})` : ''}
+                  {t('Plan canje — dispositivo entregado')}{canjes.length > 1 ? ` (${idx + 1} ${t('de')} ${canjes.length})` : ''}
                 </p>
                 <p className="font-medium">
                   {c.modelo}
@@ -365,15 +367,15 @@ export default function Boleta() {
                 </p>
                 {c.imei && (
                   <p className="text-muted">
-                    IMEI: <span className="font-bold text-ink">{c.imei}</span>
+                    {t('IMEI:')} <span className="font-bold text-ink">{c.imei}</span>
                   </p>
                 )}
-                {c.salud_bateria != null && <p className="text-muted">Batería: {c.salud_bateria}%</p>}
-                {c.detalles && <p className="text-muted">Detalles: {c.detalles}</p>}
-                {c.vendedores?.nombre && <p className="text-muted">Recibido por: {c.vendedores.nombre}</p>}
+                {c.salud_bateria != null && <p className="text-muted">{t('Batería:')} {c.salud_bateria}%</p>}
+                {c.detalles && <p className="text-muted">{t('Detalles:')} {c.detalles}</p>}
+                {c.vendedores?.nombre && <p className="text-muted">{t('Recibido por:')} {c.vendedores.nombre}</p>}
                 {c.monto != null && (
                   <p className="font-medium mt-1">
-                    Monto reconocido: {fmt(c.monto)}
+                    {t('Monto reconocido:')} {fmt(c.monto)}
                   </p>
                 )}
               </div>
@@ -386,10 +388,10 @@ export default function Boleta() {
         <table className="w-full text-sm border-separate border-spacing-0">
           <thead>
             <tr className="bg-ink text-white text-left text-xs font-semibold uppercase tracking-wide">
-              <th className="py-1.5 px-3 rounded-l-lg">Producto</th>
-              <th className="py-1.5 px-3 text-center border-l border-white/20">Cant.</th>
-              <th className="py-1.5 px-3 text-right border-l border-white/20">Precio unit.</th>
-              <th className="py-1.5 px-3 text-right rounded-r-lg border-l border-white/20">Precio</th>
+              <th className="py-1.5 px-3 rounded-l-lg">{t('Producto')}</th>
+              <th className="py-1.5 px-3 text-center border-l border-white/20">{t('Cant.')}</th>
+              <th className="py-1.5 px-3 text-right border-l border-white/20">{t('Precio unit.')}</th>
+              <th className="py-1.5 px-3 text-right rounded-r-lg border-l border-white/20">{t('Precio')}</th>
             </tr>
           </thead>
           <tbody>
@@ -399,12 +401,12 @@ export default function Boleta() {
                   {i.descripcion}
                   {i.dispositivos?.estado === 'sellado' && (
                     <span className="ml-1.5 inline-block text-[10px] font-bold text-black bg-gradient-to-b from-amber-300 to-amber-500 border border-black/40 rounded-full px-2 py-0.5 align-middle">
-                      ✦ SELLADO
+                      ✦ {t('SELLADO')}
                     </span>
                   )}
                   {i.dispositivos?.garantia_vencimiento && (
                     <p className="text-xs text-muted mt-0.5">
-                      🛡️ Garantía hasta el {new Date(i.dispositivos.garantia_vencimiento + 'T00:00:00').toLocaleDateString('es-AR')}
+                      🛡️ {t('Garantía hasta el')} {new Date(i.dispositivos.garantia_vencimiento + 'T00:00:00').toLocaleDateString('es-AR')}
                     </p>
                   )}
                 </td>
@@ -423,29 +425,29 @@ export default function Boleta() {
         <div className="self-end w-full max-w-[280px] flex flex-col gap-2 text-sm">
           {orden.anticipo != null && orden.anticipo > 0 && (
             <div className="flex justify-between text-muted">
-              <span>Anticipo</span>
+              <span>{t('Anticipo')}</span>
               <span>{fmt(orden.anticipo)}</span>
             </div>
           )}
           <div className="flex justify-between text-muted">
-            <span>Subtotal</span>
+            <span>{t('Subtotal')}</span>
             <span>{fmt(subtotal)}</span>
           </div>
           {orden.impuesto_porcentaje != null && orden.impuesto_porcentaje > 0 && (
             <div className="flex justify-between text-muted">
-              <span>Impuesto</span>
+              <span>{t('Impuesto')}</span>
               <span>{orden.impuesto_porcentaje}%</span>
             </div>
           )}
           {orden.monto_canje != null && orden.monto_canje > 0 && (
             <div className="flex justify-between text-muted">
-              <span>Plan canje</span>
+              <span>{t('Plan canje')}</span>
               <span>-{fmt(orden.monto_canje)}</span>
             </div>
           )}
           <div className="flex justify-between items-baseline font-display font-semibold text-lg rounded-lg bg-ink text-white px-3 py-2 mt-1">
             <span className="text-sm font-sans font-medium opacity-80">
-              {totalNum < 0 ? 'SALDO A FAVOR DEL CLIENTE' : 'TOTAL'}
+              {totalNum < 0 ? t('SALDO A FAVOR DEL CLIENTE') : t('TOTAL')}
             </span>
             <span>
               {totalNum < 0 ? '-' : ''}
@@ -454,7 +456,7 @@ export default function Boleta() {
           </div>
           {orden.cuotas != null && orden.cuotas > 1 && (
             <div className="flex justify-between text-muted">
-              <span>Financiado en {orden.cuotas} cuotas</span>
+              <span>{t('Financiado en')} {orden.cuotas} {t('cuotas')}</span>
               <span>
                 {orden.cuotas} × {fmt(totalNum / orden.cuotas)}
               </span>
@@ -463,19 +465,19 @@ export default function Boleta() {
           {modo === 'ambas' && orden.monto_secundario != null && orden.moneda_secundaria && (
             <p className="text-xs text-muted italic text-right">
               ≈ {simboloMoneda(orden.moneda_secundaria)}
-              {orden.monto_secundario.toLocaleString('es-AR')} {orden.moneda_secundaria} (valor informativo)
+              {orden.monto_secundario.toLocaleString('es-AR')} {orden.moneda_secundaria} ({t('valor informativo')})
             </p>
           )}
         </div>
 
         <div className="flex flex-wrap gap-x-8 gap-y-1 text-sm">
           <p>
-            <span className="text-muted">Método de pago </span>
+            <span className="text-muted">{t('Método de pago')} </span>
             <span className="font-medium">{orden.forma_pago}</span>
           </p>
           {orden.vendedores?.nombre && (
             <p>
-              <span className="text-muted">Vendedor </span>
+              <span className="text-muted">{t('Vendedor')} </span>
               <span className="font-medium">{orden.vendedores.nombre}</span>
             </p>
           )}
@@ -483,14 +485,14 @@ export default function Boleta() {
 
         {orden.nota && (
           <div className="rounded-xl bg-canvas p-4 print:p-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">Nota</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">{t('Nota')}</p>
             <p className="whitespace-pre-wrap text-muted">{orden.nota}</p>
           </div>
         )}
 
         {orden.incluir_aclaraciones_tecnico && orden.aclaraciones_tecnico && (
           <div className="rounded-xl bg-canvas p-4 print:p-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">Aclaraciones del técnico</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">{t('Aclaraciones del técnico')}</p>
             <p className="whitespace-pre-wrap text-muted">{orden.aclaraciones_tecnico}</p>
           </div>
         )}
@@ -502,7 +504,7 @@ export default function Boleta() {
 
         {orden.incluir_garantia && tieneProductos && negocio?.texto_garantia && (
           <div className="rounded-xl bg-canvas p-4 print:p-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">Garantía de productos</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">{t('Garantía de productos')}</p>
             <p
               className="whitespace-pre-wrap text-ink font-medium print:font-semibold"
               style={{ fontSize: negocio.texto_garantia_tamano }}
@@ -514,7 +516,7 @@ export default function Boleta() {
 
         {orden.incluir_garantia && tieneTrabajos && negocio?.texto_garantia_servicio && (
           <div className="rounded-xl bg-canvas p-4 print:p-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">Garantía de servicio técnico</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">{t('Garantía de servicio técnico')}</p>
             <p
               className="whitespace-pre-wrap text-ink font-medium print:font-semibold"
               style={{ fontSize: negocio.texto_garantia_servicio_tamano }}
@@ -526,14 +528,14 @@ export default function Boleta() {
 
         <div className="mt-4 print:mt-2 flex flex-col items-center gap-1 self-center">
           <div className="w-56 border-t border-border" />
-          <p className="text-sm text-muted">Nombre y firma del cliente</p>
+          <p className="text-sm text-muted">{t('Nombre y firma del cliente')}</p>
         </div>
 
         <Divisor />
 
         <div className="flex flex-col items-center gap-1">
           <p className="text-[10px] text-muted text-center max-w-xs">
-            Escaneá el código QR para volver a ver esta boleta cuando quieras.
+            {t('Escaneá el código QR para volver a ver esta boleta cuando quieras.')}
           </p>
         </div>
       </div>

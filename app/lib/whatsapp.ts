@@ -28,8 +28,17 @@ export function mensajeEsperandoRepuesto(nombreCliente: string, modelo: string, 
   return `Hola ${nombreCliente}! Te contamos que tu ${modelo} está esperando un repuesto para poder terminar la reparación. Te avisamos apenas llegue. Más detalles acá: ${urlSeguimiento}`;
 }
 
-export function mensajeComprobantePlanAhorro(nombreCliente: string, monto: string, modelo: string, urlComprobante: string) {
-  return `Hola ${nombreCliente}! Te confirmamos tu pago de ${monto} para el plan de ahorro de ${modelo}. Acá tenés tu comprobante: ${urlComprobante}`;
+// t opcional — quien llama desde un componente cliente pasa su useT() para
+// que el mensaje salga en el idioma que esa persona tiene elegido (mismo
+// criterio que la boleta que este comprobante acompaña).
+export function mensajeComprobantePlanAhorro(
+  nombreCliente: string,
+  monto: string,
+  modelo: string,
+  urlComprobante: string,
+  t: (texto: string) => string = (s) => s
+) {
+  return `${t('Hola')} ${nombreCliente}! ${t('Te confirmamos tu pago de')} ${monto} ${t('para el plan de ahorro de')} ${modelo}. ${t('Acá tenés tu comprobante:')} ${urlComprobante}`;
 }
 
 export function mensajeConsultaProveedor(nombreRepuesto: string) {

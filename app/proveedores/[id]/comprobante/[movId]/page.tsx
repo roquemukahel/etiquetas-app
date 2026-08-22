@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import { crearClienteNavegador } from '../../../../lib/supabase/client';
 import { ESLOGAN } from '../../../../lib/eslogan';
 import EtiquetaSeccion from '../../../../EtiquetaSeccion';
+import { useT } from '../../../../lib/idioma';
 
 type Movimiento = {
   id: string;
@@ -42,6 +43,7 @@ function Divisor() {
 export default function ComprobanteProveedor() {
   const { id, movId } = useParams<{ id: string; movId: string }>();
   const supabase = crearClienteNavegador();
+  const t = useT();
 
   const [proveedor, setProveedor] = useState<Proveedor | null>(null);
   const [movimiento, setMovimiento] = useState<Movimiento | null>(null);
@@ -83,7 +85,7 @@ export default function ComprobanteProveedor() {
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center">
-        <p className="text-sm text-muted">Cargando...</p>
+        <p className="text-sm text-muted">{t('Cargando...')}</p>
       </main>
     );
   }
@@ -91,17 +93,17 @@ export default function ComprobanteProveedor() {
   if (!movimiento || !proveedor) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
-        <p className="text-sm text-muted">No encontramos ese comprobante.</p>
+        <p className="text-sm text-muted">{t('No encontramos ese comprobante.')}</p>
         {error && <p className="text-xs text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
         <Link href={`/proveedores/${id}`} className="text-sm text-accent underline">
-          Volver al proveedor
+          {t('Volver al proveedor')}
         </Link>
       </main>
     );
   }
 
   const esPago = movimiento.tipo === 'abono';
-  const titulo = esPago ? 'Comprobante de pago' : 'Comprobante de deuda';
+  const titulo = esPago ? t('Comprobante de pago') : t('Comprobante de deuda');
 
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4 print:p-0 print:gap-0">
@@ -114,7 +116,7 @@ export default function ComprobanteProveedor() {
           onClick={() => window.print()}
           className="rounded-lg border border-border dark:border-dark-border bg-white dark:bg-dark-surface text-ink dark:text-dark-text px-3 py-2 text-xs font-medium hover:bg-canvas dark:hover:bg-dark-bg transition-colors"
         >
-          Imprimir
+          {t('Imprimir')}
         </button>
       </header>
 
@@ -133,7 +135,7 @@ export default function ComprobanteProveedor() {
 
         {movimiento.anulado && (
           <div className="rounded-xl bg-bad/10 border-2 border-bad text-bad text-center py-2 font-display font-semibold tracking-wide">
-            ⚠ ESTE MOVIMIENTO FUE ANULADO — no es válido como comprobante
+            ⚠ {t('ESTE MOVIMIENTO FUE ANULADO — no es válido como comprobante')}
           </div>
         )}
 
@@ -141,7 +143,7 @@ export default function ComprobanteProveedor() {
           <div className="flex items-center gap-3">
             {negocio?.logo_url && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={negocio.logo_url} alt="Logo" className="h-32 w-32 print:h-24 print:w-24 object-contain rounded-lg" />
+              <img src={negocio.logo_url} alt={t('Logo')} className="h-32 w-32 print:h-24 print:w-24 object-contain rounded-lg" />
             )}
             <div>
               <p className="text-2xl print:text-lg font-display font-semibold leading-tight">{negocio?.nombre}</p>
@@ -158,13 +160,13 @@ export default function ComprobanteProveedor() {
 
         <div className="grid grid-cols-2 gap-8 print:gap-4">
           <div className="flex flex-col gap-1">
-            <EtiquetaSeccion>Negocio</EtiquetaSeccion>
+            <EtiquetaSeccion>{t('Negocio')}</EtiquetaSeccion>
             <p className="font-medium">{negocio?.nombre}</p>
             {negocio?.telefono && <p className="text-muted">{negocio.telefono}</p>}
             {negocio?.direccion && <p className="text-muted">{negocio.direccion}</p>}
           </div>
           <div className="flex flex-col gap-1">
-            <EtiquetaSeccion>Proveedor</EtiquetaSeccion>
+            <EtiquetaSeccion>{t('Proveedor')}</EtiquetaSeccion>
             <p className="font-medium">{proveedor.nombre}</p>
             {proveedor.telefono && <p className="text-muted">{proveedor.telefono}</p>}
           </div>
@@ -173,21 +175,21 @@ export default function ComprobanteProveedor() {
         <Divisor />
 
         <div className="rounded-xl bg-canvas p-4 print:p-2 flex flex-col gap-1">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-1">Concepto</p>
-          <p className="font-medium">{esPago ? 'Pago realizado' : 'Deuda registrada'}</p>
-          {movimiento.medio && <p className="text-muted">Medio: {movimiento.medio}</p>}
-          {movimiento.observacion && <p className="text-muted">Observación: {movimiento.observacion}</p>}
-          {movimiento.registrado_por_nombre && <p className="text-muted">Registrado por: {movimiento.registrado_por_nombre}</p>}
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-1">{t('Concepto')}</p>
+          <p className="font-medium">{esPago ? t('Pago realizado') : t('Deuda registrada')}</p>
+          {movimiento.medio && <p className="text-muted">{t('Medio:')} {movimiento.medio}</p>}
+          {movimiento.observacion && <p className="text-muted">{t('Observación:')} {movimiento.observacion}</p>}
+          {movimiento.registrado_por_nombre && <p className="text-muted">{t('Registrado por:')} {movimiento.registrado_por_nombre}</p>}
         </div>
 
         <div className="self-end w-full max-w-[280px] flex justify-between items-baseline font-display font-semibold text-xl rounded-lg bg-ink text-white px-3 py-2.5">
-          <span className="text-sm font-sans font-medium opacity-80">{esPago ? 'MONTO PAGADO' : 'MONTO ADEUDADO'}</span>
+          <span className="text-sm font-sans font-medium opacity-80">{esPago ? t('MONTO PAGADO') : t('MONTO ADEUDADO')}</span>
           <span>${Math.round(movimiento.monto).toLocaleString('es-AR')}</span>
         </div>
 
         {negocio?.texto_declaracion_proveedor && (
           <div className="rounded-xl bg-canvas p-4 print:p-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">Términos y condiciones</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">{t('Términos y condiciones')}</p>
             <p
               className="whitespace-pre-wrap text-ink font-medium print:font-semibold"
               style={{ fontSize: negocio.texto_declaracion_proveedor_tamano }}
@@ -199,9 +201,9 @@ export default function ComprobanteProveedor() {
 
         <div className="mt-4 print:mt-2 flex flex-col items-center gap-1 self-center">
           <div className="w-64 border-t border-border" />
-          <p className="text-sm text-muted">Firma</p>
+          <p className="text-sm text-muted">{t('Firma')}</p>
           <div className="w-64 border-t border-border mt-4" />
-          <p className="text-sm text-muted">Aclaración</p>
+          <p className="text-sm text-muted">{t('Aclaración')}</p>
         </div>
       </div>
 
