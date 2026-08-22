@@ -19,10 +19,19 @@ import ProductosMasVendidos from './ProductosMasVendidos';
 import QoviLateral from './QoviLateral';
 import AvisoPruebaPorVencer from './AvisoPruebaPorVencer';
 import { obtenerIdiomaServidor, traducir } from './lib/idiomaServidor';
+import { obtenerSucursalServidor } from './lib/sucursalServidor';
 
 export default async function Home() {
   const idioma = obtenerIdiomaServidor();
   const t = (texto: string) => traducir(idioma, texto);
+  const sucursalId = obtenerSucursalServidor();
+  // Aplica el filtro solo a lo que Fase 1 etiqueta por sucursal (stock,
+  // órdenes, reparaciones) — clientes/canjes/compras quedan compartidos a
+  // propósito. sucursalId solo llega no-null si el negocio activó
+  // multisucursal Y eligió una sucursal puntual en el panel, así que para
+  // el resto de los negocios esto es un no-op.
+  const porSucursal = <Q extends { eq: (columna: string, valor: string) => Q }>(q: Q): Q =>
+    sucursalId ? q.eq('sucursal_id', sucursalId) : q;
   const supabase = crearClienteServidor();
   const {
     data: { user },
@@ -127,59 +136,73 @@ export default async function Home() {
         .eq('id', user.id)
         .single(),
       Promise.all([
-      supabase.from('dispositivos').select('id', { count: 'exact', head: true }).eq('en_stock', true),
-      supabase.from('ordenes').select('id', { count: 'exact', head: true }).eq('estado', 'pendiente'),
+      porSucursal(supabase.from('dispositivos').select('id', { count: 'exact', head: true }).eq('en_stock', true)),
+      porSucursal(supabase.from('ordenes').select('id', { count: 'exact', head: true }).eq('estado', 'pendiente')),
       supabase.from('clientes').select('id', { count: 'exact', head: true }),
       supabase.rpc('es_admin'),
-      supabase
-        .from('ordenes')
-        .select(
-          'total, estado, created_at, vendedores ( nombre, foto_url ), clientes ( nombre, apellido ), orden_items ( descripcion, cantidad, tipo, dispositivos ( modelo, color ) )'
-        )
-        .gte('created_at', inicioMesPasado.toISOString()),
+      porSucursal(
+        supabase
+          .from('ordenes')
+          .select(
+            'total, estado, created_at, vendedores ( nombre, foto_url ), clientes ( nombre, apellido ), orden_items ( descripcion, cantidad, tipo, dispositivos ( modelo, color ) )'
+          )
+          .gte('created_at', inicioMesPasado.toISOString())
+      ),
       supabase.from('modelos_stock').select('nombre, imagen_url'),
       supabase.from('productos').select('nombre, imagen_url'),
-      supabase
-        .from('reparaciones')
-        .select('modelo, fecha_reparado, tecnicos ( nombre, foto_url )')
-        .not('fecha_reparado', 'is', null)
-        .order('fecha_reparado', { ascending: false })
-        .limit(5),
-      supabase
-        .from('dispositivos')
-        .select('modelo, created_at, agregado_por_nombre, agregado_por_foto_url')
-        .order('created_at', { ascending: false })
-        .limit(5),
+      porSucursal(
+        supabase
+          .from('reparaciones')
+          .select('modelo, fecha_reparado, tecnicos ( nombre, foto_url )')
+          .not('fecha_reparado', 'is', null)
+          .order('fecha_reparado', { ascending: false })
+          .limit(5)
+      ),
+      porSucursal(
+        supabase
+          .from('dispositivos')
+          .select('modelo, created_at, agregado_por_nombre, agregado_por_foto_url')
+          .order('created_at', { ascending: false })
+          .limit(5)
+      ),
       supabase
         .from('clientes')
         .select('nombre, apellido, created_at, agregado_por_nombre, agregado_por_foto_url')
         .order('created_at', { ascending: false })
         .limit(5),
-      supabase.from('reparaciones').select('id', { count: 'exact', head: true }).eq('estado', 'listo_para_entregar'),
-      supabase
-        .from('dispositivos')
-        .select('id', { count: 'exact', head: true })
-        .not('garantia_vencimiento', 'is', null)
-        .gte('garantia_vencimiento', new Date().toISOString().slice(0, 10))
-        .lte('garantia_vencimiento', en7dias.toISOString().slice(0, 10)),
-      supabase
-        .from('dispositivos')
-        .select('id', { count: 'exact', head: true })
-        .eq('en_stock', true)
-        .lte('en_stock_desde', hace30dias.toISOString()),
-      supabase
-        .from('reparaciones')
-        .select('id', { count: 'exact', head: true })
-        .neq('estado', 'entregado')
-        .neq('estado', 'cancelado')
-        .lte('fecha_ingreso_servicio', hace60dias.toISOString()),
+      porSucursal(supabase.from('reparaciones').select('id', { count: 'exact', head: true }).eq('estado', 'listo_para_entregar')),
+      porSucursal(
+        supabase
+          .from('dispositivos')
+          .select('id', { count: 'exact', head: true })
+          .not('garantia_vencimiento', 'is', null)
+          .gte('garantia_vencimiento', new Date().toISOString().slice(0, 10))
+          .lte('garantia_vencimiento', en7dias.toISOString().slice(0, 10))
+      ),
+      porSucursal(
+        supabase
+          .from('dispositivos')
+          .select('id', { count: 'exact', head: true })
+          .eq('en_stock', true)
+          .lte('en_stock_desde', hace30dias.toISOString())
+      ),
+      porSucursal(
+        supabase
+          .from('reparaciones')
+          .select('id', { count: 'exact', head: true })
+          .neq('estado', 'entregado')
+          .neq('estado', 'cancelado')
+          .lte('fecha_ingreso_servicio', hace60dias.toISOString())
+      ),
       supabase.from('canjes').select('id', { count: 'exact', head: true }).eq('estado', 'en_canje').eq('oculto_en_canje', false),
       supabase.from('compras').select('id', { count: 'exact', head: true }).eq('estado', 'pendiente'),
-      supabase
-        .from('dispositivos')
-        .select('id', { count: 'exact', head: true })
-        .eq('en_stock', true)
-        .is('precio', null),
+      porSucursal(
+        supabase
+          .from('dispositivos')
+          .select('id', { count: 'exact', head: true })
+          .eq('en_stock', true)
+          .is('precio', null)
+      ),
       // Acciones sensibles del libro de auditoría (borrados, ediciones,
       // derivaciones, cambios de config): son actividad del sistema que no
       // aparece en las tablas vivas (un borrado deja la fila inexistente).
@@ -193,7 +216,7 @@ export default async function Home() {
       supabase.from('vendedores').select('nombre, foto_url'),
       supabase.from('tecnicos').select('nombre, foto_url'),
       ]),
-      obtenerTodasLasFilas<{ modelo: string | null }>(supabase, 'dispositivos', 'modelo', [], (q) => q.eq('en_stock', true)),
+      obtenerTodasLasFilas<{ modelo: string | null }>(supabase, 'dispositivos', 'modelo', [], (q) => porSucursal(q.eq('en_stock', true))),
     ]);
 
     // Puede pasar si el registro se cortó justo entre crear la cuenta y

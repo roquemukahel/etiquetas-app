@@ -65,6 +65,7 @@ type Dispositivo = {
   en_stock: boolean;
   created_at: string;
   agregado_por_nombre: string | null;
+  sucursal_id?: string | null;
 };
 
 type Producto = {
@@ -176,7 +177,9 @@ export default function Stock() {
   const [categoriasStock, setCategoriasStock] = useState<Categoria[]>([]);
   const [categoriaProducto, setCategoriaProducto] = useState('');
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
-  const [filtroSucursal, setFiltroSucursal] = useState('');
+  // Arranca en la sucursal elegida en el panel — se puede "espiar" otra acá
+  // adentro sin tocar la selección global.
+  const [filtroSucursal, setFiltroSucursal] = useState(sucursalActual.id ?? '');
   // Modalidad del producto que se está por agregar: la sugiere la categoría
   // elegida (modalidad_default), pero queda editable — la spec pide que sea
   // "explícitamente seleccionable por producto", no fija por categoría.
@@ -328,7 +331,7 @@ export default function Stock() {
   // esa persona cargó, traerla en un listado de miles de filas multiplica
   // el peso de la respuesta varias veces sin necesidad.
   const COLUMNAS_DISPOSITIVO =
-    'id, modelo, capacidad_gb, imei, numero_serie, salud_bateria, color, precio, costo, proveedor, estado, detalles, en_stock, created_at, agregado_por_nombre';
+    'id, modelo, capacidad_gb, imei, numero_serie, salud_bateria, color, precio, costo, proveedor, estado, detalles, en_stock, created_at, agregado_por_nombre, sucursal_id';
   const ORDEN_DISPOSITIVO = [{ columna: 'modelo' }, { columna: 'created_at', ascending: false }];
 
   // "En stock" se trae siempre (es lo chico y lo que se usa a cada rato).
@@ -820,6 +823,7 @@ export default function Stock() {
     return dispositivos.filter((d) => {
       if (vista === 'stock' && !d.en_stock) return false;
       if (vista === 'vendidos' && d.en_stock) return false;
+      if (filtroSucursal && d.sucursal_id !== filtroSucursal) return false;
       if (!cumpleFiltroRapido(d)) return false;
       if (!q) return true;
       // Modelo, serie y color con espacios normales; el IMEI se compara
@@ -831,7 +835,7 @@ export default function Stock() {
       return false;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dispositivos, busquedaDebounced, vista, filtroRapido, conteoEnStockPorModelo, puedeVerCapital]);
+  }, [dispositivos, busquedaDebounced, vista, filtroRapido, filtroSucursal, conteoEnStockPorModelo, puedeVerCapital]);
 
   // Si la búsqueda es un IMEI exacto, esa carpeta pasa primera en la lista
   // — no hace falta buscar entre las demás para encontrar el equipo.
@@ -1338,6 +1342,22 @@ export default function Stock() {
                 </button>
               ))}
             </div>
+
+            {sucursales.length > 1 && (
+              <select
+                value={filtroSucursal}
+                onChange={(e) => setFiltroSucursal(e.target.value)}
+                aria-label={t('Filtrar por sucursal')}
+                className="self-start bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2.5 py-1.5 text-xs"
+              >
+                <option value="">🏬 {t('Todas las sucursales')}</option>
+                {sucursales.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    🏬 {s.nombre}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
           {planImport && puedeAgregarStock && (

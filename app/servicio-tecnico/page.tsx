@@ -34,6 +34,7 @@ import { ICONOS } from '../Iconos';
 import { QCard } from '../QCard';
 import { QoviState } from '../QoviState';
 import { useT } from '../lib/idioma';
+import { useSucursalActual } from '../lib/sucursal';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 
@@ -81,6 +82,7 @@ export default function ServicioTecnico() {
   // esto.
   const puedeVerEstadisticas = tienePermiso(actor, 'ver_estadisticas');
   const t = useT();
+  const sucursalActual = useSucursalActual();
   const [reparaciones, setReparaciones] = useState<Reparacion[]>([]);
   const [tecnicos, setTecnicos] = useState<Tecnico[]>([]);
   const [loading, setLoading] = useState(true);
@@ -445,7 +447,13 @@ export default function ServicioTecnico() {
           .join('\n\n') || null;
       const { data: orden, error: ordenError } = await supabase
         .from('ordenes')
-        .insert({ cliente_id: clienteId, estado: 'pendiente', total: 0, nota: notaCondicion })
+        .insert({
+          cliente_id: clienteId,
+          estado: 'pendiente',
+          total: 0,
+          nota: notaCondicion,
+          ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
+        })
         .select('id')
         .single();
       if (ordenError || !orden) {
@@ -495,6 +503,7 @@ export default function ServicioTecnico() {
           tecnico_id: asignadoTecnicoId || null,
           orden_cobro_id: ordenId,
           ...eq.checklist,
+          ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
         }))
       )
       .select('modelo, token_seguimiento');

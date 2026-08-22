@@ -32,6 +32,7 @@ import { registrarAuditoria } from '../../lib/auditoria';
 import MiniaturaDispositivo from '../../MiniaturaDispositivo';
 import CheckTri from '../../CheckTri';
 import TextoCondicionGenerado from '../../TextoCondicionGenerado';
+import { useSucursalActual } from '../../lib/sucursal';
 
 type Dispositivo = {
   id: string;
@@ -156,6 +157,7 @@ export default function NuevaOrden() {
   const puedeRecibirServicioTecnico = tienePermiso(actorActual, 'recibir_servicio_tecnico');
   const puedeGestionarFinanciacion = tienePermiso(actorActual, 'gestionar_financiacion');
   const t = useT();
+  const sucursalActual = useSucursalActual();
 
   const [step, setStep] = useState<'cliente' | 'carrito' | 'confirmar'>('cliente');
 
@@ -971,6 +973,7 @@ export default function NuevaOrden() {
           fecha_entrega: estadoOrden === 'entregado' ? new Date().toISOString() : null,
           nota: nota.trim() || null,
           incluir_garantia: incluirGarantia,
+          ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
         })
         .select()
         .single();
@@ -1023,6 +1026,7 @@ export default function NuevaOrden() {
             moneda: monedaOrden,
             registrado_por_nombre: actorCobro?.nombre ?? null,
             registrado_por_foto_url: actorCobro?.fotoUrl ?? null,
+            ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
           }))
         );
         if (pagosErr) throw new Error(pagosErr.message);
@@ -1041,6 +1045,7 @@ export default function NuevaOrden() {
             cantidadCuotas: financiarCuotasNum,
             primeraFecha: financiarPrimeraFecha,
             observaciones: 'Financiación generada al confirmar la orden.',
+            sucursalId: sucursalActual.id,
           });
           if ('error' in resultadoPlan) throw new Error(t('No pudimos crear el plan de financiación:') + ' ' + resultadoPlan.error);
         } else {
@@ -1054,6 +1059,7 @@ export default function NuevaOrden() {
             vencimiento: vencimientoDesdeHoy(clienteElegido?.plazo_dias),
             registrado_por_nombre: actorCobro?.nombre ?? null,
             registrado_por_foto_url: actorCobro?.fotoUrl ?? null,
+            ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
           });
           if (movErr) throw new Error(movErr.message);
         }
@@ -1097,6 +1103,7 @@ export default function NuevaOrden() {
             conectores_ok: ci.conectores_ok ?? null,
             humedad: ci.humedad ?? null,
             garantia_excepcion_manual: ci.garantia_excepcion_manual ?? null,
+            ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
           })
           .select('id, numero_orden')
           .single();

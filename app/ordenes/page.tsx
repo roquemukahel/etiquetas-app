@@ -11,6 +11,8 @@ import { generarOrdenDeReparacion } from '../lib/ordenesServicio';
 import { ICONOS } from '../Iconos';
 import { QoviState } from '../QoviState';
 import { useT } from '../lib/idioma';
+import { useSucursalActual } from '../lib/sucursal';
+import { obtenerSucursales, type Sucursal } from '../lib/sucursales';
 
 type Orden = {
   id: string;
@@ -20,6 +22,7 @@ type Orden = {
   created_at: string;
   clientes: { nombre: string; apellido: string | null } | null;
   orden_items: { descripcion: string; tipo: string }[];
+  sucursal_id?: string | null;
 };
 
 // Plan canje del dispositivo que el cliente entregó como parte de pago —
@@ -76,6 +79,7 @@ export default function Ordenes() {
   const actor = useActor();
   const t = useT();
   const puedeVender = tienePermiso(actor, 'vender');
+  const sucursalActual = useSucursalActual();
   const [ordenes, setOrdenes] = useState<Orden[]>([]);
   const [canjes, setCanjes] = useState<CanjeOrden[]>([]);
   const [reparacionesListas, setReparacionesListas] = useState<ReparacionLista[]>([]);
@@ -85,6 +89,10 @@ export default function Ordenes() {
   const [filtroEstado, setFiltroEstado] = useState('todas');
   const [filtroTipo, setFiltroTipo] = useState<'todas' | 'ventas' | 'servicio'>('todas');
   const [busqueda, setBusqueda] = useState('');
+  const [sucursales, setSucursales] = useState<Sucursal[]>([]);
+  // Arranca en la sucursal elegida en el panel — si el dueño la cambia acá
+  // adentro puede "espiar" otra sin tocar la selección global.
+  const [filtroSucursal, setFiltroSucursal] = useState(sucursalActual.id ?? '');
 
   const cargar = async () => {
     const [{ data: ordenesData }, { data: listasData }, { data: canceladasData }, { data: canjesData }] = await Promise.all([
@@ -122,6 +130,17 @@ export default function Ordenes() {
 
   useEffect(() => {
     cargar();
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        setSucursales(await obtenerSucursales(supabase, false));
+      } catch {
+        // Tabla sucursales todavía no existe en este negocio.
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const generarBoleta = async (r: ReparacionLista) => {
@@ -182,6 +201,7 @@ export default function Ordenes() {
     const q = busqueda.trim().toLowerCase();
     return ordenes
       .filter((o) => filtroEstado === 'todas' || o.estado === filtroEstado)
+      .filter((o) => !filtroSucursal || o.sucursal_id === filtroSucursal)
       .filter((o) => {
         if (filtroTipo === 'todas') return true;
         return filtroTipo === 'servicio' ? esServicioTecnico(o) : !esServicioTecnico(o);
@@ -203,7 +223,7 @@ export default function Ordenes() {
           .toLowerCase();
         return nombreCliente.includes(q) || itemsTexto.includes(q) || canjesTexto.includes(q);
       });
-  }, [ordenes, filtroEstado, filtroTipo, busqueda, canjesPorOrden]);
+  }, [ordenes, filtroEstado, filtroSucursal, filtroTipo, busqueda, canjesPorOrden]);
 
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
@@ -248,6 +268,22 @@ export default function Ordenes() {
           </button>
         ))}
       </div>
+
+      {sucursales.length > 1 && (
+        <select
+          value={filtroSucursal}
+          onChange={(e) => setFiltroSucursal(e.target.value)}
+          aria-label={t('Filtrar por sucursal')}
+          className="self-start bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2.5 py-1.5 text-xs"
+        >
+          <option value="">🏬 {t('Todas las sucursales')}</option>
+          {sucursales.map((s) => (
+            <option key={s.id} value={s.id}>
+              🏬 {s.nombre}
+            </option>
+          ))}
+        </select>
+      )}
 
       {puedeVender ? (
         <Link

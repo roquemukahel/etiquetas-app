@@ -33,6 +33,7 @@ export type OrdenR = {
   estado: string;
   forma_pago: string | null;
   created_at: string;
+  sucursal_id?: string | null;
 };
 export type ItemR = {
   orden_id: string;
@@ -40,8 +41,8 @@ export type ItemR = {
   precio_unitario: number | null;
   costo: number | null;
 };
-export type PagoR = { medio: string; monto: number; fecha: string };
-export type CreditoR = { concepto: string; tipo: string; monto: number; fecha: string };
+export type PagoR = { medio: string; monto: number; fecha: string; sucursal_id?: string | null };
+export type CreditoR = { concepto: string; tipo: string; monto: number; fecha: string; sucursal_id?: string | null };
 
 export const ESTADOS_COBRADOS = ['pagado', 'entregado'];
 
@@ -363,7 +364,7 @@ export function resumenComisionesDe(movimientos: ComisionMovR[], inicio: Date, f
 // `new Date(fechaISO)`, que para una fecha "pelada" cae en medianoche UTC, no
 // local — podía correr un egreso al mes de al lado cerca del límite del
 // período según el huso horario del que mira la pantalla.
-export type EgresoR = { importe: number; fecha: string };
+export type EgresoR = { importe: number; fecha: string; sucursal_id?: string | null };
 
 export function egresosPeriodoDe(egresos: EgresoR[], inicio: Date, fin: Date): number {
   return egresos.filter((e) => entre(e.fecha + 'T00:00:00', inicio, fin)).reduce((a, e) => a + e.importe, 0);
