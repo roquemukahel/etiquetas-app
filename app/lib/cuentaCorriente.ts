@@ -21,9 +21,26 @@ export const MEDIOS_PAGO: { codigo: MedioPago; label: string; icono: string }[] 
 // un cargo). No es un MedioPago real.
 export const CUENTA_CORRIENTE = 'cuenta_corriente';
 
-export function medioLabel(codigo: string): string {
-  if (codigo === CUENTA_CORRIENTE) return 'Cuenta corriente';
-  return MEDIOS_PAGO.find((m) => m.codigo === codigo)?.label ?? codigo;
+// Proveedores y Plan de ahorro tienen su propio <select> de medio de pago,
+// separado de MEDIOS_PAGO de arriba, y con acento en el valor guardado
+// ('débito'/'crédito' en vez de 'debito'/'credito') — no es lo ideal tener
+// dos convenciones, pero unificarlas tocaría datos ya guardados, así que acá
+// se contemplan las dos formas en vez de arriesgar esa migración.
+const MEDIO_LABELS_EXTRA: Record<string, string> = {
+  débito: 'Débito',
+  crédito: 'Crédito',
+  cheque: 'Cheque',
+};
+
+// t opcional (default identidad) — igual criterio que mensajeComprobantePlanAhorro
+// en app/lib/whatsapp.ts: quien llama desde un componente pasa su useT() para
+// que la etiqueta salga en el idioma elegido, en vez de quedar siempre en
+// español como pasaba antes en Estadísticas, Egresos, Nueva Orden,
+// Proveedores y Plan de ahorro.
+export function medioLabel(codigo: string, t: (texto: string) => string = (s) => s): string {
+  if (codigo === CUENTA_CORRIENTE) return t('Cuenta corriente');
+  const label = MEDIOS_PAGO.find((m) => m.codigo === codigo)?.label ?? MEDIO_LABELS_EXTRA[codigo];
+  return label ? t(label) : codigo;
 }
 
 export function medioIcono(codigo: string): string {

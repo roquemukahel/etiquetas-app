@@ -9,6 +9,7 @@ import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import { sanitizarDecimal } from '../../lib/numeros';
 import { normalizarNombreModelo } from '../../lib/modelos';
+import { medioLabel } from '../../lib/cuentaCorriente';
 import SelectorColorAuto from '../../SelectorColorAuto';
 import { hexColorDe } from '../../lib/coloresIphone';
 import { useT } from '../../lib/idioma';
@@ -527,7 +528,7 @@ export default function DetalleProveedor() {
                 <div className="min-w-0">
                   <p className="truncate">
                     {m.concepto === 'pago' ? t('Pago') : m.concepto === 'deuda' ? t('Deuda') : t('Ajuste')}
-                    {m.medio ? ` · ${m.medio}` : ''}
+                    {m.medio ? ` · ${medioLabel(m.medio, t)}` : ''}
                     {m.observacion ? ` · ${m.observacion}` : ''}
                   </p>
                   <p className="text-[11px] text-muted dark:text-dark-text-secondary">{new Date(m.fecha).toLocaleDateString('es-AR')}</p>

@@ -217,7 +217,7 @@ export default function Egresos() {
                 <p className="text-sm font-medium truncate">{e.descripcion}</p>
                 <p className="text-[11px] text-muted dark:text-dark-text-secondary">
                   {new Date(e.fecha + 'T00:00:00').toLocaleDateString('es-AR')} · {nombreCategoria(e.categoria_id)} · {t(ETIQUETA_TIPO_EGRESO[e.tipo])}
-                  {e.medio_pago ? ` · ${medioLabel(e.medio_pago)}` : ''}
+                  {e.medio_pago ? ` · ${medioLabel(e.medio_pago, t)}` : ''}
                   {e.registrado_por_nombre ? ` · ${e.registrado_por_nombre}` : ''}
                 </p>
               </div>

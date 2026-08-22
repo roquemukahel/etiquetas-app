@@ -592,10 +592,10 @@ export default function Estadisticas() {
     const mapa = new Map<string, number>();
     for (const p of pagos.filter((p) => new Date(p.fecha) >= inicio && new Date(p.fecha) <= fin)) mapa.set(p.medio, (mapa.get(p.medio) ?? 0) + (p.monto || 0));
     return Array.from(mapa.entries())
-      .map(([medio, valor]) => ({ nombre: medioLabel(medio), valor }))
+      .map(([medio, valor]) => ({ nombre: medioLabel(medio, t), valor }))
       .filter((d) => d.valor > 0)
       .sort((a, b) => b.valor - a.valor);
-  }, [pagos, inicio, fin]);
+  }, [pagos, inicio, fin, t]);
 
   const rankingProveedores: Dato[] = useMemo(() => {
     const mapa = new Map<string, number>();
@@ -1067,7 +1067,7 @@ export default function Estadisticas() {
                         <th className="py-1 pr-3 font-medium">{t('Mes')}</th>
                         {mediosEnEvolucion.map((medio) => (
                           <th key={medio} className="py-1 px-2 font-medium text-right whitespace-nowrap">
-                            {medioLabel(medio)}
+                            {medioLabel(medio, t)}
                           </th>
                         ))}
                         <th className="py-1 pl-2 font-medium text-right">{t('Total')}</th>

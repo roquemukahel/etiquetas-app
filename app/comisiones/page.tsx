@@ -119,7 +119,7 @@ export default function Comisiones() {
     const mapa = new Map<string, { vendedorId: string; nombre: string; comMin: number; comMay: number; ajustes: number; pendiente: number; total: number }>();
     for (const mv of movs) {
       const key = mv.vendedor_id;
-      const row = mapa.get(key) ?? { vendedorId: key, nombre: mv.vendedores?.nombre ?? 'Vendedor', comMin: 0, comMay: 0, ajustes: 0, pendiente: 0, total: 0 };
+      const row = mapa.get(key) ?? { vendedorId: key, nombre: mv.vendedores?.nombre ?? t('Vendedor'), comMin: 0, comMay: 0, ajustes: 0, pendiente: 0, total: 0 };
       if (mv.tipo_movimiento === 'comision') {
         if (mv.tipo_venta === 'mayorista') row.comMay += mv.comision;
         else row.comMin += mv.comision;
@@ -130,7 +130,7 @@ export default function Comisiones() {
       mapa.set(key, row);
     }
     return Array.from(mapa.values()).sort((a, b) => b.total - a.total);
-  }, [movs]);
+  }, [movs, t]);
 
   const liquidar = async (vendedorId: string, nombre: string, pendiente: number) => {
     if (!puedeGestionar || trabajando) return;

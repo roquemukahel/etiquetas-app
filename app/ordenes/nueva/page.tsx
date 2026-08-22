@@ -791,7 +791,7 @@ export default function NuevaOrden() {
     // Antes se guardaba "Mixto" a secas: en la boleta no se sabía CON QUÉ pagó.
     // Ahora se guarda el desglose de medios (ej. "Efectivo + Transferencia"),
     // que es lo que muestran las boletas y los listados.
-    return medios.map(medioLabel).join(' + ');
+    return medios.map((m) => medioLabel(m)).join(' + ');
   };
 
   // Construye las filas de pagos (plata que entra) para esta venta.

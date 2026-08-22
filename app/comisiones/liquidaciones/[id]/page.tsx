@@ -8,7 +8,7 @@ import { simboloMoneda } from '../../../lib/monedas';
 import { useActor } from '../../../lib/actor';
 import { tienePermiso } from '../../../lib/permisos';
 import { registrarPagoLiquidacion } from '../../../lib/comisiones/operaciones';
-import { LABEL_ESTADO_LIQ, LABEL_TIPO_MOV, type EstadoLiquidacion, type TipoMovimiento } from '../../../lib/comisiones/tipos';
+import { LABEL_ESTADO_LIQ, LABEL_TIPO_MOV, LABEL_TIPO_VENTA, type EstadoLiquidacion, type TipoMovimiento } from '../../../lib/comisiones/tipos';
 import { useT } from '../../../lib/idioma';
 
 type Liq = {
@@ -206,7 +206,7 @@ export default function DetalleLiquidacion() {
             <div key={mv.id} className="flex items-center gap-3 px-4 py-2.5">
               <div className="min-w-0 flex-1">
                 <p className="text-sm truncate">{t(LABEL_TIPO_MOV[mv.tipo_movimiento])}{mv.motivo ? ` · ${mv.motivo}` : ''}</p>
-                <p className="text-[11px] text-muted dark:text-dark-text-secondary">{mv.fecha_hecho ? new Date(mv.fecha_hecho).toLocaleDateString('es-AR') : ''}{mv.tipo_venta ? ` · ${mv.tipo_venta}` : ''}</p>
+                <p className="text-[11px] text-muted dark:text-dark-text-secondary">{mv.fecha_hecho ? new Date(mv.fecha_hecho).toLocaleDateString('es-AR') : ''}{mv.tipo_venta ? ` · ${t(LABEL_TIPO_VENTA[mv.tipo_venta as 'minorista' | 'mayorista'] ?? mv.tipo_venta)}` : ''}</p>
               </div>
               <span className={`text-sm tabular-nums font-semibold ${mv.comision < 0 ? 'text-bad' : ''}`}>{m(mv.comision)}</span>
             </div>

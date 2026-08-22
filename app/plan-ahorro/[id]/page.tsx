@@ -8,6 +8,7 @@ import { registrarAuditoria } from '../../lib/auditoria';
 import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import { sanitizarDecimal } from '../../lib/numeros';
+import { medioLabel } from '../../lib/cuentaCorriente';
 import SelectorColorAuto from '../../SelectorColorAuto';
 import { ICONOS } from '../../Iconos';
 import { useT } from '../../lib/idioma';
@@ -532,7 +533,7 @@ export default function DetallePlanAhorro() {
               <div key={m.id} className="flex items-center justify-between gap-2 text-sm">
                 <div className="min-w-0">
                   <p className="truncate">
-                    {m.medio || t('Pago')}
+                    {m.medio ? medioLabel(m.medio, t) : t('Pago')}
                     {m.observacion ? ` · ${m.observacion}` : ''}
                   </p>
                   <p className="text-[11px] text-muted dark:text-dark-text-secondary">{new Date(m.fecha).toLocaleDateString('es-AR')}</p>
