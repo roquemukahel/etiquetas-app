@@ -6,6 +6,7 @@ import { crearClienteNavegador } from '../../lib/supabase/client';
 import { asegurarModelo, normalizarNombreModelo, sugerirCarpetas } from '../../lib/modelos';
 import { asegurarProveedor } from '../../lib/proveedores';
 import { obtenerCategorias } from '../../lib/categorias';
+import { useSucursalActual } from '../../lib/sucursal';
 import { limpiarImei } from '../../lib/imei';
 import { useDictado } from '../../lib/dictado';
 import { getActor, useActor, MENSAJE_ACTOR_REQUERIDO } from '../../lib/actor';
@@ -34,6 +35,7 @@ export default function StockPorFoto() {
   const actorActual = useActor();
   const t = useT();
   const puedeAgregarStock = tienePermiso(actorActual, 'agregar_stock');
+  const sucursalActual = useSucursalActual();
 
   const [carpetas, setCarpetas] = useState<string[]>([]);
   const [proveedores, setProveedores] = useState<string[]>([]);
@@ -170,6 +172,7 @@ export default function StockPorFoto() {
       proveedor_id: proveedorId,
       estado,
       ...(categoriaId ? { categoria_id: categoriaId } : {}),
+      ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
       en_stock: true,
       agregado_por_nombre: actor?.nombre ?? null,
       agregado_por_foto_url: actor?.fotoUrl ?? null,

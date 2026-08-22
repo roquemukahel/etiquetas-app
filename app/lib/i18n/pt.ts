@@ -2371,4 +2371,30 @@ export const PT: Record<string, string> = {
   'Ventas a consumidor final': 'Vendas a consumidor final',
   'Ventas del período sin cliente cargado (opción "Consumidor final" en Nueva Orden). Ya están sumadas en Ventas netas y Operaciones — esto es solo el desglose.':
     'Vendas do período sem cliente cadastrado (opção "Consumidor final" em Nova Venda). Já estão somadas em Vendas líquidas e Operações — isto é só o detalhamento.',
+
+  // Multisucursal — Fase 1 (Configuración > Sucursales, asignación de
+  // personal, filtro en Stock)
+  Sucursales: 'Filiais',
+  'Si tenés más de un local, organizá stock y personal por sucursal': 'Se você tem mais de uma loja, organize estoque e equipe por filial',
+  'Activar sucursales': 'Ativar filiais',
+  'No pudimos activar sucursales:': 'Não conseguimos ativar as filiais:',
+  'No quedan sucursales activas.': 'Não restam filiais ativas.',
+  'No tenés permiso para gestionar sucursales.': 'Você não tem permissão para gerenciar filiais.',
+  'Nueva sucursal': 'Nova filial',
+  'Ej. Sucursal Centro': 'Ex. Filial Centro',
+  'Crear sucursal': 'Criar filial',
+  '¿Archivar la sucursal': 'Arquivar a filial',
+  'dispositivo(s),': 'aparelho(s),',
+  'producto(s) y': 'produto(s) e',
+  'persona(s) asignada(s) — se conservan intactos, solo deja de ofrecerse para elegir.':
+    'pessoa(s) atribuída(s) — continuam intactos, só deixa de aparecer para escolher.',
+  'Si tu negocio tiene más de un local, activá sucursales para que el stock, las ventas, el personal y el servicio técnico queden identificados por dónde pasaron. Todo lo que ya tenés cargado se agrupa automáticamente en una "Sucursal principal" — no se pierde ni se mueve nada.':
+    'Se o seu negócio tem mais de uma loja, ative as filiais para que o estoque, as vendas, a equipe e a assistência técnica fiquem identificados por onde passaram. Tudo que você já tem cadastrado é agrupado automaticamente numa "Filial principal" — nada se perde nem se move.',
+  'Asigná a cada vendedor/técnico su sucursal desde Configuración → Vendedores/Técnicos. Quien no tenga una asignada (ej. el dueño) puede elegir en qué sucursal está trabajando desde el botón 🏬 que aparece abajo a la izquierda.':
+    'Atribua a cada vendedor/técnico sua filial em Configurações → Vendedores/Técnicos. Quem não tiver uma atribuída (ex. o dono) pode escolher em qual filial está trabalhando pelo botão 🏬 que aparece embaixo à esquerda.',
+  'Sucursal asignada': 'Filial atribuída',
+  'Sin asignar (elige sucursal al trabajar)': 'Sem atribuir (escolhe a filial ao trabalhar)',
+  'Elegí tu sucursal': 'Escolha sua filial',
+  'Filtrar por sucursal': 'Filtrar por filial',
+  'Todas las sucursales': 'Todas as filiais',
 };

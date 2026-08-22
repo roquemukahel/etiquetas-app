@@ -33,6 +33,11 @@ export type Actor = {
   fotoUrl?: string | null;
   // Ausente en un actor guardado antes de que existiera este campo.
   permisos?: Permisos;
+  // Sucursal asignada a esta persona en Configuración (null/ausente = sin
+  // asignar, típicamente el dueño/administrador que circula entre locales
+  // — ver app/lib/sucursal.ts para cómo se resuelve "la sucursal actual"
+  // en ese caso).
+  sucursalId?: string | null;
 };
 
 const KEY = 'qovento:actor';

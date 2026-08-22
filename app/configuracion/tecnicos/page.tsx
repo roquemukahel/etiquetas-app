@@ -8,6 +8,7 @@ import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import Avatar from '../../Avatar';
 import PermisosEditor, { PermisosForm } from '../../PermisosEditor';
+import { obtenerSucursales, type Sucursal } from '../../lib/sucursales';
 import { useT } from '../../lib/idioma';
 
 type Tecnico = {
@@ -26,6 +27,7 @@ type Tecnico = {
   puede_recibir_servicio_tecnico: boolean;
   puede_gestionar_servicio_tecnico: boolean;
   puede_gestionar_financiacion: boolean;
+  sucursal_id?: string | null;
 };
 
 const PERMISOS_DEFAULT: PermisosForm = {
@@ -56,7 +58,9 @@ export default function Tecnicos() {
   const [edadEdit, setEdadEdit] = useState('');
   const [pinEdit, setPinEdit] = useState('');
   const [permisosEdit, setPermisosEdit] = useState<PermisosForm>(PERMISOS_DEFAULT);
+  const [sucursalIdEdit, setSucursalIdEdit] = useState('');
   const [guardandoPerfil, setGuardandoPerfil] = useState(false);
+  const [sucursales, setSucursales] = useState<Sucursal[]>([]);
 
   const cargar = async () => {
     const { data } = await supabase.from('tecnicos').select('*').order('nombre');
@@ -66,6 +70,14 @@ export default function Tecnicos() {
 
   useEffect(() => {
     cargar();
+    (async () => {
+      try {
+        setSucursales(await obtenerSucursales(supabase, false));
+      } catch {
+        // Tabla sucursales todavía no existe en este negocio.
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const agregar = async () => {
@@ -112,6 +124,7 @@ export default function Tecnicos() {
       puedeGestionarServicioTecnico: tec.puede_gestionar_servicio_tecnico,
       puedeGestionarFinanciacion: tec.puede_gestionar_financiacion,
     });
+    setSucursalIdEdit(tec.sucursal_id ?? '');
     setError(null);
   };
 
@@ -148,6 +161,7 @@ export default function Tecnicos() {
         puede_recibir_servicio_tecnico: permisosEdit.puedeRecibirServicioTecnico,
         puede_gestionar_servicio_tecnico: permisosEdit.puedeGestionarServicioTecnico,
         puede_gestionar_financiacion: permisosEdit.puedeGestionarFinanciacion,
+        ...(sucursales.length > 0 ? { sucursal_id: sucursalIdEdit || null } : {}),
       })
       .eq('id', tec.id);
     setGuardandoPerfil(false);
@@ -254,6 +268,24 @@ export default function Tecnicos() {
                     {t('Si le ponés un PIN, va a tener que escribirlo al elegirse en "Cambiar". Dejalo vacío para que no pida nada.')}
                   </p>
                 </div>
+
+                {sucursales.length > 0 && (
+                  <div>
+                    <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Sucursal asignada')}</label>
+                    <select
+                      value={sucursalIdEdit}
+                      onChange={(e) => setSucursalIdEdit(e.target.value)}
+                      className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                    >
+                      <option value="">{t('Sin asignar (elige sucursal al trabajar)')}</option>
+                      {sucursales.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.nombre}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 <PermisosEditor valor={permisosEdit} onChange={setPermisosEdit} tienePin={!!pinEdit.trim()} />
 

@@ -3,6 +3,7 @@ import { Inter, Sora } from 'next/font/google';
 import '../styles/globals.css';
 import { SCRIPT_TEMA_INICIAL } from './lib/theme';
 import SelectorDeActor from './SelectorDeActor';
+import SelectorSucursalFlotante from './SelectorSucursalFlotante';
 import BotonFlotante from './BotonFlotante';
 import AppShell from './AppShell';
 
@@ -38,6 +39,7 @@ export default function RootLayout({
       </head>
       <body className="min-h-screen bg-canvas dark:bg-dark-bg text-ink dark:text-dark-text font-sans transition-colors">
         <SelectorDeActor />
+        <SelectorSucursalFlotante />
         <AppShell>{children}</AppShell>
         <BotonFlotante />
       </body>
