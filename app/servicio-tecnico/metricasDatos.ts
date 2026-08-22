@@ -60,6 +60,7 @@ export type ReparacionMetrica = {
   presupuesto_respondido_at: string | null;
   tipo_ingreso: string | null;
   trabajos_realizados: string[] | null;
+  sucursal_id?: string | null;
 };
 
 export type RepuestoUsoMetrica = { reparacion_id: string; nombre_repuesto: string; cantidad: number; costo_unitario: number | null };

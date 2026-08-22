@@ -48,6 +48,7 @@ type ReparacionLista = {
   orden_cobro_id: string | null;
   fecha_reparado: string | null;
   clientes: { nombre: string; apellido: string | null } | null;
+  sucursal_id?: string | null;
 };
 
 const ESTADOS = ['todas', 'pendiente', 'pagado', 'entregado'];
@@ -232,6 +233,19 @@ export default function Ordenes() {
       });
   }, [ordenes, filtroEstado, filtroSucursal, filtroTipo, busqueda, canjesPorOrden]);
 
+  // Se me había pasado esto en la primera pasada de multisucursal: estas dos
+  // NO nacen de la tabla `ordenes` (que sí ya filtraba), sino de
+  // `reparaciones` directo — sin este filtro, cambiar de sucursal seguía
+  // mostrando acá reparaciones "listas para cobrar" de OTRA sucursal.
+  const reparacionesListasFiltradas = useMemo(
+    () => reparacionesListas.filter((r) => !filtroSucursal || r.sucursal_id === filtroSucursal),
+    [reparacionesListas, filtroSucursal]
+  );
+  const reparacionesCanceladasFiltradas = useMemo(
+    () => reparacionesCanceladas.filter((r) => !filtroSucursal || r.sucursal_id === filtroSucursal),
+    [reparacionesCanceladas, filtroSucursal]
+  );
+
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
       <header className="flex items-center gap-3">
@@ -305,12 +319,12 @@ export default function Ordenes() {
         </p>
       )}
 
-      {puedeVender && reparacionesListas.length > 0 && (
+      {puedeVender && reparacionesListasFiltradas.length > 0 && (
         <section className="rounded-2xl border border-good/40 bg-good/5 p-3 flex flex-col gap-2">
           <p className="text-sm font-medium text-good">
-            🔧 {t('Reparados por el técnico · listos para cobrar')} ({reparacionesListas.length})
+            🔧 {t('Reparados por el técnico · listos para cobrar')} ({reparacionesListasFiltradas.length})
           </p>
-          {reparacionesListas.map((r) => {
+          {reparacionesListasFiltradas.map((r) => {
             const importe = r.importe_total ?? (r.presupuesto_mano_obra || 0) + (r.presupuesto_repuestos || 0);
             return (
               <div
@@ -348,12 +362,12 @@ export default function Ordenes() {
         </section>
       )}
 
-      {puedeVender && reparacionesCanceladas.length > 0 && (
+      {puedeVender && reparacionesCanceladasFiltradas.length > 0 && (
         <section className="rounded-2xl border border-bad/40 bg-bad/5 p-3 flex flex-col gap-2">
           <p className="text-sm font-medium text-bad">
-            🔴 {t('Cancelados sin solución')} ({reparacionesCanceladas.length})
+            🔴 {t('Cancelados sin solución')} ({reparacionesCanceladasFiltradas.length})
           </p>
-          {reparacionesCanceladas.map((r) => {
+          {reparacionesCanceladasFiltradas.map((r) => {
             const importe = r.importe_total ?? (r.presupuesto_mano_obra || 0) + (r.presupuesto_repuestos || 0);
             return (
               <div

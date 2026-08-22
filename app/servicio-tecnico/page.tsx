@@ -35,6 +35,7 @@ import { QCard } from '../QCard';
 import { QoviState } from '../QoviState';
 import { useT } from '../lib/idioma';
 import { useSucursalActual } from '../lib/sucursal';
+import { obtenerSucursales, type Sucursal } from '../lib/sucursales';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 
@@ -115,6 +116,24 @@ export default function ServicioTecnico() {
     return () => clearTimeout(timer);
   }, [busqueda]);
   const [filtroTecnico, setFiltroTecnico] = useState('');
+  const [sucursales, setSucursales] = useState<Sucursal[]>([]);
+  // Arranca en la sucursal elegida en el panel — se puede "espiar" otra acá
+  // adentro sin tocar la selección global; un useEffect la sigue si el
+  // dueño cambia de sucursal MIENTRAS ya está en esta pantalla.
+  const [filtroSucursal, setFiltroSucursal] = useState(sucursalActual.id ?? '');
+  useEffect(() => {
+    setFiltroSucursal(sucursalActual.id ?? '');
+  }, [sucursalActual.id]);
+  useEffect(() => {
+    (async () => {
+      try {
+        setSucursales(await obtenerSucursales(supabase, false));
+      } catch {
+        // Tabla sucursales todavía no existe en este negocio.
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // Orden temporal de toda la sección (lista, en poder del técnico e
   // historial) — por defecto más recientes primero. Se guarda por navegador
   // para no tener que elegirlo de nuevo cada vez que se entra.
@@ -180,7 +199,7 @@ export default function ServicioTecnico() {
     const { data } = await supabase
       .from('reparaciones')
       .select(
-        'id, numero_orden, modelo, capacidad_gb, color, imei, falla_declarada, diagnostico, ubicacion_fisica, tecnico_id, estado, prioridad, trabajos_realizados, fecha_ingreso_servicio, fecha_estimada, fecha_reparado, fecha_entrega, garantia_dias, estado_actualizado_at, cliente_id, token_seguimiento, en_poder_tecnico, presupuesto_mano_obra, presupuesto_repuestos, importe_total, orden_cobro_id, agregado_a_stock, clientes ( nombre, apellido, telefono )'
+        'id, numero_orden, modelo, capacidad_gb, color, imei, falla_declarada, diagnostico, ubicacion_fisica, tecnico_id, estado, prioridad, trabajos_realizados, fecha_ingreso_servicio, fecha_estimada, fecha_reparado, fecha_entrega, garantia_dias, estado_actualizado_at, cliente_id, token_seguimiento, en_poder_tecnico, presupuesto_mano_obra, presupuesto_repuestos, importe_total, orden_cobro_id, agregado_a_stock, sucursal_id, clientes ( nombre, apellido, telefono )'
       )
       .order('fecha_ingreso_servicio', { ascending: false });
     setReparaciones((data as any) ?? []);
@@ -238,15 +257,24 @@ export default function ServicioTecnico() {
     return false;
   };
 
+  // Filtro central por sucursal — TODO lo demás de esta pantalla (lista,
+  // indicadores, alertas, Mi banco, estadísticas por técnico) deriva de
+  // esto en vez de leer `reparaciones` directo, para que cambiar de
+  // sucursal actualice la pantalla entera de una sola vez.
+  const reparacionesSucursal = useMemo(
+    () => reparaciones.filter((r) => !filtroSucursal || r.sucursal_id === filtroSucursal),
+    [reparaciones, filtroSucursal]
+  );
+
   // Base ordenada por fecha de ingreso según el toggle de arriba — de acá
   // derivan la lista principal, "en poder del técnico" y el historial, para
   // que las tres respeten el mismo orden en vez de cada una el suyo.
   const reparacionesOrdenadas = useMemo(() => {
     const signo = orden === 'recientes' ? -1 : 1;
-    return [...reparaciones].sort(
+    return [...reparacionesSucursal].sort(
       (a, b) => signo * (new Date(a.fecha_ingreso_servicio).getTime() - new Date(b.fecha_ingreso_servicio).getTime())
     );
-  }, [reparaciones, orden]);
+  }, [reparacionesSucursal, orden]);
 
   const filtrados = useMemo(() => {
     const q = busquedaDebounced.trim().toLowerCase();
@@ -279,27 +307,27 @@ export default function ServicioTecnico() {
   };
 
   const indicadores = useMemo(() => {
-    const activas = reparaciones.filter((r) => !FINALIZADOS.includes(r.estado));
+    const activas = reparacionesSucursal.filter((r) => !FINALIZADOS.includes(r.estado));
     return {
       activas: activas.length,
       demoradas: activas.filter(esDemorado).length,
-      aprobacion: reparaciones.filter((r) => r.estado === 'esperando_aprobacion').length,
-      repuesto: reparaciones.filter((r) => r.estado === 'esperando_repuesto').length,
-      listas: reparaciones.filter((r) => r.estado === 'listo_para_entregar').length,
+      aprobacion: reparacionesSucursal.filter((r) => r.estado === 'esperando_aprobacion').length,
+      repuesto: reparacionesSucursal.filter((r) => r.estado === 'esperando_repuesto').length,
+      listas: reparacionesSucursal.filter((r) => r.estado === 'listo_para_entregar').length,
       sinAsignar: activas.filter((r) => !r.tecnico_id).length,
     };
-  }, [reparaciones]);
+  }, [reparacionesSucursal]);
 
   // Denominador para la barra de carga relativa entre técnicos (Fase 3) —
   // el que más reparaciones activas tiene marca el 100%.
   const maxActivasTecnicos = useMemo(() => {
     let max = 0;
     for (const tec of tecnicos) {
-      const n = reparaciones.filter((r) => r.tecnico_id === tec.id && !FINALIZADOS.includes(r.estado)).length;
+      const n = reparacionesSucursal.filter((r) => r.tecnico_id === tec.id && !FINALIZADOS.includes(r.estado)).length;
       if (n > max) max = n;
     }
     return max;
-  }, [tecnicos, reparaciones]);
+  }, [tecnicos, reparacionesSucursal]);
 
   const dentroPeriodoTecnicos = (iso: string | null) => {
     if (!iso) return false;
@@ -334,8 +362,8 @@ export default function ServicioTecnico() {
   };
   const alertasKey = (a: { tipo: string; id: string; categoria: string }) => `${a.tipo}:${a.id}:${a.categoria}`;
   const alertas = useMemo(
-    () => calcularAlertas(reparaciones, repuestosParaAlertas).filter((a) => !alertasDescartadas.has(alertasKey(a))),
-    [reparaciones, repuestosParaAlertas, alertasDescartadas]
+    () => calcularAlertas(reparacionesSucursal, repuestosParaAlertas).filter((a) => !alertasDescartadas.has(alertasKey(a))),
+    [reparacionesSucursal, repuestosParaAlertas, alertasDescartadas]
   );
   const [alertasAbiertas, setAlertasAbiertas] = useState(false);
 
@@ -1025,7 +1053,7 @@ export default function ServicioTecnico() {
             tecnicoId={actor.id}
             nombreTecnico={nombreTecnico}
             fotoTecnico={fotoTecnico}
-            reparaciones={reparaciones}
+            reparaciones={reparacionesSucursal}
             tecnicos={tecnicos}
             guardando={guardando}
             menuAbierto={menuAbierto}
@@ -1091,7 +1119,7 @@ export default function ServicioTecnico() {
                 tecnicoId={tecnicoSeleccionado}
                 nombreTecnico={nombreTecnico}
                 fotoTecnico={fotoTecnico}
-                reparaciones={reparaciones}
+                reparaciones={reparacionesSucursal}
                 tecnicos={tecnicos}
                 guardando={guardando}
                 menuAbierto={menuAbierto}
@@ -1212,7 +1240,7 @@ export default function ServicioTecnico() {
             )}
             <div className="flex flex-col gap-2">
               {tecnicos.map((tec) => {
-                const propias = reparaciones.filter((r) => r.tecnico_id === tec.id);
+                const propias = reparacionesSucursal.filter((r) => r.tecnico_id === tec.id);
                 const activasArr = propias.filter((r) => !FINALIZADOS.includes(r.estado));
                 const enCurso = activasArr.filter((r) => r.estado === 'en_reparacion').length;
                 const demoradas = activasArr.filter(esDemorado).length;
@@ -1410,6 +1438,21 @@ export default function ServicioTecnico() {
                   </option>
                 ))}
               </select>
+              {sucursales.length > 1 && (
+                <select
+                  value={filtroSucursal}
+                  onChange={(e) => setFiltroSucursal(e.target.value)}
+                  aria-label={t('Filtrar por sucursal')}
+                  className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                >
+                  <option value="">🏬 {t('Todas las sucursales')}</option>
+                  {sucursales.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      🏬 {s.nombre}
+                    </option>
+                  ))}
+                </select>
+              )}
               {hayFiltrosActivos && (
                 <button
                   onClick={limpiarFiltros}

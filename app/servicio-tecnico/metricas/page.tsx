@@ -29,6 +29,8 @@ import {
   RepuestoMetrica,
 } from '../metricasDatos';
 import { useT } from '../../lib/idioma';
+import { useSucursalActual } from '../../lib/sucursal';
+import { obtenerSucursales, type Sucursal } from '../../lib/sucursales';
 
 type Tecnico = { id: string; nombre: string };
 
@@ -41,6 +43,7 @@ export default function MetricasServicioTecnico() {
   // Técnicos (Fase 3) y en el panel lateral de la ficha (Fase 6), en vez de
   // crear uno nuevo solo para esta pantalla.
   const puedeVerEstadisticas = tienePermiso(actor, 'ver_estadisticas');
+  const sucursalActual = useSucursalActual();
 
   const [reparaciones, setReparaciones] = useState<ReparacionMetrica[]>([]);
   const [usosRepuestos, setUsosRepuestos] = useState<RepuestoUsoMetrica[]>([]);
@@ -50,6 +53,21 @@ export default function MetricasServicioTecnico() {
   const [loading, setLoading] = useState(true);
   const [periodo, setPeriodo] = useState<PeriodoMetricas>('30d');
   const [filtroTecnico, setFiltroTecnico] = useState('');
+  const [sucursales, setSucursales] = useState<Sucursal[]>([]);
+  const [filtroSucursal, setFiltroSucursal] = useState(sucursalActual.id ?? '');
+  useEffect(() => {
+    setFiltroSucursal(sucursalActual.id ?? '');
+  }, [sucursalActual.id]);
+  useEffect(() => {
+    (async () => {
+      try {
+        setSucursales(await obtenerSucursales(supabase, false));
+      } catch {
+        // Tabla sucursales todavía no existe en este negocio.
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!puedeVerEstadisticas) {
@@ -61,7 +79,7 @@ export default function MetricasServicioTecnico() {
         supabase
           .from('reparaciones')
           .select(
-            'id, modelo, estado, tecnico_id, fecha_ingreso_servicio, fecha_reparado, fecha_entrega, fecha_estimada, estado_actualizado_at, importe_total, presupuesto_estado, presupuesto_respondido_at, tipo_ingreso, trabajos_realizados'
+            'id, modelo, estado, tecnico_id, fecha_ingreso_servicio, fecha_reparado, fecha_entrega, fecha_estimada, estado_actualizado_at, importe_total, presupuesto_estado, presupuesto_respondido_at, tipo_ingreso, trabajos_realizados, sucursal_id'
           ),
         supabase.from('reparaciones_repuestos').select('reparacion_id, nombre_repuesto, cantidad, costo_unitario'),
         supabase.from('repuestos').select('id, nombre, cantidad_stock, cantidad_reservada, stock_minimo'),
@@ -87,9 +105,13 @@ export default function MetricasServicioTecnico() {
 
   const nombreTecnico = (id: string) => tecnicos.find((tec) => tec.id === id)?.nombre ?? t('Sin técnico');
 
+  const reparacionesSucursal = useMemo(
+    () => reparaciones.filter((r) => !filtroSucursal || r.sucursal_id === filtroSucursal),
+    [reparaciones, filtroSucursal]
+  );
   const reparacionesFiltradas = useMemo(
-    () => (filtroTecnico ? reparaciones.filter((r) => r.tecnico_id === filtroTecnico) : reparaciones),
-    [reparaciones, filtroTecnico]
+    () => (filtroTecnico ? reparacionesSucursal.filter((r) => r.tecnico_id === filtroTecnico) : reparacionesSucursal),
+    [reparacionesSucursal, filtroTecnico]
   );
 
   const { desde, hasta } = useMemo(() => rangoMetricas(periodo, new Date()), [periodo]);
@@ -103,7 +125,7 @@ export default function MetricasServicioTecnico() {
     [usosRepuestos, reparacionesFiltradas, desde, hasta]
   );
   const antiguedad = useMemo(() => ordenesAbiertasPorAntiguedad(reparacionesFiltradas, hasta), [reparacionesFiltradas, hasta]);
-  const carga = useMemo(() => cargaPorTecnico(reparaciones, nombreTecnico), [reparaciones, tecnicos]);
+  const carga = useMemo(() => cargaPorTecnico(reparacionesSucursal, nombreTecnico), [reparacionesSucursal, tecnicos]);
   const bajaRotacion = useMemo(
     () => repuestosBajaRotacion(repuestos, usosRepuestos, reparaciones, desde, hasta),
     [repuestos, usosRepuestos, reparaciones, desde, hasta]
@@ -168,6 +190,21 @@ export default function MetricasServicioTecnico() {
             {tecnicos.map((tec) => (
               <option key={tec.id} value={tec.id}>
                 {tec.nombre}
+              </option>
+            ))}
+          </select>
+        )}
+        {sucursales.length > 1 && (
+          <select
+            value={filtroSucursal}
+            onChange={(e) => setFiltroSucursal(e.target.value)}
+            aria-label={t('Filtrar por sucursal')}
+            className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-1.5 text-xs"
+          >
+            <option value="">🏬 {t('Todas las sucursales')}</option>
+            {sucursales.map((s) => (
+              <option key={s.id} value={s.id}>
+                🏬 {s.nombre}
               </option>
             ))}
           </select>

@@ -51,6 +51,7 @@ export type Reparacion = {
   orden_cobro_id: string | null;
   agregado_a_stock: boolean;
   clientes: { nombre: string; apellido: string | null; telefono: string | null } | null;
+  sucursal_id?: string | null;
 };
 
 // Franja lateral semántica de la tarjeta: mismos hex que tailwind.config.js
