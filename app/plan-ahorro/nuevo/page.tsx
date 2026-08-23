@@ -171,6 +171,13 @@ export default function NuevoPlanAhorro() {
         })
         .select()
         .single();
+      if (planErr?.code === '23505') {
+        // idx_planes_ahorro_dispositivo_activo_unico — alguien más señó
+        // este mismo equipo un instante antes (el chequeo de arriba mira
+        // en_stock, que señar NO cambia, así que no alcanza a detectar
+        // esta carrera puntual).
+        throw new Error(t('Este equipo ya lo señó otra persona en este mismo momento. Elegí otro.'));
+      }
       if (planErr || !plan) throw new Error(planErr?.message || t('no se pudo crear el plan'));
 
       router.push(`/plan-ahorro/${plan.id}`);

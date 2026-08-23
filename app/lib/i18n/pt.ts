@@ -2569,4 +2569,6 @@ export const PT: Record<string, string> = {
     'Marque primeiro Correto, Falha ou Não se aplica para poder anexar a foto.',
   'Este plan ya estaba marcado como completado — al anular este pago queda con menos plata juntada de la que pactaron, pero el plan sigue figurando "completado" (no lo cambiamos solos, puede que el equipo ya se haya entregado). Si corresponde, reabrilo con el botón "Reactivar".':
     'Este plano já estava marcado como concluído — ao anular este pagamento fica com menos dinheiro juntado do que combinaram, mas o plano continua constando como "concluído" (não mudamos isso sozinhos, pode ser que o aparelho já tenha sido entregue). Se for o caso, reabra com o botão "Reativar".',
+  'Este equipo ya lo señó otra persona en este mismo momento. Elegí otro.':
+    'Este aparelho acabou de ser reservado por outra pessoa neste exato momento. Escolha outro.',
 };

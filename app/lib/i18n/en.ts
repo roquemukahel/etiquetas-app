@@ -2568,4 +2568,6 @@ export const EN: Record<string, string> = {
     'Mark Correct, Failed, or N/A first so you can attach the photo.',
   'Este plan ya estaba marcado como completado — al anular este pago queda con menos plata juntada de la que pactaron, pero el plan sigue figurando "completado" (no lo cambiamos solos, puede que el equipo ya se haya entregado). Si corresponde, reabrilo con el botón "Reactivar".':
     'This plan was already marked as completed — voiding this payment leaves it with less money saved than agreed, but the plan still shows as "completed" (we won\'t change that on our own, the device may have already been handed over). If that applies here, reopen it with the "Reactivate" button.',
+  'Este equipo ya lo señó otra persona en este mismo momento. Elegí otro.':
+    'This device was just reserved by someone else this very moment. Pick another one.',
 };
