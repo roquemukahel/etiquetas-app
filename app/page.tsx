@@ -2,7 +2,8 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { crearClienteServidor } from './lib/supabase/server';
 import { obtenerTodasLasFilas } from './lib/db';
-import { ESTADOS_COBRADOS } from './estadisticas/datos';
+import { ESTADOS_COBRADOS, montoVenta } from './estadisticas/datos';
+import { aFechaISO } from './lib/financiacion/motor';
 import QMark from './QMark';
 import BuscadorUniversal from './BuscadorUniversal';
 import LandingPublica from './LandingPublica';
@@ -144,7 +145,7 @@ export default async function Home() {
         supabase
           .from('ordenes')
           .select(
-            'total, estado, created_at, vendedores ( nombre, foto_url ), clientes ( nombre, apellido ), orden_items ( descripcion, cantidad, tipo, dispositivos ( modelo, color ) )'
+            'total, anticipo, monto_canje, estado, created_at, vendedores ( nombre, foto_url ), clientes ( nombre, apellido ), orden_items ( descripcion, cantidad, tipo, dispositivos ( modelo, color ) )'
           )
           .gte('created_at', inicioMesPasado.toISOString())
       ),
@@ -175,9 +176,13 @@ export default async function Home() {
         supabase
           .from('dispositivos')
           .select('id', { count: 'exact', head: true })
+          // garantia_vencimiento es una columna `date` (calendario LOCAL del
+          // negocio) — toISOString() da la fecha en UTC, que se corre al día
+          // siguiente unas horas antes de medianoche local en cualquier huso
+          // horario detrás de UTC. aFechaISO usa los componentes locales.
           .not('garantia_vencimiento', 'is', null)
-          .gte('garantia_vencimiento', new Date().toISOString().slice(0, 10))
-          .lte('garantia_vencimiento', en7dias.toISOString().slice(0, 10))
+          .gte('garantia_vencimiento', aFechaISO(new Date()))
+          .lte('garantia_vencimiento', aFechaISO(en7dias))
       ),
       porSucursal(
         supabase
@@ -253,13 +258,21 @@ export default async function Home() {
     esAdmin = !!esAdminData;
 
     const cobradas = (ordenesRecientes ?? []).filter((o) => ESTADOS_COBRADOS.includes(o.estado));
+    // montoVenta (total + anticipo + monto_canje) es el mismo criterio que
+    // usa Estadísticas para "Ventas netas" — el "total" solo, sin sumar
+    // anticipo/canje, subestima cualquier venta que los tuviera. Antes
+    // Inicio y Estadísticas mostraban números distintos para el mismo mes.
     ingresosMes = cobradas
       .filter((o) => new Date(o.created_at) >= inicioMes)
-      .reduce((acc, o) => acc + (o.total || 0), 0);
+      .reduce((acc, o) => acc + montoVenta(o), 0);
     const ingresosMesPasado = cobradas
       .filter((o) => new Date(o.created_at) >= inicioMesPasado && new Date(o.created_at) < inicioMes)
-      .reduce((acc, o) => acc + (o.total || 0), 0);
-    ventasMes = (ordenesRecientes ?? []).filter((o) => new Date(o.created_at) >= inicioMes).length;
+      .reduce((acc, o) => acc + montoVenta(o), 0);
+    // ventasMes tiene que contar solo lo COBRADO (cobradas), igual que
+    // ventasMesPasado más abajo — antes contaba cualquier orden (incluidas
+    // pendientes/canceladas), inflando el "+X% vs mes pasado" y
+    // subestimando el ticket promedio.
+    ventasMes = cobradas.filter((o) => new Date(o.created_at) >= inicioMes).length;
     deltaPct = ingresosMesPasado > 0 ? Math.round(((ingresosMes - ingresosMesPasado) / ingresosMesPasado) * 100) : null;
 
     const ventasMesPasado = cobradas.filter(
@@ -484,7 +497,7 @@ export default async function Home() {
         const d = new Date(o.created_at);
         return d >= dia && d < diaFin;
       });
-      const valor = ordenesDia.reduce((acc, o) => acc + (o.total || 0), 0);
+      const valor = ordenesDia.reduce((acc, o) => acc + montoVenta(o), 0);
       dias.push({ label: dia.toLocaleDateString('es-AR', { weekday: 'short' }).slice(0, 1).toUpperCase(), valor });
       serieVentas.push(ordenesDia.length);
       serieTicket.push(ordenesDia.length > 0 ? valor / ordenesDia.length : 0);

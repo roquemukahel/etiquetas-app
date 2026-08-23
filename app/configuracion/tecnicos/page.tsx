@@ -57,14 +57,23 @@ export default function Tecnicos() {
   const [telefonoEdit, setTelefonoEdit] = useState('');
   const [edadEdit, setEdadEdit] = useState('');
   const [pinEdit, setPinEdit] = useState('');
+  // El PIN real nunca se vuelve a mostrar (ver conPin más abajo) — este flag
+  // distingue "no lo tocó" (no enviar nada, no pisar el que ya tenía) de
+  // "lo dejó vacío a propósito" (sí enviar, para sacarle el PIN).
+  const [pinTocado, setPinTocado] = useState(false);
   const [permisosEdit, setPermisosEdit] = useState<PermisosForm>(PERMISOS_DEFAULT);
   const [sucursalIdEdit, setSucursalIdEdit] = useState('');
   const [guardandoPerfil, setGuardandoPerfil] = useState(false);
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
+  const [conPin, setConPin] = useState<Set<string>>(new Set());
 
   const cargar = async () => {
-    const { data } = await supabase.from('tecnicos').select('*').order('nombre');
+    const [{ data }, { data: idsConPin }] = await Promise.all([
+      supabase.from('tecnicos').select('*').order('nombre'),
+      supabase.rpc('ids_tecnicos_con_pin'),
+    ]);
     setTecnicos((data as Tecnico[]) ?? []);
+    setConPin(new Set(((idsConPin as { id: string }[]) ?? []).map((r) => r.id)));
     setLoading(false);
   };
 
@@ -98,6 +107,23 @@ export default function Tecnicos() {
   const eliminar = async (id: string) => {
     if (!confirm(t('¿Eliminar este técnico?'))) return;
     const tecnico = tecnicos.find((tec) => tec.id === id);
+
+    // Mismo criterio que vendedores: avisar antes si tiene reparaciones a
+    // su nombre, en vez de dejar que el delete falle en crudo o pierda
+    // trazabilidad en silencio.
+    const { count: cReparaciones } = await supabase
+      .from('reparaciones')
+      .select('id', { count: 'exact', head: true })
+      .eq('tecnico_id', id);
+    if ((cReparaciones ?? 0) > 0) {
+      alert(
+        t(
+          'Este técnico tiene reparaciones registradas a su nombre — no se puede eliminar para no perder ese historial. Si ya no trabaja más acá, podés dejarlo así: no molesta en la lista.'
+        )
+      );
+      return;
+    }
+
     await supabase.from('tecnicos').delete().eq('id', id);
     await registrarAuditoria(supabase, {
       accion: `eliminó un técnico (${tecnico?.nombre || 'sin nombre'})`,
@@ -112,7 +138,10 @@ export default function Tecnicos() {
     setEditando(editando === tec.id ? null : tec.id);
     setTelefonoEdit(tec.telefono ?? '');
     setEdadEdit(tec.edad != null ? String(tec.edad) : '');
-    setPinEdit(tec.pin ?? '');
+    // El PIN nunca se vuelve a mostrar en texto plano — arranca vacío
+    // siempre, tenga o no tenga uno cargado ya (ver conPin/pinTocado).
+    setPinEdit('');
+    setPinTocado(false);
     setPermisosEdit({
       esAdministrador: tec.es_administrador,
       accesoCompleto: tec.acceso_completo,
@@ -146,12 +175,17 @@ export default function Tecnicos() {
       return;
     }
     setGuardandoPerfil(true);
+    // El PIN va por un RPC aparte que lo hashea del lado del servidor — nunca
+    // se guarda ni se compara en texto plano. Solo se toca si de verdad lo
+    // tocaron (pinTocado); si no, el que ya tenía queda como estaba.
+    if (pinTocado) {
+      await supabase.rpc('establecer_pin_tecnico', { p_tecnico_id: tec.id, p_pin: pinEdit.trim() || null });
+    }
     await supabase
       .from('tecnicos')
       .update({
         telefono: telefonoEdit.trim() || null,
         edad: edadEdit ? Number(edadEdit) : null,
-        pin: pinEdit.trim() || null,
         es_administrador: permisosEdit.esAdministrador,
         acceso_completo: permisosEdit.accesoCompleto,
         puede_vender: permisosEdit.puedeVender,
@@ -258,14 +292,19 @@ export default function Tecnicos() {
                 <div>
                   <input
                     value={pinEdit}
-                    onChange={(e) => setPinEdit(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                    placeholder={t('PIN de 4 a 6 dígitos (opcional)')}
+                    onChange={(e) => {
+                      setPinTocado(true);
+                      setPinEdit(e.target.value.replace(/\D/g, '').slice(0, 6));
+                    }}
+                    placeholder={conPin.has(tec.id) ? t('•••• (ya tiene un PIN — escribí uno nuevo para cambiarlo)') : t('PIN de 4 a 6 dígitos (opcional)')}
                     inputMode="numeric"
                     maxLength={6}
                     className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                   />
                   <p className="text-[10px] text-muted dark:text-dark-text-secondary mt-1">
-                    {t('Si le ponés un PIN, va a tener que escribirlo al elegirse en "Cambiar". Dejalo vacío para que no pida nada.')}
+                    {conPin.has(tec.id) && !pinTocado
+                      ? t('Por seguridad no se muestra el PIN ya cargado. Dejalo así para no cambiarlo, o escribí uno nuevo para reemplazarlo.')
+                      : t('Si le ponés un PIN, va a tener que escribirlo al elegirse en "Cambiar". Dejalo vacío para que no pida nada.')}
                   </p>
                 </div>
 
@@ -287,7 +326,7 @@ export default function Tecnicos() {
                   </div>
                 )}
 
-                <PermisosEditor valor={permisosEdit} onChange={setPermisosEdit} tienePin={!!pinEdit.trim()} />
+                <PermisosEditor valor={permisosEdit} onChange={setPermisosEdit} tienePin={pinTocado ? !!pinEdit.trim() : conPin.has(tec.id)} />
 
                 <button
                   disabled={guardandoPerfil}

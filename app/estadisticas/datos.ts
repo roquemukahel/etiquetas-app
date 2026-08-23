@@ -6,7 +6,7 @@
 // fáciles de testear y de razonar. El fetching vive en la página.
 // ============================================================
 
-import { sumarMesConClamp } from '../lib/financiacion/motor';
+import { sumarMesConClamp, aFechaISO } from '../lib/financiacion/motor';
 
 export type Periodo = 'hoy' | 'semana' | 'mes' | 'anio';
 
@@ -48,7 +48,7 @@ export const ESTADOS_COBRADOS = ['pagado', 'entregado'];
 
 // Valor real de la venta (ver comentario original en la página): el "total"
 // ya viene con anticipo y canje descontados, pero la venta valió eso igual.
-export function montoVenta(o: OrdenR): number {
+export function montoVenta(o: Pick<OrdenR, 'total' | 'anticipo' | 'monto_canje'>): number {
   return (o.total || 0) + (o.anticipo || 0) + (o.monto_canje || 0);
 }
 
@@ -314,10 +314,16 @@ export function resumenFinanciacionDe(
   fin: Date,
   hoy: Date
 ): ResumenFinanciacion {
-  const hoyISO = hoy.toISOString().slice(0, 10);
+  // aFechaISO (componentes locales), NO toISOString() (UTC) — fecha_vencimiento
+  // es una columna `date` que representa el calendario LOCAL del negocio; con
+  // toISOString() el "hoy" se corre al día siguiente unas horas antes de la
+  // medianoche local en cualquier huso horario detrás de UTC (todo el
+  // mercado de esta app), sobrestimando "vencido"/pctMorosidad justo en ese
+  // lapso. Mismo criterio que ya usa aFechaInput en Dashboard.tsx.
+  const hoyISO = aFechaISO(hoy);
   const en7dias = new Date(hoy);
   en7dias.setDate(en7dias.getDate() + 7);
-  const en7ISO = en7dias.toISOString().slice(0, 10);
+  const en7ISO = aFechaISO(en7dias);
 
   const totalFinanciadoActivo = planes.filter((p) => p.estado === 'activo' || p.estado === 'completado').reduce((a, p) => a + p.importe_financiado, 0);
   const nuevosCreditosPeriodo = planes.filter((p) => entre(p.created_at, inicio, fin)).reduce((a, p) => a + p.importe_financiado, 0);

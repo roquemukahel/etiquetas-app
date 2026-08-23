@@ -2571,4 +2571,15 @@ export const PT: Record<string, string> = {
     'Este plano já estava marcado como concluído — ao anular este pagamento fica com menos dinheiro juntado do que combinaram, mas o plano continua constando como "concluído" (não mudamos isso sozinhos, pode ser que o aparelho já tenha sido entregue). Se for o caso, reabra com o botão "Reativar".',
   'Este equipo ya lo señó otra persona en este mismo momento. Elegí otro.':
     'Este aparelho acabou de ser reservado por outra pessoa neste exato momento. Escolha outro.',
+
+  // Auditoría exhaustiva ronda 3 (2026-08-22) — proteger el borrado de
+  // vendedores/técnicos con historial real, mismo criterio que clientes.
+  'Este vendedor tiene ventas o comisiones registradas — no se puede eliminar para no perder ese historial. Si ya no trabaja más acá, podés dejarlo así: no molesta en la lista.':
+    'Este vendedor tem vendas ou comissões registradas — não é possível excluí-lo para não perder esse histórico. Se não trabalha mais aqui, pode deixá-lo assim: não atrapalha na lista.',
+  'Este técnico tiene reparaciones registradas a su nombre — no se puede eliminar para no perder ese historial. Si ya no trabaja más acá, podés dejarlo así: no molesta en la lista.':
+    'Este técnico tem reparos registrados em seu nome — não é possível excluí-lo para não perder esse histórico. Se não trabalha mais aqui, pode deixá-lo assim: não atrapalha na lista.',
+  '•••• (ya tiene un PIN — escribí uno nuevo para cambiarlo)':
+    '•••• (já tem um PIN — digite um novo para trocá-lo)',
+  'Por seguridad no se muestra el PIN ya cargado. Dejalo así para no cambiarlo, o escribí uno nuevo para reemplazarlo.':
+    'Por segurança, o PIN já cadastrado não é exibido. Deixe assim para não mudá-lo, ou digite um novo para substituí-lo.',
 };

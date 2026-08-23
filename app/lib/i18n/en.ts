@@ -2570,4 +2570,15 @@ export const EN: Record<string, string> = {
     'This plan was already marked as completed — voiding this payment leaves it with less money saved than agreed, but the plan still shows as "completed" (we won\'t change that on our own, the device may have already been handed over). If that applies here, reopen it with the "Reactivate" button.',
   'Este equipo ya lo señó otra persona en este mismo momento. Elegí otro.':
     'This device was just reserved by someone else this very moment. Pick another one.',
+
+  // Auditoría exhaustiva ronda 3 (2026-08-22) — proteger el borrado de
+  // vendedores/técnicos con historial real, mismo criterio que clientes.
+  'Este vendedor tiene ventas o comisiones registradas — no se puede eliminar para no perder ese historial. Si ya no trabaja más acá, podés dejarlo así: no molesta en la lista.':
+    "This salesperson has sales or commissions on record — they can't be deleted to avoid losing that history. If they don't work here anymore, you can just leave them — it won't get in the way in the list.",
+  'Este técnico tiene reparaciones registradas a su nombre — no se puede eliminar para no perder ese historial. Si ya no trabaja más acá, podés dejarlo así: no molesta en la lista.':
+    "This technician has repairs on record under their name — they can't be deleted to avoid losing that history. If they don't work here anymore, you can just leave them — it won't get in the way in the list.",
+  '•••• (ya tiene un PIN — escribí uno nuevo para cambiarlo)':
+    '•••• (already has a PIN — type a new one to change it)',
+  'Por seguridad no se muestra el PIN ya cargado. Dejalo así para no cambiarlo, o escribí uno nuevo para reemplazarlo.':
+    "For security, the existing PIN isn't shown. Leave it as is to keep it, or type a new one to replace it.",
 };

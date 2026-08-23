@@ -57,14 +57,23 @@ export default function Vendedores() {
   const [telefonoEdit, setTelefonoEdit] = useState('');
   const [edadEdit, setEdadEdit] = useState('');
   const [pinEdit, setPinEdit] = useState('');
+  // El PIN real nunca se vuelve a mostrar (ver conPin más abajo) — este flag
+  // distingue "no lo tocó" (no enviar nada, no pisar el que ya tenía) de
+  // "lo dejó vacío a propósito" (sí enviar, para sacarle el PIN).
+  const [pinTocado, setPinTocado] = useState(false);
   const [permisosEdit, setPermisosEdit] = useState<PermisosForm>(PERMISOS_DEFAULT);
   const [sucursalIdEdit, setSucursalIdEdit] = useState('');
   const [guardandoPerfil, setGuardandoPerfil] = useState(false);
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
+  const [conPin, setConPin] = useState<Set<string>>(new Set());
 
   const cargar = async () => {
-    const { data } = await supabase.from('vendedores').select('*').order('nombre');
+    const [{ data }, { data: idsConPin }] = await Promise.all([
+      supabase.from('vendedores').select('*').order('nombre'),
+      supabase.rpc('ids_vendedores_con_pin'),
+    ]);
     setVendedores((data as Vendedor[]) ?? []);
+    setConPin(new Set(((idsConPin as { id: string }[]) ?? []).map((r) => r.id)));
     setLoading(false);
   };
 
@@ -98,6 +107,26 @@ export default function Vendedores() {
   const eliminar = async (id: string) => {
     if (!confirm(t('¿Eliminar este vendedor?'))) return;
     const vendedor = vendedores.find((v) => v.id === id);
+
+    // comision_movimientos/comision_liquidaciones son "on delete restrict"
+    // (libro de comisiones inmutable) — sin este chequeo, el delete de acá
+    // abajo fallaría con un error crudo de Postgres apenas el vendedor
+    // tuviera cualquier comisión generada. Se avisa antes, con un mensaje
+    // claro, en vez de dejar que llegue a intentarlo.
+    const [{ count: cComisiones }, { count: cLiquidaciones }, { count: cOrdenes }] = await Promise.all([
+      supabase.from('comision_movimientos').select('id', { count: 'exact', head: true }).eq('vendedor_id', id),
+      supabase.from('comision_liquidaciones').select('id', { count: 'exact', head: true }).eq('vendedor_id', id),
+      supabase.from('ordenes').select('id', { count: 'exact', head: true }).eq('vendedor_id', id),
+    ]);
+    if ((cComisiones ?? 0) > 0 || (cLiquidaciones ?? 0) > 0 || (cOrdenes ?? 0) > 0) {
+      alert(
+        t(
+          'Este vendedor tiene ventas o comisiones registradas — no se puede eliminar para no perder ese historial. Si ya no trabaja más acá, podés dejarlo así: no molesta en la lista.'
+        )
+      );
+      return;
+    }
+
     await supabase.from('vendedores').delete().eq('id', id);
     await registrarAuditoria(supabase, {
       accion: `eliminó un vendedor (${vendedor?.nombre || 'sin nombre'})`,
@@ -112,7 +141,10 @@ export default function Vendedores() {
     setEditando(editando === v.id ? null : v.id);
     setTelefonoEdit(v.telefono ?? '');
     setEdadEdit(v.edad != null ? String(v.edad) : '');
-    setPinEdit(v.pin ?? '');
+    // El PIN nunca se vuelve a mostrar en texto plano — arranca vacío
+    // siempre, tenga o no tenga uno cargado ya (ver conPin/pinTocado).
+    setPinEdit('');
+    setPinTocado(false);
     setPermisosEdit({
       esAdministrador: v.es_administrador,
       accesoCompleto: v.acceso_completo,
@@ -146,12 +178,17 @@ export default function Vendedores() {
       return;
     }
     setGuardandoPerfil(true);
+    // El PIN va por un RPC aparte que lo hashea del lado del servidor — nunca
+    // se guarda ni se compara en texto plano. Solo se toca si de verdad lo
+    // tocaron (pinTocado); si no, el que ya tenía queda como estaba.
+    if (pinTocado) {
+      await supabase.rpc('establecer_pin_vendedor', { p_vendedor_id: v.id, p_pin: pinEdit.trim() || null });
+    }
     await supabase
       .from('vendedores')
       .update({
         telefono: telefonoEdit.trim() || null,
         edad: edadEdit ? Number(edadEdit) : null,
-        pin: pinEdit.trim() || null,
         es_administrador: permisosEdit.esAdministrador,
         acceso_completo: permisosEdit.accesoCompleto,
         puede_vender: permisosEdit.puedeVender,
@@ -258,14 +295,19 @@ export default function Vendedores() {
                 <div>
                   <input
                     value={pinEdit}
-                    onChange={(e) => setPinEdit(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                    placeholder={t('PIN de 4 a 6 dígitos (opcional)')}
+                    onChange={(e) => {
+                      setPinTocado(true);
+                      setPinEdit(e.target.value.replace(/\D/g, '').slice(0, 6));
+                    }}
+                    placeholder={conPin.has(v.id) ? t('•••• (ya tiene un PIN — escribí uno nuevo para cambiarlo)') : t('PIN de 4 a 6 dígitos (opcional)')}
                     inputMode="numeric"
                     maxLength={6}
                     className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                   />
                   <p className="text-[10px] text-muted dark:text-dark-text-secondary mt-1">
-                    {t('Si le ponés un PIN, va a tener que escribirlo al elegirse en "Cambiar". Dejalo vacío para que no pida nada.')}
+                    {conPin.has(v.id) && !pinTocado
+                      ? t('Por seguridad no se muestra el PIN ya cargado. Dejalo así para no cambiarlo, o escribí uno nuevo para reemplazarlo.')
+                      : t('Si le ponés un PIN, va a tener que escribirlo al elegirse en "Cambiar". Dejalo vacío para que no pida nada.')}
                   </p>
                 </div>
 
@@ -287,7 +329,7 @@ export default function Vendedores() {
                   </div>
                 )}
 
-                <PermisosEditor valor={permisosEdit} onChange={setPermisosEdit} tienePin={!!pinEdit.trim()} />
+                <PermisosEditor valor={permisosEdit} onChange={setPermisosEdit} tienePin={pinTocado ? !!pinEdit.trim() : conPin.has(v.id)} />
 
                 <button
                   disabled={guardandoPerfil}
