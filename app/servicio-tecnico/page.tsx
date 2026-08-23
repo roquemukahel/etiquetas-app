@@ -623,7 +623,7 @@ export default function ServicioTecnico() {
       return;
     }
     setGuardando(r.id);
-    const resultado = await cambiarEstadoReparacion(supabase, r, nuevoEstado);
+    const resultado = await cambiarEstadoReparacion(supabase, r, nuevoEstado, actor?.nombre ?? null);
     if (resultado === 'cancelado') {
       setGuardando(null);
       return;

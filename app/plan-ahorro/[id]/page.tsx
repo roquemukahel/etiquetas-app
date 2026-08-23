@@ -145,6 +145,24 @@ export default function DetallePlanAhorro() {
   const anularMovimiento = async (movId: string) => {
     if (!confirm(t('¿Anular este pago? Deja de contar para el total juntado (queda registrado como anulado, no se borra).'))) return;
     await supabase.from('plan_ahorro_movimientos').update({ anulado: true }).eq('id', movId);
+    // Si este pago era parte de lo que había completado el plan, anularlo
+    // lo deja por debajo del objetivo otra vez, pero el plan sigue
+    // figurando "completado" (y si era una seña, el equipo ya se entregó
+    // y se vendió — no hay nada que "seguir juntando"). No lo reabrimos
+    // solos: se lo avisamos a quien lo anuló para que decida con el botón
+    // "Reactivar" si corresponde, en vez de cambiar el estado por su cuenta
+    // sin saber si el equipo ya salió del local.
+    if (plan?.estado === 'completado') {
+      const anulado = movimientos.find((m) => m.id === movId);
+      const pagadoNuevo = pagado - (anulado?.monto ?? 0);
+      if (pagadoNuevo < plan.monto_objetivo) {
+        alert(
+          t(
+            'Este plan ya estaba marcado como completado — al anular este pago queda con menos plata juntada de la que pactaron, pero el plan sigue figurando "completado" (no lo cambiamos solos, puede que el equipo ya se haya entregado). Si corresponde, reabrilo con el botón "Reactivar".'
+          )
+        );
+      }
+    }
     cargar();
   };
 
@@ -187,17 +205,24 @@ export default function DetallePlanAhorro() {
     setProcesando(true);
     setError(null);
 
+    // Atómico: se reserva el dispositivo ANTES de crear nada — si dos
+    // pestañas confirman la entrega casi al mismo tiempo, solo la primera
+    // consigue pasar en_stock de true a false (mismo patrón ya usado en
+    // Compras/Canje). Si no devuelve fila, alguien más ya lo vendió — se
+    // aborta en vez de generar una segunda orden para el mismo equipo.
     const { data: disp, error: dispError } = await supabase
       .from('dispositivos')
-      .select('modelo, capacidad_gb, color, imei, en_stock')
+      .update({ en_stock: false })
       .eq('id', plan.dispositivo_id)
-      .single();
-    if (dispError || !disp) {
-      setError(t('No pudimos encontrar el dispositivo reservado.'));
+      .eq('en_stock', true)
+      .select('modelo, capacidad_gb, color, imei')
+      .maybeSingle();
+    if (dispError) {
+      setError(t('No pudimos encontrar el dispositivo reservado.') + ' ' + dispError.message);
       setProcesando(false);
       return;
     }
-    if (!disp.en_stock) {
+    if (!disp) {
       setError(t('Este equipo ya no figura en Stock (puede que ya se haya vendido o dado de baja).'));
       setProcesando(false);
       return;
@@ -218,6 +243,10 @@ export default function DetallePlanAhorro() {
       .select()
       .single();
     if (ordenError || !orden) {
+      // El dispositivo ya se reservó arriba — si la orden no se pudo crear,
+      // hay que devolverlo a Stock, si no quedaría fuera de stock sin
+      // ninguna venta real detrás.
+      await supabase.from('dispositivos').update({ en_stock: true }).eq('id', plan.dispositivo_id);
       setError(t('No pudimos generar la venta:') + ' ' + (ordenError?.message || ''));
       setProcesando(false);
       return;
@@ -230,7 +259,6 @@ export default function DetallePlanAhorro() {
       precio_unitario: plan.monto_objetivo,
       tipo: 'dispositivo',
     });
-    await supabase.from('dispositivos').update({ en_stock: false }).eq('id', plan.dispositivo_id);
     await supabase.from('planes_ahorro').update({ estado: 'completado' }).eq('id', plan.id);
 
     await registrarAuditoria(supabase, {

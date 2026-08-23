@@ -2556,4 +2556,17 @@ export const PT: Record<string, string> = {
   // historial real (ventas, cuenta corriente, reparaciones, etc.).
   'Este cliente tiene ventas, reparaciones, cuenta corriente u otras operaciones registradas — no se puede eliminar para no perder ese historial. Si ya no lo usás, podés dejarlo así: no molesta en la lista.':
     'Este cliente tem vendas, reparos, conta corrente ou outras operações registradas — não é possível excluí-lo para não perder esse histórico. Se não usa mais, pode deixá-lo assim: não atrapalha na lista.',
+
+  // Auditoría exhaustiva ronda 2 (2026-08-22) — resincronizar la orden de
+  // cobro de una reparación cuando el presupuesto cambia después de
+  // generarla.
+  'Actualizar orden de cobro': 'Atualizar pedido de cobrança',
+  '¿Actualizar la orden de cobro con el importe actual de esta reparación? Si el presupuesto cambió después de generarla, la orden se va a corregir.':
+    'Atualizar o pedido de cobrança com o valor atual deste reparo? Se o orçamento mudou depois de gerá-lo, o pedido vai ser corrigido.',
+  'Si editaste el presupuesto después de generar la orden, usá esto para que coincidan.':
+    'Se você editou o orçamento depois de gerar o pedido, use isto para que fiquem iguais.',
+  'Marcá primero Correcto, Falla o No aplica para poder adjuntar la foto.':
+    'Marque primeiro Correto, Falha ou Não se aplica para poder anexar a foto.',
+  'Este plan ya estaba marcado como completado — al anular este pago queda con menos plata juntada de la que pactaron, pero el plan sigue figurando "completado" (no lo cambiamos solos, puede que el equipo ya se haya entregado). Si corresponde, reabrilo con el botón "Reactivar".':
+    'Este plano já estava marcado como concluído — ao anular este pagamento fica com menos dinheiro juntado do que combinaram, mas o plano continua constando como "concluído" (não mudamos isso sozinhos, pode ser que o aparelho já tenha sido entregue). Se for o caso, reabra com o botão "Reativar".',
 };

@@ -1012,6 +1012,29 @@ export default function NuevaOrden() {
       );
       if (itemsErr) throw new Error(itemsErr.message);
 
+      // Descuenta stock de accesorios vendidos (tipo 'producto' con
+      // productoId real del catálogo) — a diferencia de los dispositivos
+      // (que se marcan en_stock:false más abajo), la cantidad de un
+      // producto NUNCA se venía descontando acá, así que Stock mostraba
+      // siempre la misma cantidad sin importar cuántos se vendieran. Se
+      // usa el RPC atómico ya existente (mismo que Stock > editar
+      // cantidad), no bloquea la venta si falla (best-effort): la orden ya
+      // se creó, y no tiene sentido dejar al vendedor sin poder cobrar por
+      // un problema de stock de un accesorio.
+      const actorProducto = getActor();
+      for (const i of carrito.filter((i) => i.tipo === 'producto' && i.productoId)) {
+        try {
+          await supabase.rpc('producto_mover_stock', {
+            p_producto_id: i.productoId,
+            p_tipo: 'venta',
+            p_cantidad: i.cantidad,
+            p_motivo: 'Venta',
+            p_usuario: actorProducto?.nombre ?? null,
+            p_orden_id: orden.id,
+          });
+        } catch {}
+      }
+
       // Cobro: pagos (plata que entra) + cargo de cuenta corriente (deuda
       // que nace). La etiqueta de la orden ya resume el medio; el detalle
       // real vive acá para poder armar la caja por medio de pago.

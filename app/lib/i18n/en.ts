@@ -2555,4 +2555,17 @@ export const EN: Record<string, string> = {
   // historial real (ventas, cuenta corriente, reparaciones, etc.).
   'Este cliente tiene ventas, reparaciones, cuenta corriente u otras operaciones registradas — no se puede eliminar para no perder ese historial. Si ya no lo usás, podés dejarlo así: no molesta en la lista.':
     "This client has sales, repairs, a running balance, or other recorded operations — it can't be deleted to avoid losing that history. If you don't use it anymore, you can just leave it — it won't get in the way in the list.",
+
+  // Auditoría exhaustiva ronda 2 (2026-08-22) — resincronizar la orden de
+  // cobro de una reparación cuando el presupuesto cambia después de
+  // generarla.
+  'Actualizar orden de cobro': 'Update billing order',
+  '¿Actualizar la orden de cobro con el importe actual de esta reparación? Si el presupuesto cambió después de generarla, la orden se va a corregir.':
+    'Update the billing order with this repair\'s current amount? If the estimate changed after generating it, the order will be corrected.',
+  'Si editaste el presupuesto después de generar la orden, usá esto para que coincidan.':
+    'If you edited the estimate after generating the order, use this so they match.',
+  'Marcá primero Correcto, Falla o No aplica para poder adjuntar la foto.':
+    'Mark Correct, Failed, or N/A first so you can attach the photo.',
+  'Este plan ya estaba marcado como completado — al anular este pago queda con menos plata juntada de la que pactaron, pero el plan sigue figurando "completado" (no lo cambiamos solos, puede que el equipo ya se haya entregado). Si corresponde, reabrilo con el botón "Reactivar".':
+    'This plan was already marked as completed — voiding this payment leaves it with less money saved than agreed, but the plan still shows as "completed" (we won\'t change that on our own, the device may have already been handed over). If that applies here, reopen it with the "Reactivate" button.',
 };

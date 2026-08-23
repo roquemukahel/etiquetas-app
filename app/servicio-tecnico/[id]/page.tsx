@@ -574,7 +574,7 @@ export default function FichaReparacion() {
   const cambiarEstado = async (nuevoEstado: string) => {
     if (!r || !puedeGestionar) return;
     setGuardando(true);
-    const resultado = await cambiarEstadoReparacion(supabase, r, nuevoEstado);
+    const resultado = await cambiarEstadoReparacion(supabase, r, nuevoEstado, actor?.nombre ?? null);
     if (resultado === 'cancelado') {
       setGuardando(false);
       return;
@@ -819,7 +819,10 @@ export default function FichaReparacion() {
 
   const generarOrdenCobro = async () => {
     if (!r || !puedeGestionar) return;
-    if (!confirm(t('¿Generar la orden de cobro con el importe de esta reparación?'))) return;
+    const mensaje = r.orden_cobro_id
+      ? t('¿Actualizar la orden de cobro con el importe actual de esta reparación? Si el presupuesto cambió después de generarla, la orden se va a corregir.')
+      : t('¿Generar la orden de cobro con el importe de esta reparación?');
+    if (!confirm(mensaje)) return;
     setGuardando(true);
     // Misma lógica compartida que usa la sección "Listos para cobrar" de Órdenes.
     const { ordenId, total, error: genError } = await generarOrdenDeReparacion(supabase, r as any, { sucursalId: sucursalActual.id });
@@ -2107,9 +2110,21 @@ export default function FichaReparacion() {
               )}
 
               {r.orden_cobro_id && (
-                <Link href={`/ordenes/${r.orden_cobro_id}`} className="rounded-xl border border-border dark:border-dark-border py-2.5 text-center text-xs font-medium">
-                  {t('Ver orden de cobro')}
-                </Link>
+                <div className="flex flex-col gap-2">
+                  <Link href={`/ordenes/${r.orden_cobro_id}`} className="rounded-xl border border-border dark:border-dark-border py-2.5 text-center text-xs font-medium">
+                    {t('Ver orden de cobro')}
+                  </Link>
+                  {puedeGestionar && (
+                    <button
+                      disabled={guardando}
+                      onClick={generarOrdenCobro}
+                      className="rounded-xl border border-border dark:border-dark-border py-2.5 text-center text-xs font-medium disabled:opacity-40"
+                      title={t('Si editaste el presupuesto después de generar la orden, usá esto para que coincidan.')}
+                    >
+                      {t('Actualizar orden de cobro')}
+                    </button>
+                  )}
+                </div>
               )}
             </>
           )}

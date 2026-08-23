@@ -1,6 +1,7 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { registrarAuditoria } from './auditoria';
 import { infoEstado, CHECKLIST_CALIDAD_GENERICO } from './reparaciones';
+import { liberarRepuestosDeReparaciones } from './repuestos';
 
 // Cambiar el estado de una reparación se podía disparar desde 3 lugares
 // (lista de Reparaciones, Mi banco, la ficha) y cada uno tenía su propia
@@ -40,7 +41,8 @@ async function controlesDeCalidadFaltantes(supabase: SupabaseClient, r: Reparaci
 export async function cambiarEstadoReparacion(
   supabase: SupabaseClient,
   r: ReparacionMinima,
-  nuevoEstado: string
+  nuevoEstado: string,
+  actorNombre: string | null = null
 ): Promise<'aplicado' | 'cancelado'> {
   let overrideControlCalidad = false;
   let controlesFaltantes: string[] = [];
@@ -69,6 +71,17 @@ export async function cambiarEstadoReparacion(
   }
   await supabase.from('reparaciones').update(cambios).eq('id', r.id);
 
+  // Cancelar (a diferencia de eliminar) no borraba la reparación, así que
+  // nadie liberaba los repuestos que tuviera reservados/consumidos — quedaban
+  // descontados del stock para siempre por un trabajo que nunca se hizo.
+  // Mismo criterio y misma función que ya usa eliminarDefinitivo. Best-effort:
+  // si falla, no bloquea la cancelación, pero el error queda en la auditoría.
+  let liberacionError: string | null = null;
+  if (nuevoEstado === 'cancelado') {
+    const liberacion = await liberarRepuestosDeReparaciones(supabase, [r.id], actorNombre);
+    if (!liberacion.ok) liberacionError = liberacion.error;
+  }
+
   // La orden vinculada se borra al cancelar SOLO si sigue en $0 y pendiente
   // — si ya tiene un total cargado o está pagada/entregada, es plata real y
   // no se toca aunque después la marquen como cancelada.
@@ -85,10 +98,11 @@ export async function cambiarEstadoReparacion(
     }
   }
 
+  const avisoLiberacion = liberacionError ? ` (no se pudieron liberar los repuestos: ${liberacionError})` : '';
   await registrarAuditoria(supabase, {
     accion: `cambió el estado de la reparación ${r.numero_orden || ''} (${r.modelo || 'sin modelo'}) de "${infoEstado(r.estado).label}" a "${infoEstado(nuevoEstado).label}"${
       overrideControlCalidad ? ` (con controles de calidad pendientes: ${controlesFaltantes.join(', ')})` : ''
-    }`,
+    }${avisoLiberacion}`,
     entidad: 'reparacion',
     entidadId: r.id,
     valorAnterior: { estado: r.estado },

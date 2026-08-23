@@ -40,12 +40,23 @@ export default function ControlCalidad({
   const elegirFoto = async (item: string, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    let dataUrl: string;
     try {
-      const dataUrl = await comprimirImagen(file);
-      setFotosNuevas((p) => ({ ...p, [item]: dataUrl }));
-      const reg = registroDe(item);
-      if (reg) onGuardar(item, reg.resultado, reg.observacion, dataUrl);
-    } catch {}
+      dataUrl = await comprimirImagen(file);
+    } catch {
+      alert(t('No pudimos leer la foto.'));
+      return;
+    }
+    const reg = registroDe(item);
+    // Si el ítem todavía no tiene ningún resultado marcado, no hay fila en
+    // la base donde guardar la foto — antes quedaba solo en memoria (se veía
+    // en pantalla) y se perdía en silencio al cambiar de pestaña o recargar.
+    if (!reg) {
+      alert(t('Marcá primero Correcto, Falla o No aplica para poder adjuntar la foto.'));
+      return;
+    }
+    setFotosNuevas((p) => ({ ...p, [item]: dataUrl }));
+    onGuardar(item, reg.resultado, reg.observacion, dataUrl);
   };
 
   const guardar = (item: string, resultado: string) => {

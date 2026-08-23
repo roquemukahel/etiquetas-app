@@ -33,6 +33,7 @@ type Item = {
   cantidad: number;
   precio_unitario: number;
   dispositivo_id: string | null;
+  producto_id: string | null;
   tipo: string;
 };
 
@@ -210,7 +211,7 @@ export default function DetalleOrden() {
     const { data } = await supabase
       .from('ordenes')
       .select(
-        '*, clientes ( nombre, apellido, telefono ), vendedores ( nombre, foto_url ), orden_items ( id, descripcion, cantidad, precio_unitario, dispositivo_id, tipo )'
+        '*, clientes ( nombre, apellido, telefono ), vendedores ( nombre, foto_url ), orden_items ( id, descripcion, cantidad, precio_unitario, dispositivo_id, producto_id, tipo )'
       )
       .eq('id', id)
       .single();
@@ -860,10 +861,31 @@ export default function DetalleOrden() {
         .update({ en_stock: true, en_stock_desde: new Date().toISOString(), alerta_stock_enviada: false })
         .in('id', dispositivoIds);
     }
+    // Devuelve al stock los accesorios (tipo 'producto') vendidos en esta
+    // orden — simétrico al descuento que se hace al crearla en Nueva Orden.
+    // Best-effort: si falla, no bloquea la cancelación (mismo criterio que
+    // el resto de esta función).
+    for (const i of orden.orden_items.filter((i) => i.producto_id)) {
+      try {
+        await supabase.rpc('producto_mover_stock', {
+          p_producto_id: i.producto_id,
+          p_tipo: 'devolucion',
+          p_cantidad: i.cantidad,
+          p_motivo: 'Venta cancelada',
+          p_usuario: actor?.nombre ?? null,
+        });
+      } catch {}
+    }
     // Se borran antes de eliminar la orden: canjes.orden_id queda en null
     // automáticamente al borrar la orden (on delete set null), así que
     // después ya no se los podría encontrar por ese filtro.
-    await supabase.from('canjes').delete().eq('orden_id', id).eq('estado', 'en_canje');
+    // agregado_a_stock (no estado) es lo que de verdad indica si este canje
+    // ya se convirtió en un dispositivo de Stock — estado solo distingue
+    // "en_canje" de "derivado a servicio técnico", nunca pasa a otro valor
+    // al agregarlo a Stock. Filtrar por estado acá borraba también canjes
+    // que ya eran inventario vendible, perdiendo su trazabilidad (de dónde
+    // salió, a quién se le recibió, en qué monto) sin necesidad.
+    await supabase.from('canjes').delete().eq('orden_id', id).eq('agregado_a_stock', false);
     // Lo mismo con la cuenta corriente: si esta venta había generado deuda
     // (cargo) o registrado pagos, hay que anularlos ANTES de borrar la orden
     // (después orden_id queda en null y no se los encuentra). Se anulan (no

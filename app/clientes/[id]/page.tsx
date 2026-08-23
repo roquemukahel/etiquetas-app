@@ -330,8 +330,18 @@ export default function DetalleCliente() {
     // no siga contando en la caja de Estadísticas.
     if (m.pago_id) {
       await supabase.from('pagos').update({ anulado: true }).eq('id', m.pago_id);
+      // Si ese pago se había aplicado a una o más cuotas de financiación
+      // (aplicarPagoAFinanciacion), esa aplicación quedaba sin revertir: la
+      // cuota seguía figurando "pagada" aunque el pago que la saldó ya no
+      // cuenta. Best-effort: si el negocio no corrió
+      // financiacion_revertir_pago_supabase.sql todavía, esto no bloquea la
+      // anulación del movimiento (que ya se aplicó arriba).
+      try {
+        await supabase.rpc('financiacion_revertir_pago', { p_pago_id: m.pago_id, p_usuario: actor?.nombre ?? null });
+      } catch {}
     }
     await cargarMovimientos();
+    setRecargarFinanciacion((n) => n + 1);
   };
 
   const guardarCredito = async () => {
