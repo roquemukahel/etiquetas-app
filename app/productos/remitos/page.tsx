@@ -7,7 +7,8 @@ import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import { obtenerTodasLasFilas } from '../../lib/db';
 import { obtenerSucursales, type Sucursal } from '../../lib/sucursales';
-import { useT } from '../../lib/idioma';
+import { useT, useIdioma } from '../../lib/idioma';
+import { localeDe } from '../../lib/i18n/traducir';
 
 type Remito = {
   id: string;
@@ -30,6 +31,8 @@ export default function RemitosInternos() {
   const supabase = crearClienteNavegador();
   const actor = useActor();
   const t = useT();
+  const idioma = useIdioma();
+  const locale = localeDe(idioma);
   const puedeAgregarStock = tienePermiso(actor, 'agregar_stock');
 
   const [remitos, setRemitos] = useState<Remito[]>([]);
@@ -102,7 +105,7 @@ export default function RemitosInternos() {
                   <span className="flex-1 text-muted dark:text-dark-text-secondary truncate">
                     {nombreSucursal(r.sucursal_origen_id)} → {nombreSucursal(r.sucursal_destino_id)}
                   </span>
-                  <span className="text-xs text-muted dark:text-dark-text-secondary shrink-0">{new Date(r.fecha).toLocaleDateString()}</span>
+                  <span className="text-xs text-muted dark:text-dark-text-secondary shrink-0">{new Date(r.fecha).toLocaleDateString(locale)}</span>
                 </button>
                 {abierto && (
                   <div className="px-3 pb-3 flex flex-col gap-1 border-t border-border dark:border-dark-border pt-2">
@@ -116,6 +119,12 @@ export default function RemitosInternos() {
                     ))}
                     {r.usuario && <p className="text-xs text-muted dark:text-dark-text-secondary mt-1">{t('Generado por')} {r.usuario}</p>}
                     {r.observaciones && <p className="text-xs text-muted dark:text-dark-text-secondary">{r.observaciones}</p>}
+                    <Link
+                      href={`/productos/remitos/${r.id}`}
+                      className="mt-2 self-start text-xs font-medium text-accent dark:text-dark-accent hover:underline"
+                    >
+                      {t('Ver e imprimir')}
+                    </Link>
                   </div>
                 )}
               </div>

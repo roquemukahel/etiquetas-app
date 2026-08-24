@@ -2629,4 +2629,10 @@ export const PT: Record<string, string> = {
   'Ajustes del negocio y del equipo': 'Configurações do negócio e da equipe',
   'Ayuda y contacto': 'Ajuda e contato',
   Administración: 'Administração',
+
+  // Comprobante imprimible del Remito Interno.
+  'Ver e imprimir': 'Ver e imprimir',
+  'No encontramos ese remito.': 'Não encontramos essa transferência.',
+  'Remito interno': 'Transferência interna',
+  'Recibido por': 'Recebido por',
 };

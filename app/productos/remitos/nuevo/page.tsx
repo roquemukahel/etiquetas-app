@@ -167,10 +167,16 @@ export default function NuevoRemitoInterno() {
           {remitoCreado.numero} · {nombreSucursal(origenId)} → {nombreSucursal(destinoId)}
         </p>
         <div className="flex gap-2">
+          <Link
+            href={`/productos/remitos/${remitoCreado.id}`}
+            className="rounded-lg bg-accent dark:bg-dark-accent text-white px-4 py-2 text-sm font-medium"
+          >
+            {t('Ver e imprimir')}
+          </Link>
           <Link href="/productos/remitos" className="rounded-lg border border-border dark:border-dark-border px-4 py-2 text-sm font-medium">
             {t('Ver remitos')}
           </Link>
-          <Link href="/productos" className="rounded-lg bg-accent dark:bg-dark-accent text-white px-4 py-2 text-sm font-medium">
+          <Link href="/productos" className="rounded-lg border border-border dark:border-dark-border px-4 py-2 text-sm font-medium">
             {t('Volver a Productos')}
           </Link>
         </div>

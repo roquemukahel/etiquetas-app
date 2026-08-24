@@ -2628,4 +2628,10 @@ export const EN: Record<string, string> = {
   'Ajustes del negocio y del equipo': 'Business and team settings',
   'Ayuda y contacto': 'Help and contact',
   Administración: 'Administration',
+
+  // Internal transfer printable receipt.
+  'Ver e imprimir': 'View and print',
+  'No encontramos ese remito.': "We couldn't find that transfer.",
+  'Remito interno': 'Internal transfer',
+  'Recibido por': 'Received by',
 };
