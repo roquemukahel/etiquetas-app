@@ -2616,4 +2616,5 @@ export const PT: Record<string, string> = {
     'Você precisa de pelo menos 2 filiais ativas para gerar uma transferência interna.',
   'Otro remito se estaba generando al mismo tiempo entre estas sucursales. Probá de nuevo.':
     'Outra transferência estava sendo gerada ao mesmo tempo entre essas filiais. Tente novamente.',
+  'Se va a guardar en la sucursal': 'Vai ser salvo na filial',
 };

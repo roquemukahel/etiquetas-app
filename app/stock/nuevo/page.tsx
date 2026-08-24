@@ -7,6 +7,7 @@ import { crearClienteNavegador } from '../../lib/supabase/client';
 import { asegurarModelo, normalizarNombreModelo, sugerirCarpetas } from '../../lib/modelos';
 import { asegurarProveedor } from '../../lib/proveedores';
 import { obtenerCategorias, type Categoria } from '../../lib/categorias';
+import { obtenerSucursales, type Sucursal } from '../../lib/sucursales';
 import { useSucursalActual } from '../../lib/sucursal';
 import { limpiarImei } from '../../lib/imei';
 import { getActor, useActor, MENSAJE_ACTOR_REQUERIDO } from '../../lib/actor';
@@ -34,6 +35,27 @@ export default function NuevoDispositivo() {
   const [monedaCodigo, setMonedaCodigo] = useState('ARS');
   const [categoriasDispositivo, setCategoriasDispositivo] = useState<Categoria[]>([]);
   const [categoriaId, setCategoriaId] = useState('');
+  // A qué sucursal se va a guardar este dispositivo — visible y editable acá
+  // mismo, en vez de tomarla en silencio de lo que esté elegido en el panel
+  // de arriba. Si el panel está en "Todas las sucursales" (sucursalActual.id
+  // null), antes esto guardaba el dispositivo SIN sucursal para siempre (no
+  // hay forma de asignársela después) — ahora nunca se deja en blanco si el
+  // negocio tiene sucursales: cae en la primera de la lista como default,
+  // pero queda un selector para cambiarla antes de guardar.
+  const [sucursales, setSucursales] = useState<Sucursal[]>([]);
+  const [sucursalElegida, setSucursalElegida] = useState('');
+  useEffect(() => {
+    (async () => {
+      try {
+        const lista = await obtenerSucursales(supabase, false);
+        setSucursales(lista);
+        setSucursalElegida(sucursalActual.id ?? lista[0]?.id ?? '');
+      } catch {
+        // Tabla sucursales todavía no existe en este negocio.
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   useEffect(() => {
     (async () => {
       const { data } = await supabase.from('modelos_stock').select('nombre').order('nombre');
@@ -125,7 +147,7 @@ export default function NuevoDispositivo() {
       detalles: detalles.trim() || null,
       estado,
       ...(categoriaId ? { categoria_id: categoriaId } : {}),
-      ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
+      ...(sucursalElegida ? { sucursal_id: sucursalElegida } : {}),
       en_stock: true,
       agregado_por_nombre: actor?.nombre ?? null,
       agregado_por_foto_url: actor?.fotoUrl ?? null,
@@ -158,6 +180,22 @@ export default function NuevoDispositivo() {
       )}
 
       <div className="flex flex-col gap-3">
+        {sucursales.length > 1 && (
+          <div>
+            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Se va a guardar en la sucursal')}</label>
+            <select
+              value={sucursalElegida}
+              onChange={(e) => setSucursalElegida(e.target.value)}
+              className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+            >
+              {sucursales.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.nombre}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         {categoriasDispositivo.length > 1 && (
           <div>
             <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Categoría')}</label>

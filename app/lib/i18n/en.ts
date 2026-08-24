@@ -2615,4 +2615,5 @@ export const EN: Record<string, string> = {
     'You need at least 2 active branches to generate an internal transfer.',
   'Otro remito se estaba generando al mismo tiempo entre estas sucursales. Probá de nuevo.':
     'Another transfer was being generated between these branches at the same time. Try again.',
+  'Se va a guardar en la sucursal': 'This will be saved to the branch',
 };

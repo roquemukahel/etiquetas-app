@@ -196,6 +196,17 @@ export default function Stock() {
   const [marcaProducto, setMarcaProducto] = useState('');
   const [numeroSerieProducto, setNumeroSerieProducto] = useState('');
   const [cantidadInicialProducto, setCantidadInicialProducto] = useState('1');
+  // A qué sucursal se va a guardar el producto que se está por cargar —
+  // visible y editable, en vez de tomarla en silencio de sucursalActual.id.
+  // Si el panel está en "Todas las sucursales" (id null), antes el producto
+  // quedaba sin sucursal para siempre (no hay forma de asignársela después) —
+  // ahora cae en la primera de la lista como default en vez de null.
+  const [sucursalAgregarProducto, setSucursalAgregarProducto] = useState(sucursalActual.id ?? '');
+  useEffect(() => {
+    if (sucursalActual.id) setSucursalAgregarProducto(sucursalActual.id);
+    else if (!sucursalAgregarProducto && sucursales[0]) setSucursalAgregarProducto(sucursales[0].id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sucursalActual.id, sucursales]);
   // "Perfil genérico" (categorias_stock_supabase.sql): campos que existen en
   // la base hace tiempo pero nunca tuvieron formulario — colapsados detrás
   // de "Más campos" para no abrumar el alta rápida de un accesorio simple.
@@ -1061,7 +1072,7 @@ export default function Stock() {
       cantidad: esSerializado ? 1 : Math.max(0, Math.floor(Number(cantidadInicialProducto) || 0)),
       ...(productoMaestroId ? { producto_maestro_id: productoMaestroId } : {}),
       ...(categoriaProducto ? { categoria_id: categoriaProducto, modalidad: modalidadProducto } : {}),
-      ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
+      ...(sucursalAgregarProducto ? { sucursal_id: sucursalAgregarProducto } : {}),
       ...(esSerializado ? { marca: marcaLimpia, numero_serie: numeroSerieProducto.trim() || null } : {}),
       ...(mostrarMasCamposProducto
         ? {
@@ -1936,6 +1947,22 @@ export default function Stock() {
 
           {puedeAgregarStock && (
             <div className="flex flex-col gap-2">
+              {sucursales.length > 1 && (
+                <div>
+                  <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Se va a guardar en la sucursal')}</label>
+                  <select
+                    value={sucursalAgregarProducto}
+                    onChange={(e) => setSucursalAgregarProducto(e.target.value)}
+                    className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+                  >
+                    {sucursales.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <input
                 value={nombreProducto}
                 onChange={(e) => setNombreProducto(e.target.value)}
