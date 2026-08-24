@@ -2617,4 +2617,15 @@ export const EN: Record<string, string> = {
     'Another transfer was being generated between these branches at the same time. Try again.',
   'Se va a guardar en la sucursal': 'This will be saved to the branch',
   '1 unidad': '1 unit',
+
+  // Quick access (Home) — full parity with the sidebar menu.
+  'Catálogo completo, cruzado entre sucursales': 'Full catalog, combined across branches',
+  'Lo que le corresponde a cada vendedor': 'What each salesperson is owed',
+  'Gastos y retiros del negocio': 'Business expenses and withdrawals',
+  'Señas y equipos reservados': 'Deposits and reserved devices',
+  'Cómo viene el negocio': 'How the business is doing',
+  'Tus locales y qué hay en cada uno': "Your branches and what's in each one",
+  'Ajustes del negocio y del equipo': 'Business and team settings',
+  'Ayuda y contacto': 'Help and contact',
+  Administración: 'Administration',
 };

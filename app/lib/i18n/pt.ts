@@ -2618,4 +2618,15 @@ export const PT: Record<string, string> = {
     'Outra transferência estava sendo gerada ao mesmo tempo entre essas filiais. Tente novamente.',
   'Se va a guardar en la sucursal': 'Vai ser salvo na filial',
   '1 unidad': '1 unidade',
+
+  // Accesos rápidos (Inicio) — paridad completa con el menú lateral.
+  'Catálogo completo, cruzado entre sucursales': 'Catálogo completo, cruzado entre filiais',
+  'Lo que le corresponde a cada vendedor': 'O que cabe a cada vendedor',
+  'Gastos y retiros del negocio': 'Gastos e retiradas do negócio',
+  'Señas y equipos reservados': 'Sinais e aparelhos reservados',
+  'Cómo viene el negocio': 'Como está indo o negócio',
+  'Tus locales y qué hay en cada uno': 'Suas filiais e o que tem em cada uma',
+  'Ajustes del negocio y del equipo': 'Configurações do negócio e da equipe',
+  'Ayuda y contacto': 'Ajuda e contato',
+  Administración: 'Administração',
 };
