@@ -20,6 +20,7 @@ import ProductosMasVendidos from './ProductosMasVendidos';
 import QoviLateral from './QoviLateral';
 import AvisoPruebaPorVencer from './AvisoPruebaPorVencer';
 import { obtenerIdiomaServidor, traducir } from './lib/idiomaServidor';
+import { localeDe } from './lib/i18n/traducir';
 import { obtenerSucursalServidor } from './lib/sucursalServidor';
 import { traducirAccion } from './lib/i18n/traducirAccion';
 
@@ -691,7 +692,7 @@ export default async function Home() {
         </div>
       )}
 
-      <AccesosRapidos metricas={metricas} t={t} />
+      <AccesosRapidos metricas={metricas} t={t} locale={localeDe(idioma)} />
 
       <div className="text-center mt-auto pt-6 pb-2 flex flex-col items-center gap-1.5">
         <p className="flex items-center justify-center gap-2 text-sm font-display font-semibold">

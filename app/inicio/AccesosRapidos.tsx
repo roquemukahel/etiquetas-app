@@ -70,7 +70,7 @@ const plural = (n: number, s: string, p: string) => (n === 1 ? s : p);
 type T = (texto: string) => string;
 
 // Badges (pills con estado) y una nota opcional en gris por módulo.
-function datosDe(href: string, m: MetricasAccesos, t: T): { badges: { texto: string; tono: Tono }[]; nota?: string } {
+function datosDe(href: string, m: MetricasAccesos, t: T, locale: string): { badges: { texto: string; tono: Tono }[]; nota?: string } {
   switch (href) {
     case '/ordenes':
       return {
@@ -93,7 +93,7 @@ function datosDe(href: string, m: MetricasAccesos, t: T): { badges: { texto: str
         ],
       };
     case '/clientes':
-      return { badges: [{ texto: `${m.clientes.toLocaleString('es-AR')} ${t(plural(m.clientes, 'cliente', 'clientes'))}`, tono: 'info' }] };
+      return { badges: [{ texto: `${m.clientes.toLocaleString(locale)} ${t(plural(m.clientes, 'cliente', 'clientes'))}`, tono: 'info' }] };
     case '/compras':
       return { badges: m.comprasPendientes > 0 ? [{ texto: `${m.comprasPendientes} ${t(plural(m.comprasPendientes, 'pendiente', 'pendientes'))}`, tono: 'warn' }] : [] };
     case '/canje':
@@ -129,8 +129,8 @@ function Chevron() {
 }
 
 // Tarjeta principal (Operación diaria): mayor presencia, ilustración grande.
-function TarjetaPrincipal({ mod, m, t }: { mod: Modulo; m: MetricasAccesos; t: T }) {
-  const { badges, nota } = datosDe(mod.href, m, t);
+function TarjetaPrincipal({ mod, m, t, locale }: { mod: Modulo; m: MetricasAccesos; t: T; locale: string }) {
+  const { badges, nota } = datosDe(mod.href, m, t, locale);
   return (
     <Link href={mod.href} aria-label={t(mod.titulo)} className={`${CARD_BASE} min-h-[132px] flex-col justify-between overflow-hidden p-4 sm:p-5`}>
       <span className="pointer-events-none absolute -right-3 -top-3 h-24 w-24 rounded-full bg-accent-soft/60 dark:bg-dark-accent-soft opacity-70" aria-hidden="true" />
@@ -157,8 +157,8 @@ function TarjetaPrincipal({ mod, m, t }: { mod: Modulo; m: MetricasAccesos; t: T
 }
 
 // Tarjeta secundaria (Compras y finanzas): más compacta, misma ilustración.
-function TarjetaSecundaria({ mod, m, t }: { mod: Modulo; m: MetricasAccesos; t: T }) {
-  const { badges } = datosDe(mod.href, m, t);
+function TarjetaSecundaria({ mod, m, t, locale }: { mod: Modulo; m: MetricasAccesos; t: T; locale: string }) {
+  const { badges } = datosDe(mod.href, m, t, locale);
   return (
     <Link href={mod.href} aria-label={t(mod.titulo)} className={`${CARD_BASE} items-center gap-3 p-3.5`}>
       <IlustracionModulo nombre={mod.ilustracion} className={`h-12 w-12 shrink-0 ${ILUS_ANIM}`} />
@@ -206,7 +206,7 @@ function Subtitulo({ children }: { children: React.ReactNode }) {
   return <p className="text-[11px] font-semibold uppercase tracking-wide text-muted dark:text-dark-text-secondary">{children}</p>;
 }
 
-export default function AccesosRapidos({ metricas, t }: { metricas: MetricasAccesos; t: T }) {
+export default function AccesosRapidos({ metricas, t, locale }: { metricas: MetricasAccesos; t: T; locale: string }) {
   return (
     <section aria-labelledby="accesos-titulo" className="flex flex-col gap-4 animate-fade-in-up" style={{ animationDelay: '240ms' }}>
       {/* Encabezado: solo título, con Qovi acompañando (no es clickeable) */}
@@ -224,7 +224,7 @@ export default function AccesosRapidos({ metricas, t }: { metricas: MetricasAcce
       {/* Operación diaria — tarjetas principales */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {OPERACION.map((mod) => (
-          <TarjetaPrincipal key={mod.href} mod={mod} m={metricas} t={t} />
+          <TarjetaPrincipal key={mod.href} mod={mod} m={metricas} t={t} locale={locale} />
         ))}
       </div>
 
@@ -232,7 +232,7 @@ export default function AccesosRapidos({ metricas, t }: { metricas: MetricasAcce
       <Subtitulo>{t('Compras y finanzas')}</Subtitulo>
       <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
         {FINANZAS.map((mod) => (
-          <TarjetaSecundaria key={mod.href} mod={mod} m={metricas} t={t} />
+          <TarjetaSecundaria key={mod.href} mod={mod} m={metricas} t={t} locale={locale} />
         ))}
       </div>
 
@@ -240,7 +240,7 @@ export default function AccesosRapidos({ metricas, t }: { metricas: MetricasAcce
       <Subtitulo>{t('Administración')}</Subtitulo>
       <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
         {ADMINISTRACION.map((mod) => (
-          <TarjetaSecundaria key={mod.href} mod={mod} m={metricas} t={t} />
+          <TarjetaSecundaria key={mod.href} mod={mod} m={metricas} t={t} locale={locale} />
         ))}
       </div>
 

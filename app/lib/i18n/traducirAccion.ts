@@ -129,9 +129,14 @@ const PATRONES: { re: RegExp; pt: Constructor; en: Constructor }[] = [
     en: (m) => `deleted the device ${m[1]} from history`,
   },
   {
-    re: /^marcó (.+) como (en stock|fuera de stock)$/,
-    pt: (m) => `marcou ${m[1]} como ${m[2] === 'en stock' ? 'em estoque' : 'fora de estoque'}`,
-    en: (m) => `marked ${m[1]} as ${m[2] === 'en stock' ? 'in stock' : 'out of stock'}`,
+    // El sufijo opcional "(selección múltiple)" es el que aparece en
+    // stock/page.tsx cuando la acción viene de marcar varios dispositivos
+    // a la vez, en vez de uno solo — sin el grupo 3 acá, ese caso nunca
+    // matcheaba (el "$" quedaba pegado justo antes del sufijo) y quedaba
+    // siempre en español pese a estar en pt/en.
+    re: /^marcó (.+) como (en stock|fuera de stock)( \(selección múltiple\))?$/,
+    pt: (m) => `marcou ${m[1]} como ${m[2] === 'en stock' ? 'em estoque' : 'fora de estoque'}${m[3] ? ' (seleção múltipla)' : ''}`,
+    en: (m) => `marked ${m[1]} as ${m[2] === 'en stock' ? 'in stock' : 'out of stock'}${m[3] ? ' (multiple selection)' : ''}`,
   },
 
   // --- Productos/accesorios (Stock) ---
