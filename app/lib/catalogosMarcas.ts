@@ -207,3 +207,19 @@ export function compararModelosPorSalida(a: string, b: string): number {
   if (rb != null) return 1;
   return a.localeCompare(b);
 }
+
+// Reverso del catálogo: dado "iPhone 16 Pro" devuelve "iPhone", dado
+// "Galaxy S24" devuelve "Samsung". Un modelo escrito a mano (fuera del
+// catálogo, ej. una marca sin catálogo propio) no tiene marca detectable
+// — devuelve string vacío, no es un error.
+const MARCA_POR_MODELO: Map<string, string> = (() => {
+  const mapa = new Map<string, string>();
+  for (const [marcaId, modelos] of Object.entries(CATALOGO_MODELOS)) {
+    const nombreMarca = MARCAS_DISPONIBLES.find((m) => m.id === marcaId)?.nombre ?? marcaId;
+    for (const modelo of modelos) mapa.set(normalizarNombreModelo(modelo), nombreMarca);
+  }
+  return mapa;
+})();
+export function marcaDeModelo(modelo: string | null): string {
+  return modelo ? MARCA_POR_MODELO.get(normalizarNombreModelo(modelo)) ?? '' : '';
+}

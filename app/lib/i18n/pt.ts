@@ -2583,7 +2583,50 @@ export const PT: Record<string, string> = {
   'Por seguridad no se muestra el PIN ya cargado. Dejalo así para no cambiarlo, o escribí uno nuevo para reemplazarlo.':
     'Por segurança, o PIN já cadastrado não é exibido. Deixe assim para não mudá-lo, ou digite um novo para substituí-lo.',
 
-  // Auditoría de traducción (2026-08-24) — el pedido "Vendidos" del tab de
-  // Stock quedaba sin traducir (t() cae al español si falta la clave).
+  // Productos (catálogo maestro cruzado entre sucursales) + Remito Interno.
+  'Vista de consulta de todo el catálogo. Para editar cantidad, precio o costo de un producto, hacelo desde Stock.':
+    'Visualização de consulta de todo o catálogo. Para editar quantidade, preço ou custo de um produto, faça isso em Estoque.',
+  'Nuevo remito': 'Nova transferência',
+  'Buscar producto o marca...': 'Buscar produto ou marca...',
+  'Ver remitos emitidos': 'Ver transferências emitidas',
+  'No hay productos que coincidan.': 'Não há produtos que correspondam.',
+  Marca: 'Marca',
+  'Stock Total': 'Estoque Total',
+  'Stock Sucursal': 'Estoque da Filial',
+  Final: 'Final',
+  'Buscar producto...': 'Buscar produto...',
+  'Remito generado': 'Transferência gerada',
+  'Ver remitos': 'Ver transferências',
+  'Volver a Productos': 'Voltar para Produtos',
+  'Nuevo remito interno': 'Nova transferência interna',
+  'Sucursal origen': 'Filial de origem',
+  'Elegí una sucursal': 'Escolha uma filial',
+  'Sucursal destino': 'Filial de destino',
+  'Buscar producto en la sucursal de origen...': 'Buscar produto na filial de origem...',
+  'No hay productos con stock en esa sucursal.': 'Não há produtos com estoque nessa filial.',
+  'Ítems del remito': 'Itens da transferência',
+  'Generando...': 'Gerando...',
+  'Generar remito': 'Gerar transferência',
+  'No pudimos generar el remito:': 'Não conseguimos gerar a transferência:',
+  'Remitos internos': 'Transferências internas',
+  'Todavía no se generó ningún remito interno.': 'Ainda não foi gerada nenhuma transferência interna.',
+  'Generado por': 'Gerado por',
   Vendidos: 'Vendidos',
+  'Necesitás al menos 2 sucursales activas para generar un remito interno.':
+    'Você precisa de pelo menos 2 filiais ativas para gerar uma transferência interna.',
+  'Otro remito se estaba generando al mismo tiempo entre estas sucursales. Probá de nuevo.':
+    'Outra transferência estava sendo gerada ao mesmo tempo entre essas filiais. Tente novamente.',
+  'Se va a guardar en la sucursal': 'Vai ser salvo na filial',
+  '1 unidad': '1 unidade',
+
+  // Accesos rápidos (Inicio) — paridad completa con el menú lateral.
+  'Catálogo completo, cruzado entre sucursales': 'Catálogo completo, cruzado entre filiais',
+  'Lo que le corresponde a cada vendedor': 'O que cabe a cada vendedor',
+  'Gastos y retiros del negocio': 'Gastos e retiradas do negócio',
+  'Señas y equipos reservados': 'Sinais e aparelhos reservados',
+  'Cómo viene el negocio': 'Como está indo o negócio',
+  'Tus locales y qué hay en cada uno': 'Suas filiais e o que tem em cada uma',
+  'Ajustes del negocio y del equipo': 'Configurações do negócio e da equipe',
+  'Ayuda y contacto': 'Ajuda e contato',
+  Administración: 'Administração',
 };

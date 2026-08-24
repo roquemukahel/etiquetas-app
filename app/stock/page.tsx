@@ -16,6 +16,7 @@ import { compararModelosPorSalida } from '../lib/catalogosMarcas';
 import { sanitizarDecimal } from '../lib/numeros';
 import { obtenerCategorias, type Categoria } from '../lib/categorias';
 import { obtenerSucursales, type Sucursal } from '../lib/sucursales';
+import { obtenerProductosMaestro, crearProductoMaestro, type ProductoMaestro } from '../lib/productosMaestro';
 import { useSucursalActual } from '../lib/sucursal';
 import { asegurarProveedor } from '../lib/proveedores';
 import { useT } from '../lib/idioma';
@@ -87,6 +88,7 @@ type Producto = {
   descripcion?: string | null;
   notas?: string | null;
   sucursal_id?: string | null;
+  producto_maestro_id?: string | null;
 };
 
 // Catálogo inicial que se puede cargar con un toque desde "Agregar accesorios
@@ -194,6 +196,17 @@ export default function Stock() {
   const [marcaProducto, setMarcaProducto] = useState('');
   const [numeroSerieProducto, setNumeroSerieProducto] = useState('');
   const [cantidadInicialProducto, setCantidadInicialProducto] = useState('1');
+  // A qué sucursal se va a guardar el producto que se está por cargar —
+  // visible y editable, en vez de tomarla en silencio de sucursalActual.id.
+  // Si el panel está en "Todas las sucursales" (id null), antes el producto
+  // quedaba sin sucursal para siempre (no hay forma de asignársela después) —
+  // ahora cae en la primera de la lista como default en vez de null.
+  const [sucursalAgregarProducto, setSucursalAgregarProducto] = useState(sucursalActual.id ?? '');
+  useEffect(() => {
+    if (sucursalActual.id) setSucursalAgregarProducto(sucursalActual.id);
+    else if (!sucursalAgregarProducto && sucursales[0]) setSucursalAgregarProducto(sucursales[0].id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sucursalActual.id, sucursales]);
   // "Perfil genérico" (categorias_stock_supabase.sql): campos que existen en
   // la base hace tiempo pero nunca tuvieron formulario — colapsados detrás
   // de "Más campos" para no abrumar el alta rápida de un accesorio simple.
@@ -206,6 +219,11 @@ export default function Stock() {
   const [descripcionProducto, setDescripcionProducto] = useState('');
   const [notasProducto, setNotasProducto] = useState('');
   const [proveedoresSugeridos, setProveedoresSugeridos] = useState<string[]>([]);
+  // Catálogo maestro (productos_maestro_supabase.sql): si el negocio no
+  // corrió esa migración todavía, esta consulta vuelve vacía y agregarProducto
+  // simplemente no manda producto_maestro_id — el alta sigue funcionando
+  // igual que antes.
+  const [productosMaestroDisponibles, setProductosMaestroDisponibles] = useState<ProductoMaestro[]>([]);
   // Filtro de la grilla de accesorios por categoría — '' = todas.
   const [filtroCategoriaProducto, setFiltroCategoriaProducto] = useState('');
   const [guardandoProducto, setGuardandoProducto] = useState(false);
@@ -406,6 +424,13 @@ export default function Stock() {
         setSucursales(await obtenerSucursales(supabase, false));
       } catch {
         // Tabla sucursales todavía no existe en este negocio.
+      }
+    })();
+    (async () => {
+      try {
+        setProductosMaestroDisponibles(await obtenerProductosMaestro(supabase, false));
+      } catch {
+        // Tabla productos_maestro todavía no existe en este negocio.
       }
     })();
     // Mismo patrón que Proveedor en app/stock/nuevo/page.tsx: nombres
@@ -776,9 +801,27 @@ export default function Stock() {
       // (AirPods, cargadores, fundas, etc.) le sirven a cualquier negocio
       // desde el primer momento.
       if (data.length === 0 && puedeAgregarStock) {
-        const { error: insertError } = await supabase
-          .from('productos')
-          .insert(ACCESORIOS_DEFAULT.map((a) => ({ nombre: a.nombre, imagen_url: a.imagen, ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}) })));
+        // Cada accesorio por defecto también se enlaza a su propio maestro
+        // (mismo criterio que agregarProducto) — si no, la pestaña Productos
+        // no podría sumar su stock entre sucursales para ninguno de estos 17
+        // accesorios, justo el catálogo con el que arranca cualquier negocio
+        // nuevo. Si la migración todavía no corrió, crearProductoMaestro
+        // devuelve error y simplemente seguimos sin id (mismo fallback que
+        // ya usa agregarProducto).
+        const idsMaestro = await Promise.all(
+          ACCESORIOS_DEFAULT.map(async (a) => {
+            const resultado = await crearProductoMaestro(supabase, { nombre: a.nombre, imagenUrl: a.imagen });
+            return 'id' in resultado ? resultado.id : null;
+          })
+        );
+        const { error: insertError } = await supabase.from('productos').insert(
+          ACCESORIOS_DEFAULT.map((a, i) => ({
+            nombre: a.nombre,
+            imagen_url: a.imagen,
+            ...(idsMaestro[i] ? { producto_maestro_id: idsMaestro[i] } : {}),
+            ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
+          }))
+        );
         if (!insertError) {
           await registrarAuditoria(supabase, {
             accion: `cargó el catálogo de accesorios por defecto (${ACCESORIOS_DEFAULT.length} accesorios)`,
@@ -973,14 +1016,64 @@ export default function Stock() {
     // Por cantidad = varias unidades idénticas bajo el mismo registro.
     const esSerializado = categoriasStock.length > 0 && modalidadProducto === 'serializado';
     const proveedorId = mostrarMasCamposProducto ? await asegurarProveedor(supabase, proveedorProducto) : null;
+    const nombreLimpio = nombreProducto.trim();
+    const marcaLimpia = esSerializado ? marcaProducto.trim() || null : null;
+
+    // Catálogo maestro: si ya existe un producto con este nombre+marca (en
+    // esta u otra sucursal, elegido del datalist o tipeado igual a mano), se
+    // enlaza al mismo producto_maestro_id — así la pestaña Productos puede
+    // sumar el stock de todas las sucursales para "el mismo" producto. Si no
+    // existe, se crea un maestro nuevo con los mismos datos descriptivos.
+    const normalizar = (s: string | null) => (s ?? '').trim().toLowerCase();
+    const maestroExistente = productosMaestroDisponibles.find(
+      (m) => normalizar(m.nombre) === normalizar(nombreLimpio) && normalizar(m.marca) === normalizar(marcaLimpia)
+    );
+    let productoMaestroId: string | null = maestroExistente?.id ?? null;
+    if (!productoMaestroId) {
+      const resultadoMaestro = await crearProductoMaestro(supabase, {
+        nombre: nombreLimpio,
+        marca: marcaLimpia,
+        categoriaId: categoriaProducto || null,
+        precio: precioProducto ? Number(precioProducto) : null,
+        costo: costoProducto ? Number(costoProducto) : null,
+        sku: mostrarMasCamposProducto ? skuProducto : null,
+        codigoBarras: mostrarMasCamposProducto ? codigoBarrasProducto : null,
+        descripcion: mostrarMasCamposProducto ? descripcionProducto : null,
+        garantiaDias: mostrarMasCamposProducto && garantiaDiasProducto ? Math.max(0, Math.floor(Number(garantiaDiasProducto))) : null,
+        stockMinimo: mostrarMasCamposProducto && stockMinimoProducto ? Math.max(0, Math.floor(Number(stockMinimoProducto))) : null,
+        proveedorId,
+      });
+      if ('error' in resultadoMaestro) {
+        // Si el negocio todavía no corrió productos_maestro_supabase.sql, la
+        // tabla no existe — no bloqueamos el alta de un producto por eso, se
+        // guarda igual sin producto_maestro_id (mismo criterio que
+        // categoriasStock/sucursales más arriba). Cualquier otro error (ej.
+        // duplicado real) sí se muestra y frena el guardado.
+        // OJO: NO se puede chequear con la sola presencia de "productos_maestro"
+        // en el mensaje — el índice único de esa tabla se llama justamente
+        // "uq_productos_maestro_nombre_marca", así que un duplicado real (dos
+        // personas creando el mismo producto casi al mismo tiempo) también
+        // incluiría esas palabras y se confundiría con "falta la migración".
+        const migracionNoCorrida = /schema cache|does not exist/i.test(resultadoMaestro.error);
+        if (!migracionNoCorrida) {
+          setErrorProducto(`${t('No pudimos guardar:')} ` + resultadoMaestro.error);
+          setGuardandoProducto(false);
+          return;
+        }
+      } else {
+        productoMaestroId = resultadoMaestro.id;
+      }
+    }
+
     const { error: insertError } = await supabase.from('productos').insert({
-      nombre: nombreProducto.trim(),
+      nombre: nombreLimpio,
       precio: precioProducto ? Number(precioProducto) : null,
       costo: costoProducto ? Number(costoProducto) : null,
       cantidad: esSerializado ? 1 : Math.max(0, Math.floor(Number(cantidadInicialProducto) || 0)),
+      ...(productoMaestroId ? { producto_maestro_id: productoMaestroId } : {}),
       ...(categoriaProducto ? { categoria_id: categoriaProducto, modalidad: modalidadProducto } : {}),
-      ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
-      ...(esSerializado ? { marca: marcaProducto.trim() || null, numero_serie: numeroSerieProducto.trim() || null } : {}),
+      ...(sucursalAgregarProducto ? { sucursal_id: sucursalAgregarProducto } : {}),
+      ...(esSerializado ? { marca: marcaLimpia, numero_serie: numeroSerieProducto.trim() || null } : {}),
       ...(mostrarMasCamposProducto
         ? {
             sku: skuProducto.trim() || null,
@@ -998,6 +1091,7 @@ export default function Stock() {
       setGuardandoProducto(false);
       return;
     }
+    if (!maestroExistente) setProductosMaestroDisponibles(await obtenerProductosMaestro(supabase, false).catch(() => productosMaestroDisponibles));
     setNombreProducto('');
     setPrecioProducto('');
     setCostoProducto('');
@@ -1078,6 +1172,13 @@ export default function Stock() {
     }
     if (cambianOtros) {
       await supabase.from('productos').update({ costo: costoNuevo, precio: precioNuevo }).eq('id', p.id);
+      // El precio/costo "Final" que muestra la pestaña Productos sale del
+      // catálogo maestro, no de esta fila puntual — sin este paso, editar el
+      // precio acá (lo normal del día a día) dejaba ese catálogo desactualizado
+      // para siempre desde la primera vez que se creó el producto.
+      if (p.producto_maestro_id) {
+        await supabase.from('productos_maestro').update({ costo: costoNuevo, precio: precioNuevo }).eq('id', p.producto_maestro_id);
+      }
     }
     await registrarAuditoria(supabase, {
       accion: `editó el accesorio "${p.nombre}"`,
@@ -1846,12 +1947,38 @@ export default function Stock() {
 
           {puedeAgregarStock && (
             <div className="flex flex-col gap-2">
+              {sucursales.length > 1 && (
+                <div>
+                  <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Se va a guardar en la sucursal')}</label>
+                  <select
+                    value={sucursalAgregarProducto}
+                    onChange={(e) => setSucursalAgregarProducto(e.target.value)}
+                    className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+                  >
+                    {sucursales.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <input
                 value={nombreProducto}
                 onChange={(e) => setNombreProducto(e.target.value)}
                 placeholder={t('Nombre (ej. Funda, AirPods)')}
+                list="productos-maestro-nombres"
                 className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
               />
+              {/* Si el nombre coincide con uno que ya existe en el catálogo
+                  (de esta u otra sucursal), agregarProducto lo enlaza al
+                  mismo producto_maestro_id en vez de crear uno nuevo — así
+                  la pestaña Productos puede sumar el stock de ambas. */}
+              <datalist id="productos-maestro-nombres">
+                {productosMaestroDisponibles.map((m) => (
+                  <option key={m.id} value={m.nombre} />
+                ))}
+              </datalist>
               <div className="flex gap-2">
                 <input
                   value={costoProducto}

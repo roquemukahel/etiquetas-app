@@ -33,6 +33,7 @@ const OPERACION: Modulo[] = [
   { href: '/stock', titulo: 'Stock', desc: 'Dispositivos disponibles en tu local', ilustracion: 'stock' },
   { href: '/servicio-tecnico', titulo: 'Servicio Técnico', desc: 'Equipos derivados a reparación', ilustracion: 'servicio' },
   { href: '/clientes', titulo: 'Clientes', desc: 'Tu base de clientes', ilustracion: 'clientes' },
+  { href: '/productos', titulo: 'Productos', desc: 'Catálogo completo, cruzado entre sucursales', ilustracion: 'productos' },
 ];
 
 const FINANZAS: Modulo[] = [
@@ -40,6 +41,16 @@ const FINANZAS: Modulo[] = [
   { href: '/proveedores', titulo: 'Proveedores', desc: 'A quién le comprás stock en lote', ilustracion: 'proveedores' },
   { href: '/cuentas-por-cobrar', titulo: 'Cuentas por cobrar', desc: 'Quién te debe y cuánto', ilustracion: 'cobrar' },
   { href: '/canje', titulo: 'Plan Canje', desc: 'Dispositivos recibidos como parte de pago', ilustracion: 'canje' },
+  { href: '/comisiones', titulo: 'Comisiones', desc: 'Lo que le corresponde a cada vendedor', ilustracion: 'comisiones' },
+  { href: '/egresos', titulo: 'Egresos', desc: 'Gastos y retiros del negocio', ilustracion: 'egresos' },
+  { href: '/plan-ahorro', titulo: 'Plan de ahorro', desc: 'Señas y equipos reservados', ilustracion: 'ahorro' },
+];
+
+const ADMINISTRACION: Modulo[] = [
+  { href: '/estadisticas', titulo: 'Estadísticas', desc: 'Cómo viene el negocio', ilustracion: 'estadisticas' },
+  { href: '/configuracion/sucursales', titulo: 'Sucursales', desc: 'Tus locales y qué hay en cada uno', ilustracion: 'sucursales' },
+  { href: '/configuracion', titulo: 'Configuración', desc: 'Ajustes del negocio y del equipo', ilustracion: 'configuracion' },
+  { href: '/configuracion/soporte', titulo: 'Soporte', desc: 'Ayuda y contacto', ilustracion: 'soporte' },
 ];
 
 const ACCIONES: Modulo[] = [
@@ -221,6 +232,14 @@ export default function AccesosRapidos({ metricas, t }: { metricas: MetricasAcce
       <Subtitulo>{t('Compras y finanzas')}</Subtitulo>
       <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
         {FINANZAS.map((mod) => (
+          <TarjetaSecundaria key={mod.href} mod={mod} m={metricas} t={t} />
+        ))}
+      </div>
+
+      {/* Administración — configuración y análisis, se visitan menos seguido */}
+      <Subtitulo>{t('Administración')}</Subtitulo>
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+        {ADMINISTRACION.map((mod) => (
           <TarjetaSecundaria key={mod.href} mod={mod} m={metricas} t={t} />
         ))}
       </div>

@@ -261,17 +261,191 @@ function Camara({ className }: Props) {
   );
 }
 
+// Productos: planilla/tabla con filas y una lupa (vista de consulta).
+function Productos({ className }: Props) {
+  return (
+    <Svg className={className}>
+      <Piso />
+      <rect x="20" y="18" width="50" height="44" rx="6" fill={AZUL_OSC} />
+      <rect x="18" y="16" width="50" height="44" rx="6" fill={BLANCO} stroke={LINEA} strokeWidth="1.6" />
+      <rect x="24" y="22" width="38" height="6" rx="2" fill={AZUL} />
+      <g stroke={LINEA} strokeWidth="1.4">
+        <path d="M24 34h38M24 42h38M24 50h38" />
+      </g>
+      <g fill={AZUL_CLARO}>
+        <rect x="24" y="36" width="14" height="4" rx="1.4" />
+        <rect x="24" y="44" width="10" height="4" rx="1.4" />
+      </g>
+      {/* lupa (acento) */}
+      <circle cx="66" cy="60" r="11" fill="#16A34A" />
+      <circle cx="63.5" cy="57.5" r="5" fill="none" stroke={BLANCO} strokeWidth="2.2" />
+      <path d="M67.2 61.2 71 65" stroke={BLANCO} strokeWidth="2.2" strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+// Comisiones: moneda con porcentaje + barras crecientes.
+function Comisiones({ className }: Props) {
+  return (
+    <Svg className={className}>
+      <Piso />
+      <g fill={AZUL_CLARO}>
+        <rect x="22" y="52" width="9" height="16" rx="2" />
+        <rect x="34" y="44" width="9" height="24" rx="2" />
+        <rect x="46" y="36" width="9" height="32" rx="2" fill={AZUL} />
+      </g>
+      <circle cx="64" cy="34" r="18" fill={AZUL_OSC} />
+      <circle cx="63" cy="32" r="18" fill="#E8890C" />
+      <circle cx="55.5" cy="27" r="3.2" fill={BLANCO} />
+      <circle cx="70.5" cy="37" r="3.2" fill={BLANCO} />
+      <path d="M56 38 70 26" stroke={BLANCO} strokeWidth="2.4" strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+// Egresos: comprobante con flecha hacia afuera (opuesto a Compra).
+function Egresos({ className }: Props) {
+  return (
+    <Svg className={className}>
+      <Piso />
+      <rect x="24" y="16" width="34" height="44" rx="4" fill={AZUL_OSC} />
+      <rect x="22" y="14" width="34" height="44" rx="4" fill={BLANCO} stroke={LINEA} strokeWidth="1.6" />
+      <rect x="28" y="21" width="22" height="3.4" rx="1.7" fill={AZUL} />
+      <rect x="28" y="28" width="22" height="2.8" rx="1.4" fill={AZUL_CLARO} />
+      <rect x="28" y="34" width="16" height="2.8" rx="1.4" fill={AZUL_CLARO} />
+      <rect x="28" y="46" width="22" height="3.4" rx="1.7" fill="#DC2626" opacity="0.85" />
+      {/* flecha saliendo (acento rojo) */}
+      <circle cx="66" cy="58" r="12" fill="#DC2626" />
+      <path d="M66 51v14M60 60l6 5 6-5" stroke={BLANCO} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+    </Svg>
+  );
+}
+
+// Plan de ahorro: alcancía con moneda cayendo.
+function Ahorro({ className }: Props) {
+  return (
+    <Svg className={className}>
+      <Piso />
+      <path
+        d="M24 56c0-13 10-22 24-22s22 7 26 12l6-2-1 8-5 2c-1 9-9 16-19 16v6h-8v-6a26 26 0 0 1-6-1.4V72h-8v-4.6C28 65 24 61 24 56Z"
+        fill={AZUL_OSC}
+      />
+      <path
+        d="M22 54c0-13 10-22 24-22s22 7 26 12l6-2-1 8-5 2c-1 9-9 16-19 16v6h-8v-6a26 26 0 0 1-6-1.4V70h-8v-4.6C26 63 22 59 22 54Z"
+        fill={AZUL}
+      />
+      <circle cx="52" cy="42" r="3" fill={AZUL_OSC} />
+      <rect x="44" y="30" width="10" height="4" rx="2" fill={AZUL_OSC} transform="rotate(-18 49 32)" />
+      {/* moneda cayendo (acento) */}
+      <circle cx="66" cy="20" r="8" fill="#E8890C" />
+      <path d="M66 15.5v9M63.4 17.6c0-1.2 1.1-1.9 2.6-1.9s2.6.7 2.6 1.8-.9 1.6-2.6 2-2.6.9-2.6 2 1.1 1.8 2.6 1.8 2.6-.7 2.6-1.8" stroke={BLANCO} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+// Estadísticas: pantalla con barras crecientes + flecha arriba.
+function Estadisticas({ className }: Props) {
+  return (
+    <Svg className={className}>
+      <Piso />
+      <rect x="18" y="20" width="52" height="40" rx="6" fill={AZUL_OSC} />
+      <rect x="16" y="18" width="52" height="40" rx="6" fill={AZUL} />
+      <rect x="21" y="23" width="42" height="30" rx="3" fill={CIELO} />
+      <g fill={AZUL}>
+        <rect x="26" y="40" width="6" height="9" rx="1.5" />
+        <rect x="35" y="34" width="6" height="15" rx="1.5" />
+        <rect x="44" y="28" width="6" height="21" rx="1.5" />
+      </g>
+      {/* flecha creciente (acento verde) */}
+      <circle cx="64" cy="20" r="11" fill="#16A34A" />
+      <path d="M59 24l5-8 3 3 5-6" stroke={BLANCO} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      <path d="M67 12h4v4" stroke={BLANCO} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+    </Svg>
+  );
+}
+
+// Sucursales: local/vidriera con toldo + pin de ubicación.
+function Sucursales({ className }: Props) {
+  return (
+    <Svg className={className}>
+      <Piso />
+      <rect x="24" y="38" width="40" height="26" rx="3" fill={AZUL_OSC} />
+      <rect x="22" y="36" width="40" height="26" rx="3" fill={BLANCO} stroke={LINEA} strokeWidth="1.6" />
+      <rect x="27" y="41" width="12" height="15" rx="1.5" fill={CIELO} />
+      <rect x="43" y="41" width="14" height="21" rx="1.5" fill={AZUL_CLARO} />
+      {/* toldo */}
+      <path d="M19 36l3-10a4 4 0 0 1 4-3h30a4 4 0 0 1 4 3l3 10Z" fill={AZUL} />
+      <g fill={BLANCO}>
+        <path d="M22 36l1.5-9h6l-1 9Z" opacity="0.9" />
+        <path d="M35 36l0.5-9h7l0.5 9Z" opacity="0.9" />
+        <path d="M49 36l-0.5-9h7l1 9Z" opacity="0.9" />
+      </g>
+      {/* pin (acento) */}
+      <g transform="translate(66 20)">
+        <path d="M0 22C-7 12-8 5-2.5 0.6 0.9-2 5-2 8.5 0.6 13 5 12 12 5 22Z" fill="#DC2626" transform="translate(-5 0)" />
+        <circle cx="0" cy="8" r="4" fill={BLANCO} />
+      </g>
+    </Svg>
+  );
+}
+
+// Configuración: engranaje grande con control deslizante.
+function Configuracion({ className }: Props) {
+  return (
+    <Svg className={className}>
+      <Piso />
+      <g transform="translate(40 40)">
+        <path d="M0-22 4-19.5 9-20.5 10.5-15.5 15.5-13.5 14.5-8 18-4 15-0.5 18 3 14.5 6.5 15.5 12 10.5 14 9 19 4 18 0 22-4 18-9 19-10.5 14-15.5 12-14.5 6.5-18 3-15 -0.5-18-4-14.5-8-15.5-13.5-10.5-15.5-9-20.5-4-19.5Z" fill={AZUL_OSC} />
+        <circle cx="0" cy="0" r="8.5" fill={BLANCO} />
+        <circle cx="0" cy="0" r="4.5" fill={AZUL_OSC} />
+      </g>
+      {/* control deslizante (acento) */}
+      <rect x="52" y="60" width="32" height="9" rx="4.5" fill="#7C3AED" opacity="0.18" />
+      <rect x="52" y="60" width="20" height="9" rx="4.5" fill="#7C3AED" />
+      <circle cx="72" cy="64.5" r="6.5" fill={BLANCO} stroke="#7C3AED" strokeWidth="2" />
+    </Svg>
+  );
+}
+
+// Soporte: auriculares de atención + burbuja de chat.
+function Soporte({ className }: Props) {
+  return (
+    <Svg className={className}>
+      <Piso />
+      <path d="M24 46a20 20 0 0 1 40 0" stroke={AZUL_OSC} strokeWidth="7" strokeLinecap="round" fill="none" />
+      <path d="M22 44a20 20 0 0 1 40 0" stroke={AZUL} strokeWidth="7" strokeLinecap="round" fill="none" />
+      <rect x="18" y="44" width="9" height="16" rx="4.5" fill={AZUL_OSC} />
+      <rect x="57" y="44" width="9" height="16" rx="4.5" fill={AZUL_OSC} />
+      <rect x="20" y="44" width="9" height="16" rx="4.5" fill={AZUL_CLARO} />
+      <rect x="55" y="44" width="9" height="16" rx="4.5" fill={AZUL_CLARO} />
+      {/* burbuja de chat (acento) */}
+      <path d="M50 12h20a6 6 0 0 1 6 6v10a6 6 0 0 1-6 6H62l-6 6v-6h-6a6 6 0 0 1-6-6V18a6 6 0 0 1 6-6Z" fill="#16A34A" />
+      <circle cx="57" cy="23" r="2" fill={BLANCO} />
+      <circle cx="63.5" cy="23" r="2" fill={BLANCO} />
+      <circle cx="70" cy="23" r="2" fill={BLANCO} />
+    </Svg>
+  );
+}
+
 const MAPA: Record<string, (p: Props) => React.ReactElement> = {
   ordenes: Ordenes,
   compra: Compra,
   proveedores: Proveedores,
   stock: Stock,
+  productos: Productos,
   clientes: Clientes,
   cobrar: Cobrar,
   canje: Canje,
   servicio: Servicio,
   etiqueta: Etiqueta,
   camara: Camara,
+  comisiones: Comisiones,
+  egresos: Egresos,
+  ahorro: Ahorro,
+  estadisticas: Estadisticas,
+  sucursales: Sucursales,
+  configuracion: Configuracion,
+  soporte: Soporte,
 };
 
 export default function IlustracionModulo({ nombre, className }: { nombre: string; className?: string }) {
