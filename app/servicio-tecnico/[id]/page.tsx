@@ -34,7 +34,8 @@ import EstadoBadge from '../../EstadoBadge';
 import ControlCalidad, { ControlCalidadItem } from '../ControlCalidad';
 import { ICONOS } from '../../Iconos';
 import CampoFecha from '../../CampoFecha';
-import { useT } from '../../lib/idioma';
+import { useT, useIdioma } from '../../lib/idioma';
+import { traducirAccion } from '../../lib/i18n/traducirAccion';
 import { useSucursalActual } from '../../lib/sucursal';
 
 // Mismo patrón que TarjetaReparacion/EstadoBadge para reescalar los SVG de
@@ -212,6 +213,7 @@ export default function FichaReparacion() {
   // el administrador), así que se chequea con su propio permiso.
   const puedeAgregarStock = tienePermiso(actor, 'agregar_stock');
   const t = useT();
+  const idioma = useIdioma();
   const sucursalActual = useSucursalActual();
 
   const [r, setR] = useState<Reparacion | null>(null);
@@ -293,7 +295,7 @@ export default function FichaReparacion() {
     const deAuditoria: Evento[] = (aud ?? []).map((a: any) => ({
       id: `a-${a.id}`,
       tipo: 'sistema',
-      texto: a.accion,
+      texto: traducirAccion(a.accion, idioma),
       actor_nombre: a.actor_nombre,
       created_at: a.created_at,
     }));
