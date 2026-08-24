@@ -2612,4 +2612,8 @@ export const PT: Record<string, string> = {
   'Todavía no se generó ningún remito interno.': 'Ainda não foi gerada nenhuma transferência interna.',
   'Generado por': 'Gerado por',
   Vendidos: 'Vendidos',
+  'Necesitás al menos 2 sucursales activas para generar un remito interno.':
+    'Você precisa de pelo menos 2 filiais ativas para gerar uma transferência interna.',
+  'Otro remito se estaba generando al mismo tiempo entre estas sucursales. Probá de nuevo.':
+    'Outra transferência estava sendo gerada ao mesmo tempo entre essas filiais. Tente novamente.',
 };

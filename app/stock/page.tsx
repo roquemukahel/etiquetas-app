@@ -88,6 +88,7 @@ type Producto = {
   descripcion?: string | null;
   notas?: string | null;
   sucursal_id?: string | null;
+  producto_maestro_id?: string | null;
 };
 
 // Catálogo inicial que se puede cargar con un toque desde "Agregar accesorios
@@ -1160,6 +1161,13 @@ export default function Stock() {
     }
     if (cambianOtros) {
       await supabase.from('productos').update({ costo: costoNuevo, precio: precioNuevo }).eq('id', p.id);
+      // El precio/costo "Final" que muestra la pestaña Productos sale del
+      // catálogo maestro, no de esta fila puntual — sin este paso, editar el
+      // precio acá (lo normal del día a día) dejaba ese catálogo desactualizado
+      // para siempre desde la primera vez que se creó el producto.
+      if (p.producto_maestro_id) {
+        await supabase.from('productos_maestro').update({ costo: costoNuevo, precio: precioNuevo }).eq('id', p.producto_maestro_id);
+      }
     }
     await registrarAuditoria(supabase, {
       accion: `editó el accesorio "${p.nombre}"`,

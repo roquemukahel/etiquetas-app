@@ -164,6 +164,16 @@ begin
 
       v_destino_id := null;
       if v_origen.producto_maestro_id is not null then
+        -- Lockea el maestro ANTES de buscar la fila destino: "select ... for
+        -- update" no bloquea nada cuando todavía no existe ninguna fila que
+        -- coincida (no hay qué lockear), así que sin esto dos remitos
+        -- concurrentes hacia la misma sucursal podían no ver la fila que el
+        -- otro estaba por crear y terminaban creando dos filas duplicadas
+        -- para el mismo producto en vez de sumar a una sola. Lockear el
+        -- maestro serializa a los remitos que tocan el mismo producto entre
+        -- sí (el segundo espera a que el primero termine y recién ahí
+        -- busca), sin afectar remitos de productos distintos.
+        perform 1 from productos_maestro where id = v_origen.producto_maestro_id for update;
         select id into v_destino_id
           from productos
           where negocio_id = v_negocio and sucursal_id = p_sucursal_destino_id and producto_maestro_id = v_origen.producto_maestro_id

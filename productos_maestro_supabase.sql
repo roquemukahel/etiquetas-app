@@ -80,42 +80,53 @@ begin
     select distinct negocio_id, lower(trim(nombre)) as nombre_norm, lower(trim(coalesce(marca, ''))) as marca_norm
     from productos
     where producto_maestro_id is null
+      -- nombre vacío/solo espacios violaría el check de productos_maestro
+      -- (nombre_no_vacio) — se salta ese grupo puntual en vez de intentarlo.
+      and length(trim(nombre)) > 0
   loop
-    -- La fila más reciente del grupo aporta los datos descriptivos.
-    select id, nombre, marca, categoria_id, precio, costo, sku, codigo_barras, descripcion, garantia_dias, stock_minimo, proveedor_id, imagen_url
-      into v_fuente
-      from productos
-      where negocio_id = v_grupo.negocio_id
-        and lower(trim(nombre)) = v_grupo.nombre_norm
-        and lower(trim(coalesce(marca, ''))) = v_grupo.marca_norm
-        and producto_maestro_id is null
-      order by created_at desc
-      limit 1;
+    -- Cada grupo en su propio sub-bloque: si algo puntual falla acá (un
+    -- caso borde que no anticipamos), se salta SOLO ese grupo — antes un
+    -- error en una sola fila de un solo negocio abortaba todo el backfill
+    -- de TODOS los negocios (el "do $$" entero es una transacción).
+    begin
+      -- La fila más reciente del grupo aporta los datos descriptivos.
+      select id, nombre, marca, categoria_id, precio, costo, sku, codigo_barras, descripcion, garantia_dias, stock_minimo, proveedor_id, imagen_url
+        into v_fuente
+        from productos
+        where negocio_id = v_grupo.negocio_id
+          and lower(trim(nombre)) = v_grupo.nombre_norm
+          and lower(trim(coalesce(marca, ''))) = v_grupo.marca_norm
+          and producto_maestro_id is null
+        order by created_at desc
+        limit 1;
 
-    select id into v_maestro_id
-      from productos_maestro
-      where negocio_id = v_grupo.negocio_id
-        and lower(trim(nombre)) = v_grupo.nombre_norm
-        and lower(trim(coalesce(marca, ''))) = v_grupo.marca_norm
-        and not archivado
-      limit 1;
+      select id into v_maestro_id
+        from productos_maestro
+        where negocio_id = v_grupo.negocio_id
+          and lower(trim(nombre)) = v_grupo.nombre_norm
+          and lower(trim(coalesce(marca, ''))) = v_grupo.marca_norm
+          and not archivado
+        limit 1;
 
-    if v_maestro_id is null then
-      insert into productos_maestro (
-        negocio_id, nombre, marca, categoria_id, precio, costo, sku, codigo_barras, descripcion, garantia_dias, stock_minimo, proveedor_id, imagen_url
-      ) values (
-        v_grupo.negocio_id, v_fuente.nombre, v_fuente.marca, v_fuente.categoria_id, v_fuente.precio, v_fuente.costo,
-        v_fuente.sku, v_fuente.codigo_barras, v_fuente.descripcion, v_fuente.garantia_dias, v_fuente.stock_minimo,
-        v_fuente.proveedor_id, v_fuente.imagen_url
-      )
-      returning id into v_maestro_id;
-    end if;
+      if v_maestro_id is null then
+        insert into productos_maestro (
+          negocio_id, nombre, marca, categoria_id, precio, costo, sku, codigo_barras, descripcion, garantia_dias, stock_minimo, proveedor_id, imagen_url
+        ) values (
+          v_grupo.negocio_id, v_fuente.nombre, v_fuente.marca, v_fuente.categoria_id, v_fuente.precio, v_fuente.costo,
+          v_fuente.sku, v_fuente.codigo_barras, v_fuente.descripcion, v_fuente.garantia_dias, v_fuente.stock_minimo,
+          v_fuente.proveedor_id, v_fuente.imagen_url
+        )
+        returning id into v_maestro_id;
+      end if;
 
-    update productos
-      set producto_maestro_id = v_maestro_id
-      where negocio_id = v_grupo.negocio_id
-        and lower(trim(nombre)) = v_grupo.nombre_norm
-        and lower(trim(coalesce(marca, ''))) = v_grupo.marca_norm
-        and producto_maestro_id is null;
+      update productos
+        set producto_maestro_id = v_maestro_id
+        where negocio_id = v_grupo.negocio_id
+          and lower(trim(nombre)) = v_grupo.nombre_norm
+          and lower(trim(coalesce(marca, ''))) = v_grupo.marca_norm
+          and producto_maestro_id is null;
+    exception when others then
+      raise warning 'productos_maestro backfill: se saltó negocio % / nombre "%" / marca "%" por: %', v_grupo.negocio_id, v_grupo.nombre_norm, v_grupo.marca_norm, sqlerrm;
+    end;
   end loop;
 end $$;

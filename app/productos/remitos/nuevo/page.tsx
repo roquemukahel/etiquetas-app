@@ -100,7 +100,8 @@ export default function NuevoRemitoInterno() {
 
   const nombreSucursal = (id: string) => sucursales.find((s) => s.id === id)?.nombre ?? '';
 
-  const puedeGenerar = puedeAgregarStock && origenId && destinoId && origenId !== destinoId && items.length > 0 && !guardando;
+  const puedeGenerar =
+    puedeAgregarStock && sucursales.length >= 2 && origenId && destinoId && origenId !== destinoId && items.length > 0 && !guardando;
 
   const generarRemito = async () => {
     if (!puedeGenerar) return;
@@ -115,7 +116,15 @@ export default function NuevoRemitoInterno() {
       p_usuario: actor?.nombre ?? null,
     });
     if (rpcError) {
-      setError(`${t('No pudimos generar el remito:')} ` + rpcError.message);
+      // Dos remitos casi simultáneos entre las mismas sucursales pueden
+      // pisarse (Postgres lo detecta solo y aborta uno de los dos, sin
+      // perder ni mezclar datos) — mensaje legible en vez del error crudo.
+      const esConflictoConcurrente = /deadlock/i.test(rpcError.message);
+      setError(
+        esConflictoConcurrente
+          ? t('Otro remito se estaba generando al mismo tiempo entre estas sucursales. Probá de nuevo.')
+          : `${t('No pudimos generar el remito:')} ` + rpcError.message
+      );
       setGuardando(false);
       return;
     }
@@ -163,6 +172,11 @@ export default function NuevoRemitoInterno() {
       {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
       {!puedeAgregarStock && (
         <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{t('No tenés permiso para gestionar el stock.')}</p>
+      )}
+      {sucursales.length > 0 && sucursales.length < 2 && (
+        <p className="text-sm text-muted dark:text-dark-muted bg-canvas dark:bg-dark-bg rounded-lg px-3 py-2">
+          {t('Necesitás al menos 2 sucursales activas para generar un remito interno.')}
+        </p>
       )}
 
       <div className="flex gap-2">

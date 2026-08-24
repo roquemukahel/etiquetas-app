@@ -26,6 +26,7 @@ type ProductoFila = {
 type FilaGrid = {
   clave: string;
   maestro: ProductoMaestro | null;
+  categoriaId: string | null;
   categoria: string;
   marca: string;
   nombre: string;
@@ -117,6 +118,7 @@ export default function Productos() {
       resultado.push({
         clave,
         maestro: info.maestro,
+        categoriaId: info.categoriaId,
         categoria: info.categoriaId ? nombreCategoria.get(info.categoriaId) ?? '' : '',
         marca: info.marca ?? '',
         nombre: info.nombre,
@@ -133,7 +135,7 @@ export default function Productos() {
   const filasFiltradas = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
     return filas.filter((f) => {
-      if (filtroCategoria && f.maestro?.categoria_id !== filtroCategoria) return false;
+      if (filtroCategoria && f.categoriaId !== filtroCategoria) return false;
       if (!q) return true;
       return f.nombre.toLowerCase().includes(q) || f.marca.toLowerCase().includes(q);
     });
