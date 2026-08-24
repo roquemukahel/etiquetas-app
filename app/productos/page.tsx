@@ -14,6 +14,10 @@ import { useT } from '../lib/idioma';
 
 type ProductoFila = {
   id: string;
+  nombre: string;
+  marca: string | null;
+  categoria_id: string | null;
+  precio: number | null;
   cantidad: number;
   sucursal_id: string | null;
   producto_maestro_id: string | null;
@@ -48,7 +52,12 @@ export default function Productos() {
   useEffect(() => {
     (async () => {
       const [filas, maestrosData, categoriasData] = await Promise.all([
-        obtenerTodasLasFilas<ProductoFila>(supabase, 'productos', 'id, cantidad, sucursal_id, producto_maestro_id', [{ columna: 'nombre' }]),
+        obtenerTodasLasFilas<ProductoFila>(
+          supabase,
+          'productos',
+          'id, nombre, marca, categoria_id, precio, cantidad, sucursal_id, producto_maestro_id',
+          [{ columna: 'nombre' }]
+        ),
         obtenerProductosMaestro(supabase, false),
         obtenerCategorias(supabase, false).catch(() => [] as Categoria[]),
       ]);
@@ -73,15 +82,31 @@ export default function Productos() {
 
   const filas: FilaGrid[] = useMemo(() => {
     const mapaMaestros = new Map(maestros.map((m) => [m.id, m]));
-    const porClave = new Map<string, { maestro: ProductoMaestro | null; stockTotal: number; stockSucursal: number }>();
+    const normalizar = (s: string | null) => (s ?? '').trim().toLowerCase();
+    type Grupo = { maestro: ProductoMaestro | null; nombre: string; marca: string | null; categoriaId: string | null; precio: number | null; stockTotal: number; stockSucursal: number };
+    const porClave = new Map<string, Grupo>();
 
     for (const p of productos) {
-      // Un producto sin maestro todavía (negocio que corrió la migración
-      // pero tiene alguna fila suelta) se muestra como su propia fila,
-      // usando su propio id como clave — nunca se pierde de la vista.
-      const clave = p.producto_maestro_id ?? `sin-maestro:${p.id}`;
+      // Una fila todavía sin enlazar a un maestro (negocio que no corrió la
+      // migración, o el catálogo por defecto que se carga solo al entrar a
+      // Stock por primera vez) NO pierde su identidad: en vez de agruparla
+      // por su propio id (lo que la mostraría separada de "la misma" fila en
+      // otra sucursal), se agrupa por nombre+marca normalizados — el mismo
+      // criterio que usaba el backfill — así el cruce entre sucursales sigue
+      // funcionando aunque falte el enlace exacto.
+      const clave = p.producto_maestro_id ?? `sin-maestro:${normalizar(p.nombre)}|${normalizar(p.marca)}`;
       const maestro = p.producto_maestro_id ? mapaMaestros.get(p.producto_maestro_id) ?? null : null;
-      const actual = porClave.get(clave) ?? { maestro, stockTotal: 0, stockSucursal: 0 };
+      const actual =
+        porClave.get(clave) ??
+        ({
+          maestro,
+          nombre: maestro?.nombre ?? p.nombre,
+          marca: maestro?.marca ?? p.marca,
+          categoriaId: maestro?.categoria_id ?? p.categoria_id,
+          precio: maestro?.precio ?? p.precio,
+          stockTotal: 0,
+          stockSucursal: 0,
+        } as Grupo);
       actual.stockTotal += p.cantidad;
       if (sucursalActual.id && p.sucursal_id === sucursalActual.id) actual.stockSucursal += p.cantidad;
       porClave.set(clave, actual);
@@ -92,12 +117,12 @@ export default function Productos() {
       resultado.push({
         clave,
         maestro: info.maestro,
-        categoria: info.maestro?.categoria_id ? nombreCategoria.get(info.maestro.categoria_id) ?? '' : '',
-        marca: info.maestro?.marca ?? '',
-        nombre: info.maestro?.nombre ?? t('Sin catálogo'),
+        categoria: info.categoriaId ? nombreCategoria.get(info.categoriaId) ?? '' : '',
+        marca: info.marca ?? '',
+        nombre: info.nombre,
         stockTotal: info.stockTotal,
         stockSucursal: info.stockSucursal,
-        final: info.maestro?.precio ?? null,
+        final: info.precio,
       });
     }
     resultado.sort((a, b) => a.nombre.localeCompare(b.nombre));

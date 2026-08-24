@@ -789,9 +789,27 @@ export default function Stock() {
       // (AirPods, cargadores, fundas, etc.) le sirven a cualquier negocio
       // desde el primer momento.
       if (data.length === 0 && puedeAgregarStock) {
-        const { error: insertError } = await supabase
-          .from('productos')
-          .insert(ACCESORIOS_DEFAULT.map((a) => ({ nombre: a.nombre, imagen_url: a.imagen, ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}) })));
+        // Cada accesorio por defecto también se enlaza a su propio maestro
+        // (mismo criterio que agregarProducto) — si no, la pestaña Productos
+        // no podría sumar su stock entre sucursales para ninguno de estos 17
+        // accesorios, justo el catálogo con el que arranca cualquier negocio
+        // nuevo. Si la migración todavía no corrió, crearProductoMaestro
+        // devuelve error y simplemente seguimos sin id (mismo fallback que
+        // ya usa agregarProducto).
+        const idsMaestro = await Promise.all(
+          ACCESORIOS_DEFAULT.map(async (a) => {
+            const resultado = await crearProductoMaestro(supabase, { nombre: a.nombre, imagenUrl: a.imagen });
+            return 'id' in resultado ? resultado.id : null;
+          })
+        );
+        const { error: insertError } = await supabase.from('productos').insert(
+          ACCESORIOS_DEFAULT.map((a, i) => ({
+            nombre: a.nombre,
+            imagen_url: a.imagen,
+            ...(idsMaestro[i] ? { producto_maestro_id: idsMaestro[i] } : {}),
+            ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
+          }))
+        );
         if (!insertError) {
           await registrarAuditoria(supabase, {
             accion: `cargó el catálogo de accesorios por defecto (${ACCESORIOS_DEFAULT.length} accesorios)`,
@@ -1019,7 +1037,12 @@ export default function Stock() {
         // guarda igual sin producto_maestro_id (mismo criterio que
         // categoriasStock/sucursales más arriba). Cualquier otro error (ej.
         // duplicado real) sí se muestra y frena el guardado.
-        const migracionNoCorrida = /productos_maestro|schema cache/i.test(resultadoMaestro.error);
+        // OJO: NO se puede chequear con la sola presencia de "productos_maestro"
+        // en el mensaje — el índice único de esa tabla se llama justamente
+        // "uq_productos_maestro_nombre_marca", así que un duplicado real (dos
+        // personas creando el mismo producto casi al mismo tiempo) también
+        // incluiría esas palabras y se confundiría con "falta la migración".
+        const migracionNoCorrida = /schema cache|does not exist/i.test(resultadoMaestro.error);
         if (!migracionNoCorrida) {
           setErrorProducto(`${t('No pudimos guardar:')} ` + resultadoMaestro.error);
           setGuardandoProducto(false);

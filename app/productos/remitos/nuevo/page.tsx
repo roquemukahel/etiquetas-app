@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../../../lib/supabase/client';
-import { getActor } from '../../../lib/actor';
+import { getActor, useActor } from '../../../lib/actor';
+import { tienePermiso } from '../../../lib/permisos';
 import { obtenerSucursales, type Sucursal } from '../../../lib/sucursales';
 import { obtenerTodasLasFilas } from '../../../lib/db';
 import { registrarAuditoria } from '../../../lib/auditoria';
@@ -30,6 +31,8 @@ type ItemRemito = {
 export default function NuevoRemitoInterno() {
   const supabase = crearClienteNavegador();
   const t = useT();
+  const actor = useActor();
+  const puedeAgregarStock = tienePermiso(actor, 'agregar_stock');
 
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
   const [origenId, setOrigenId] = useState('');
@@ -97,7 +100,7 @@ export default function NuevoRemitoInterno() {
 
   const nombreSucursal = (id: string) => sucursales.find((s) => s.id === id)?.nombre ?? '';
 
-  const puedeGenerar = origenId && destinoId && origenId !== destinoId && items.length > 0 && !guardando;
+  const puedeGenerar = puedeAgregarStock && origenId && destinoId && origenId !== destinoId && items.length > 0 && !guardando;
 
   const generarRemito = async () => {
     if (!puedeGenerar) return;
@@ -158,6 +161,9 @@ export default function NuevoRemitoInterno() {
       </header>
 
       {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
+      {!puedeAgregarStock && (
+        <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{t('No tenés permiso para gestionar el stock.')}</p>
+      )}
 
       <div className="flex gap-2">
         <div className="flex-1">

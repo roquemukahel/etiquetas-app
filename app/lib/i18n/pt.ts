@@ -2594,7 +2594,6 @@ export const PT: Record<string, string> = {
   'Stock Total': 'Estoque Total',
   'Stock Sucursal': 'Estoque da Filial',
   Final: 'Final',
-  'Sin catálogo': 'Sem catálogo',
   'Buscar producto...': 'Buscar produto...',
   'Remito generado': 'Transferência gerada',
   'Ver remitos': 'Ver transferências',
@@ -2612,4 +2611,5 @@ export const PT: Record<string, string> = {
   'Remitos internos': 'Transferências internas',
   'Todavía no se generó ningún remito interno.': 'Ainda não foi gerada nenhuma transferência interna.',
   'Generado por': 'Gerado por',
+  Vendidos: 'Vendidos',
 };
