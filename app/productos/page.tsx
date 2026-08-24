@@ -204,11 +204,13 @@ export default function Productos() {
                 <th className="px-3 py-2 font-medium">{t('Categoría')}</th>
                 <th className="px-3 py-2 font-medium">{t('Marca')}</th>
                 <th className="px-3 py-2 font-medium">{t('Producto')}</th>
-                <th className="px-3 py-2 font-medium text-right">{t('Stock Total')}</th>
-                <th className="px-3 py-2 font-medium text-right">
-                  {t('Stock Sucursal')}
-                  {nombreSucursalActual ? ` (${nombreSucursalActual})` : ''}
-                </th>
+                <th className="px-3 py-2 font-medium text-right">{sucursales.length > 1 ? t('Stock Total') : t('Stock')}</th>
+                {sucursales.length > 1 && (
+                  <th className="px-3 py-2 font-medium text-right">
+                    {t('Stock Sucursal')}
+                    {nombreSucursalActual ? ` (${nombreSucursalActual})` : ''}
+                  </th>
+                )}
                 <th className="px-3 py-2 font-medium text-right">{t('Final')}</th>
               </tr>
             </thead>
@@ -219,7 +221,9 @@ export default function Productos() {
                   <td className="px-3 py-2">{f.marca || '—'}</td>
                   <td className="px-3 py-2 font-medium">{f.nombre}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{f.stockTotal}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{sucursalActual.id ? f.stockSucursal : f.stockTotal}</td>
+                  {sucursales.length > 1 && (
+                    <td className="px-3 py-2 text-right tabular-nums">{sucursalActual.id ? f.stockSucursal : f.stockTotal}</td>
+                  )}
                   <td className="px-3 py-2 text-right tabular-nums">{f.final != null ? `$${f.final.toLocaleString()}` : '—'}</td>
                 </tr>
               ))}
