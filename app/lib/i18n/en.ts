@@ -2581,4 +2581,8 @@ export const EN: Record<string, string> = {
     '•••• (already has a PIN — type a new one to change it)',
   'Por seguridad no se muestra el PIN ya cargado. Dejalo así para no cambiarlo, o escribí uno nuevo para reemplazarlo.':
     "For security, the existing PIN isn't shown. Leave it as is to keep it, or type a new one to replace it.",
+
+  // Translation audit (2026-08-24) — the Stock "Vendidos" tab label was
+  // missing (t() falls back to Spanish when the key is absent).
+  Vendidos: 'Sold',
 };

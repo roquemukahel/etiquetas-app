@@ -2582,4 +2582,8 @@ export const PT: Record<string, string> = {
     '•••• (já tem um PIN — digite um novo para trocá-lo)',
   'Por seguridad no se muestra el PIN ya cargado. Dejalo así para no cambiarlo, o escribí uno nuevo para reemplazarlo.':
     'Por segurança, o PIN já cadastrado não é exibido. Deixe assim para não mudá-lo, ou digite um novo para substituí-lo.',
+
+  // Auditoría de traducción (2026-08-24) — el pedido "Vendidos" del tab de
+  // Stock quedaba sin traducir (t() cae al español si falta la clave).
+  Vendidos: 'Vendidos',
 };
