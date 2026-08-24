@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
-import { useT } from '../../lib/idioma';
+import { useT, useIdioma } from '../../lib/idioma';
+import { traducirAccion } from '../../lib/i18n/traducirAccion';
 
 type Registro = {
   id: string;
@@ -30,6 +31,7 @@ export default function Auditoria() {
   const supabase = crearClienteNavegador();
   const actor = useActor();
   const t = useT();
+  const idioma = useIdioma();
   const puedeVerAuditoria = tienePermiso(actor, 'auditoria');
   const [registros, setRegistros] = useState<Registro[]>([]);
   const [loading, setLoading] = useState(true);
@@ -123,7 +125,7 @@ export default function Auditoria() {
             className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex flex-col gap-0.5"
           >
             <p className="text-sm">
-              <strong>{r.actor_nombre}</strong> {r.accion}
+              <strong>{r.actor_nombre}</strong> {traducirAccion(r.accion, idioma)}
             </p>
             <p className="text-xs text-muted dark:text-dark-text-secondary capitalize">
               {r.actor_tipo} · {formatearFecha(r.created_at)}
