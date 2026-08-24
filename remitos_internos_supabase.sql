@@ -66,14 +66,33 @@ create policy "remitos_internos de mi negocio" on remitos_internos
 -- la referencia) — así el remito histórico no cambia si después alguien
 -- edita el catálogo. `producto_origen_id` referencia la fila puntual de
 -- `productos` que originó el movimiento (la de la sucursal origen).
+-- `tipo_item` + `dispositivo_origen_id`: un remito también puede mover
+-- celulares (tabla `dispositivos`, no `productos`) — cada ítem es de un
+-- tipo o del otro, nunca los dos a la vez (ver el check de abajo).
 create table if not exists remito_internos_items (
   id uuid primary key default gen_random_uuid(),
   remito_id uuid not null references remitos_internos(id) on delete cascade,
+  tipo_item text not null default 'producto',
   producto_maestro_id uuid references productos_maestro(id) on delete set null,
   producto_origen_id uuid references productos(id) on delete set null,
+  dispositivo_origen_id uuid references dispositivos(id) on delete set null,
   nombre_snapshot text not null,
   marca_snapshot text,
-  cantidad int not null check (cantidad > 0)
+  cantidad int not null check (cantidad > 0),
+  constraint remito_internos_items_tipo_valido check (tipo_item in ('producto', 'dispositivo')),
+  constraint remito_internos_items_origen_coherente check (
+    (tipo_item = 'producto' and dispositivo_origen_id is null) or
+    (tipo_item = 'dispositivo' and producto_origen_id is null and producto_maestro_id is null)
+  )
+);
+alter table remito_internos_items add column if not exists tipo_item text not null default 'producto';
+alter table remito_internos_items add column if not exists dispositivo_origen_id uuid references dispositivos(id) on delete set null;
+alter table remito_internos_items drop constraint if exists remito_internos_items_tipo_valido;
+alter table remito_internos_items add constraint remito_internos_items_tipo_valido check (tipo_item in ('producto', 'dispositivo'));
+alter table remito_internos_items drop constraint if exists remito_internos_items_origen_coherente;
+alter table remito_internos_items add constraint remito_internos_items_origen_coherente check (
+  (tipo_item = 'producto' and dispositivo_origen_id is null) or
+  (tipo_item = 'dispositivo' and producto_origen_id is null and producto_maestro_id is null)
 );
 create index if not exists idx_remito_internos_items_remito on remito_internos_items(remito_id);
 
@@ -88,11 +107,11 @@ create policy "remito_internos_items de mi negocio" on remito_internos_items
 
 -- ============================================================
 -- RPC transaccional: crea el remito y mueve el stock de todos los ítems.
--- p_items es un jsonb array de {producto_id, cantidad} — producto_id es
--- SIEMPRE la fila puntual de `productos` en la sucursal ORIGEN (la que
--- ya se está viendo/eligiendo en la pantalla de origen).
+-- p_items es un jsonb array de {tipo, id, cantidad} — tipo es 'producto'
+-- (default si se omite, por compatibilidad con la versión anterior) o
+-- 'dispositivo'; "id" es SIEMPRE la fila puntual en la sucursal ORIGEN.
 --
--- Por cada ítem:
+-- Por cada ítem tipo 'producto':
 --  - "cantidad" (modalidad != 'serializado'): descuenta del origen con
 --    producto_mover_stock('salida', ...) (RPC ya existente, sin tocar),
 --    busca en destino una fila con el mismo producto_maestro_id — si
@@ -104,6 +123,11 @@ create policy "remito_internos_items de mi negocio" on remito_internos_items
 --    que simplemente se le cambia sucursal_id a la MISMA fila, sin crear
 --    ni descontar/acreditar cantidad.
 --
+-- Por cada ítem tipo 'dispositivo' (celular): igual criterio que un
+-- producto serializado — cantidad siempre 1, se le cambia sucursal_id a
+-- la MISMA fila de `dispositivos` (misma unidad física, mismo IMEI,
+-- mismo historial), nunca se crea una fila nueva.
+--
 -- Es una sola función plpgsql: si cualquier paso falla (ej. "Stock
 -- insuficiente" que ya lanza producto_mover_stock), Postgres revierte todo
 -- el remito solo — no puede quedar un estado a mitad de camino.
@@ -111,7 +135,7 @@ create policy "remito_internos_items de mi negocio" on remito_internos_items
 create or replace function crear_remito_interno(
   p_sucursal_origen_id uuid,
   p_sucursal_destino_id uuid,
-  p_items jsonb,   -- [{producto_id, cantidad}, ...]
+  p_items jsonb,   -- [{tipo: 'producto'|'dispositivo', id, cantidad}, ...]
   p_observaciones text,
   p_usuario text
 ) returns uuid language plpgsql security definer as $$
@@ -119,9 +143,11 @@ declare
   v_negocio uuid := negocio_actual();
   v_remito_id uuid;
   v_item jsonb;
-  v_producto_id uuid;
+  v_tipo text;
+  v_id uuid;
   v_cantidad int;
   v_origen record;
+  v_disp record;
   v_destino_id uuid;
 begin
   if v_negocio is null then raise exception 'Sin negocio'; end if;
@@ -138,20 +164,39 @@ begin
 
   for v_item in select * from jsonb_array_elements(p_items)
   loop
-    v_producto_id := (v_item->>'producto_id')::uuid;
+    v_tipo := coalesce(v_item->>'tipo', 'producto');
+    v_id := coalesce((v_item->>'id')::uuid, (v_item->>'producto_id')::uuid);
     v_cantidad := (v_item->>'cantidad')::int;
     if v_cantidad is null or v_cantidad <= 0 then
-      raise exception 'Cantidad inválida para el producto %', v_producto_id;
+      raise exception 'Cantidad inválida para el ítem %', v_id;
+    end if;
+
+    if v_tipo = 'dispositivo' then
+      if v_cantidad <> 1 then
+        raise exception 'Un dispositivo se transfiere de a 1 unidad';
+      end if;
+      select id, modelo into v_disp
+        from dispositivos
+        where id = v_id and negocio_id = v_negocio and sucursal_id = p_sucursal_origen_id and en_stock = true
+        for update;
+      if not found then
+        raise exception 'Dispositivo % no encontrado en la sucursal de origen', v_id;
+      end if;
+      update dispositivos set sucursal_id = p_sucursal_destino_id where id = v_disp.id;
+
+      insert into remito_internos_items (remito_id, tipo_item, dispositivo_origen_id, nombre_snapshot, marca_snapshot, cantidad)
+      values (v_remito_id, 'dispositivo', v_disp.id, coalesce(v_disp.modelo, 'Sin modelo'), null, 1);
+      continue;
     end if;
 
     select id, nombre, marca, modalidad, producto_maestro_id, categoria_id, precio, costo, sku, codigo_barras,
            descripcion, garantia_dias, stock_minimo, proveedor_id, imagen_url
       into v_origen
       from productos
-      where id = v_producto_id and negocio_id = v_negocio and sucursal_id = p_sucursal_origen_id
+      where id = v_id and negocio_id = v_negocio and sucursal_id = p_sucursal_origen_id
       for update;
     if not found then
-      raise exception 'Producto % no encontrado en la sucursal de origen', v_producto_id;
+      raise exception 'Producto % no encontrado en la sucursal de origen', v_id;
     end if;
 
     if v_origen.modalidad = 'serializado' then
@@ -194,8 +239,8 @@ begin
       end if;
     end if;
 
-    insert into remito_internos_items (remito_id, producto_maestro_id, producto_origen_id, nombre_snapshot, marca_snapshot, cantidad)
-    values (v_remito_id, v_origen.producto_maestro_id, v_origen.id, v_origen.nombre, v_origen.marca, v_cantidad);
+    insert into remito_internos_items (remito_id, tipo_item, producto_maestro_id, producto_origen_id, nombre_snapshot, marca_snapshot, cantidad)
+    values (v_remito_id, 'producto', v_origen.producto_maestro_id, v_origen.id, v_origen.nombre, v_origen.marca, v_cantidad);
   end loop;
 
   return v_remito_id;

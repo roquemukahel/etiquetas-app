@@ -11,7 +11,7 @@ import { obtenerSucursales, type Sucursal } from '../lib/sucursales';
 import { obtenerProductosMaestro, type ProductoMaestro } from '../lib/productosMaestro';
 import { useSucursalActual } from '../lib/sucursal';
 import { useT } from '../lib/idioma';
-import { CATALOGO_MODELOS, MARCAS_DISPONIBLES, normalizarNombreModelo } from '../lib/catalogosMarcas';
+import { marcaDeModelo } from '../lib/catalogosMarcas';
 
 type ProductoFila = {
   id: string;
@@ -31,22 +31,6 @@ type DispositivoFila = {
   precio: number | null;
   sucursal_id: string | null;
 };
-
-// Reverso del catálogo de modelos (catalogosMarcas.ts): dado "iPhone 16
-// Pro" devuelve "iPhone", dado "Galaxy S24" devuelve "Samsung". Un modelo
-// escrito a mano (fuera del catálogo, ej. una marca sin catálogo propio)
-// no tiene marca detectable — queda en blanco, no es un error.
-const MARCA_POR_MODELO: Map<string, string> = (() => {
-  const mapa = new Map<string, string>();
-  for (const [marcaId, modelos] of Object.entries(CATALOGO_MODELOS)) {
-    const nombreMarca = MARCAS_DISPONIBLES.find((m) => m.id === marcaId)?.nombre ?? marcaId;
-    for (const modelo of modelos) mapa.set(normalizarNombreModelo(modelo), nombreMarca);
-  }
-  return mapa;
-})();
-function marcaDeModelo(modelo: string | null): string {
-  return modelo ? MARCA_POR_MODELO.get(normalizarNombreModelo(modelo)) ?? '' : '';
-}
 
 type FilaGrid = {
   clave: string;

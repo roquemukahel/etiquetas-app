@@ -2616,4 +2616,5 @@ export const EN: Record<string, string> = {
   'Otro remito se estaba generando al mismo tiempo entre estas sucursales. Probá de nuevo.':
     'Another transfer was being generated between these branches at the same time. Try again.',
   'Se va a guardar en la sucursal': 'This will be saved to the branch',
+  '1 unidad': '1 unit',
 };

@@ -9,24 +9,24 @@ import { obtenerSucursales, type Sucursal } from '../../../lib/sucursales';
 import { obtenerTodasLasFilas } from '../../../lib/db';
 import { registrarAuditoria } from '../../../lib/auditoria';
 import { useT } from '../../../lib/idioma';
+import { marcaDeModelo } from '../../../lib/catalogosMarcas';
 
-type ProductoOrigen = {
+type Tipo = 'producto' | 'dispositivo';
+
+// Unifica productos (accesorios) y dispositivos (celulares) en una sola
+// forma para el picker — un celular siempre se comporta como "serializado"
+// (disponible=1, no se puede elegir cantidad, se transfiere la unidad tal
+// cual, nunca se descuenta/acredita como stock por cantidad).
+type ItemOrigen = {
   id: string;
-  nombre: string;
-  marca: string | null;
-  cantidad: number;
-  modalidad: string | null;
-  sucursal_id: string | null;
-};
-
-type ItemRemito = {
-  producto_id: string;
+  tipo: Tipo;
   nombre: string;
   marca: string | null;
   disponible: number;
   modalidad: string | null;
-  cantidad: number;
 };
+
+type ItemRemito = ItemOrigen & { cantidad: number };
 
 export default function NuevoRemitoInterno() {
   const supabase = crearClienteNavegador();
@@ -39,8 +39,8 @@ export default function NuevoRemitoInterno() {
   const [destinoId, setDestinoId] = useState('');
   const [observaciones, setObservaciones] = useState('');
 
-  const [productos, setProductos] = useState<ProductoOrigen[]>([]);
-  const [cargandoProductos, setCargandoProductos] = useState(false);
+  const [itemsOrigen, setItemsOrigen] = useState<ItemOrigen[]>([]);
+  const [cargandoItems, setCargandoItems] = useState(false);
   const [buscar, setBuscar] = useState('');
   const [items, setItems] = useState<ItemRemito[]>([]);
 
@@ -55,47 +55,65 @@ export default function NuevoRemitoInterno() {
 
   // Cada vez que se elige la sucursal de origen, se trae el stock puntual de
   // esa sucursal (no de todo el negocio) — son las únicas filas de donde se
-  // puede descontar.
+  // puede descontar. Junta accesorios (productos) y celulares (dispositivos)
+  // en una sola lista para el picker: para el dueño ambos son "productos"
+  // que se pueden transferir, aunque vivan en tablas distintas.
   useEffect(() => {
     setItems([]);
-    setProductos([]);
+    setItemsOrigen([]);
     if (!origenId) return;
-    setCargandoProductos(true);
+    setCargandoItems(true);
     (async () => {
-      const data = await obtenerTodasLasFilas<ProductoOrigen>(
-        supabase,
-        'productos',
-        'id, nombre, marca, cantidad, modalidad, sucursal_id',
-        [{ columna: 'nombre' }],
-        (q) => q.eq('sucursal_id', origenId).gt('cantidad', 0)
-      );
-      setProductos(data);
-      setCargandoProductos(false);
+      const [productosData, dispositivosData] = await Promise.all([
+        obtenerTodasLasFilas<{ id: string; nombre: string; marca: string | null; cantidad: number; modalidad: string | null }>(
+          supabase,
+          'productos',
+          'id, nombre, marca, cantidad, modalidad, sucursal_id',
+          [{ columna: 'nombre' }],
+          (q) => q.eq('sucursal_id', origenId).gt('cantidad', 0)
+        ),
+        obtenerTodasLasFilas<{ id: string; modelo: string | null }>(
+          supabase,
+          'dispositivos',
+          'id, modelo, sucursal_id',
+          [{ columna: 'modelo' }],
+          (q) => q.eq('sucursal_id', origenId).eq('en_stock', true)
+        ),
+      ]);
+      setItemsOrigen([
+        ...productosData.map((p) => ({ id: p.id, tipo: 'producto' as const, nombre: p.nombre, marca: p.marca, disponible: p.cantidad, modalidad: p.modalidad })),
+        ...dispositivosData.map((d) => ({
+          id: d.id,
+          tipo: 'dispositivo' as const,
+          nombre: d.modelo || 'Sin modelo',
+          marca: marcaDeModelo(d.modelo) || null,
+          disponible: 1,
+          modalidad: 'serializado',
+        })),
+      ]);
+      setCargandoItems(false);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [origenId]);
 
-  const idsEnItems = useMemo(() => new Set(items.map((i) => i.producto_id)), [items]);
+  const idsEnItems = useMemo(() => new Set(items.map((i) => `${i.tipo}:${i.id}`)), [items]);
 
-  const productosFiltrados = useMemo(() => {
+  const itemsFiltrados = useMemo(() => {
     const q = buscar.trim().toLowerCase();
-    return productos
-      .filter((p) => !idsEnItems.has(p.id))
+    return itemsOrigen
+      .filter((p) => !idsEnItems.has(`${p.tipo}:${p.id}`))
       .filter((p) => !q || [p.nombre, p.marca].filter(Boolean).some((c) => c!.toLowerCase().includes(q)));
-  }, [productos, buscar, idsEnItems]);
+  }, [itemsOrigen, buscar, idsEnItems]);
 
-  const agregarItem = (p: ProductoOrigen) => {
-    setItems((prev) => [
-      ...prev,
-      { producto_id: p.id, nombre: p.nombre, marca: p.marca, disponible: p.cantidad, modalidad: p.modalidad, cantidad: p.modalidad === 'serializado' ? 1 : 1 },
-    ]);
+  const agregarItem = (p: ItemOrigen) => {
+    setItems((prev) => [...prev, { ...p, cantidad: 1 }]);
     setBuscar('');
   };
 
-  const quitarItem = (id: string) => setItems((prev) => prev.filter((i) => i.producto_id !== id));
+  const quitarItem = (tipo: Tipo, id: string) => setItems((prev) => prev.filter((i) => !(i.tipo === tipo && i.id === id)));
 
-  const cambiarCantidad = (id: string, cantidad: number) => {
-    setItems((prev) => prev.map((i) => (i.producto_id === id ? { ...i, cantidad: Math.max(1, Math.min(cantidad, i.disponible)) } : i)));
+  const cambiarCantidad = (tipo: Tipo, id: string, cantidad: number) => {
+    setItems((prev) => prev.map((i) => (i.tipo === tipo && i.id === id ? { ...i, cantidad: Math.max(1, Math.min(cantidad, i.disponible)) } : i)));
   };
 
   const nombreSucursal = (id: string) => sucursales.find((s) => s.id === id)?.nombre ?? '';
@@ -111,7 +129,7 @@ export default function NuevoRemitoInterno() {
     const { data, error: rpcError } = await supabase.rpc('crear_remito_interno', {
       p_sucursal_origen_id: origenId,
       p_sucursal_destino_id: destinoId,
-      p_items: items.map((i) => ({ producto_id: i.producto_id, cantidad: i.cantidad })),
+      p_items: items.map((i) => ({ tipo: i.tipo, id: i.id, cantidad: i.cantidad })),
       p_observaciones: observaciones.trim() || null,
       p_usuario: actor?.nombre ?? null,
     });
@@ -221,20 +239,22 @@ export default function NuevoRemitoInterno() {
             className="w-full rounded-lg border border-border dark:border-dark-border bg-surface dark:bg-dark-surface px-3 py-2 text-sm"
           />
           <div className="flex flex-col gap-1 max-h-56 overflow-y-auto">
-            {cargandoProductos && <p className="text-xs text-muted dark:text-dark-muted">{t('Cargando...')}</p>}
-            {!cargandoProductos && productosFiltrados.length === 0 && (
+            {cargandoItems && <p className="text-xs text-muted dark:text-dark-muted">{t('Cargando...')}</p>}
+            {!cargandoItems && itemsFiltrados.length === 0 && (
               <p className="text-xs text-muted dark:text-dark-muted">{t('No hay productos con stock en esa sucursal.')}</p>
             )}
-            {productosFiltrados.map((p) => (
+            {itemsFiltrados.map((p) => (
               <button
-                key={p.id}
+                key={`${p.tipo}:${p.id}`}
                 onClick={() => agregarItem(p)}
                 className="rounded-lg border border-border dark:border-dark-border px-3 py-2 flex items-center justify-between text-sm text-left"
               >
                 <span>
                   {p.nombre} {p.marca ? `· ${p.marca}` : ''}
                 </span>
-                <span className="text-xs text-muted dark:text-dark-muted shrink-0">{p.cantidad} {t('disp.')}</span>
+                <span className="text-xs text-muted dark:text-dark-muted shrink-0">
+                  {p.tipo === 'dispositivo' ? t('1 unidad') : `${p.disponible} ${t('disp.')}`}
+                </span>
               </button>
             ))}
           </div>
@@ -245,7 +265,7 @@ export default function NuevoRemitoInterno() {
         <div className="flex flex-col gap-2">
           <h2 className="text-sm font-medium">{t('Ítems del remito')}</h2>
           {items.map((i) => (
-            <div key={i.producto_id} className="flex items-center gap-2 rounded-lg border border-border dark:border-dark-border px-3 py-2">
+            <div key={`${i.tipo}:${i.id}`} className="flex items-center gap-2 rounded-lg border border-border dark:border-dark-border px-3 py-2">
               <span className="flex-1 text-sm truncate">
                 {i.nombre} {i.marca ? `· ${i.marca}` : ''}
               </span>
@@ -257,11 +277,11 @@ export default function NuevoRemitoInterno() {
                   min={1}
                   max={i.disponible}
                   value={i.cantidad}
-                  onChange={(e) => cambiarCantidad(i.producto_id, Number(e.target.value) || 1)}
+                  onChange={(e) => cambiarCantidad(i.tipo, i.id, Number(e.target.value) || 1)}
                   className="w-16 rounded-lg border border-border dark:border-dark-border bg-surface dark:bg-dark-surface px-2 py-1 text-sm text-right"
                 />
               )}
-              <button onClick={() => quitarItem(i.producto_id)} className="text-xs text-bad shrink-0">
+              <button onClick={() => quitarItem(i.tipo, i.id)} className="text-xs text-bad shrink-0">
                 {t('Quitar')}
               </button>
             </div>

@@ -2617,4 +2617,5 @@ export const PT: Record<string, string> = {
   'Otro remito se estaba generando al mismo tiempo entre estas sucursales. Probá de nuevo.':
     'Outra transferência estava sendo gerada ao mesmo tempo entre essas filiais. Tente novamente.',
   'Se va a guardar en la sucursal': 'Vai ser salvo na filial',
+  '1 unidad': '1 unidade',
 };
