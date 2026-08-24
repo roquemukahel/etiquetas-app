@@ -56,7 +56,16 @@ type Cliente = {
 };
 
 type Vendedor = { id: string; nombre: string };
-type Producto = { id: string; nombre: string; precio: number | null; imagen_url: string | null };
+type Producto = {
+  id: string;
+  nombre: string;
+  precio: number | null;
+  imagen_url: string | null;
+  marca?: string | null;
+  sku?: string | null;
+  codigo_barras?: string | null;
+  sucursal_id?: string | null;
+};
 type Trabajo = { id: string; nombre: string; precio: number | null; imagen_url: string | null };
 
 type CanjeCarrito = {
@@ -187,6 +196,7 @@ export default function NuevaOrden() {
   const [dispositivosStock, setDispositivosStock] = useState<Dispositivo[]>([]);
   const [carpetasStock, setCarpetasStock] = useState<string[]>([]);
   const [buscarDispositivo, setBuscarDispositivo] = useState('');
+  const [buscarProducto, setBuscarProducto] = useState('');
   const [modoDispositivo, setModoDispositivo] = useState<'stock' | 'nuevo'>('stock');
   const [nuevoModelo, setNuevoModelo] = useState('');
   const [nuevaCapacidad, setNuevaCapacidad] = useState<number | null>(null);
@@ -390,6 +400,20 @@ export default function NuevaOrden() {
       .filter((d) => !idsEnCarrito.has(d.id))
       .filter((d) => !q || [d.modelo, d.imei].filter(Boolean).some((c) => c!.toLowerCase().includes(q)));
   }, [dispositivosStock, buscarDispositivo, idsEnCarrito]);
+
+  // Mismo criterio que dispositivosFiltrados: buscador en vivo, sin
+  // debounce (el catálogo de productos es chico). También filtra por la
+  // sucursal actual — antes este picker mostraba TODO el catálogo del
+  // negocio sin importar en qué sucursal hay stock de verdad, lo que podía
+  // hacer "vender" algo que en realidad estaba en otro local.
+  const productosFiltrados = useMemo(() => {
+    const q = buscarProducto.trim().toLowerCase();
+    return productos
+      .filter((p) => !sucursalActual.id || !p.sucursal_id || p.sucursal_id === sucursalActual.id)
+      .filter(
+        (p) => !q || [p.nombre, p.marca, p.sku, p.codigo_barras].filter(Boolean).some((c) => c!.toLowerCase().includes(q))
+      );
+  }, [productos, buscarProducto, sucursalActual.id]);
 
   const subtotal = useMemo(
     () => carrito.reduce((acc, i) => acc + i.cantidad * i.precioUnitario, 0),
@@ -1433,13 +1457,25 @@ export default function NuevaOrden() {
             </div>
 
             {modoProducto === 'catalogo' ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-96 overflow-y-auto">
+              <div className="flex flex-col gap-2">
+                <input
+                  value={buscarProducto}
+                  onChange={(e) => setBuscarProducto(e.target.value)}
+                  placeholder={t('Buscar producto...')}
+                  className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                />
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-96 overflow-y-auto">
                 {productos.length === 0 && (
                   <p className="col-span-full text-xs text-muted dark:text-dark-text-secondary text-center py-2">
                     {t('Todavía no cargaste productos en Stock > Accesorios.')}
                   </p>
                 )}
-                {productos.map((p, i) => (
+                {productos.length > 0 && productosFiltrados.length === 0 && (
+                  <p className="col-span-full text-xs text-muted dark:text-dark-text-secondary text-center py-2">
+                    {t('No hay productos que coincidan.')}
+                  </p>
+                )}
+                {productosFiltrados.map((p, i) => (
                   <button
                     key={p.id}
                     onClick={() => agregarProductoDelCatalogo(p)}
@@ -1461,6 +1497,7 @@ export default function NuevaOrden() {
                     {p.precio != null && <span className="text-xs font-semibold">{moneda}{p.precio.toLocaleString('es-AR')}</span>}
                   </button>
                 ))}
+                </div>
               </div>
             ) : (
               <div className="flex flex-col gap-2">
