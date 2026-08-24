@@ -21,6 +21,7 @@ import QoviLateral from './QoviLateral';
 import AvisoPruebaPorVencer from './AvisoPruebaPorVencer';
 import { obtenerIdiomaServidor, traducir } from './lib/idiomaServidor';
 import { obtenerSucursalServidor } from './lib/sucursalServidor';
+import { traducirAccion } from './lib/i18n/traducirAccion';
 
 export default async function Home() {
   const idioma = obtenerIdiomaServidor();
@@ -422,7 +423,9 @@ export default async function Home() {
         fecha: new Date(a.created_at),
         // accion ya viene como frase en pasado ("eliminó un proveedor (X)"),
         // así que con el actor adelante queda "Roque eliminó un proveedor (X)".
-        texto: `${a.actor_nombre ? `${a.actor_nombre} ` : ''}${accion}`,
+        // traducirAccion reconstruye los patrones más comunes en pt/en — lo
+        // que no reconoce queda igual, en español (ver ese archivo).
+        texto: `${a.actor_nombre ? `${a.actor_nombre} ` : ''}${traducirAccion(accion, idioma)}`,
         actorNombre: a.actor_nombre ?? null,
         actorFoto: a.actor_nombre ? mapaFotoActor.get(a.actor_nombre.trim().toLowerCase()) ?? null : null,
       });
