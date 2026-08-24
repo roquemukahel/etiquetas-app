@@ -84,9 +84,9 @@ export default function RemitosInternos() {
       </header>
 
       {loading ? (
-        <p className="text-sm text-muted dark:text-dark-muted">{t('Cargando...')}</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t('Cargando...')}</p>
       ) : remitos.length === 0 ? (
-        <p className="text-sm text-muted dark:text-dark-muted">{t('Todavía no se generó ningún remito interno.')}</p>
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t('Todavía no se generó ningún remito interno.')}</p>
       ) : (
         <div className="flex flex-col gap-2">
           {remitos.map((r) => {
@@ -99,10 +99,10 @@ export default function RemitosInternos() {
                   className="w-full flex items-center justify-between gap-2 px-3 py-2.5 text-left text-sm"
                 >
                   <span className="font-medium">{r.numero ?? '—'}</span>
-                  <span className="flex-1 text-muted dark:text-dark-muted truncate">
+                  <span className="flex-1 text-muted dark:text-dark-text-secondary truncate">
                     {nombreSucursal(r.sucursal_origen_id)} → {nombreSucursal(r.sucursal_destino_id)}
                   </span>
-                  <span className="text-xs text-muted dark:text-dark-muted shrink-0">{new Date(r.fecha).toLocaleDateString()}</span>
+                  <span className="text-xs text-muted dark:text-dark-text-secondary shrink-0">{new Date(r.fecha).toLocaleDateString()}</span>
                 </button>
                 {abierto && (
                   <div className="px-3 pb-3 flex flex-col gap-1 border-t border-border dark:border-dark-border pt-2">
@@ -111,11 +111,11 @@ export default function RemitosInternos() {
                         <span>
                           {i.nombre_snapshot} {i.marca_snapshot ? `· ${i.marca_snapshot}` : ''}
                         </span>
-                        <span className="tabular-nums text-muted dark:text-dark-muted">{i.cantidad}</span>
+                        <span className="tabular-nums text-muted dark:text-dark-text-secondary">{i.cantidad}</span>
                       </div>
                     ))}
-                    {r.usuario && <p className="text-xs text-muted dark:text-dark-muted mt-1">{t('Generado por')} {r.usuario}</p>}
-                    {r.observaciones && <p className="text-xs text-muted dark:text-dark-muted">{r.observaciones}</p>}
+                    {r.usuario && <p className="text-xs text-muted dark:text-dark-text-secondary mt-1">{t('Generado por')} {r.usuario}</p>}
+                    {r.observaciones && <p className="text-xs text-muted dark:text-dark-text-secondary">{r.observaciones}</p>}
                   </div>
                 )}
               </div>

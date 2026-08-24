@@ -163,7 +163,7 @@ export default function NuevoRemitoInterno() {
       <main className="flex min-h-screen flex-col px-6 py-6 gap-4 items-center text-center">
         <div className="text-4xl">✅</div>
         <h1 className="text-xl font-semibold">{t('Remito generado')}</h1>
-        <p className="text-sm text-muted dark:text-dark-muted">
+        <p className="text-sm text-muted dark:text-dark-text-secondary">
           {remitoCreado.numero} · {nombreSucursal(origenId)} → {nombreSucursal(destinoId)}
         </p>
         <div className="flex gap-2">
@@ -192,14 +192,14 @@ export default function NuevoRemitoInterno() {
         <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{t('No tenés permiso para gestionar el stock.')}</p>
       )}
       {sucursales.length > 0 && sucursales.length < 2 && (
-        <p className="text-sm text-muted dark:text-dark-muted bg-canvas dark:bg-dark-bg rounded-lg px-3 py-2">
+        <p className="text-sm text-muted dark:text-dark-text-secondary bg-canvas dark:bg-dark-bg rounded-lg px-3 py-2">
           {t('Necesitás al menos 2 sucursales activas para generar un remito interno.')}
         </p>
       )}
 
       <div className="flex gap-2">
         <div className="flex-1">
-          <label className="block text-xs text-muted dark:text-dark-muted mb-1">{t('Sucursal origen')}</label>
+          <label className="block text-xs text-muted dark:text-dark-text-secondary mb-1">{t('Sucursal origen')}</label>
           <select
             value={origenId}
             onChange={(e) => setOrigenId(e.target.value)}
@@ -214,7 +214,7 @@ export default function NuevoRemitoInterno() {
           </select>
         </div>
         <div className="flex-1">
-          <label className="block text-xs text-muted dark:text-dark-muted mb-1">{t('Sucursal destino')}</label>
+          <label className="block text-xs text-muted dark:text-dark-text-secondary mb-1">{t('Sucursal destino')}</label>
           <select
             value={destinoId}
             onChange={(e) => setDestinoId(e.target.value)}
@@ -239,9 +239,9 @@ export default function NuevoRemitoInterno() {
             className="w-full rounded-lg border border-border dark:border-dark-border bg-surface dark:bg-dark-surface px-3 py-2 text-sm"
           />
           <div className="flex flex-col gap-1 max-h-56 overflow-y-auto">
-            {cargandoItems && <p className="text-xs text-muted dark:text-dark-muted">{t('Cargando...')}</p>}
+            {cargandoItems && <p className="text-xs text-muted dark:text-dark-text-secondary">{t('Cargando...')}</p>}
             {!cargandoItems && itemsFiltrados.length === 0 && (
-              <p className="text-xs text-muted dark:text-dark-muted">{t('No hay productos con stock en esa sucursal.')}</p>
+              <p className="text-xs text-muted dark:text-dark-text-secondary">{t('No hay productos con stock en esa sucursal.')}</p>
             )}
             {itemsFiltrados.map((p) => (
               <button
@@ -252,7 +252,7 @@ export default function NuevoRemitoInterno() {
                 <span>
                   {p.nombre} {p.marca ? `· ${p.marca}` : ''}
                 </span>
-                <span className="text-xs text-muted dark:text-dark-muted shrink-0">
+                <span className="text-xs text-muted dark:text-dark-text-secondary shrink-0">
                   {p.tipo === 'dispositivo' ? t('1 unidad') : `${p.disponible} ${t('disp.')}`}
                 </span>
               </button>
@@ -270,7 +270,7 @@ export default function NuevoRemitoInterno() {
                 {i.nombre} {i.marca ? `· ${i.marca}` : ''}
               </span>
               {i.modalidad === 'serializado' ? (
-                <span className="text-xs text-muted dark:text-dark-muted">1 {t('unidad')}</span>
+                <span className="text-xs text-muted dark:text-dark-text-secondary">1 {t('unidad')}</span>
               ) : (
                 <input
                   type="number"
