@@ -7,7 +7,8 @@ import { crearClienteNavegador } from '../../../lib/supabase/client';
 import { simboloMoneda } from '../../../lib/monedas';
 import { ESLOGAN } from '../../../lib/eslogan';
 import EtiquetaSeccion from '../../../EtiquetaSeccion';
-import { useT } from '../../../lib/idioma';
+import { useT, useIdioma } from '../../../lib/idioma';
+import { localeDe } from '../../../lib/i18n/traducir';
 
 type Compra = {
   id: string;
@@ -40,8 +41,8 @@ type Negocio = {
   moneda: string;
 };
 
-function formatearFecha(iso: string) {
-  return new Date(iso).toLocaleString('es-AR');
+function formatearFecha(iso: string, locale: string) {
+  return new Date(iso).toLocaleString(locale);
 }
 
 function Divisor() {
@@ -52,6 +53,8 @@ export default function BoletaCompra() {
   const { id } = useParams<{ id: string }>();
   const supabase = crearClienteNavegador();
   const t = useT();
+  const idioma = useIdioma();
+  const locale = localeDe(idioma);
 
   const [compra, setCompra] = useState<Compra | null>(null);
   const [negocio, setNegocio] = useState<Negocio | null>(null);
@@ -161,7 +164,7 @@ export default function BoletaCompra() {
           </div>
           <div className="text-right text-sm text-muted leading-relaxed">
             <p className="font-medium text-ink">{t('Compra #')}{compra.id.slice(0, 8)}</p>
-            <p>{formatearFecha(compra.created_at)}</p>
+            <p>{formatearFecha(compra.created_at, locale)}</p>
           </div>
         </div>
 
@@ -211,7 +214,7 @@ export default function BoletaCompra() {
             <span className="text-sm font-sans font-medium opacity-80">{t('PRECIO PAGADO')}</span>
             <span>
               {moneda}
-              {compra.precio.toLocaleString('es-AR')}
+              {compra.precio.toLocaleString(locale)}
             </span>
           </div>
         )}

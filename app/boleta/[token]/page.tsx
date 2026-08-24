@@ -6,7 +6,9 @@ import { crearClienteNavegador } from '../../lib/supabase/client';
 import { simboloMoneda } from '../../lib/monedas';
 import { ESLOGAN } from '../../lib/eslogan';
 import EtiquetaSeccion from '../../EtiquetaSeccion';
-import { useT } from '../../lib/idioma';
+import { useT, useIdioma } from '../../lib/idioma';
+import { localeDe } from '../../lib/i18n/traducir';
+import SelectorIdiomaFlotante from '../../SelectorIdiomaFlotante';
 
 type Item = {
   descripcion: string;
@@ -59,8 +61,8 @@ type Boleta = {
   items: Item[];
 };
 
-function formatearFecha(iso: string) {
-  return new Date(iso).toLocaleString('es-AR');
+function formatearFecha(iso: string, locale: string) {
+  return new Date(iso).toLocaleString(locale);
 }
 
 function Divisor() {
@@ -71,6 +73,8 @@ export default function BoletaPublica() {
   const { token } = useParams<{ token: string }>();
   const supabase = crearClienteNavegador();
   const t = useT();
+  const idioma = useIdioma();
+  const locale = localeDe(idioma);
   const [boleta, setBoleta] = useState<Boleta | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -115,10 +119,11 @@ export default function BoletaPublica() {
   const modoCrudo = boleta.boleta_moneda || (boleta.monto_secundario != null ? 'ambas' : 'principal');
   const modo = modoCrudo === 'secundaria' ? 'ambas' : modoCrudo;
   // Monto EXACTO: hasta 2 decimales si los tiene, sin forzar ",00" en enteros.
-  const fmt = (n: number) => moneda + n.toLocaleString('es-AR', { maximumFractionDigits: 2 });
+  const fmt = (n: number) => moneda + n.toLocaleString(locale, { maximumFractionDigits: 2 });
 
   return (
     <main className="flex min-h-screen flex-col items-center px-6 py-10">
+      <SelectorIdiomaFlotante />
       <div className="w-full max-w-xl flex flex-col gap-6 text-[15px] text-ink bg-white rounded-2xl border border-border shadow-card px-8 pt-2 pb-8">
         <div className="flex flex-col items-center gap-0 leading-none">
           <div className="flex items-center gap-1 opacity-70">
@@ -144,8 +149,8 @@ export default function BoletaPublica() {
 
         <div className="text-sm text-muted leading-relaxed">
           <p className="font-medium text-ink">{t('Orden #')}{boleta.id.slice(0, 8)}</p>
-          <p>{formatearFecha(boleta.created_at)}</p>
-          {boleta.fecha_entrega && <p>{t('Entregado:')} {formatearFecha(boleta.fecha_entrega)}</p>}
+          <p>{formatearFecha(boleta.created_at, locale)}</p>
+          {boleta.fecha_entrega && <p>{t('Entregado:')} {formatearFecha(boleta.fecha_entrega, locale)}</p>}
           <span
             className={`inline-block mt-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
               boleta.estado === 'entregado'
@@ -224,7 +229,7 @@ export default function BoletaPublica() {
                   )}
                   {i.garantia_vencimiento && (
                     <p className="text-xs text-muted mt-0.5">
-                      🛡️ {t('Garantía hasta el')} {new Date(i.garantia_vencimiento + 'T00:00:00').toLocaleDateString('es-AR')}
+                      🛡️ {t('Garantía hasta el')} {new Date(i.garantia_vencimiento + 'T00:00:00').toLocaleDateString(locale)}
                     </p>
                   )}
                 </td>
@@ -266,7 +271,7 @@ export default function BoletaPublica() {
           {modo === 'ambas' && boleta.monto_secundario != null && boleta.moneda_secundaria && (
             <p className="text-xs text-muted italic text-right">
               ≈ {simboloMoneda(boleta.moneda_secundaria)}
-              {boleta.monto_secundario.toLocaleString('es-AR')} {boleta.moneda_secundaria} ({t('valor informativo')})
+              {boleta.monto_secundario.toLocaleString(locale)} {boleta.moneda_secundaria} ({t('valor informativo')})
             </p>
           )}
         </div>

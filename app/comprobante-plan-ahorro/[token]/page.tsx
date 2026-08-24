@@ -5,7 +5,9 @@ import { useParams } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { ESLOGAN } from '../../lib/eslogan';
 import EtiquetaSeccion from '../../EtiquetaSeccion';
-import { useT } from '../../lib/idioma';
+import { useT, useIdioma } from '../../lib/idioma';
+import { localeDe } from '../../lib/i18n/traducir';
+import SelectorIdiomaFlotante from '../../SelectorIdiomaFlotante';
 
 type Comprobante = {
   id: string;
@@ -29,8 +31,8 @@ type Comprobante = {
   total_pagado: number;
 };
 
-function formatearFecha(iso: string) {
-  return new Date(iso).toLocaleString('es-AR');
+function formatearFecha(iso: string, locale: string) {
+  return new Date(iso).toLocaleString(locale);
 }
 
 function Divisor() {
@@ -44,6 +46,8 @@ export default function ComprobantePlanAhorroPublico() {
   const { token } = useParams<{ token: string }>();
   const supabase = crearClienteNavegador();
   const t = useT();
+  const idioma = useIdioma();
+  const locale = localeDe(idioma);
   const [c, setC] = useState<Comprobante | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -77,6 +81,7 @@ export default function ComprobantePlanAhorroPublico() {
 
   return (
     <main className="flex min-h-screen flex-col items-center px-6 py-10">
+      <SelectorIdiomaFlotante />
       <div className="w-full max-w-xl flex flex-col gap-6 text-[15px] text-ink bg-white rounded-2xl border border-border shadow-card px-8 pt-2 pb-8">
         <div className="flex flex-col items-center gap-0 leading-none">
           <div className="flex items-center gap-1 opacity-70">
@@ -106,7 +111,7 @@ export default function ComprobantePlanAhorroPublico() {
           </div>
           <div className="text-right text-sm text-muted leading-relaxed">
             <p className="font-medium text-ink">{t('Comprobante de pago')}</p>
-            <p>{formatearFecha(c.fecha)}</p>
+            <p>{formatearFecha(c.fecha, locale)}</p>
           </div>
         </div>
 
@@ -144,17 +149,17 @@ export default function ComprobantePlanAhorroPublico() {
         <div className="self-end w-full max-w-[320px] flex flex-col gap-2">
           <div className="flex justify-between items-baseline font-display font-semibold text-xl rounded-lg bg-ink text-white px-3 py-2.5">
             <span className="text-sm font-sans font-medium opacity-80">{t('PAGO DE HOY')}</span>
-            <span>${Math.round(c.monto).toLocaleString('es-AR')}</span>
+            <span>${Math.round(c.monto).toLocaleString(locale)}</span>
           </div>
           <div className="flex justify-between text-sm px-1">
             <span className="text-muted">{t('Total juntado')}</span>
             <span className="font-medium">
-              ${Math.round(c.total_pagado).toLocaleString('es-AR')} / ${Math.round(c.plan.monto_objetivo).toLocaleString('es-AR')}
+              ${Math.round(c.total_pagado).toLocaleString(locale)} / ${Math.round(c.plan.monto_objetivo).toLocaleString(locale)}
             </span>
           </div>
           <div className="flex justify-between text-sm px-1">
             <span className="text-muted">{completo ? t('¡Objetivo completado!') : t('Falta para completar')}</span>
-            {!completo && <span className="font-medium">${Math.round(falta).toLocaleString('es-AR')}</span>}
+            {!completo && <span className="font-medium">${Math.round(falta).toLocaleString(locale)}</span>}
           </div>
         </div>
 

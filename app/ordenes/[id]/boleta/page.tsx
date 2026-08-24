@@ -10,7 +10,8 @@ import { ESLOGAN } from '../../../lib/eslogan';
 import { armarLinkWhatsApp } from '../../../lib/whatsapp';
 import { codigoLlamada } from '../../../lib/paises';
 import EtiquetaSeccion from '../../../EtiquetaSeccion';
-import { useT } from '../../../lib/idioma';
+import { useT, useIdioma } from '../../../lib/idioma';
+import { localeDe } from '../../../lib/i18n/traducir';
 
 type Item = {
   descripcion: string;
@@ -109,8 +110,8 @@ function IconoTiktok() {
   );
 }
 
-function formatearFecha(iso: string) {
-  return new Date(iso).toLocaleString('es-AR');
+function formatearFecha(iso: string, locale: string) {
+  return new Date(iso).toLocaleString(locale);
 }
 
 function Divisor() {
@@ -121,6 +122,8 @@ export default function Boleta() {
   const { id } = useParams<{ id: string }>();
   const supabase = crearClienteNavegador();
   const t = useT();
+  const idioma = useIdioma();
+  const locale = localeDe(idioma);
 
   const [orden, setOrden] = useState<Orden | null>(null);
   const [canjes, setCanjes] = useState<CanjeEntregado[]>([]);
@@ -210,7 +213,7 @@ export default function Boleta() {
   const modo = modoCrudo === 'secundaria' ? 'ambas' : modoCrudo;
   // Monto EXACTO: hasta 2 decimales si los tiene (US$7,64 no se redondea a 8),
   // pero sin forzar ",00" en los enteros (US$470 queda US$470).
-  const fmt = (n: number) => moneda + n.toLocaleString('es-AR', { maximumFractionDigits: 2 });
+  const fmt = (n: number) => moneda + n.toLocaleString(locale, { maximumFractionDigits: 2 });
 
   // Link público a la boleta (misma que se ve en /boleta/[token]), para que
   // el cliente pueda abrirla y descargarla — antes el mensaje era solo texto
@@ -294,8 +297,8 @@ export default function Boleta() {
           <div className="flex items-start gap-3">
             <div className="text-right text-sm text-muted leading-relaxed mt-1">
               <p className="font-medium text-ink">{t('Orden #')}{orden.id.slice(0, 8)}</p>
-              <p>{formatearFecha(orden.created_at)}</p>
-              {orden.fecha_entrega && <p>{t('Entregado:')} {formatearFecha(orden.fecha_entrega)}</p>}
+              <p>{formatearFecha(orden.created_at, locale)}</p>
+              {orden.fecha_entrega && <p>{t('Entregado:')} {formatearFecha(orden.fecha_entrega, locale)}</p>}
               <span
                 className={`inline-block mt-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
                   orden.estado === 'entregado'
@@ -406,7 +409,7 @@ export default function Boleta() {
                   )}
                   {i.dispositivos?.garantia_vencimiento && (
                     <p className="text-xs text-muted mt-0.5">
-                      🛡️ {t('Garantía hasta el')} {new Date(i.dispositivos.garantia_vencimiento + 'T00:00:00').toLocaleDateString('es-AR')}
+                      🛡️ {t('Garantía hasta el')} {new Date(i.dispositivos.garantia_vencimiento + 'T00:00:00').toLocaleDateString(locale)}
                     </p>
                   )}
                 </td>
@@ -465,7 +468,7 @@ export default function Boleta() {
           {modo === 'ambas' && orden.monto_secundario != null && orden.moneda_secundaria && (
             <p className="text-xs text-muted italic text-right">
               ≈ {simboloMoneda(orden.moneda_secundaria)}
-              {orden.monto_secundario.toLocaleString('es-AR')} {orden.moneda_secundaria} ({t('valor informativo')})
+              {orden.monto_secundario.toLocaleString(locale)} {orden.moneda_secundaria} ({t('valor informativo')})
             </p>
           )}
         </div>

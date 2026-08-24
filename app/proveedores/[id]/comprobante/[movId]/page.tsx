@@ -6,7 +6,8 @@ import { useParams } from 'next/navigation';
 import { crearClienteNavegador } from '../../../../lib/supabase/client';
 import { ESLOGAN } from '../../../../lib/eslogan';
 import EtiquetaSeccion from '../../../../EtiquetaSeccion';
-import { useT } from '../../../../lib/idioma';
+import { useT, useIdioma } from '../../../../lib/idioma';
+import { localeDe } from '../../../../lib/i18n/traducir';
 
 type Movimiento = {
   id: string;
@@ -32,8 +33,8 @@ type Negocio = {
   texto_declaracion_proveedor_tamano: number;
 };
 
-function formatearFecha(iso: string) {
-  return new Date(iso).toLocaleString('es-AR');
+function formatearFecha(iso: string, locale: string) {
+  return new Date(iso).toLocaleString(locale);
 }
 
 function Divisor() {
@@ -44,6 +45,8 @@ export default function ComprobanteProveedor() {
   const { id, movId } = useParams<{ id: string; movId: string }>();
   const supabase = crearClienteNavegador();
   const t = useT();
+  const idioma = useIdioma();
+  const locale = localeDe(idioma);
 
   const [proveedor, setProveedor] = useState<Proveedor | null>(null);
   const [movimiento, setMovimiento] = useState<Movimiento | null>(null);
@@ -152,7 +155,7 @@ export default function ComprobanteProveedor() {
           </div>
           <div className="text-right text-sm text-muted leading-relaxed">
             <p className="font-medium text-ink">{titulo}</p>
-            <p>{formatearFecha(movimiento.fecha)}</p>
+            <p>{formatearFecha(movimiento.fecha, locale)}</p>
           </div>
         </div>
 
@@ -184,7 +187,7 @@ export default function ComprobanteProveedor() {
 
         <div className="self-end w-full max-w-[280px] flex justify-between items-baseline font-display font-semibold text-xl rounded-lg bg-ink text-white px-3 py-2.5">
           <span className="text-sm font-sans font-medium opacity-80">{esPago ? t('MONTO PAGADO') : t('MONTO ADEUDADO')}</span>
-          <span>${Math.round(movimiento.monto).toLocaleString('es-AR')}</span>
+          <span>${Math.round(movimiento.monto).toLocaleString(locale)}</span>
         </div>
 
         {negocio?.texto_declaracion_proveedor && (

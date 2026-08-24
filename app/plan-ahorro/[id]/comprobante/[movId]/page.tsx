@@ -8,7 +8,8 @@ import { ESLOGAN } from '../../../../lib/eslogan';
 import EtiquetaSeccion from '../../../../EtiquetaSeccion';
 import { armarLinkWhatsApp, mensajeComprobantePlanAhorro } from '../../../../lib/whatsapp';
 import { codigoLlamada } from '../../../../lib/paises';
-import { useT } from '../../../../lib/idioma';
+import { useT, useIdioma } from '../../../../lib/idioma';
+import { localeDe } from '../../../../lib/i18n/traducir';
 
 type Movimiento = {
   id: string;
@@ -40,8 +41,8 @@ type Negocio = {
   texto_declaracion_plan_ahorro_tamano: number;
 };
 
-function formatearFecha(iso: string) {
-  return new Date(iso).toLocaleString('es-AR');
+function formatearFecha(iso: string, locale: string) {
+  return new Date(iso).toLocaleString(locale);
 }
 
 function Divisor() {
@@ -52,6 +53,8 @@ export default function ComprobantePlanAhorro() {
   const { id, movId } = useParams<{ id: string; movId: string }>();
   const supabase = crearClienteNavegador();
   const t = useT();
+  const idioma = useIdioma();
+  const locale = localeDe(idioma);
 
   const [plan, setPlan] = useState<Plan | null>(null);
   const [movimiento, setMovimiento] = useState<Movimiento | null>(null);
@@ -129,7 +132,7 @@ export default function ComprobantePlanAhorro() {
         plan.clientes.telefono,
         mensajeComprobantePlanAhorro(
           clienteNombre || t('estimado/a'),
-          `$${Math.round(movimiento.monto).toLocaleString('es-AR')}`,
+          `$${Math.round(movimiento.monto).toLocaleString(locale)}`,
           plan.modelo || t('tu equipo'),
           `${typeof window !== 'undefined' ? window.location.origin : ''}/comprobante-plan-ahorro/${movimiento.token_publico}`,
           t
@@ -195,7 +198,7 @@ export default function ComprobantePlanAhorro() {
           </div>
           <div className="text-right text-sm text-muted leading-relaxed">
             <p className="font-medium text-ink">{t('Comprobante de pago')}</p>
-            <p>{formatearFecha(movimiento.fecha)}</p>
+            <p>{formatearFecha(movimiento.fecha, locale)}</p>
           </div>
         </div>
 
@@ -232,7 +235,7 @@ export default function ComprobantePlanAhorro() {
         <div className="self-end w-full max-w-[320px] flex flex-col gap-2">
           <div className="flex justify-between items-baseline font-display font-semibold text-xl rounded-lg bg-ink text-white px-3 py-2.5">
             <span className="text-sm font-sans font-medium opacity-80">{t('PAGO DE HOY')}</span>
-            <span>${Math.round(movimiento.monto).toLocaleString('es-AR')}</span>
+            <span>${Math.round(movimiento.monto).toLocaleString(locale)}</span>
           </div>
           {totalPagadoError ? (
             <p className="text-xs text-bad text-right">{t('No pudimos confirmar el total juntado hasta ahora — no lo tomes de este comprobante.')}</p>
@@ -241,12 +244,12 @@ export default function ComprobantePlanAhorro() {
               <div className="flex justify-between text-sm px-1">
                 <span className="text-muted">{t('Total juntado')}</span>
                 <span className="font-medium">
-                  ${Math.round(totalPagado).toLocaleString('es-AR')} / ${Math.round(plan.monto_objetivo).toLocaleString('es-AR')}
+                  ${Math.round(totalPagado).toLocaleString(locale)} / ${Math.round(plan.monto_objetivo).toLocaleString(locale)}
                 </span>
               </div>
               <div className="flex justify-between text-sm px-1">
                 <span className="text-muted">{completo ? t('¡Objetivo completado!') : t('Falta para completar')}</span>
-                {!completo && <span className="font-medium">${Math.round(falta).toLocaleString('es-AR')}</span>}
+                {!completo && <span className="font-medium">${Math.round(falta).toLocaleString(locale)}</span>}
               </div>
             </>
           )}

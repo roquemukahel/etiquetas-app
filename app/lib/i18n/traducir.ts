@@ -18,3 +18,14 @@ const DICCIONARIOS: Record<Idioma, Record<string, string>> = { es: {}, pt: PT, e
 export function traducir(idioma: Idioma, texto: string): string {
   return DICCIONARIOS[idioma][texto] ?? texto;
 }
+
+// Para boletas y comprobantes: fechas y montos formateados con
+// toLocaleString/toLocaleDateString necesitan un locale real, no alcanza con
+// traducir el texto que los rodea — un "12/3/2026" (formato es-AR) se lee
+// distinto que "3/12/2026" (en-US) aunque las palabras alrededor ya estén en
+// inglés. Uruguay/Argentina comparten formato con es-AR (no hay es-UY con
+// soporte amplio en Intl), así que se mantiene igual que hoy para español.
+const LOCALE_POR_IDIOMA: Record<Idioma, string> = { es: 'es-AR', pt: 'pt-BR', en: 'en-US' };
+export function localeDe(idioma: Idioma): string {
+  return LOCALE_POR_IDIOMA[idioma];
+}
