@@ -11,6 +11,7 @@ import { obtenerSucursales, type Sucursal } from '../lib/sucursales';
 import { obtenerProductosMaestro, type ProductoMaestro } from '../lib/productosMaestro';
 import { useSucursalActual } from '../lib/sucursal';
 import { useT } from '../lib/idioma';
+import { CATALOGO_MODELOS, MARCAS_DISPONIBLES, normalizarNombreModelo } from '../lib/catalogosMarcas';
 
 type ProductoFila = {
   id: string;
@@ -22,6 +23,30 @@ type ProductoFila = {
   sucursal_id: string | null;
   producto_maestro_id: string | null;
 };
+
+type DispositivoFila = {
+  id: string;
+  modelo: string | null;
+  categoria_id: string | null;
+  precio: number | null;
+  sucursal_id: string | null;
+};
+
+// Reverso del catálogo de modelos (catalogosMarcas.ts): dado "iPhone 16
+// Pro" devuelve "iPhone", dado "Galaxy S24" devuelve "Samsung". Un modelo
+// escrito a mano (fuera del catálogo, ej. una marca sin catálogo propio)
+// no tiene marca detectable — queda en blanco, no es un error.
+const MARCA_POR_MODELO: Map<string, string> = (() => {
+  const mapa = new Map<string, string>();
+  for (const [marcaId, modelos] of Object.entries(CATALOGO_MODELOS)) {
+    const nombreMarca = MARCAS_DISPONIBLES.find((m) => m.id === marcaId)?.nombre ?? marcaId;
+    for (const modelo of modelos) mapa.set(normalizarNombreModelo(modelo), nombreMarca);
+  }
+  return mapa;
+})();
+function marcaDeModelo(modelo: string | null): string {
+  return modelo ? MARCA_POR_MODELO.get(normalizarNombreModelo(modelo)) ?? '' : '';
+}
 
 type FilaGrid = {
   clave: string;
@@ -43,6 +68,7 @@ export default function Productos() {
   const puedeAgregarStock = tienePermiso(actor, 'agregar_stock');
 
   const [productos, setProductos] = useState<ProductoFila[]>([]);
+  const [dispositivos, setDispositivos] = useState<DispositivoFila[]>([]);
   const [maestros, setMaestros] = useState<ProductoMaestro[]>([]);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
@@ -52,17 +78,25 @@ export default function Productos() {
 
   useEffect(() => {
     (async () => {
-      const [filas, maestrosData, categoriasData] = await Promise.all([
+      const [filas, dispositivosData, maestrosData, categoriasData] = await Promise.all([
         obtenerTodasLasFilas<ProductoFila>(
           supabase,
           'productos',
           'id, nombre, marca, categoria_id, precio, cantidad, sucursal_id, producto_maestro_id',
           [{ columna: 'nombre' }]
         ),
+        // Celulares (tabla dispositivos): son "productos" también desde la
+        // perspectiva de esta vista, aunque vivan en una tabla distinta a
+        // los accesorios. Solo los que siguen en stock — vendidos no cuentan
+        // como stock disponible en ninguna sucursal.
+        obtenerTodasLasFilas<DispositivoFila>(supabase, 'dispositivos', 'id, modelo, categoria_id, precio, sucursal_id', [], (q) =>
+          q.eq('en_stock', true)
+        ),
         obtenerProductosMaestro(supabase, false),
         obtenerCategorias(supabase, false).catch(() => [] as Categoria[]),
       ]);
       setProductos(filas);
+      setDispositivos(dispositivosData);
       setMaestros(maestrosData);
       setCategorias(categoriasData);
       try {
@@ -113,6 +147,27 @@ export default function Productos() {
       porClave.set(clave, actual);
     }
 
+    // Celulares: se agrupan por modelo (no tienen producto_maestro_id, esa
+    // idea es exclusiva de accesorios) — cada unidad en `dispositivos` es 1
+    // unidad de stock, así que agrupar es simplemente contar filas. El
+    // precio de cada unidad puede variar (estado, color, batería), así que
+    // "Final" solo muestra un número cuando TODAS las unidades del grupo
+    // comparten exactamente el mismo precio — mostrar cualquier otro
+    // inventaría un precio único donde no lo hay.
+    type GrupoDisp = { nombre: string; marca: string; categoriaId: string | null; stockTotal: number; stockSucursal: number; precios: Set<number> };
+    const porClaveDisp = new Map<string, GrupoDisp>();
+    for (const d of dispositivos) {
+      const modelo = d.modelo || 'Sin modelo';
+      const clave = `disp:${normalizar(modelo)}`;
+      const actual =
+        porClaveDisp.get(clave) ??
+        ({ nombre: modelo, marca: marcaDeModelo(d.modelo), categoriaId: d.categoria_id, stockTotal: 0, stockSucursal: 0, precios: new Set<number>() } as GrupoDisp);
+      actual.stockTotal += 1;
+      if (sucursalActual.id && d.sucursal_id === sucursalActual.id) actual.stockSucursal += 1;
+      if (d.precio != null) actual.precios.add(d.precio);
+      porClaveDisp.set(clave, actual);
+    }
+
     const resultado: FilaGrid[] = [];
     for (const [clave, info] of porClave) {
       resultado.push({
@@ -127,10 +182,23 @@ export default function Productos() {
         final: info.precio,
       });
     }
+    for (const [clave, info] of porClaveDisp) {
+      resultado.push({
+        clave,
+        maestro: null,
+        categoriaId: info.categoriaId,
+        categoria: info.categoriaId ? nombreCategoria.get(info.categoriaId) ?? '' : '',
+        marca: info.marca,
+        nombre: info.nombre,
+        stockTotal: info.stockTotal,
+        stockSucursal: info.stockSucursal,
+        final: info.precios.size === 1 ? [...info.precios][0] : null,
+      });
+    }
     resultado.sort((a, b) => a.nombre.localeCompare(b.nombre));
     return resultado;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [productos, maestros, nombreCategoria, sucursalActual.id]);
+  }, [productos, dispositivos, maestros, nombreCategoria, sucursalActual.id]);
 
   const filasFiltradas = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
