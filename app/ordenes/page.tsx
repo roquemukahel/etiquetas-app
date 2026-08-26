@@ -90,6 +90,14 @@ export default function Ordenes() {
   const [filtroEstado, setFiltroEstado] = useState('todas');
   const [filtroTipo, setFiltroTipo] = useState<'todas' | 'ventas' | 'servicio'>('todas');
   const [busqueda, setBusqueda] = useState('');
+  // Por defecto se trae solo lo reciente (últimos 90 días) — con miles de
+  // órdenes acumuladas, traer TODO el historial en cada visita a esta
+  // pantalla (la que más se abre) es lo que hace sentir lento el sistema.
+  // "Ver todo el historial" hace una segunda carga sin el filtro de fecha,
+  // así una búsqueda por un cliente/equipo viejo sigue siendo posible, solo
+  // que no es lo que se trae por defecto.
+  const [historialCompleto, setHistorialCompleto] = useState(false);
+  const [cargandoHistorial, setCargandoHistorial] = useState(false);
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
   // Arranca en la sucursal elegida en el panel — si el dueño la cambia acá
   // adentro puede "espiar" otra sin tocar la selección global.
@@ -102,12 +110,20 @@ export default function Ordenes() {
     setFiltroSucursal(sucursalActual.id ?? '');
   }, [sucursalActual.id]);
 
-  const cargar = async () => {
+  const DIAS_VENTANA_RECIENTE = 90;
+
+  const cargar = async (traerTodoElHistorial = false) => {
+    let ordenesQuery = supabase
+      .from('ordenes')
+      .select('id, forma_pago, total, estado, created_at, sucursal_id, clientes ( nombre, apellido ), orden_items ( descripcion, tipo )')
+      .order('created_at', { ascending: false });
+    if (!traerTodoElHistorial) {
+      const desde = new Date();
+      desde.setDate(desde.getDate() - DIAS_VENTANA_RECIENTE);
+      ordenesQuery = ordenesQuery.gte('created_at', desde.toISOString());
+    }
     const [{ data: ordenesData }, { data: listasData }, { data: canceladasData }, { data: canjesData }] = await Promise.all([
-      supabase
-        .from('ordenes')
-        .select('id, forma_pago, total, estado, created_at, sucursal_id, clientes ( nombre, apellido ), orden_items ( descripcion, tipo )')
-        .order('created_at', { ascending: false }),
+      ordenesQuery,
       // Reparaciones terminadas por el técnico (con cliente) que faltan cobrar.
       supabase
         .from('reparaciones')
@@ -133,7 +149,15 @@ export default function Ordenes() {
     setReparacionesListas((listasData as any) ?? []);
     setReparacionesCanceladas((canceladasData as any) ?? []);
     setCanjes((canjesData as CanjeOrden[]) ?? []);
+    if (traerTodoElHistorial) setHistorialCompleto(true);
     setLoading(false);
+  };
+
+  const verHistorialCompleto = async () => {
+    if (historialCompleto || cargandoHistorial) return;
+    setCargandoHistorial(true);
+    await cargar(true);
+    setCargandoHistorial(false);
   };
 
   useEffect(() => {
@@ -261,6 +285,18 @@ export default function Ordenes() {
         placeholder={t('Buscar por cliente, modelo, IMEI o plan canje...')}
         className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
       />
+
+      {!historialCompleto && (
+        <button
+          onClick={verHistorialCompleto}
+          disabled={cargandoHistorial}
+          className="self-start text-xs text-accent dark:text-dark-accent underline disabled:opacity-50"
+        >
+          {cargandoHistorial
+            ? t('Cargando todo el historial…')
+            : `${t('Mostrando los últimos')} ${DIAS_VENTANA_RECIENTE} ${t('días —')} ${t('ver todo el historial')}`}
+        </button>
+      )}
 
       <div className="flex items-center gap-2 text-xs overflow-x-auto">
         {TIPOS.map((tipo) => (
@@ -413,7 +449,16 @@ export default function Ordenes() {
           escena="sinResultados"
           tamano="sm"
           titulo={t('No encontramos resultados')}
-          descripcion={t('Nada coincide con esa búsqueda o esos filtros.')}
+          descripcion={
+            !historialCompleto && busqueda.trim() !== ''
+              ? t('Nada coincide en los últimos 90 días — puede estar más atrás en el historial.')
+              : t('Nada coincide con esa búsqueda o esos filtros.')
+          }
+          accionPrimaria={
+            !historialCompleto && busqueda.trim() !== ''
+              ? { label: cargandoHistorial ? t('Cargando…') : t('Buscar en todo el historial'), onClick: verHistorialCompleto }
+              : undefined
+          }
           accionSecundaria={{
             label: t('Limpiar filtros'),
             onClick: () => {

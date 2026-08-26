@@ -194,16 +194,51 @@ export default function ServicioTecnico() {
   const [imagenesCarpetas, setImagenesCarpetas] = useState<Map<string, string>>(new Map());
   const [codigoPais, setCodigoPais] = useState('54');
 
-  const cargar = async () => {
-    const { data } = await supabase
+  // Por defecto solo se trae lo ACTIVO (no entregado/cancelado) — con miles
+  // de reparaciones acumuladas, traer TODO el historial en cada visita a
+  // esta pantalla (la principal del módulo) es lo que hace sentir lento el
+  // sistema, cuando el 99% de las visitas solo necesita ver lo que está en
+  // curso hoy. El resto del historial se trae en segundo plano recién
+  // cuando de verdad hace falta: al buscar texto (la búsqueda ya promete
+  // mirar TODAS las reparaciones, ver comentario en `filtrados` más abajo)
+  // o al apagar el chip "Activas" para ver entregados/cancelados.
+  const [historialCompleto, setHistorialCompleto] = useState(false);
+  const [cargandoHistorial, setCargandoHistorial] = useState(false);
+
+  const cargar = async (soloActivas = true) => {
+    let query = supabase
       .from('reparaciones')
       .select(
         'id, numero_orden, modelo, capacidad_gb, color, imei, falla_declarada, diagnostico, ubicacion_fisica, tecnico_id, estado, prioridad, trabajos_realizados, fecha_ingreso_servicio, fecha_estimada, fecha_reparado, fecha_entrega, garantia_dias, estado_actualizado_at, cliente_id, token_seguimiento, en_poder_tecnico, presupuesto_mano_obra, presupuesto_repuestos, importe_total, orden_cobro_id, agregado_a_stock, sucursal_id, clientes ( nombre, apellido, telefono )'
       )
       .order('fecha_ingreso_servicio', { ascending: false });
+    if (soloActivas) query = query.not('estado', 'in', `(${FINALIZADOS.join(',')})`);
+    const { data } = await query;
     setReparaciones((data as any) ?? []);
+    if (!soloActivas) setHistorialCompleto(true);
     setLoading(false);
   };
+
+  const asegurarHistorialCompleto = async () => {
+    if (historialCompleto || cargandoHistorial) return;
+    setCargandoHistorial(true);
+    await cargar(false);
+    setCargandoHistorial(false);
+  };
+
+  // Los casos en que la pantalla necesita de verdad ver más que "lo
+  // activo": tipear una búsqueda (mira TODAS las reparaciones a propósito),
+  // apagar el chip "Activas" (filtroIndicador pasa a null, que también
+  // muestra todo, ver `filtrados` más abajo), o entrar a "Técnicos"/"Mi
+  // banco" — ambas pestañas cuentan reparaciones YA entregadas (estadística
+  // por técnico, historial de entregas de un técnico puntual) que quedarían
+  // en cero/incompletas si solo hubiera llegado lo activo.
+  useEffect(() => {
+    if (busquedaDebounced.trim() !== '' || filtroIndicador === null || tab !== 'lista') {
+      asegurarHistorialCompleto();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busquedaDebounced, filtroIndicador, tab]);
 
   useEffect(() => {
     cargar();
@@ -832,6 +867,9 @@ export default function ServicioTecnico() {
           setTecnicoSeleccionado(null);
         }}
       />
+      {cargandoHistorial && (
+        <p className="text-xs text-muted dark:text-dark-text-secondary text-center">{t('Cargando historial completo…')}</p>
+      )}
 
       {!puedeRecibir && (
         <p className="text-xs text-muted dark:text-dark-text-secondary text-center">

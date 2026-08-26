@@ -41,14 +41,43 @@ export default function Compras() {
   const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
   const [eliminandoSeleccion, setEliminandoSeleccion] = useState(false);
 
-  const cargar = async () => {
-    const { data } = await supabase
+  const DIAS_VENTANA_RECIENTE = 90;
+  // Por defecto se trae "pendiente" (necesita acción, sin importar cuán
+  // vieja sea) + lo resuelto en los últimos 90 días — no TODO el historial
+  // de compras desde el día uno, que crece para siempre y es lo que hace
+  // sentir lenta esta pantalla con miles de ventas acumuladas. "Ver todo el
+  // historial" trae el resto para cuando hace falta buscar una compra vieja
+  // ya resuelta.
+  const [historialCompleto, setHistorialCompleto] = useState(false);
+  const [cargandoHistorial, setCargandoHistorial] = useState(false);
+
+  const cargar = async (traerTodoElHistorial = false) => {
+    let query = supabase
       .from('compras')
       .select('id, modelo, capacidad_gb, imei, precio, estado, created_at, clientes ( nombre, apellido )')
       .order('created_at', { ascending: false });
+    if (!traerTodoElHistorial) {
+      const desde = new Date();
+      desde.setDate(desde.getDate() - DIAS_VENTANA_RECIENTE);
+      query = query.or(`estado.eq.pendiente,created_at.gte.${desde.toISOString()}`);
+    }
+    const { data } = await query;
     setCompras((data as any) ?? []);
+    if (traerTodoElHistorial) setHistorialCompleto(true);
     setLoading(false);
   };
+
+  const verHistorialCompleto = async () => {
+    if (historialCompleto || cargandoHistorial) return;
+    setCargandoHistorial(true);
+    await cargar(true);
+    setCargandoHistorial(false);
+  };
+
+  useEffect(() => {
+    if (busqueda.trim() !== '') verHistorialCompleto();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busqueda]);
 
   useEffect(() => {
     cargar();
@@ -102,7 +131,7 @@ export default function Compras() {
 
     setEliminandoSeleccion(false);
     salirDeSeleccion();
-    cargar();
+    cargar(historialCompleto);
   };
 
   const filtradas = useMemo(() => {
@@ -121,6 +150,18 @@ export default function Compras() {
         </Link>
         <span className="text-lg font-medium">{t('Compra de dispositivos')}</span>
       </header>
+
+      {!historialCompleto && (
+        <button
+          onClick={verHistorialCompleto}
+          disabled={cargandoHistorial}
+          className="self-start text-xs text-accent dark:text-dark-accent underline disabled:opacity-50"
+        >
+          {cargandoHistorial
+            ? t('Cargando todo el historial…')
+            : `${t('Mostrando los últimos')} ${DIAS_VENTANA_RECIENTE} ${t('días —')} ${t('ver todo el historial')}`}
+        </button>
+      )}
 
       <input
         value={busqueda}
