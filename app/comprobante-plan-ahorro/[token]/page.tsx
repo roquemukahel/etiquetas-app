@@ -7,6 +7,7 @@ import { ESLOGAN } from '../../lib/eslogan';
 import EtiquetaSeccion from '../../EtiquetaSeccion';
 import { useT, useIdioma } from '../../lib/idioma';
 import { localeDe } from '../../lib/i18n/traducir';
+import { formatearMonto } from '../../lib/numeros';
 import SelectorIdiomaFlotante from '../../SelectorIdiomaFlotante';
 
 type Comprobante = {
@@ -149,17 +150,17 @@ export default function ComprobantePlanAhorroPublico() {
         <div className="self-end w-full max-w-[320px] flex flex-col gap-2">
           <div className="flex justify-between items-baseline font-display font-semibold text-xl rounded-lg bg-ink text-white px-3 py-2.5">
             <span className="text-sm font-sans font-medium opacity-80">{t('PAGO DE HOY')}</span>
-            <span>${Math.round(c.monto).toLocaleString(locale)}</span>
+            <span>${formatearMonto(c.monto, locale)}</span>
           </div>
           <div className="flex justify-between text-sm px-1">
             <span className="text-muted">{t('Total juntado')}</span>
             <span className="font-medium">
-              ${Math.round(c.total_pagado).toLocaleString(locale)} / ${Math.round(c.plan.monto_objetivo).toLocaleString(locale)}
+              ${formatearMonto(c.total_pagado, locale)} / ${formatearMonto(c.plan.monto_objetivo, locale)}
             </span>
           </div>
           <div className="flex justify-between text-sm px-1">
             <span className="text-muted">{completo ? t('¡Objetivo completado!') : t('Falta para completar')}</span>
-            {!completo && <span className="font-medium">${Math.round(falta).toLocaleString(locale)}</span>}
+            {!completo && <span className="font-medium">${formatearMonto(falta, locale)}</span>}
           </div>
         </div>
 

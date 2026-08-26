@@ -9,6 +9,7 @@ import { ESLOGAN } from '../../../lib/eslogan';
 import EtiquetaSeccion from '../../../EtiquetaSeccion';
 import { useT, useIdioma } from '../../../lib/idioma';
 import { localeDe } from '../../../lib/i18n/traducir';
+import { formatearMonto } from '../../../lib/numeros';
 
 type Compra = {
   id: string;
@@ -214,7 +215,7 @@ export default function BoletaCompra() {
             <span className="text-sm font-sans font-medium opacity-80">{t('PRECIO PAGADO')}</span>
             <span>
               {moneda}
-              {compra.precio.toLocaleString(locale)}
+              {formatearMonto(compra.precio, locale)}
             </span>
           </div>
         )}

@@ -8,6 +8,7 @@ import { ESLOGAN } from '../../../../lib/eslogan';
 import EtiquetaSeccion from '../../../../EtiquetaSeccion';
 import { useT, useIdioma } from '../../../../lib/idioma';
 import { localeDe } from '../../../../lib/i18n/traducir';
+import { formatearMonto } from '../../../../lib/numeros';
 
 type Movimiento = {
   id: string;
@@ -187,7 +188,7 @@ export default function ComprobanteProveedor() {
 
         <div className="self-end w-full max-w-[280px] flex justify-between items-baseline font-display font-semibold text-xl rounded-lg bg-ink text-white px-3 py-2.5">
           <span className="text-sm font-sans font-medium opacity-80">{esPago ? t('MONTO PAGADO') : t('MONTO ADEUDADO')}</span>
-          <span>${Math.round(movimiento.monto).toLocaleString(locale)}</span>
+          <span>${formatearMonto(movimiento.monto, locale)}</span>
         </div>
 
         {negocio?.texto_declaracion_proveedor && (

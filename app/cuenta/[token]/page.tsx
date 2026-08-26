@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { simboloMoneda } from '../../lib/monedas';
+import { formatearMonto } from '../../lib/numeros';
 import { useT } from '../../lib/idioma';
 import SelectorIdiomaFlotante from '../../SelectorIdiomaFlotante';
 
@@ -42,7 +43,7 @@ export default function PortalCuenta() {
   }, [token]);
 
   const moneda = useMemo(() => simboloMoneda(cuenta?.moneda), [cuenta?.moneda]);
-  const fmt = (n: number) => `${moneda}${Math.round(Math.abs(n)).toLocaleString('es-AR')}`;
+  const fmt = (n: number) => `${moneda}${formatearMonto(Math.abs(n))}`;
 
   if (loading) {
     return (

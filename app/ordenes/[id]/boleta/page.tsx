@@ -492,7 +492,7 @@ export default function Boleta() {
           {modo === 'ambas' && orden.monto_secundario != null && orden.moneda_secundaria && (
             <p className="text-xs text-muted italic text-right">
               ≈ {simboloMoneda(orden.moneda_secundaria)}
-              {orden.monto_secundario.toLocaleString(locale)} {orden.moneda_secundaria} ({t('valor informativo')})
+              {orden.monto_secundario.toLocaleString(locale, { maximumFractionDigits: 2 })} {orden.moneda_secundaria} ({t('valor informativo')})
             </p>
           )}
         </div>

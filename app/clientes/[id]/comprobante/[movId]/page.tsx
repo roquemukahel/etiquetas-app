@@ -10,6 +10,7 @@ import { armarLinkWhatsApp, mensajeComprobanteCuentaCorriente } from '../../../.
 import { codigoLlamada } from '../../../../lib/paises';
 import { useT, useIdioma } from '../../../../lib/idioma';
 import { localeDe } from '../../../../lib/i18n/traducir';
+import { formatearMonto } from '../../../../lib/numeros';
 
 type Movimiento = {
   id: string;
@@ -150,7 +151,7 @@ export default function ComprobanteCliente() {
         cliente.telefono,
         mensajeComprobanteCuentaCorriente(
           clienteNombre || t('estimado/a'),
-          `$${Math.round(movimiento.monto).toLocaleString(locale)}`,
+          `$${formatearMonto(movimiento.monto, locale)}`,
           esPago,
           urlPortal,
           t
@@ -253,7 +254,7 @@ export default function ComprobanteCliente() {
 
         <div className="self-end w-full max-w-[280px] flex justify-between items-baseline font-display font-semibold text-xl rounded-lg bg-ink text-white px-3 py-2.5">
           <span className="text-sm font-sans font-medium opacity-80">{esCargo ? t('MONTO ADEUDADO') : t('MONTO ABONADO')}</span>
-          <span>${Math.round(movimiento.monto).toLocaleString(locale)}</span>
+          <span>${formatearMonto(movimiento.monto, locale)}</span>
         </div>
 
         <div className="mt-4 print:mt-2 flex flex-col items-center gap-1 self-center">

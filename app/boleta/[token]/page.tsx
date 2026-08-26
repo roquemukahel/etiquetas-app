@@ -271,7 +271,7 @@ export default function BoletaPublica() {
           {modo === 'ambas' && boleta.monto_secundario != null && boleta.moneda_secundaria && (
             <p className="text-xs text-muted italic text-right">
               ≈ {simboloMoneda(boleta.moneda_secundaria)}
-              {boleta.monto_secundario.toLocaleString(locale)} {boleta.moneda_secundaria} ({t('valor informativo')})
+              {boleta.monto_secundario.toLocaleString(locale, { maximumFractionDigits: 2 })} {boleta.moneda_secundaria} ({t('valor informativo')})
             </p>
           )}
         </div>

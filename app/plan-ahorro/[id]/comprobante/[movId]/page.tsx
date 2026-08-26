@@ -10,6 +10,7 @@ import { armarLinkWhatsApp, mensajeComprobantePlanAhorro } from '../../../../lib
 import { codigoLlamada } from '../../../../lib/paises';
 import { useT, useIdioma } from '../../../../lib/idioma';
 import { localeDe } from '../../../../lib/i18n/traducir';
+import { formatearMonto } from '../../../../lib/numeros';
 
 type Movimiento = {
   id: string;
@@ -132,7 +133,7 @@ export default function ComprobantePlanAhorro() {
         plan.clientes.telefono,
         mensajeComprobantePlanAhorro(
           clienteNombre || t('estimado/a'),
-          `$${Math.round(movimiento.monto).toLocaleString(locale)}`,
+          `$${formatearMonto(movimiento.monto, locale)}`,
           plan.modelo || t('tu equipo'),
           `${typeof window !== 'undefined' ? window.location.origin : ''}/comprobante-plan-ahorro/${movimiento.token_publico}`,
           t
@@ -235,7 +236,7 @@ export default function ComprobantePlanAhorro() {
         <div className="self-end w-full max-w-[320px] flex flex-col gap-2">
           <div className="flex justify-between items-baseline font-display font-semibold text-xl rounded-lg bg-ink text-white px-3 py-2.5">
             <span className="text-sm font-sans font-medium opacity-80">{t('PAGO DE HOY')}</span>
-            <span>${Math.round(movimiento.monto).toLocaleString(locale)}</span>
+            <span>${formatearMonto(movimiento.monto, locale)}</span>
           </div>
           {totalPagadoError ? (
             <p className="text-xs text-bad text-right">{t('No pudimos confirmar el total juntado hasta ahora — no lo tomes de este comprobante.')}</p>
@@ -244,12 +245,12 @@ export default function ComprobantePlanAhorro() {
               <div className="flex justify-between text-sm px-1">
                 <span className="text-muted">{t('Total juntado')}</span>
                 <span className="font-medium">
-                  ${Math.round(totalPagado).toLocaleString(locale)} / ${Math.round(plan.monto_objetivo).toLocaleString(locale)}
+                  ${formatearMonto(totalPagado, locale)} / ${formatearMonto(plan.monto_objetivo, locale)}
                 </span>
               </div>
               <div className="flex justify-between text-sm px-1">
                 <span className="text-muted">{completo ? t('¡Objetivo completado!') : t('Falta para completar')}</span>
-                {!completo && <span className="font-medium">${Math.round(falta).toLocaleString(locale)}</span>}
+                {!completo && <span className="font-medium">${formatearMonto(falta, locale)}</span>}
               </div>
             </>
           )}
