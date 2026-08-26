@@ -2629,6 +2629,7 @@ export const EN: Record<string, string> = {
     "A view of the whole catalog. Tap the ✏️ on a row to edit category, brand, cost, price, and more — quantity still gets adjusted from Stock.",
   'Nuevo remito': 'New transfer',
   'Buscar producto o marca...': 'Search product or brand...',
+  'Buscar producto, marca, IMEI o código de barra...': 'Search product, brand, IMEI, or barcode...',
   'Ver remitos emitidos': 'View issued transfers',
   'No hay productos que coincidan.': 'No products match.',
   Marca: 'Brand',

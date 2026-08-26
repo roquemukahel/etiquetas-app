@@ -2630,6 +2630,7 @@ export const PT: Record<string, string> = {
     'Visualização de todo o catálogo. Toque no ✏️ de uma linha para editar categoria, marca, custo, preço e mais — a quantidade continua se ajustando em Estoque.',
   'Nuevo remito': 'Nova transferência',
   'Buscar producto o marca...': 'Buscar produto ou marca...',
+  'Buscar producto, marca, IMEI o código de barra...': 'Buscar produto, marca, IMEI ou código de barras...',
   'Ver remitos emitidos': 'Ver transferências emitidas',
   'No hay productos que coincidan.': 'Não há produtos que correspondam.',
   Marca: 'Marca',

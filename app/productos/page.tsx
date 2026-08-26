@@ -33,6 +33,7 @@ type DispositivoFila = {
   categoria_id: string | null;
   precio: number | null;
   sucursal_id: string | null;
+  imei: string | null;
 };
 
 type FilaGrid = {
@@ -45,6 +46,10 @@ type FilaGrid = {
   stockTotal: number;
   stockSucursal: number;
   final: number | null;
+  // Solo para celulares (agrupados por modelo, sin maestro): los IMEI de
+  // cada unidad del grupo, para poder encontrar un equipo puntual por su
+  // número de serie sin tener que ir a Stock.
+  imeis: string[];
 };
 
 export default function Productos() {
@@ -88,7 +93,7 @@ export default function Productos() {
         // perspectiva de esta vista, aunque vivan en una tabla distinta a
         // los accesorios. Solo los que siguen en stock — vendidos no cuentan
         // como stock disponible en ninguna sucursal.
-        obtenerTodasLasFilas<DispositivoFila>(supabase, 'dispositivos', 'id, modelo, categoria_id, precio, sucursal_id', [], (q) =>
+        obtenerTodasLasFilas<DispositivoFila>(supabase, 'dispositivos', 'id, modelo, categoria_id, precio, sucursal_id, imei', [], (q) =>
           q.eq('en_stock', true)
         ),
         obtenerProductosMaestro(supabase, false),
@@ -218,17 +223,18 @@ export default function Productos() {
     // "Final" solo muestra un número cuando TODAS las unidades del grupo
     // comparten exactamente el mismo precio — mostrar cualquier otro
     // inventaría un precio único donde no lo hay.
-    type GrupoDisp = { nombre: string; marca: string; categoriaId: string | null; stockTotal: number; stockSucursal: number; precios: Set<number> };
+    type GrupoDisp = { nombre: string; marca: string; categoriaId: string | null; stockTotal: number; stockSucursal: number; precios: Set<number>; imeis: string[] };
     const porClaveDisp = new Map<string, GrupoDisp>();
     for (const d of dispositivos) {
       const modelo = d.modelo || 'Sin modelo';
       const clave = `disp:${normalizar(modelo)}`;
       const actual =
         porClaveDisp.get(clave) ??
-        ({ nombre: modelo, marca: marcaDeModelo(d.modelo), categoriaId: d.categoria_id, stockTotal: 0, stockSucursal: 0, precios: new Set<number>() } as GrupoDisp);
+        ({ nombre: modelo, marca: marcaDeModelo(d.modelo), categoriaId: d.categoria_id, stockTotal: 0, stockSucursal: 0, precios: new Set<number>(), imeis: [] } as GrupoDisp);
       actual.stockTotal += 1;
       if (sucursalActual.id && d.sucursal_id === sucursalActual.id) actual.stockSucursal += 1;
       if (d.precio != null) actual.precios.add(d.precio);
+      if (d.imei) actual.imeis.push(d.imei);
       porClaveDisp.set(clave, actual);
     }
 
@@ -244,6 +250,7 @@ export default function Productos() {
         stockTotal: info.stockTotal,
         stockSucursal: info.stockSucursal,
         final: info.precio,
+        imeis: [],
       });
     }
     for (const [clave, info] of porClaveDisp) {
@@ -257,6 +264,7 @@ export default function Productos() {
         stockTotal: info.stockTotal,
         stockSucursal: info.stockSucursal,
         final: info.precios.size === 1 ? [...info.precios][0] : null,
+        imeis: info.imeis,
       });
     }
     resultado.sort((a, b) => a.nombre.localeCompare(b.nombre));
@@ -269,15 +277,18 @@ export default function Productos() {
     return filas.filter((f) => {
       if (filtroCategoria && f.categoriaId !== filtroCategoria) return false;
       if (!q) return true;
-      // El código de barra/SKU se busca por coincidencia exacta primero
-      // (así un lector de código de barra, que escribe el código completo
-      // de una sola vez, encuentra el producto aunque el nombre no tenga
-      // nada que ver con lo tipeado) y si no, por substring como el resto.
+      // El código de barra/SKU/IMEI se busca por coincidencia exacta
+      // primero (así un lector de código de barra, que escribe el código
+      // completo de una sola vez, encuentra el producto aunque el nombre
+      // no tenga nada que ver con lo tipeado) y si no, por substring como
+      // el resto. El IMEI es propio de cada unidad (celulares no tienen
+      // catálogo maestro), así que se busca en la lista de IMEIs del grupo.
       return (
         f.nombre.toLowerCase().includes(q) ||
         f.marca.toLowerCase().includes(q) ||
         f.maestro?.sku?.toLowerCase().includes(q) ||
-        f.maestro?.codigo_barras?.toLowerCase().includes(q)
+        f.maestro?.codigo_barras?.toLowerCase().includes(q) ||
+        f.imeis.some((imei) => imei.toLowerCase().includes(q))
       );
     });
   }, [filas, busqueda, filtroCategoria]);
@@ -311,7 +322,7 @@ export default function Productos() {
           type="text"
           value={busqueda}
           onChange={(e) => setBusqueda(e.target.value)}
-          placeholder={t('Buscar producto o marca...')}
+          placeholder={t('Buscar producto, marca, IMEI o código de barra...')}
           className="flex-1 min-w-[200px] rounded-lg border border-border dark:border-dark-border bg-surface dark:bg-dark-surface px-3 py-2 text-sm"
         />
         {categorias.length > 0 && (
