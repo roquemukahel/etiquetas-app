@@ -44,3 +44,21 @@ export function mensajeComprobantePlanAhorro(
 export function mensajeConsultaProveedor(nombreRepuesto: string) {
   return `Hola! Te consulto por precio y disponibilidad de: ${nombreRepuesto}`;
 }
+
+// El link que acompaña es el portal público de cuenta corriente
+// (/cuenta/[token], ver middleware.ts) — no un comprobante de un solo
+// movimiento, porque ese movimiento no tiene su propio token público.
+// Mostrar el estado de cuenta completo es igual de útil para el cliente
+// y evita crear una segunda ruta pública solo para esto.
+export function mensajeComprobanteCuentaCorriente(
+  nombreCliente: string,
+  monto: string,
+  esPago: boolean,
+  urlPortal: string | null,
+  t: (texto: string) => string = (s) => s
+) {
+  const base = esPago
+    ? `${t('Hola')} ${nombreCliente}! ${t('Te confirmamos que registramos tu pago de')} ${monto}.`
+    : `${t('Hola')} ${nombreCliente}! ${t('Te registramos un movimiento en tu cuenta por')} ${monto}.`;
+  return urlPortal ? `${base} ${t('Podés ver el detalle de tu cuenta acá:')} ${urlPortal}` : base;
+}

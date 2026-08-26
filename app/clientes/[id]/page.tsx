@@ -12,9 +12,11 @@ import { armarLinkWhatsApp } from '../../lib/whatsapp';
 import { codigoLlamada } from '../../lib/paises';
 import { MEDIOS_PAGO, calcularSaldo, estadoCuenta, ESTADO_INFO, diasDeMora } from '../../lib/cuentaCorriente';
 import { aplicarPagoAFinanciacion } from '../../lib/financiacion/servicio';
+import { sanitizarDecimal } from '../../lib/numeros';
 import { ESTADOS_COBRADOS } from '../../estadisticas/datos';
 import FinanciacionCliente from '../../FinanciacionCliente';
-import { useT } from '../../lib/idioma';
+import { useT, useIdioma } from '../../lib/idioma';
+import { localeDe } from '../../lib/i18n/traducir';
 import { useSucursalActual } from '../../lib/sucursal';
 
 type Cliente = {
@@ -59,6 +61,8 @@ export default function DetalleCliente() {
   const supabase = crearClienteNavegador();
   const actor = useActor();
   const t = useT();
+  const idioma = useIdioma();
+  const locale = localeDe(idioma);
   const sucursalActual = useSucursalActual();
   const puedeEliminar = tienePermiso(actor, 'eliminar');
 
@@ -234,18 +238,22 @@ export default function DetalleCliente() {
       setGuardandoPago(false);
       return;
     }
-    const { error: mErr } = await supabase.from('cta_cte_movimientos').insert({
-      cliente_id: id,
-      tipo: 'abono',
-      concepto: 'pago',
-      monto,
-      moneda: monedaCodigo,
-      pago_id: pago.id,
-      observacion: pagoObs.trim() || null,
-      registrado_por_nombre: a?.nombre ?? null,
-      registrado_por_foto_url: a?.fotoUrl ?? null,
-      ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
-    });
+    const { data: nuevoMov, error: mErr } = await supabase
+      .from('cta_cte_movimientos')
+      .insert({
+        cliente_id: id,
+        tipo: 'abono',
+        concepto: 'pago',
+        monto,
+        moneda: monedaCodigo,
+        pago_id: pago.id,
+        observacion: pagoObs.trim() || null,
+        registrado_por_nombre: a?.nombre ?? null,
+        registrado_por_foto_url: a?.fotoUrl ?? null,
+        ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
+      })
+      .select('id')
+      .single();
     if (mErr) {
       setError(`${t('El pago se guardó pero no se pudo asentar en la cuenta:')} ` + mErr.message);
       setGuardandoPago(false);
@@ -266,8 +274,14 @@ export default function DetalleCliente() {
     }
     setGuardandoPago(false);
     setRegistrandoPago(false);
-    await cargarMovimientos();
     setRecargarFinanciacion((n) => n + 1);
+    // Se abre directo el comprobante para imprimirlo o mandarlo — mismo
+    // criterio que ya usa Proveedores para un pago/ajuste recién generado.
+    if (nuevoMov?.id) {
+      router.push(`/clientes/${id}/comprobante/${nuevoMov.id}`);
+      return;
+    }
+    await cargarMovimientos();
   };
 
   const abrirAjuste = () => {
@@ -290,17 +304,21 @@ export default function DetalleCliente() {
     // Descuento/condonación = abono (baja la deuda), nota de crédito.
     // Cargo manual = cargo (sube la deuda), ej. un interés por mora.
     const esDescuento = ajusteTipo === 'descuento';
-    const { error: mErr } = await supabase.from('cta_cte_movimientos').insert({
-      cliente_id: id,
-      tipo: esDescuento ? 'abono' : 'cargo',
-      concepto: esDescuento ? 'nota_credito' : 'ajuste',
-      monto,
-      moneda: monedaCodigo,
-      observacion: ajusteObs.trim() || null,
-      registrado_por_nombre: a?.nombre ?? null,
-      registrado_por_foto_url: a?.fotoUrl ?? null,
-      ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
-    });
+    const { data: nuevoMov, error: mErr } = await supabase
+      .from('cta_cte_movimientos')
+      .insert({
+        cliente_id: id,
+        tipo: esDescuento ? 'abono' : 'cargo',
+        concepto: esDescuento ? 'nota_credito' : 'ajuste',
+        monto,
+        moneda: monedaCodigo,
+        observacion: ajusteObs.trim() || null,
+        registrado_por_nombre: a?.nombre ?? null,
+        registrado_por_foto_url: a?.fotoUrl ?? null,
+        ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
+      })
+      .select('id')
+      .single();
     if (mErr) {
       setError(`${t('No pudimos registrar el ajuste:')} ` + mErr.message);
       setGuardandoAjuste(false);
@@ -308,6 +326,10 @@ export default function DetalleCliente() {
     }
     setGuardandoAjuste(false);
     setAjustando(false);
+    if (nuevoMov?.id) {
+      router.push(`/clientes/${id}/comprobante/${nuevoMov.id}`);
+      return;
+    }
     await cargarMovimientos();
   };
 
@@ -470,7 +492,7 @@ export default function DetalleCliente() {
     );
   }
 
-  const fmt = (n: number) => `${moneda}${Math.round(n).toLocaleString('es-AR')}`;
+  const fmt = (n: number) => `${moneda}${Math.round(n).toLocaleString(locale)}`;
   const colorSaldo = saldo > 0.009 ? (vencido > 0 ? 'text-bad' : 'text-warn') : saldo < -0.009 ? 'text-good' : '';
 
   // Link del portal de autoconsulta (solo si ya tiene token — necesita el
@@ -494,7 +516,7 @@ export default function DetalleCliente() {
             : m.concepto === 'nota_credito'
             ? t('Nota de crédito')
             : t('Ajuste');
-        return `• ${new Date(m.fecha).toLocaleDateString('es-AR')} ${et}: ${signo}${fmt(m.monto)}`;
+        return `• ${new Date(m.fecha).toLocaleDateString(locale)} ${et}: ${signo}${fmt(m.monto)}`;
       })
       .join('\n');
     const estadoTxt =
@@ -651,7 +673,7 @@ export default function DetalleCliente() {
                   <div className="flex gap-2">
                     <div className="flex-1">
                       <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Límite de crédito (vacío = sin límite)')}</label>
-                      <input value={credLimite} onChange={(e) => setCredLimite(e.target.value.replace(/[^\d]/g, ''))} inputMode="numeric" placeholder={t('Sin límite')} className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm" />
+                      <input value={credLimite} onChange={(e) => setCredLimite(sanitizarDecimal(e.target.value))} inputMode="decimal" placeholder={t('Sin límite')} className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm" />
                     </div>
                     <div className="w-32">
                       <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Vencimiento (días)')}</label>
@@ -693,8 +715,8 @@ export default function DetalleCliente() {
                           {m.concepto === 'venta' ? t('Venta a cuenta corriente') : m.concepto === 'pago' ? t('Pago recibido') : m.concepto.replace('_', ' ')}
                         </p>
                         <p className="text-xs text-muted dark:text-dark-text-secondary">
-                          {new Date(m.fecha).toLocaleDateString('es-AR')}
-                          {esCargo && m.vencimiento ? ` · ${t('vence')} ${new Date(m.vencimiento).toLocaleDateString('es-AR')}` : ''}
+                          {new Date(m.fecha).toLocaleDateString(locale)}
+                          {esCargo && m.vencimiento ? ` · ${t('vence')} ${new Date(m.vencimiento).toLocaleDateString(locale)}` : ''}
                         </p>
                         {m.observacion && <p className="text-xs text-muted dark:text-dark-text-secondary truncate">{m.observacion}</p>}
                       </div>
@@ -704,9 +726,14 @@ export default function DetalleCliente() {
                           {fmt(m.monto)}
                         </p>
                         <p className="text-[11px] text-muted dark:text-dark-text-secondary">{t('saldo')} {fmt(m.saldoAcum)}</p>
-                        <button onClick={() => anularMovimiento(m)} className="text-[10px] text-bad underline mt-0.5">
-                          {t('Anular')}
-                        </button>
+                        <div className="flex items-center gap-2 justify-end mt-0.5">
+                          <Link href={`/clientes/${id}/comprobante/${m.id}`} className="text-[10px] text-accent dark:text-dark-accent underline">
+                            {t('Comprobante')}
+                          </Link>
+                          <button onClick={() => anularMovimiento(m)} className="text-[10px] text-bad underline">
+                            {t('Anular')}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   );
@@ -772,7 +799,7 @@ export default function DetalleCliente() {
             {saldo > 0 && <p className="text-xs text-muted dark:text-dark-text-secondary">{t('Debe')} {fmt(saldo)}.</p>}
             <div>
               <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Monto')}</label>
-              <input value={pagoMonto} onChange={(e) => setPagoMonto(e.target.value.replace(/[^\d]/g, ''))} inputMode="numeric" autoFocus placeholder="0" className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2.5 text-lg" />
+              <input value={pagoMonto} onChange={(e) => setPagoMonto(sanitizarDecimal(e.target.value))} inputMode="decimal" autoFocus placeholder="0" className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2.5 text-lg" />
             </div>
             <div>
               <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Medio de pago')}</label>
@@ -827,7 +854,7 @@ export default function DetalleCliente() {
             </p>
             <div>
               <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Monto')}</label>
-              <input value={ajusteMonto} onChange={(e) => setAjusteMonto(e.target.value.replace(/[^\d]/g, ''))} inputMode="numeric" autoFocus placeholder="0" className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2.5 text-lg" />
+              <input value={ajusteMonto} onChange={(e) => setAjusteMonto(sanitizarDecimal(e.target.value))} inputMode="decimal" autoFocus placeholder="0" className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2.5 text-lg" />
             </div>
             <textarea value={ajusteObs} onChange={(e) => setAjusteObs(e.target.value)} rows={2} placeholder={t('Motivo (recomendado)')} className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm" />
             <div className="flex gap-2">
@@ -861,6 +888,8 @@ function ListaOrdenes({
   moneda: string;
 }) {
   const t = useT();
+  const idioma = useIdioma();
+  const locale = localeDe(idioma);
   if (ordenes.length === 0) {
     return <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{vacio}</p>;
   }
@@ -878,10 +907,10 @@ function ListaOrdenes({
               <p className="text-sm font-medium">
                 {items.length > 0 ? `${items[0].descripcion}${items.length > 1 ? ` +${items.length - 1}` : ''}` : t('Orden vacía')}
               </p>
-              <p className="text-xs text-muted dark:text-dark-text-secondary">{new Date(o.created_at).toLocaleDateString('es-AR')}</p>
+              <p className="text-xs text-muted dark:text-dark-text-secondary">{new Date(o.created_at).toLocaleDateString(locale)}</p>
             </div>
             <div className="text-right">
-              {o.total != null && <p className="text-sm font-medium">{moneda}{o.total.toLocaleString('es-AR')}</p>}
+              {o.total != null && <p className="text-sm font-medium">{moneda}{o.total.toLocaleString(locale)}</p>}
               <p className="text-xs text-muted dark:text-dark-text-secondary capitalize">{t(o.estado)}</p>
             </div>
           </Link>

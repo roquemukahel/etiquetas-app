@@ -1,7 +1,12 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextRequest, NextResponse } from 'next/server';
 
-const RUTAS_PUBLICAS = ['/login', '/registro', '/cuenta-desactivada', '/suscripcion-vencida', '/terminos', '/privacidad', '/seguimiento', '/boleta', '/comprobante-plan-ahorro', '/stock-publico'];
+// '/cuenta/' (con la barra al final) es el portal público de cuenta
+// corriente de un cliente (app/cuenta/[token]/page.tsx, RPC cuenta_publica)
+// — un cliente externo nunca tiene sesión, así que sin esto el middleware
+// lo mandaba derecho a /login. Con la barra no choca con '/cuenta-desactivada'
+// (ruta distinta, ya pública, para negocios suspendidos).
+const RUTAS_PUBLICAS = ['/login', '/registro', '/cuenta-desactivada', '/suscripcion-vencida', '/terminos', '/privacidad', '/seguimiento', '/boleta', '/comprobante-plan-ahorro', '/stock-publico', '/cuenta/'];
 
 // El deployment de PRODUCCIÓN de Vercel siempre queda accesible además por
 // su propio dominio genérico (*.vercel.app) — no se puede desactivar. Para
@@ -84,7 +89,7 @@ export async function middleware(request: NextRequest) {
   // (a diferencia de /login, que no tiene sentido ver estando adentro).
   // /registro sí puede hacer falta verla estando logueado: es donde se
   // recupera una cuenta que quedó sin negocio creado (ver app/registro).
-  const RUTAS_SIEMPRE_ACCESIBLES = ['/registro', '/cuenta-desactivada', '/suscripcion-vencida', '/terminos', '/privacidad', '/seguimiento', '/boleta', '/comprobante-plan-ahorro', '/stock-publico'];
+  const RUTAS_SIEMPRE_ACCESIBLES = ['/registro', '/cuenta-desactivada', '/suscripcion-vencida', '/terminos', '/privacidad', '/seguimiento', '/boleta', '/comprobante-plan-ahorro', '/stock-publico', '/cuenta/'];
   const esPantallaDeBloqueo = RUTAS_SIEMPRE_ACCESIBLES.some((r) => request.nextUrl.pathname.startsWith(r));
 
   if (user && esPublica && !esPantallaDeBloqueo) {
