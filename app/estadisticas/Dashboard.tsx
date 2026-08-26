@@ -281,8 +281,19 @@ export default function Estadisticas() {
         setLoading(false);
         return;
       }
-      const desde = new Date();
-      desde.setFullYear(desde.getFullYear() - 1);
+      // 1º de enero del año pasado, NO "hace 365 días": el período "Año"
+      // compara el año actual contra el mismo tramo del año anterior
+      // (rangoDe('año', ahora).inicioPrev es EXACTAMENTE esta misma fecha),
+      // y con una ventana de "365 días atrás" esa comparación quedaba casi
+      // sin datos para cualquier mes que no fuera enero — ej. en agosto,
+      // el "año anterior" necesita desde enero del año pasado, pero solo se
+      // había traído desde agosto del año pasado en adelante, y el
+      // "crecimiento año contra año" que se mostraba salía de comparar 8
+      // meses reales contra apenas unos días de datos. Ampliar hasta acá
+      // cubre lo que necesitan los 4 períodos (hoy/semana/mes/año) con una
+      // sola traída, igual que antes.
+      const ahoraParaVentana = new Date();
+      const desde = new Date(ahoraParaVentana.getFullYear() - 1, 0, 1, 0, 0, 0, 0);
 
       const [
         [
