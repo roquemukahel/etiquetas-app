@@ -6,11 +6,12 @@ import { useT } from './lib/idioma';
 const KEY_CERRADA = 'qovento:qovi-burbuja-whatsapp-cerrada';
 const LINK_CANAL = 'https://whatsapp.com/channel/0029VbD94Sf1iUxa3EnkSr1p';
 
-// Punto de la boca de Qovi, en % del ancho/alto de la imagen — mismo
-// criterio y misma fuente que OJOS en QoviLateral.tsx (medido sobre los
-// píxeles de la imagen original, 1116×1409): un poco por debajo y entre
-// las dos pupilas (ojoIzq/ojoDer están a top 28–34%, left 40–55.7%).
-const BOCA = { left: 47, top: 43 };
+// Punto de la boca de Qovi, en % del ancho/alto de la imagen — medido
+// directamente sobre los píxeles del PNG original (1116×1409, recortando
+// con sharp la zona de la cara): la sonrisa (puntitos celestes) va de
+// (513,563) a (620,305)px aprox.; se toma la esquina más cercana al lado
+// por donde llega la burbuja (izquierda) como punto de anclaje.
+const BOCA = { left: 46, top: 40 };
 
 // Viñeta de conversación junto a Qovi (QoviLateral, que se asoma por el
 // borde izquierdo de la tarjeta de Resumen financiero) invitando a sumarse
@@ -61,11 +62,21 @@ export default function QoviBurbujaWhatsApp() {
       // menos a la boca real de Qovi.
       className="hidden lg:block pointer-events-none absolute right-full top-1/2 -translate-y-1/2 translate-x-[18%] w-36 xl:w-44 aspect-[1116/1409] z-30"
     >
+      {/* left/top posicionan la ESQUINA del div en BOCA, pero el transform
+          real que la corre a su lugar (translate -100%,-50%: borde derecho
+          en BOCA, centrada verticalmente en la boca) NO puede ir en este
+          mismo div si también lleva animate-fade-in-up — esa clase anima
+          "transform" vía @keyframes con animation-fill-mode:both, y el
+          valor final de la animación (translateY(0)) GANA para siempre por
+          sobre el transform inline de acá, dejando el div sin mover de
+          BOCA. Por eso la animación de entrada vive en el div de ADENTRO
+          (el que solo tiene su propio transform de layout, ninguno de
+          posicionamiento) y este de acá se queda solo con el transform. */}
       <div
-        className="absolute pointer-events-auto w-56 animate-fade-in-up"
-        style={{ left: `${BOCA.left}%`, top: `${BOCA.top}%`, transform: 'translate(-100%, -100%)' }}
+        className="absolute pointer-events-auto w-56"
+        style={{ left: `${BOCA.left}%`, top: `${BOCA.top}%`, transform: 'translate(-100%, -50%)' }}
       >
-        <div className="relative rounded-2xl bg-white dark:bg-dark-surface text-ink dark:text-dark-text shadow-elevated border border-border dark:border-dark-border px-3.5 py-3 mb-1.5 mr-1">
+        <div className="relative rounded-2xl bg-white dark:bg-dark-surface text-ink dark:text-dark-text shadow-elevated border border-border dark:border-dark-border px-3.5 py-3 mr-1 animate-fade-in-up">
           <button
             onClick={cerrar}
             aria-label={t('Cerrar')}
@@ -84,20 +95,20 @@ export default function QoviBurbujaWhatsApp() {
           >
             {t('Unirme al canal')} →
           </a>
-          {/* Punta delgada saliendo de la boca de Qovi: el borde inferior
-              derecho de la burbuja ya cae justo sobre BOCA (por el
-              translate(-100%,-100%) de arriba), así que este triángulo
-              angosto solo tiene que apuntar derecho hacia abajo desde esa
-              misma esquina para "salir de la boca". */}
+          {/* Punta apuntando a la derecha, hacia la boca — el div padre ya
+              queda con el borde derecho pegado a BOCA (translate -100% en
+              X), así que esta punta solo tiene que salir de la mitad
+              derecha de la burbuja apuntando horizontal hacia esa boca. */}
           <span
-            className="absolute block border-l-transparent border-r-transparent border-t-white dark:border-t-dark-surface"
+            className="absolute block border-t-transparent border-b-transparent border-l-white dark:border-l-dark-surface"
             style={{
-              right: '10px',
-              bottom: '-14px',
+              right: '-14px',
+              top: '50%',
               width: 0,
               height: 0,
               borderStyle: 'solid',
-              borderWidth: '14px 5px 0 5px',
+              borderWidth: '5px 0 5px 14px',
+              transform: 'translateY(-50%)',
             }}
           />
         </div>
