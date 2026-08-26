@@ -6,6 +6,7 @@ import { crearClienteNavegador } from '../lib/supabase/client';
 import { useActor } from '../lib/actor';
 import { tienePermiso } from '../lib/permisos';
 import { useT } from '../lib/idioma';
+import { formatearMonto } from '../lib/numeros';
 
 type Proveedor = { id: string; nombre: string; telefono: string | null; saldo: number };
 
@@ -95,13 +96,13 @@ export default function Proveedores() {
           {totalPorPagar > 0 && (
             <div className="flex-1 rounded-2xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-4">
               <p className="text-[11px] uppercase tracking-wide text-muted dark:text-dark-text-secondary">{t('Total por pagar')}</p>
-              <p className="text-2xl font-display font-semibold text-bad">${Math.round(totalPorPagar).toLocaleString('es-AR')}</p>
+              <p className="text-2xl font-display font-semibold text-bad">${formatearMonto(totalPorPagar)}</p>
             </div>
           )}
           {totalAFavor > 0 && (
             <div className="flex-1 rounded-2xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-4">
               <p className="text-[11px] uppercase tracking-wide text-muted dark:text-dark-text-secondary">{t('Saldo a favor')}</p>
-              <p className="text-2xl font-display font-semibold text-good">${Math.round(totalAFavor).toLocaleString('es-AR')}</p>
+              <p className="text-2xl font-display font-semibold text-good">${formatearMonto(totalAFavor)}</p>
             </div>
           )}
         </div>
@@ -143,9 +144,9 @@ export default function Proveedores() {
             </div>
             <div className="flex items-center gap-2">
               {p.saldo > 0 ? (
-                <span className="text-sm font-medium text-bad">{t('le debés')} ${Math.round(p.saldo).toLocaleString('es-AR')}</span>
+                <span className="text-sm font-medium text-bad">{t('le debés')} ${formatearMonto(p.saldo)}</span>
               ) : p.saldo < 0 ? (
-                <span className="text-xs font-medium text-good">{t('saldo a favor')} ${Math.round(-p.saldo).toLocaleString('es-AR')}</span>
+                <span className="text-xs font-medium text-good">{t('saldo a favor')} ${formatearMonto(-p.saldo)}</span>
               ) : null}
               <span className="text-muted dark:text-dark-text-secondary">&rsaquo;</span>
             </div>

@@ -13,6 +13,7 @@ import { EvolucionBarras } from '../estadisticas/graficos';
 import { proyeccionMensual, alertasCuotas, aFechaISO, type CuotaProyeccion, type PagoAplicadoProyeccion, type AlertaCuota } from '../lib/financiacion/motor';
 import { armarLinkWhatsApp, mensajeRecordatorioCobranza } from '../lib/whatsapp';
 import { codigoLlamada } from '../lib/paises';
+import { formatearMonto } from '../lib/numeros';
 import { useT } from '../lib/idioma';
 
 type Cliente = { id: string; nombre: string; apellido: string | null; suspendido: boolean | null; telefono: string | null };
@@ -247,7 +248,7 @@ export default function CuentasPorCobrar() {
 
   const totalPorCobrar = filas.reduce((acc, f) => acc + f.saldo, 0);
   const totalVencido = filas.reduce((acc, f) => acc + f.vencido, 0);
-  const fmt = (n: number) => `${moneda}${Math.round(n).toLocaleString('es-AR')}`;
+  const fmt = (n: number) => `${moneda}${formatearMonto(n)}`;
 
   if (!puedeVer) {
     return (
@@ -285,7 +286,7 @@ export default function CuentasPorCobrar() {
                   <Link href={`/clientes/${a.clienteId}`} className="flex-1 min-w-0 truncate">
                     <span className="font-medium">{a.clienteNombre}</span> · {t('cuota')} {a.cuotaNumero}/{a.cuotaTotal} ·{' '}
                     {simboloMoneda(a.moneda)}
-                    {Math.round(a.importe).toLocaleString('es-AR')} ·{' '}
+                    {formatearMonto(a.importe)} ·{' '}
                     {a.categoria === 'vencida'
                       ? `${t('vencida hace')} ${a.diasAtraso} ${a.diasAtraso === 1 ? t('día') : t('días')}`
                       : a.categoria === 'vence_hoy'
@@ -353,9 +354,9 @@ export default function CuentasPorCobrar() {
 
           {mesActual && (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-              <ResumenMes etiqueta={t('A cobrar este mes')} valor={`${simboloMoneda(monedaProyeccion)}${Math.round(mesActual.programado).toLocaleString('es-AR')}`} />
-              <ResumenMes etiqueta={t('Cobrado este mes')} valor={`${simboloMoneda(monedaProyeccion)}${Math.round(mesActual.cobrado).toLocaleString('es-AR')}`} tono="text-good" />
-              <ResumenMes etiqueta={t('Pendiente del mes')} valor={`${simboloMoneda(monedaProyeccion)}${Math.round(mesActual.pendiente).toLocaleString('es-AR')}`} tono={mesActual.pendiente > 0 ? 'text-warn' : undefined} />
+              <ResumenMes etiqueta={t('A cobrar este mes')} valor={`${simboloMoneda(monedaProyeccion)}${formatearMonto(mesActual.programado)}`} />
+              <ResumenMes etiqueta={t('Cobrado este mes')} valor={`${simboloMoneda(monedaProyeccion)}${formatearMonto(mesActual.cobrado)}`} tono="text-good" />
+              <ResumenMes etiqueta={t('Pendiente del mes')} valor={`${simboloMoneda(monedaProyeccion)}${formatearMonto(mesActual.pendiente)}`} tono={mesActual.pendiente > 0 ? 'text-warn' : undefined} />
               <ResumenMes etiqueta={t('% cobrado del mes')} valor={pctCobradoMes != null ? `${pctCobradoMes}%` : '—'} />
             </div>
           )}
@@ -379,10 +380,10 @@ export default function CuentasPorCobrar() {
                 {proyeccion.map((m) => (
                   <tr key={m.mes} className="border-b border-border/60 dark:border-dark-border/60 last:border-0">
                     <td className="py-1.5 pr-2">{etiquetaMesCorta(m.mes, t)}</td>
-                    <td className="py-1.5 px-2 text-right tabular-nums">{simboloMoneda(monedaProyeccion)}{Math.round(m.programado).toLocaleString('es-AR')}</td>
-                    <td className="py-1.5 px-2 text-right tabular-nums text-good">{simboloMoneda(monedaProyeccion)}{Math.round(m.cobrado).toLocaleString('es-AR')}</td>
-                    <td className="py-1.5 px-2 text-right tabular-nums">{simboloMoneda(monedaProyeccion)}{Math.round(m.pendiente).toLocaleString('es-AR')}</td>
-                    <td className={`py-1.5 px-2 text-right tabular-nums ${m.vencido > 0 ? 'text-bad' : ''}`}>{simboloMoneda(monedaProyeccion)}{Math.round(m.vencido).toLocaleString('es-AR')}</td>
+                    <td className="py-1.5 px-2 text-right tabular-nums">{simboloMoneda(monedaProyeccion)}{formatearMonto(m.programado)}</td>
+                    <td className="py-1.5 px-2 text-right tabular-nums text-good">{simboloMoneda(monedaProyeccion)}{formatearMonto(m.cobrado)}</td>
+                    <td className="py-1.5 px-2 text-right tabular-nums">{simboloMoneda(monedaProyeccion)}{formatearMonto(m.pendiente)}</td>
+                    <td className={`py-1.5 px-2 text-right tabular-nums ${m.vencido > 0 ? 'text-bad' : ''}`}>{simboloMoneda(monedaProyeccion)}{formatearMonto(m.vencido)}</td>
                     <td className="py-1.5 pl-2 text-right tabular-nums">{m.cantidadCuotas}</td>
                     <td className="py-1.5 pl-2 text-right tabular-nums">{m.cantidadClientes}</td>
                   </tr>

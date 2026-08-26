@@ -7,7 +7,7 @@ import { crearClienteNavegador } from '../../lib/supabase/client';
 import { registrarAuditoria } from '../../lib/auditoria';
 import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
-import { sanitizarDecimal } from '../../lib/numeros';
+import { sanitizarDecimal, formatearMonto } from '../../lib/numeros';
 import { medioLabel } from '../../lib/cuentaCorriente';
 import SelectorColorAuto from '../../SelectorColorAuto';
 import { ICONOS } from '../../Iconos';
@@ -174,7 +174,7 @@ export default function DetallePlanAhorro() {
       activo: t('¿Reactivar este plan?'),
     };
     if (nuevoEstado === 'completado' && !completo) {
-      if (!confirm(`${t('Todavía le faltan')} $${Math.round(falta).toLocaleString('es-AR')} ${t('para completar el objetivo.')} ${mensajes.completado}`)) return;
+      if (!confirm(`${t('Todavía le faltan')} $${formatearMonto(falta)} ${t('para completar el objetivo.')} ${mensajes.completado}`)) return;
     } else if (!confirm(mensajes[nuevoEstado])) {
       return;
     }
@@ -199,7 +199,7 @@ export default function DetallePlanAhorro() {
     if (!plan || !plan.dispositivo_id || procesando) return;
     const aviso = completo
       ? t('¿Confirmar la entrega y generar la venta de este equipo?')
-      : `${t('Todavía le faltan')} $${Math.round(falta).toLocaleString('es-AR')} ${t('para completar el objetivo.')} ${t('¿Generar la venta igual?')}`;
+      : `${t('Todavía le faltan')} $${formatearMonto(falta)} ${t('para completar el objetivo.')} ${t('¿Generar la venta igual?')}`;
     if (!confirm(aviso)) return;
 
     setProcesando(true);
@@ -474,14 +474,14 @@ export default function DetallePlanAhorro() {
           <div className="flex items-end justify-between gap-3 mb-1.5">
             <p className="text-[11px] uppercase tracking-wide text-muted dark:text-dark-text-secondary">{t('Juntado')}</p>
             <p className="text-[11px] text-muted dark:text-dark-text-secondary">
-              ${Math.round(pagado).toLocaleString('es-AR')} / ${Math.round(plan.monto_objetivo).toLocaleString('es-AR')}
+              ${formatearMonto(pagado)} / ${formatearMonto(plan.monto_objetivo)}
             </p>
           </div>
           <div className="h-2.5 w-full rounded-full bg-canvas dark:bg-dark-bg overflow-hidden">
             <div className={`h-full rounded-full ${completo ? 'bg-good' : 'bg-accent dark:bg-dark-accent'}`} style={{ width: `${pct}%` }} />
           </div>
           <p className={`text-xs mt-1.5 ${completo ? 'text-good font-medium' : 'text-muted dark:text-dark-text-secondary'}`}>
-            {completo ? t('¡Objetivo completado!') : `${t('Faltan')} $${Math.round(falta).toLocaleString('es-AR')}`}
+            {completo ? t('¡Objetivo completado!') : `${t('Faltan')} $${formatearMonto(falta)}`}
           </p>
         </div>
 
@@ -567,7 +567,7 @@ export default function DetallePlanAhorro() {
                   <p className="text-[11px] text-muted dark:text-dark-text-secondary">{new Date(m.fecha).toLocaleDateString('es-AR')}</p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <p className="text-sm font-medium text-good">+${Math.round(m.monto).toLocaleString('es-AR')}</p>
+                  <p className="text-sm font-medium text-good">+${formatearMonto(m.monto)}</p>
                   <Link href={`/plan-ahorro/${id}/comprobante/${m.id}`} className="text-[11px] text-accent dark:text-dark-accent underline">
                     {t('Comprobante')}
                   </Link>

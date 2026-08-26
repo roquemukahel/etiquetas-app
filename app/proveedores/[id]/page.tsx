@@ -7,7 +7,7 @@ import { crearClienteNavegador } from '../../lib/supabase/client';
 import { registrarAuditoria } from '../../lib/auditoria';
 import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
-import { sanitizarDecimal } from '../../lib/numeros';
+import { sanitizarDecimal, formatearMonto } from '../../lib/numeros';
 import { normalizarNombreModelo } from '../../lib/modelos';
 import { medioLabel } from '../../lib/cuentaCorriente';
 import SelectorColorAuto from '../../SelectorColorAuto';
@@ -447,7 +447,7 @@ export default function DetalleProveedor() {
         <div>
           <p className="text-[11px] uppercase tracking-wide text-muted dark:text-dark-text-secondary">{t('Le debés a este proveedor')}</p>
           <p className={`text-2xl font-display font-semibold ${saldo > 0 ? 'text-bad' : saldo < 0 ? 'text-good' : ''}`}>
-            ${Math.round(Math.abs(saldo)).toLocaleString('es-AR')}
+            ${formatearMonto(Math.abs(saldo))}
           </p>
           {saldo < 0 && <p className="text-[11px] text-good">{t('Tenés saldo a favor con él')}</p>}
           {saldo === 0 && <p className="text-[11px] text-muted dark:text-dark-text-secondary">{t('Estás al día')}</p>}
@@ -535,7 +535,7 @@ export default function DetalleProveedor() {
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <p className={`text-sm font-medium ${m.tipo === 'cargo' ? 'text-bad' : 'text-good'}`}>
-                    {m.tipo === 'cargo' ? '+' : '−'}${Math.round(m.monto).toLocaleString('es-AR')}
+                    {m.tipo === 'cargo' ? '+' : '−'}${formatearMonto(m.monto)}
                   </p>
                   <Link href={`/proveedores/${id}/comprobante/${m.id}`} className="text-[11px] text-accent dark:text-dark-accent underline">
                     {t('Comprobante')}
@@ -552,7 +552,7 @@ export default function DetalleProveedor() {
 
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-3.5 flex flex-col gap-0.5">
-          <p className="text-xl font-display font-semibold leading-none">${Math.round(totalGastado).toLocaleString('es-AR')}</p>
+          <p className="text-xl font-display font-semibold leading-none">${formatearMonto(totalGastado)}</p>
           <p className="text-[11px] text-muted dark:text-dark-text-secondary leading-tight mt-1">{t('Total comprado')}</p>
         </div>
         <div className="rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-3.5 flex flex-col gap-0.5">
@@ -671,7 +671,7 @@ export default function DetalleProveedor() {
             </div>
             <div className="flex items-center gap-2 shrink-0">
               {f.precioUnitario != null && (
-                <p className="text-sm font-medium">${(f.precioUnitario * f.cantidad).toLocaleString('es-AR')}</p>
+                <p className="text-sm font-medium">${formatearMonto(f.precioUnitario * f.cantidad)}</p>
               )}
               {f.origen === 'manual' && f.idManual && (
                 <button

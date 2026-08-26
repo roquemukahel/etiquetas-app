@@ -6,6 +6,7 @@ import { crearClienteNavegador } from '../lib/supabase/client';
 import { useActor } from '../lib/actor';
 import { tienePermiso } from '../lib/permisos';
 import { useT } from '../lib/idioma';
+import { formatearMonto } from '../lib/numeros';
 
 type Plan = {
   id: string;
@@ -156,7 +157,7 @@ export default function PlanAhorro() {
                   </p>
                 </div>
                 <span className="text-xs font-medium text-muted dark:text-dark-text-secondary shrink-0">
-                  ${Math.round(p.pagado).toLocaleString('es-AR')} / ${Math.round(p.monto_objetivo).toLocaleString('es-AR')}
+                  ${formatearMonto(p.pagado)} / ${formatearMonto(p.monto_objetivo)}
                 </span>
               </div>
               <div className="h-1.5 w-full rounded-full bg-canvas dark:bg-dark-bg overflow-hidden">

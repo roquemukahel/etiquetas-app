@@ -9,7 +9,7 @@ import { crearClienteNavegador } from './lib/supabase/client';
 import { useActor } from './lib/actor';
 import { tienePermiso } from './lib/permisos';
 import { simboloMoneda, decimalesMoneda } from './lib/monedas';
-import { sanitizarDecimal } from './lib/numeros';
+import { sanitizarDecimal, formatearMonto } from './lib/numeros';
 import {
   crearPlanFinanciacion,
   ajustarCuotasFinanciacion,
@@ -141,7 +141,7 @@ export default function FinanciacionCliente({
     return { totalFinanciado, totalPagado, saldoPendiente, proximoVencimiento, cuotasVencidas, progreso };
   }, [todasLasCuotas, planesActivos, hoy]);
 
-  const fmt = (n: number) => `${moneda}${Math.round(n).toLocaleString('es-AR')}`;
+  const fmt = (n: number) => `${moneda}${formatearMonto(n)}`;
 
   if (loading) return <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{t('Cargando...')}</p>;
 
@@ -181,7 +181,7 @@ export default function FinanciacionCliente({
                   <div className="min-w-0">
                     <p className="text-sm font-medium">
                       {p.cantidad_cuotas} {p.cantidad_cuotas === 1 ? t('cuota') : t('cuotas')} · {simboloMoneda(p.moneda)}
-                      {Math.round(p.importe_financiado).toLocaleString('es-AR')}
+                      {formatearMonto(p.importe_financiado)}
                     </p>
                     <p className="text-xs text-muted dark:text-dark-text-secondary">
                       {t('Creado el')} {new Date(p.created_at).toLocaleDateString('es-AR')} · {t(ETIQUETA_ESTADO_PLAN[p.estado])} · {progresoPlan}% {t('pagado')}
@@ -194,8 +194,8 @@ export default function FinanciacionCliente({
                 {abierto && (
                   <div className="border-t border-border dark:border-dark-border px-4 py-3 flex flex-col gap-3">
                     <div className="grid grid-cols-2 gap-2 text-xs text-muted dark:text-dark-text-secondary">
-                      <p>{t('Importe de la venta:')} {simboloMoneda(p.moneda)}{Math.round(p.importe_original).toLocaleString('es-AR')}</p>
-                      {p.entrega_inicial > 0 && <p>{t('Entrega inicial:')} {simboloMoneda(p.moneda)}{Math.round(p.entrega_inicial).toLocaleString('es-AR')}</p>}
+                      <p>{t('Importe de la venta:')} {simboloMoneda(p.moneda)}{formatearMonto(p.importe_original)}</p>
+                      {p.entrega_inicial > 0 && <p>{t('Entrega inicial:')} {simboloMoneda(p.moneda)}{formatearMonto(p.entrega_inicial)}</p>}
                       {p.observaciones && <p className="col-span-2">{t('Obs:')} {p.observaciones}</p>}
                     </div>
 
@@ -211,9 +211,9 @@ export default function FinanciacionCliente({
                             <span className="shrink-0">{new Date(c.fecha_vencimiento + 'T00:00:00').toLocaleDateString('es-AR')}</span>
                             <span className="flex-1 text-right font-medium">
                               {simboloMoneda(p.moneda)}
-                              {Math.round(c.importe_original).toLocaleString('es-AR')}
+                              {formatearMonto(c.importe_original)}
                               {c.importe_pagado > 0 && c.estado !== 'pagada' && (
-                                <span className="text-muted dark:text-dark-text-secondary font-normal"> ({t('falta')} {simboloMoneda(p.moneda)}{Math.round(saldoCuota).toLocaleString('es-AR')})</span>
+                                <span className="text-muted dark:text-dark-text-secondary font-normal"> ({t('falta')} {simboloMoneda(p.moneda)}{formatearMonto(saldoCuota)})</span>
                               )}
                             </span>
                             <span className={`shrink-0 rounded-full px-2 py-0.5 font-medium ${COLOR_ESTADO[estadoVisual]}`}>{t(ETIQUETA_ESTADO[estadoVisual])}</span>
@@ -405,13 +405,13 @@ function ModalNuevoPlan({
 
         {preview && (
           <div className="rounded-lg bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border p-2.5">
-            <p className="text-xs font-medium mb-1.5">{t('Vista previa del cronograma — financiado:')} {moneda}{Math.round(financiado).toLocaleString('es-AR')}</p>
+            <p className="text-xs font-medium mb-1.5">{t('Vista previa del cronograma — financiado:')} {moneda}{formatearMonto(financiado)}</p>
             <div className="flex flex-col gap-0.5 max-h-40 overflow-y-auto">
               {preview.map((c) => (
                 <div key={c.numero} className="flex items-center justify-between text-xs text-muted dark:text-dark-text-secondary">
                   <span>{t('Cuota')} {c.numero}/{cuotas}</span>
                   <span>{new Date(c.fecha_vencimiento + 'T00:00:00').toLocaleDateString('es-AR')}</span>
-                  <span className="font-medium text-ink dark:text-dark-text">{moneda}{Math.round(c.importe).toLocaleString('es-AR')}</span>
+                  <span className="font-medium text-ink dark:text-dark-text">{moneda}{formatearMonto(c.importe)}</span>
                 </div>
               ))}
             </div>
@@ -511,7 +511,7 @@ function ModalAjuste({
               {cuotas.map((c) => (
                 <label key={c.id} className="flex items-center gap-2 text-xs cursor-pointer">
                   <input type="checkbox" checked={cuotasElegidas.has(c.id)} onChange={() => toggleCuota(c.id)} className="h-4 w-4 accent-ink" />
-                  {t('Cuota')} {c.numero} — {moneda}{Math.round(c.importe_original - c.importe_pagado).toLocaleString('es-AR')} {t('pendiente')}
+                  {t('Cuota')} {c.numero} — {moneda}{formatearMonto(c.importe_original - c.importe_pagado)} {t('pendiente')}
                 </label>
               ))}
             </div>
@@ -660,7 +660,7 @@ function ModalReprogramar({
         {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
         <p className="text-xs text-muted dark:text-dark-text-secondary">
           {t('Arma un cronograma nuevo con el saldo pendiente')} ({moneda}
-          {Math.round(saldoPendiente).toLocaleString('es-AR')}). {t('El plan actual queda marcado como')} &quot;{t('Reprogramado')}&quot; {t('y su historial se conserva completo — las cuotas ya pagadas no se tocan.')}
+          {formatearMonto(saldoPendiente)}). {t('El plan actual queda marcado como')} &quot;{t('Reprogramado')}&quot; {t('y su historial se conserva completo — las cuotas ya pagadas no se tocan.')}
         </p>
         <div className="grid grid-cols-2 gap-3">
           <CampoNumero label={t('Cantidad de cuotas nuevas')} valor={cantidadCuotas} onChange={setCantidadCuotas} />
@@ -687,7 +687,7 @@ function ModalReprogramar({
                 <div key={c.numero} className="flex items-center justify-between text-xs text-muted dark:text-dark-text-secondary">
                   <span>{t('Cuota')} {c.numero}/{cuotas}</span>
                   <span>{new Date(c.fecha_vencimiento + 'T00:00:00').toLocaleDateString('es-AR')}</span>
-                  <span className="font-medium text-ink dark:text-dark-text">{moneda}{Math.round(c.importe).toLocaleString('es-AR')}</span>
+                  <span className="font-medium text-ink dark:text-dark-text">{moneda}{formatearMonto(c.importe)}</span>
                 </div>
               ))}
             </div>
