@@ -601,7 +601,9 @@ export default async function Home() {
           <OjoResumenFinanciero>
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-xs text-white/60 mb-1">{t('Ingresos este mes')}</p>
+              <p className="text-xs text-white/60 mb-1">
+                {t('Ingresos este mes')} <span className="opacity-70">({t('incluye fiado')})</span>
+              </p>
               <p className="qv-financial-value text-4xl sm:text-5xl font-display font-semibold tracking-tight">
                 <NumeroAnimado prefijo={moneda} valor={ingresosMes} />
               </p>

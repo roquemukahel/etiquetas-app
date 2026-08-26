@@ -269,6 +269,16 @@ export default function NuevaOrden() {
   const [financiarActivo, setFinanciarActivo] = useState(false);
   const [financiarCuotas, setFinanciarCuotas] = useState('3');
   const [financiarPrimeraFecha, setFinanciarPrimeraFecha] = useState('');
+  // Recargo propio de ESTA financiación (a diferencia de "Impuesto %", que es
+  // general y se aplica a toda la venta antes de restar anticipo/canje) — se
+  // calcula solo sobre lo que efectivamente queda financiado, DESPUÉS de
+  // restar anticipo y canje. Antes no existía este campo y los negocios que
+  // financiaban "a mano" usaban Impuesto% con ese fin, lo que inflaba TODA la
+  // venta (incluida la parte ya cobrada de contado) en vez de solo el saldo:
+  // con anticipo $420 sobre una venta de $730 y 25% de recargo, el sistema
+  // cobraba el 25% sobre los $730 en vez de sobre los $310 que quedaban a
+  // cuenta corriente.
+  const [recargoFinanciacion, setRecargoFinanciacion] = useState('');
 
   // --- plan canje ---
   const [canjeActivo, setCanjeActivo] = useState(false);
@@ -456,13 +466,31 @@ export default function NuevaOrden() {
   const interesPlan = interesDe(interesCuotas, cuotasElegidas);
   const subtotalFinanciado = subtotal * (1 + interesPlan / 100);
 
-  const total = useMemo(() => {
+  const totalSinRecargoFinanciacion = useMemo(() => {
     const conImpuesto = subtotalFinanciado * (1 + (Number(impuesto) || 0) / 100);
     // Sin Math.max(0, ...) a propósito: si el anticipo es mayor al precio
     // (ej. seña de una compra anterior más grande que lo que se lleva hoy),
     // el total puede quedar negativo — representa saldo a favor del cliente.
     return conImpuesto - (Number(anticipo) || 0) - montoCanjeTotal;
   }, [subtotalFinanciado, impuesto, anticipo, montoCanjeTotal]);
+
+  // Cuánto de esta venta queda como deuda en la cuenta corriente, SIN el
+  // recargo de financiación propia todavía — en modo simple es lo que resta
+  // del total tras anticipo/canje; en modo mixto es lo que el usuario tipeó
+  // a mano en la línea "Cuenta corriente".
+  const montoCuentaCorrienteBase = useMemo(() => {
+    if (!pagoMixto) return medioSimple === CUENTA_CORRIENTE ? Math.max(0, totalSinRecargoFinanciacion) : 0;
+    return lineasPago
+      .filter((l) => l.medio === CUENTA_CORRIENTE)
+      .reduce((acc, l) => acc + (Number(l.monto) || 0), 0);
+  }, [pagoMixto, medioSimple, lineasPago, totalSinRecargoFinanciacion]);
+
+  // El recargo de "Financiar en cuotas propias" pega SOLO sobre lo que
+  // efectivamente queda financiado (montoCuentaCorrienteBase), nunca sobre
+  // la parte ya cobrada de contado (anticipo) ni sobre el canje.
+  const recargoFinanciacionMonto = financiarActivo ? montoCuentaCorrienteBase * ((Number(recargoFinanciacion) || 0) / 100) : 0;
+  const montoCuentaCorriente = montoCuentaCorrienteBase + recargoFinanciacionMonto;
+  const total = totalSinRecargoFinanciacion + recargoFinanciacionMonto;
 
   // Monto informativo en la segunda moneda: se recalcula solo mientras
   // el usuario no lo haya tocado a mano (si lo edita, respetamos su
@@ -527,14 +555,6 @@ export default function NuevaOrden() {
     // acordarse de tocar el botón que recién apareció.
     if (!pagoMixto) setMedioSimple(CUENTA_CORRIENTE);
   };
-
-  // Cuánto de esta venta queda como deuda en la cuenta corriente.
-  const montoCuentaCorriente = useMemo(() => {
-    if (!pagoMixto) return medioSimple === CUENTA_CORRIENTE ? Math.max(0, total) : 0;
-    return lineasPago
-      .filter((l) => l.medio === CUENTA_CORRIENTE)
-      .reduce((acc, l) => acc + (Number(l.monto) || 0), 0);
-  }, [pagoMixto, medioSimple, lineasPago, total]);
 
   const montoAsignado = useMemo(() => {
     if (!pagoMixto) return total;
@@ -2097,6 +2117,23 @@ export default function NuevaOrden() {
                     <label className="text-[10px] text-muted dark:text-dark-text-secondary block mb-1">{t('Fecha de la 1ª cuota')}</label>
                     <CampoFecha value={financiarPrimeraFecha} onChange={setFinanciarPrimeraFecha} ancho="completo" />
                   </div>
+                  <div>
+                    <label className="text-[10px] text-muted dark:text-dark-text-secondary block mb-1">{t('Recargo por financiar (%)')}</label>
+                    <input
+                      value={recargoFinanciacion}
+                      onChange={(e) => setRecargoFinanciacion(sanitizarDecimal(e.target.value))}
+                      inputMode="decimal"
+                      placeholder="0"
+                      className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                    />
+                  </div>
+                  {recargoFinanciacionMonto > 0 && (
+                    <div className="flex items-end">
+                      <p className="text-[10px] text-muted dark:text-dark-text-secondary pb-2">
+                        {t('Se suma')} {moneda}{Math.round(recargoFinanciacionMonto).toLocaleString('es-AR')} {t('solo sobre el saldo financiado, no sobre el anticipo.')}
+                      </p>
+                    </div>
+                  )}
                 </div>
                 {previewFinanciacion ? (
                   <div className="flex flex-col gap-0.5 max-h-32 overflow-y-auto">

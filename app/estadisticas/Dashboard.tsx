@@ -920,7 +920,7 @@ export default function Estadisticas() {
         return (
           <>
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-              <StatCard etiqueta={t('Ventas netas')} valor={m(actualB.ventas)} tooltip={t('Todo lo que facturaste en el período (incluye lo vendido a cuenta corriente/fiado).')} variacion={varSi(actualB.ventas, prevB.ventas)} moneda={moneda} sensible oculto={ocultarMontos} />
+              <StatCard etiqueta={t('Ventas netas')} valor={m(actualB.ventas)} tooltip={t('Todo lo que facturaste en el período, incluido lo vendido a cuenta corriente/fiado — no es plata en mano. Para ver lo que realmente cobraste, mirá "Dinero ingresado".')} variacion={varSi(actualB.ventas, prevB.ventas)} moneda={moneda} sensible oculto={ocultarMontos} />
               <StatCard etiqueta={t('Operaciones')} valor={actualB.operaciones.toLocaleString('es-AR')} tooltip={t('Cantidad de ventas cobradas en el período.')} variacion={varSi(actualB.operaciones, prevB.operaciones)} />
               <StatCard etiqueta={t('Ticket promedio')} valor={m(ticket)} tooltip={t('Promedio facturado por operación (ventas ÷ operaciones).')} variacion={varSi(ticket, ticketPrev)} moneda={moneda} sensible oculto={ocultarMontos} />
               <StatCard etiqueta={t('Unidades vendidas')} valor={actualB.unidades.toLocaleString('es-AR')} tooltip={t('Dispositivos y productos vendidos en el período.')} variacion={varSi(actualB.unidades, prevB.unidades)} />
@@ -1400,7 +1400,7 @@ export default function Estadisticas() {
             <StatCard
               etiqueta={t('Ventas netas')}
               valor={m(actualB.ventas)}
-              tooltip={t('Todo lo que facturaste en el período (incluye lo que se vendió a cuenta corriente/fiado).')}
+              tooltip={t('Todo lo que facturaste en el período, incluido lo vendido a cuenta corriente/fiado — no es plata en mano. Para ver lo que realmente cobraste, mirá "Dinero ingresado".')}
               variacion={comparar ? variacion(actualB.ventas, prevB.ventas) : undefined}
               moneda={moneda}
               sensible

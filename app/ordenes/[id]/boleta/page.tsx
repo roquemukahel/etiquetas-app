@@ -10,6 +10,7 @@ import { ESLOGAN } from '../../../lib/eslogan';
 import { armarLinkWhatsApp } from '../../../lib/whatsapp';
 import { codigoLlamada } from '../../../lib/paises';
 import EtiquetaSeccion from '../../../EtiquetaSeccion';
+import { medioLabel } from '../../../lib/cuentaCorriente';
 import { useT, useIdioma } from '../../../lib/idioma';
 import { localeDe } from '../../../lib/i18n/traducir';
 
@@ -126,6 +127,7 @@ export default function Boleta() {
   const locale = localeDe(idioma);
 
   const [orden, setOrden] = useState<Orden | null>(null);
+  const [desglosePagos, setDesglosePagos] = useState<{ medio: string; monto: number }[]>([]);
   const [canjes, setCanjes] = useState<CanjeEntregado[]>([]);
   const [negocio, setNegocio] = useState<Negocio | null>(null);
   const [loading, setLoading] = useState(true);
@@ -151,6 +153,28 @@ export default function Boleta() {
         .eq('estado', 'en_canje')
         .order('created_at');
       setCanjes((canjesData as any) ?? []);
+
+      // Desglose real de cómo se pagó — antes la boleta solo mostraba
+      // "Efectivo + Cuenta corriente" (la etiqueta armada en forma_pago) sin
+      // los montos de cada medio, así que un pago mixto no se podía auditar
+      // desde la boleta. `pagos` tiene la plata que entró de contado; lo que
+      // quedó a cuenta corriente no genera fila en `pagos` (ver
+      // construirPagos() en ordenes/nueva), así que se suma aparte desde
+      // cta_cte_movimientos.
+      const [{ data: pagosData }, { data: ctaCteData }] = await Promise.all([
+        supabase.from('pagos').select('medio, monto').eq('orden_id', id).eq('anulado', false),
+        // 'venta' = cargo único (cuenta corriente normal); 'cuota' = cada
+        // cuota de "Financiar en cuotas propias" (financiacion_crear_plan) —
+        // ambos representan plata de ESTA orden que quedó a cuenta corriente.
+        supabase.from('cta_cte_movimientos').select('monto').eq('orden_id', id).in('concepto', ['venta', 'cuota']).eq('anulado', false),
+      ]);
+      const porMedio = new Map<string, number>();
+      for (const p of (pagosData as { medio: string; monto: number }[]) ?? []) {
+        porMedio.set(p.medio, (porMedio.get(p.medio) ?? 0) + p.monto);
+      }
+      const totalCtaCte = ((ctaCteData as { monto: number }[]) ?? []).reduce((acc, m) => acc + m.monto, 0);
+      if (totalCtaCte > 0) porMedio.set('cuenta_corriente', (porMedio.get('cuenta_corriente') ?? 0) + totalCtaCte);
+      setDesglosePagos(Array.from(porMedio.entries()).map(([medio, monto]) => ({ medio, monto })));
 
       if (ordenData) {
         const url = `${window.location.origin}/boleta/${(ordenData as any).token_boleta}`;
@@ -473,11 +497,23 @@ export default function Boleta() {
           )}
         </div>
 
-        <div className="flex flex-wrap gap-x-8 gap-y-1 text-sm">
-          <p>
-            <span className="text-muted">{t('Método de pago')} </span>
+        <div className="flex flex-col gap-1 text-sm">
+          <span className="text-muted">{t('Método de pago')}</span>
+          {desglosePagos.length > 0 ? (
+            <div className="flex flex-col gap-0.5">
+              {desglosePagos.map((p) => (
+                <div key={p.medio} className="flex justify-between gap-4 max-w-[280px]">
+                  <span>{medioLabel(p.medio, t)}</span>
+                  <span className="font-medium">{fmt(p.monto)}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
             <span className="font-medium">{orden.forma_pago}</span>
-          </p>
+          )}
+        </div>
+
+        <div className="flex flex-wrap gap-x-8 gap-y-1 text-sm">
           {orden.vendedores?.nombre && (
             <p>
               <span className="text-muted">{t('Vendedor')} </span>

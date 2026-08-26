@@ -1324,6 +1324,9 @@ export const EN: Record<string, string> = {
   'Ventas del período que NO se financiaron en cuenta corriente.': 'Sales in the period that were NOT financed on a running balance.',
   'Ventas financiadas con cronograma propio — un crédito no es dinero cobrado hasta que se registra el pago.':
     "Sales financed with our own schedule — a credit isn't collected money until the payment is recorded.",
+  'Todo lo que facturaste en el período, incluido lo vendido a cuenta corriente/fiado — no es plata en mano. Para ver lo que realmente cobraste, mirá "Dinero ingresado".':
+    'Everything you invoiced in the period, including what was sold on credit — this isn\'t cash in hand. To see what you actually collected, check "Dinero ingresado".',
+  'incluye fiado': 'includes credit sales',
   'Ventas netas': 'Net sales',
   'Ventas netas menos costo histórico de venta, en lo que tiene costo cargado': 'Net sales minus historical cost of sale, on what has a cost logged',
   'Ventas que quedaron fiadas (cuenta corriente) en el período.': 'Sales left on store credit (running balance) in the period.',
@@ -2041,6 +2044,9 @@ export const EN: Record<string, string> = {
   'Falta asignar': 'Needs assigning',
   'Fecha de la 1ª cuota': '1st installment date',
   'Financiar en cuotas propias (con vencimientos)': 'Finance in-house in installments (with due dates)',
+  'Recargo por financiar (%)': 'Surcharge for financing (%)',
+  'Se suma': 'Adds',
+  'solo sobre el saldo financiado, no sobre el anticipo.': 'only on the financed balance, not on the down payment.',
   'Habilitando...': 'Enabling...',
   'Habilitar cuenta corriente para este cliente': 'Enable running balance for this customer',
   'Habilitar y usar en esta venta': 'Enable and use in this sale',

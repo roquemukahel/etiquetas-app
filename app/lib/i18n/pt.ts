@@ -1325,6 +1325,9 @@ export const PT: Record<string, string> = {
   'Ventas del período que NO se financiaron en cuenta corriente.': 'Vendas do período que NÃO foram financiadas em conta corrente.',
   'Ventas financiadas con cronograma propio — un crédito no es dinero cobrado hasta que se registra el pago.':
     'Vendas financiadas com cronograma próprio — um crédito não é dinheiro recebido até que o pagamento seja registrado.',
+  'Todo lo que facturaste en el período, incluido lo vendido a cuenta corriente/fiado — no es plata en mano. Para ver lo que realmente cobraste, mirá "Dinero ingresado".':
+    'Tudo o que você faturou no período, incluindo o que foi vendido a prazo/fiado — não é dinheiro em mãos. Para ver o que você realmente recebeu, veja "Dinheiro recebido".',
+  'incluye fiado': 'inclui fiado',
   'Ventas netas': 'Vendas líquidas',
   'Ventas netas menos costo histórico de venta, en lo que tiene costo cargado': 'Vendas líquidas menos custo histórico de venda, no que tem custo cadastrado',
   'Ventas que quedaron fiadas (cuenta corriente) en el período.': 'Vendas que ficaram fiadas (conta corrente) no período.',
@@ -2042,6 +2045,9 @@ export const PT: Record<string, string> = {
   'Falta asignar': 'Falta atribuir',
   'Fecha de la 1ª cuota': 'Data da 1ª parcela',
   'Financiar en cuotas propias (con vencimientos)': 'Financiar em parcelas próprias (com vencimentos)',
+  'Recargo por financiar (%)': 'Acréscimo por financiar (%)',
+  'Se suma': 'Adiciona',
+  'solo sobre el saldo financiado, no sobre el anticipo.': 'somente sobre o saldo financiado, não sobre o sinal.',
   'Habilitando...': 'Habilitando...',
   'Habilitar cuenta corriente para este cliente': 'Habilitar conta corrente para este cliente',
   'Habilitar y usar en esta venta': 'Habilitar e usar nesta venda',
