@@ -24,7 +24,7 @@ import {
 import { cambiarEstadoReparacion } from '../../lib/estadoReparacion';
 import { generarOrdenDeReparacion } from '../../lib/ordenesServicio';
 import { extraerStockInsuficiente } from '../../lib/repuestos';
-import { sanitizarDecimal } from '../../lib/numeros';
+import { sanitizarDecimal, formatearMonto } from '../../lib/numeros';
 import { comprimirImagen } from '../../lib/comprimirImagen';
 import SelectorColorAuto from '../../SelectorColorAuto';
 import Avatar from '../../Avatar';
@@ -742,7 +742,7 @@ export default function FichaReparacion() {
     let mensaje = '';
     if (tipo === 'recibido') mensaje = mensajeSeguimientoServicio(nombre, modelo, url);
     if (tipo === 'presupuesto') {
-      const monto = `$${((r.presupuesto_mano_obra || 0) + (r.presupuesto_repuestos || 0)).toLocaleString('es-AR')}`;
+      const monto = `$${formatearMonto((r.presupuesto_mano_obra || 0) + (r.presupuesto_repuestos || 0))}`;
       mensaje = mensajePresupuesto(nombre, modelo, monto, url);
     }
     if (tipo === 'repuesto') mensaje = mensajeEsperandoRepuesto(nombre, modelo, url);

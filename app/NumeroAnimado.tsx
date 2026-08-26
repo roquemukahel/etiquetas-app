@@ -30,9 +30,17 @@ export default function NumeroAnimado({
     const paso = (timestamp: number) => {
       if (inicio === null) inicio = timestamp;
       const progreso = Math.min(1, (timestamp - inicio) / duracionMs);
-      const facilitado = 1 - Math.pow(1 - progreso, 3);
-      setMostrado(Math.round(valor * facilitado));
-      if (progreso < 1) frame = requestAnimationFrame(paso);
+      // Redondeado SOLO mientras cuenta (un contador con decimales
+      // temblando 60 veces por segundo se ve roto) — al llegar al final
+      // se fija el valor EXACTO, no el redondeado, para no perder los
+      // centavos del número real una vez terminada la animación.
+      if (progreso >= 1) {
+        setMostrado(valor);
+      } else {
+        const facilitado = 1 - Math.pow(1 - progreso, 3);
+        setMostrado(Math.round(valor * facilitado));
+        frame = requestAnimationFrame(paso);
+      }
     };
 
     frame = requestAnimationFrame(paso);
@@ -42,7 +50,7 @@ export default function NumeroAnimado({
   return (
     <>
       {prefijo}
-      {mostrado.toLocaleString('es-AR')}
+      {mostrado.toLocaleString('es-AR', { maximumFractionDigits: 2 })}
     </>
   );
 }

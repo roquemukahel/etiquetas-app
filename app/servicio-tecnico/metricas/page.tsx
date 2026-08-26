@@ -6,6 +6,7 @@ import { crearClienteNavegador } from '../../lib/supabase/client';
 import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import { simboloMoneda } from '../../lib/monedas';
+import { formatearMonto } from '../../lib/numeros';
 import ServicioTecnicoTabs from '../../ServicioTecnicoTabs';
 import { RankingBarras, EvolucionBarras } from '../../estadisticas/graficos';
 import { StatCard, SeccionCard, EmptyState, SegmentedChips } from '../../estadisticas/ui';
@@ -157,7 +158,7 @@ export default function MetricasServicioTecnico() {
     );
   }
 
-  const fmt = (n: number) => `${moneda}${Math.round(n).toLocaleString('es-AR')}`;
+  const fmt = (n: number) => `${moneda}${formatearMonto(n)}`;
   const pct = (n: number | null) => (n == null ? '—' : `${n.toFixed(1).replace('.', ',')}%`);
 
   return (

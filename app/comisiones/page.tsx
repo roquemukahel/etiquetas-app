@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../lib/supabase/client';
 import { simboloMoneda } from '../lib/monedas';
+import { formatearMonto } from '../lib/numeros';
 import { useActor } from '../lib/actor';
 import { tienePermiso } from '../lib/permisos';
 import { registrarAuditoria } from '../lib/auditoria';
@@ -97,7 +98,7 @@ export default function Comisiones() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [puedeGestionar, actor?.id]);
 
-  const m = (n: number) => `${moneda}${Math.round(n).toLocaleString('es-AR')}`;
+  const m = (n: number) => `${moneda}${formatearMonto(n)}`;
 
   const tot = useMemo(() => {
     const t = { generada: 0, aprobada: 0, en_liquidacion: 0, pagada: 0, ajustesReversiones: 0, base: 0 };

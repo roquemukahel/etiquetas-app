@@ -6,7 +6,7 @@ import { crearClienteNavegador } from '../lib/supabase/client';
 import { useActor } from '../lib/actor';
 import { tienePermiso } from '../lib/permisos';
 import { simboloMoneda } from '../lib/monedas';
-import { sanitizarDecimal } from '../lib/numeros';
+import { sanitizarDecimal, formatearMonto } from '../lib/numeros';
 import { MEDIOS_PAGO, medioLabel } from '../lib/cuentaCorriente';
 import {
   obtenerEgresos,
@@ -219,7 +219,7 @@ export default function Egresos() {
             <div key={mon}>
               <p className="text-lg font-display font-semibold leading-none">
                 {simboloMoneda(mon)}
-                {Math.round(total).toLocaleString('es-AR')}
+                {formatearMonto(total)}
               </p>
               <p className="text-[11px] text-muted dark:text-dark-text-secondary mt-1">{t('Total')} {mon}</p>
             </div>
@@ -252,7 +252,7 @@ export default function Egresos() {
               <div className="flex items-center gap-2 shrink-0">
                 <span className="text-sm font-medium tabular-nums">
                   {simboloMoneda(e.moneda)}
-                  {Math.round(e.importe).toLocaleString('es-AR')}
+                  {formatearMonto(e.importe)}
                 </span>
                 <button onClick={() => setModalAnular(e)} className="text-xs text-bad underline">
                   {t('Anular')}
@@ -548,7 +548,7 @@ function ModalAnularEgreso({ egreso, onClose, onAnulado }: { egreso: Egreso; onC
         {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
         <p className="text-sm text-muted dark:text-dark-text-secondary">
           "{egreso.descripcion}" — {simboloMoneda(egreso.moneda)}
-          {Math.round(egreso.importe).toLocaleString('es-AR')}. {t('No se puede deshacer.')}
+          {formatearMonto(egreso.importe)}. {t('No se puede deshacer.')}
         </p>
         <div>
           <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Motivo (obligatorio)')}</label>

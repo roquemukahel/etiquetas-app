@@ -10,6 +10,7 @@ import { tienePermiso } from '../../../lib/permisos';
 import { registrarPagoLiquidacion } from '../../../lib/comisiones/operaciones';
 import { LABEL_ESTADO_LIQ, LABEL_TIPO_MOV, LABEL_TIPO_VENTA, type EstadoLiquidacion, type TipoMovimiento } from '../../../lib/comisiones/tipos';
 import { useT } from '../../../lib/idioma';
+import { formatearMonto } from '../../../lib/numeros';
 
 type Liq = {
   id: string;
@@ -75,7 +76,7 @@ export default function DetalleLiquidacion() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  const m = (n: number) => `${monedaSimbolo}${Math.round(n).toLocaleString('es-AR')}`;
+  const m = (n: number) => `${monedaSimbolo}${formatearMonto(n)}`;
 
   const pagar = async () => {
     if (!liq || !puedeGestionar) return;
@@ -98,8 +99,10 @@ export default function DetalleLiquidacion() {
       [t('Fecha')]: mv.fecha_hecho ? new Date(mv.fecha_hecho).toLocaleDateString('es-AR') : '',
       [t('Concepto')]: t(LABEL_TIPO_MOV[mv.tipo_movimiento]),
       [t('Tipo de venta')]: mv.tipo_venta ?? '',
-      [t('Base')]: Math.round(mv.base),
-      [t('Comisión')]: Math.round(mv.comision),
+      // Sin redondear a entero: es el CSV que el vendedor usa para
+      // reconciliar su pago, tiene que reflejar los centavos reales.
+      [t('Base')]: Math.round(mv.base * 100) / 100,
+      [t('Comisión')]: Math.round(mv.comision * 100) / 100,
       [t('Motivo')]: mv.motivo ?? '',
     }));
     const csv = Papa.unparse(filas);

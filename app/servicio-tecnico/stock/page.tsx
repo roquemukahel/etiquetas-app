@@ -7,7 +7,7 @@ import { registrarAuditoria } from '../../lib/auditoria';
 import { useActor, getActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import { simboloMoneda } from '../../lib/monedas';
-import { sanitizarDecimal } from '../../lib/numeros';
+import { sanitizarDecimal, formatearMonto } from '../../lib/numeros';
 import { extraerStockInsuficiente, extraerDisponibleInsuficiente } from '../../lib/repuestos';
 import { FINALIZADOS } from '../../lib/reparaciones';
 import ServicioTecnicoTabs from '../../ServicioTecnicoTabs';
@@ -589,7 +589,7 @@ export default function StockRepuestos() {
           <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-2.5 py-2 flex flex-col gap-0.5 col-span-2">
             <span className="text-base font-semibold">
               {moneda}
-              {Math.round(indicadores.valorTotal).toLocaleString('es-AR')}
+              {formatearMonto(indicadores.valorTotal)}
             </span>
             <span className="text-muted dark:text-dark-text-secondary">{t('Valor del inventario (a costo)')}</span>
           </div>
