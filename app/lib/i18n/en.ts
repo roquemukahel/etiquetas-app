@@ -64,6 +64,9 @@ export const EN: Record<string, string> = {
   'Ticket promedio': 'Average ticket',
   'vs. mes anterior': 'vs. last month',
   'Ver estadísticas completas': 'View full analytics',
+  '¡Sumate a nuestro canal de WhatsApp! Ahí compartimos noticias y novedades de Qovento.':
+    'Join our WhatsApp channel! We share Qovento news and updates there.',
+  'Unirme al canal': 'Join the channel',
   'En stock': 'In stock',
   Pendientes: 'Pending',
   'Actividad reciente': 'Recent activity',
@@ -230,6 +233,8 @@ export const EN: Record<string, string> = {
   'Enlace para que cualquiera vea tu stock disponible': 'A link so anyone can see your available stock',
   'Categorías de egresos': 'Expense categories',
   'Alquiler, sueldos, impuestos y las que crees': 'Rent, payroll, taxes, and any you create',
+  'Áreas de egresos': 'Expense areas',
+  'Local, taller, o el lugar físico que quieras distinguir dentro de una sucursal': 'Storefront, workshop, or whatever physical spot you want to tell apart within a branch',
   'Suscripción': 'Subscription',
   'Estado del pago y plan de Qovento': 'Your Qovento plan and payment status',
   'Reportá un problema o dejanos un mensaje': 'Report an issue or leave us a message',
@@ -1628,6 +1633,18 @@ export const EN: Record<string, string> = {
   'Sin egresos en este rango.': 'No expenses in this range.',
   'Sin especificar': 'Unspecified',
   'Sí, anular': 'Yes, void it',
+  Sucursal: 'Branch',
+  'Sin sucursal': 'No branch',
+  Área: 'Area',
+  'Filtrar por área': 'Filter by area',
+  'Todas las áreas': 'All areas',
+  'No tenés permiso para gestionar áreas de egresos.': "You don't have permission to manage expense areas.",
+  'Un área es un lugar físico dentro de una sucursal (por ejemplo Local o Taller) que querés distinguir al registrar un gasto — se combina con la sucursal, no la reemplaza. Te dejamos "Local" y "Taller" cargados para arrancar; renombralos, agregá los que te sirvan, o archivá los que no uses.':
+    'An area is a physical spot within a branch (for example Storefront or Workshop) that you want to tell apart when logging an expense — it combines with the branch, it doesn\'t replace it. We\'ve preloaded "Storefront" and "Workshop" to get you started; rename them, add the ones you need, or archive the ones you don\'t use.',
+  'Nueva área': 'New area',
+  'Ej. Depósito': 'e.g. Warehouse',
+  'Todavía no creaste ninguna área.': "You haven't created any area yet.",
+  '¿Archivar el área': 'Archive the area',
   Tipo: 'Type',
   'Gasto operativo': 'Operating expense',
   'Retiro de dinero': 'Cash withdrawal',
@@ -2597,8 +2614,8 @@ export const EN: Record<string, string> = {
     "For security, the existing PIN isn't shown. Leave it as is to keep it, or type a new one to replace it.",
 
   // Productos (cross-branch master catalog) + Internal transfer.
-  'Vista de consulta de todo el catálogo. Para editar cantidad, precio o costo de un producto, hacelo desde Stock.':
-    "A read-only view of the whole catalog. To edit a product's quantity, price, or cost, do it from Stock.",
+  'Vista de todo el catálogo. Tocá el ✏️ de una fila para editar categoría, marca, costo, precio y más — la cantidad se sigue ajustando desde Stock.':
+    "A view of the whole catalog. Tap the ✏️ on a row to edit category, brand, cost, price, and more — quantity still gets adjusted from Stock.",
   'Nuevo remito': 'New transfer',
   'Buscar producto o marca...': 'Search product or brand...',
   'Ver remitos emitidos': 'View issued transfers',
@@ -2607,6 +2624,9 @@ export const EN: Record<string, string> = {
   'Stock Total': 'Total Stock',
   'Stock Sucursal': 'Branch Stock',
   Final: 'Final',
+  'Editar producto': 'Edit product',
+  'Stock mínimo': 'Minimum stock',
+  'Poné un nombre.': 'Enter a name.',
   'Buscar producto...': 'Search product...',
   'Remito generado': 'Transfer generated',
   'Ver remitos': 'View transfers',

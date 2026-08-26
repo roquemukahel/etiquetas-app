@@ -92,6 +92,45 @@ export async function crearProductoMaestro(
   return { id: (data as { id: string }).id };
 }
 
+export async function actualizarProductoMaestro(
+  supabase: SupabaseClient,
+  id: string,
+  params: {
+    nombre: string;
+    marca?: string | null;
+    categoriaId?: string | null;
+    precio?: number | null;
+    costo?: number | null;
+    sku?: string | null;
+    codigoBarras?: string | null;
+    garantiaDias?: number | null;
+    stockMinimo?: number | null;
+  }
+): Promise<{ ok: true } | { error: string }> {
+  const nombre = params.nombre.trim();
+  if (!nombre) return { error: 'El nombre no puede estar vacío.' };
+  const marca = params.marca?.trim() || null;
+  if (await productoMaestroDuplicado(supabase, nombre, marca, id)) {
+    return { error: `Ya existe "${nombre}"${marca ? ` (${marca})` : ''} en el catálogo.` };
+  }
+  const { error } = await supabase
+    .from('productos_maestro')
+    .update({
+      nombre,
+      marca,
+      categoria_id: params.categoriaId || null,
+      precio: params.precio ?? null,
+      costo: params.costo ?? null,
+      sku: params.sku?.trim() || null,
+      codigo_barras: params.codigoBarras?.trim() || null,
+      garantia_dias: params.garantiaDias ?? null,
+      stock_minimo: params.stockMinimo ?? null,
+    })
+    .eq('id', id);
+  if (error) return { error: error.message };
+  return { ok: true };
+}
+
 // Cuánto stock hay cargado bajo un maestro — para avisar antes de archivar.
 export async function contarEnProductoMaestro(supabase: SupabaseClient, maestroId: string): Promise<number> {
   const { count } = await supabase.from('productos').select('id', { count: 'exact', head: true }).eq('producto_maestro_id', maestroId);

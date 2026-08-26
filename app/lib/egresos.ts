@@ -28,6 +28,13 @@ export type CategoriaEgreso = {
   archivada: boolean;
 };
 
+export type AreaEgreso = {
+  id: string;
+  nombre: string;
+  orden: number;
+  archivada: boolean;
+};
+
 export type Egreso = {
   id: string;
   fecha: string; // 'YYYY-MM-DD'
@@ -44,7 +51,72 @@ export type Egreso = {
   registrado_por_foto_url: string | null;
   created_at: string;
   sucursal_id?: string | null;
+  area_id?: string | null;
 };
+
+// ---------- Áreas (Local / Taller / lo que el negocio use) ----------
+// egresos_areas_supabase.sql es opcional — si un negocio no lo corrió, la
+// tabla no existe todavía. En ese caso devolvemos [] en vez de tirar error,
+// igual que obtenerSucursales: el selector de Área simplemente no aparece.
+export async function obtenerAreasEgresos(supabase: SupabaseClient, incluirArchivadas = false): Promise<AreaEgreso[]> {
+  let query = supabase.from('egresos_areas').select('id, nombre, orden, archivada').order('orden', { ascending: true });
+  if (!incluirArchivadas) query = query.eq('archivada', false);
+  const { data, error } = await query;
+  if (error) return [];
+  return (data as AreaEgreso[]) ?? [];
+}
+
+async function nombreAreaDuplicado(supabase: SupabaseClient, nombre: string, excluirId?: string): Promise<boolean> {
+  const { data } = await supabase.from('egresos_areas').select('id').eq('archivada', false).ilike('nombre', nombre.trim());
+  return ((data as { id: string }[]) ?? []).some((a) => a.id !== excluirId);
+}
+
+export async function crearAreaEgreso(supabase: SupabaseClient, nombre: string, orden: number): Promise<{ id: string } | { error: string }> {
+  const limpio = nombre.trim();
+  if (!limpio) return { error: 'El nombre no puede estar vacío.' };
+  if (await nombreAreaDuplicado(supabase, limpio)) return { error: `Ya existe un área activa llamada "${limpio}".` };
+  const { data, error } = await supabase.from('egresos_areas').insert({ nombre: limpio, orden }).select('id').single();
+  if (error) return { error: error.message };
+  return { id: (data as { id: string }).id };
+}
+
+export async function renombrarAreaEgreso(supabase: SupabaseClient, id: string, nombre: string): Promise<{ ok: true } | { error: string }> {
+  const limpio = nombre.trim();
+  if (!limpio) return { error: 'El nombre no puede estar vacío.' };
+  if (await nombreAreaDuplicado(supabase, limpio, id)) return { error: `Ya existe un área activa llamada "${limpio}".` };
+  const { error } = await supabase.from('egresos_areas').update({ nombre: limpio, updated_at: new Date().toISOString() }).eq('id', id);
+  if (error) return { error: error.message };
+  return { ok: true };
+}
+
+export async function reordenarAreasEgresos(supabase: SupabaseClient, ordenIds: string[]): Promise<{ ok: true } | { error: string }> {
+  for (let i = 0; i < ordenIds.length; i++) {
+    const { error } = await supabase.from('egresos_areas').update({ orden: i }).eq('id', ordenIds[i]);
+    if (error) return { error: error.message };
+  }
+  return { ok: true };
+}
+
+// Cuántos egresos hay cargados bajo un área — para avisar antes de archivar.
+export async function contarEnAreaEgreso(supabase: SupabaseClient, areaId: string): Promise<number> {
+  const { count } = await supabase.from('egresos').select('id', { count: 'exact', head: true }).eq('area_id', areaId).eq('anulado', false);
+  return count ?? 0;
+}
+
+export async function archivarAreaEgreso(supabase: SupabaseClient, id: string): Promise<{ ok: true } | { error: string }> {
+  const { error } = await supabase.from('egresos_areas').update({ archivada: true }).eq('id', id);
+  if (error) return { error: error.message };
+  return { ok: true };
+}
+
+export async function restaurarAreaEgreso(supabase: SupabaseClient, id: string, nombre: string): Promise<{ ok: true } | { error: string }> {
+  if (await nombreAreaDuplicado(supabase, nombre, id)) {
+    return { error: `Ya hay un área activa llamada "${nombre}" — renombrá una de las dos antes de restaurar.` };
+  }
+  const { error } = await supabase.from('egresos_areas').update({ archivada: false }).eq('id', id);
+  if (error) return { error: error.message };
+  return { ok: true };
+}
 
 // ---------- Categorías ----------
 export async function obtenerCategoriasEgresos(supabase: SupabaseClient, incluirArchivadas = false): Promise<CategoriaEgreso[]> {
@@ -120,7 +192,7 @@ export async function obtenerEgresos(
 ): Promise<Egreso[]> {
   let query = supabase
     .from('egresos')
-    .select('id, fecha, categoria_id, tipo, descripcion, importe, moneda, medio_pago, proveedor_id, notas, anulado, registrado_por_nombre, registrado_por_foto_url, created_at, sucursal_id')
+    .select('id, fecha, categoria_id, tipo, descripcion, importe, moneda, medio_pago, proveedor_id, notas, anulado, registrado_por_nombre, registrado_por_foto_url, created_at, sucursal_id, area_id')
     .eq('anulado', false)
     .order('fecha', { ascending: false })
     .order('created_at', { ascending: false });
@@ -143,6 +215,7 @@ export async function crearEgreso(
     proveedorId: string | null;
     notas?: string;
     sucursalId?: string | null;
+    areaId?: string | null;
   }
 ): Promise<{ id: string } | { error: string }> {
   const descripcion = params.descripcion.trim();
@@ -165,6 +238,7 @@ export async function crearEgreso(
       registrado_por_nombre: actor?.nombre ?? null,
       registrado_por_foto_url: actor?.fotoUrl ?? null,
       ...(params.sucursalId ? { sucursal_id: params.sucursalId } : {}),
+      ...(params.areaId ? { area_id: params.areaId } : {}),
     })
     .select('id')
     .single();

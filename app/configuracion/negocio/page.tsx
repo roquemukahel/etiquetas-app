@@ -317,7 +317,7 @@ export default function DatosNegocio() {
                   key={m.codigo}
                   className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm cursor-pointer ${
                     elegida
-                      ? 'border-accent dark:border-dark-accent bg-accent-soft'
+                      ? 'border-accent dark:border-dark-accent bg-accent-soft dark:bg-dark-accent-soft'
                       : 'border-border dark:border-dark-border'
                   } ${deshabilitado ? 'opacity-40 cursor-not-allowed' : ''}`}
                 >
@@ -400,7 +400,7 @@ export default function DatosNegocio() {
                 <label
                   key={m.id}
                   className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-sm cursor-pointer ${
-                    elegida ? 'border-accent dark:border-dark-accent bg-accent-soft' : 'border-border dark:border-dark-border'
+                    elegida ? 'border-accent dark:border-dark-accent bg-accent-soft dark:bg-dark-accent-soft' : 'border-border dark:border-dark-border'
                   }`}
                 >
                   <input

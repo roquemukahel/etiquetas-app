@@ -23,6 +23,7 @@ const SECCIONES: Seccion[] = [
   { href: '/configuracion/categorias-stock', titulo: 'Categorías de stock', desc: 'Celulares, accesorios y las que crees para tu negocio', permiso: 'agregar_stock' },
   { href: '/configuracion/stock-publico', titulo: 'Stock público', desc: 'Enlace para que cualquiera vea tu stock disponible', permiso: 'agregar_stock' },
   { href: '/configuracion/egresos-categorias', titulo: 'Categorías de egresos', desc: 'Alquiler, sueldos, impuestos y las que crees', permiso: 'gestionar_egresos' },
+  { href: '/configuracion/egresos-areas', titulo: 'Áreas de egresos', desc: 'Local, taller, o el lugar físico que quieras distinguir dentro de una sucursal', permiso: 'gestionar_egresos' },
   { href: '/configuracion/suscripcion', titulo: 'Suscripción', desc: 'Estado del pago y plan de Qovento' },
   { href: '/configuracion/soporte', titulo: 'Soporte', desc: 'Reportá un problema o dejanos un mensaje' },
   { href: '/configuracion/auditoria', titulo: 'Auditoría', desc: 'Quién hizo qué y cuándo', permiso: 'auditoria' },

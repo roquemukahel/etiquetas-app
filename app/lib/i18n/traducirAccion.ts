@@ -95,6 +95,28 @@ const PATRONES: { re: RegExp; pt: Constructor; en: Constructor }[] = [
     en: (m) => `restored the expense category "${m[1]}"`,
   },
 
+  // --- Áreas de egresos (Local/Taller) ---
+  {
+    re: /^creó el área de egresos "(.+)"$/,
+    pt: (m) => `criou a área de despesas "${m[1]}"`,
+    en: (m) => `created the expense area "${m[1]}"`,
+  },
+  {
+    re: /^renombró el área de egresos "(.+)" a "(.+)"$/,
+    pt: (m) => `renomeou a área de despesas "${m[1]}" para "${m[2]}"`,
+    en: (m) => `renamed the expense area "${m[1]}" to "${m[2]}"`,
+  },
+  {
+    re: /^archivó el área de egresos "(.+)"$/,
+    pt: (m) => `arquivou a área de despesas "${m[1]}"`,
+    en: (m) => `archived the expense area "${m[1]}"`,
+  },
+  {
+    re: /^restauró el área de egresos "(.+)"$/,
+    pt: (m) => `restaurou a área de despesas "${m[1]}"`,
+    en: (m) => `restored the expense area "${m[1]}"`,
+  },
+
   // --- Servicio Técnico ---
   {
     re: /^cambió el estado de la reparación (\S*) \((.+?)\) de "(.+?)" a "(.+?)"(.*)$/,
@@ -149,6 +171,11 @@ const PATRONES: { re: RegExp; pt: Constructor; en: Constructor }[] = [
     re: /^editó el accesorio "(.+)"$/,
     pt: (m) => `editou o acessório "${m[1]}"`,
     en: (m) => `edited the accessory "${m[1]}"`,
+  },
+  {
+    re: /^editó el producto "(.+)" del catálogo$/,
+    pt: (m) => `editou o produto "${m[1]}" do catálogo`,
+    en: (m) => `edited the product "${m[1]}" in the catalog`,
   },
 
   // --- Personas / clientes / proveedores ---

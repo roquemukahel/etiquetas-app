@@ -13,9 +13,11 @@ import {
   crearEgreso,
   anularEgreso,
   obtenerCategoriasEgresos,
+  obtenerAreasEgresos,
   ETIQUETA_TIPO_EGRESO,
   type Egreso,
   type CategoriaEgreso,
+  type AreaEgreso,
   type TipoEgreso,
 } from '../lib/egresos';
 import { QCard } from '../QCard';
@@ -57,7 +59,9 @@ export default function Egresos() {
   useEffect(() => {
     setFiltroSucursal(sucursalActual.id ?? '');
   }, [sucursalActual.id]);
+  const [filtroArea, setFiltroArea] = useState('');
   const [categorias, setCategorias] = useState<CategoriaEgreso[]>([]);
+  const [areas, setAreas] = useState<AreaEgreso[]>([]);
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [monedaCodigo, setMonedaCodigo] = useState('ARS');
   const [monedasDisponibles, setMonedasDisponibles] = useState<string[]>(['ARS']);
@@ -74,12 +78,14 @@ export default function Egresos() {
     setLoading(true);
     setError(null);
     try {
-      const [egresosData, categoriasData] = await Promise.all([
+      const [egresosData, categoriasData, areasData] = await Promise.all([
         obtenerEgresos(supabase, { desde, hasta }),
         obtenerCategoriasEgresos(supabase),
+        obtenerAreasEgresos(supabase),
       ]);
       setEgresos(egresosData);
       setCategorias(categoriasData);
+      setAreas(areasData);
     } catch (e) {
       setError(t('No pudimos cargar los egresos:') + ' ' + (e instanceof Error ? e.message : t('error desconocido')));
     }
@@ -121,8 +127,11 @@ export default function Egresos() {
   const nombreCategoria = (id: string | null) => (id ? categorias.find((c) => c.id === id)?.nombre ?? t('Categoría eliminada') : t('Sin categoría'));
 
   const egresosFiltrados = useMemo(
-    () => (filtroSucursal ? egresos.filter((e) => e.sucursal_id === filtroSucursal) : egresos),
-    [egresos, filtroSucursal]
+    () =>
+      egresos
+        .filter((e) => !filtroSucursal || e.sucursal_id === filtroSucursal)
+        .filter((e) => !filtroArea || e.area_id === filtroArea),
+    [egresos, filtroSucursal, filtroArea]
   );
 
   // Total por moneda — nunca se suman monedas distintas.
@@ -169,21 +178,38 @@ export default function Egresos() {
         </div>
       </div>
 
-      {sucursales.length > 1 && (
-        <select
-          value={filtroSucursal}
-          onChange={(e) => setFiltroSucursal(e.target.value)}
-          aria-label={t('Filtrar por sucursal')}
-          className="self-start bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2.5 py-1.5 text-xs"
-        >
-          <option value="">🏬 {t('Todas las sucursales')}</option>
-          {sucursales.map((s) => (
-            <option key={s.id} value={s.id}>
-              🏬 {s.nombre}
-            </option>
-          ))}
-        </select>
-      )}
+      <div className="flex flex-wrap gap-2">
+        {sucursales.length > 1 && (
+          <select
+            value={filtroSucursal}
+            onChange={(e) => setFiltroSucursal(e.target.value)}
+            aria-label={t('Filtrar por sucursal')}
+            className="self-start bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2.5 py-1.5 text-xs"
+          >
+            <option value="">🏬 {t('Todas las sucursales')}</option>
+            {sucursales.map((s) => (
+              <option key={s.id} value={s.id}>
+                🏬 {s.nombre}
+              </option>
+            ))}
+          </select>
+        )}
+        {areas.length > 0 && (
+          <select
+            value={filtroArea}
+            onChange={(e) => setFiltroArea(e.target.value)}
+            aria-label={t('Filtrar por área')}
+            className="self-start bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2.5 py-1.5 text-xs"
+          >
+            <option value="">{t('Todas las áreas')}</option>
+            {areas.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.nombre}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
 
       <QCard firma padding="sm" className="flex flex-wrap gap-4">
         {totalesPorMoneda.length === 0 ? (
@@ -218,6 +244,8 @@ export default function Egresos() {
                 <p className="text-[11px] text-muted dark:text-dark-text-secondary">
                   {new Date(e.fecha + 'T00:00:00').toLocaleDateString('es-AR')} · {nombreCategoria(e.categoria_id)} · {t(ETIQUETA_TIPO_EGRESO[e.tipo])}
                   {e.medio_pago ? ` · ${medioLabel(e.medio_pago, t)}` : ''}
+                  {sucursales.length > 1 ? ` · 🏬 ${sucursales.find((s) => s.id === e.sucursal_id)?.nombre ?? t('Sin sucursal')}` : ''}
+                  {areas.length > 0 && e.area_id ? ` · ${areas.find((a) => a.id === e.area_id)?.nombre ?? ''}` : ''}
                   {e.registrado_por_nombre ? ` · ${e.registrado_por_nombre}` : ''}
                 </p>
               </div>
@@ -239,6 +267,8 @@ export default function Egresos() {
         <ModalNuevoEgreso
           categorias={categorias}
           proveedores={proveedores}
+          sucursales={sucursales}
+          areas={areas}
           monedaDefault={monedaCodigo}
           monedasDisponibles={monedasDisponibles}
           onClose={() => setModalNuevo(false)}
@@ -266,6 +296,8 @@ export default function Egresos() {
 function ModalNuevoEgreso({
   categorias,
   proveedores,
+  sucursales,
+  areas,
   monedaDefault,
   monedasDisponibles,
   onClose,
@@ -273,6 +305,8 @@ function ModalNuevoEgreso({
 }: {
   categorias: CategoriaEgreso[];
   proveedores: Proveedor[];
+  sucursales: Sucursal[];
+  areas: AreaEgreso[];
   monedaDefault: string;
   monedasDisponibles: string[];
   onClose: () => void;
@@ -289,6 +323,8 @@ function ModalNuevoEgreso({
   const [moneda, setMoneda] = useState(monedaDefault);
   const [medioPago, setMedioPago] = useState('');
   const [proveedorId, setProveedorId] = useState('');
+  const [sucursalId, setSucursalId] = useState(sucursalActual.id ?? '');
+  const [areaId, setAreaId] = useState('');
   const [notas, setNotas] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
@@ -315,7 +351,8 @@ function ModalNuevoEgreso({
       medioPago: medioPago || null,
       proveedorId: proveedorId || null,
       notas,
-      sucursalId: sucursalActual.id,
+      sucursalId: sucursalId || null,
+      areaId: areaId || null,
     });
     setGuardando(false);
     if ('error' in resultado) {
@@ -430,6 +467,36 @@ function ModalNuevoEgreso({
             </select>
           </div>
         </div>
+        {(sucursales.length > 1 || areas.length > 0) && (
+          <div className="grid grid-cols-2 gap-3">
+            {sucursales.length > 1 && (
+              <div>
+                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Sucursal')}</label>
+                <select value={sucursalId} onChange={(e) => setSucursalId(e.target.value)} className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm">
+                  <option value="">{t('Sin especificar')}</option>
+                  {sucursales.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      🏬 {s.nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {areas.length > 0 && (
+              <div>
+                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Área')}</label>
+                <select value={areaId} onChange={(e) => setAreaId(e.target.value)} className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm">
+                  <option value="">{t('Sin especificar')}</option>
+                  {areas.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+        )}
         <div>
           <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Notas (opcional)')}</label>
           <textarea

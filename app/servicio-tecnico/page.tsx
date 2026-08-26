@@ -267,8 +267,37 @@ export default function ServicioTecnico() {
     );
   }, [reparacionesSucursal, orden]);
 
+  // Igual orden que reparacionesOrdenadas pero SIN el recorte por sucursal
+  // — solo existe para el caso de abajo, cuando hay texto de búsqueda.
+  const todasOrdenadas = useMemo(() => {
+    const signo = orden === 'recientes' ? -1 : 1;
+    return [...reparaciones].sort(
+      (a, b) => signo * (new Date(a.fecha_ingreso_servicio).getTime() - new Date(b.fecha_ingreso_servicio).getTime())
+    );
+  }, [reparaciones, orden]);
+
   const filtrados = useMemo(() => {
     const q = busquedaDebounced.trim().toLowerCase();
+    // Con texto de búsqueda se busca en TODAS las reparaciones del negocio
+    // — todas las sucursales, técnicos y estados, ignorando esos tres
+    // filtros — no solo dentro de lo que ya está filtrado. Antes, buscar
+    // un equipo puntual por IMEI/orden/cliente solo miraba adentro de la
+    // sucursal y el técnico ya seleccionados (y de "activas", que excluye
+    // entregados/cancelados): un equipo derivado a otra sucursal, asignado
+    // a otro técnico, o ya entregado, se volvía invisible en la búsqueda
+    // aunque uno tuviera el dato exacto para encontrarlo.
+    if (q) {
+      return todasOrdenadas.filter((r) => {
+        const nombreCliente = r.clientes ? `${r.clientes.nombre} ${r.clientes.apellido || ''}`.trim().toLowerCase() : '';
+        return (
+          r.numero_orden?.toLowerCase().includes(q) ||
+          r.modelo?.toLowerCase().includes(q) ||
+          r.imei?.toLowerCase().includes(q) ||
+          nombreCliente.includes(q) ||
+          r.clientes?.telefono?.includes(q)
+        );
+      });
+    }
     return reparacionesOrdenadas.filter((r) => {
       if (filtroIndicador === 'activas' && FINALIZADOS.includes(r.estado)) return false;
       if (filtroIndicador === 'demoradas' && !esDemorado(r)) return false;
@@ -276,19 +305,9 @@ export default function ServicioTecnico() {
       if (filtroIndicador === 'repuesto' && r.estado !== 'esperando_repuesto') return false;
       if (filtroIndicador === 'listas' && r.estado !== 'listo_para_entregar') return false;
       if (filtroTecnico && r.tecnico_id !== filtroTecnico) return false;
-      if (q) {
-        const nombreCliente = r.clientes ? `${r.clientes.nombre} ${r.clientes.apellido || ''}`.trim().toLowerCase() : '';
-        const coincide =
-          r.numero_orden?.toLowerCase().includes(q) ||
-          r.modelo?.toLowerCase().includes(q) ||
-          r.imei?.toLowerCase().includes(q) ||
-          nombreCliente.includes(q) ||
-          r.clientes?.telefono?.includes(q);
-        if (!coincide) return false;
-      }
       return true;
     });
-  }, [reparacionesOrdenadas, filtroIndicador, filtroTecnico, busquedaDebounced]);
+  }, [reparacionesOrdenadas, todasOrdenadas, filtroIndicador, filtroTecnico, busquedaDebounced]);
 
   const hayFiltrosActivos = filtroIndicador !== null || filtroTecnico !== '' || busqueda.trim() !== '';
   const limpiarFiltros = () => {
@@ -1507,24 +1526,30 @@ export default function ServicioTecnico() {
 
           <div className="flex flex-col gap-2">
             {filtrados.map((r) => (
-              <TarjetaReparacion
-                key={r.id}
-                r={r}
-                nombreTecnico={nombreTecnico}
-                guardando={guardando}
-                menuAbierto={menuAbierto}
-                setMenuAbierto={setMenuAbierto}
-                tecnicos={tecnicos}
-                onAsignarTecnico={asignarTecnico}
-                onCambiarEstado={cambiarEstado}
-                onWhatsApp={enviarWhatsApp}
-                onArchivar={archivarCancelar}
-                onEliminar={eliminarDefinitivo}
-                onAgregarAlStock={agregarAlStock}
-                onEntregadoCliente={marcarEntregadoCliente}
-                imagenesCarpetas={imagenesCarpetas}
-                puedeAgregarStock={puedeAgregarStock}
-              />
+              <div key={r.id} className="flex flex-col gap-1">
+                {busquedaDebounced.trim() !== '' && sucursales.length > 1 && (
+                  <span className="self-start text-[10px] font-medium text-accent dark:text-dark-accent bg-accent-soft dark:bg-dark-accent-soft rounded-full px-2 py-0.5">
+                    🏬 {sucursales.find((s) => s.id === r.sucursal_id)?.nombre ?? t('Sin sucursal')}
+                  </span>
+                )}
+                <TarjetaReparacion
+                  r={r}
+                  nombreTecnico={nombreTecnico}
+                  guardando={guardando}
+                  menuAbierto={menuAbierto}
+                  setMenuAbierto={setMenuAbierto}
+                  tecnicos={tecnicos}
+                  onAsignarTecnico={asignarTecnico}
+                  onCambiarEstado={cambiarEstado}
+                  onWhatsApp={enviarWhatsApp}
+                  onArchivar={archivarCancelar}
+                  onEliminar={eliminarDefinitivo}
+                  onAgregarAlStock={agregarAlStock}
+                  onEntregadoCliente={marcarEntregadoCliente}
+                  imagenesCarpetas={imagenesCarpetas}
+                  puedeAgregarStock={puedeAgregarStock}
+                />
+              </div>
             ))}
           </div>
         </>

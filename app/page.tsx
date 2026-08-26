@@ -18,6 +18,7 @@ import IlustracionModulo from './inicio/IlustracionesModulos';
 import OjoResumenFinanciero from './OjoResumenFinanciero';
 import ProductosMasVendidos from './ProductosMasVendidos';
 import QoviLateral from './QoviLateral';
+import QoviBurbujaWhatsApp from './QoviBurbujaWhatsApp';
 import AvisoPruebaPorVencer from './AvisoPruebaPorVencer';
 import { obtenerIdiomaServidor, traducir } from './lib/idiomaServidor';
 import { localeDe } from './lib/i18n/traducir';
@@ -591,9 +592,10 @@ export default async function Home() {
         {t('Resumen financiero')}
       </p>
       <div className="lg:grid lg:grid-cols-3 lg:gap-6 flex flex-col gap-6 animate-fade-in-up" style={{ animationDelay: '120ms' }}>
+        <div className="relative lg:col-span-2">
         <Link
           href="/estadisticas"
-          className="qv-card qv-financial group relative lg:col-span-2 rounded-2xl bg-gradient-to-br from-ink to-[#1B2540] dark:from-dark-surface dark:to-dark-bg text-white p-6 flex flex-col gap-4 shadow-elevated hover:opacity-95 transition-opacity active:scale-[0.99]"
+          className="qv-card qv-financial group relative rounded-2xl bg-gradient-to-br from-ink to-[#1B2540] dark:from-dark-surface dark:to-dark-bg text-white p-6 flex flex-col gap-4 shadow-elevated hover:opacity-95 transition-opacity active:scale-[0.99]"
         >
           <QoviLateral />
           <OjoResumenFinanciero>
@@ -646,6 +648,8 @@ export default async function Home() {
 
           <span className="text-xs text-white/50 group-hover:text-white/70">{t('Ver estadísticas completas')} &rarr;</span>
         </Link>
+        <QoviBurbujaWhatsApp />
+        </div>
 
         <ProductosMasVendidos telefonos={masVendidosTelefonos} accesorios={masVendidosAccesorios} />
       </div>

@@ -65,6 +65,9 @@ export const PT: Record<string, string> = {
   'Ticket promedio': 'Ticket médio',
   'vs. mes anterior': 'vs. mês anterior',
   'Ver estadísticas completas': 'Ver estatísticas completas',
+  '¡Sumate a nuestro canal de WhatsApp! Ahí compartimos noticias y novedades de Qovento.':
+    'Entre no nosso canal do WhatsApp! Lá compartilhamos notícias e novidades do Qovento.',
+  'Unirme al canal': 'Entrar no canal',
   'En stock': 'Em estoque',
   Pendientes: 'Pendentes',
   'Actividad reciente': 'Atividade recente',
@@ -231,6 +234,8 @@ export const PT: Record<string, string> = {
   'Enlace para que cualquiera vea tu stock disponible': 'Link para qualquer pessoa ver seu estoque disponível',
   'Categorías de egresos': 'Categorias de despesas',
   'Alquiler, sueldos, impuestos y las que crees': 'Aluguel, salários, impostos e as que você criar',
+  'Áreas de egresos': 'Áreas de despesas',
+  'Local, taller, o el lugar físico que quieras distinguir dentro de una sucursal': 'Loja, oficina, ou o local físico que você queira distinguir dentro de uma filial',
   'Suscripción': 'Assinatura',
   'Estado del pago y plan de Qovento': 'Status do pagamento e plano do Qovento',
   'Reportá un problema o dejanos un mensaje': 'Relate um problema ou deixe uma mensagem',
@@ -1629,6 +1634,18 @@ export const PT: Record<string, string> = {
   'Sin egresos en este rango.': 'Sem despesas neste intervalo.',
   'Sin especificar': 'Sem especificar',
   'Sí, anular': 'Sim, anular',
+  Sucursal: 'Filial',
+  'Sin sucursal': 'Sem filial',
+  Área: 'Área',
+  'Filtrar por área': 'Filtrar por área',
+  'Todas las áreas': 'Todas as áreas',
+  'No tenés permiso para gestionar áreas de egresos.': 'Você não tem permissão para gerenciar áreas de despesas.',
+  'Un área es un lugar físico dentro de una sucursal (por ejemplo Local o Taller) que querés distinguir al registrar un gasto — se combina con la sucursal, no la reemplaza. Te dejamos "Local" y "Taller" cargados para arrancar; renombralos, agregá los que te sirvan, o archivá los que no uses.':
+    'Uma área é um local físico dentro de uma filial (por exemplo Loja ou Oficina) que você quer distinguir ao registrar um gasto — se combina com a filial, não a substitui. Deixamos "Loja" e "Oficina" cadastradas para começar; renomeie, adicione as que precisar, ou arquive as que não usar.',
+  'Nueva área': 'Nova área',
+  'Ej. Depósito': 'Ex. Depósito',
+  'Todavía no creaste ninguna área.': 'Você ainda não criou nenhuma área.',
+  '¿Archivar el área': 'Arquivar a área',
   Tipo: 'Tipo',
   'Gasto operativo': 'Gasto operacional',
   'Retiro de dinero': 'Retirada de dinheiro',
@@ -2598,8 +2615,8 @@ export const PT: Record<string, string> = {
     'Por segurança, o PIN já cadastrado não é exibido. Deixe assim para não mudá-lo, ou digite um novo para substituí-lo.',
 
   // Productos (catálogo maestro cruzado entre sucursales) + Remito Interno.
-  'Vista de consulta de todo el catálogo. Para editar cantidad, precio o costo de un producto, hacelo desde Stock.':
-    'Visualização de consulta de todo o catálogo. Para editar quantidade, preço ou custo de um produto, faça isso em Estoque.',
+  'Vista de todo el catálogo. Tocá el ✏️ de una fila para editar categoría, marca, costo, precio y más — la cantidad se sigue ajustando desde Stock.':
+    'Visualização de todo o catálogo. Toque no ✏️ de uma linha para editar categoria, marca, custo, preço e mais — a quantidade continua se ajustando em Estoque.',
   'Nuevo remito': 'Nova transferência',
   'Buscar producto o marca...': 'Buscar produto ou marca...',
   'Ver remitos emitidos': 'Ver transferências emitidas',
@@ -2608,6 +2625,9 @@ export const PT: Record<string, string> = {
   'Stock Total': 'Estoque Total',
   'Stock Sucursal': 'Estoque da Filial',
   Final: 'Final',
+  'Editar producto': 'Editar produto',
+  'Stock mínimo': 'Estoque mínimo',
+  'Poné un nombre.': 'Coloque um nome.',
   'Buscar producto...': 'Buscar produto...',
   'Remito generado': 'Transferência gerada',
   'Ver remitos': 'Ver transferências',

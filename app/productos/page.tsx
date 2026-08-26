@@ -8,10 +8,13 @@ import { tienePermiso } from '../lib/permisos';
 import { obtenerTodasLasFilas } from '../lib/db';
 import { obtenerCategorias, type Categoria } from '../lib/categorias';
 import { obtenerSucursales, type Sucursal } from '../lib/sucursales';
-import { obtenerProductosMaestro, type ProductoMaestro } from '../lib/productosMaestro';
+import { obtenerProductosMaestro, actualizarProductoMaestro, type ProductoMaestro } from '../lib/productosMaestro';
+import { registrarAuditoria } from '../lib/auditoria';
+import { sanitizarDecimal } from '../lib/numeros';
 import { useSucursalActual } from '../lib/sucursal';
 import { useT } from '../lib/idioma';
 import { marcaDeModelo } from '../lib/catalogosMarcas';
+import Modal from '../Modal';
 
 type ProductoFila = {
   id: string;
@@ -59,6 +62,18 @@ export default function Productos() {
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState('');
   const [filtroCategoria, setFiltroCategoria] = useState('');
+  const [editando, setEditando] = useState<ProductoMaestro | null>(null);
+  const [formNombre, setFormNombre] = useState('');
+  const [formMarca, setFormMarca] = useState('');
+  const [formCategoriaId, setFormCategoriaId] = useState('');
+  const [formCosto, setFormCosto] = useState('');
+  const [formPrecio, setFormPrecio] = useState('');
+  const [formSku, setFormSku] = useState('');
+  const [formCodigoBarras, setFormCodigoBarras] = useState('');
+  const [formGarantiaDias, setFormGarantiaDias] = useState('');
+  const [formStockMinimo, setFormStockMinimo] = useState('');
+  const [guardandoEdicion, setGuardandoEdicion] = useState(false);
+  const [errorEdicion, setErrorEdicion] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -92,6 +107,71 @@ export default function Productos() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const abrirEdicion = (maestro: ProductoMaestro) => {
+    setEditando(maestro);
+    setFormNombre(maestro.nombre);
+    setFormMarca(maestro.marca ?? '');
+    setFormCategoriaId(maestro.categoria_id ?? '');
+    setFormCosto(maestro.costo != null ? String(maestro.costo) : '');
+    setFormPrecio(maestro.precio != null ? String(maestro.precio) : '');
+    setFormSku(maestro.sku ?? '');
+    setFormCodigoBarras(maestro.codigo_barras ?? '');
+    setFormGarantiaDias(maestro.garantia_dias != null ? String(maestro.garantia_dias) : '');
+    setFormStockMinimo(maestro.stock_minimo != null ? String(maestro.stock_minimo) : '');
+    setErrorEdicion(null);
+  };
+
+  const guardarEdicion = async () => {
+    if (!editando) return;
+    if (!formNombre.trim()) {
+      setErrorEdicion(t('Poné un nombre.'));
+      return;
+    }
+    setGuardandoEdicion(true);
+    setErrorEdicion(null);
+    const resultado = await actualizarProductoMaestro(supabase, editando.id, {
+      nombre: formNombre,
+      marca: formMarca || null,
+      categoriaId: formCategoriaId || null,
+      costo: formCosto ? Number(formCosto) : null,
+      precio: formPrecio ? Number(formPrecio) : null,
+      sku: formSku || null,
+      codigoBarras: formCodigoBarras || null,
+      garantiaDias: formGarantiaDias ? Number(formGarantiaDias) : null,
+      stockMinimo: formStockMinimo ? Number(formStockMinimo) : null,
+    });
+    if ('error' in resultado) {
+      setErrorEdicion(resultado.error);
+      setGuardandoEdicion(false);
+      return;
+    }
+    await registrarAuditoria(supabase, {
+      accion: `editó el producto "${formNombre.trim()}" del catálogo`,
+      entidad: 'producto_maestro',
+      entidadId: editando.id,
+    });
+    setMaestros((prev) =>
+      prev.map((m) =>
+        m.id === editando.id
+          ? {
+              ...m,
+              nombre: formNombre.trim(),
+              marca: formMarca.trim() || null,
+              categoria_id: formCategoriaId || null,
+              costo: formCosto ? Number(formCosto) : null,
+              precio: formPrecio ? Number(formPrecio) : null,
+              sku: formSku.trim() || null,
+              codigo_barras: formCodigoBarras.trim() || null,
+              garantia_dias: formGarantiaDias ? Number(formGarantiaDias) : null,
+              stock_minimo: formStockMinimo ? Number(formStockMinimo) : null,
+            }
+          : m
+      )
+    );
+    setGuardandoEdicion(false);
+    setEditando(null);
+  };
 
   const nombreCategoria = useMemo(() => {
     const mapa = new Map<string, string>();
@@ -189,7 +269,16 @@ export default function Productos() {
     return filas.filter((f) => {
       if (filtroCategoria && f.categoriaId !== filtroCategoria) return false;
       if (!q) return true;
-      return f.nombre.toLowerCase().includes(q) || f.marca.toLowerCase().includes(q);
+      // El código de barra/SKU se busca por coincidencia exacta primero
+      // (así un lector de código de barra, que escribe el código completo
+      // de una sola vez, encuentra el producto aunque el nombre no tenga
+      // nada que ver con lo tipeado) y si no, por substring como el resto.
+      return (
+        f.nombre.toLowerCase().includes(q) ||
+        f.marca.toLowerCase().includes(q) ||
+        f.maestro?.sku?.toLowerCase().includes(q) ||
+        f.maestro?.codigo_barras?.toLowerCase().includes(q)
+      );
     });
   }, [filas, busqueda, filtroCategoria]);
 
@@ -204,7 +293,7 @@ export default function Productos() {
         <div className="flex-1">
           <h1 className="text-xl font-semibold">{t('Productos')}</h1>
           <p className="text-sm text-muted dark:text-dark-text-secondary">
-            {t('Vista de consulta de todo el catálogo. Para editar cantidad, precio o costo de un producto, hacelo desde Stock.')}
+            {t('Vista de todo el catálogo. Tocá el ✏️ de una fila para editar categoría, marca, costo, precio y más — la cantidad se sigue ajustando desde Stock.')}
           </p>
         </div>
         {puedeAgregarStock && sucursales.length > 1 && (
@@ -266,6 +355,7 @@ export default function Productos() {
                   </th>
                 )}
                 <th className="px-3 py-2 font-medium text-right">{t('Final')}</th>
+                {puedeAgregarStock && <th className="px-3 py-2 font-medium text-right">{t('Editar')}</th>}
               </tr>
             </thead>
             <tbody>
@@ -279,11 +369,136 @@ export default function Productos() {
                     <td className="px-3 py-2 text-right tabular-nums">{sucursalActual.id ? f.stockSucursal : f.stockTotal}</td>
                   )}
                   <td className="px-3 py-2 text-right tabular-nums">{f.final != null ? `$${f.final.toLocaleString()}` : '—'}</td>
+                  {puedeAgregarStock && (
+                    <td className="px-3 py-2 text-right">
+                      {f.maestro ? (
+                        <button
+                          onClick={() => abrirEdicion(f.maestro!)}
+                          aria-label={t('Editar')}
+                          className="text-accent dark:text-dark-accent hover:opacity-70"
+                        >
+                          ✏️
+                        </button>
+                      ) : (
+                        <Link href="/stock" className="text-xs text-accent dark:text-dark-accent hover:underline">
+                          {t('Stock')}
+                        </Link>
+                      )}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+      )}
+
+      {editando && (
+        <Modal titulo={t('Editar producto')} onClose={() => setEditando(null)} maxWidth="max-w-lg">
+          <div className="flex flex-col gap-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
+                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Nombre')}</label>
+                <input
+                  value={formNombre}
+                  onChange={(e) => setFormNombre(e.target.value)}
+                  className="w-full bg-white dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Marca')}</label>
+                <input
+                  value={formMarca}
+                  onChange={(e) => setFormMarca(e.target.value)}
+                  className="w-full bg-white dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Categoría')}</label>
+                <select
+                  value={formCategoriaId}
+                  onChange={(e) => setFormCategoriaId(e.target.value)}
+                  className="w-full bg-white dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                >
+                  <option value="">{t('Sin categoría')}</option>
+                  {categorias.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Costo')}</label>
+                <input
+                  value={formCosto}
+                  onChange={(e) => setFormCosto(sanitizarDecimal(e.target.value))}
+                  inputMode="decimal"
+                  className="w-full bg-white dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Final')}</label>
+                <input
+                  value={formPrecio}
+                  onChange={(e) => setFormPrecio(sanitizarDecimal(e.target.value))}
+                  inputMode="decimal"
+                  className="w-full bg-white dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">SKU</label>
+                <input
+                  value={formSku}
+                  onChange={(e) => setFormSku(e.target.value)}
+                  className="w-full bg-white dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Código de barras')}</label>
+                <input
+                  value={formCodigoBarras}
+                  onChange={(e) => setFormCodigoBarras(e.target.value)}
+                  className="w-full bg-white dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Garantía (días)')}</label>
+                <input
+                  value={formGarantiaDias}
+                  onChange={(e) => setFormGarantiaDias(e.target.value.replace(/[^\d]/g, ''))}
+                  inputMode="numeric"
+                  className="w-full bg-white dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Stock mínimo')}</label>
+                <input
+                  value={formStockMinimo}
+                  onChange={(e) => setFormStockMinimo(e.target.value.replace(/[^\d]/g, ''))}
+                  inputMode="numeric"
+                  className="w-full bg-white dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+            {errorEdicion && <p className="text-xs text-bad bg-bad/10 rounded-lg px-3 py-2">{errorEdicion}</p>}
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setEditando(null)}
+                className="rounded-lg border border-border dark:border-dark-border px-4 py-2 text-sm font-medium"
+              >
+                {t('Cancelar')}
+              </button>
+              <button
+                onClick={guardarEdicion}
+                disabled={guardandoEdicion}
+                className="rounded-lg bg-accent dark:bg-dark-accent text-white px-4 py-2 text-sm font-medium disabled:opacity-50"
+              >
+                {guardandoEdicion ? t('Guardando...') : t('Guardar')}
+              </button>
+            </div>
+          </div>
+        </Modal>
       )}
     </main>
   );
