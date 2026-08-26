@@ -592,7 +592,12 @@ export default async function Home() {
         {t('Resumen financiero')}
       </p>
       <div className="lg:grid lg:grid-cols-3 lg:gap-6 flex flex-col gap-6 animate-fade-in-up" style={{ animationDelay: '120ms' }}>
-        <div className="relative lg:col-span-2">
+        {/* self-start: sin esto, la grilla estira este div a la altura de
+            "Más vendidos" (más alto), y QoviBurbujaWhatsApp calcula su
+            punto de anclaje (top-1/2) sobre esa altura estirada en vez de
+            la altura real de la tarjeta oscura → la burbuja terminaba
+            lejos de la cara de Qovi, cerca de sus piernas. */}
+        <div className="relative lg:col-span-2 self-start">
         <Link
           href="/estadisticas"
           className="qv-card qv-financial group relative rounded-2xl bg-gradient-to-br from-ink to-[#1B2540] dark:from-dark-surface dark:to-dark-bg text-white p-6 flex flex-col gap-4 shadow-elevated hover:opacity-95 transition-opacity active:scale-[0.99]"
