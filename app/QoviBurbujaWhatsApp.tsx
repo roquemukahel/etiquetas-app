@@ -53,7 +53,13 @@ export default function QoviBurbujaWhatsApp() {
   return (
     <div
       aria-hidden={false}
-      className="hidden lg:block pointer-events-none absolute right-full top-1/2 -translate-y-1/2 translate-x-[18%] w-36 xl:w-44 z-30"
+      // aspect-[1116/1409]: MISMA proporción que la imagen de QoviLateral.
+      // Sin esto, este div queda con alto 0 (su único contenido es
+      // "position: absolute", que no aporta altura al padre) y entonces
+      // top/left en % de BOCA se calculan sobre una caja de 0px de alto —
+      // por eso la primera versión terminó apuntando a cualquier lado
+      // menos a la boca real de Qovi.
+      className="hidden lg:block pointer-events-none absolute right-full top-1/2 -translate-y-1/2 translate-x-[18%] w-36 xl:w-44 aspect-[1116/1409] z-30"
     >
       <div
         className="absolute pointer-events-auto w-56 animate-fade-in-up"
