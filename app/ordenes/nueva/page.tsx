@@ -28,6 +28,7 @@ import { ITEMS_CHECKLIST_INGRESO, CAMPOS_DEPENDEN_MODULO, generarTextoCondicionI
 import SelectorColorAuto from '../../SelectorColorAuto';
 import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
 import { limpiarImei } from '../../lib/imei';
+import { formatearMonto } from '../../lib/numeros';
 import { registrarAuditoria } from '../../lib/auditoria';
 import MiniaturaDispositivo from '../../MiniaturaDispositivo';
 import CheckTri from '../../CheckTri';
@@ -1887,7 +1888,7 @@ export default function NuevaOrden() {
               >
                 {t(etiquetaCuotas(p.cuotas))}
                 <span className="block text-[10px] opacity-80 font-normal">
-                  {t('de')} {moneda}{Math.round(valorCuota(subtotal, p.cuotas, p.interes)).toLocaleString('es-AR')}
+                  {t('de')} {moneda}{formatearMonto(valorCuota(subtotal, p.cuotas, p.interes))}
                 </span>
               </button>
             ))}
@@ -1896,8 +1897,8 @@ export default function NuevaOrden() {
             <p className="text-[11px] text-muted dark:text-dark-text-secondary mt-1">
               {cuotasElegidas === 1 ? `${t('Paga a ~1 mes:')} ` : ''}
               {t(etiquetaCuotas(cuotasElegidas))} {t('de')} {moneda}
-              {Math.round(valorCuota(subtotal, cuotasElegidas, interesPlan)).toLocaleString('es-AR')} · {t('total financiado')}{' '}
-              {moneda}{Math.round(subtotalFinanciado).toLocaleString('es-AR')} ({t('interés')} {interesPlan}%)
+              {formatearMonto(valorCuota(subtotal, cuotasElegidas, interesPlan))} · {t('total financiado')}{' '}
+              {moneda}{formatearMonto(subtotalFinanciado)} ({t('interés')} {interesPlan}%)
             </p>
           )}
         </div>
@@ -1933,7 +1934,7 @@ export default function NuevaOrden() {
               const nuevo = !pagoMixto;
               setPagoMixto(nuevo);
               if (nuevo && lineasPago.length === 0) {
-                setLineasPago([{ tempId: idTemporal(), medio: 'efectivo', monto: total > 0 ? String(Math.round(total)) : '' }]);
+                setLineasPago([{ tempId: idTemporal(), medio: 'efectivo', monto: total > 0 ? String(Math.round(total * 100) / 100) : '' }]);
               }
             }}
             className="text-xs text-accent dark:text-dark-accent underline"
@@ -2031,7 +2032,7 @@ export default function NuevaOrden() {
             <div className="flex items-center justify-between text-xs">
               <span className="text-muted dark:text-dark-text-secondary">{t('Asignado')}</span>
               <span className={asignacionOk ? 'text-good font-medium' : 'text-warn font-medium'}>
-                {moneda}{Math.round(montoAsignado).toLocaleString('es-AR')} / {moneda}{Math.round(total).toLocaleString('es-AR')}
+                {moneda}{formatearMonto(montoAsignado)} / {moneda}{formatearMonto(total)}
                 {asignacionOk ? ' ✓' : ''}
               </span>
             </div>
@@ -2040,20 +2041,20 @@ export default function NuevaOrden() {
                 onClick={() =>
                   setLineasPago((ls) => [
                     ...ls,
-                    { tempId: idTemporal(), medio: CUENTA_CORRIENTE, monto: String(Math.round(restantePorAsignar)) },
+                    { tempId: idTemporal(), medio: CUENTA_CORRIENTE, monto: String(Math.round(restantePorAsignar * 100) / 100) },
                   ])
                 }
                 className="text-xs text-accent dark:text-dark-accent underline self-start"
               >
-                {t('Poner el resto')} ({moneda}{Math.round(restantePorAsignar).toLocaleString('es-AR')}) {t('en cuenta corriente')}
+                {t('Poner el resto')} ({moneda}{formatearMonto(restantePorAsignar)}) {t('en cuenta corriente')}
               </button>
             )}
             {!asignacionOk && (
               <p className="text-[10px] text-warn">
                 {t('La suma de los medios tiene que dar el total.')}{' '}
                 {restantePorAsignar > 0
-                  ? `${t('Falta asignar')} ${moneda}${Math.round(restantePorAsignar).toLocaleString('es-AR')}.`
-                  : `${t('Te pasaste por')} ${moneda}${Math.round(-restantePorAsignar).toLocaleString('es-AR')}.`}
+                  ? `${t('Falta asignar')} ${moneda}${formatearMonto(restantePorAsignar)}.`
+                  : `${t('Te pasaste por')} ${moneda}${formatearMonto(-restantePorAsignar)}.`}
               </p>
             )}
           </div>
@@ -2063,24 +2064,24 @@ export default function NuevaOrden() {
           <div className="rounded-lg bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border px-3 py-2 text-xs flex flex-col gap-1">
             <div className="flex justify-between">
               <span className="text-muted dark:text-dark-text-secondary">📒 {t('Queda debiendo')}</span>
-              <span className="font-medium">{moneda}{Math.round(montoCuentaCorriente).toLocaleString('es-AR')}</span>
+              <span className="font-medium">{moneda}{formatearMonto(montoCuentaCorriente)}</span>
             </div>
             {saldoCliente > 0 && (
               <div className="flex justify-between">
                 <span className="text-muted dark:text-dark-text-secondary">{t('Saldo anterior')}</span>
-                <span>{moneda}{Math.round(saldoCliente).toLocaleString('es-AR')}</span>
+                <span>{moneda}{formatearMonto(saldoCliente)}</span>
               </div>
             )}
             {clienteElegido?.limite_credito != null && (
               <div className="flex justify-between">
                 <span className="text-muted dark:text-dark-text-secondary">{t('Límite de crédito')}</span>
-                <span>{moneda}{Math.round(clienteElegido.limite_credito).toLocaleString('es-AR')}</span>
+                <span>{moneda}{formatearMonto(clienteElegido.limite_credito)}</span>
               </div>
             )}
             {excedeLimite && (
               <p className="text-bad">
                 {t('Supera el límite de crédito (disponible')} {moneda}
-                {Math.round(Math.max(0, creditoDisponible)).toLocaleString('es-AR')}). {t('No se puede confirmar hasta cobrarle o subirle el límite.')}
+                {formatearMonto(Math.max(0, creditoDisponible))}). {t('No se puede confirmar hasta cobrarle o subirle el límite.')}
               </p>
             )}
           </div>
@@ -2138,7 +2139,7 @@ export default function NuevaOrden() {
                   {recargoFinanciacionMonto > 0 && (
                     <div className="flex items-end">
                       <p className="text-[10px] text-muted dark:text-dark-text-secondary pb-2">
-                        {t('Se suma')} {moneda}{Math.round(recargoFinanciacionMonto).toLocaleString('es-AR')} {t('solo sobre el saldo financiado, no sobre el anticipo.')}
+                        {t('Se suma')} {moneda}{formatearMonto(recargoFinanciacionMonto)} {t('solo sobre el saldo financiado, no sobre el anticipo.')}
                       </p>
                     </div>
                   )}
@@ -2149,7 +2150,7 @@ export default function NuevaOrden() {
                       <div key={c.numero} className="flex items-center justify-between text-[11px] text-muted dark:text-dark-text-secondary">
                         <span>{t('Cuota')} {c.numero}/{financiarCuotasNum}</span>
                         <span>{new Date(c.fecha_vencimiento + 'T00:00:00').toLocaleDateString('es-AR')}</span>
-                        <span className="font-medium text-ink dark:text-dark-text">{moneda}{Math.round(c.importe).toLocaleString('es-AR')}</span>
+                        <span className="font-medium text-ink dark:text-dark-text">{moneda}{formatearMonto(c.importe)}</span>
                       </div>
                     ))}
                   </div>

@@ -14,7 +14,7 @@ import { getActor, useActor, MENSAJE_ACTOR_REQUERIDO } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import { planesActivos, valorCuota, etiquetaCuotas } from '../../lib/cuotas';
 import { simboloMoneda } from '../../lib/monedas';
-import { sanitizarDecimal } from '../../lib/numeros';
+import { sanitizarDecimal, formatearMonto } from '../../lib/numeros';
 import SelectorColorAuto from '../../SelectorColorAuto';
 import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
 import { useT } from '../../lib/idioma';
@@ -271,8 +271,8 @@ export default function NuevoDispositivo() {
               {planes.map((p) => (
                 <span key={p.cuotas}>
                   {t(etiquetaCuotas(p.cuotas))} {t('de')} {mon}
-                  {Math.round(valorCuota(base, p.cuotas, p.interes)).toLocaleString('es-AR')} · {t('total')} {mon}
-                  {Math.round(base * (1 + p.interes / 100)).toLocaleString('es-AR')}
+                  {formatearMonto(valorCuota(base, p.cuotas, p.interes))} · {t('total')} {mon}
+                  {formatearMonto(base * (1 + p.interes / 100))}
                 </span>
               ))}
             </div>

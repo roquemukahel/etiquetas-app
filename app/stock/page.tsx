@@ -13,7 +13,7 @@ import { leerCSV, valorDe, descargarCSV, insertarEnTandas } from '../lib/csv';
 import { obtenerTodasLasFilas } from '../lib/db';
 import { asegurarModelo, normalizarNombreModelo } from '../lib/modelos';
 import { compararModelosPorSalida } from '../lib/catalogosMarcas';
-import { sanitizarDecimal } from '../lib/numeros';
+import { sanitizarDecimal, formatearMonto } from '../lib/numeros';
 import { obtenerCategorias, type Categoria } from '../lib/categorias';
 import { obtenerSucursales, type Sucursal } from '../lib/sucursales';
 import { obtenerProductosMaestro, crearProductoMaestro, type ProductoMaestro } from '../lib/productosMaestro';
@@ -2373,7 +2373,7 @@ function IndicadorCapital({
       {sinDatos ? (
         <p className="text-lg font-display font-semibold text-muted dark:text-dark-text-secondary">{t('Sin calcular')}</p>
       ) : (
-        <p className={`text-lg font-display font-semibold ${tono ?? ''}`}>${Math.round(valor).toLocaleString('es-AR')}</p>
+        <p className={`text-lg font-display font-semibold ${tono ?? ''}`}>${formatearMonto(valor)}</p>
       )}
       <p className="text-[11px] text-muted dark:text-dark-text-secondary">{etiqueta}</p>
       {!sinDatos && cobertura < total && (

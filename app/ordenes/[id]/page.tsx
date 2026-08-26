@@ -1063,7 +1063,7 @@ export default function DetalleOrden() {
                   onClick={() => {
                     setBoletaMonedaEdit(op.v);
                     if (op.v !== 'principal' && !montoSecundarioEdit && tipoCambio) {
-                      setMontoSecundarioEdit(Math.round(totalEdit * tipoCambio).toString());
+                      setMontoSecundarioEdit((Math.round(totalEdit * tipoCambio * 100) / 100).toString());
                     }
                   }}
                   className={`flex-1 rounded-xl py-2 text-sm font-medium ${
