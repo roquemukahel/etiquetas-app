@@ -151,6 +151,15 @@ export default function Productos() {
       setGuardandoEdicion(false);
       return;
     }
+    const nuevoCosto = formCosto ? Number(formCosto) : null;
+    const nuevoPrecio = formPrecio ? Number(formPrecio) : null;
+    // El precio/costo que de verdad se cobra en Nueva Orden y se muestra en
+    // Stock sale de la fila de `productos` de esa sucursal, NO del maestro
+    // — el maestro es solo el valor de referencia que arma esta grilla.
+    // Sin este paso, editar "Costo"/Final acá parecía funcionar (esta
+    // grilla ya prioriza el precio del maestro) pero no cambiaba nada de lo
+    // que en verdad se cobra, quedando la edición en los hechos ignorada.
+    await supabase.from('productos').update({ costo: nuevoCosto, precio: nuevoPrecio }).eq('producto_maestro_id', editando.id);
     await registrarAuditoria(supabase, {
       accion: `editó el producto "${formNombre.trim()}" del catálogo`,
       entidad: 'producto_maestro',
@@ -164,8 +173,8 @@ export default function Productos() {
               nombre: formNombre.trim(),
               marca: formMarca.trim() || null,
               categoria_id: formCategoriaId || null,
-              costo: formCosto ? Number(formCosto) : null,
-              precio: formPrecio ? Number(formPrecio) : null,
+              costo: nuevoCosto,
+              precio: nuevoPrecio,
               sku: formSku.trim() || null,
               codigo_barras: formCodigoBarras.trim() || null,
               garantia_dias: formGarantiaDias ? Number(formGarantiaDias) : null,
@@ -174,6 +183,7 @@ export default function Productos() {
           : m
       )
     );
+    setProductos((prev) => prev.map((p) => (p.producto_maestro_id === editando.id ? { ...p, precio: nuevoPrecio } : p)));
     setGuardandoEdicion(false);
     setEditando(null);
   };
