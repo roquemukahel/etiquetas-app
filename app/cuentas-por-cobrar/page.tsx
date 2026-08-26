@@ -11,14 +11,17 @@ import { obtenerTodasLasFilas } from '../lib/db';
 import { QCard } from '../QCard';
 import { EvolucionBarras } from '../estadisticas/graficos';
 import { proyeccionMensual, alertasCuotas, aFechaISO, type CuotaProyeccion, type PagoAplicadoProyeccion, type AlertaCuota } from '../lib/financiacion/motor';
+import { armarLinkWhatsApp, mensajeRecordatorioCobranza } from '../lib/whatsapp';
+import { codigoLlamada } from '../lib/paises';
 import { useT } from '../lib/idioma';
 
-type Cliente = { id: string; nombre: string; apellido: string | null; suspendido: boolean | null };
+type Cliente = { id: string; nombre: string; apellido: string | null; suspendido: boolean | null; telefono: string | null };
 type Saldo = { cliente_id: string; saldo: number; vencido: number };
 
 type Fila = {
   id: string;
   nombre: string;
+  telefono: string | null;
   saldo: number;
   vencido: number;
   suspendido: boolean;
@@ -46,8 +49,9 @@ export default function CuentasPorCobrar() {
 
   const [filas, setFilas] = useState<Fila[]>([]);
   const [monedaCodigo, setMonedaCodigo] = useState('ARS');
+  const [codigoPais, setCodigoPais] = useState('54');
   const [loading, setLoading] = useState(true);
-  const [orden, setOrden] = useState<'saldo' | 'vencido' | 'nombre'>('saldo');
+  const [orden, setOrden] = useState<'saldo' | 'vencido' | 'nombre' | 'vencimiento'>('vencimiento');
 
   // ---------- Proyección de cobranzas (financiación en cuotas) ----------
   const [cuotas, setCuotas] = useState<CuotaFila[]>([]);
@@ -72,7 +76,7 @@ export default function CuentasPorCobrar() {
       // "Cliente eliminado" sin estarlo de verdad.
       const [{ data: saldosData }, clientesData, { data: userData }, { data: cuotasData }, { data: pagosData }] = await Promise.all([
         supabase.rpc('saldos_cuenta_corriente'),
-        obtenerTodasLasFilas<Cliente>(supabase, 'clientes', 'id, nombre, apellido, suspendido'),
+        obtenerTodasLasFilas<Cliente>(supabase, 'clientes', 'id, nombre, apellido, suspendido, telefono'),
         supabase.auth.getUser(),
         supabase
           .from('financiacion_cuotas')
@@ -92,6 +96,7 @@ export default function CuentasPorCobrar() {
           return {
             id: s.cliente_id,
             nombre: c ? `${c.nombre} ${c.apellido || ''}`.trim() : t('Cliente eliminado'),
+            telefono: c?.telefono ?? null,
             saldo,
             vencido: Number(s.vencido) || 0,
             suspendido: !!c?.suspendido,
@@ -130,11 +135,12 @@ export default function CuentasPorCobrar() {
       if (userData?.user) {
         const { data: perfil } = await supabase
           .from('perfiles')
-          .select('negocios ( moneda )')
+          .select('negocios ( moneda, pais )')
           .eq('id', userData.user.id)
           .single();
         const cod = (perfil as any)?.negocios?.moneda;
         if (cod) setMonedaCodigo(cod);
+        setCodigoPais(codigoLlamada((perfil as any)?.negocios?.pais));
       }
       setLoading(false);
     })();
@@ -204,13 +210,40 @@ export default function CuentasPorCobrar() {
     return alertasCuotas(conNombre, new Date()).filter((a) => !alertasDescartadas.has(a.id));
   }, [cuotas, nombresClientes, alertasDescartadas]);
 
+  // Próxima cuota pendiente de cada cliente — para poder ordenar "quién vence
+  // primero" y verlo de un vistazo en la planilla, en vez de tener que abrir
+  // la ficha de cada uno. Solo cubre financiación en cuotas propias (que es
+  // la que tiene fecha por cuota); una venta a cuenta corriente simple no
+  // tiene ese desglose, así que esos clientes quedan sin fecha (se ordenan
+  // al final al elegir "Próximo vencimiento").
+  const proximoVencPorCliente = useMemo(() => {
+    const mapa = new Map<string, { fecha: string; monto: number; numero: number; total: number }>();
+    for (const c of cuotas) {
+      if (c.estado !== 'pendiente') continue;
+      const actual = mapa.get(c.cliente_id);
+      if (!actual || c.fecha_vencimiento < actual.fecha) {
+        mapa.set(c.cliente_id, { fecha: c.fecha_vencimiento, monto: c.importe_original - c.importe_pagado, numero: c.numero, total: c.cantidad_cuotas });
+      }
+    }
+    return mapa;
+  }, [cuotas]);
+
   const ordenadas = useMemo(() => {
     const copia = [...filas];
     if (orden === 'nombre') copia.sort((a, b) => a.nombre.localeCompare(b.nombre));
     else if (orden === 'vencido') copia.sort((a, b) => b.vencido - a.vencido || b.saldo - a.saldo);
-    else copia.sort((a, b) => b.saldo - a.saldo);
+    else if (orden === 'vencimiento') {
+      copia.sort((a, b) => {
+        const fa = proximoVencPorCliente.get(a.id)?.fecha;
+        const fb = proximoVencPorCliente.get(b.id)?.fecha;
+        if (fa && fb) return fa < fb ? -1 : fa > fb ? 1 : 0;
+        if (fa) return -1;
+        if (fb) return 1;
+        return b.saldo - a.saldo;
+      });
+    } else copia.sort((a, b) => b.saldo - a.saldo);
     return copia;
-  }, [filas, orden]);
+  }, [filas, orden, proximoVencPorCliente]);
 
   const totalPorCobrar = filas.reduce((acc, f) => acc + f.saldo, 0);
   const totalVencido = filas.reduce((acc, f) => acc + f.vencido, 0);
@@ -368,9 +401,9 @@ export default function CuentasPorCobrar() {
         </p>
       ) : (
         <>
-          <div className="flex items-center gap-1.5 text-xs">
+          <div className="flex items-center gap-1.5 text-xs flex-wrap">
             <span className="text-muted dark:text-dark-text-secondary">{t('Ordenar por:')}</span>
-            {(['saldo', 'vencido', 'nombre'] as const).map((o) => (
+            {(['vencimiento', 'saldo', 'vencido', 'nombre'] as const).map((o) => (
               <button
                 key={o}
                 onClick={() => setOrden(o)}
@@ -378,7 +411,7 @@ export default function CuentasPorCobrar() {
                   orden === o ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border'
                 }`}
               >
-                {o === 'saldo' ? t('Deuda') : o === 'vencido' ? t('Vencido') : t('Nombre')}
+                {o === 'vencimiento' ? t('Próximo vencimiento') : o === 'saldo' ? t('Deuda') : o === 'vencido' ? t('Vencido') : t('Nombre')}
               </button>
             ))}
           </div>
@@ -387,21 +420,50 @@ export default function CuentasPorCobrar() {
             {ordenadas.map((f) => {
               const estado = estadoCuenta(f.saldo, f.vencido, f.suspendido);
               const info = ESTADO_INFO[estado];
+              const prox = proximoVencPorCliente.get(f.id);
+              const fechaProx = prox ? new Date(prox.fecha + 'T00:00:00').toLocaleDateString('es-AR') : null;
+              const linkWhatsApp = f.telefono
+                ? armarLinkWhatsApp(f.telefono, mensajeRecordatorioCobranza(f.nombre, fmt(prox?.monto ?? f.saldo), fechaProx, t), codigoPais)
+                : null;
               return (
-                <Link
+                <div
                   key={f.id}
-                  href={`/clientes/${f.id}`}
                   className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex items-center justify-between gap-3"
                 >
-                  <div className="min-w-0">
+                  <Link href={`/clientes/${f.id}`} className="min-w-0 flex-1">
                     <p className="text-sm font-medium truncate">{f.nombre}</p>
                     <span className={`inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full mt-0.5 ${info.fondo}`}>
                       {info.label}
                       {f.vencido > 0 ? ` · ${t('vencido')} ${fmt(f.vencido)}` : ''}
                     </span>
+                    {prox && (
+                      <p className="text-[11px] text-muted dark:text-dark-text-secondary mt-0.5">
+                        {t('Vence el')} {fechaProx} · {t('Cuota')} {prox.numero}/{prox.total} · {fmt(prox.monto)}
+                      </p>
+                    )}
+                  </Link>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <p className="text-sm font-semibold text-warn">{fmt(f.saldo)}</p>
+                    {linkWhatsApp && (
+                      <a
+                        href={linkWhatsApp}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={t('Enviar recordatorio por WhatsApp')}
+                        className="rounded-lg border border-good/30 text-good px-2 py-1.5 hover:bg-good/10"
+                      >
+                        💬
+                      </a>
+                    )}
+                    <Link
+                      href={`/clientes/${f.id}?abrirPago=1`}
+                      title={t('Registrar un pago')}
+                      className="rounded-lg border border-accent/30 dark:border-dark-accent/30 text-accent dark:text-dark-accent px-2 py-1.5 hover:bg-accent-soft dark:hover:bg-dark-accent-soft"
+                    >
+                      💰
+                    </Link>
                   </div>
-                  <p className="text-sm font-semibold text-warn shrink-0">{fmt(f.saldo)}</p>
-                </Link>
+                </div>
               );
             })}
           </div>

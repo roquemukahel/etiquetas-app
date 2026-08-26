@@ -41,6 +41,19 @@ export function mensajeComprobantePlanAhorro(
   return `${t('Hola')} ${nombreCliente}! ${t('Te confirmamos tu pago de')} ${monto} ${t('para el plan de ahorro de')} ${modelo}. ${t('Acá tenés tu comprobante:')} ${urlComprobante}`;
 }
 
+// Recordatorio de cobranza — usado desde la planilla de Cuentas por cobrar
+// para avisarle a un cliente que tiene una cuota pendiente, sin tener que
+// entrar a su ficha para armar el mensaje a mano.
+export function mensajeRecordatorioCobranza(
+  nombreCliente: string,
+  monto: string,
+  fecha: string | null,
+  t: (texto: string) => string = (s) => s
+) {
+  const cuando = fecha ? ` ${t('con vencimiento el')} ${fecha}` : '';
+  return `${t('Hola')} ${nombreCliente}! ${t('Te recordamos que tenés un pago pendiente de')} ${monto}${cuando}. ${t('¡Gracias!')}`;
+}
+
 export function mensajeConsultaProveedor(nombreRepuesto: string) {
   return `Hola! Te consulto por precio y disponibilidad de: ${nombreRepuesto}`;
 }

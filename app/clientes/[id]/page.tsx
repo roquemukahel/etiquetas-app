@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { registrarAuditoria } from '../../lib/auditoria';
 import { getActor, useActor } from '../../lib/actor';
@@ -58,6 +58,7 @@ type Movimiento = {
 export default function DetalleCliente() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = crearClienteNavegador();
   const actor = useActor();
   const t = useT();
@@ -208,6 +209,18 @@ export default function DetalleCliente() {
     setError(null);
     setRegistrandoPago(true);
   };
+
+  // Entrar desde /clientes/[id]?abrirPago=1 (ej. el botón "Cobrar" de la
+  // planilla de Cuentas por cobrar) abre el modal de pago directo, sin que
+  // haya que buscar el botón en esta ficha — se saca el parámetro de la URL
+  // enseguida para que un refresh de la página no vuelva a abrirlo solo.
+  useEffect(() => {
+    if (!loading && searchParams.get('abrirPago') === '1') {
+      abrirRegistrarPago();
+      router.replace(`/clientes/${id}`);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
 
   const registrarPago = async () => {
     const monto = Number(pagoMonto);
