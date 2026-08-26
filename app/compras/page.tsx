@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { crearClienteNavegador } from '../lib/supabase/client';
 import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../lib/carpetas';
 import { registrarAuditoria } from '../lib/auditoria';
-import { useActor } from '../lib/actor';
+import { getActor, useActor } from '../lib/actor';
 import { tienePermiso } from '../lib/permisos';
 import MiniaturaDispositivo from '../MiniaturaDispositivo';
 import { useT } from '../lib/idioma';
@@ -44,7 +44,7 @@ export default function Compras() {
   const cargar = async () => {
     const { data } = await supabase
       .from('compras')
-      .select('*, clientes ( nombre, apellido )')
+      .select('id, modelo, capacidad_gb, imei, precio, estado, created_at, clientes ( nombre, apellido )')
       .order('created_at', { ascending: false });
     setCompras((data as any) ?? []);
     setLoading(false);
@@ -80,12 +80,23 @@ export default function Compras() {
 
     const { error } = await supabase.from('compras').delete().in('id', ids);
     if (!error) {
-      for (const c of aEliminar) {
-        await registrarAuditoria(supabase, {
-          accion: `eliminó la compra de ${c.modelo || 'sin modelo'}${c.imei ? ` (IMEI ${c.imei})` : ''}`,
-          entidad: 'compra',
-          entidadId: c.id,
-        });
+      // Un solo insert con N filas (no N awaits en fila) — mismo fix que
+      // en Stock, misma auditoría de performance (2026-08-26).
+      const actorAuditoria = getActor();
+      if (actorAuditoria) {
+        try {
+          await supabase.from('auditoria').insert(
+            aEliminar.map((c) => ({
+              actor_nombre: actorAuditoria.nombre,
+              actor_tipo: actorAuditoria.tipo,
+              accion: `eliminó la compra de ${c.modelo || 'sin modelo'}${c.imei ? ` (IMEI ${c.imei})` : ''}`,
+              entidad: 'compra',
+              entidad_id: c.id,
+            }))
+          );
+        } catch {
+          // La auditoría nunca debe romper la acción principal del usuario.
+        }
       }
     }
 

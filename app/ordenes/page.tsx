@@ -106,7 +106,7 @@ export default function Ordenes() {
     const [{ data: ordenesData }, { data: listasData }, { data: canceladasData }, { data: canjesData }] = await Promise.all([
       supabase
         .from('ordenes')
-        .select('*, clientes ( nombre, apellido ), orden_items ( descripcion, tipo )')
+        .select('id, forma_pago, total, estado, created_at, sucursal_id, clientes ( nombre, apellido ), orden_items ( descripcion, tipo )')
         .order('created_at', { ascending: false }),
       // Reparaciones terminadas por el técnico (con cliente) que faltan cobrar.
       supabase

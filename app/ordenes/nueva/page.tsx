@@ -373,8 +373,16 @@ export default function NuevaOrden() {
       setDispositivosStock(data);
     })();
     (async () => {
-      const { data } = await supabase.from('productos').select('*').order('nombre');
-      setProductos((data as Producto[]) ?? []);
+      // Mismo bug que tenían los dispositivos (ver comentario arriba):
+      // select() sin paginar se corta en 1000 filas sin avisar. Con un
+      // catálogo de accesorios grande, los productos que quedaban afuera
+      // de esa primera página no aparecían para vender.
+      const data = await obtenerTodasLasFilas<Producto>(
+        supabase,
+        'productos',
+        'id, nombre, precio, imagen_url, marca, sku, codigo_barras, sucursal_id'
+      );
+      setProductos(data);
     })();
     (async () => {
       const { data } = await supabase.from('vendedores').select('*').order('nombre');

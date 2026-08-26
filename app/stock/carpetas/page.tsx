@@ -22,7 +22,7 @@ export default function Carpetas() {
   const [error, setError] = useState<string | null>(null);
 
   const cargar = async () => {
-    const { data } = await supabase.from('modelos_stock').select('*');
+    const { data } = await supabase.from('modelos_stock').select('id, nombre, imagen_url');
     // Mismo orden cronológico que usa la lista principal de Stock (ver
     // app/stock/page.tsx), para no mostrar acá un orden distinto al que el
     // vendedor ya está acostumbrado a buscar.

@@ -664,12 +664,20 @@ export default function DetalleOrden() {
     // en medio fallara, la orden quedaría con un total que descuenta un
     // canje que en realidad nunca se llegó a crear/borrar/editar en la
     // base — un descuento fantasma sin canje real detrás.
-    for (const cambio of itemsCambiados) {
-      const despues = cambio.despues as { descripcion: string; cantidad: number; precio_unitario: number };
-      const { error: itemUpdError } = await supabase
-        .from('orden_items')
-        .update({ descripcion: despues.descripcion, cantidad: despues.cantidad, precio_unitario: despues.precio_unitario })
-        .eq('id', cambio.id);
+    // En paralelo (Promise.all), no uno por uno en fila: una boleta con
+    // muchas líneas editadas (ej. una venta mayorista) tardaba tantos
+    // viajes de ida y vuelta a la base como ítems cambiados hubiera.
+    if (itemsCambiados.length > 0) {
+      const resultadosItems = await Promise.all(
+        itemsCambiados.map((cambio) => {
+          const despues = cambio.despues as { descripcion: string; cantidad: number; precio_unitario: number };
+          return supabase
+            .from('orden_items')
+            .update({ descripcion: despues.descripcion, cantidad: despues.cantidad, precio_unitario: despues.precio_unitario })
+            .eq('id', cambio.id);
+        })
+      );
+      const itemUpdError = resultadosItems.find((r) => r.error)?.error;
       if (itemUpdError) {
         setError(t('No pudimos actualizar un ítem:') + ' ' + itemUpdError.message);
         setGuardando(false);
@@ -738,11 +746,16 @@ export default function DetalleOrden() {
       }
     }
 
-    for (const c of canjesModificados) {
-      const { error: canjeUpdError } = await supabase
-        .from('canjes')
-        .update({ monto: c.monto ? Number(c.monto) : null })
-        .eq('id', c.id);
+    if (canjesModificados.length > 0) {
+      const resultadosCanjes = await Promise.all(
+        canjesModificados.map((c) =>
+          supabase
+            .from('canjes')
+            .update({ monto: c.monto ? Number(c.monto) : null })
+            .eq('id', c.id)
+        )
+      );
+      const canjeUpdError = resultadosCanjes.find((r) => r.error)?.error;
       if (canjeUpdError) {
         setError(t('No pudimos actualizar un canje:') + ' ' + canjeUpdError.message);
         setGuardando(false);

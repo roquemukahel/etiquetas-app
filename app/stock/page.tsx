@@ -345,7 +345,12 @@ export default function Stock() {
   };
 
   const cargarProductos = async () => {
-    const data = await obtenerTodasLasFilas<Producto>(supabase, 'productos', '*', [{ columna: 'nombre' }]);
+    const data = await obtenerTodasLasFilas<Producto>(
+      supabase,
+      'productos',
+      'id, nombre, precio, costo, imagen_url, cantidad, categoria_id, modalidad, marca, numero_serie, sku, codigo_barras, proveedor_id, stock_minimo, garantia_dias, descripcion, notas, sucursal_id, producto_maestro_id',
+      [{ columna: 'nombre' }]
+    );
     setProductos(data);
     setLoadingProductos(false);
   };
@@ -618,12 +623,25 @@ export default function Stock() {
 
     const { error } = await supabase.from('dispositivos').delete().in('id', ids);
     if (!error) {
-      for (const d of aEliminar) {
-        await registrarAuditoria(supabase, {
-          accion: `eliminó el dispositivo ${d.modelo || 'sin modelo'}${d.imei ? ` (IMEI ${d.imei})` : ''} del historial`,
-          entidad: 'dispositivo',
-          entidadId: d.id,
-        });
+      // Un solo insert con N filas (no N awaits en fila): con selecciones
+      // grandes, auditar uno por uno bloqueaba la UI mucho más que el
+      // borrado real. Mismo detalle por dispositivo que antes, un solo
+      // viaje de ida y vuelta a la base.
+      const actor = getActor();
+      if (actor) {
+        try {
+          await supabase.from('auditoria').insert(
+            aEliminar.map((d) => ({
+              actor_nombre: actor.nombre,
+              actor_tipo: actor.tipo,
+              accion: `eliminó el dispositivo ${d.modelo || 'sin modelo'}${d.imei ? ` (IMEI ${d.imei})` : ''} del historial`,
+              entidad: 'dispositivo',
+              entidad_id: d.id,
+            }))
+          );
+        } catch {
+          // La auditoría nunca debe romper la acción principal del usuario.
+        }
       }
     }
 
@@ -793,7 +811,12 @@ export default function Stock() {
     })();
     (async () => setImagenesCarpetas(await obtenerImagenesCarpetas(supabase)))();
     (async () => {
-      const data = await obtenerTodasLasFilas<Producto>(supabase, 'productos', '*', [{ columna: 'nombre' }]);
+      const data = await obtenerTodasLasFilas<Producto>(
+      supabase,
+      'productos',
+      'id, nombre, precio, costo, imagen_url, cantidad, categoria_id, modalidad, marca, numero_serie, sku, codigo_barras, proveedor_id, stock_minimo, garantia_dias, descripcion, notas, sucursal_id, producto_maestro_id',
+      [{ columna: 'nombre' }]
+    );
       // Catálogo de accesorios todavía vacío: se carga el set inicial acá
       // mismo, sin pedirle a nadie que active nada — a diferencia de
       // Servicios/Trabajos (que sí quedan como catálogo manual porque cada
@@ -828,7 +851,12 @@ export default function Stock() {
             entidad: 'producto',
             valorNuevo: { accesorios: ACCESORIOS_DEFAULT.map((a) => a.nombre) },
           });
-          setProductos(await obtenerTodasLasFilas<Producto>(supabase, 'productos', '*', [{ columna: 'nombre' }]));
+          setProductos(await obtenerTodasLasFilas<Producto>(
+      supabase,
+      'productos',
+      'id, nombre, precio, costo, imagen_url, cantidad, categoria_id, modalidad, marca, numero_serie, sku, codigo_barras, proveedor_id, stock_minimo, garantia_dias, descripcion, notas, sucursal_id, producto_maestro_id',
+      [{ columna: 'nombre' }]
+    ));
           setLoadingProductos(false);
           return;
         }
@@ -1006,6 +1034,19 @@ export default function Stock() {
     if (filtroSucursal) lista = lista.filter((p) => p.sucursal_id === filtroSucursal);
     return lista;
   }, [productos, filtroCategoriaProducto, filtroSucursal]);
+
+  // Con un catálogo de accesorios grande, pintar TODAS las tarjetas de una
+  // (cada una con su imagen) es lo que hace sentir lenta la pantalla — mismo
+  // patrón manual de paginación que ya usa app/clientes/page.tsx.
+  const PASO_VISIBLES_PRODUCTOS = 60;
+  const [visiblesProductos, setVisiblesProductos] = useState(PASO_VISIBLES_PRODUCTOS);
+  useEffect(() => {
+    setVisiblesProductos(PASO_VISIBLES_PRODUCTOS);
+  }, [filtroCategoriaProducto, filtroSucursal]);
+  const productosParaRenderizar = useMemo(
+    () => productosFiltrados.slice(0, visiblesProductos),
+    [productosFiltrados, visiblesProductos]
+  );
 
   const agregarProducto = async () => {
     if (!nombreProducto.trim() || !puedeAgregarStock) return;
@@ -2200,7 +2241,7 @@ export default function Stock() {
           )}
 
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {productosFiltrados.map((p, i) => (
+            {productosParaRenderizar.map((p, i) => (
               <div
                 key={p.id}
                 className="group relative rounded-2xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-3 flex flex-col items-center gap-1.5 text-center overflow-hidden"
@@ -2292,6 +2333,15 @@ export default function Stock() {
               </div>
             ))}
           </div>
+          {visiblesProductos < productosFiltrados.length && (
+            <button
+              onClick={() => setVisiblesProductos((v) => v + PASO_VISIBLES_PRODUCTOS)}
+              className="mt-2 text-sm text-accent dark:text-dark-accent font-medium self-center"
+            >
+              {t('Mostrar')} {Math.min(PASO_VISIBLES_PRODUCTOS, productosFiltrados.length - visiblesProductos)} {t('más')} (
+              {productosParaRenderizar.length} {t('de')} {productosFiltrados.length})
+            </button>
+          )}
         </>
       )}
     </main>
