@@ -12,7 +12,7 @@ import { armarLinkWhatsApp } from '../../lib/whatsapp';
 import { codigoLlamada } from '../../lib/paises';
 import { MEDIOS_PAGO, calcularSaldo, estadoCuenta, ESTADO_INFO, diasDeMora } from '../../lib/cuentaCorriente';
 import { aplicarPagoAFinanciacion } from '../../lib/financiacion/servicio';
-import { sanitizarDecimal } from '../../lib/numeros';
+import { sanitizarDecimal, formatearMonto } from '../../lib/numeros';
 import { ESTADOS_COBRADOS } from '../../estadisticas/datos';
 import FinanciacionCliente from '../../FinanciacionCliente';
 import { useT, useIdioma } from '../../lib/idioma';
@@ -203,7 +203,11 @@ export default function DetalleCliente() {
   const campo = (k: keyof Cliente, valor: string) => setC((prev) => (prev ? { ...prev, [k]: valor } : prev));
 
   const abrirRegistrarPago = () => {
-    setPagoMonto(saldo > 0 ? String(Math.round(saldo)) : '');
+    // Sin redondear: si el saldo tiene centavos (ej. $1.500,64) y se
+    // sugiere "1500" a secas, un pago "por el total" con el monto sugerido
+    // dejaba una deuda fantasma de $0,64 para siempre — mismo bug que el
+    // saldo mostrado de más arriba, reportado por un cliente (2026-08-26).
+    setPagoMonto(saldo > 0 ? String(Math.round(saldo * 100) / 100) : '');
     setPagoMedio('efectivo');
     setPagoObs('');
     setError(null);
@@ -505,7 +509,7 @@ export default function DetalleCliente() {
     );
   }
 
-  const fmt = (n: number) => `${moneda}${Math.round(n).toLocaleString(locale)}`;
+  const fmt = (n: number) => `${moneda}${formatearMonto(n, locale)}`;
   const colorSaldo = saldo > 0.009 ? (vencido > 0 ? 'text-bad' : 'text-warn') : saldo < -0.009 ? 'text-good' : '';
 
   // Link del portal de autoconsulta (solo si ya tiene token — necesita el
