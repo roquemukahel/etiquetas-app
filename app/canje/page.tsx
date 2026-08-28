@@ -28,6 +28,8 @@ type Canje = {
   estado: string;
   agregado_a_stock: boolean;
   oculto_en_canje: boolean;
+  condicion: string | null;
+  ubicacion_fisica: string | null;
   vendedores: { nombre: string; foto_url: string | null } | null;
 };
 
@@ -58,6 +60,8 @@ export default function PlanCanje() {
   const [vista, setVista] = useState<Vista>('en_canje');
   const [procesando, setProcesando] = useState<string | null>(null);
   const [imagenesCarpetas, setImagenesCarpetas] = useState<Map<string, string>>(new Map());
+  const [editandoUbicacionId, setEditandoUbicacionId] = useState<string | null>(null);
+  const [ubicacionInput, setUbicacionInput] = useState('');
 
   const cargar = async () => {
     const [{ data: c }, { data: r }] = await Promise.all([
@@ -99,6 +103,7 @@ export default function PlanCanje() {
         color: c.color,
         imei: c.imei,
         falla_declarada: c.detalles,
+        ubicacion_fisica: c.ubicacion_fisica,
         estado: 'recibido',
         canje_origen_id: c.id,
         ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
@@ -158,7 +163,7 @@ export default function PlanCanje() {
       color: c.color,
       imei: c.imei,
       salud_bateria: c.salud_bateria,
-      estado: 'usado',
+      estado: c.condicion || 'usado',
       en_stock: true,
       agregado_por_nombre: actor?.nombre ?? null,
       agregado_por_foto_url: actor?.fotoUrl ?? null,
@@ -186,6 +191,19 @@ export default function PlanCanje() {
       entidadId: c.id,
       valorAnterior: { modelo: c.modelo, capacidad_gb: c.capacidad_gb, color: c.color, imei: c.imei, monto: c.monto },
     });
+    setProcesando(null);
+    cargar();
+  };
+
+  const abrirEdicionUbicacion = (c: Canje) => {
+    setEditandoUbicacionId(c.id);
+    setUbicacionInput(c.ubicacion_fisica || '');
+  };
+
+  const guardarUbicacion = async (c: Canje) => {
+    setProcesando(c.id);
+    await supabase.from('canjes').update({ ubicacion_fisica: ubicacionInput.trim() || null }).eq('id', c.id);
+    setEditandoUbicacionId(null);
     setProcesando(null);
     cargar();
   };
@@ -280,10 +298,15 @@ export default function PlanCanje() {
                   <div className="flex items-start gap-3">
                     <MiniaturaDispositivo src={imagenPorNombreExacto(c.modelo, imagenesCarpetas)} />
                     <div>
-                      <p className="text-sm font-medium">
+                      <p className="text-sm font-medium flex items-center gap-1.5 flex-wrap">
                         {c.modelo}
                         {c.capacidad_gb ? ` · ${c.capacidad_gb}GB` : ''}
                         {c.color ? ` · ${c.color}` : ''}
+                        {c.condicion === 'sellado' && (
+                          <span className="text-[10px] font-bold text-black bg-gradient-to-b from-amber-300 to-amber-500 border border-black/40 rounded-full px-2 py-0.5">
+                            ✦ {t('SELLADO')}
+                          </span>
+                        )}
                       </p>
                       {c.imei && (
                         <p className="text-xs text-muted dark:text-dark-text-secondary">
@@ -303,6 +326,39 @@ export default function PlanCanje() {
                     </p>
                   )}
                 </div>
+
+                {editandoUbicacionId === c.id ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      autoFocus
+                      value={ubicacionInput}
+                      onChange={(e) => setUbicacionInput(e.target.value)}
+                      placeholder={t('Ej. Estante A-3, Tribuna')}
+                      className="flex-1 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-1.5 text-xs"
+                    />
+                    <button
+                      onClick={() => guardarUbicacion(c)}
+                      disabled={procesando === c.id}
+                      className="text-xs font-medium text-accent dark:text-dark-accent shrink-0"
+                    >
+                      {t('Guardar')}
+                    </button>
+                    <button onClick={() => setEditandoUbicacionId(null)} className="text-xs text-muted dark:text-dark-text-secondary shrink-0">
+                      {t('Cancelar')}
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => abrirEdicionUbicacion(c)}
+                    className="self-start flex items-center gap-1 text-xs text-muted dark:text-dark-text-secondary hover:text-ink dark:hover:text-dark-text"
+                  >
+                    <span aria-hidden="true" className="[&_svg]:h-3.5 [&_svg]:w-3.5 inline-flex shrink-0">
+                      {ICONOS.ubicacion}
+                    </span>
+                    {c.ubicacion_fisica || t('Agregar ubicación')}
+                  </button>
+                )}
+
                 {vista === 'en_canje' && (
                   <div className="flex items-center gap-2 mt-1">
                     {puedeAgregarStock && (

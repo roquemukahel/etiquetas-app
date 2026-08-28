@@ -113,6 +113,8 @@ type Canje = {
   salud_bateria: number | null;
   detalles: string | null;
   monto: number | null;
+  condicion: string | null;
+  ubicacion_fisica: string | null;
 };
 
 // id: null para un canje nuevo que todavía no existe en la base (se crea
@@ -128,6 +130,8 @@ type CanjeEditable = {
   salud_bateria: string;
   detalles: string;
   monto: string;
+  condicion: string;
+  ubicacion_fisica: string;
 };
 
 export default function DetalleOrden() {
@@ -204,6 +208,8 @@ export default function DetalleOrden() {
   const [canjeBateria, setCanjeBateria] = useState('');
   const [canjeMonto, setCanjeMonto] = useState('');
   const [canjeDetalles, setCanjeDetalles] = useState('');
+  const [canjeCondicion, setCanjeCondicion] = useState('usado');
+  const [canjeUbicacion, setCanjeUbicacion] = useState('');
   const [agregandoCanje, setAgregandoCanje] = useState(false);
 
   const [yaDerivado, setYaDerivado] = useState(false);
@@ -234,7 +240,7 @@ export default function DetalleOrden() {
     setReparacionesDerivadasIds(idsRep);
     const { data: canjesData, error: canjesErr } = await supabase
       .from('canjes')
-      .select('id, modelo, capacidad_gb, color, imei, salud_bateria, detalles, monto')
+      .select('id, modelo, capacidad_gb, color, imei, salud_bateria, detalles, monto, condicion, ubicacion_fisica')
       .eq('orden_id', id)
       .eq('estado', 'en_canje')
       .order('created_at');
@@ -389,6 +395,8 @@ export default function DetalleOrden() {
         salud_bateria: c.salud_bateria != null ? String(c.salud_bateria) : '',
         detalles: c.detalles || '',
         monto: c.monto != null ? String(c.monto) : '',
+        condicion: c.condicion || 'usado',
+        ubicacion_fisica: c.ubicacion_fisica || '',
       }))
     );
     setCanjeModelo('');
@@ -537,6 +545,8 @@ export default function DetalleOrden() {
         salud_bateria: canjeBateria,
         monto: canjeMonto,
         detalles: canjeDetalles.trim(),
+        condicion: canjeCondicion,
+        ubicacion_fisica: canjeUbicacion.trim(),
       },
     ]);
     setCanjeModelo('');
@@ -546,6 +556,8 @@ export default function DetalleOrden() {
     setCanjeBateria('');
     setCanjeMonto('');
     setCanjeDetalles('');
+    setCanjeCondicion('usado');
+    setCanjeUbicacion('');
     setAgregandoCanje(false);
   };
 
@@ -784,6 +796,8 @@ export default function DetalleOrden() {
           detalles: c.detalles.trim() || null,
           monto: c.monto ? Number(c.monto) : null,
           vendedor_id: vendedorNuevo,
+          condicion: c.condicion,
+          ubicacion_fisica: c.ubicacion_fisica.trim() || null,
         }))
       );
       if (canjesInsError) {
@@ -1321,13 +1335,19 @@ export default function DetalleOrden() {
               {canjesEdit.map((c, idx) => (
                 <div key={c.tempId} className="rounded-lg bg-canvas dark:bg-dark-bg p-2.5 flex items-center justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">
+                    <p className="text-sm font-medium truncate flex items-center gap-1.5">
                       {canjesEdit.length > 1 ? `${idx + 1}. ` : ''}
                       {c.modelo || t('Sin modelo')}
                       {c.capacidad_gb ? ` · ${c.capacidad_gb}GB` : ''}
                       {c.color ? ` · ${c.color}` : ''}
+                      {c.condicion === 'sellado' && (
+                        <span className="text-[10px] font-bold text-black bg-gradient-to-b from-amber-300 to-amber-500 border border-black/40 rounded-full px-2 py-0.5 shrink-0">
+                          ✦ {t('SELLADO')}
+                        </span>
+                      )}
                     </p>
                     {c.imei && <p className="text-xs text-muted dark:text-dark-text-secondary">{t('IMEI:')} {c.imei}</p>}
+                    {c.ubicacion_fisica && <p className="text-xs text-muted dark:text-dark-text-secondary">📍 {c.ubicacion_fisica}</p>}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <span className="text-xs">$</span>
@@ -1354,6 +1374,7 @@ export default function DetalleOrden() {
                 placeholder={t('Modelo (ej. iPhone 11)')}
                 className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
               />
+              <SelectorEstadoDispositivo value={canjeCondicion} onChange={setCanjeCondicion} label={t('Estado')} />
               <div className="flex gap-2">
                 {STORAGE_OPTIONS.map((gb) => (
                   <button
@@ -1383,6 +1404,12 @@ export default function DetalleOrden() {
                   className="w-24 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                 />
               </div>
+              <input
+                value={canjeUbicacion}
+                onChange={(e) => setCanjeUbicacion(e.target.value)}
+                placeholder={t('Ubicación física (ej. Estante A-3, Tribuna)')}
+                className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+              />
               <input
                 value={canjeMonto}
                 onChange={(e) => setCanjeMonto(sanitizarDecimal(e.target.value))}
@@ -1590,15 +1617,23 @@ export default function DetalleOrden() {
           {canjes.map((c) => (
             <div
               key={c.id}
-              className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex items-center justify-between text-sm"
+              className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex flex-col gap-1 text-sm"
             >
-              <span>
-                {c.modelo || t('Sin modelo')}
-                {c.capacidad_gb ? ` · ${c.capacidad_gb}GB` : ''}
-                {c.color ? ` · ${c.color}` : ''}
-                {c.imei ? ` · IMEI ${c.imei}` : ''}
-              </span>
-              {c.monto != null && <span className="font-medium">${c.monto.toLocaleString('es-AR')}</span>}
+              <div className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-1.5 flex-wrap">
+                  {c.modelo || t('Sin modelo')}
+                  {c.capacidad_gb ? ` · ${c.capacidad_gb}GB` : ''}
+                  {c.color ? ` · ${c.color}` : ''}
+                  {c.imei ? ` · IMEI ${c.imei}` : ''}
+                  {c.condicion === 'sellado' && (
+                    <span className="text-[10px] font-bold text-black bg-gradient-to-b from-amber-300 to-amber-500 border border-black/40 rounded-full px-2 py-0.5">
+                      ✦ {t('SELLADO')}
+                    </span>
+                  )}
+                </span>
+                {c.monto != null && <span className="font-medium shrink-0">${c.monto.toLocaleString('es-AR')}</span>}
+              </div>
+              {c.ubicacion_fisica && <p className="text-xs text-muted dark:text-dark-text-secondary">📍 {c.ubicacion_fisica}</p>}
             </div>
           ))}
         </div>
