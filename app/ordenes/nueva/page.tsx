@@ -79,6 +79,8 @@ type CanjeCarrito = {
   salud_bateria: string;
   monto: string;
   detalles: string;
+  condicion: string;
+  ubicacion_fisica: string;
 };
 
 type ItemCarrito = {
@@ -292,6 +294,8 @@ export default function NuevaOrden() {
   const [canjeBateria, setCanjeBateria] = useState('');
   const [canjeMonto, setCanjeMonto] = useState('');
   const [canjeDetalles, setCanjeDetalles] = useState('');
+  const [canjeCondicion, setCanjeCondicion] = useState('usado');
+  const [canjeUbicacion, setCanjeUbicacion] = useState('');
 
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
@@ -458,11 +462,13 @@ export default function NuevaOrden() {
               salud_bateria: canjeBateria,
               monto: canjeMonto,
               detalles: canjeDetalles,
+              condicion: canjeCondicion,
+              ubicacion_fisica: canjeUbicacion,
             },
           ]
         : [];
     return [...canjesCarrito, ...enProgreso];
-  }, [canjesCarrito, canjeActivo, canjeModelo, canjeCapacidad, canjeColor, canjeImei, canjeBateria, canjeMonto, canjeDetalles]);
+  }, [canjesCarrito, canjeActivo, canjeModelo, canjeCapacidad, canjeColor, canjeImei, canjeBateria, canjeMonto, canjeDetalles, canjeCondicion, canjeUbicacion]);
 
   const montoCanjeTotal = useMemo(
     () => canjesEfectivos.reduce((acc, c) => acc + (Number(c.monto) || 0), 0),
@@ -796,6 +802,8 @@ export default function NuevaOrden() {
         salud_bateria: canjeBateria,
         monto: canjeMonto,
         detalles: canjeDetalles.trim(),
+        condicion: canjeCondicion,
+        ubicacion_fisica: canjeUbicacion.trim(),
       },
     ]);
     setCanjeModelo('');
@@ -805,6 +813,8 @@ export default function NuevaOrden() {
     setCanjeBateria('');
     setCanjeMonto('');
     setCanjeDetalles('');
+    setCanjeCondicion('usado');
+    setCanjeUbicacion('');
   };
 
   const quitarCanje = (tempId: string) => setCanjesCarrito((c) => c.filter((x) => x.tempId !== tempId));
@@ -1047,6 +1057,8 @@ export default function NuevaOrden() {
             detalles: c.detalles.trim() || null,
             monto: c.monto ? Number(c.monto) : null,
             vendedor_id: vendedorId || null,
+            condicion: c.condicion,
+            ubicacion_fisica: c.ubicacion_fisica.trim() || null,
           }))
         );
         if (canjesErr) throw new Error(canjesErr.message || t('no se pudieron cargar los dispositivos de canje'));
@@ -2301,13 +2313,19 @@ export default function NuevaOrden() {
                 className="rounded-lg border border-border dark:border-dark-border px-3 py-2 flex items-center justify-between gap-2 text-sm"
               >
                 <div>
-                  <p className="font-medium">
+                  <p className="font-medium flex items-center gap-1.5 flex-wrap">
                     {canjesCarrito.length > 1 ? `${idx + 1}. ` : ''}
                     {c.modelo}
                     {c.capacidad_gb ? ` · ${c.capacidad_gb}GB` : ''}
                     {c.color ? ` · ${c.color}` : ''}
+                    {c.condicion === 'sellado' && (
+                      <span className="text-[10px] font-bold text-black bg-gradient-to-b from-amber-300 to-amber-500 border border-black/40 rounded-full px-2 py-0.5">
+                        ✦ {t('SELLADO')}
+                      </span>
+                    )}
                   </p>
                   {c.imei && <p className="text-xs text-muted dark:text-dark-text-secondary font-mono">{t('IMEI:')} {c.imei}</p>}
+                  {c.ubicacion_fisica && <p className="text-xs text-muted dark:text-dark-text-secondary">📍 {c.ubicacion_fisica}</p>}
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <span className="text-xs text-muted dark:text-dark-text-secondary">{moneda}</span>
@@ -2335,6 +2353,7 @@ export default function NuevaOrden() {
               placeholder={t('Modelo del dispositivo entregado')}
               className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
             />
+            <SelectorEstadoDispositivo value={canjeCondicion} onChange={setCanjeCondicion} label={t('Estado')} />
             <div className="flex gap-2">
               {STORAGE_OPTIONS.map((gb) => (
                 <button
@@ -2361,6 +2380,12 @@ export default function NuevaOrden() {
               onChange={(e) => setCanjeImei(e.target.value)}
               placeholder={t('IMEI')}
               className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm font-mono"
+            />
+            <input
+              value={canjeUbicacion}
+              onChange={(e) => setCanjeUbicacion(e.target.value)}
+              placeholder={t('Ubicación física (ej. Estante A-3, Tribuna)')}
+              className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
             />
             <input
               value={canjeMonto}
