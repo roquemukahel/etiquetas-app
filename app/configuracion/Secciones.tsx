@@ -17,6 +17,7 @@ const SECCIONES: Seccion[] = [
   { href: '/configuracion/vendedores', titulo: 'Vendedores', desc: 'Quién atiende cada venta', permiso: 'gestionar_usuarios' },
   { href: '/configuracion/tecnicos', titulo: 'Técnicos', desc: 'Quién repara los equipos de Servicio Técnico', permiso: 'gestionar_usuarios' },
   { href: '/configuracion/sucursales', titulo: 'Sucursales', desc: 'Si tenés más de un local, organizá stock y personal por sucursal', permiso: 'gestionar_usuarios' },
+  { href: '/configuracion/cajas', titulo: 'Cajas', desc: 'Nombres de las cajas de Venta diaria y Financiamiento por sucursal', permiso: 'gestionar_egresos' },
   { href: '/configuracion/financiacion', titulo: 'Financiación en cuotas', desc: 'Interés de cada plan (3, 6 y 12 cuotas)', permiso: 'gestionar_usuarios' },
   { href: '/configuracion/comisiones', titulo: 'Comisiones', desc: 'Comisión de los vendedores por venta (minorista/mayorista)', permiso: 'gestionar_comisiones' },
   { href: '/configuracion/carpetas', titulo: 'Carpetas del stock', desc: 'Unificar carpetas repetidas y borrar las vacías', permiso: 'agregar_stock' },

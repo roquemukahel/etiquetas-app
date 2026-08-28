@@ -222,6 +222,13 @@ export const ICONOS: Record<string, React.ReactNode> = {
       <path d="M14 3v4h4M9 12h6M9 16h6" />
     </IconoBase>
   ),
+  caja: (
+    <IconoBase>
+      <path d="M3 10 5 4h14l2 6" />
+      <rect x="3" y="10" width="18" height="10" rx="1.5" />
+      <path d="M9 10v3a3 3 0 0 0 6 0v-3" />
+    </IconoBase>
+  ),
   entregado: (
     <IconoBase>
       <path d="M3 9 12 4l9 5-9 5-9-5Z" />

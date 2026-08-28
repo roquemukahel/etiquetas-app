@@ -8,11 +8,12 @@ import { registrarAuditoria } from '../../lib/auditoria';
 import { revertirComisionesOrden } from '../../lib/comisiones/operaciones';
 import { limpiarImei } from '../../lib/imei';
 import { asegurarModelo, normalizarNombreModelo } from '../../lib/modelos';
-import { useActor } from '../../lib/actor';
+import { useActor, getActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import { useT } from '../../lib/idioma';
 import { simboloMoneda } from '../../lib/monedas';
-import { sanitizarDecimal } from '../../lib/numeros';
+import { MEDIOS_PAGO, medioLabel } from '../../lib/cuentaCorriente';
+import { sanitizarDecimal, formatearMonto } from '../../lib/numeros';
 import { liberarRepuestosDeReparaciones } from '../../lib/repuestos';
 import Avatar from '../../Avatar';
 import SelectorColorAuto from '../../SelectorColorAuto';
@@ -41,6 +42,7 @@ type Vendedor = { id: string; nombre: string };
 
 type Orden = {
   id: string;
+  numero_orden: string | null;
   forma_pago: string | null;
   total: number | null;
   anticipo: number | null;
@@ -151,6 +153,13 @@ export default function DetalleOrden() {
   const [canjesError, setCanjesError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [guardando, setGuardando] = useState(false);
+  // Marcar "pagado" una orden que sigue "pendiente" (el caso real: cobrar
+  // una reparación terminada) nunca había registrado un pago de verdad en
+  // `pagos` — solo cambiaba el texto del estado. Sin esto, esa plata no
+  // tenía forma de llegar a ninguna caja ni a las estadísticas de cobro.
+  const [modalCobro, setModalCobro] = useState(false);
+  const [medioCobro, setMedioCobro] = useState('efectivo');
+  const [cobrando, setCobrando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [editando, setEditando] = useState(false);
@@ -858,6 +867,42 @@ export default function DetalleOrden() {
     setGuardando(false);
   };
 
+  // Cobrar de verdad (registrar en `pagos`) antes de marcar la orden como
+  // pagada — hoy es el único punto de la app donde una orden que nació
+  // "pendiente" (sobre todo las de Servicio Técnico, vía generarOrdenDeReparacion)
+  // termina de cobrarse. Caja Venta diaria: es una venta/reparación que se
+  // cobra íntegra en el momento, no un anticipo ni una cobranza de cta cte.
+  const confirmarCobro = async () => {
+    if (!orden) return;
+    setCobrando(true);
+    setError(null);
+    const a = getActor();
+    const { error: pagoErr } = await supabase.from('pagos').insert({
+      cliente_id: orden.cliente_id,
+      orden_id: orden.id,
+      medio: medioCobro,
+      monto: orden.total || 0,
+      moneda: orden.moneda || 'ARS',
+      caja_tipo: 'venta_diaria',
+      registrado_por_nombre: a?.nombre ?? null,
+      registrado_por_foto_url: a?.fotoUrl ?? null,
+      ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
+    });
+    if (pagoErr) {
+      setError(t('No pudimos registrar el cobro:') + ' ' + pagoErr.message);
+      setCobrando(false);
+      return;
+    }
+    await registrarAuditoria(supabase, {
+      accion: `cobró la orden ${orden.numero_orden || orden.id.slice(0, 8)} (${medioLabel(medioCobro, t)}, ${formatearMonto(orden.total || 0)})`,
+      entidad: 'orden',
+      entidadId: orden.id,
+    });
+    await cambiarEstado('pagado');
+    setCobrando(false);
+    setModalCobro(false);
+  };
+
   const handleCancelar = async () => {
     if (!orden || !puedeEliminar) return;
     const mensaje = yaDerivado
@@ -1463,7 +1508,10 @@ export default function DetalleOrden() {
         <Link href="/ordenes" className="text-2xl leading-none">
           &larr;
         </Link>
-        <span className="text-lg font-medium mr-auto">{t('Orden')}</span>
+        <span className="text-lg font-medium mr-auto">
+          {t('Orden')}
+          {orden?.numero_orden && <span className="text-muted dark:text-dark-text-secondary text-sm font-normal"> {orden.numero_orden}</span>}
+        </span>
         <button onClick={empezarEdicion} className="text-xs text-accent dark:text-dark-accent underline">
           {t('Editar')}
         </button>
@@ -1643,7 +1691,7 @@ export default function DetalleOrden() {
             <button
               key={e}
               disabled={guardando}
-              onClick={() => cambiarEstado(e)}
+              onClick={() => (e === 'pagado' && orden.estado === 'pendiente' ? setModalCobro(true) : cambiarEstado(e))}
               className={`flex-1 rounded-xl py-2 text-sm font-medium capitalize disabled:opacity-40 ${
                 orden.estado === e ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
               }`}
@@ -1653,6 +1701,42 @@ export default function DetalleOrden() {
           ))}
         </div>
       </div>
+
+      {modalCobro && (
+        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-dark-surface rounded-2xl p-5 w-full max-w-sm flex flex-col gap-3">
+            <p className="text-sm font-medium">{t('¿Cómo se cobró?')}</p>
+            <p className="text-xs text-muted dark:text-dark-text-secondary">
+              {t('Total a cobrar:')} <span className="font-medium text-ink dark:text-dark-text">{simboloMoneda(orden.moneda)}{formatearMonto(orden.total || 0)}</span>
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {MEDIOS_PAGO.map((m) => (
+                <button
+                  key={m.codigo}
+                  onClick={() => setMedioCobro(m.codigo)}
+                  className={`rounded-xl px-3 py-2 text-sm font-medium ${
+                    medioCobro === m.codigo ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border text-ink dark:text-dark-text'
+                  }`}
+                >
+                  {m.icono} {t(m.label)}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2 mt-1">
+              <button onClick={() => setModalCobro(false)} className="flex-1 rounded-xl border border-border dark:border-dark-border py-2.5 text-sm font-medium">
+                {t('Cancelar')}
+              </button>
+              <button
+                disabled={cobrando}
+                onClick={confirmarCobro}
+                className="flex-1 rounded-xl bg-accent dark:bg-dark-accent text-white py-2.5 text-sm font-medium disabled:opacity-40"
+              >
+                {cobrando ? t('Cobrando…') : t('Confirmar cobro')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {puedeEliminar && (
         <button

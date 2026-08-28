@@ -36,6 +36,7 @@ const RUTAS_SIN_SIDEBAR = [
 const RUTAS_FONDO_SUTIL = [
   '/clientes',
   '/ordenes',
+  '/caja',
   '/stock',
   '/productos',
   '/comisiones',
@@ -47,6 +48,7 @@ const RUTAS_FONDO_SUTIL = [
 const NAV = [
   { href: '/', label: 'Inicio', icono: 'inicio' },
   { href: '/ordenes', label: 'Órdenes', icono: 'ordenes' },
+  { href: '/caja', label: 'Caja', icono: 'caja' },
   { href: '/stock', label: 'Stock', icono: 'stock' },
   { href: '/productos', label: 'Productos', icono: 'productos' },
   { href: '/clientes', label: 'Clientes', icono: 'clientes' },

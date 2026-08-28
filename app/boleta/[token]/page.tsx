@@ -21,6 +21,7 @@ type Item = {
 
 type Boleta = {
   id: string;
+  numero_orden: string | null;
   created_at: string;
   fecha_entrega: string | null;
   estado: string;
@@ -148,7 +149,7 @@ export default function BoletaPublica() {
         </div>
 
         <div className="text-sm text-muted leading-relaxed">
-          <p className="font-medium text-ink">{t('Orden #')}{boleta.id.slice(0, 8)}</p>
+          <p className="font-medium text-ink">{t('Orden #')}{boleta.numero_orden || boleta.id.slice(0, 8)}</p>
           <p>{formatearFecha(boleta.created_at, locale)}</p>
           {boleta.fecha_entrega && <p>{t('Entregado:')} {formatearFecha(boleta.fecha_entrega, locale)}</p>}
           <span

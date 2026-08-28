@@ -16,6 +16,7 @@ import { obtenerSucursales, type Sucursal } from '../lib/sucursales';
 
 type Orden = {
   id: string;
+  numero_orden: string | null;
   forma_pago: string | null;
   total: number | null;
   estado: string;
@@ -115,7 +116,7 @@ export default function Ordenes() {
   const cargar = async (traerTodoElHistorial = false) => {
     let ordenesQuery = supabase
       .from('ordenes')
-      .select('id, forma_pago, total, estado, created_at, sucursal_id, clientes ( nombre, apellido ), orden_items ( descripcion, tipo )')
+      .select('id, numero_orden, forma_pago, total, estado, created_at, sucursal_id, clientes ( nombre, apellido ), orden_items ( descripcion, tipo )')
       .order('created_at', { ascending: false });
     if (!traerTodoElHistorial) {
       const desde = new Date();
@@ -501,6 +502,7 @@ export default function Ordenes() {
                   </span>
                   {' · '}
                   {o.clientes ? `${o.clientes.nombre} ${o.clientes.apellido || ''}` : t('Sin cliente')}
+                  {o.numero_orden && <span className="text-muted dark:text-dark-text-secondary"> · {o.numero_orden}</span>}
                 </p>
                 {(canjesPorOrden.get(o.id) ?? []).length > 0 && (
                   <p className="text-[11px] text-accent dark:text-dark-accent mt-0.5 truncate">
