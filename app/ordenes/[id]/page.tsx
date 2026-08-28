@@ -223,27 +223,31 @@ export default function DetalleOrden() {
   const [derivando, setDerivando] = useState(false);
 
   const cargar = async () => {
-    const { data } = await supabase
-      .from('ordenes')
-      .select(
-        '*, clientes ( nombre, apellido, telefono ), vendedores ( nombre, foto_url ), orden_items ( id, descripcion, cantidad, precio_unitario, dispositivo_id, producto_id, tipo )'
-      )
-      .eq('id', id)
-      .single();
+    // Las 3 consultas son independientes entre sí (todas filtran por el
+    // mismo id de orden) — antes se pedían una tras otra, ahora en paralelo.
+    const [{ data }, { data: reparacionesLigadas }, { data: canjesData, error: canjesErr }] = await Promise.all([
+      supabase
+        .from('ordenes')
+        .select(
+          '*, clientes ( nombre, apellido, telefono ), vendedores ( nombre, foto_url ), orden_items ( id, descripcion, cantidad, precio_unitario, dispositivo_id, producto_id, tipo )'
+        )
+        .eq('id', id)
+        .single(),
+      // Una orden puede tener VARIAS reparaciones derivadas (varios equipos de
+      // la misma boleta). Por eso NO se usa .maybeSingle() (que con >1 fila
+      // devuelve null y haría creer que no se derivó nada): se traen todas.
+      supabase.from('reparaciones').select('id').eq('orden_origen_id', id),
+      supabase
+        .from('canjes')
+        .select('id, modelo, capacidad_gb, color, imei, salud_bateria, detalles, monto, condicion, ubicacion_fisica')
+        .eq('orden_id', id)
+        .eq('estado', 'en_canje')
+        .order('created_at'),
+    ]);
     setOrden(data as any);
-    // Una orden puede tener VARIAS reparaciones derivadas (varios equipos de la
-    // misma boleta). Por eso NO se usa .maybeSingle() (que con >1 fila devuelve
-    // null y haría creer que no se derivó nada): se traen todas.
-    const { data: reparacionesLigadas } = await supabase.from('reparaciones').select('id').eq('orden_origen_id', id);
     const idsRep = (reparacionesLigadas ?? []).map((r: any) => r.id as string);
     setYaDerivado(idsRep.length > 0);
     setReparacionesDerivadasIds(idsRep);
-    const { data: canjesData, error: canjesErr } = await supabase
-      .from('canjes')
-      .select('id, modelo, capacidad_gb, color, imei, salud_bateria, detalles, monto, condicion, ubicacion_fisica')
-      .eq('orden_id', id)
-      .eq('estado', 'en_canje')
-      .order('created_at');
     if (canjesErr) {
       // No seguimos: si diéramos por "cargados" cero canjes sin haber
       // confirmado la consulta, una edición posterior guardaría monto_canje=0
@@ -937,17 +941,21 @@ export default function DetalleOrden() {
     // orden — simétrico al descuento que se hace al crearla en Nueva Orden.
     // Best-effort: si falla, no bloquea la cancelación (mismo criterio que
     // el resto de esta función).
-    for (const i of orden.orden_items.filter((i) => i.producto_id)) {
-      try {
-        await supabase.rpc('producto_mover_stock', {
-          p_producto_id: i.producto_id,
-          p_tipo: 'devolucion',
-          p_cantidad: i.cantidad,
-          p_motivo: 'Venta cancelada',
-          p_usuario: actor?.nombre ?? null,
-        });
-      } catch {}
-    }
+    await Promise.all(
+      orden.orden_items
+        .filter((i) => i.producto_id)
+        .map((i) =>
+          Promise.resolve(
+            supabase.rpc('producto_mover_stock', {
+              p_producto_id: i.producto_id,
+              p_tipo: 'devolucion',
+              p_cantidad: i.cantidad,
+              p_motivo: 'Venta cancelada',
+              p_usuario: actor?.nombre ?? null,
+            })
+          ).catch(() => {})
+        )
+    );
     // Se borran antes de eliminar la orden: canjes.orden_id queda en null
     // automáticamente al borrar la orden (on delete set null), así que
     // después ya no se los podría encontrar por ese filtro.
