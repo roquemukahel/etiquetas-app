@@ -192,11 +192,18 @@ begin
 
   select * into v_caja from cajas where id = v_turno.caja_id;
 
+  -- "and moneda = v_turno.moneda": sin esto, un negocio que cobra en más de
+  -- una moneda sumaba efectivo en pesos y en dólares como si fueran el mismo
+  -- número — el arqueo nunca podía cerrar bien. El turno opera en UNA sola
+  -- moneda (la que tenía el negocio al abrirlo); pagos en otra moneda quedan
+  -- fuera de este cierre (no se pierden, viven en `pagos` igual, pero no
+  -- entran en el efectivo esperado de ESTA caja).
   select coalesce(sum(monto), 0) into v_total_efectivo
   from pagos
   where negocio_id = negocio_actual()
     and caja_tipo = v_caja.tipo
     and medio = 'efectivo'
+    and moneda = v_turno.moneda
     and not anulado
     and fecha >= v_turno.abierta_en
     and fecha <= now()

@@ -14,27 +14,34 @@ import {
   obtenerTurnoAbierto,
   obtenerHistorialTurnos,
   obtenerPagosDeCaja,
+  obtenerTurnoPorNumero,
   abrirTurno,
   cerrarTurno,
   reabrirTurno,
   type Caja,
   type TurnoCaja,
 } from '../lib/caja/servicio';
-import { totalesPorMedio, totalGeneral, efectivoEsperado, MEDIOS_CAJA, NOMBRE_CAJA, type TipoCaja } from '../lib/caja/motor';
+import { totalesPorMedio, totalGeneral, efectivoEsperado, diferenciaArqueo, MEDIOS_CAJA, NOMBRE_CAJA, type TipoCaja } from '../lib/caja/motor';
 import { sanitizarDecimal, formatearMonto } from '../lib/numeros';
 import { medioLabel } from '../lib/cuentaCorriente';
-import { useT } from '../lib/idioma';
+import { useT, useIdioma } from '../lib/idioma';
+import { localeDe } from '../lib/i18n/traducir';
 
 export default function CajaPage() {
   const supabase = crearClienteNavegador();
   const actor = useActor();
   const t = useT();
+  const idioma = useIdioma();
+  const locale = localeDe(idioma);
   const puede = tienePermiso(actor, 'vender');
   const sucursalActualGlobal = useSucursalActual();
 
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
   const [sucursalId, setSucursalId] = useState<string | null>(sucursalActualGlobal.id ?? null);
   useEffect(() => setSucursalId(sucursalActualGlobal.id ?? null), [sucursalActualGlobal.id]);
+  // La moneda del turno es la del negocio al momento de abrirlo — antes
+  // quedaba hardcodeada en 'ARS' sin importar la configuración real.
+  const [monedaNegocio, setMonedaNegocio] = useState('ARS');
 
   const [tipo, setTipo] = useState<TipoCaja>('venta_diaria');
   const [cajas, setCajas] = useState<Caja[]>([]);
@@ -60,9 +67,24 @@ export default function CajaPage() {
       } catch {
         // Tabla sucursales todavía no existe en este negocio.
       }
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: perfil } = await supabase.from('perfiles').select('negocios ( moneda )').eq('id', user.id).single();
+      const m = (perfil as any)?.negocios?.moneda;
+      if (m) setMonedaNegocio(m);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Asegurar las 2 cajas predeterminadas solo depende de la sucursal, no de
+  // qué pestaña (tipo) esté mirando — antes se repetía el RPC en cada click
+  // de pestaña sin necesidad, contra un unique index que ya estaba satisfecho.
+  useEffect(() => {
+    asegurarCajasPredeterminadas(supabase, sucursalId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sucursalId]);
 
   const cajaActual = useMemo(() => cajas.find((c) => c.tipo === tipo) ?? null, [cajas, tipo]);
 
@@ -73,20 +95,29 @@ export default function CajaPage() {
     }
     setLoading(true);
     setError(null);
-    await asegurarCajasPredeterminadas(supabase, sucursalId);
-    const cajasData = await obtenerCajas(supabase, sucursalId);
-    setCajas(cajasData);
-    const caja = cajasData.find((c) => c.tipo === tipo);
-    if (caja) {
-      const t1 = await obtenerTurnoAbierto(supabase, caja.id);
-      setTurno(t1);
-      if (t1) {
-        const pagos = await obtenerPagosDeCaja(supabase, caja, t1.abierta_en, new Date().toISOString());
-        setTotales(totalesPorMedio(pagos));
-      } else {
-        setTotales(totalesPorMedio([]));
+    try {
+      const cajasData = await obtenerCajas(supabase, sucursalId);
+      setCajas(cajasData);
+      const caja = cajasData.find((c) => c.tipo === tipo);
+      if (caja) {
+        const [t1, hist] = await Promise.all([obtenerTurnoAbierto(supabase, caja.id), obtenerHistorialTurnos(supabase, caja.id)]);
+        setTurno(t1);
+        setHistorial(hist);
+        if (t1) {
+          // Sin "hasta": filtrar contra el reloj del navegador podía dejar
+          // afuera una venta recién cobrada si ese reloj estaba atrasado
+          // respecto al del servidor (que es quien pone la fecha real).
+          const pagos = await obtenerPagosDeCaja(supabase, caja, t1.abierta_en, undefined, t1.moneda);
+          setTotales(totalesPorMedio(pagos));
+        } else {
+          setTotales(totalesPorMedio([]));
+        }
       }
-      setHistorial(await obtenerHistorialTurnos(supabase, caja.id));
+    } catch (e) {
+      // Un error real de lectura NUNCA debe verse igual que "esta caja está
+      // cerrada" — si no, alguien podría creer que no hay turno abierto
+      // cuando en realidad no se pudo consultar.
+      setError(e instanceof Error ? e.message : t('No pudimos cargar la caja. Recargá la página.'));
     }
     setLoading(false);
   };
@@ -101,7 +132,7 @@ export default function CajaPage() {
     setAbriendo(true);
     setError(null);
     const a = getActor();
-    const { turno: nuevo, error: err } = await abrirTurno(supabase, cajaActual.id, Number(efectivoInicial) || 0, 'ARS', a?.nombre ?? null);
+    const { turno: nuevo, error: err } = await abrirTurno(supabase, cajaActual.id, Number(efectivoInicial) || 0, monedaNegocio, a?.nombre ?? null);
     setAbriendo(false);
     if (err || !nuevo) {
       setError(err || t('No pudimos abrir la caja.'));
@@ -141,12 +172,25 @@ export default function CajaPage() {
   const handleReabrir = async (tu: TurnoCaja) => {
     if (!confirm(`${t('¿Reabrir el turno N°')} ${tu.numero}? ${t('Solo se puede si no se cerró ya uno después.')}`)) return;
     setError(null);
+    // caja_reabrir_turno() borra el turno siguiente (auto-creado al cerrar
+    // este) si sigue intacto — eso es un borrado real de un registro
+    // contable, y cualquier borrado en esta app tiene que quedar
+    // auditado. Se busca ANTES de reabrir porque después ya no va a existir.
+    const sucesor = await obtenerTurnoPorNumero(supabase, tu.caja_id, tu.numero + 1).catch(() => null);
     const { turno: reabierto, error: err } = await reabrirTurno(supabase, tu.id);
     if (err || !reabierto) {
       setError(err || t('No pudimos reabrir el turno.'));
       return;
     }
     await registrarAuditoria(supabase, { accion: `reabrió el turno N° ${tu.numero} de ${cajaActual?.nombre ?? ''}`, entidad: 'caja_turno', entidadId: tu.id });
+    if (sucesor && sucesor.estado === 'abierta') {
+      await registrarAuditoria(supabase, {
+        accion: `eliminó el turno N° ${sucesor.numero} de ${cajaActual?.nombre ?? ''} (se auto-había creado al cerrar el N° ${tu.numero}, y quedó vacío al reabrirlo)`,
+        entidad: 'caja_turno',
+        entidadId: sucesor.id,
+        valorAnterior: { numero: sucesor.numero, efectivo_inicial: sucesor.efectivo_inicial, abierta_en: sucesor.abierta_en },
+      });
+    }
     await cargar();
   };
 
@@ -235,7 +279,7 @@ export default function CajaPage() {
               <span className="text-[11px] rounded-full px-2 py-0.5 bg-good/15 text-good font-medium">{t('ACTUAL')}</span>
             </div>
             <p className="text-xs text-muted dark:text-dark-text-secondary">
-              {t('Abierta el')} {new Date(turno.abierta_en).toLocaleString('es-AR')}
+              {t('Abierta el')} {new Date(turno.abierta_en).toLocaleString(locale)}
               {turno.abierta_por && ` · ${turno.abierta_por}`}
             </p>
 
@@ -264,7 +308,7 @@ export default function CajaPage() {
 
             <button
               onClick={() => {
-                setEfectivoDeclarado(String(esperado));
+                setEfectivoDeclarado(String(Math.round(esperado * 100) / 100));
                 setModalCierre(true);
               }}
               className="rounded-xl border border-border dark:border-dark-border py-3 text-sm font-medium mt-1"
@@ -290,9 +334,9 @@ export default function CajaPage() {
                     className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                   />
                 </label>
-                {efectivoDeclarado !== '' && Number(efectivoDeclarado) !== esperado && (
+                {efectivoDeclarado !== '' && Math.abs(diferenciaArqueo(Number(efectivoDeclarado), esperado)) > 0.009 && (
                   <p className={`text-xs font-medium ${Number(efectivoDeclarado) > esperado ? 'text-good' : 'text-bad'}`}>
-                    {Number(efectivoDeclarado) > esperado ? t('Sobra') : t('Falta')} ${formatearMonto(Math.abs(Number(efectivoDeclarado) - esperado))}
+                    {Number(efectivoDeclarado) > esperado ? t('Sobra') : t('Falta')} ${formatearMonto(Math.abs(diferenciaArqueo(Number(efectivoDeclarado), esperado)))}
                   </p>
                 )}
                 <label className="flex flex-col gap-1">
@@ -334,7 +378,7 @@ export default function CajaPage() {
                   {t('Cierre N°')} {String(h.numero).padStart(6, '0')}
                 </p>
                 <p className="text-xs text-muted dark:text-dark-text-secondary">
-                  {h.cerrada_en && new Date(h.cerrada_en).toLocaleString('es-AR')}
+                  {h.cerrada_en && new Date(h.cerrada_en).toLocaleString(locale)}
                   {h.cerrada_por && ` · ${h.cerrada_por}`}
                 </p>
                 {h.diferencia != null && Math.abs(h.diferencia) > 0.009 && (

@@ -1115,7 +1115,12 @@ export default function NuevaOrden() {
         );
         if (pagosErr) throw new Error(pagosErr.message);
       }
-      if (montoCuentaCorriente > 0 && clienteId) {
+      // Mismo umbral (0.009) que cajaDeVenta arriba, para que "esto es una
+      // venta financiada" se responda igual en los dos lugares — antes acá
+      // era "> 0" a secas mientras cajaDeVenta usaba tolerancia, así que un
+      // residuo de coma flotante minúsculo podía clasificar el cobro como
+      // Venta diaria pero igual generar un cargo real de cuenta corriente.
+      if (montoCuentaCorriente > 0.009 && clienteId) {
         if (financiarActivo && previewFinanciacion) {
           // Financiación propia en cuotas: en vez de un solo cargo, el plan
           // genera un cargo POR CUOTA en cta_cte_movimientos (cada uno con su
