@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../../lib/supabase/client';
+import { obtenerTodasLasFilas } from '../../lib/db';
 import { registrarAuditoria } from '../../lib/auditoria';
 import { useActor, getActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
@@ -152,8 +153,11 @@ export default function StockRepuestos() {
   const [guardandoMovimiento, setGuardandoMovimiento] = useState(false);
 
   const cargar = async () => {
-    const { data } = await supabase.from('repuestos').select('*').order('nombre');
-    setRepuestos((data as Repuesto[]) ?? []);
+    // Sin paginar, un catálogo de repuestos con más de 1000 filas se corta en
+    // silencio (límite por defecto de PostgREST) — mismo bug ya corregido en
+    // Stock/Dispositivos, reusa el mismo helper.
+    const data = await obtenerTodasLasFilas<Repuesto>(supabase, 'repuestos', '*', [{ columna: 'nombre' }]);
+    setRepuestos(data);
     setLoading(false);
   };
 
@@ -164,11 +168,16 @@ export default function StockRepuestos() {
       setProveedores((data as Proveedor[]) ?? []);
     })();
     (async () => {
+      // Filtrado por estado del lado del servidor (no solo en JS): con miles
+      // de reparaciones históricas acumuladas, traer TODAS para filtrar acá
+      // se corta en 1000 filas sin avisar y hace desaparecer reparaciones
+      // abiertas viejas del selector de "reservar repuesto".
       const { data } = await supabase
         .from('reparaciones')
         .select('id, numero_orden, modelo, estado')
+        .not('estado', 'in', `(${FINALIZADOS.join(',')})`)
         .order('fecha_ingreso_servicio', { ascending: false });
-      setReparacionesAbiertas(((data as ReparacionAbierta[]) ?? []).filter((r) => !FINALIZADOS.includes(r.estado)));
+      setReparacionesAbiertas((data as ReparacionAbierta[]) ?? []);
     })();
     (async () => {
       const {

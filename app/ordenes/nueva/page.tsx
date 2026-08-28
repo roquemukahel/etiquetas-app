@@ -1088,18 +1088,22 @@ export default function NuevaOrden() {
       // se creó, y no tiene sentido dejar al vendedor sin poder cobrar por
       // un problema de stock de un accesorio.
       const actorProducto = getActor();
-      for (const i of carrito.filter((i) => i.tipo === 'producto' && i.productoId)) {
-        try {
-          await supabase.rpc('producto_mover_stock', {
-            p_producto_id: i.productoId,
-            p_tipo: 'venta',
-            p_cantidad: i.cantidad,
-            p_motivo: 'Venta',
-            p_usuario: actorProducto?.nombre ?? null,
-            p_orden_id: orden.id,
-          });
-        } catch {}
-      }
+      await Promise.all(
+        carrito
+          .filter((i) => i.tipo === 'producto' && i.productoId)
+          .map((i) =>
+            Promise.resolve(
+              supabase.rpc('producto_mover_stock', {
+                p_producto_id: i.productoId,
+                p_tipo: 'venta',
+                p_cantidad: i.cantidad,
+                p_motivo: 'Venta',
+                p_usuario: actorProducto?.nombre ?? null,
+                p_orden_id: orden.id,
+              })
+            ).catch(() => {})
+          )
+      );
 
       // Cobro: pagos (plata que entra) + cargo de cuenta corriente (deuda
       // que nace). La etiqueta de la orden ya resume el medio; el detalle

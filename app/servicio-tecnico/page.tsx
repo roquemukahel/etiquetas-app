@@ -206,15 +206,19 @@ export default function ServicioTecnico() {
   const [cargandoHistorial, setCargandoHistorial] = useState(false);
 
   const cargar = async (soloActivas = true) => {
-    let query = supabase
-      .from('reparaciones')
-      .select(
-        'id, numero_orden, modelo, capacidad_gb, color, imei, falla_declarada, diagnostico, ubicacion_fisica, tecnico_id, estado, prioridad, trabajos_realizados, fecha_ingreso_servicio, fecha_estimada, fecha_reparado, fecha_entrega, garantia_dias, estado_actualizado_at, cliente_id, token_seguimiento, en_poder_tecnico, presupuesto_mano_obra, presupuesto_repuestos, importe_total, orden_cobro_id, agregado_a_stock, sucursal_id, clientes ( nombre, apellido, telefono )'
-      )
-      .order('fecha_ingreso_servicio', { ascending: false });
-    if (soloActivas) query = query.not('estado', 'in', `(${FINALIZADOS.join(',')})`);
-    const { data } = await query;
-    setReparaciones((data as any) ?? []);
+    // Paginado con obtenerTodasLasFilas: sin esto, un negocio con más de
+    // 1000 reparaciones históricas perdía resultados en silencio al buscar
+    // (esta pantalla promete mirar TODAS las reparaciones al buscar texto,
+    // ver comentario en `filtrados` más abajo) — mismo bug de truncamiento
+    // de PostgREST ya corregido en Stock/Dispositivos.
+    const data = await obtenerTodasLasFilas<Reparacion>(
+      supabase,
+      'reparaciones',
+      'id, numero_orden, modelo, capacidad_gb, color, imei, falla_declarada, diagnostico, ubicacion_fisica, tecnico_id, estado, prioridad, trabajos_realizados, fecha_ingreso_servicio, fecha_estimada, fecha_reparado, fecha_entrega, garantia_dias, estado_actualizado_at, cliente_id, token_seguimiento, en_poder_tecnico, presupuesto_mano_obra, presupuesto_repuestos, importe_total, orden_cobro_id, agregado_a_stock, sucursal_id, clientes ( nombre, apellido, telefono )',
+      [{ columna: 'fecha_ingreso_servicio', ascending: false }],
+      soloActivas ? (q) => q.not('estado', 'in', `(${FINALIZADOS.join(',')})`) : undefined
+    );
+    setReparaciones(data);
     if (!soloActivas) setHistorialCompleto(true);
     setLoading(false);
   };
