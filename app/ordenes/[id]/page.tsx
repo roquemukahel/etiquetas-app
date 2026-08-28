@@ -41,6 +41,7 @@ type Vendedor = { id: string; nombre: string };
 
 type Orden = {
   id: string;
+  numero_orden: string | null;
   forma_pago: string | null;
   total: number | null;
   anticipo: number | null;
@@ -1463,7 +1464,10 @@ export default function DetalleOrden() {
         <Link href="/ordenes" className="text-2xl leading-none">
           &larr;
         </Link>
-        <span className="text-lg font-medium mr-auto">{t('Orden')}</span>
+        <span className="text-lg font-medium mr-auto">
+          {t('Orden')}
+          {orden?.numero_orden && <span className="text-muted dark:text-dark-text-secondary text-sm font-normal"> {orden.numero_orden}</span>}
+        </span>
         <button onClick={empezarEdicion} className="text-xs text-accent dark:text-dark-accent underline">
           {t('Editar')}
         </button>

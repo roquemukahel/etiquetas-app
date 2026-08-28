@@ -24,6 +24,7 @@ type Item = {
 
 type Orden = {
   id: string;
+  numero_orden: string | null;
   forma_pago: string | null;
   total: number | null;
   anticipo: number | null;
@@ -320,7 +321,7 @@ export default function Boleta() {
           </div>
           <div className="flex items-start gap-3">
             <div className="text-right text-sm text-muted leading-relaxed mt-1">
-              <p className="font-medium text-ink">{t('Orden #')}{orden.id.slice(0, 8)}</p>
+              <p className="font-medium text-ink">{t('Orden #')}{orden.numero_orden || orden.id.slice(0, 8)}</p>
               <p>{formatearFecha(orden.created_at, locale)}</p>
               {orden.fecha_entrega && <p>{t('Entregado:')} {formatearFecha(orden.fecha_entrega, locale)}</p>}
               <span
