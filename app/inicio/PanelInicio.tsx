@@ -1,0 +1,690 @@
+import Link from 'next/link';
+import { crearClienteServidor } from '../lib/supabase/server';
+import { obtenerTodasLasFilas } from '../lib/db';
+import { ESTADOS_COBRADOS, montoVenta } from '../estadisticas/datos';
+import { aFechaISO } from '../lib/financiacion/motor';
+import { imagenParaDescripcion } from '../lib/carpetas';
+import { imagenColorDeModelo } from '../lib/coloresModelo';
+import { COLOR_ICONO, ICONOS } from '../Iconos';
+import NumeroAnimado from '../NumeroAnimado';
+import Avatar from '../Avatar';
+import AccesosRapidos, { MetricasAccesos } from './AccesosRapidos';
+import IlustracionModulo from './IlustracionesModulos';
+import OjoResumenFinanciero from '../OjoResumenFinanciero';
+import ProductosMasVendidos from '../ProductosMasVendidos';
+import QoviLateral from '../QoviLateral';
+import QoviBurbujaWhatsApp from '../QoviBurbujaWhatsApp';
+import { traducir, type Idioma } from '../lib/idiomaServidor';
+import { traducirAccion } from '../lib/i18n/traducirAccion';
+
+// Todo lo que en Home() (app/page.tsx) tardaba en resolver — el bloque
+// grande de ~19 consultas en paralelo — vive acá, en su PROPIO componente
+// async. Home() ya resolvió auth+perfil (rápido, una sola consulta) y
+// renderiza el header/buscador al toque; este componente queda envuelto en
+// un <Suspense> allá, así que Next.js muestra el resto de la app de
+// inmediato y streamea este panel en cuanto está listo, en vez de dejar
+// TODA la pantalla en blanco esperando a la consulta más lenta de las 19.
+export default async function PanelInicio({
+  userId,
+  sucursalId,
+  idioma,
+  moneda,
+}: {
+  userId: string;
+  sucursalId: string | null;
+  idioma: Idioma;
+  moneda: string;
+}) {
+  const t = (texto: string) => traducir(idioma, texto);
+  // Aplica el filtro solo a lo que Fase 1 etiqueta por sucursal (stock,
+  // órdenes, reparaciones) — clientes/canjes/compras quedan compartidos a
+  // propósito. sucursalId solo llega no-null si el negocio activó
+  // multisucursal Y eligió una sucursal puntual en el panel, así que para
+  // el resto de los negocios esto es un no-op.
+  const porSucursal = <Q extends { eq: (columna: string, valor: string) => Q }>(q: Q): Q =>
+    sucursalId ? q.eq('sucursal_id', sucursalId) : q;
+  const supabase = crearClienteServidor();
+
+  const inicioMes = new Date();
+  inicioMes.setDate(1);
+  inicioMes.setHours(0, 0, 0, 0);
+  const inicioMesPasado = new Date(inicioMes);
+  inicioMesPasado.setMonth(inicioMesPasado.getMonth() - 1);
+
+  const hace30dias = new Date();
+  hace30dias.setDate(hace30dias.getDate() - 30);
+  const hace60dias = new Date();
+  hace60dias.setDate(hace60dias.getDate() - 60);
+  const en7dias = new Date();
+  en7dias.setDate(en7dias.getDate() + 7);
+
+  const [
+    [
+      { count: countStock },
+      { count: countPendientes },
+      { count: countClientes },
+      { data: ordenesRecientes },
+      { data: carpetasStock },
+      { data: catalogoProductos },
+      { data: reparacionesRecientes },
+      { data: stockRecienteData },
+      { data: clientesRecientesData },
+      { count: countListosEntregar },
+      { count: countGarantias },
+      { count: countStockQuieto },
+      { count: countServicioLargo },
+      { count: countEnCanje },
+      { count: countComprasPendientes },
+      { count: countSinPrecio },
+      { data: auditoriaReciente },
+      { data: vendedoresLista },
+      { data: tecnicosLista },
+    ],
+    // Aparte del Promise.all de arriba: un select() común de "dispositivos"
+    // se corta en 1000 filas sin avisar. Con miles de equipos en stock, la
+    // alerta de "por reponer" se quedaría corta sin este paginado.
+    modelosEnStock,
+  ] = await Promise.all([
+    Promise.all([
+      porSucursal(supabase.from('dispositivos').select('id', { count: 'exact', head: true }).eq('en_stock', true)),
+      porSucursal(supabase.from('ordenes').select('id', { count: 'exact', head: true }).eq('estado', 'pendiente')),
+      supabase.from('clientes').select('id', { count: 'exact', head: true }),
+      porSucursal(
+        supabase
+          .from('ordenes')
+          .select(
+            'total, anticipo, monto_canje, estado, created_at, vendedores ( nombre, foto_url ), clientes ( nombre, apellido ), orden_items ( descripcion, cantidad, tipo, dispositivos ( modelo, color ) )'
+          )
+          .gte('created_at', inicioMesPasado.toISOString())
+      ),
+      supabase.from('modelos_stock').select('nombre, imagen_url'),
+      supabase.from('productos').select('nombre, imagen_url'),
+      porSucursal(
+        supabase
+          .from('reparaciones')
+          .select('modelo, fecha_reparado, tecnicos ( nombre, foto_url )')
+          .not('fecha_reparado', 'is', null)
+          .order('fecha_reparado', { ascending: false })
+          .limit(5)
+      ),
+      porSucursal(
+        supabase
+          .from('dispositivos')
+          .select('modelo, created_at, agregado_por_nombre, agregado_por_foto_url')
+          .order('created_at', { ascending: false })
+          .limit(5)
+      ),
+      supabase
+        .from('clientes')
+        .select('nombre, apellido, created_at, agregado_por_nombre, agregado_por_foto_url')
+        .order('created_at', { ascending: false })
+        .limit(5),
+      porSucursal(supabase.from('reparaciones').select('id', { count: 'exact', head: true }).eq('estado', 'listo_para_entregar')),
+      porSucursal(
+        supabase
+          .from('dispositivos')
+          .select('id', { count: 'exact', head: true })
+          // garantia_vencimiento es una columna `date` (calendario LOCAL del
+          // negocio) — toISOString() da la fecha en UTC, que se corre al día
+          // siguiente unas horas antes de medianoche local en cualquier huso
+          // horario detrás de UTC. aFechaISO usa los componentes locales.
+          .not('garantia_vencimiento', 'is', null)
+          .gte('garantia_vencimiento', aFechaISO(new Date()))
+          .lte('garantia_vencimiento', aFechaISO(en7dias))
+      ),
+      porSucursal(
+        supabase
+          .from('dispositivos')
+          .select('id', { count: 'exact', head: true })
+          .eq('en_stock', true)
+          .lte('en_stock_desde', hace30dias.toISOString())
+      ),
+      porSucursal(
+        supabase
+          .from('reparaciones')
+          .select('id', { count: 'exact', head: true })
+          .neq('estado', 'entregado')
+          .neq('estado', 'cancelado')
+          .lte('fecha_ingreso_servicio', hace60dias.toISOString())
+      ),
+      supabase.from('canjes').select('id', { count: 'exact', head: true }).eq('estado', 'en_canje').eq('oculto_en_canje', false),
+      supabase.from('compras').select('id', { count: 'exact', head: true }).eq('estado', 'pendiente'),
+      porSucursal(
+        supabase
+          .from('dispositivos')
+          .select('id', { count: 'exact', head: true })
+          .eq('en_stock', true)
+          .is('precio', null)
+      ),
+      // Acciones sensibles del libro de auditoría (borrados, ediciones,
+      // derivaciones, cambios de config): son actividad del sistema que no
+      // aparece en las tablas vivas (un borrado deja la fila inexistente).
+      supabase
+        .from('auditoria')
+        .select('actor_nombre, accion, created_at')
+        .order('created_at', { ascending: false })
+        .limit(12),
+      // La auditoría guarda solo el nombre del actor, no su foto. Cruzamos por
+      // nombre con vendedores/técnicos para mostrar el avatar real en el feed.
+      supabase.from('vendedores').select('nombre, foto_url'),
+      supabase.from('tecnicos').select('nombre, foto_url'),
+    ]),
+    obtenerTodasLasFilas<{ modelo: string | null }>(supabase, 'dispositivos', 'modelo', [], (q) => porSucursal(q.eq('en_stock', true))),
+  ]);
+
+  const enStock = countStock ?? 0;
+  const pendientes = countPendientes ?? 0;
+  const totalClientes = countClientes ?? 0;
+
+  const cobradas = (ordenesRecientes ?? []).filter((o) => ESTADOS_COBRADOS.includes(o.estado));
+  // montoVenta (total + anticipo + monto_canje) es el mismo criterio que
+  // usa Estadísticas para "Ventas netas" — el "total" solo, sin sumar
+  // anticipo/canje, subestima cualquier venta que los tuviera. Antes
+  // Inicio y Estadísticas mostraban números distintos para el mismo mes.
+  const ingresosMes = cobradas
+    .filter((o) => new Date(o.created_at) >= inicioMes)
+    .reduce((acc, o) => acc + montoVenta(o), 0);
+  const ingresosMesPasado = cobradas
+    .filter((o) => new Date(o.created_at) >= inicioMesPasado && new Date(o.created_at) < inicioMes)
+    .reduce((acc, o) => acc + montoVenta(o), 0);
+  // ventasMes tiene que contar solo lo COBRADO (cobradas), igual que
+  // ventasMesPasado más abajo — antes contaba cualquier orden (incluidas
+  // pendientes/canceladas), inflando el "+X% vs mes pasado" y
+  // subestimando el ticket promedio.
+  const ventasMes = cobradas.filter((o) => new Date(o.created_at) >= inicioMes).length;
+  const deltaPct = ingresosMesPasado > 0 ? Math.round(((ingresosMes - ingresosMesPasado) / ingresosMesPasado) * 100) : null;
+
+  const ventasMesPasado = cobradas.filter(
+    (o) => new Date(o.created_at) >= inicioMesPasado && new Date(o.created_at) < inicioMes
+  ).length;
+  const deltaVentasPct = ventasMesPasado > 0 ? Math.round(((ventasMes - ventasMesPasado) / ventasMesPasado) * 100) : null;
+
+  const ticketPromedio = ventasMes > 0 ? ingresosMes / ventasMes : 0;
+  const ticketPromedioMesPasado = ventasMesPasado > 0 ? ingresosMesPasado / ventasMesPasado : 0;
+  const deltaTicketPct =
+    ticketPromedioMesPasado > 0
+      ? Math.round(((ticketPromedio - ticketPromedioMesPasado) / ticketPromedioMesPasado) * 100)
+      : null;
+
+  const mapaImagenesCarpetas = new Map<string, string>();
+  for (const c of (carpetasStock as { nombre: string; imagen_url: string | null }[]) ?? []) {
+    if (c.imagen_url) mapaImagenesCarpetas.set(c.nombre, c.imagen_url);
+  }
+  const mapaImagenesProductos = new Map<string, string>();
+  for (const p of (catalogoProductos as { nombre: string; imagen_url: string | null }[]) ?? []) {
+    if (p.imagen_url) mapaImagenesProductos.set(p.nombre, p.imagen_url);
+  }
+  // Separados en dos rankings (teléfonos vs. accesorios) en vez de uno solo
+  // mezclado: con un local que vende sobre todo fundas/vidrios/cables, esos
+  // accesorios (que se venden en mucho mayor volumen) tapaban por completo
+  // a los teléfonos en el top 5 único que había antes. Los ítems de tipo
+  // 'trabajo' (servicio técnico) no son "productos" — quedan afuera de
+  // ambos rankings.
+  const conteoTelefonos = new Map<string, number>();
+  // Modelo/color reales del dispositivo vendido (via orden_items.dispositivo_id),
+  // para poder mostrar su foto de verdad con imagenColorDeModelo — antes acá
+  // solo se probaba la foto de la CARPETA (imagenParaDescripcion), que
+  // depende de que el dueño le haya cargado una foto a mano a esa carpeta;
+  // sin eso, un modelo bien vendido igual aparecía con el ícono genérico.
+  const telefonoInfo = new Map<string, { modelo: string | null; color: string | null }>();
+  const conteoAccesorios = new Map<string, number>();
+  for (const o of cobradas.filter((o: any) => new Date(o.created_at) >= inicioMes)) {
+    for (const item of (o as any).orden_items ?? []) {
+      if (item.tipo === 'dispositivo') {
+        // El IMEI hace única a cada descripción de dispositivo — lo sacamos
+        // para agrupar por modelo/capacidad/color, no por unidad individual.
+        const clave = item.descripcion.split(' · IMEI')[0];
+        conteoTelefonos.set(clave, (conteoTelefonos.get(clave) ?? 0) + item.cantidad);
+        if (!telefonoInfo.has(clave)) {
+          telefonoInfo.set(clave, { modelo: item.dispositivos?.modelo ?? null, color: item.dispositivos?.color ?? null });
+        }
+      } else if (item.tipo === 'producto') {
+        conteoAccesorios.set(item.descripcion, (conteoAccesorios.get(item.descripcion) ?? 0) + item.cantidad);
+      }
+    }
+  }
+  const masVendidosTelefonos = Array.from(conteoTelefonos.entries())
+    .map(([nombre, cantidad]) => {
+      const inf = telefonoInfo.get(nombre);
+      const imagenUrl =
+        (inf ? imagenColorDeModelo(inf.modelo, inf.color) : null) ??
+        mapaImagenesProductos.get(nombre) ??
+        imagenParaDescripcion(nombre, mapaImagenesCarpetas);
+      return { nombre, cantidad, imagenUrl };
+    })
+    .sort((a, b) => b.cantidad - a.cantidad)
+    .slice(0, 5);
+  const masVendidosAccesorios = Array.from(conteoAccesorios.entries())
+    .map(([nombre, cantidad]) => ({
+      nombre,
+      cantidad,
+      imagenUrl: mapaImagenesProductos.get(nombre) ?? imagenParaDescripcion(nombre, mapaImagenesCarpetas),
+    }))
+    .sort((a, b) => b.cantidad - a.cantidad)
+    .slice(0, 5);
+
+  const candidatos: {
+    tipo: 'venta' | 'reparacion' | 'stock' | 'cliente' | 'eliminacion' | 'ajuste';
+    fecha: Date;
+    texto: string;
+    actorNombre: string | null;
+    actorFoto: string | null;
+  }[] = [];
+
+  for (const o of cobradas.slice(0, 8) as any[]) {
+    const primerItem = o.orden_items?.[0]?.descripcion?.split(' · IMEI')[0];
+    const extra = (o.orden_items?.length ?? 0) > 1 ? ` y ${o.orden_items.length - 1} más` : '';
+    const vendedor = o.vendedores?.nombre;
+    const cliente = o.clientes ? `${o.clientes.nombre} ${o.clientes.apellido || ''}`.trim() : null;
+    const que = primerItem ? `${primerItem}${extra}` : t('una venta');
+    candidatos.push({
+      tipo: 'venta',
+      fecha: new Date(o.created_at),
+      texto: `${vendedor ? `${vendedor} ${t('vendió')}` : t('Se vendió')} ${que}${cliente ? ` ${t('a')} ${cliente}` : ''}`,
+      actorNombre: vendedor ?? null,
+      actorFoto: o.vendedores?.foto_url ?? null,
+    });
+  }
+
+  for (const r of (reparacionesRecientes as any[]) ?? []) {
+    const tecnico = r.tecnicos?.nombre;
+    candidatos.push({
+      tipo: 'reparacion',
+      fecha: new Date(r.fecha_reparado),
+      texto: `${tecnico ? `${tecnico} ${t('terminó')}` : t('Se terminó')} ${t('una reparación')}${r.modelo ? ` ${t('de')} ${r.modelo}` : ''}`,
+      actorNombre: tecnico ?? null,
+      actorFoto: r.tecnicos?.foto_url ?? null,
+    });
+  }
+
+  for (const d of (stockRecienteData as any[]) ?? []) {
+    const cargadoPor = d.agregado_por_nombre;
+    candidatos.push({
+      tipo: 'stock',
+      fecha: new Date(d.created_at),
+      texto: `${cargadoPor ? `${cargadoPor} ${t('ingresó')}` : t('Ingresó')} ${d.modelo || t('un equipo')} ${t('al stock')}`,
+      actorNombre: d.agregado_por_nombre ?? null,
+      actorFoto: d.agregado_por_foto_url ?? null,
+    });
+  }
+
+  for (const c of (clientesRecientesData as any[]) ?? []) {
+    const nombreCompleto = `${c.nombre} ${c.apellido || ''}`.trim();
+    const cargadoPor = c.agregado_por_nombre;
+    candidatos.push({
+      tipo: 'cliente',
+      fecha: new Date(c.created_at),
+      texto: `${cargadoPor ? `${cargadoPor} ${t('cargó')}` : t('Se cargó')} ${t('un nuevo cliente:')} ${nombreCompleto}`,
+      actorNombre: c.agregado_por_nombre ?? null,
+      actorFoto: c.agregado_por_foto_url ?? null,
+    });
+  }
+
+  const mapaFotoActor = new Map<string, string>();
+  for (const v of (vendedoresLista as any[]) ?? []) {
+    if (v.nombre && v.foto_url) mapaFotoActor.set(v.nombre.trim().toLowerCase(), v.foto_url);
+  }
+  for (const tec of (tecnicosLista as any[]) ?? []) {
+    if (tec.nombre && tec.foto_url) mapaFotoActor.set(tec.nombre.trim().toLowerCase(), tec.foto_url);
+  }
+
+  for (const a of (auditoriaReciente as any[]) ?? []) {
+    const accion = (a.accion ?? '').trim();
+    if (!accion) continue;
+    // Los ingresos al stock ya aparecen como evento "stock" desde la tabla
+    // viva de dispositivos; saltamos su registro de auditoría para no
+    // mostrar la misma acción dos veces con distinto texto.
+    if (/^agreg[oó] al stock/i.test(accion)) continue;
+    const esBorrado = /^(elimin|borr|cancel|quit|revirt|anul)/i.test(accion);
+    candidatos.push({
+      tipo: esBorrado ? 'eliminacion' : 'ajuste',
+      fecha: new Date(a.created_at),
+      // accion ya viene como frase en pasado ("eliminó un proveedor (X)"),
+      // así que con el actor adelante queda "Roque eliminó un proveedor (X)".
+      // traducirAccion reconstruye los patrones más comunes en pt/en — lo
+      // que no reconoce queda igual, en español (ver ese archivo).
+      texto: `${a.actor_nombre ? `${a.actor_nombre} ` : ''}${traducirAccion(accion, idioma)}`,
+      actorNombre: a.actor_nombre ?? null,
+      actorFoto: a.actor_nombre ? mapaFotoActor.get(a.actor_nombre.trim().toLowerCase()) ?? null : null,
+    });
+  }
+
+  const actividad = candidatos.sort((a, b) => b.fecha.getTime() - a.fecha.getTime()).slice(0, 8);
+
+  const conteoModelo = new Map<string, number>();
+  for (const d of modelosEnStock) {
+    const clave = d.modelo || 'Sin modelo';
+    conteoModelo.set(clave, (conteoModelo.get(clave) ?? 0) + 1);
+  }
+  const modelosBajos = Array.from(conteoModelo.entries()).filter(([, cant]) => cant > 0 && cant < 3);
+
+  const notificaciones: { color: string; texto: string; href: string }[] = [];
+  if ((countListosEntregar ?? 0) > 0) {
+    notificaciones.push({
+      color: 'bad',
+      texto: `${countListosEntregar} ${countListosEntregar === 1 ? t('equipo listo para entregar') : t('equipos listos para entregar')}`,
+      href: '/servicio-tecnico',
+    });
+  }
+  if ((countGarantias ?? 0) > 0) {
+    notificaciones.push({
+      color: 'warn',
+      texto: `${countGarantias} ${countGarantias === 1 ? t('garantía vence esta semana') : t('garantías vencen esta semana')}`,
+      href: '/stock',
+    });
+  }
+  if ((countStockQuieto ?? 0) > 0) {
+    notificaciones.push({
+      color: 'accent',
+      texto: `${countStockQuieto} ${countStockQuieto === 1 ? t('equipo lleva más de 30 días sin venderse') : t('equipos llevan más de 30 días sin venderse')}`,
+      href: '/stock',
+    });
+  }
+  if (modelosBajos.length === 1) {
+    notificaciones.push({ color: 'good', texto: `${t('Queda poco stock de')} ${modelosBajos[0][0]}`, href: '/stock' });
+  } else if (modelosBajos.length > 1) {
+    notificaciones.push({ color: 'good', texto: `${modelosBajos.length} ${t('modelos están por agotarse')}`, href: '/stock' });
+  }
+  if ((countServicioLargo ?? 0) > 0) {
+    notificaciones.push({
+      color: 'violet-500',
+      texto: `${countServicioLargo} ${countServicioLargo === 1 ? t('equipo lleva más de 60 días en reparación') : t('equipos llevan más de 60 días en reparación')}`,
+      href: '/servicio-tecnico',
+    });
+  }
+
+  const ultimaVenta = actividad.find((a) => a.tipo === 'venta');
+  const metricas: MetricasAccesos = {
+    ordenesPendientes: pendientes,
+    ultimaVentaTexto: ultimaVenta ? `${t('Última venta')} ${hace(ultimaVenta.fecha, t).toLowerCase()}` : null,
+    enStock,
+    porAgotarse: modelosBajos.length,
+    sinPrecio: countSinPrecio ?? 0,
+    clientes: totalClientes,
+    comprasPendientes: countComprasPendientes ?? 0,
+    enCanje: countEnCanje ?? 0,
+    listosEntregar: countListosEntregar ?? 0,
+    atrasadosServicio: countServicioLargo ?? 0,
+  };
+
+  const dias: { label: string; valor: number }[] = [];
+  const serieVentas: number[] = [];
+  const serieTicket: number[] = [];
+  for (let i = 6; i >= 0; i--) {
+    const dia = new Date();
+    dia.setDate(dia.getDate() - i);
+    dia.setHours(0, 0, 0, 0);
+    const diaFin = new Date(dia);
+    diaFin.setDate(diaFin.getDate() + 1);
+    const ordenesDia = cobradas.filter((o) => {
+      const d = new Date(o.created_at);
+      return d >= dia && d < diaFin;
+    });
+    const valor = ordenesDia.reduce((acc, o) => acc + montoVenta(o), 0);
+    dias.push({ label: dia.toLocaleDateString('es-AR', { weekday: 'short' }).slice(0, 1).toUpperCase(), valor });
+    serieVentas.push(ordenesDia.length);
+    serieTicket.push(ordenesDia.length > 0 ? valor / ordenesDia.length : 0);
+  }
+
+  const maxDia = Math.max(1, ...dias.map((d) => d.valor));
+
+  return (
+    <>
+      <div className="qv-card rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-4 flex flex-col gap-2.5 animate-fade-in-up">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted dark:text-dark-text-secondary">
+          {t('Centro de notificaciones')}
+        </p>
+        {notificaciones.length === 0 ? (
+          <p className="text-sm text-good flex items-center gap-1.5">✓ {t('Todo en orden, no hay alertas por ahora.')}</p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {notificaciones.map((n, idx) => (
+              <Link key={idx} href={n.href} className="group flex items-center gap-2.5 hover:opacity-80 transition-opacity">
+                <span className={`h-2 w-2 rounded-full shrink-0 ${DOT_COLOR[n.color]}`} />
+                <p className="flex-1 min-w-0 text-sm truncate">{n.texto}</p>
+                <span className="text-muted dark:text-dark-text-secondary shrink-0 group-hover:translate-x-0.5 transition-transform">&rarr;</span>
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted dark:text-dark-text-secondary -mb-1">
+        {t('Resumen financiero')}
+      </p>
+      <div className="lg:grid lg:grid-cols-3 lg:gap-6 flex flex-col gap-6 animate-fade-in-up">
+        {/* self-start: sin esto, la grilla estira este div a la altura de
+            "Más vendidos" (más alto), y QoviBurbujaWhatsApp calcula su
+            punto de anclaje (top-1/2) sobre esa altura estirada en vez de
+            la altura real de la tarjeta oscura → la burbuja terminaba
+            lejos de la cara de Qovi, cerca de sus piernas. */}
+        <div className="relative lg:col-span-2 self-start">
+        <Link
+          href="/estadisticas"
+          className="qv-card qv-financial group relative rounded-2xl bg-gradient-to-br from-ink to-[#1B2540] dark:from-dark-surface dark:to-dark-bg text-white p-6 flex flex-col gap-4 shadow-elevated hover:opacity-95 transition-opacity active:scale-[0.99]"
+        >
+          <QoviLateral />
+          <OjoResumenFinanciero>
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-xs text-white/60 mb-1">
+                {t('Ingresos este mes')} <span className="opacity-70">({t('incluye fiado')})</span>
+              </p>
+              <p className="qv-financial-value text-4xl sm:text-5xl font-display font-semibold tracking-tight">
+                <NumeroAnimado prefijo={moneda} valor={ingresosMes} />
+              </p>
+              <div className="flex items-center gap-2 mt-2">
+                <p className="text-xs text-white/60">
+                  {ventasMes} {ventasMes === 1 ? t('venta este mes') : t('ventas este mes')}
+                </p>
+                {deltaPct != null && (
+                  <span
+                    className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[11px] font-medium ${
+                      deltaPct >= 0 ? 'bg-good/20 text-good' : 'bg-bad/20 text-bad'
+                    }`}
+                  >
+                    {deltaPct >= 0 ? '↑' : '↓'} {Math.abs(deltaPct)}%
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="flex items-end gap-1.5 h-14">
+              {dias.map((d, idx) => (
+                <div key={idx} className="flex flex-col items-center gap-1 w-5">
+                  <div
+                    className="animate-grow-bar w-full rounded-full bg-white/25"
+                    style={{ height: `${Math.max(6, (d.valor / maxDia) * 40)}px`, animationDelay: `${idx * 40}ms` }}
+                  />
+                  <span className="text-[9px] text-white/40">{d.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 pt-3 border-t border-white/10">
+            <MiniStatTrend etiqueta={t('Ventas')} valorNumerico={ventasMes} deltaPct={deltaVentasPct} serie={serieVentas} t={t} />
+            <MiniStatTrend
+              etiqueta={t('Ticket promedio')}
+              valorNumerico={Math.round(ticketPromedio)}
+              prefijo={moneda}
+              deltaPct={deltaTicketPct}
+              serie={serieTicket}
+              t={t}
+            />
+          </div>
+          </OjoResumenFinanciero>
+
+          <span className="text-xs text-white/50 group-hover:text-white/70">{t('Ver estadísticas completas')} &rarr;</span>
+        </Link>
+        <QoviBurbujaWhatsApp />
+        </div>
+
+        <ProductosMasVendidos telefonos={masVendidosTelefonos} accesorios={masVendidosAccesorios} />
+      </div>
+
+      <div className="grid grid-cols-3 gap-3 animate-fade-in-up">
+        <StatTile valor={enStock} etiqueta={t('En stock')} icono="stock" color="inventario" href="/stock" />
+        <StatTile valor={pendientes} etiqueta={t('Pendientes')} icono="ordenes" color="servicio" href="/ordenes" />
+        <StatTile valor={totalClientes} etiqueta={t('Clientes')} icono="clientes" color="clientes" href="/clientes" />
+      </div>
+
+      {actividad.length > 0 && (
+        <div className="qv-card rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-5 flex flex-col gap-3 animate-fade-in-up">
+          <p className="text-sm font-semibold tracking-tight">{t('Actividad reciente')}</p>
+          <div className="flex flex-col gap-3">
+            {actividad.map((ev, idx) => {
+              const { icono, color } = ICONO_ACTIVIDAD[ev.tipo];
+              return (
+                <div key={idx} className="flex items-center gap-3">
+                  {ev.actorNombre ? (
+                    <div className="relative shrink-0">
+                      <Avatar src={ev.actorFoto} nombre={ev.actorNombre} size={38} />
+                      <div
+                        className={`absolute -bottom-1 -right-1 h-5 w-5 rounded-full bg-gradient-to-br ${COLOR_ICONO[color]} flex items-center justify-center text-white border-2 border-white dark:border-dark-surface [&_svg]:h-2.5 [&_svg]:w-2.5`}
+                      >
+                        {ICONOS[icono]}
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      className={`h-8 w-8 shrink-0 rounded-full bg-gradient-to-br ${COLOR_ICONO[color]} flex items-center justify-center text-white [&_svg]:h-4 [&_svg]:w-4`}
+                    >
+                      {ICONOS[icono]}
+                    </div>
+                  )}
+                  <p className="flex-1 min-w-0 text-sm leading-snug truncate">{ev.texto}</p>
+                  <p className="shrink-0 text-[11px] text-muted dark:text-dark-text-secondary">{hace(ev.fecha, t)}</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <AccesosRapidos metricas={metricas} t={t} locale={localeDeIdioma(idioma)} />
+    </>
+  );
+}
+
+// Duplicado mínimo de localeDe (app/lib/i18n/traducir.ts) para no arrastrar
+// ese módulo entero acá por una sola línea — mismo mapeo, ver ese archivo
+// si algún día se agrega un idioma nuevo.
+function localeDeIdioma(idioma: Idioma): string {
+  return idioma === 'pt' ? 'pt-BR' : idioma === 'en' ? 'en-US' : 'es-AR';
+}
+
+function StatTile({
+  valor,
+  etiqueta,
+  icono,
+  color,
+  href,
+}: {
+  valor: number;
+  etiqueta: string;
+  icono: string;
+  color: string;
+  href: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="qv-card group relative overflow-hidden rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-3.5 flex flex-col gap-2 hover:shadow-elevated hover:-translate-y-1 transition-all"
+    >
+      <span className={`absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r ${COLOR_ICONO[color]}`} />
+      <IlustracionModulo
+        nombre={icono}
+        className="h-11 w-11 shrink-0 transition-transform duration-200 ease-out group-hover:-translate-y-0.5 group-hover:scale-[1.05] motion-reduce:transform-none motion-reduce:transition-none"
+      />
+      <div>
+        <p className="text-2xl font-display font-semibold leading-none">
+          <NumeroAnimado valor={valor} />
+        </p>
+        <p className="text-[11px] text-muted dark:text-dark-text-secondary leading-tight mt-1">{etiqueta}</p>
+      </div>
+    </Link>
+  );
+}
+
+function hace(fecha: Date, t: (texto: string) => string): string {
+  const segundos = Math.max(0, Math.floor((Date.now() - fecha.getTime()) / 1000));
+  if (segundos < 60) return t('Recién');
+  const minutos = Math.floor(segundos / 60);
+  if (minutos < 60) return `${t('Hace')} ${minutos} ${minutos === 1 ? t('minuto') : t('minutos')}`;
+  const horas = Math.floor(minutos / 60);
+  if (horas < 24) return `${t('Hace')} ${horas} ${horas === 1 ? t('hora') : t('horas')}`;
+  const dias = Math.floor(horas / 24);
+  return `${t('Hace')} ${dias} ${dias === 1 ? t('día') : t('días')}`;
+}
+
+const ICONO_ACTIVIDAD: Record<string, { icono: string; color: string }> = {
+  venta: { icono: 'ordenes', color: 'ventas' },
+  reparacion: { icono: 'herramienta', color: 'servicio' },
+  stock: { icono: 'stock', color: 'inventario' },
+  cliente: { icono: 'clientes', color: 'clientes' },
+  eliminacion: { icono: 'papelera', color: 'eliminacion' },
+  ajuste: { icono: 'editar', color: 'compras' },
+};
+
+const DOT_COLOR: Record<string, string> = {
+  bad: 'bg-bad',
+  warn: 'bg-warn',
+  accent: 'bg-accent dark:bg-dark-accent',
+  good: 'bg-good',
+  'violet-500': 'bg-violet-500',
+};
+
+function Sparkline({ serie }: { serie: number[] }) {
+  const w = 64;
+  const h = 24;
+  const max = Math.max(...serie, 0);
+  const min = Math.min(...serie, 0);
+  const rango = Math.max(1, max - min);
+  const puntos = serie
+    .map((v, i) => {
+      const x = serie.length > 1 ? (i / (serie.length - 1)) * w : w / 2;
+      const y = h - ((v - min) / rango) * h;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(' ');
+
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="shrink-0">
+      <polyline points={puntos} fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.85" />
+    </svg>
+  );
+}
+
+function MiniStatTrend({
+  etiqueta,
+  valorNumerico,
+  prefijo,
+  deltaPct,
+  serie,
+  t,
+}: {
+  etiqueta: string;
+  valorNumerico: number;
+  prefijo?: string;
+  deltaPct: number | null;
+  serie: number[];
+  t: (texto: string) => string;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <div>
+        <p className="text-[11px] text-white/60">{etiqueta}</p>
+        <p className="text-base font-display font-semibold">
+          <NumeroAnimado prefijo={prefijo} valor={valorNumerico} />
+        </p>
+        {deltaPct != null && (
+          <p className={`text-[11px] ${deltaPct >= 0 ? 'text-good' : 'text-bad'}`}>
+            {deltaPct >= 0 ? '+' : ''}
+            {deltaPct}% {t('vs. mes anterior')}
+          </p>
+        )}
+      </div>
+      <Sparkline serie={serie} />
+    </div>
+  );
+}
