@@ -13,6 +13,7 @@ import { codigoLlamada } from '../../lib/paises';
 import { MEDIOS_PAGO, calcularSaldo, estadoCuenta, ESTADO_INFO, diasDeMora } from '../../lib/cuentaCorriente';
 import { aplicarPagoAFinanciacion } from '../../lib/financiacion/servicio';
 import { sanitizarDecimal, formatearMonto } from '../../lib/numeros';
+import { CAJA_DE_COBRANZA } from '../../lib/caja/motor';
 import { ESTADOS_COBRADOS } from '../../estadisticas/datos';
 import FinanciacionCliente from '../../FinanciacionCliente';
 import { useT, useIdioma } from '../../lib/idioma';
@@ -243,6 +244,11 @@ export default function DetalleCliente() {
         medio: pagoMedio,
         monto,
         moneda: monedaCodigo,
+        // Cobrar una cuenta corriente/cuota ya existente siempre es plata
+        // de la caja Financiamiento (a diferencia del pago EN EL MOMENTO
+        // de una venta, que puede ser Venta diaria o Financiamiento según
+        // si deja deuda — ver app/lib/caja/motor.ts).
+        caja_tipo: CAJA_DE_COBRANZA,
         observacion: pagoObs.trim() || null,
         registrado_por_nombre: a?.nombre ?? null,
         registrado_por_foto_url: a?.fotoUrl ?? null,

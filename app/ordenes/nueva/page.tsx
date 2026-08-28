@@ -29,6 +29,7 @@ import SelectorColorAuto from '../../SelectorColorAuto';
 import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
 import { limpiarImei } from '../../lib/imei';
 import { formatearMonto } from '../../lib/numeros';
+import { cajaDeVenta } from '../../lib/caja/motor';
 import { registrarAuditoria } from '../../lib/auditoria';
 import MiniaturaDispositivo from '../../MiniaturaDispositivo';
 import CheckTri from '../../CheckTri';
@@ -1094,6 +1095,11 @@ export default function NuevaOrden() {
       const actorCobro = getActor();
       const pagosNuevos = construirPagos();
       if (pagosNuevos.length > 0) {
+        // Si la venta deja saldo en cuenta corriente (con o sin cronograma
+        // propio), lo cobrado en el momento es un ANTICIPO de crédito nuevo
+        // → caja Financiamiento. Si se cobró íntegro, es una venta común →
+        // caja Venta diaria. Ver app/lib/caja/motor.ts (cajaDeVenta).
+        const cajaTipoVenta = cajaDeVenta(montoCuentaCorriente);
         const { error: pagosErr } = await supabase.from('pagos').insert(
           pagosNuevos.map((p) => ({
             cliente_id: clienteId ?? null,
@@ -1101,6 +1107,7 @@ export default function NuevaOrden() {
             medio: p.medio,
             monto: p.monto,
             moneda: monedaOrden,
+            caja_tipo: cajaTipoVenta,
             registrado_por_nombre: actorCobro?.nombre ?? null,
             registrado_por_foto_url: actorCobro?.fotoUrl ?? null,
             ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
