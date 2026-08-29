@@ -17,11 +17,13 @@ type Comprobante = {
 
 export default function PagoUSDT({
   negocioId,
+  nombreNegocio,
   comprobante,
   onEnviado,
   abiertoPorDefecto = false,
 }: {
   negocioId: string;
+  nombreNegocio?: string | null;
   comprobante: Comprobante | null;
   onEnviado: () => void;
   abiertoPorDefecto?: boolean;
@@ -74,6 +76,13 @@ export default function PagoUSDT({
       setEnviando(false);
       return;
     }
+    // Best-effort: si el aviso falla, no rompe el flujo del negocio que
+    // recién pagó — su comprobante ya quedó guardado, eso es lo que importa.
+    fetch('/api/notificar-comprobante', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nombreNegocio, monto, moneda: 'USDT', referencia: referencia.trim() || null, metodo: 'USDT (cripto)' }),
+    }).catch(() => {});
     setEnviando(false);
     setAbierto(false);
     setImagen(null);
