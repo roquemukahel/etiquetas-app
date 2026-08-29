@@ -5,6 +5,7 @@ import { SCRIPT_TEMA_INICIAL } from './lib/theme';
 import SelectorDeActor from './SelectorDeActor';
 import BotonFlotante from './BotonFlotante';
 import AppShell from './AppShell';
+import RegistrarServiceWorker from './RegistrarServiceWorker';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' });
 const sora = Sora({ subsets: ['latin'], variable: '--font-sora', display: 'swap' });
@@ -37,6 +38,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: SCRIPT_TEMA_INICIAL }} />
       </head>
       <body className="min-h-screen bg-canvas dark:bg-dark-bg text-ink dark:text-dark-text font-sans transition-colors">
+        <RegistrarServiceWorker />
         <SelectorDeActor />
         <AppShell>{children}</AppShell>
         <BotonFlotante />
