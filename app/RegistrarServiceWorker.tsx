@@ -10,7 +10,13 @@ import { useEffect } from 'react';
 // escritorio pese a tener manifest.json y sw.js. Se registra a mano acá.
 export default function RegistrarServiceWorker() {
   useEffect(() => {
-    if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
+    // Sin chequeo de NODE_ENV: next-pwa ya decide si genera /sw.js o no
+    // (lo desactiva en desarrollo vía su propia opción `disable`) — si el
+    // archivo no existe (dev local), el registro simplemente falla solo,
+    // sin romper nada (.catch). Agregar una segunda condición acá encima
+    // era redundante y, en la práctica, terminó bloqueando el registro en
+    // producción real (ver comentario de arriba).
+    if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
   }, []);
