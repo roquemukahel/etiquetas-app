@@ -63,8 +63,15 @@ export async function asegurarModelo(supabase: SupabaseClient, nombre: string | 
   // mayúsculas/minúsculas — así, aunque en la base ya exista "iPhone 13"
   // guardada con otra capitalización residual, la encuentra igual y no
   // crea una carpeta repetida.
-  const { data } = await supabase.from('modelos_stock').select('id').ilike('nombre', normalizado).maybeSingle();
-  if (!data) {
+  //
+  // .limit(1) en vez de .maybeSingle() (bug real corregido 2026-08-29):
+  // .maybeSingle() tira un error si hay más de una fila — como nunca se
+  // chequeaba ese error, en cuanto una carpeta quedaba duplicada por
+  // cualquier motivo, esta función nunca más la volvía a encontrar y
+  // seguía creando una carpeta nueva en cada carga futura (bola de nieve).
+  // Mismo bug y mismo fix que asegurarProveedor (app/lib/proveedores.ts).
+  const { data } = await supabase.from('modelos_stock').select('id').ilike('nombre', normalizado).limit(1);
+  if (!data || data.length === 0) {
     await supabase.from('modelos_stock').insert({ nombre: normalizado });
   }
 }
