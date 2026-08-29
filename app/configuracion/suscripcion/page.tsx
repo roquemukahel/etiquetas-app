@@ -12,6 +12,7 @@ type EstadoSuscripcion = 'trialing' | 'active' | 'past_due' | 'unpaid' | 'cancel
 
 type Negocio = {
   id: string;
+  nombre: string | null;
   estado_suscripcion: EstadoSuscripcion;
   fecha_fin_prueba: string | null;
 };
@@ -64,7 +65,7 @@ export default function Suscripcion() {
 
       const { data: perfil } = await supabase
         .from('perfiles')
-        .select('negocios ( id, estado_suscripcion, fecha_fin_prueba )')
+        .select('negocios ( id, nombre, estado_suscripcion, fecha_fin_prueba )')
         .eq('id', user.id)
         .single();
 
@@ -131,9 +132,10 @@ export default function Suscripcion() {
             textoBotonMensual={necesitaPagar ? t('Suscribirme — Mensual') : t('Antes de que termine la prueba — Mensual')}
             textoBotonAnual={necesitaPagar ? t('Suscribirme — Anual') : t('Antes de que termine la prueba — Anual')}
           />
-          <PagoUSDT negocioId={negocio.id} comprobante={comprobante} onEnviado={() => cargarComprobante(negocio.id)} />
+          <PagoUSDT negocioId={negocio.id} nombreNegocio={negocio.nombre} comprobante={comprobante} onEnviado={() => cargarComprobante(negocio.id)} />
           <PagoTransferenciaARS
             negocioId={negocio.id}
+            nombreNegocio={negocio.nombre}
             comprobante={comprobante}
             onEnviado={() => cargarComprobante(negocio.id)}
           />

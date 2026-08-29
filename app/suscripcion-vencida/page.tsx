@@ -103,12 +103,14 @@ export default function SuscripcionVencida() {
           </p>
           <PagoUSDT
             negocioId={datos.negocioId}
+            nombreNegocio={datos.nombreNegocio}
             comprobante={comprobante}
             onEnviado={() => cargarComprobante(datos.negocioId)}
             abiertoPorDefecto
           />
           <PagoTransferenciaARS
             negocioId={datos.negocioId}
+            nombreNegocio={datos.nombreNegocio}
             comprobante={comprobante}
             onEnviado={() => cargarComprobante(datos.negocioId)}
           />

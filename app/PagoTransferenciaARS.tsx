@@ -22,11 +22,13 @@ type Comprobante = {
 
 export default function PagoTransferenciaARS({
   negocioId,
+  nombreNegocio,
   comprobante,
   onEnviado,
   abiertoPorDefecto = false,
 }: {
   negocioId: string;
+  nombreNegocio?: string | null;
   comprobante: Comprobante | null;
   onEnviado: () => void;
   abiertoPorDefecto?: boolean;
@@ -68,6 +70,13 @@ export default function PagoTransferenciaARS({
       setEnviando(false);
       return;
     }
+    // Best-effort: si el aviso falla, no rompe el flujo del negocio que
+    // recién pagó — su comprobante ya quedó guardado, eso es lo que importa.
+    fetch('/api/notificar-comprobante', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nombreNegocio, monto, moneda: 'ARS', referencia: referencia.trim() || null, metodo: 'Transferencia (ARS)' }),
+    }).catch(() => {});
     setEnviando(false);
     setAbierto(false);
     setImagen(null);
