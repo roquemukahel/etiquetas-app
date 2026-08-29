@@ -11,6 +11,7 @@ import { MEDIOS_PAGO, medioLabel } from '../lib/cuentaCorriente';
 import {
   obtenerEgresos,
   crearEgreso,
+  editarEgreso,
   anularEgreso,
   obtenerCategoriasEgresos,
   obtenerAreasEgresos,
@@ -43,6 +44,18 @@ function ultimoDiaMes(d: Date): string {
   return aFechaLocal(new Date(d.getFullYear(), d.getMonth() + 1, 0));
 }
 
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      resolve(result.split(',')[1]);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function Egresos() {
   const supabase = crearClienteNavegador();
   const actor = useActor();
@@ -72,6 +85,7 @@ export default function Egresos() {
   const [hasta, setHasta] = useState(() => ultimoDiaMes(new Date()));
 
   const [modalNuevo, setModalNuevo] = useState(false);
+  const [modalEditar, setModalEditar] = useState<Egreso | null>(null);
   const [modalAnular, setModalAnular] = useState<Egreso | null>(null);
 
   const cargar = async () => {
@@ -254,6 +268,9 @@ export default function Egresos() {
                   {simboloMoneda(e.moneda)}
                   {formatearMonto(e.importe)}
                 </span>
+                <button onClick={() => setModalEditar(e)} className="text-xs text-accent dark:text-dark-accent underline">
+                  {t('Editar')}
+                </button>
                 <button onClick={() => setModalAnular(e)} className="text-xs text-bad underline">
                   {t('Anular')}
                 </button>
@@ -264,7 +281,7 @@ export default function Egresos() {
       )}
 
       {modalNuevo && (
-        <ModalNuevoEgreso
+        <ModalEgreso
           categorias={categorias}
           proveedores={proveedores}
           sucursales={sucursales}
@@ -272,8 +289,25 @@ export default function Egresos() {
           monedaDefault={monedaCodigo}
           monedasDisponibles={monedasDisponibles}
           onClose={() => setModalNuevo(false)}
-          onCreado={async () => {
+          onGuardado={async () => {
             setModalNuevo(false);
+            await cargar();
+          }}
+        />
+      )}
+
+      {modalEditar && (
+        <ModalEgreso
+          egresoAEditar={modalEditar}
+          categorias={categorias}
+          proveedores={proveedores}
+          sucursales={sucursales}
+          areas={areas}
+          monedaDefault={monedaCodigo}
+          monedasDisponibles={monedasDisponibles}
+          onClose={() => setModalEditar(null)}
+          onGuardado={async () => {
+            setModalEditar(null);
             await cargar();
           }}
         />
@@ -293,7 +327,8 @@ export default function Egresos() {
   );
 }
 
-function ModalNuevoEgreso({
+function ModalEgreso({
+  egresoAEditar,
   categorias,
   proveedores,
   sucursales,
@@ -301,8 +336,9 @@ function ModalNuevoEgreso({
   monedaDefault,
   monedasDisponibles,
   onClose,
-  onCreado,
+  onGuardado,
 }: {
+  egresoAEditar?: Egreso;
   categorias: CategoriaEgreso[];
   proveedores: Proveedor[];
   sucursales: Sucursal[];
@@ -310,24 +346,66 @@ function ModalNuevoEgreso({
   monedaDefault: string;
   monedasDisponibles: string[];
   onClose: () => void;
-  onCreado: () => void;
+  onGuardado: () => void;
 }) {
   const supabase = crearClienteNavegador();
   const t = useT();
   const sucursalActual = useSucursalActual();
-  const [fecha, setFecha] = useState(() => aFechaLocal(new Date()));
-  const [categoriaId, setCategoriaId] = useState(categorias[0]?.id ?? '');
-  const [tipo, setTipo] = useState<TipoEgreso>('gasto_operativo');
-  const [descripcion, setDescripcion] = useState('');
-  const [importe, setImporte] = useState('');
-  const [moneda, setMoneda] = useState(monedaDefault);
-  const [medioPago, setMedioPago] = useState('');
-  const [proveedorId, setProveedorId] = useState('');
-  const [sucursalId, setSucursalId] = useState(sucursalActual.id ?? '');
-  const [areaId, setAreaId] = useState('');
-  const [notas, setNotas] = useState('');
+  const [fecha, setFecha] = useState(() => egresoAEditar?.fecha ?? aFechaLocal(new Date()));
+  const [categoriaId, setCategoriaId] = useState(egresoAEditar?.categoria_id ?? categorias[0]?.id ?? '');
+  const [tipo, setTipo] = useState<TipoEgreso>(egresoAEditar?.tipo ?? 'gasto_operativo');
+  const [descripcion, setDescripcion] = useState(egresoAEditar?.descripcion ?? '');
+  const [importe, setImporte] = useState(egresoAEditar ? String(egresoAEditar.importe) : '');
+  const [moneda, setMoneda] = useState(egresoAEditar?.moneda ?? monedaDefault);
+  const [medioPago, setMedioPago] = useState(egresoAEditar?.medio_pago ?? '');
+  const [proveedorId, setProveedorId] = useState(egresoAEditar?.proveedor_id ?? '');
+  const [sucursalId, setSucursalId] = useState(egresoAEditar?.sucursal_id ?? sucursalActual.id ?? '');
+  const [areaId, setAreaId] = useState(egresoAEditar?.area_id ?? '');
+  const [notas, setNotas] = useState(egresoAEditar?.notas ?? '');
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
+  const [leyendoFoto, setLeyendoFoto] = useState(false);
+
+  // Sacarle una foto a la factura/boleta y completar el formulario solo —
+  // pensado sobre todo para compras de repuestos u otros gastos que llegan
+  // con comprobante en papel. Best-effort: si no puede leer nada, el
+  // formulario queda como estaba, se completa a mano.
+  const handleFoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setLeyendoFoto(true);
+    setError(null);
+    try {
+      const base64 = await fileToBase64(file);
+      const res = await fetch('/api/extract-egreso-info', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: base64, mediaType: file.type }),
+      });
+      if (!res.ok) throw new Error('fallo la extraccion');
+      const { data } = await res.json();
+      if (data?.monto) setImporte((prev) => prev || String(data.monto));
+      if (data?.moneda) setMoneda((prev) => prev || data.moneda);
+      if (data?.fecha) setFecha((prev) => prev || data.fecha);
+      if (data?.comercio) {
+        setDescripcion((prev) => prev || data.comercio);
+        // Si el comercio ya existe como proveedor, lo preseleccionamos —
+        // no creamos uno nuevo a ciegas desde una lectura de IA, que podría
+        // traer el nombre mal escrito o abreviado.
+        const match = proveedores.find((p) => p.nombre.trim().toLowerCase() === data.comercio.trim().toLowerCase());
+        if (match) setProveedorId((prev) => prev || match.id);
+      } else if (data?.descripcion) {
+        setDescripcion((prev) => prev || data.descripcion);
+      }
+      if (!data?.monto && !data?.comercio && !data?.descripcion) {
+        setError(t('No pudimos leer datos de esta foto. Podés completar los campos a mano.'));
+      }
+    } catch {
+      setError(t('No pudimos leer la foto. Podés completar los campos a mano.'));
+    } finally {
+      setLeyendoFoto(false);
+    }
+  };
 
   const confirmar = async () => {
     const monto = Number(importe) || 0;
@@ -341,7 +419,7 @@ function ModalNuevoEgreso({
     }
     setGuardando(true);
     setError(null);
-    const resultado = await crearEgreso(supabase, {
+    const params = {
       fecha,
       categoriaId: categoriaId || null,
       tipo,
@@ -353,19 +431,29 @@ function ModalNuevoEgreso({
       notas,
       sucursalId: sucursalId || null,
       areaId: areaId || null,
-    });
+    };
+    const resultado = egresoAEditar ? await editarEgreso(supabase, egresoAEditar, params) : await crearEgreso(supabase, params);
     setGuardando(false);
     if ('error' in resultado) {
       setError(resultado.error);
       return;
     }
-    onCreado();
+    onGuardado();
   };
 
   return (
-    <Modal titulo={t('Registrar egreso')} onClose={onClose} maxWidth="max-w-lg">
+    <Modal titulo={egresoAEditar ? t('Editar egreso') : t('Registrar egreso')} onClose={onClose} maxWidth="max-w-lg">
       <div className="flex flex-col gap-3">
         {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
+
+        <div>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">
+            {t('Foto de la factura/boleta (opcional)')}
+          </label>
+          <input type="file" accept="image/*" onChange={handleFoto} disabled={leyendoFoto} className="text-sm" />
+          {leyendoFoto && <p className="text-xs text-muted dark:text-dark-text-secondary mt-1">{t('Leyendo la foto...')}</p>}
+        </div>
+
         <div>
           <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Descripción')}</label>
           <input
@@ -511,7 +599,7 @@ function ModalNuevoEgreso({
             {t('Cancelar')}
           </Boton>
           <Boton variante="primario" tamano="md" cargando={guardando} onClick={confirmar} className="flex-1">
-            {t('Registrar')}
+            {egresoAEditar ? t('Guardar cambios') : t('Registrar')}
           </Boton>
         </div>
       </div>

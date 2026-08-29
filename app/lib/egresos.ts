@@ -254,6 +254,61 @@ export async function crearEgreso(
   return { id: (data as { id: string }).id };
 }
 
+// Antes solo se podía anular y volver a cargar de cero — un error de
+// tipeo (ej. poner USD en vez de ARS) obligaba a borrar y rehacer. Edita
+// el egreso en el lugar y deja auditado qué cambió (mismo criterio que
+// editar monto_objetivo en Plan de Ahorro: tiene impacto financiero
+// directo, así que se audita aunque no sea un borrado).
+export async function editarEgreso(
+  supabase: SupabaseClient,
+  egreso: Egreso,
+  params: {
+    fecha: string;
+    categoriaId: string | null;
+    tipo: TipoEgreso;
+    descripcion: string;
+    importe: number;
+    moneda: string;
+    medioPago: string | null;
+    proveedorId: string | null;
+    notas?: string;
+    sucursalId?: string | null;
+    areaId?: string | null;
+  }
+): Promise<{ ok: true } | { error: string }> {
+  const descripcion = params.descripcion.trim();
+  if (!descripcion) return { error: 'La descripción no puede estar vacía.' };
+  if (!params.importe || params.importe <= 0) return { error: 'El importe tiene que ser mayor a 0.' };
+
+  const { error } = await supabase
+    .from('egresos')
+    .update({
+      fecha: params.fecha,
+      categoria_id: params.categoriaId,
+      tipo: params.tipo,
+      descripcion,
+      importe: params.importe,
+      moneda: params.moneda,
+      medio_pago: params.medioPago,
+      proveedor_id: params.proveedorId,
+      notas: params.notas?.trim() || null,
+      sucursal_id: params.sucursalId || null,
+      area_id: params.areaId || null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', egreso.id);
+  if (error) return { error: error.message };
+
+  await registrarAuditoria(supabase, {
+    accion: `editó un egreso: "${egreso.descripcion}" (${egreso.moneda}${egreso.importe} → ${params.moneda}${params.importe})`,
+    entidad: 'egreso',
+    entidadId: egreso.id,
+    valorAnterior: { descripcion: egreso.descripcion, importe: egreso.importe, moneda: egreso.moneda, tipo: egreso.tipo, categoria_id: egreso.categoria_id },
+    valorNuevo: { descripcion, importe: params.importe, moneda: params.moneda, tipo: params.tipo, categoria_id: params.categoriaId },
+  });
+  return { ok: true };
+}
+
 // Anular = soft-void, nunca se borra (mismo patrón que cta_cte_movimientos/
 // proveedor_movimientos). Requiere motivo, igual que ajustar/anular en
 // financiación.
