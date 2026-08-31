@@ -456,6 +456,39 @@ const GALAXY_A56: ModeloColores = {
   ],
 };
 
+// Samsung Galaxy A25 — colores oficiales: Blue Black, Light Blue, Yellow, Lime Green.
+const GALAXY_A25: ModeloColores = {
+  carpeta: 'galaxy-a25',
+  colores: [
+    { nombre: 'Negro', archivo: 'negro', hex: '#2f3142' },
+    { nombre: 'Azul claro', archivo: 'azul', hex: '#92a2ba' },
+    { nombre: 'Amarillo', archivo: 'amarillo', hex: '#efe4a0' },
+    { nombre: 'Verde lima', archivo: 'verdelima', hex: '#d1e1dc' },
+  ],
+};
+
+// Samsung Galaxy A35 — colores oficiales: Awesome Iceblue/Lilac/Lemon/Navy.
+const GALAXY_A35: ModeloColores = {
+  carpeta: 'galaxy-a35',
+  colores: [
+    { nombre: 'Lila', archivo: 'lila', hex: '#e6d8e8' },
+    { nombre: 'Azul hielo', archivo: 'azulhielo', hex: '#dce8f0' },
+    { nombre: 'Azul marino', archivo: 'azulmarino', hex: '#2b2d3a' },
+    { nombre: 'Limón', archivo: 'limon', hex: '#eee888' },
+  ],
+};
+
+// Samsung Galaxy A55 — colores oficiales: Awesome Iceblue/Lilac/Lemon/Navy.
+const GALAXY_A55: ModeloColores = {
+  carpeta: 'galaxy-a55',
+  colores: [
+    { nombre: 'Lila', archivo: 'lila', hex: '#e6d8e8' },
+    { nombre: 'Azul hielo', archivo: 'azulhielo', hex: '#dce8f0' },
+    { nombre: 'Azul marino', archivo: 'azulmarino', hex: '#2b2d3a' },
+    { nombre: 'Limón', archivo: 'limon', hex: '#eee888' },
+  ],
+};
+
 // Clave de modelo normalizada: "iPhone 11", "iphone 11", "iPhone11" -> "iphone11".
 const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   iphone7: IPHONE_7,
@@ -505,6 +538,9 @@ const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   galaxya16: GALAXY_A16,
   galaxya36: GALAXY_A36,
   galaxya56: GALAXY_A56,
+  galaxya25: GALAXY_A25,
+  galaxya35: GALAXY_A35,
+  galaxya55: GALAXY_A55,
 };
 
 function claveModelo(modelo: string | null | undefined): string {
