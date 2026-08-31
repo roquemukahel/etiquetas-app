@@ -48,25 +48,29 @@ export default function DetalleLiquidacion() {
 
   const cargar = async () => {
     const { data: { user } } = await supabase.auth.getUser();
+    // Estas 4 son independientes entre sí (todas filtran por "id"/"user.id",
+    // ya conocidos) — pedirlas en paralelo evita encadenar 4 round-trips.
+    const [{ data: perfil }, { data: l }, { data: m }, { data: p }] = await Promise.all([
+      user ? supabase.from('perfiles').select('negocios ( nombre, moneda )').eq('id', user.id).single() : Promise.resolve({ data: null }),
+      supabase
+        .from('comision_liquidaciones')
+        .select('id, vendedor_id, periodo_desde, periodo_hasta, estado, total_bruto, total_neto, pagado, moneda, vendedores ( nombre )')
+        .eq('id', id)
+        .single(),
+      supabase
+        .from('comision_movimientos')
+        .select('id, tipo_movimiento, fecha_hecho, base, comision, orden_id, tipo_venta, motivo')
+        .eq('liquidacion_id', id)
+        .order('fecha_hecho', { ascending: true }),
+      supabase.from('comision_liquidacion_pagos').select('id, monto, medio, referencia, fecha').eq('liquidacion_id', id).order('fecha'),
+    ]);
     if (user) {
-      const { data: perfil } = await supabase.from('perfiles').select('negocios ( nombre, moneda )').eq('id', user.id).single();
       const neg = (perfil as any)?.negocios;
       setNombreNegocio(neg?.nombre ?? '');
       if (neg?.moneda) setMonedaSimbolo(simboloMoneda(neg.moneda));
     }
-    const { data: l } = await supabase
-      .from('comision_liquidaciones')
-      .select('id, vendedor_id, periodo_desde, periodo_hasta, estado, total_bruto, total_neto, pagado, moneda, vendedores ( nombre )')
-      .eq('id', id)
-      .single();
     setLiq((l as any) ?? null);
-    const { data: m } = await supabase
-      .from('comision_movimientos')
-      .select('id, tipo_movimiento, fecha_hecho, base, comision, orden_id, tipo_venta, motivo')
-      .eq('liquidacion_id', id)
-      .order('fecha_hecho', { ascending: true });
     setMovs((m as any) ?? []);
-    const { data: p } = await supabase.from('comision_liquidacion_pagos').select('id, monto, medio, referencia, fecha').eq('liquidacion_id', id).order('fecha');
     setPagos((p as any) ?? []);
     setLoading(false);
   };

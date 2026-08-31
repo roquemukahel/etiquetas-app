@@ -1,5 +1,19 @@
 import Papa from 'papaparse';
-import ExcelJS from 'exceljs';
+import type * as ExcelJSNamespace from 'exceljs';
+
+type ExcelJSModulo = typeof ExcelJSNamespace;
+
+// ExcelJS es una librería pesada (varios cientos de KB) que hasta hace poco
+// se importaba arriba de todo — eso la sumaba al bundle de Clientes/Stock/
+// Exportar datos para TODO el mundo, incluso quien nunca toca Excel (CSV
+// sigue siendo el formato por defecto). Se carga bajo demanda, solo la
+// primera vez que hace falta leer o generar un .xlsx real, y se cachea acá
+// para no volver a pedirla en la misma pestaña.
+let cargaExcelJS: Promise<ExcelJSModulo> | null = null;
+function cargarExcelJS(): Promise<ExcelJSModulo> {
+  if (!cargaExcelJS) cargaExcelJS = import('exceljs');
+  return cargaExcelJS;
+}
 
 // Lee un archivo CSV del usuario (input type="file") y devuelve las filas
 // como objetos, usando la primera línea como encabezados. Tolera comas
@@ -19,13 +33,13 @@ export function leerCSV(archivo: File): Promise<Record<string, string>[]> {
 // número o fórmula ya calculada) al mismo formato de string que devuelve
 // Papa.parse para CSV, así valorDe() y el resto del código de importación no
 // necesitan saber si el archivo original era CSV o Excel.
-function celdaATexto(valor: ExcelJS.CellValue): string {
+function celdaATexto(valor: ExcelJSNamespace.CellValue): string {
   if (valor === null || valor === undefined) return '';
   if (valor instanceof Date) return valor.toISOString().slice(0, 10);
   if (typeof valor === 'object') {
     if ('richText' in valor) return valor.richText.map((r) => r.text).join('');
     if ('text' in valor) return String(valor.text ?? '');
-    if ('result' in valor) return celdaATexto(valor.result as ExcelJS.CellValue);
+    if ('result' in valor) return celdaATexto(valor.result as ExcelJSNamespace.CellValue);
   }
   return String(valor).trim();
 }
@@ -34,6 +48,7 @@ function celdaATexto(valor: ExcelJS.CellValue): string {
 // objetos, usando la primera fila de la primera hoja como encabezados —
 // mismo formato que leerCSV.
 async function leerXLSX(archivo: File): Promise<Record<string, string>[]> {
+  const ExcelJS = await cargarExcelJS();
   const buffer = await archivo.arrayBuffer();
   const libro = new ExcelJS.Workbook();
   await libro.xlsx.load(buffer);
@@ -43,7 +58,7 @@ async function leerXLSX(archivo: File): Promise<Record<string, string>[]> {
   let encabezados: string[] = [];
   const filas: Record<string, string>[] = [];
   hoja.eachRow((fila, numeroFila) => {
-    const valores = (fila.values as ExcelJS.CellValue[]).slice(1).map(celdaATexto);
+    const valores = (fila.values as ExcelJSNamespace.CellValue[]).slice(1).map(celdaATexto);
     if (numeroFila === 1) {
       encabezados = valores;
       return;
@@ -98,6 +113,7 @@ export function descargarCSV(nombreArchivo: string, columnas: string[], filas: R
 // columnas en el orden indicado, y descarga el archivo en el navegador —
 // misma firma que descargarCSV.
 export async function descargarXLSX(nombreArchivo: string, columnas: string[], filas: Record<string, unknown>[]) {
+  const ExcelJS = await cargarExcelJS();
   const libro = new ExcelJS.Workbook();
   const hoja = libro.addWorksheet('Datos');
   hoja.addRow(columnas);

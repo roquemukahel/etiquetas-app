@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../../lib/supabase/client';
+import { obtenerTodasLasFilas } from '../../lib/db';
 import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import { simboloMoneda } from '../../lib/monedas';
@@ -76,18 +77,18 @@ export default function MetricasServicioTecnico() {
       return;
     }
     (async () => {
-      const [{ data: reps }, { data: usos }, { data: rep }, { data: tecs }] = await Promise.all([
-        supabase
-          .from('reparaciones')
-          .select(
-            'id, modelo, estado, tecnico_id, fecha_ingreso_servicio, fecha_reparado, fecha_entrega, fecha_estimada, estado_actualizado_at, importe_total, presupuesto_estado, presupuesto_respondido_at, tipo_ingreso, trabajos_realizados, sucursal_id'
-          ),
-        supabase.from('reparaciones_repuestos').select('reparacion_id, nombre_repuesto, cantidad, costo_unitario'),
+      const [reps, usos, { data: rep }, { data: tecs }] = await Promise.all([
+        obtenerTodasLasFilas<ReparacionMetrica>(
+          supabase,
+          'reparaciones',
+          'id, modelo, estado, tecnico_id, fecha_ingreso_servicio, fecha_reparado, fecha_entrega, fecha_estimada, estado_actualizado_at, importe_total, presupuesto_estado, presupuesto_respondido_at, tipo_ingreso, trabajos_realizados, sucursal_id'
+        ),
+        obtenerTodasLasFilas<RepuestoUsoMetrica>(supabase, 'reparaciones_repuestos', 'reparacion_id, nombre_repuesto, cantidad, costo_unitario'),
         supabase.from('repuestos').select('id, nombre, cantidad_stock, cantidad_reservada, stock_minimo'),
         supabase.from('tecnicos').select('id, nombre').order('nombre'),
       ]);
-      setReparaciones((reps as ReparacionMetrica[]) ?? []);
-      setUsosRepuestos((usos as RepuestoUsoMetrica[]) ?? []);
+      setReparaciones(reps);
+      setUsosRepuestos(usos);
       setRepuestos((rep as RepuestoMetrica[]) ?? []);
       setTecnicos((tecs as Tecnico[]) ?? []);
       setLoading(false);

@@ -386,6 +386,48 @@ export default function ServicioTecnico() {
     return Date.now() - new Date(iso).getTime() <= dias * 86400000;
   };
 
+  // La pestaña "Técnicos" recalculaba estos 7 filter()/reduce() por técnico
+  // directo en el cuerpo del render, sin memoizar — con años de historial
+  // (esta pestaña carga TODO, no solo lo activo) eso es O(técnicos × miles
+  // de filas) en cada render mientras la pestaña sigue abierta. Un solo
+  // useMemo con un Map evita recalcular si no cambió ninguna de las 3 cosas
+  // de las que depende.
+  const resumenPorTecnico = useMemo(() => {
+    const mapa = new Map<
+      string,
+      {
+        activasArr: typeof reparacionesSucursal;
+        enCurso: number;
+        demoradas: number;
+        esperandoDiagnostico: number;
+        listasHoy: number;
+        completadasPeriodo: number;
+        tiempoPromedioDias: number | null;
+      }
+    >();
+    for (const tec of tecnicos) {
+      const propias = reparacionesSucursal.filter((r) => r.tecnico_id === tec.id);
+      const activasArr = propias.filter((r) => !FINALIZADOS.includes(r.estado));
+      const enCurso = activasArr.filter((r) => r.estado === 'en_reparacion').length;
+      const demoradas = activasArr.filter(esDemorado).length;
+      const esperandoDiagnostico = activasArr.filter((r) => r.estado === 'recibido' || r.estado === 'esperando_diagnostico').length;
+      const listasHoy = propias.filter((r) => r.estado === 'listo_para_entregar' && esHoy(r.fecha_reparado)).length;
+      const completadasPeriodo = propias.filter((r) => r.estado === 'entregado' && dentroPeriodoTecnicos(r.fecha_reparado));
+      const tiempoPromedioDias =
+        completadasPeriodo.length > 0
+          ? completadasPeriodo.reduce(
+              (acc, r) => acc + (new Date(r.fecha_reparado as string).getTime() - new Date(r.fecha_ingreso_servicio).getTime()),
+              0
+            ) /
+            completadasPeriodo.length /
+            86400000
+          : null;
+      mapa.set(tec.id, { activasArr, enCurso, demoradas, esperandoDiagnostico, listasHoy, completadasPeriodo: completadasPeriodo.length, tiempoPromedioDias });
+    }
+    return mapa;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tecnicos, reparacionesSucursal, periodoTecnicos]);
+
   const [repuestosParaAlertas, setRepuestosParaAlertas] = useState<RepuestoParaAlerta[]>([]);
   // "Descartar" una alerta la oculta en este navegador (sección 22: poder
   // marcarla como resuelta) — no hay una tabla de alertas en la base (son
@@ -1296,22 +1338,14 @@ export default function ServicioTecnico() {
             )}
             <div className="flex flex-col gap-2">
               {tecnicos.map((tec) => {
-                const propias = reparacionesSucursal.filter((r) => r.tecnico_id === tec.id);
-                const activasArr = propias.filter((r) => !FINALIZADOS.includes(r.estado));
-                const enCurso = activasArr.filter((r) => r.estado === 'en_reparacion').length;
-                const demoradas = activasArr.filter(esDemorado).length;
-                const esperandoDiagnostico = activasArr.filter((r) => r.estado === 'recibido' || r.estado === 'esperando_diagnostico').length;
-                const listasHoy = propias.filter((r) => r.estado === 'listo_para_entregar' && esHoy(r.fecha_reparado)).length;
-                const completadasPeriodo = propias.filter((r) => r.estado === 'entregado' && dentroPeriodoTecnicos(r.fecha_reparado));
-                const tiempoPromedioDias =
-                  completadasPeriodo.length > 0
-                    ? completadasPeriodo.reduce(
-                        (acc, r) => acc + (new Date(r.fecha_reparado as string).getTime() - new Date(r.fecha_ingreso_servicio).getTime()),
-                        0
-                      ) /
-                      completadasPeriodo.length /
-                      86400000
-                    : null;
+                const resumen = resumenPorTecnico.get(tec.id);
+                const activasArr = resumen?.activasArr ?? [];
+                const enCurso = resumen?.enCurso ?? 0;
+                const demoradas = resumen?.demoradas ?? 0;
+                const esperandoDiagnostico = resumen?.esperandoDiagnostico ?? 0;
+                const listasHoy = resumen?.listasHoy ?? 0;
+                const completadasPeriodoCount = resumen?.completadasPeriodo ?? 0;
+                const tiempoPromedioDias = resumen?.tiempoPromedioDias ?? null;
                 const ocupado = activasArr.length > 0;
                 const cargaPct = maxActivasTecnicos > 0 ? Math.round((activasArr.length / maxActivasTecnicos) * 100) : 0;
                 return (
@@ -1370,7 +1404,7 @@ export default function ServicioTecnico() {
                           <div className="h-full bg-accent dark:bg-dark-accent" style={{ width: `${cargaPct}%` }} />
                         </div>
                         <p className="text-xs text-muted dark:text-dark-text-secondary">
-                          {completadasPeriodo.length} {completadasPeriodo.length === 1 ? t('completada') : t('completadas')} {t('en el período')}
+                          {completadasPeriodoCount} {completadasPeriodoCount === 1 ? t('completada') : t('completadas')} {t('en el período')}
                           {tiempoPromedioDias != null ? ` · ${t('promedio')} ${tiempoPromedioDias.toFixed(1)} ${t('días')}` : ''}
                         </p>
                       </div>

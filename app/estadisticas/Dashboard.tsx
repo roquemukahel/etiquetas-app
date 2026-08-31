@@ -296,33 +296,26 @@ export default function Estadisticas() {
       const desde = new Date(ahoraParaVentana.getFullYear() - 1, 0, 1, 0, 0, 0, 0);
 
       const [
-        [
-          { data: perfil },
-          { data: vend },
-          { data: tec },
-          { data: prov },
-          { data: ord },
-          { data: items },
-          { data: rep },
-          { data: ing },
-          { data: comprasManual },
-          { data: pagosData },
-          { data: creditoData },
-          { data: saldosData },
-          { data: categoriasData },
-          { data: movsProveedorData },
-          { data: saldosProveedorData },
-          { data: cuotasFinData },
-          { data: planesFinData },
-          { data: pagosFinData },
-          { data: comisionData },
-          { data: egresosData },
-        ],
-        // Estas 3 son de "dispositivos" aparte (no en el Promise.all de
-        // arriba): con miles de dispositivos cargados, un select() común se
+        [{ data: perfil }, { data: vend }, { data: tec }, { data: prov }, { data: saldosData }, { data: categoriasData }, { data: saldosProveedorData }],
+        ord,
+        items,
+        rep,
+        ing,
+        comprasManual,
+        pagosData,
+        creditoData,
+        movsProveedorData,
+        cuotasFinData,
+        planesFinData,
+        pagosFinData,
+        comisionData,
+        egresosData,
+        // Estas de acá en más pasan por obtenerTodasLasFilas (no en el
+        // Promise.all interno de arriba): con miles de filas en el período
+        // (sobre todo el período "Año", ~20 meses), un select() común se
         // corta en 1000 filas sin avisar y las estadísticas quedarían mal
-        // (capital de stock, compras del período, ranking de altas, todos
-        // subestimados). obtenerTodasLasFilas pagina hasta traer todo.
+        // (ventas, comisiones, cuentas por cobrar, financiación, todo
+        // subestimado). obtenerTodasLasFilas pagina hasta traer todo.
         compras,
         stockData,
         registrosData,
@@ -332,46 +325,59 @@ export default function Estadisticas() {
           supabase.from('vendedores').select('id, nombre, foto_url').order('nombre'),
           supabase.from('tecnicos').select('id, nombre, foto_url').order('nombre'),
           supabase.from('proveedores').select('id, nombre').order('nombre'),
-          supabase
-            .from('ordenes')
-            .select('id, vendedor_id, cliente_id, total, anticipo, monto_canje, estado, forma_pago, created_at, sucursal_id')
-            .gte('created_at', desde.toISOString()),
-          supabase
-            .from('orden_items')
-            .select('orden_id, cantidad, precio_unitario, costo, created_at, dispositivo_id, producto_id, descripcion, tipo')
-            .gte('created_at', desde.toISOString()),
-          supabase
-            .from('reparaciones')
-            .select('tecnico_id, fecha_reparado, sucursal_id')
-            .not('fecha_reparado', 'is', null)
-            .gte('fecha_reparado', desde.toISOString()),
-          supabase
-            .from('reparaciones')
-            .select('cliente_id, fecha_ingreso_servicio, sucursal_id')
-            .not('cliente_id', 'is', null)
-            .not('fecha_ingreso_servicio', 'is', null)
-            .gte('fecha_ingreso_servicio', desde.toISOString()),
-          supabase.from('compras_proveedor').select('proveedor_id, cantidad, precio_unitario, created_at').gte('created_at', desde.toISOString()),
-          supabase.from('pagos').select('medio, monto, fecha, sucursal_id').eq('anulado', false).gte('fecha', desde.toISOString()),
-          supabase.from('cta_cte_movimientos').select('concepto, tipo, monto, fecha, sucursal_id').eq('anulado', false).gte('fecha', desde.toISOString()),
           supabase.rpc('saldos_cuenta_corriente'),
           // Todas estas son opcionales — si el negocio no corrió esa
           // migración (o no activó el módulo), Supabase devuelve error y
           // "data: null" en vez de tirar excepción; los "?? []" de abajo
           // dejan la sección vacía en vez de romper toda la pantalla.
           supabase.from('stock_categorias').select('id, nombre'),
-          supabase.from('proveedor_movimientos').select('proveedor_id, tipo, monto, fecha').eq('anulado', false).gte('fecha', desde.toISOString()),
           supabase.rpc('saldos_proveedores'),
-          supabase.from('financiacion_cuotas').select('importe_original, importe_pagado, estado, fecha_vencimiento').neq('estado', 'anulada'),
-          supabase.from('financiacion_planes').select('importe_financiado, estado, created_at'),
-          supabase
-            .from('financiacion_pagos')
-            .select('monto_aplicado, tipo, created_at')
-            .eq('tipo', 'pago')
-            .gte('created_at', desde.toISOString()),
-          supabase.from('comision_movimientos').select('comision, estado, fecha_hecho, created_at').neq('estado', 'revertida').gte('created_at', desde.toISOString()),
-          supabase.from('egresos').select('importe, fecha, sucursal_id').eq('anulado', false).gte('fecha', desde.toISOString().slice(0, 10)),
         ]),
+        obtenerTodasLasFilas<OrdenR>(
+          supabase,
+          'ordenes',
+          'id, vendedor_id, cliente_id, total, anticipo, monto_canje, estado, forma_pago, created_at, sucursal_id',
+          [],
+          (q) => q.gte('created_at', desde.toISOString())
+        ),
+        obtenerTodasLasFilas<ItemPeriodoR>(
+          supabase,
+          'orden_items',
+          'orden_id, cantidad, precio_unitario, costo, created_at, dispositivo_id, producto_id, descripcion, tipo',
+          [],
+          (q) => q.gte('created_at', desde.toISOString())
+        ),
+        obtenerTodasLasFilas<Reparacion>(supabase, 'reparaciones', 'tecnico_id, fecha_reparado, sucursal_id', [], (q) =>
+          q.not('fecha_reparado', 'is', null).gte('fecha_reparado', desde.toISOString())
+        ),
+        obtenerTodasLasFilas<IngresoServicio>(supabase, 'reparaciones', 'cliente_id, fecha_ingreso_servicio, sucursal_id', [], (q) =>
+          q.not('cliente_id', 'is', null).not('fecha_ingreso_servicio', 'is', null).gte('fecha_ingreso_servicio', desde.toISOString())
+        ),
+        obtenerTodasLasFilas<CompraManual>(supabase, 'compras_proveedor', 'proveedor_id, cantidad, precio_unitario, created_at', [], (q) =>
+          q.gte('created_at', desde.toISOString())
+        ),
+        obtenerTodasLasFilas<PagoR>(supabase, 'pagos', 'medio, monto, fecha, sucursal_id', [], (q) =>
+          q.eq('anulado', false).gte('fecha', desde.toISOString())
+        ),
+        obtenerTodasLasFilas<CreditoR>(supabase, 'cta_cte_movimientos', 'concepto, tipo, monto, fecha, sucursal_id', [], (q) =>
+          q.eq('anulado', false).gte('fecha', desde.toISOString())
+        ),
+        obtenerTodasLasFilas<MovProveedorR>(supabase, 'proveedor_movimientos', 'proveedor_id, tipo, monto, fecha', [], (q) =>
+          q.eq('anulado', false).gte('fecha', desde.toISOString())
+        ),
+        obtenerTodasLasFilas<CuotaFinR>(supabase, 'financiacion_cuotas', 'importe_original, importe_pagado, estado, fecha_vencimiento', [], (q) =>
+          q.neq('estado', 'anulada')
+        ),
+        obtenerTodasLasFilas<PlanFinR>(supabase, 'financiacion_planes', 'importe_financiado, estado, created_at'),
+        obtenerTodasLasFilas<PagoFinR>(supabase, 'financiacion_pagos', 'monto_aplicado, tipo, created_at', [], (q) =>
+          q.eq('tipo', 'pago').gte('created_at', desde.toISOString())
+        ),
+        obtenerTodasLasFilas<ComisionMovR>(supabase, 'comision_movimientos', 'comision, estado, fecha_hecho, created_at', [], (q) =>
+          q.neq('estado', 'revertida').gte('created_at', desde.toISOString())
+        ),
+        obtenerTodasLasFilas<EgresoR>(supabase, 'egresos', 'importe, fecha, sucursal_id', [], (q) =>
+          q.eq('anulado', false).gte('fecha', desde.toISOString().slice(0, 10))
+        ),
         obtenerTodasLasFilas<DispositivoCompra>(supabase, 'dispositivos', 'proveedor_id, costo, created_at, sucursal_id', [], (q) =>
           q.not('proveedor_id', 'is', null).gte('created_at', desde.toISOString())
         ),

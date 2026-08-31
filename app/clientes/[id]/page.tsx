@@ -172,10 +172,7 @@ export default function DetalleCliente() {
   );
   const sumaVencida = cargosVencidos.reduce((acc, m) => acc + (m.monto || 0), 0);
   const vencido = Math.min(Math.max(saldo, 0), sumaVencida);
-  const vencMasAntiguo = cargosVencidos
-    .map((m) => m.vencimiento!)
-    .sort()
-    .at(0);
+  const vencMasAntiguo = useMemo(() => cargosVencidos.map((m) => m.vencimiento!).sort().at(0), [cargosVencidos]);
   const diasMora = vencido > 0 ? diasDeMora(vencMasAntiguo) : null;
   const estado = estadoCuenta(saldo, vencido, !!c?.suspendido);
   const infoEstado = ESTADO_INFO[estado];
@@ -192,14 +189,15 @@ export default function DetalleCliente() {
     return conSaldo.reverse();
   }, [movimientos]);
 
-  const ordenesServicio = ordenes.filter((o) => o.orden_items.some((i) => i.tipo === 'trabajo'));
-  const ordenesCompra = ordenes.filter((o) => !o.orden_items.some((i) => i.tipo === 'trabajo'));
+  const ordenesServicio = useMemo(() => ordenes.filter((o) => o.orden_items.some((i) => i.tipo === 'trabajo')), [ordenes]);
+  const ordenesCompra = useMemo(() => ordenes.filter((o) => !o.orden_items.some((i) => i.tipo === 'trabajo')), [ordenes]);
   // Mismo criterio que Estadísticas (ESTADOS_COBRADOS): una orden pendiente
   // o cancelada no es una compra "cumplida" — sumarla acá infla el total
   // histórico que se le muestra al vendedor sobre este cliente.
-  const totalComprado = ordenes
-    .filter((o) => ESTADOS_COBRADOS.includes(o.estado))
-    .reduce((acc, o) => acc + (o.total || 0), 0);
+  const totalComprado = useMemo(
+    () => ordenes.filter((o) => ESTADOS_COBRADOS.includes(o.estado)).reduce((acc, o) => acc + (o.total || 0), 0),
+    [ordenes]
+  );
 
   const campo = (k: keyof Cliente, valor: string) => setC((prev) => (prev ? { ...prev, [k]: valor } : prev));
 

@@ -71,19 +71,19 @@ export default function DetallePlanAhorro() {
   const nombreCliente = (p: Plan) => (p.clientes ? `${p.clientes.nombre} ${p.clientes.apellido || ''}`.trim() : t('sin cliente'));
 
   const cargar = async () => {
-    const { data: planData } = await supabase
-      .from('planes_ahorro')
-      .select('*, clientes ( nombre, apellido, telefono )')
-      .eq('id', id)
-      .maybeSingle();
+    // Ambas filtran solo por "id"/"plan_id" (ya conocidos) — son
+    // independientes, así que se piden en paralelo en vez de una detrás
+    // de la otra.
+    const [{ data: planData }, { data: movData, error: movError }] = await Promise.all([
+      supabase.from('planes_ahorro').select('*, clientes ( nombre, apellido, telefono )').eq('id', id).maybeSingle(),
+      supabase
+        .from('plan_ahorro_movimientos')
+        .select('id, monto, medio, observacion, fecha')
+        .eq('plan_id', id)
+        .eq('anulado', false)
+        .order('fecha', { ascending: false }),
+    ]);
     setPlan((planData as Plan) ?? null);
-
-    const { data: movData, error: movError } = await supabase
-      .from('plan_ahorro_movimientos')
-      .select('id, monto, medio, observacion, fecha')
-      .eq('plan_id', id)
-      .eq('anulado', false)
-      .order('fecha', { ascending: false });
     setMovimientosError(!!movError);
     setMovimientos(movError ? [] : ((movData as Movimiento[]) ?? []));
     setLoading(false);

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../lib/supabase/client';
+import { obtenerTodasLasFilas } from '../lib/db';
 import { asegurarModelo, normalizarNombreModelo } from '../lib/modelos';
 import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../lib/carpetas';
 import { registrarAuditoria } from '../lib/auditoria';
@@ -64,16 +65,18 @@ export default function PlanCanje() {
   const [ubicacionInput, setUbicacionInput] = useState('');
 
   const cargar = async () => {
-    const [{ data: c }, { data: r }] = await Promise.all([
-      supabase.from('canjes').select('*, vendedores ( nombre, foto_url )').order('created_at', { ascending: false }),
-      supabase
-        .from('reparaciones')
-        .select('id, numero_orden, modelo, capacidad_gb, color, imei, estado, fecha_ingreso_servicio')
-        .not('canje_origen_id', 'is', null)
-        .order('fecha_ingreso_servicio', { ascending: false }),
+    const [c, r] = await Promise.all([
+      obtenerTodasLasFilas<Canje>(supabase, 'canjes', '*, vendedores ( nombre, foto_url )', [{ columna: 'created_at', ascending: false }]),
+      obtenerTodasLasFilas<ReparacionDerivada>(
+        supabase,
+        'reparaciones',
+        'id, numero_orden, modelo, capacidad_gb, color, imei, estado, fecha_ingreso_servicio',
+        [{ columna: 'fecha_ingreso_servicio', ascending: false }],
+        (q) => q.not('canje_origen_id', 'is', null)
+      ),
     ]);
-    setCanjes((c as any) ?? []);
-    setDerivados((r as any) ?? []);
+    setCanjes(c);
+    setDerivados(r);
     setLoading(false);
   };
 

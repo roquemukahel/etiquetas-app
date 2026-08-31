@@ -80,24 +80,28 @@ export default function BuscadorUniversal() {
   const cargarDatos = async () => {
     if (cargado) return;
     setCargado(true);
-    const [cl, di, { data: ca }, { data: re }, { data: co }, { data: or }] = await Promise.all([
+    const [cl, di, ca, re, co, or] = await Promise.all([
       obtenerTodasLasFilas<Cliente>(supabase, 'clientes', 'id, nombre, apellido, telefono, dni'),
       obtenerTodasLasFilas<Dispositivo>(supabase, 'dispositivos', 'id, modelo, imei, numero_serie, en_stock, capacidad_gb, color'),
-      supabase.from('canjes').select('id, modelo, imei, detalles, estado, cliente_id, clientes ( nombre, apellido )'),
-      supabase
-        .from('reparaciones')
-        .select('id, numero_orden, modelo, imei, falla_declarada, estado, cliente_id, clientes ( nombre, apellido )'),
-      supabase.from('compras').select('id, modelo, imei, detalles, cliente_id, clientes ( nombre, apellido )'),
-      supabase
-        .from('ordenes')
-        .select('id, total, estado, cliente_id, clientes ( nombre, apellido, telefono ), orden_items ( descripcion )'),
+      obtenerTodasLasFilas<Canje>(supabase, 'canjes', 'id, modelo, imei, detalles, estado, cliente_id, clientes ( nombre, apellido )'),
+      obtenerTodasLasFilas<Reparacion>(
+        supabase,
+        'reparaciones',
+        'id, numero_orden, modelo, imei, falla_declarada, estado, cliente_id, clientes ( nombre, apellido )'
+      ),
+      obtenerTodasLasFilas<Compra>(supabase, 'compras', 'id, modelo, imei, detalles, cliente_id, clientes ( nombre, apellido )'),
+      obtenerTodasLasFilas<Orden>(
+        supabase,
+        'ordenes',
+        'id, total, estado, cliente_id, clientes ( nombre, apellido, telefono ), orden_items ( descripcion )'
+      ),
     ]);
     setClientes(cl);
     setDispositivos(di);
-    setCanjes((ca as any) ?? []);
-    setReparaciones((re as any) ?? []);
-    setCompras((co as any) ?? []);
-    setOrdenes((or as any) ?? []);
+    setCanjes(ca);
+    setReparaciones(re);
+    setCompras(co);
+    setOrdenes(or);
   };
 
   useEffect(() => {

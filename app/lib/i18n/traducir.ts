@@ -2,19 +2,33 @@
 // usarse tanto desde componentes cliente (app/lib/idioma.ts) como desde
 // Server Components (app/lib/idiomaServidor.ts), que son dos mundos
 // distintos en Next.js App Router y no pueden compartir hooks de React.
-import { PT } from './pt';
-import { EN } from './en';
-
+//
+// A propósito NO importa pt.ts/en.ts acá arriba (ver git history si hace
+// falta el porqué): este módulo lo importa app/lib/idioma.ts, que es
+// 'use client' — un import estático de ambos diccionarios (~165KB cada
+// uno) quedaba empaquetado en el bundle de CADA página para TODOS los
+// negocios, aunque el 100% use español. app/lib/idiomaServidor.ts (lado
+// servidor, el bundle no viaja al navegador) registra los diccionarios
+// completos de una sola vez al importarse; app/lib/idioma.ts (lado
+// cliente) los carga bajo demanda con import() solo cuando el idioma
+// elegido no es español, así ese peso solo lo paga quien realmente
+// eligió portugués/inglés.
 export type Idioma = 'es' | 'pt' | 'en';
 
 export function esIdiomaValido(v: string | undefined | null): v is Idioma {
   return v === 'es' || v === 'pt' || v === 'en';
 }
 
-const DICCIONARIOS: Record<Idioma, Record<string, string>> = { es: {}, pt: PT, en: EN };
+const DICCIONARIOS: Record<Idioma, Record<string, string>> = { es: {}, pt: {}, en: {} };
+
+export function registrarDiccionario(idioma: Idioma, diccionario: Record<string, string>) {
+  DICCIONARIOS[idioma] = diccionario;
+}
 
 // El texto en español es tanto el valor por defecto como la clave de
-// búsqueda — ver app/lib/idioma.ts para el porqué de este diseño.
+// búsqueda — ver app/lib/idioma.ts para el porqué de este diseño. Si el
+// diccionario de pt/en todavía no se registró (en el cliente, mientras el
+// chunk se está bajando), devuelve el texto en español sin traducir.
 export function traducir(idioma: Idioma, texto: string): string {
   return DICCIONARIOS[idioma][texto] ?? texto;
 }

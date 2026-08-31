@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../lib/supabase/client';
+import { obtenerTodasLasFilas } from '../lib/db';
 import { useActor } from '../lib/actor';
 import { tienePermiso } from '../lib/permisos';
 import { registrarAuditoria } from '../lib/auditoria';
@@ -114,17 +115,16 @@ export default function Ordenes() {
   const DIAS_VENTANA_RECIENTE = 90;
 
   const cargar = async (traerTodoElHistorial = false) => {
-    let ordenesQuery = supabase
-      .from('ordenes')
-      .select('id, numero_orden, forma_pago, total, estado, created_at, sucursal_id, clientes ( nombre, apellido ), orden_items ( descripcion, tipo )')
-      .order('created_at', { ascending: false });
-    if (!traerTodoElHistorial) {
-      const desde = new Date();
-      desde.setDate(desde.getDate() - DIAS_VENTANA_RECIENTE);
-      ordenesQuery = ordenesQuery.gte('created_at', desde.toISOString());
-    }
-    const [{ data: ordenesData }, { data: listasData }, { data: canceladasData }, { data: canjesData }] = await Promise.all([
-      ordenesQuery,
+    const desdeReciente = new Date();
+    desdeReciente.setDate(desdeReciente.getDate() - DIAS_VENTANA_RECIENTE);
+    const [ordenesData, { data: listasData }, { data: canceladasData }, canjesData] = await Promise.all([
+      obtenerTodasLasFilas<Orden>(
+        supabase,
+        'ordenes',
+        'id, numero_orden, forma_pago, total, estado, created_at, sucursal_id, clientes ( nombre, apellido ), orden_items ( descripcion, tipo )',
+        [{ columna: 'created_at', ascending: false }],
+        traerTodoElHistorial ? undefined : (q) => q.gte('created_at', desdeReciente.toISOString())
+      ),
       // Reparaciones terminadas por el técnico (con cliente) que faltan cobrar.
       supabase
         .from('reparaciones')
@@ -144,9 +144,9 @@ export default function Ordenes() {
         .order('estado_actualizado_at', { ascending: false }),
       // Plan canje de cada orden, para poder buscar por el equipo que el
       // cliente entregó (no solo por el que se llevó).
-      supabase.from('canjes').select('orden_id, modelo, imei, color').not('orden_id', 'is', null),
+      obtenerTodasLasFilas<CanjeOrden>(supabase, 'canjes', 'orden_id, modelo, imei, color', [], (q) => q.not('orden_id', 'is', null)),
     ]);
-    setOrdenes((ordenesData as any) ?? []);
+    setOrdenes(ordenesData);
     setReparacionesListas((listasData as any) ?? []);
     setReparacionesCanceladas((canceladasData as any) ?? []);
     setCanjes((canjesData as CanjeOrden[]) ?? []);
@@ -257,6 +257,18 @@ export default function Ordenes() {
         return nombreCliente.includes(q) || itemsTexto.includes(q) || canjesTexto.includes(q);
       });
   }, [ordenes, filtroEstado, filtroSucursal, filtroTipo, busqueda, canjesPorOrden]);
+
+  // Con "ver todo el historial" activado (años de órdenes), pintar TODAS las
+  // tarjetas de una es lo que hace sentir lenta la pantalla que todo vendedor
+  // usa todo el día — mismo patrón de paginado manual que Clientes/Stock. La
+  // búsqueda/filtros siguen actuando sobre TODAS las órdenes cargadas
+  // (filtradas no cambia), solo lo que se renderiza arranca corto.
+  const PASO_VISIBLES = 150;
+  const [visibles, setVisibles] = useState(PASO_VISIBLES);
+  useEffect(() => {
+    setVisibles(PASO_VISIBLES);
+  }, [busqueda, filtroEstado, filtroTipo, filtroSucursal]);
+  const paraRenderizar = useMemo(() => filtradas.slice(0, visibles), [filtradas, visibles]);
 
   // Se me había pasado esto en la primera pasada de multisucursal: estas dos
   // NO nacen de la tabla `ordenes` (que sí ya filtraba), sino de
@@ -475,7 +487,7 @@ export default function Ordenes() {
       )}
 
       <div className="flex flex-col gap-2">
-        {filtradas.map((o) => {
+        {paraRenderizar.map((o) => {
           const servicio = esServicioTecnico(o);
           const estadoInfo = ESTADO_ORDEN_COLOR[o.estado] ?? ESTADO_ORDEN_COLOR.pendiente;
           return (
@@ -520,6 +532,15 @@ export default function Ordenes() {
           );
         })}
       </div>
+
+      {visibles < filtradas.length && (
+        <button
+          onClick={() => setVisibles((v) => v + PASO_VISIBLES)}
+          className="w-full rounded-xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium"
+        >
+          {t('Mostrar')} {Math.min(PASO_VISIBLES, filtradas.length - visibles)} {t('más')}
+        </button>
+      )}
     </main>
   );
 }

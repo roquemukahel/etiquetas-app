@@ -75,19 +75,24 @@ export default function CuentasPorCobrar() {
       // clientes, un select() común se corta en 1000 filas sin avisar y los
       // deudores que quedaran afuera de esa página aparecerían como
       // "Cliente eliminado" sin estarlo de verdad.
-      const [{ data: saldosData }, clientesData, { data: userData }, { data: cuotasData }, { data: pagosData }] = await Promise.all([
+      const [{ data: saldosData }, clientesData, { data: userData }, cuotasData, pagosData] = await Promise.all([
         supabase.rpc('saldos_cuenta_corriente'),
         obtenerTodasLasFilas<Cliente>(supabase, 'clientes', 'id, nombre, apellido, suspendido, telefono'),
         supabase.auth.getUser(),
-        supabase
-          .from('financiacion_cuotas')
-          .select('id, plan_id, numero, fecha_vencimiento, importe_original, importe_pagado, estado, financiacion_planes!inner(cliente_id, moneda, cantidad_cuotas)'),
+        obtenerTodasLasFilas<any>(
+          supabase,
+          'financiacion_cuotas',
+          'id, plan_id, numero, fecha_vencimiento, importe_original, importe_pagado, estado, financiacion_planes!inner(cliente_id, moneda, cantidad_cuotas)'
+        ),
         // Solo pagos reales (tipo='pago', no 'ajuste' — un ajuste no es plata
         // que entró, no cuenta como "cobrado" en la proyección).
-        supabase
-          .from('financiacion_pagos')
-          .select('monto_aplicado, tipo, pagos!inner(fecha), financiacion_cuotas!inner(plan_id, financiacion_planes!inner(cliente_id, moneda))')
-          .eq('tipo', 'pago'),
+        obtenerTodasLasFilas<any>(
+          supabase,
+          'financiacion_pagos',
+          'monto_aplicado, tipo, pagos!inner(fecha), financiacion_cuotas!inner(plan_id, financiacion_planes!inner(cliente_id, moneda))',
+          [],
+          (q) => q.eq('tipo', 'pago')
+        ),
       ]);
       const clientes = new Map(clientesData.map((c) => [c.id, c]));
       const armadas: Fila[] = ((saldosData as Saldo[]) ?? [])

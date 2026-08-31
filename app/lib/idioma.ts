@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { traducir, esIdiomaValido, type Idioma } from './i18n/traducir';
+import { traducir, esIdiomaValido, registrarDiccionario, type Idioma } from './i18n/traducir';
 
 export type { Idioma };
 
@@ -14,6 +14,25 @@ export type { Idioma };
 // personas en el mismo local pueden elegir cada una su idioma.
 const COOKIE = 'qovento_idioma';
 const EVENTO_CAMBIO = 'qovento:idioma-changed';
+const EVENTO_DICCIONARIO = 'qovento:diccionario-listo';
+
+// Español no necesita diccionario (el texto ya está en ese idioma), así
+// que la carga perezosa de pt.ts/en.ts (ver traducir.ts) solo se dispara
+// para quien realmente eligió portugués/inglés — se cachea acá para no
+// volver a pedir el chunk si ya se cargó antes en esta pestaña.
+const diccionariosCargados = new Set<Idioma>(['es']);
+function asegurarDiccionario(idioma: Idioma) {
+  if (diccionariosCargados.has(idioma)) return;
+  diccionariosCargados.add(idioma);
+  const promesa = idioma === 'pt' ? import('./i18n/pt').then((m) => m.PT) : import('./i18n/en').then((m) => m.EN);
+  promesa.then((diccionario) => {
+    registrarDiccionario(idioma, diccionario);
+    // No alcanza con re-leer el idioma (no cambió) para que los t() ya
+    // montados vuelvan a renderizar con el diccionario recién llegado —
+    // hace falta un evento aparte que useIdioma() escuche en cada instancia.
+    window.dispatchEvent(new Event(EVENTO_DICCIONARIO));
+  });
+}
 
 function leerCookie(): Idioma | null {
   if (typeof document === 'undefined') return null;
@@ -48,10 +67,19 @@ export const IDIOMAS_DISPONIBLES: { valor: Idioma; etiqueta: string }[] = [
 // router.refresh() explícito tras cambiar — lo hace el botón del selector.
 export function useIdioma(): Idioma {
   const [idioma, setIdiomaState] = useState<Idioma>(() => getIdioma());
+  const [, forzarRender] = useState(0);
+  useEffect(() => {
+    asegurarDiccionario(idioma);
+  }, [idioma]);
   useEffect(() => {
     const actualizar = () => setIdiomaState(getIdioma());
+    const actualizarAlLlegarDiccionario = () => forzarRender((n) => n + 1);
     window.addEventListener(EVENTO_CAMBIO, actualizar);
-    return () => window.removeEventListener(EVENTO_CAMBIO, actualizar);
+    window.addEventListener(EVENTO_DICCIONARIO, actualizarAlLlegarDiccionario);
+    return () => {
+      window.removeEventListener(EVENTO_CAMBIO, actualizar);
+      window.removeEventListener(EVENTO_DICCIONARIO, actualizarAlLlegarDiccionario);
+    };
   }, []);
   return idioma;
 }

@@ -1606,9 +1606,9 @@ export default function DetalleOrden() {
       )}
 
       <div className="flex flex-col gap-2">
-        {orden.orden_items.map((i, idx) => (
+        {orden.orden_items.map((i) => (
           <div
-            key={idx}
+            key={i.id}
             className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex items-center justify-between text-sm"
           >
             <span>

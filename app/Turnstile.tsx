@@ -52,10 +52,12 @@ export default function Turnstile({ onVerify }: { onVerify: (token: string) => v
       }
     };
 
+    let existente: Element | null = null;
+
     if (window.turnstile) {
       renderWidget();
     } else {
-      const existente = document.querySelector('script[data-turnstile]');
+      existente = document.querySelector('script[data-turnstile]');
       if (!existente) {
         const script = document.createElement('script');
         script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
@@ -70,6 +72,11 @@ export default function Turnstile({ onVerify }: { onVerify: (token: string) => v
     }
 
     return () => {
+      // Si el script ya existía pero todavía no había cargado y esta
+      // pantalla se desmonta antes de que termine (ej. se navegó afuera de
+      // Login/Registro), sin esto el listener quedaba vivo e intentaba
+      // renderizar el widget sobre un componente ya desmontado.
+      existente?.removeEventListener('load', renderWidget);
       if (widgetId.current && window.turnstile) {
         window.turnstile.remove(widgetId.current);
         widgetId.current = null;

@@ -65,10 +65,6 @@ export default function Comisiones() {
   const cargar = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return setLoading(false);
-    const { data: perfil } = await supabase.from('perfiles').select('negocios ( moneda, comisiones_activas )').eq('id', user.id).single();
-    const neg = (perfil as any)?.negocios;
-    if (neg?.moneda) setMoneda(simboloMoneda(neg.moneda));
-    setActivas(!!neg?.comisiones_activas);
 
     let q = supabase
       .from('comision_movimientos')
@@ -76,20 +72,27 @@ export default function Comisiones() {
       .order('created_at', { ascending: false })
       .limit(500);
     if (!puedeGestionar && actor?.id) q = q.eq('vendedor_id', actor.id);
-    const { data } = await q;
-    setMovs((data as any) ?? []);
 
     let ql = supabase.from('comision_liquidaciones').select('id, vendedor_id, estado, total_neto, pagado, created_at, vendedores ( nombre )').order('created_at', { ascending: false }).limit(100);
     if (!puedeGestionar && actor?.id) ql = ql.eq('vendedor_id', actor.id);
-    const { data: liq } = await ql;
-    setLiquidaciones((liq as any) ?? []);
 
-    // Todos los vendedores del negocio (para el ajuste manual, aunque todavía no
-    // tengan comisiones generadas).
-    if (puedeGestionar) {
-      const { data: vend } = await supabase.from('vendedores').select('id, nombre').order('nombre');
-      setVendedores((vend as any) ?? []);
-    }
+    // Estas 4 son independientes entre sí (ninguna depende del resultado de
+    // otra, solo de "user"/"puedeGestionar"/"actor.id" que ya se conocen) —
+    // pedirlas en paralelo evita encadenar 4 round-trips uno atrás del otro.
+    const [{ data: perfil }, { data }, { data: liq }, vendResult] = await Promise.all([
+      supabase.from('perfiles').select('negocios ( moneda, comisiones_activas )').eq('id', user.id).single(),
+      q,
+      ql,
+      // Todos los vendedores del negocio (para el ajuste manual, aunque
+      // todavía no tengan comisiones generadas) — solo hace falta si puede gestionar.
+      puedeGestionar ? supabase.from('vendedores').select('id, nombre').order('nombre') : Promise.resolve({ data: null }),
+    ]);
+    const neg = (perfil as any)?.negocios;
+    if (neg?.moneda) setMoneda(simboloMoneda(neg.moneda));
+    setActivas(!!neg?.comisiones_activas);
+    setMovs((data as any) ?? []);
+    setLiquidaciones((liq as any) ?? []);
+    if (puedeGestionar) setVendedores((vendResult.data as any) ?? []);
     setLoading(false);
   };
 
