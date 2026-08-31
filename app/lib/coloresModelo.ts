@@ -556,6 +556,50 @@ const GALAXY_S26: ModeloColores = {
   ],
 };
 
+// Samsung Galaxy S25 — colores oficiales: Navy, Mint, Icyblue, Silver Shadow.
+const GALAXY_S25: ModeloColores = {
+  carpeta: 'galaxy-s25',
+  colores: [
+    { nombre: 'Plata', archivo: 'plata', hex: '#a8abae' },
+    { nombre: 'Azul marino', archivo: 'azulmarino', hex: '#2b3d5c' },
+    { nombre: 'Azul hielo', archivo: 'azulhielo', hex: '#c9d6e8' },
+  ],
+};
+
+// Samsung Galaxy S24 — colores oficiales: Onyx Black, Marble Gray, Amber
+// Yellow, Cobalt Violet.
+const GALAXY_S24: ModeloColores = {
+  carpeta: 'galaxy-s24',
+  colores: [
+    { nombre: 'Negro', archivo: 'negro', hex: '#3a3a3a' },
+    { nombre: 'Gris mármol', archivo: 'gris', hex: '#d4d2ce' },
+    { nombre: 'Violeta cobalto', archivo: 'violeta', hex: '#87829c' },
+    { nombre: 'Ámbar', archivo: 'amarillo', hex: '#f0e6b8' },
+  ],
+};
+
+// Samsung Galaxy S24 FE — colores oficiales: Blue, Marble Gray, Graphite, Mint.
+const GALAXY_S24_FE: ModeloColores = {
+  carpeta: 'galaxy-s24-fe',
+  colores: [
+    { nombre: 'Grafito', archivo: 'grafito', hex: '#3a3a3c' },
+    { nombre: 'Gris mármol', archivo: 'gris', hex: '#e8e6e0' },
+    { nombre: 'Azul', archivo: 'azul', hex: '#c3d8ec' },
+  ],
+};
+
+// Samsung Galaxy S23 — colores oficiales: Phantom Black, Green, Cream,
+// Lavender + exclusivo online Lime.
+const GALAXY_S23: ModeloColores = {
+  carpeta: 'galaxy-s23',
+  colores: [
+    { nombre: 'Negro', archivo: 'negro', hex: '#1c1c1e' },
+    { nombre: 'Verde', archivo: 'verde', hex: '#5c6650' },
+    { nombre: 'Lavanda', archivo: 'lavanda', hex: '#e0d4e0' },
+    { nombre: 'Lima', archivo: 'lima', hex: '#e2eab0' },
+  ],
+};
+
 // Clave de modelo normalizada: "iPhone 11", "iphone 11", "iPhone11" -> "iphone11".
 const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   iphone7: IPHONE_7,
@@ -616,6 +660,10 @@ const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   galaxys26: GALAXY_S26,
   'galaxys26+': GALAXY_S26,
   galaxys26ultra: GALAXY_S26,
+  galaxys25: GALAXY_S25,
+  galaxys24: GALAXY_S24,
+  galaxys24fe: GALAXY_S24_FE,
+  galaxys23: GALAXY_S23,
 };
 
 function claveModelo(modelo: string | null | undefined): string {
