@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../lib/supabase/client';
-import { leerCSV, valorDe, descargarCSV, insertarEnTandas } from '../lib/csv';
+import { leerArchivoDatos, valorDe, descargarDatos, insertarEnTandas } from '../lib/csv';
 import { obtenerTodasLasFilas } from '../lib/db';
 import { registrarAuditoria } from '../lib/auditoria';
 import { eliminarEnBloque } from '../lib/eliminarEnBloque';
@@ -93,11 +93,12 @@ export default function Clientes() {
     })();
   }, []);
 
-  const exportar = () => {
-    descargarCSV(
-      'clientes-qovento.csv',
+  const exportar = (formato: 'csv' | 'xlsx') => {
+    descargarDatos(
+      'clientes-qovento',
       ['nombre', 'apellido', 'email', 'telefono', 'dni', 'domicilio'],
-      clientes
+      clientes,
+      formato
     );
   };
 
@@ -109,7 +110,7 @@ export default function Clientes() {
     setProgresoImport(null);
 
     try {
-      const filas = await leerCSV(archivo);
+      const filas = await leerArchivoDatos(archivo);
       const dnisExistentes = new Set(clientes.map((c) => c.dni).filter(Boolean));
       const actor = getActor();
 
@@ -314,22 +315,38 @@ export default function Clientes() {
         + {t('Cargar cliente')}
       </Link>
 
-      <div className="flex gap-2">
-        <label className="flex-1 rounded-xl border border-border dark:border-dark-border py-2.5 text-center text-xs font-medium cursor-pointer">
+      <div className="flex flex-col gap-2">
+        <label className="rounded-xl border border-border dark:border-dark-border py-2.5 text-center text-xs font-medium cursor-pointer">
           {importando
             ? progresoImport
               ? `${t('Importando...')} ${progresoImport.hechas}/${progresoImport.total}`
               : t('Leyendo archivo...')
-            : `⬆ ${t('Importar CSV')}`}
-          <input ref={inputImportRef} type="file" accept=".csv" className="hidden" disabled={importando} onChange={importar} />
+            : `⬆ ${t('Importar CSV o Excel')}`}
+          <input
+            ref={inputImportRef}
+            type="file"
+            accept=".csv,.xlsx,.xls"
+            className="hidden"
+            disabled={importando}
+            onChange={importar}
+          />
         </label>
-        <button
-          onClick={exportar}
-          disabled={clientes.length === 0}
-          className="flex-1 rounded-xl border border-border dark:border-dark-border py-2.5 text-center text-xs font-medium disabled:opacity-40"
-        >
-          ⬇ {t('Exportar CSV')}
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => exportar('csv')}
+            disabled={clientes.length === 0}
+            className="flex-1 rounded-xl border border-border dark:border-dark-border py-2.5 text-center text-xs font-medium disabled:opacity-40"
+          >
+            ⬇ {t('Exportar CSV')}
+          </button>
+          <button
+            onClick={() => exportar('xlsx')}
+            disabled={clientes.length === 0}
+            className="flex-1 rounded-xl border border-border dark:border-dark-border py-2.5 text-center text-xs font-medium disabled:opacity-40"
+          >
+            ⬇ {t('Exportar Excel')}
+          </button>
+        </div>
       </div>
 
       {resultadoImport && (

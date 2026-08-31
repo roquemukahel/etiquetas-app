@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { obtenerTodasLasFilas } from '../../lib/db';
-import { descargarCSV } from '../../lib/csv';
+import { descargarDatos } from '../../lib/csv';
 import { eliminarEnBloque } from '../../lib/eliminarEnBloque';
 import { registrarAuditoria } from '../../lib/auditoria';
 import { useActor } from '../../lib/actor';
@@ -29,14 +29,14 @@ const CONFIG: Record<
 > = {
   clientes: {
     titulo: 'Clientes',
-    archivo: 'clientes-qovento.csv',
+    archivo: 'clientes-qovento',
     columnas: ['nombre', 'apellido', 'email', 'telefono', 'dni', 'domicilio'],
     orden: [{ columna: 'nombre' }],
     perfilCategoria: null,
   },
   dispositivos: {
     titulo: 'Dispositivos (Stock)',
-    archivo: 'stock-celulares-qovento.csv',
+    archivo: 'stock-celulares-qovento',
     columnas: [
       'modelo',
       'capacidad_gb',
@@ -57,7 +57,7 @@ const CONFIG: Record<
   },
   productos: {
     titulo: 'Productos (otros rubros)',
-    archivo: 'stock-productos-qovento.csv',
+    archivo: 'stock-productos-qovento',
     columnas: [
       'nombre',
       'categoria',
@@ -144,11 +144,11 @@ export default function ExportarDatos() {
     return filas.map((f) => (cfg.perfilCategoria ? { ...f, categoria: nombreCategoria(f.categoria_id) } : f));
   };
 
-  const exportarSolo = async (entidad: Entidad) => {
+  const exportarSolo = async (entidad: Entidad, formato: 'csv' | 'xlsx') => {
     setExportando(entidad);
     const cfg = CONFIG[entidad];
     const filas = await traerFilas(entidad);
-    descargarCSV(cfg.archivo, cfg.columnas, filas);
+    await descargarDatos(cfg.archivo, cfg.columnas, filas, formato);
     setExportando(null);
   };
 
@@ -174,8 +174,9 @@ export default function ExportarDatos() {
 
     // Se descarga el CSV ANTES de borrar nada — así siempre queda una copia
     // de respaldo del momento exacto del borrado, sin depender de que se
-    // haya exportado antes por separado.
-    descargarCSV(cfg.archivo, cfg.columnas, filas);
+    // haya exportado antes por separado. Siempre CSV acá (no XLSX): es un
+    // respaldo de auditoría, no algo pensado para reimportar a otro sistema.
+    await descargarDatos(cfg.archivo, cfg.columnas, filas, 'csv');
 
     const ids = filas.map((f) => f.id);
     const { eliminados, bloqueados } = await eliminarEnBloque(supabase, entidad, ids);
@@ -256,24 +257,40 @@ export default function ExportarDatos() {
               </select>
             </div>
           )}
-          <div className="flex gap-2">
-            <button
-              onClick={() => exportarSolo(entidad)}
-              disabled={exportando === entidad}
-              className="flex-1 rounded-xl border border-border dark:border-dark-border py-2.5 text-center text-xs font-medium disabled:opacity-40"
-            >
-              {exportando === entidad ? (
-                t('Exportando...')
-              ) : (
-                <span className="inline-flex items-center justify-center gap-1">
-                  <span aria-hidden="true" className="[&_svg]:h-3.5 [&_svg]:w-3.5 inline-flex shrink-0">{ICONOS.descargar}</span>
-                  {t('Exportar únicamente')}
-                </span>
-              )}
-            </button>
+          <div className="flex flex-col gap-2">
+            <div className="flex gap-2">
+              <button
+                onClick={() => exportarSolo(entidad, 'csv')}
+                disabled={exportando === entidad}
+                className="flex-1 rounded-xl border border-border dark:border-dark-border py-2.5 text-center text-xs font-medium disabled:opacity-40"
+              >
+                {exportando === entidad ? (
+                  t('Exportando...')
+                ) : (
+                  <span className="inline-flex items-center justify-center gap-1">
+                    <span aria-hidden="true" className="[&_svg]:h-3.5 [&_svg]:w-3.5 inline-flex shrink-0">{ICONOS.descargar}</span>
+                    {t('CSV')}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => exportarSolo(entidad, 'xlsx')}
+                disabled={exportando === entidad}
+                className="flex-1 rounded-xl border border-border dark:border-dark-border py-2.5 text-center text-xs font-medium disabled:opacity-40"
+              >
+                {exportando === entidad ? (
+                  t('Exportando...')
+                ) : (
+                  <span className="inline-flex items-center justify-center gap-1">
+                    <span aria-hidden="true" className="[&_svg]:h-3.5 [&_svg]:w-3.5 inline-flex shrink-0">{ICONOS.descargar}</span>
+                    {t('Excel')}
+                  </span>
+                )}
+              </button>
+            </div>
             <button
               onClick={() => abrirConfirmacion(entidad)}
-              className="flex-1 rounded-xl border border-bad/40 text-bad py-2.5 text-center text-xs font-medium"
+              className="rounded-xl border border-bad/40 text-bad py-2.5 text-center text-xs font-medium"
             >
               <span className="inline-flex items-center justify-center gap-1">
                 <span aria-hidden="true" className="[&_svg]:h-3.5 [&_svg]:w-3.5 inline-flex shrink-0">{ICONOS.alerta}</span>
