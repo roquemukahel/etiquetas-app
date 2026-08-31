@@ -625,6 +625,16 @@ const REDMI_15C: ModeloColores = {
   ],
 };
 
+// Samsung Galaxy A14 — colores oficiales: Black, Light Green, Dark Red, Silver.
+const GALAXY_A14: ModeloColores = {
+  carpeta: 'galaxy-a14',
+  colores: [
+    { nombre: 'Negro', archivo: 'negro', hex: '#1c1c1e' },
+    { nombre: 'Plata', archivo: 'plata', hex: '#d6d8da' },
+    { nombre: 'Verde claro', archivo: 'verdeclaro', hex: '#d0e0ae' },
+  ],
+};
+
 // Clave de modelo normalizada: "iPhone 11", "iphone 11", "iPhone11" -> "iphone11".
 const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   iphone7: IPHONE_7,
@@ -694,6 +704,7 @@ const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   'galaxys23+': GALAXY_S23,
   galaxys23ultra: GALAXY_S23_ULTRA,
   redmi15c: REDMI_15C,
+  galaxya14: GALAXY_A14,
 };
 
 function claveModelo(modelo: string | null | undefined): string {

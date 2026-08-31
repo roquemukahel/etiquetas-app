@@ -94,6 +94,7 @@ export const CATALOGO_MODELOS: Record<string, string[]> = {
     'Galaxy S23 FE',
     'Galaxy Z Flip 5',
     'Galaxy Z Fold 5',
+    'Galaxy A14',
     'Galaxy A34',
     'Galaxy A54',
     'Galaxy S24',
