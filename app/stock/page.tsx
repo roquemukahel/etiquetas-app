@@ -9,7 +9,7 @@ import { hexColorDe } from '../lib/coloresIphone';
 import { registrarAuditoria } from '../lib/auditoria';
 import { getActor, useActor } from '../lib/actor';
 import { tienePermiso } from '../lib/permisos';
-import { leerCSV, valorDe, descargarCSV, insertarEnTandas } from '../lib/csv';
+import { leerArchivoDatos, valorDe, descargarCSV, descargarDatos, insertarEnTandas } from '../lib/csv';
 import { obtenerTodasLasFilas } from '../lib/db';
 import { asegurarModelo, normalizarNombreModelo } from '../lib/modelos';
 import { compararModelosPorSalida } from '../lib/catalogosMarcas';
@@ -454,13 +454,14 @@ export default function Stock() {
   // cargó, `dispositivos` solo tiene lo que está en stock, y el CSV
   // saldría incompleto sin que se note (no hay ningún aviso visual de
   // que falta el historial). Trae todo fresco al momento de exportar.
-  const exportarDispositivos = async () => {
+  const exportarDispositivos = async (formato: 'csv' | 'xlsx') => {
     setExportandoDispositivos(true);
     const todos = await obtenerTodasLasFilas<Dispositivo>(supabase, 'dispositivos', COLUMNAS_DISPOSITIVO, ORDEN_DISPOSITIVO);
-    descargarCSV(
-      'stock-celulares-qovento.csv',
+    await descargarDatos(
+      'stock-celulares-qovento',
       ['modelo', 'capacidad_gb', 'color', 'imei', 'numero_serie', 'salud_bateria', 'precio', 'costo', 'proveedor', 'estado', 'en_stock', 'created_at'],
-      todos
+      todos,
+      formato
     );
     setExportandoDispositivos(false);
   };
@@ -473,7 +474,7 @@ export default function Stock() {
     setPlanImport(null);
 
     try {
-      const filas = await leerCSV(archivo);
+      const filas = await leerArchivoDatos(archivo);
       const imeisExistentes = new Set(dispositivos.map((d) => d.imei).filter(Boolean));
       let omitidosSinModelo = 0;
       let omitidosDuplicado = 0;
@@ -1323,11 +1324,11 @@ export default function Stock() {
                         ? progresoImport
                           ? `${t('Importando...')} ${progresoImport.hechas}/${progresoImport.total}`
                           : t('Importando...')
-                        : t('Importar CSV')}
+                        : t('Importar CSV o Excel')}
                       <input
                         ref={inputImportRef}
                         type="file"
-                        accept=".csv"
+                        accept=".csv,.xlsx,.xls"
                         className="hidden"
                         disabled={preparando || importando}
                         onChange={(e) => {
@@ -1340,12 +1341,22 @@ export default function Stock() {
                   <button
                     onClick={() => {
                       setMenuAbierto(null);
-                      exportarDispositivos();
+                      exportarDispositivos('csv');
                     }}
                     disabled={totalDispositivos === 0 || exportandoDispositivos}
                     className="px-3.5 py-2.5 text-sm text-left hover:bg-canvas dark:hover:bg-dark-bg disabled:opacity-40"
                   >
                     {exportandoDispositivos ? t('Exportando...') : t('Exportar CSV')}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setMenuAbierto(null);
+                      exportarDispositivos('xlsx');
+                    }}
+                    disabled={totalDispositivos === 0 || exportandoDispositivos}
+                    className="px-3.5 py-2.5 text-sm text-left hover:bg-canvas dark:hover:bg-dark-bg disabled:opacity-40"
+                  >
+                    {exportandoDispositivos ? t('Exportando...') : t('Exportar Excel')}
                   </button>
                   <Link
                     href="/stock/carpetas"
