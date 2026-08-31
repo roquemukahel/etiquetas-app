@@ -661,9 +661,12 @@ const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   'galaxys26+': GALAXY_S26,
   galaxys26ultra: GALAXY_S26,
   galaxys25: GALAXY_S25,
+  'galaxys25+': GALAXY_S25,
   galaxys24: GALAXY_S24,
+  'galaxys24+': GALAXY_S24,
   galaxys24fe: GALAXY_S24_FE,
   galaxys23: GALAXY_S23,
+  'galaxys23+': GALAXY_S23,
 };
 
 function claveModelo(modelo: string | null | undefined): string {
