@@ -384,33 +384,75 @@ const GALAXY_A32: ModeloColores = {
   ],
 };
 
-// Samsung Galaxy A07.
+// Samsung Galaxy A07 — colores oficiales: Black, Light Violet, Green.
 const GALAXY_A07: ModeloColores = {
   carpeta: 'galaxy-a07',
   colores: [
     { nombre: 'Negro', archivo: 'negro', hex: '#2b2c30' },
     { nombre: 'Verde', archivo: 'verde', hex: '#1f5c47' },
-    { nombre: 'Violeta', archivo: 'violeta', hex: '#b8bdc9' },
+    { nombre: 'Violeta claro', archivo: 'violeta', hex: '#b8bdc9' },
   ],
 };
 
-// Samsung Galaxy A17.
+// Samsung Galaxy A17 — colores oficiales: Black, Gray, Light Blue.
 const GALAXY_A17: ModeloColores = {
   carpeta: 'galaxy-a17',
   colores: [
-    { nombre: 'Azul', archivo: 'azul', hex: '#b9d6dd' },
+    { nombre: 'Azul claro', archivo: 'azul', hex: '#b9d6dd' },
     { nombre: 'Gris', archivo: 'gris', hex: '#a8a9ab' },
     { nombre: 'Negro', archivo: 'negro', hex: '#2b2b2d' },
   ],
 };
 
-// Samsung Galaxy A26.
+// Samsung Galaxy A26 — colores oficiales: Black, White, Mint, Peach Pink.
 const GALAXY_A26: ModeloColores = {
   carpeta: 'galaxy-a26',
   colores: [
     { nombre: 'Blanco', archivo: 'blanco', hex: '#f5f5f0' },
-    { nombre: 'Verde', archivo: 'verde', hex: '#c8e8d8' },
+    { nombre: 'Menta', archivo: 'verde', hex: '#c8e8d8' },
     { nombre: 'Negro', archivo: 'negro', hex: '#1c1c1e' },
+  ],
+};
+
+// Samsung Galaxy A06 — colores oficiales: Black, Light Blue, Light Green.
+const GALAXY_A06: ModeloColores = {
+  carpeta: 'galaxy-a06',
+  colores: [
+    { nombre: 'Negro', archivo: 'negro', hex: '#303947' },
+    { nombre: 'Azul claro', archivo: 'azul', hex: '#e5eef9' },
+    { nombre: 'Verde claro', archivo: 'verde', hex: '#d5ecd8' },
+  ],
+};
+
+// Samsung Galaxy A16 — colores oficiales: Blue Black, Light Gray, Light Green.
+const GALAXY_A16: ModeloColores = {
+  carpeta: 'galaxy-a16',
+  colores: [
+    { nombre: 'Gris claro', archivo: 'gris', hex: '#d6d8d8' },
+    { nombre: 'Negro', archivo: 'negro', hex: '#1c1d21' },
+    { nombre: 'Verde claro', archivo: 'verde', hex: '#c9e8dd' },
+  ],
+};
+
+// Samsung Galaxy A36 — colores oficiales: Awesome Black/White/Lavender/Lime.
+const GALAXY_A36: ModeloColores = {
+  carpeta: 'galaxy-a36',
+  colores: [
+    { nombre: 'Blanco', archivo: 'blanco', hex: '#f0f0ee' },
+    { nombre: 'Lavanda', archivo: 'lavanda', hex: '#dcd7e8' },
+    { nombre: 'Negro', archivo: 'negro', hex: '#3a3a3c' },
+    { nombre: 'Verde lima', archivo: 'verdelima', hex: '#d6e8c8' },
+  ],
+};
+
+// Samsung Galaxy A56 — colores oficiales: Awesome Graphite/Lightgray/Olive/Pink.
+const GALAXY_A56: ModeloColores = {
+  carpeta: 'galaxy-a56',
+  colores: [
+    { nombre: 'Gris claro', archivo: 'gris', hex: '#d3d5d5' },
+    { nombre: 'Grafito', archivo: 'grafito', hex: '#515355' },
+    { nombre: 'Rosa', archivo: 'rosa', hex: '#f0d9e0' },
+    { nombre: 'Oliva', archivo: 'oliva', hex: '#c3d6c0' },
   ],
 };
 
@@ -459,6 +501,10 @@ const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   galaxya07: GALAXY_A07,
   galaxya17: GALAXY_A17,
   galaxya26: GALAXY_A26,
+  galaxya06: GALAXY_A06,
+  galaxya16: GALAXY_A16,
+  galaxya36: GALAXY_A36,
+  galaxya56: GALAXY_A56,
 };
 
 function claveModelo(modelo: string | null | undefined): string {
