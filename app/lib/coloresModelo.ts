@@ -384,6 +384,36 @@ const GALAXY_A32: ModeloColores = {
   ],
 };
 
+// Samsung Galaxy A07.
+const GALAXY_A07: ModeloColores = {
+  carpeta: 'galaxy-a07',
+  colores: [
+    { nombre: 'Negro', archivo: 'negro', hex: '#2b2c30' },
+    { nombre: 'Verde', archivo: 'verde', hex: '#1f5c47' },
+    { nombre: 'Violeta', archivo: 'violeta', hex: '#b8bdc9' },
+  ],
+};
+
+// Samsung Galaxy A17.
+const GALAXY_A17: ModeloColores = {
+  carpeta: 'galaxy-a17',
+  colores: [
+    { nombre: 'Azul', archivo: 'azul', hex: '#b9d6dd' },
+    { nombre: 'Gris', archivo: 'gris', hex: '#a8a9ab' },
+    { nombre: 'Negro', archivo: 'negro', hex: '#2b2b2d' },
+  ],
+};
+
+// Samsung Galaxy A26.
+const GALAXY_A26: ModeloColores = {
+  carpeta: 'galaxy-a26',
+  colores: [
+    { nombre: 'Blanco', archivo: 'blanco', hex: '#f5f5f0' },
+    { nombre: 'Verde', archivo: 'verde', hex: '#c8e8d8' },
+    { nombre: 'Negro', archivo: 'negro', hex: '#1c1c1e' },
+  ],
+};
+
 // Clave de modelo normalizada: "iPhone 11", "iphone 11", "iPhone11" -> "iphone11".
 const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   iphone7: IPHONE_7,
@@ -426,6 +456,9 @@ const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   iphone17e: IPHONE_17E,
   iphoneair: IPHONE_AIR,
   galaxya32: GALAXY_A32,
+  galaxya07: GALAXY_A07,
+  galaxya17: GALAXY_A17,
+  galaxya26: GALAXY_A26,
 };
 
 function claveModelo(modelo: string | null | undefined): string {
