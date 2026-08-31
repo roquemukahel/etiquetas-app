@@ -531,6 +531,31 @@ const GALAXY_A34: ModeloColores = {
   ],
 };
 
+// Samsung Galaxy A54 — colores oficiales: Awesome Lime/Graphite/Violet/White.
+const GALAXY_A54: ModeloColores = {
+  carpeta: 'galaxy-a54',
+  colores: [
+    { nombre: 'Blanco', archivo: 'blanco', hex: '#f0f0ee' },
+    { nombre: 'Grafito', archivo: 'grafito', hex: '#2c2c2e' },
+    { nombre: 'Verde lima', archivo: 'verdelima', hex: '#d8eab0' },
+  ],
+};
+
+// Samsung Galaxy S26 (mismas fotos para S26, S26+ y S26 Ultra, a pedido del
+// usuario). Colores oficiales: Black, White, Cobalt Violet, Sky Blue +
+// online-exclusive Silver Shadow y Pink Gold.
+const GALAXY_S26: ModeloColores = {
+  carpeta: 'galaxy-s26',
+  colores: [
+    { nombre: 'Negro', archivo: 'negro', hex: '#3a3a3c' },
+    { nombre: 'Blanco', archivo: 'blanco', hex: '#eef0ef' },
+    { nombre: 'Violeta cobalto', archivo: 'violeta', hex: '#5f5a86' },
+    { nombre: 'Azul cielo', archivo: 'azulcielo', hex: '#c7dced' },
+    { nombre: 'Plata', archivo: 'plata', hex: '#c6c8ca' },
+    { nombre: 'Oro rosa', archivo: 'orosa', hex: '#f2ded0' },
+  ],
+};
+
 // Clave de modelo normalizada: "iPhone 11", "iphone 11", "iPhone11" -> "iphone11".
 const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   iphone7: IPHONE_7,
@@ -587,6 +612,10 @@ const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   galaxya15: GALAXY_A15,
   galaxya24: GALAXY_A24,
   galaxya34: GALAXY_A34,
+  galaxya54: GALAXY_A54,
+  galaxys26: GALAXY_S26,
+  'galaxys26+': GALAXY_S26,
+  galaxys26ultra: GALAXY_S26,
 };
 
 function claveModelo(modelo: string | null | undefined): string {
