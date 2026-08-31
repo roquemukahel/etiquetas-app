@@ -373,6 +373,17 @@ const IPHONE_12_PRO: ModeloColores = {
   ],
 };
 
+// Samsung Galaxy A32 — colores oficiales de Samsung.
+const GALAXY_A32: ModeloColores = {
+  carpeta: 'galaxy-a32',
+  colores: [
+    { nombre: 'Negro', archivo: 'negro', hex: '#1c1c1e' },
+    { nombre: 'Blanco', archivo: 'blanco', hex: '#f5f5f0' },
+    { nombre: 'Azul', archivo: 'azul', hex: '#a9c9d8' },
+    { nombre: 'Violeta', archivo: 'morado', hex: '#d9cee6' },
+  ],
+};
+
 // Clave de modelo normalizada: "iPhone 11", "iphone 11", "iPhone11" -> "iphone11".
 const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   iphone7: IPHONE_7,
@@ -414,6 +425,7 @@ const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   iphone17promax: IPHONE_17_PRO,
   iphone17e: IPHONE_17E,
   iphoneair: IPHONE_AIR,
+  galaxya32: GALAXY_A32,
 };
 
 function claveModelo(modelo: string | null | undefined): string {
