@@ -489,6 +489,48 @@ const GALAXY_A55: ModeloColores = {
   ],
 };
 
+// Samsung Galaxy A05 — colores oficiales: Black, Silver, Light Green.
+const GALAXY_A05: ModeloColores = {
+  carpeta: 'galaxy-a05',
+  colores: [
+    { nombre: 'Negro', archivo: 'negro', hex: '#1e2a24' },
+    { nombre: 'Plata', archivo: 'plata', hex: '#e8e8e6' },
+    { nombre: 'Verde claro', archivo: 'verdeclaro', hex: '#c9dcae' },
+  ],
+};
+
+// Samsung Galaxy A15 — colores oficiales: Blue Black, Blue, Light Blue, Yellow.
+const GALAXY_A15: ModeloColores = {
+  carpeta: 'galaxy-a15',
+  colores: [
+    { nombre: 'Negro', archivo: 'negro', hex: '#26283b' },
+    { nombre: 'Azul', archivo: 'azul', hex: '#8fa8c2' },
+    { nombre: 'Azul claro', archivo: 'azulclaro', hex: '#e8e4ea' },
+    { nombre: 'Amarillo', archivo: 'amarillo', hex: '#eee9a0' },
+  ],
+};
+
+// Samsung Galaxy A24 — colores oficiales: Black, Dark Red, Light Green, Silver.
+const GALAXY_A24: ModeloColores = {
+  carpeta: 'galaxy-a24',
+  colores: [
+    { nombre: 'Negro', archivo: 'negro', hex: '#1c1c1e' },
+    { nombre: 'Plata', archivo: 'plata', hex: '#d6e0dc' },
+    { nombre: 'Verde claro', archivo: 'verdeclaro', hex: '#d4e8b8' },
+  ],
+};
+
+// Samsung Galaxy A34 — colores oficiales: Awesome Lime/Graphite/Silver/Violet.
+const GALAXY_A34: ModeloColores = {
+  carpeta: 'galaxy-a34',
+  colores: [
+    { nombre: 'Plata', archivo: 'plata', hex: '#dce4dc' },
+    { nombre: 'Verde lima', archivo: 'verdelima', hex: '#d8e8a0' },
+    { nombre: 'Grafito', archivo: 'grafito', hex: '#28292c' },
+    { nombre: 'Violeta', archivo: 'violeta', hex: '#a89ce0' },
+  ],
+};
+
 // Clave de modelo normalizada: "iPhone 11", "iphone 11", "iPhone11" -> "iphone11".
 const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   iphone7: IPHONE_7,
@@ -541,6 +583,10 @@ const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   galaxya25: GALAXY_A25,
   galaxya35: GALAXY_A35,
   galaxya55: GALAXY_A55,
+  galaxya05: GALAXY_A05,
+  galaxya15: GALAXY_A15,
+  galaxya24: GALAXY_A24,
+  galaxya34: GALAXY_A34,
 };
 
 function claveModelo(modelo: string | null | undefined): string {
