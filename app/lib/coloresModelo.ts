@@ -600,6 +600,31 @@ const GALAXY_S23: ModeloColores = {
   ],
 };
 
+// Samsung Galaxy S23 Ultra — mismos nombres de color que el S23 (Phantom
+// Black/Cream/Green/Lavender) pero diseño físico distinto (bordes planos,
+// cámara individual, S-Pen), así que NO comparte fotos con el S23 base.
+const GALAXY_S23_ULTRA: ModeloColores = {
+  carpeta: 'galaxy-s23-ultra',
+  colores: [
+    { nombre: 'Negro', archivo: 'negro', hex: '#1c1c1e' },
+    { nombre: 'Crema', archivo: 'crema', hex: '#ede4d3' },
+    { nombre: 'Verde', archivo: 'verde', hex: '#4a5c4e' },
+    { nombre: 'Lavanda', archivo: 'lavanda', hex: '#e6d9e6' },
+  ],
+};
+
+// Redmi 15C — colores oficiales: Midnight Black, Mint Green, Dusk Purple,
+// Moonlight Blue.
+const REDMI_15C: ModeloColores = {
+  carpeta: 'redmi-15c',
+  colores: [
+    { nombre: 'Negro', archivo: 'negro', hex: '#2b2b2d' },
+    { nombre: 'Verde menta', archivo: 'verde', hex: '#a8d0c8' },
+    { nombre: 'Púrpura', archivo: 'purpura', hex: '#e8b8a8' },
+    { nombre: 'Azul', archivo: 'azul', hex: '#3a5ea8' },
+  ],
+};
+
 // Clave de modelo normalizada: "iPhone 11", "iphone 11", "iPhone11" -> "iphone11".
 const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   iphone7: IPHONE_7,
@@ -667,6 +692,8 @@ const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   galaxys24fe: GALAXY_S24_FE,
   galaxys23: GALAXY_S23,
   'galaxys23+': GALAXY_S23,
+  galaxys23ultra: GALAXY_S23_ULTRA,
+  redmi15c: REDMI_15C,
 };
 
 function claveModelo(modelo: string | null | undefined): string {
