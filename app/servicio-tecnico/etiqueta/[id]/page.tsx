@@ -26,6 +26,7 @@ export default function EtiquetaServicioTecnico() {
   const [loading, setLoading] = useState(true);
   const [descargando, setDescargando] = useState(false);
   const [formato, setFormato] = useState<FormatoEtiqueta>('estandar');
+  const [imagenParaImprimir, setImagenParaImprimir] = useState<string | null>(null);
   const etiquetaRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -116,6 +117,22 @@ export default function EtiquetaServicioTecnico() {
     }
   };
 
+  // Imprimir directo — mismo criterio que app/nueva-etiqueta/page.tsx: se
+  // rasteriza a imagen (el div está en píxeles pensados para html2canvas, no
+  // para tamaño físico en pantalla) y se imprime esa imagen sola, en una
+  // página del tamaño físico exacto.
+  const imprimirEtiqueta = async () => {
+    if (!etiquetaRef.current) return;
+    setDescargando(true);
+    try {
+      const canvas = await capturarLienzo();
+      if (!canvas) return;
+      setImagenParaImprimir(canvas.toDataURL('image/png'));
+    } finally {
+      setDescargando(false);
+    }
+  };
+
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center">
@@ -139,14 +156,14 @@ export default function EtiquetaServicioTecnico() {
 
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-5 items-center">
-      <header className="w-full flex items-center gap-3">
+      <header className="no-print w-full flex items-center gap-3">
         <Link href="/servicio-tecnico" aria-label={t('Volver')} className="text-2xl leading-none">
           &larr;
         </Link>
         <span className="text-lg font-medium">{t('Etiqueta del equipo')}</span>
       </header>
 
-      <div className="w-full">
+      <div className="no-print w-full">
         <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Tamaño de la etiqueta')}</label>
         <div className="flex gap-2">
           {(Object.keys(TAMANOS) as FormatoEtiqueta[]).map((f) => (
@@ -168,6 +185,7 @@ export default function EtiquetaServicioTecnico() {
 
       {/* Vista previa reducida (solo para mostrar; NO se captura desde acá) */}
       <div
+        className="no-print"
         style={{
           width: `${TAMANOS[formato].wPx * (288 / TAMANOS[formato].wPx)}px`,
           height: `${TAMANOS[formato].hPx * (288 / TAMANOS[formato].wPx)}px`,
@@ -188,22 +206,45 @@ export default function EtiquetaServicioTecnico() {
         </div>
       </div>
 
-      {/* Copia a tamaño real fuera de pantalla: la que captura html2canvas */}
-      <div aria-hidden style={{ position: 'fixed', left: '-10000px', top: 0, pointerEvents: 'none' }}>
+      {/* Copia a tamaño real fuera de pantalla: la que captura html2canvas
+          (para PNG/PDF/Imprimir) — nunca se imprime directo. */}
+      <div aria-hidden className="no-print" style={{ position: 'fixed', left: '-10000px', top: 0, pointerEvents: 'none' }}>
         <EtiquetaServicio ref={etiquetaRef} logo={logo} modelo={equipo.modelo} identificador={identificador} detalle={equipo.falla_declarada} formato={formato} />
       </div>
 
+      {/* Lo único que se imprime: la imagen ya rasterizada, a tamaño físico exacto. */}
+      {imagenParaImprimir && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={imagenParaImprimir}
+          alt=""
+          className="hidden print:block"
+          style={{ width: `${TAMANOS[formato].wCm}cm`, height: `${TAMANOS[formato].hCm}cm` }}
+          onLoad={() => {
+            window.print();
+            setImagenParaImprimir(null);
+          }}
+        />
+      )}
+
       {!logo && (
-        <Link href="/configuracion/negocio" className="text-sm text-accent dark:text-dark-accent underline -mt-6">
+        <Link href="/configuracion/negocio" className="no-print text-sm text-accent dark:text-dark-accent underline -mt-6">
           {t('Subir el logo de tu negocio en Configuración')}
         </Link>
       )}
 
-      <div className="w-full flex flex-col gap-3 mt-auto">
+      <div className="no-print w-full flex flex-col gap-3 mt-auto">
+        <button
+          onClick={imprimirEtiqueta}
+          disabled={descargando}
+          className="w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
+        >
+          🖨️ {t('Imprimir')}
+        </button>
         <button
           onClick={descargarPNG}
           disabled={descargando}
-          className="w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
+          className="w-full rounded-2xl border border-border dark:border-dark-border py-4 text-center text-base font-medium"
         >
           {t('Guardar / compartir PNG')}
         </button>
@@ -215,6 +256,18 @@ export default function EtiquetaServicioTecnico() {
           {t('Guardar / compartir PDF')}
         </button>
       </div>
+
+      <style jsx global>{`
+        @media print {
+          body {
+            background: white;
+          }
+          @page {
+            size: ${TAMANOS[formato].wCm}cm ${TAMANOS[formato].hCm}cm;
+            margin: 0;
+          }
+        }
+      `}</style>
     </main>
   );
 }

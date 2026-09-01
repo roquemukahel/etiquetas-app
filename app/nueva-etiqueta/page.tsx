@@ -50,6 +50,7 @@ export default function NuevaEtiqueta() {
   const etiquetaRef = useRef<HTMLDivElement>(null);
   const [descargando, setDescargando] = useState(false);
   const [formato, setFormato] = useState<FormatoEtiqueta>('estandar');
+  const [imagenParaImprimir, setImagenParaImprimir] = useState<string | null>(null);
   const [agregarAlStock, setAgregarAlStock] = useState(false);
   const [color, setColor] = useState('');
   const [precio, setPrecio] = useState('');
@@ -132,6 +133,26 @@ export default function NuevaEtiqueta() {
       if (blob) {
         await compartirOdescargar(blob, `etiqueta-${datos?.imei || 'sin-imei'}.png`, 'image/png');
       }
+    } finally {
+      setDescargando(false);
+    }
+  };
+
+  // Imprimir directo (no PNG/PDF para compartir): el navegador imprime sin
+  // pasar por "Guardar como" ni por el menú de compartir, que en Android no
+  // siempre ofrece una opción de impresión real. La etiqueta se renderiza en
+  // píxeles pensados para html2canvas (300dpi), no para el tamaño físico en
+  // pantalla — por eso NO se imprime el div directo: se rasteriza a imagen
+  // (mismo canvas que el PNG) y se la ubica en una página con @page del
+  // tamaño físico exacto (5x3cm o 5.8x4cm), igual que ya hace el PDF con
+  // jsPDF más abajo. Así el resultado impreso es siempre nítido y a escala
+  // real, sin importar el dpi de la pantalla del que imprime.
+  const imprimirEtiqueta = async () => {
+    setDescargando(true);
+    try {
+      const canvas = await capturarLienzo();
+      if (!canvas) return;
+      setImagenParaImprimir(canvas.toDataURL('image/png'));
     } finally {
       setDescargando(false);
     }
@@ -310,14 +331,14 @@ export default function NuevaEtiqueta() {
     const previewScale = 288 / tam.wPx;
     return (
       <main className="flex min-h-screen flex-col px-6 py-6 gap-5 items-center">
-        <header className="w-full flex items-center gap-3">
+        <header className="no-print w-full flex items-center gap-3">
           <button onClick={() => setStep('revision')} className="text-2xl leading-none">
             &larr;
           </button>
           <span className="text-lg font-medium">{t('Tu etiqueta')}</span>
         </header>
 
-        <div className="w-full">
+        <div className="no-print w-full">
           <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Tamaño de la etiqueta')}</label>
           <div className="flex gap-2">
             {(Object.keys(TAMANOS) as FormatoEtiqueta[]).map((f) => (
@@ -339,6 +360,7 @@ export default function NuevaEtiqueta() {
 
         {/* Vista previa reducida (solo para mostrar; NO se captura desde acá) */}
         <div
+          className="no-print"
           style={{
             width: `${tam.wPx * previewScale}px`,
             height: `${tam.hPx * previewScale}px`,
@@ -359,8 +381,10 @@ export default function NuevaEtiqueta() {
           </div>
         </div>
 
-        {/* Copia a tamaño real fuera de pantalla: esta es la que captura html2canvas */}
-        <div aria-hidden style={{ position: 'fixed', left: '-10000px', top: 0, pointerEvents: 'none' }}>
+        {/* Copia a tamaño real fuera de pantalla: esta es la que captura html2canvas
+            (para PNG/PDF/Imprimir) — nunca se imprime directo (no-print), porque
+            está en píxeles pensados para el canvas, no para el tamaño físico. */}
+        <div aria-hidden className="no-print" style={{ position: 'fixed', left: '-10000px', top: 0, pointerEvents: 'none' }}>
           <Etiqueta
             ref={etiquetaRef}
             logo={logo}
@@ -372,17 +396,40 @@ export default function NuevaEtiqueta() {
           />
         </div>
 
+        {/* Lo único que se imprime: la imagen ya rasterizada (mismo canvas que el
+            PNG), a tamaño físico exacto — ver imprimirEtiqueta() más arriba. */}
+        {imagenParaImprimir && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={imagenParaImprimir}
+            alt=""
+            className="hidden print:block"
+            style={{ width: `${tam.wCm}cm`, height: `${tam.hCm}cm` }}
+            onLoad={() => {
+              window.print();
+              setImagenParaImprimir(null);
+            }}
+          />
+        )}
+
         {!logo && (
-          <Link href="/configuracion/negocio" className="text-sm text-accent dark:text-dark-accent underline -mt-6">
+          <Link href="/configuracion/negocio" className="no-print text-sm text-accent dark:text-dark-accent underline -mt-6">
             {t('Subir el logo de tu negocio en Configuración')}
           </Link>
         )}
 
-        <div className="w-full flex flex-col gap-3 mt-auto">
+        <div className="no-print w-full flex flex-col gap-3 mt-auto">
+          <button
+            onClick={imprimirEtiqueta}
+            disabled={descargando}
+            className="w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
+          >
+            🖨️ {t('Imprimir')}
+          </button>
           <button
             onClick={descargarPNG}
             disabled={descargando}
-            className="w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
+            className="w-full rounded-2xl border border-border dark:border-dark-border py-4 text-center text-base font-medium"
           >
             {t('Guardar / compartir PNG')}
           </button>
@@ -394,6 +441,18 @@ export default function NuevaEtiqueta() {
             {t('Guardar / compartir PDF')}
           </button>
         </div>
+
+        <style jsx global>{`
+          @media print {
+            body {
+              background: white;
+            }
+            @page {
+              size: ${tam.wCm}cm ${tam.hCm}cm;
+              margin: 0;
+            }
+          }
+        `}</style>
       </main>
     );
   }
