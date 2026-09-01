@@ -501,6 +501,8 @@ export const PT: Record<string, string> = {
   'Listo: se importaron': 'Pronto: foram importados',
   Mostrando: 'Mostrando',
   'Ningún cliente entra en este filtro.': 'Nenhum cliente entra neste filtro.',
+  'No pudimos exportar:': 'Não conseguimos exportar:',
+  'No pudimos generar el respaldo, así que no se eliminó nada:': 'Não conseguimos gerar o backup, então nada foi excluído:',
   'No pudimos leer el archivo:': 'Não conseguimos ler o arquivo:',
   'No se puede deshacer.': 'Não pode ser desfeito.',
   'Saldo a favor': 'Saldo a favor',
@@ -513,6 +515,8 @@ export const PT: Record<string, string> = {
   'antes de un error:': 'antes de um erro:',
   'clientes.': 'clientes.',
   'filas sin nombre o con un DNI ya cargado.': 'linhas sem nome ou com um CPF já cadastrado.',
+  'filas sin nombre o ya cargadas en esta sucursal.': 'linhas sem nome ou já cadastradas nesta filial.',
+  'productos.': 'produtos.',
   más: 'mais',
   'no se pudieron eliminar porque tienen ventas u otro historial vinculado.':
     'não puderam ser excluídos porque têm vendas ou outro histórico vinculado.',

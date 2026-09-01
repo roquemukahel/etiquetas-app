@@ -39,6 +39,7 @@ export default function Clientes() {
   const [importando, setImportando] = useState(false);
   const [progresoImport, setProgresoImport] = useState<{ hechas: number; total: number } | null>(null);
   const [resultadoImport, setResultadoImport] = useState<string | null>(null);
+  const [exportando, setExportando] = useState(false);
   const inputImportRef = useRef<HTMLInputElement>(null);
 
   const [modoSeleccion, setModoSeleccion] = useState(false);
@@ -93,13 +94,24 @@ export default function Clientes() {
     })();
   }, []);
 
-  const exportar = (formato: 'csv' | 'xlsx') => {
-    descargarDatos(
-      'clientes-qovento',
-      ['nombre', 'apellido', 'email', 'telefono', 'dni', 'domicilio'],
-      clientes,
-      formato
-    );
+  const exportar = async (formato: 'csv' | 'xlsx') => {
+    setExportando(true);
+    setResultadoImport(null);
+    try {
+      await descargarDatos(
+        'clientes-qovento',
+        ['nombre', 'apellido', 'email', 'telefono', 'dni', 'domicilio'],
+        clientes,
+        formato
+      );
+    } catch (err: any) {
+      // Antes esto no tenía try/catch ni esperaba la promesa: si algo
+      // fallaba al armar el archivo, quedaba como un error sin capturar en
+      // la consola — nadie que no fuera programador se enteraba de que la
+      // exportación había fallado, ni por qué.
+      setResultadoImport(t('No pudimos exportar:') + ' ' + (err?.message ?? t('error desconocido')));
+    }
+    setExportando(false);
   };
 
   const importar = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -334,17 +346,17 @@ export default function Clientes() {
         <div className="flex gap-2">
           <button
             onClick={() => exportar('csv')}
-            disabled={clientes.length === 0}
+            disabled={clientes.length === 0 || exportando}
             className="flex-1 rounded-xl border border-border dark:border-dark-border py-2.5 text-center text-xs font-medium disabled:opacity-40"
           >
-            ⬇ {t('Exportar CSV')}
+            ⬇ {exportando ? t('Exportando...') : t('Exportar CSV')}
           </button>
           <button
             onClick={() => exportar('xlsx')}
-            disabled={clientes.length === 0}
+            disabled={clientes.length === 0 || exportando}
             className="flex-1 rounded-xl border border-border dark:border-dark-border py-2.5 text-center text-xs font-medium disabled:opacity-40"
           >
-            ⬇ {t('Exportar Excel')}
+            ⬇ {exportando ? t('Exportando...') : t('Exportar Excel')}
           </button>
         </div>
       </div>

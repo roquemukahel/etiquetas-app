@@ -456,13 +456,22 @@ export default function Stock() {
   // que falta el historial). Trae todo fresco al momento de exportar.
   const exportarDispositivos = async (formato: 'csv' | 'xlsx') => {
     setExportandoDispositivos(true);
-    const todos = await obtenerTodasLasFilas<Dispositivo>(supabase, 'dispositivos', COLUMNAS_DISPOSITIVO, ORDEN_DISPOSITIVO);
-    await descargarDatos(
-      'stock-celulares-qovento',
-      ['modelo', 'capacidad_gb', 'color', 'imei', 'numero_serie', 'salud_bateria', 'precio', 'costo', 'proveedor', 'estado', 'en_stock', 'created_at'],
-      todos,
-      formato
-    );
+    setResultadoImport(null);
+    try {
+      const todos = await obtenerTodasLasFilas<Dispositivo>(supabase, 'dispositivos', COLUMNAS_DISPOSITIVO, ORDEN_DISPOSITIVO);
+      await descargarDatos(
+        'stock-celulares-qovento',
+        ['modelo', 'capacidad_gb', 'color', 'imei', 'numero_serie', 'salud_bateria', 'precio', 'costo', 'proveedor', 'estado', 'en_stock', 'created_at'],
+        todos,
+        formato
+      );
+    } catch (err: any) {
+      // Sin este catch, un error acá (ej. antes de la limpieza de
+      // caracteres inválidos de celdaSegura en lib/csv.ts) dejaba el botón
+      // trabado en "Exportando..." para siempre, sin bajar nada y sin
+      // ninguna pista de qué pasó.
+      setResultadoImport(t('No pudimos exportar:') + ' ' + (err?.message ?? t('error desconocido')));
+    }
     setExportandoDispositivos(false);
   };
 

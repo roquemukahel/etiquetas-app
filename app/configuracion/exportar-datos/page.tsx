@@ -146,9 +146,17 @@ export default function ExportarDatos() {
 
   const exportarSolo = async (entidad: Entidad, formato: 'csv' | 'xlsx') => {
     setExportando(entidad);
-    const cfg = CONFIG[entidad];
-    const filas = await traerFilas(entidad);
-    await descargarDatos(cfg.archivo, cfg.columnas, filas, formato);
+    setResultado(null);
+    try {
+      const cfg = CONFIG[entidad];
+      const filas = await traerFilas(entidad);
+      await descargarDatos(cfg.archivo, cfg.columnas, filas, formato);
+    } catch (err: any) {
+      // Sin este catch, un error acá dejaba el botón trabado en
+      // "Exportando..." para siempre, sin bajar nada y sin ninguna pista de
+      // qué pasó.
+      setResultado(t('No pudimos exportar:') + ' ' + (err?.message ?? t('error desconocido')));
+    }
     setExportando(null);
   };
 
@@ -176,7 +184,17 @@ export default function ExportarDatos() {
     // de respaldo del momento exacto del borrado, sin depender de que se
     // haya exportado antes por separado. Siempre CSV acá (no XLSX): es un
     // respaldo de auditoría, no algo pensado para reimportar a otro sistema.
-    await descargarDatos(cfg.archivo, cfg.columnas, filas, 'csv');
+    try {
+      await descargarDatos(cfg.archivo, cfg.columnas, filas, 'csv');
+    } catch (err: any) {
+      // Si el respaldo falla, se corta ACÁ, antes de tocar nada — nunca se
+      // borra sin haber podido bajar antes la copia de seguridad. Sin este
+      // catch, el error quedaba sin capturar y el botón trabado en
+      // "Eliminando..." para siempre, sin explicar por qué no se borró nada.
+      setEliminando(false);
+      setResultado(t('No pudimos generar el respaldo, así que no se eliminó nada:') + ' ' + (err?.message ?? t('error desconocido')));
+      return;
+    }
 
     const ids = filas.map((f) => f.id);
     const { eliminados, bloqueados } = await eliminarEnBloque(supabase, entidad, ids);

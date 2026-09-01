@@ -109,6 +109,28 @@ export function descargarCSV(nombreArchivo: string, columnas: string[], filas: R
   URL.revokeObjectURL(url);
 }
 
+// Tab (código 9), salto de línea (10) y retorno de carro (13) son válidos en
+// XML; el resto de los códigos de control (0 a 31) no lo son. Un .xlsx es en
+// el fondo XML, así que un dato con uno de estos caracteres colado (ej. algo
+// pegado de un escáner, un PDF, o la IA de extracción de datos de Egresos)
+// hace que ExcelJS tire una excepción al escribir esa celda puntual — y
+// como no había ningún try/catch alrededor, la exportación entera se
+// cancelaba en silencio, sin bajar ningún archivo y sin avisar por qué.
+function esControlInvalidoParaXML(codigo: number): boolean {
+  return codigo < 32 && codigo !== 9 && codigo !== 10 && codigo !== 13;
+}
+function celdaSegura(valor: unknown): string | number {
+  if (typeof valor === 'number' || typeof valor === 'boolean') return valor as number;
+  if (valor === null || valor === undefined) return '';
+  const texto = String(valor);
+  let limpio = '';
+  for (let i = 0; i < texto.length; i++) {
+    const codigo = texto.charCodeAt(i);
+    if (!esControlInvalidoParaXML(codigo)) limpio += texto[i];
+  }
+  return limpio;
+}
+
 // Arma un archivo Excel (.xlsx) a partir de filas de objetos, con las
 // columnas en el orden indicado, y descarga el archivo en el navegador —
 // misma firma que descargarCSV.
@@ -118,7 +140,7 @@ export async function descargarXLSX(nombreArchivo: string, columnas: string[], f
   const hoja = libro.addWorksheet('Datos');
   hoja.addRow(columnas);
   for (const fila of filas) {
-    hoja.addRow(columnas.map((c) => (fila[c] as string | number | undefined) ?? ''));
+    hoja.addRow(columnas.map((c) => celdaSegura(fila[c])));
   }
   const buffer = await libro.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });

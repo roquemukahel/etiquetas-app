@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../lib/supabase/client';
 import { useActor } from '../lib/actor';
@@ -8,8 +8,9 @@ import { tienePermiso } from '../lib/permisos';
 import { obtenerTodasLasFilas } from '../lib/db';
 import { obtenerCategorias, type Categoria } from '../lib/categorias';
 import { obtenerSucursales, type Sucursal } from '../lib/sucursales';
-import { obtenerProductosMaestro, actualizarProductoMaestro, type ProductoMaestro } from '../lib/productosMaestro';
+import { obtenerProductosMaestro, actualizarProductoMaestro, crearProductoMaestro, type ProductoMaestro } from '../lib/productosMaestro';
 import { registrarAuditoria } from '../lib/auditoria';
+import { descargarDatos, leerArchivoDatos, valorDe, insertarEnTandas } from '../lib/csv';
 import { sanitizarDecimal } from '../lib/numeros';
 import { useSucursalActual } from '../lib/sucursal';
 import { useT } from '../lib/idioma';
@@ -79,6 +80,11 @@ export default function Productos() {
   const [formStockMinimo, setFormStockMinimo] = useState('');
   const [guardandoEdicion, setGuardandoEdicion] = useState(false);
   const [errorEdicion, setErrorEdicion] = useState<string | null>(null);
+  const [exportando, setExportando] = useState(false);
+  const [importando, setImportando] = useState(false);
+  const [progresoImport, setProgresoImport] = useState<{ hechas: number; total: number } | null>(null);
+  const [resultadoImport, setResultadoImport] = useState<string | null>(null);
+  const inputImportRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     (async () => {
@@ -305,6 +311,151 @@ export default function Productos() {
 
   const nombreSucursalActual = sucursales.find((s) => s.id === sucursalActual.id)?.nombre ?? null;
 
+  // Exporta la grilla completa (no la filtrada por búsqueda/categoría en
+  // pantalla) — mismo criterio que "Exportar" en Clientes y Stock, siempre
+  // el dato completo. Incluye celulares (agrupados por modelo) porque esta
+  // vista los junta con los accesorios, pero importar solo carga accesorios
+  // nuevos (ver más abajo) — los celulares se siguen cargando de a uno,
+  // con IMEI, desde Stock.
+  const exportarCatalogo = async (formato: 'csv' | 'xlsx') => {
+    setExportando(true);
+    setResultadoImport(null);
+    try {
+      await descargarDatos(
+        'productos-qovento',
+        ['categoria', 'marca', 'nombre', 'stock_total', 'stock_sucursal', 'precio'],
+        filas.map((f) => ({
+          categoria: f.categoria,
+          marca: f.marca,
+          nombre: f.nombre,
+          stock_total: f.stockTotal,
+          stock_sucursal: f.stockSucursal,
+          precio: f.final ?? '',
+        })),
+        formato
+      );
+    } catch (err: any) {
+      setResultadoImport(t('No pudimos exportar:') + ' ' + (err?.message ?? t('error desconocido')));
+    }
+    setExportando(false);
+  };
+
+  // Carga accesorios nuevos en bloque (no celulares — esos necesitan IMEI y
+  // se siguen cargando de a uno desde Stock). Cada fila puede necesitar
+  // crear un producto_maestro nuevo (nombre+marca no existía en el
+  // catálogo) antes de poder insertar su stock — por eso se resuelve fila
+  // por fila en un for secuencial (para no crear el mismo maestro dos veces
+  // si el archivo repite un nombre) y recién después se insertan todas las
+  // filas de stock juntas, en tandas.
+  const importarProductos = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const archivo = e.target.files?.[0];
+    if (!archivo) return;
+    setImportando(true);
+    setResultadoImport(null);
+    setProgresoImport(null);
+
+    try {
+      const filasArchivo = await leerArchivoDatos(archivo);
+      const normalizar = (s: string | null | undefined) => (s ?? '').trim().toLowerCase();
+      const categoriasPorNombre = new Map(categorias.map((c) => [normalizar(c.nombre), c.id]));
+      const maestrosPorClave = new Map(maestros.map((m) => [`${normalizar(m.nombre)}|${normalizar(m.marca)}`, m.id]));
+      const sucursalId = sucursalActual.id || null;
+      const clavesYaEnSucursal = new Set(
+        productos.filter((p) => p.sucursal_id === sucursalId).map((p) => `${normalizar(p.nombre)}|${normalizar(p.marca)}`)
+      );
+
+      let omitidosSinNombre = 0;
+      let omitidosDuplicados = 0;
+      const nuevasFilas: Record<string, unknown>[] = [];
+
+      for (const fila of filasArchivo) {
+        const nombre = valorDe(fila, 'nombre', 'producto', 'name');
+        if (!nombre) {
+          omitidosSinNombre++;
+          continue;
+        }
+        const marca = valorDe(fila, 'marca', 'brand') || null;
+        const clave = `${normalizar(nombre)}|${normalizar(marca)}`;
+        if (clavesYaEnSucursal.has(clave)) {
+          omitidosDuplicados++;
+          continue;
+        }
+
+        const categoriaTexto = valorDe(fila, 'categoria', 'categoría', 'category');
+        const categoriaId = categoriaTexto ? categoriasPorNombre.get(normalizar(categoriaTexto)) ?? null : null;
+        const precioTexto = valorDe(fila, 'precio', 'price');
+        const precio = precioTexto ? Number(precioTexto) : null;
+        const costoTexto = valorDe(fila, 'costo', 'cost');
+        const costo = costoTexto ? Number(costoTexto) : null;
+        const cantidadTexto = valorDe(fila, 'cantidad', 'stock_total', 'stock', 'quantity');
+        const cantidad = cantidadTexto ? Math.max(0, Math.floor(Number(cantidadTexto) || 0)) : 0;
+
+        let productoMaestroId = maestrosPorClave.get(clave) ?? null;
+        if (!productoMaestroId) {
+          const resultadoMaestro = await crearProductoMaestro(supabase, { nombre, marca, categoriaId, precio, costo });
+          if ('error' in resultadoMaestro) {
+            // Ej. dos filas del archivo con el mismo nombre+marca, o alguien
+            // más lo cargó justo ahora — se omite solo esta fila, no se
+            // corta todo el import por un choque puntual.
+            omitidosDuplicados++;
+            continue;
+          }
+          productoMaestroId = resultadoMaestro.id;
+          maestrosPorClave.set(clave, productoMaestroId);
+        }
+
+        nuevasFilas.push({
+          nombre,
+          marca,
+          categoria_id: categoriaId,
+          precio,
+          costo,
+          cantidad,
+          producto_maestro_id: productoMaestroId,
+          ...(sucursalId ? { sucursal_id: sucursalId } : {}),
+        });
+        clavesYaEnSucursal.add(clave);
+      }
+
+      const { guardadas, error } = await insertarEnTandas(
+        (tanda) => supabase.from('productos').insert(tanda),
+        nuevasFilas,
+        300,
+        (hechas, total) => setProgresoImport({ hechas, total })
+      );
+
+      const omitidos = omitidosSinNombre + omitidosDuplicados;
+      setResultadoImport(
+        error
+          ? `${t('Se guardaron')} ${guardadas} ${t('de')} ${nuevasFilas.length} ${t('antes de un error:')} ${error}`
+          : `${t('Listo: se importaron')} ${guardadas} ${t('productos.')}${
+              omitidos > 0 ? ` ${t('Se omitieron')} ${omitidos} ${t('filas sin nombre o ya cargadas en esta sucursal.')}` : ''
+            }`
+      );
+
+      if (guardadas > 0) {
+        await registrarAuditoria(supabase, { accion: `importó ${guardadas} productos desde un archivo`, entidad: 'producto' });
+        const [productosActualizados, maestrosActualizados] = await Promise.all([
+          obtenerTodasLasFilas<ProductoFila>(
+            supabase,
+            'productos',
+            'id, nombre, marca, categoria_id, precio, cantidad, sucursal_id, producto_maestro_id',
+            [{ columna: 'nombre' }]
+          ),
+          obtenerProductosMaestro(supabase, false),
+        ]);
+        setProductos(productosActualizados);
+        setMaestros(maestrosActualizados);
+      }
+    } catch (err: any) {
+      setResultadoImport(t('No pudimos leer el archivo:') + ' ' + (err?.message ?? t('error desconocido')));
+    }
+
+    setImportando(false);
+    setProgresoImport(null);
+    if (inputImportRef.current) inputImportRef.current.value = '';
+  };
+
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
       <header className="flex items-start gap-3">
@@ -354,7 +505,43 @@ export default function Productos() {
             {t('Ver remitos emitidos')}
           </Link>
         )}
+        {puedeAgregarStock && (
+          <label className="shrink-0 rounded-lg border border-border dark:border-dark-border px-3 py-2 text-sm font-medium cursor-pointer">
+            ⬆{' '}
+            {importando
+              ? progresoImport
+                ? `${t('Importando...')} ${progresoImport.hechas}/${progresoImport.total}`
+                : t('Leyendo archivo...')
+              : t('Importar CSV o Excel')}
+            <input
+              ref={inputImportRef}
+              type="file"
+              accept=".csv,.xlsx,.xls"
+              className="hidden"
+              disabled={importando}
+              onChange={importarProductos}
+            />
+          </label>
+        )}
+        <button
+          onClick={() => exportarCatalogo('csv')}
+          disabled={filas.length === 0 || exportando}
+          className="shrink-0 rounded-lg border border-border dark:border-dark-border px-3 py-2 text-sm font-medium disabled:opacity-40"
+        >
+          ⬇ {exportando ? t('Exportando...') : t('Exportar CSV')}
+        </button>
+        <button
+          onClick={() => exportarCatalogo('xlsx')}
+          disabled={filas.length === 0 || exportando}
+          className="shrink-0 rounded-lg border border-border dark:border-dark-border px-3 py-2 text-sm font-medium disabled:opacity-40"
+        >
+          ⬇ {exportando ? t('Exportando...') : t('Exportar Excel')}
+        </button>
       </div>
+
+      {resultadoImport && (
+        <p className="text-sm bg-canvas dark:bg-dark-bg rounded-lg px-3 py-2">{resultadoImport}</p>
+      )}
 
       {loading ? (
         <p className="text-sm text-muted dark:text-dark-text-secondary">{t('Cargando...')}</p>
