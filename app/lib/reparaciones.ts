@@ -211,6 +211,18 @@ export const TIPOS_INGRESO: { id: string; label: string }[] = [
   { id: 'reincidencia_no_cubierta', label: 'Reincidencia no cubierta' },
 ];
 
+// Tipo de bloqueo del equipo recibido — opcional, "ninguno" (el default) no
+// se guarda como valor real (queda null), solo existe para que el selector
+// arranque en un estado neutro. 'pin'/'contrasena' reusan codigo_desbloqueo
+// (texto libre existente); 'patron' usa la columna aparte
+// patron_desbloqueo (ver PatronDesbloqueo.tsx y bloqueo_equipo_supabase.sql).
+export type TipoBloqueo = 'pin' | 'patron' | 'contrasena';
+export const TIPOS_BLOQUEO: { id: TipoBloqueo; label: string }[] = [
+  { id: 'pin', label: 'PIN' },
+  { id: 'patron', label: 'Patrón' },
+  { id: 'contrasena', label: 'Contraseña' },
+];
+
 export function hace(iso: string): string {
   const ms = Date.now() - new Date(iso).getTime();
   const min = Math.floor(ms / 60000);

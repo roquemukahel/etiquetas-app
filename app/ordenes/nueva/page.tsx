@@ -24,7 +24,8 @@ import { generarCronograma, sumarMesConClamp, aFechaISO } from '../../lib/financ
 import { decimalesMoneda } from '../../lib/monedas';
 import { generarComisionesAccion } from '../../comisiones/acciones';
 import CampoFecha from '../../CampoFecha';
-import { ITEMS_CHECKLIST_INGRESO, CAMPOS_DEPENDEN_MODULO, generarTextoCondicionIngreso } from '../../lib/reparaciones';
+import { ITEMS_CHECKLIST_INGRESO, CAMPOS_DEPENDEN_MODULO, generarTextoCondicionIngreso, type TipoBloqueo } from '../../lib/reparaciones';
+import CapturarBloqueo from '../../CapturarBloqueo';
 import SelectorColorAuto from '../../SelectorColorAuto';
 import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
 import { limpiarImei } from '../../lib/imei';
@@ -108,6 +109,9 @@ type Derivacion = {
   prioritario: boolean;
   desdeTrabajo: boolean;
   editar: boolean;
+  tipoBloqueo: TipoBloqueo | '';
+  codigoDesbloqueo: string;
+  patronDesbloqueo: string;
 };
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
@@ -903,6 +907,9 @@ export default function NuevaOrden() {
         prioritario: true,
         desdeTrabajo: false,
         editar: !(disp?.modelo ?? '').trim(),
+        tipoBloqueo: '',
+        codigoDesbloqueo: '',
+        patronDesbloqueo: '',
       });
     }
     const ct = (checklistOrden ?? {}) as any;
@@ -918,10 +925,27 @@ export default function NuevaOrden() {
         prioritario: false,
         desdeTrabajo: true,
         editar: false,
+        tipoBloqueo: '',
+        codigoDesbloqueo: '',
+        patronDesbloqueo: '',
       });
     }
     if (lista.length === 0) {
-      lista.push({ key: 'manual', incluir: true, modelo: '', capacidad: null, color: '', imei: '', motivo: '', prioritario: false, desdeTrabajo: false, editar: true });
+      lista.push({
+        key: 'manual',
+        incluir: true,
+        modelo: '',
+        capacidad: null,
+        color: '',
+        imei: '',
+        motivo: '',
+        prioritario: false,
+        desdeTrabajo: false,
+        editar: true,
+        tipoBloqueo: '',
+        codigoDesbloqueo: '',
+        patronDesbloqueo: '',
+      });
     }
     return lista;
   };
@@ -1189,6 +1213,9 @@ export default function NuevaOrden() {
             capacidad_gb: der.capacidad,
             color: der.color.trim() || null,
             imei: limpiarImei(der.imei) || null,
+            tipo_bloqueo: der.tipoBloqueo || null,
+            codigo_desbloqueo: der.tipoBloqueo === 'pin' || der.tipoBloqueo === 'contrasena' ? der.codigoDesbloqueo.trim() || null : null,
+            patron_desbloqueo: der.tipoBloqueo === 'patron' ? der.patronDesbloqueo || null : null,
             falla_declarada: der.motivo.trim() || null,
             estado: 'recibido',
             prioridad: der.prioritario ? 'urgente' : 'normal',
@@ -2536,6 +2563,14 @@ export default function NuevaOrden() {
                               onChange={(e) => actualizarDerivacion(der.key, { imei: e.target.value })}
                               placeholder={t('IMEI (opcional)')}
                               className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm font-mono"
+                            />
+                            <CapturarBloqueo
+                              tipoBloqueo={der.tipoBloqueo}
+                              onTipoBloqueoChange={(v) => actualizarDerivacion(der.key, { tipoBloqueo: v })}
+                              codigo={der.codigoDesbloqueo}
+                              onCodigoChange={(v) => actualizarDerivacion(der.key, { codigoDesbloqueo: v })}
+                              patron={der.patronDesbloqueo}
+                              onPatronChange={(v) => actualizarDerivacion(der.key, { patronDesbloqueo: v })}
                             />
                           </>
                         )}

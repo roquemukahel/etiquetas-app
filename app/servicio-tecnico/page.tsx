@@ -24,7 +24,9 @@ import {
   RepuestoParaAlerta,
   FINALIZADOS,
   esDemorado,
+  type TipoBloqueo,
 } from '../lib/reparaciones';
+import CapturarBloqueo from '../CapturarBloqueo';
 import Avatar from '../Avatar';
 import SelectorColorAuto from '../SelectorColorAuto';
 import CheckTri from '../CheckTri';
@@ -57,6 +59,9 @@ type EquipoIngreso = {
   falla: string;
   ubicacion: string;
   checklist: ChecklistIngreso;
+  tipoBloqueo: TipoBloqueo | '';
+  codigoDesbloqueo: string;
+  patronDesbloqueo: string;
 };
 
 type Cliente = { id: string; nombre: string; apellido: string | null; telefono: string | null };
@@ -168,6 +173,9 @@ export default function ServicioTecnico() {
   const [nuevaCapacidad, setNuevaCapacidad] = useState<number | null>(null);
   const [nuevoColor, setNuevoColor] = useState('');
   const [nuevoImei, setNuevoImei] = useState('');
+  const [nuevoTipoBloqueo, setNuevoTipoBloqueo] = useState<TipoBloqueo | ''>('');
+  const [nuevoCodigoDesbloqueo, setNuevoCodigoDesbloqueo] = useState('');
+  const [nuevoPatronDesbloqueo, setNuevoPatronDesbloqueo] = useState('');
   const [nuevaFalla, setNuevaFalla] = useState('');
   const [nuevaUbicacion, setNuevaUbicacion] = useState('');
   // Equipos ya confirmados con "+ Agregar otro equipo" en este mismo
@@ -503,6 +511,9 @@ export default function ServicioTecnico() {
         falla: nuevaFalla.trim(),
         ubicacion: nuevaUbicacion.trim(),
         checklist: datosChecklistNuevo(),
+        tipoBloqueo: nuevoTipoBloqueo,
+        codigoDesbloqueo: nuevoCodigoDesbloqueo.trim(),
+        patronDesbloqueo: nuevoPatronDesbloqueo,
       }
     : null;
   const equiposEfectivos: EquipoIngreso[] = equipoEnProgreso ? [...equiposAgregados, equipoEnProgreso] : equiposAgregados;
@@ -516,6 +527,9 @@ export default function ServicioTecnico() {
     setNuevoImei('');
     setNuevaFalla('');
     setNuevaUbicacion('');
+    setNuevoTipoBloqueo('');
+    setNuevoCodigoDesbloqueo('');
+    setNuevoPatronDesbloqueo('');
     setNuevoEnciende(null);
     setNuevaPantalla('');
     setNuevoChecklist({});
@@ -615,6 +629,9 @@ export default function ServicioTecnico() {
           capacidad_gb: eq.capacidad_gb,
           color: eq.color || null,
           imei: limpiarImei(eq.imei),
+          tipo_bloqueo: eq.tipoBloqueo || null,
+          codigo_desbloqueo: eq.tipoBloqueo === 'pin' || eq.tipoBloqueo === 'contrasena' ? eq.codigoDesbloqueo || null : null,
+          patron_desbloqueo: eq.tipoBloqueo === 'patron' ? eq.patronDesbloqueo || null : null,
           falla_declarada: eq.falla || null,
           ubicacion_fisica: eq.ubicacion || null,
           estado: 'recibido',
@@ -993,6 +1010,14 @@ export default function ServicioTecnico() {
                 onChange={(e) => setNuevoImei(e.target.value)}
                 placeholder="IMEI"
                 className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm font-mono"
+              />
+              <CapturarBloqueo
+                tipoBloqueo={nuevoTipoBloqueo}
+                onTipoBloqueoChange={setNuevoTipoBloqueo}
+                codigo={nuevoCodigoDesbloqueo}
+                onCodigoChange={setNuevoCodigoDesbloqueo}
+                patron={nuevoPatronDesbloqueo}
+                onPatronChange={setNuevoPatronDesbloqueo}
               />
               <textarea
                 value={nuevaFalla}

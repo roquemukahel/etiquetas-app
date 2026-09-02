@@ -20,7 +20,10 @@ import {
   hace,
   CHECKLIST_CALIDAD_GENERICO,
   TIPOS_INGRESO,
+  type TipoBloqueo,
 } from '../../lib/reparaciones';
+import CapturarBloqueo from '../../CapturarBloqueo';
+import MostrarBloqueo from '../../MostrarBloqueo';
 import { cambiarEstadoReparacion } from '../../lib/estadoReparacion';
 import { generarOrdenDeReparacion } from '../../lib/ordenesServicio';
 import { extraerStockInsuficiente } from '../../lib/repuestos';
@@ -110,6 +113,8 @@ type Reparacion = {
   color: string | null;
   imei: string | null;
   codigo_desbloqueo: string | null;
+  tipo_bloqueo: TipoBloqueo | null;
+  patron_desbloqueo: string | null;
   accesorios: string[];
   ubicacion_fisica: string | null;
   falla_declarada: string | null;
@@ -412,6 +417,12 @@ export default function FichaReparacion() {
       color: r.color ?? '',
       imei: r.imei ?? '',
       codigo_desbloqueo: r.codigo_desbloqueo ?? '',
+      // Dato viejo (de antes de que existiera tipo_bloqueo): un código
+      // cargado sin tipo se asume PIN al editar, para que siga siendo
+      // visible/editable de una — nunca se pierde, como mucho hay que
+      // tocar "Contraseña" si en realidad era eso.
+      tipo_bloqueo: r.tipo_bloqueo ?? (r.codigo_desbloqueo ? 'pin' : ''),
+      patron_desbloqueo: r.patron_desbloqueo ?? '',
       accesorios: r.accesorios ?? [],
       ubicacion_fisica: r.ubicacion_fisica ?? '',
       falla_declarada: r.falla_declarada ?? '',
@@ -479,7 +490,11 @@ export default function FichaReparacion() {
       capacidad_gb: f.capacidad_gb,
       color: f.color.trim() || null,
       imei: limpiarImei(f.imei) || null,
-      codigo_desbloqueo: f.codigo_desbloqueo.trim() || null,
+      // Solo se guarda el dato que corresponde al tipo elegido — cambiar de
+      // PIN a Patrón (o a Ninguno) no deja el código viejo colgado sin uso.
+      codigo_desbloqueo: f.tipo_bloqueo === 'pin' || f.tipo_bloqueo === 'contrasena' ? f.codigo_desbloqueo.trim() || null : null,
+      tipo_bloqueo: f.tipo_bloqueo || null,
+      patron_desbloqueo: f.tipo_bloqueo === 'patron' ? f.patron_desbloqueo || null : null,
       accesorios: f.accesorios,
       ubicacion_fisica: f.ubicacion_fisica.trim() || null,
       falla_declarada: f.falla_declarada.trim() || null,
@@ -1202,7 +1217,14 @@ export default function FichaReparacion() {
                   </div>
                   <SelectorColorAuto modelo={f.modelo} value={f.color} onChange={(v) => setFm((p) => ({ ...p, color: v }))} />
                   <Campo label={t('IMEI')} valor={f.imei} onChange={(v) => setFm((p) => ({ ...p, imei: v }))} mono />
-                  <Campo label={t('Código de desbloqueo (opcional)')} valor={f.codigo_desbloqueo} onChange={(v) => setFm((p) => ({ ...p, codigo_desbloqueo: v }))} />
+                  <CapturarBloqueo
+                    tipoBloqueo={f.tipo_bloqueo}
+                    onTipoBloqueoChange={(v) => setFm((p) => ({ ...p, tipo_bloqueo: v }))}
+                    codigo={f.codigo_desbloqueo}
+                    onCodigoChange={(v) => setFm((p) => ({ ...p, codigo_desbloqueo: v }))}
+                    patron={f.patron_desbloqueo}
+                    onPatronChange={(v) => setFm((p) => ({ ...p, patron_desbloqueo: v }))}
+                  />
                   <Campo label={t('Ubicación física (ej. Estante A-3)')} valor={f.ubicacion_fisica} onChange={(v) => setFm((p) => ({ ...p, ubicacion_fisica: v }))} />
                   <div>
                     <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Accesorios entregados')}</label>
@@ -1252,15 +1274,13 @@ export default function FichaReparacion() {
                       <span className="font-mono font-bold">{r.imei}</span>
                     </p>
                   )}
-                  {r.codigo_desbloqueo && (
-                    <p className="flex items-center gap-2">
-                      <span className="text-muted dark:text-dark-text-secondary">{t('Código de desbloqueo:')} </span>
-                      <span className="font-mono">{codigoVisible ? r.codigo_desbloqueo : '••••••'}</span>
-                      <button onClick={() => setCodigoVisible((v) => !v)} className="text-xs text-accent dark:text-dark-accent underline">
-                        {codigoVisible ? t('ocultar') : t('mostrar')}
-                      </button>
-                    </p>
-                  )}
+                  <MostrarBloqueo
+                    tipoBloqueo={r.tipo_bloqueo}
+                    codigo={r.codigo_desbloqueo}
+                    patron={r.patron_desbloqueo}
+                    visible={codigoVisible}
+                    onToggleVisible={() => setCodigoVisible((v) => !v)}
+                  />
                   {r.accesorios?.length > 0 && (
                     <p>
                       <span className="text-muted dark:text-dark-text-secondary">{t('Accesorios:')} </span>

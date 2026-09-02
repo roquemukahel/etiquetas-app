@@ -13,6 +13,8 @@ import EtiquetaSeccion from '../../../EtiquetaSeccion';
 import { medioLabel } from '../../../lib/cuentaCorriente';
 import { useT, useIdioma } from '../../../lib/idioma';
 import { localeDe } from '../../../lib/i18n/traducir';
+import { TIPOS_BLOQUEO, type TipoBloqueo } from '../../../lib/reparaciones';
+import PatronDesbloqueo from '../../../PatronDesbloqueo';
 
 type Item = {
   descripcion: string;
@@ -53,6 +55,13 @@ type Orden = {
   } | null;
   vendedores: { nombre: string } | null;
   orden_items: Item[];
+};
+
+type BloqueoEquipo = {
+  modelo: string | null;
+  tipo_bloqueo: TipoBloqueo | null;
+  codigo_desbloqueo: string | null;
+  patron_desbloqueo: string | null;
 };
 
 type CanjeEntregado = {
@@ -130,6 +139,7 @@ export default function Boleta() {
   const [orden, setOrden] = useState<Orden | null>(null);
   const [desglosePagos, setDesglosePagos] = useState<{ medio: string; monto: number }[]>([]);
   const [canjes, setCanjes] = useState<CanjeEntregado[]>([]);
+  const [bloqueos, setBloqueos] = useState<BloqueoEquipo[]>([]);
   const [negocio, setNegocio] = useState<Negocio | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -154,6 +164,16 @@ export default function Boleta() {
         .eq('estado', 'en_canje')
         .order('created_at');
       setCanjes((canjesData as any) ?? []);
+
+      // Solo el bloqueo que el cliente declaró para ESTE recibo — nunca en la
+      // boleta pública compartible por link/QR (app/boleta/[token]/page.tsx),
+      // solo acá, en la que se imprime en el momento y se entrega en mano.
+      const { data: bloqueosData } = await supabase
+        .from('reparaciones')
+        .select('modelo, tipo_bloqueo, codigo_desbloqueo, patron_desbloqueo')
+        .eq('orden_cobro_id', id)
+        .not('tipo_bloqueo', 'is', null);
+      setBloqueos((bloqueosData as any) ?? []);
 
       // Desglose real de cómo se pagó — antes la boleta solo mostraba
       // "Efectivo + Cuenta corriente" (la etiqueta armada en forma_pago) sin
@@ -405,6 +425,28 @@ export default function Boleta() {
                   <p className="font-medium mt-1">
                     {t('Monto reconocido:')} {fmt(c.monto)}
                   </p>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {bloqueos.length > 0 && (
+          <div className="flex flex-col gap-2">
+            {bloqueos.map((b, idx) => (
+              <div key={idx} className="rounded-xl bg-accent-soft p-4 flex flex-col gap-1.5">
+                <p className="text-xs font-semibold uppercase tracking-wide text-accent mb-0.5">
+                  {t('Bloqueo del equipo')}
+                  {b.modelo ? ` — ${b.modelo}` : ''}
+                  {bloqueos.length > 1 ? ` (${idx + 1} ${t('de')} ${bloqueos.length})` : ''}
+                </p>
+                <p className="text-muted">
+                  {t('Tipo:')} {t(TIPOS_BLOQUEO.find((o) => o.id === b.tipo_bloqueo)?.label ?? '')}
+                </p>
+                {b.tipo_bloqueo === 'patron' && b.patron_desbloqueo ? (
+                  <PatronDesbloqueo value={b.patron_desbloqueo} size={110} />
+                ) : (
+                  b.codigo_desbloqueo && <p className="font-mono font-bold text-ink">{b.codigo_desbloqueo}</p>
                 )}
               </div>
             ))}

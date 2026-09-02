@@ -19,6 +19,8 @@ import Avatar from '../../Avatar';
 import SelectorColorAuto from '../../SelectorColorAuto';
 import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
 import { useSucursalActual } from '../../lib/sucursal';
+import { type TipoBloqueo } from '../../lib/reparaciones';
+import CapturarBloqueo from '../../CapturarBloqueo';
 
 const ESTADOS = ['pendiente', 'pagado', 'entregado'];
 const FORMAS_PAGO = ['Efectivo', 'Transferencia', 'Tarjeta'];
@@ -219,6 +221,9 @@ export default function DetalleOrden() {
   const [derivarCapacidad, setDerivarCapacidad] = useState<number | null>(null);
   const [derivarColor, setDerivarColor] = useState('');
   const [derivarImei, setDerivarImei] = useState('');
+  const [derivarTipoBloqueo, setDerivarTipoBloqueo] = useState<TipoBloqueo | ''>('');
+  const [derivarCodigoDesbloqueo, setDerivarCodigoDesbloqueo] = useState('');
+  const [derivarPatronDesbloqueo, setDerivarPatronDesbloqueo] = useState('');
   const [derivarDetalles, setDerivarDetalles] = useState('');
   const [derivando, setDerivando] = useState(false);
 
@@ -300,6 +305,9 @@ export default function DetalleOrden() {
     setDerivarCapacidad(null);
     setDerivarColor(ci.color || '');
     setDerivarImei(ci.imei || '');
+    setDerivarTipoBloqueo('');
+    setDerivarCodigoDesbloqueo('');
+    setDerivarPatronDesbloqueo('');
     setDerivarDetalles(descripciones.join(', '));
     setDerivarAbierto(true);
   };
@@ -320,6 +328,9 @@ export default function DetalleOrden() {
         capacidad_gb: derivarCapacidad,
         color: derivarColor.trim() || null,
         imei: limpiarImei(derivarImei) || null,
+        tipo_bloqueo: derivarTipoBloqueo || null,
+        codigo_desbloqueo: derivarTipoBloqueo === 'pin' || derivarTipoBloqueo === 'contrasena' ? derivarCodigoDesbloqueo.trim() || null : null,
+        patron_desbloqueo: derivarTipoBloqueo === 'patron' ? derivarPatronDesbloqueo || null : null,
         falla_declarada: derivarDetalles.trim() || null,
         estado: 'recibido',
         enciende: ci.enciende ?? null,
@@ -1701,6 +1712,14 @@ export default function DetalleOrden() {
             onChange={(e) => setDerivarImei(e.target.value)}
             placeholder={t('IMEI')}
             className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm font-mono"
+          />
+          <CapturarBloqueo
+            tipoBloqueo={derivarTipoBloqueo}
+            onTipoBloqueoChange={setDerivarTipoBloqueo}
+            codigo={derivarCodigoDesbloqueo}
+            onCodigoChange={setDerivarCodigoDesbloqueo}
+            patron={derivarPatronDesbloqueo}
+            onPatronChange={setDerivarPatronDesbloqueo}
           />
           <textarea
             value={derivarDetalles}
