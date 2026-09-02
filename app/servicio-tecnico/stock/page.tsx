@@ -11,6 +11,8 @@ import { simboloMoneda } from '../../lib/monedas';
 import { sanitizarDecimal, formatearMonto } from '../../lib/numeros';
 import { extraerStockInsuficiente, extraerDisponibleInsuficiente } from '../../lib/repuestos';
 import { FINALIZADOS } from '../../lib/reparaciones';
+import { useSucursalActual } from '../../lib/sucursal';
+import { obtenerSucursales, type Sucursal } from '../../lib/sucursales';
 import ServicioTecnicoTabs from '../../ServicioTecnicoTabs';
 import Modal from '../../Modal';
 import { ICONOS } from '../../Iconos';
@@ -41,6 +43,7 @@ type Repuesto = {
   stock_minimo: number | null;
   garantia_dias: number | null;
   observaciones: string | null;
+  sucursal_id: string | null;
 };
 
 type Proveedor = { id: string; nombre: string };
@@ -112,10 +115,12 @@ export default function StockRepuestos() {
   const t = useT();
   const puedeGestionar = tienePermiso(actor, 'agregar_stock');
   const puedeEliminar = tienePermiso(actor, 'eliminar');
+  const sucursalActual = useSucursalActual();
 
   const [repuestos, setRepuestos] = useState<Repuesto[]>([]);
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [reparacionesAbiertas, setReparacionesAbiertas] = useState<ReparacionAbierta[]>([]);
+  const [sucursales, setSucursales] = useState<Sucursal[]>([]);
   const [moneda, setMoneda] = useState('$');
   const [loading, setLoading] = useState(true);
 
@@ -123,6 +128,13 @@ export default function StockRepuestos() {
   const [filtroCategoria, setFiltroCategoria] = useState('');
   const [filtroCalidad, setFiltroCalidad] = useState('');
   const [filtroProveedor, setFiltroProveedor] = useState('');
+  // Arranca en la sucursal elegida en el panel — mismo criterio que
+  // Órdenes/Stock, sigue a sucursalActual si cambia mientras la pantalla ya
+  // está abierta (ver el useEffect de abajo).
+  const [filtroSucursal, setFiltroSucursal] = useState(sucursalActual.id ?? '');
+  useEffect(() => {
+    setFiltroSucursal(sucursalActual.id ?? '');
+  }, [sucursalActual.id]);
   const [soloStockBajo, setSoloStockBajo] = useState(false);
   const [soloSinStock, setSoloSinStock] = useState(false);
 
@@ -188,25 +200,41 @@ export default function StockRepuestos() {
       const codigo = (perfil as any)?.negocios?.moneda;
       if (codigo) setMoneda(simboloMoneda(codigo));
     })();
+    (async () => {
+      try {
+        setSucursales(await obtenerSucursales(supabase, false));
+      } catch {
+        // Tabla sucursales todavía no existe en este negocio.
+      }
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const nombreProveedor = (id: string | null) => (id ? proveedores.find((p) => p.id === id)?.nombre : undefined);
+  const nombreSucursal = (id: string | null) => (id ? sucursales.find((s) => s.id === id)?.nombre : undefined);
   const disponible = (r: Repuesto) => r.cantidad_stock - r.cantidad_reservada;
   const stockBajo = (r: Repuesto) => r.stock_minimo != null && disponible(r) > 0 && disponible(r) <= r.stock_minimo;
   const sinStock = (r: Repuesto) => disponible(r) <= 0;
 
+  // Solo por sucursal (no por búsqueda/categoría/etc.) — es la base de los
+  // indicadores y del catálogo de categorías, que no deberían achicarse
+  // porque alguien esté buscando texto o filtrando por calidad.
+  const repuestosDeLaSucursal = useMemo(
+    () => (filtroSucursal ? repuestos.filter((r) => r.sucursal_id === filtroSucursal) : repuestos),
+    [repuestos, filtroSucursal]
+  );
+
   const indicadores = useMemo(() => {
     return {
-      tipos: repuestos.length,
-      fisicas: repuestos.reduce((acc, r) => acc + r.cantidad_stock, 0),
-      reservadas: repuestos.reduce((acc, r) => acc + r.cantidad_reservada, 0),
-      disponibles: repuestos.reduce((acc, r) => acc + disponible(r), 0),
-      stockBajo: repuestos.filter(stockBajo).length,
-      sinStock: repuestos.filter(sinStock).length,
-      valorTotal: repuestos.reduce((acc, r) => acc + (r.costo_unitario ?? 0) * r.cantidad_stock, 0),
+      tipos: repuestosDeLaSucursal.length,
+      fisicas: repuestosDeLaSucursal.reduce((acc, r) => acc + r.cantidad_stock, 0),
+      reservadas: repuestosDeLaSucursal.reduce((acc, r) => acc + r.cantidad_reservada, 0),
+      disponibles: repuestosDeLaSucursal.reduce((acc, r) => acc + disponible(r), 0),
+      stockBajo: repuestosDeLaSucursal.filter(stockBajo).length,
+      sinStock: repuestosDeLaSucursal.filter(sinStock).length,
+      valorTotal: repuestosDeLaSucursal.reduce((acc, r) => acc + (r.costo_unitario ?? 0) * r.cantidad_stock, 0),
     };
-  }, [repuestos]);
+  }, [repuestosDeLaSucursal]);
 
   const categoriasUsadas = useMemo(
     () => Array.from(new Set(repuestos.map((r) => r.categoria).filter(Boolean) as string[])).sort(),
@@ -215,7 +243,7 @@ export default function StockRepuestos() {
 
   const filtrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
-    return repuestos.filter((r) => {
+    return repuestosDeLaSucursal.filter((r) => {
       if (soloStockBajo && !stockBajo(r)) return false;
       if (soloSinStock && !sinStock(r)) return false;
       if (filtroCategoria && r.categoria !== filtroCategoria) return false;
@@ -224,7 +252,7 @@ export default function StockRepuestos() {
       if (q && !r.nombre.toLowerCase().includes(q) && !(r.sku ?? '').toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [repuestos, busqueda, filtroCategoria, filtroCalidad, filtroProveedor, soloStockBajo, soloSinStock]);
+  }, [repuestosDeLaSucursal, busqueda, filtroCategoria, filtroCalidad, filtroProveedor, soloStockBajo, soloSinStock]);
 
   const hayFiltrosActivos =
     busqueda.trim() !== '' || filtroCategoria !== '' || filtroCalidad !== '' || filtroProveedor !== '' || soloStockBajo || soloSinStock;
@@ -320,10 +348,16 @@ export default function StockRepuestos() {
       return;
     }
 
-    // Si ya existe un repuesto con ese nombre, sumamos a su stock en vez de
-    // crear un duplicado — es lo que va a esperar alguien que escribe
-    // "Batería iPhone 13" dos veces sin darse cuenta.
-    const existente = repuestos.find((r) => r.nombre.trim().toLowerCase() === form.nombre.trim().toLowerCase());
+    // Si ya existe un repuesto con ese nombre EN LA MISMA SUCURSAL, sumamos a
+    // su stock en vez de crear un duplicado — es lo que va a esperar alguien
+    // que escribe "Batería iPhone 13" dos veces sin darse cuenta. La misma
+    // sucursal es la condición clave: sin ella, cargar "Pantalla iPhone 11"
+    // para la Sucursal 2 terminaría sumándose al stock de la Sucursal 1 si
+    // ya existía ahí, mezclando el stock de dos locales distintos.
+    const sucursalNueva = sucursalActual.id || null;
+    const existente = repuestos.find(
+      (r) => r.nombre.trim().toLowerCase() === form.nombre.trim().toLowerCase() && r.sucursal_id === sucursalNueva
+    );
     if (existente) {
       const nuevaCantidad = existente.cantidad_stock + (Number(form.cantidad_stock) || 0);
       const { error: updError } = await supabase
@@ -344,6 +378,7 @@ export default function StockRepuestos() {
         nombre: form.nombre.trim(),
         cantidad_stock: Number(form.cantidad_stock) || 0,
         costo_unitario: form.costo_unitario ? Number(form.costo_unitario) : null,
+        ...(sucursalNueva ? { sucursal_id: sucursalNueva } : {}),
         ...payloadComun,
       });
       if (insError) {
@@ -605,6 +640,22 @@ export default function StockRepuestos() {
         </div>
       )}
 
+      {sucursales.length > 1 && (
+        <select
+          value={filtroSucursal}
+          onChange={(e) => setFiltroSucursal(e.target.value)}
+          aria-label={t('Filtrar por sucursal')}
+          className="self-start bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2.5 py-1.5 text-xs"
+        >
+          <option value="">🏬 {t('Todas las sucursales')}</option>
+          {sucursales.map((s) => (
+            <option key={s.id} value={s.id}>
+              🏬 {s.nombre}
+            </option>
+          ))}
+        </select>
+      )}
+
       {repuestos.length > 0 && (
         <div className="flex flex-col gap-2">
           <input
@@ -707,6 +758,11 @@ export default function StockRepuestos() {
                     </span>
                   )}
                   {nombreProveedor(r.proveedor_id) && <span>· {nombreProveedor(r.proveedor_id)}</span>}
+                  {!filtroSucursal && sucursales.length > 1 && nombreSucursal(r.sucursal_id) && (
+                    <span className="flex items-center gap-1">
+                      · 🏬 {nombreSucursal(r.sucursal_id)}
+                    </span>
+                  )}
                 </p>
               </button>
               <div className="relative shrink-0">
