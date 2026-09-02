@@ -9,6 +9,7 @@ import { simboloMoneda } from './lib/monedas';
 import PanelInicio from './inicio/PanelInicio';
 import PanelInicioSkeleton from './inicio/PanelInicioSkeleton';
 import AvisoPruebaPorVencer from './AvisoPruebaPorVencer';
+import NovedadesModal from './NovedadesModal';
 import { obtenerIdiomaServidor, traducir } from './lib/idiomaServidor';
 import { obtenerSucursalServidor } from './lib/sucursalServidor';
 
@@ -67,6 +68,7 @@ export default async function Home() {
 
   return (
     <main className="flex min-h-screen flex-col px-6 py-8 gap-6 max-w-2xl lg:max-w-[1180px] mx-auto w-full">
+      <NovedadesModal />
       <AvisoPruebaPorVencer diasDePrueba={diasDePrueba} />
 
       {diasDePrueba != null && (

@@ -2705,4 +2705,42 @@ export const EN: Record<string, string> = {
   'No encontramos ese remito.': "We couldn't find that transfer.",
   'Remito interno': 'Internal transfer',
   'Recibido por': 'Received by',
+
+  // NovedadesModal (what's-new dialog shown once per device on Home)
+  Novedades: "What's new",
+  'Esto es lo nuevo en Qovento': "Here's what's new in Qovento",
+  'Sumamos varias mejoras al sistema. Un resumen rápido:': 'We added several improvements to the system. A quick rundown:',
+  'Ya está todo funcionando — no hay que actualizar nada.': "It's all already live — nothing to update.",
+  Entendido: 'Got it',
+  'Motorola ya está en el catálogo': 'Motorola is now in the catalog',
+  'Se suma a iPhone, Samsung y Xiaomi: al cargar stock aparecen fotos reales de cada color.':
+    'It joins iPhone, Samsung and Xiaomi: real photos of each color show up when you load stock.',
+  'Configuración → Datos del negocio': 'Settings → Business info',
+  'Excel para importar y exportar': 'Excel for import and export',
+  'Antes solo se podía en CSV. Ahora también en Excel (.xlsx), directo.':
+    'Before it was CSV only. Now Excel (.xlsx) works too, directly.',
+  'Clientes · Stock · Productos': 'Clients · Stock · Products',
+  'Imprimir etiquetas directo': 'Print labels directly',
+  'Ya no hace falta guardar la imagen para poder imprimirla: hay un botón "Imprimir".':
+    'No more saving the image just to print it — there\'s a "Print" button.',
+  'Stock → Etiqueta': 'Stock → Label',
+  'Elegís qué tipo de equipo entra': 'Choose what type of device comes in',
+  'Celular, notebook, tablet o parlante — cada uno con su propio checklist de ingreso.':
+    'Phone, laptop, tablet or speaker — each with its own intake checklist.',
+  'Servicio Técnico → Recibir equipo': 'Repair Shop → Receive device',
+  'Bloqueo del equipo al recibirlo': 'Device lock when receiving it',
+  'PIN, contraseña o patrón (se dibuja en una grilla). Queda guardado y sale en la boleta.':
+    'PIN, password or pattern (drawn on a grid). It gets saved and shows up on the receipt.',
+  'Repuestos separados por sucursal': 'Parts stock split by branch',
+  'Si tenés más de un local, cargás stock de repuestos distinto para cada uno.':
+    "If you have more than one branch, you can load different parts stock for each one.",
+  'Servicio Técnico → Repuestos': 'Repair Shop → Parts',
+  'Botón "Imprimir boleta" en la reparación': '"Print receipt" button on the repair',
+  'Ya no hace falta ir a buscar la orden de cobro: está al lado de "Imprimir etiqueta".':
+    'No more hunting down the payment order — it\'s right next to "Print label".',
+  'Ficha de la reparación': 'Repair record',
+  'El selector Minorista/Mayorista es opcional': 'The Retail/Wholesale selector is now optional',
+  'Si no lo usás, lo apagás desde Configuración y no vuelve a aparecer al cargar una venta.':
+    "If you don't use it, turn it off in Settings and it won't show up again when loading a sale.",
+  'Configuración → Comisiones': 'Settings → Commissions',
 };

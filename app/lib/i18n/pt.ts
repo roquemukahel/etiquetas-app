@@ -2706,4 +2706,42 @@ export const PT: Record<string, string> = {
   'No encontramos ese remito.': 'Não encontramos essa transferência.',
   'Remito interno': 'Transferência interna',
   'Recibido por': 'Recebido por',
+
+  // NovedadesModal (aviso de novidades, aparece uma vez por dispositivo em Início)
+  Novedades: 'Novidades',
+  'Esto es lo nuevo en Qovento': 'O que há de novo no Qovento',
+  'Sumamos varias mejoras al sistema. Un resumen rápido:': 'Adicionamos várias melhorias ao sistema. Um resumo rápido:',
+  'Ya está todo funcionando — no hay que actualizar nada.': 'Já está tudo funcionando — não precisa atualizar nada.',
+  Entendido: 'Entendi',
+  'Motorola ya está en el catálogo': 'A Motorola já está no catálogo',
+  'Se suma a iPhone, Samsung y Xiaomi: al cargar stock aparecen fotos reales de cada color.':
+    'Ela se junta ao iPhone, Samsung e Xiaomi: ao cadastrar estoque aparecem fotos reais de cada cor.',
+  'Configuración → Datos del negocio': 'Configurações → Dados do negócio',
+  'Excel para importar y exportar': 'Excel para importar e exportar',
+  'Antes solo se podía en CSV. Ahora también en Excel (.xlsx), directo.':
+    'Antes só dava em CSV. Agora também dá em Excel (.xlsx), direto.',
+  'Clientes · Stock · Productos': 'Clientes · Estoque · Produtos',
+  'Imprimir etiquetas directo': 'Imprimir etiquetas direto',
+  'Ya no hace falta guardar la imagen para poder imprimirla: hay un botón "Imprimir".':
+    'Não precisa mais salvar a imagem para poder imprimir: agora tem um botão "Imprimir".',
+  'Stock → Etiqueta': 'Estoque → Etiqueta',
+  'Elegís qué tipo de equipo entra': 'Você escolhe que tipo de aparelho entra',
+  'Celular, notebook, tablet o parlante — cada uno con su propio checklist de ingreso.':
+    'Celular, notebook, tablet ou caixa de som — cada um com seu próprio checklist de entrada.',
+  'Servicio Técnico → Recibir equipo': 'Assistência Técnica → Receber aparelho',
+  'Bloqueo del equipo al recibirlo': 'Bloqueio do aparelho ao recebê-lo',
+  'PIN, contraseña o patrón (se dibuja en una grilla). Queda guardado y sale en la boleta.':
+    'PIN, senha ou padrão (desenhado numa grade). Fica salvo e aparece no comprovante.',
+  'Repuestos separados por sucursal': 'Peças separadas por filial',
+  'Si tenés más de un local, cargás stock de repuestos distinto para cada uno.':
+    'Se você tem mais de uma filial, cadastra um estoque de peças diferente para cada uma.',
+  'Servicio Técnico → Repuestos': 'Assistência Técnica → Peças',
+  'Botón "Imprimir boleta" en la reparación': 'Botão "Imprimir comprovante" no reparo',
+  'Ya no hace falta ir a buscar la orden de cobro: está al lado de "Imprimir etiqueta".':
+    'Não precisa mais ir buscar a ordem de cobrança: está do lado de "Imprimir etiqueta".',
+  'Ficha de la reparación': 'Ficha do reparo',
+  'El selector Minorista/Mayorista es opcional': 'O seletor Varejo/Atacado agora é opcional',
+  'Si no lo usás, lo apagás desde Configuración y no vuelve a aparecer al cargar una venta.':
+    'Se você não usa, desativa em Configurações e ele não aparece mais ao cadastrar uma venda.',
+  'Configuración → Comisiones': 'Configurações → Comissões',
 };
