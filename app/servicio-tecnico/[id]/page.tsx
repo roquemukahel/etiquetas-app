@@ -21,9 +21,12 @@ import {
   CHECKLIST_CALIDAD_GENERICO,
   TIPOS_INGRESO,
   type TipoBloqueo,
+  type TipoDispositivo,
+  TIPOS_DISPOSITIVO,
 } from '../../lib/reparaciones';
 import CapturarBloqueo from '../../CapturarBloqueo';
 import MostrarBloqueo from '../../MostrarBloqueo';
+import SelectorTipoDispositivo from '../../SelectorTipoDispositivo';
 import { cambiarEstadoReparacion } from '../../lib/estadoReparacion';
 import { generarOrdenDeReparacion } from '../../lib/ordenesServicio';
 import { extraerStockInsuficiente } from '../../lib/repuestos';
@@ -112,6 +115,7 @@ type Reparacion = {
   capacidad_gb: number | null;
   color: string | null;
   imei: string | null;
+  tipo_dispositivo: TipoDispositivo;
   codigo_desbloqueo: string | null;
   tipo_bloqueo: TipoBloqueo | null;
   patron_desbloqueo: string | null;
@@ -416,6 +420,7 @@ export default function FichaReparacion() {
       capacidad_gb: r.capacidad_gb,
       color: r.color ?? '',
       imei: r.imei ?? '',
+      tipo_dispositivo: r.tipo_dispositivo ?? 'celular',
       codigo_desbloqueo: r.codigo_desbloqueo ?? '',
       // Dato viejo (de antes de que existiera tipo_bloqueo): un código
       // cargado sin tipo se asume PIN al editar, para que siga siendo
@@ -490,6 +495,7 @@ export default function FichaReparacion() {
       capacidad_gb: f.capacidad_gb,
       color: f.color.trim() || null,
       imei: limpiarImei(f.imei) || null,
+      tipo_dispositivo: f.tipo_dispositivo,
       // Solo se guarda el dato que corresponde al tipo elegido — cambiar de
       // PIN a Patrón (o a Ninguno) no deja el código viejo colgado sin uso.
       codigo_desbloqueo: f.tipo_bloqueo === 'pin' || f.tipo_bloqueo === 'contrasena' ? f.codigo_desbloqueo.trim() || null : null,
@@ -1201,6 +1207,7 @@ export default function FichaReparacion() {
             <Seccion titulo={t('Identificación')}>
               {editando ? (
                 <div className="flex flex-col gap-2">
+                  <SelectorTipoDispositivo value={f.tipo_dispositivo} onChange={(v) => setFm((p) => ({ ...p, tipo_dispositivo: v }))} />
                   <Campo label={t('Modelo')} valor={f.modelo} onChange={(v) => setFm((p) => ({ ...p, modelo: v }))} />
                   <div className="flex gap-2">
                     {STORAGE_OPTIONS.map((gb) => (
@@ -1264,6 +1271,9 @@ export default function FichaReparacion() {
                   )}
                   <p>
                     <span className="text-muted dark:text-dark-text-secondary">{t('Equipo:')} </span>
+                    {r.tipo_dispositivo && r.tipo_dispositivo !== 'celular'
+                      ? `${t(TIPOS_DISPOSITIVO.find((o) => o.id === r.tipo_dispositivo)?.label ?? '')} · `
+                      : ''}
                     {r.modelo}
                     {r.capacidad_gb ? ` · ${r.capacidad_gb}GB` : ''}
                     {r.color ? ` · ${r.color}` : ''}
@@ -1369,7 +1379,8 @@ export default function FichaReparacion() {
                   <Campo label={t('Falla declarada por el cliente')} valor={f.falla_declarada} onChange={(v) => setFm((p) => ({ ...p, falla_declarada: v }))} textarea />
                   <Campo label={t('Estado estético')} valor={f.estado_estetico} onChange={(v) => setFm((p) => ({ ...p, estado_estetico: v }))} />
                   <CheckTri label={t('Enciende')} valor={f.enciende} onChange={(v) => setFm((p) => ({ ...p, enciende: v }))} />
-                  {ITEMS_CHECKLIST_INGRESO.map((item) => {
+                  {f.tipo_dispositivo === 'celular' &&
+                    ITEMS_CHECKLIST_INGRESO.map((item) => {
                     const deshabilitado = CAMPOS_DEPENDEN_MODULO.includes(item.campo) && f.modulo_ok === false;
                     return (
                       <CheckTri
@@ -1418,7 +1429,8 @@ export default function FichaReparacion() {
                   )}
                   <p className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted dark:text-dark-text-secondary">
                     {itemChecklist(t('Enciende'), r.enciende)}
-                    {ITEMS_CHECKLIST_INGRESO.map((item) => itemChecklist(t(item.label), (r as any)[item.campo]))}
+                    {r.tipo_dispositivo === 'celular' &&
+                      ITEMS_CHECKLIST_INGRESO.map((item) => itemChecklist(t(item.label), (r as any)[item.campo]))}
                     {/* Reparaciones cargadas antes de este cambio: si nunca se usó la checklist nueva, mostramos la vieja para no perder ese historial. */}
                     {r.camara_frontal_ok == null && r.camara_trasera_ok == null && itemChecklist(t('Cámaras'), r.camaras_ok)}
                     {r.boton_power_ok == null && r.boton_volumen_ok == null && itemChecklist(t('Botones'), r.botones_ok)}

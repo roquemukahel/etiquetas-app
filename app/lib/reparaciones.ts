@@ -211,6 +211,22 @@ export const TIPOS_INGRESO: { id: string; label: string }[] = [
   { id: 'reincidencia_no_cubierta', label: 'Reincidencia no cubierta' },
 ];
 
+// Tipo de equipo recibido — 'celular' es el default histórico (así arrancó
+// Servicio Técnico, y sigue siendo la enorme mayoría de los ingresos), así
+// que una reparación vieja o cualquier código que no setee este campo se
+// comporta EXACTAMENTE igual que antes: checklist completo de celular. Los
+// otros tipos existen para que ese checklist (cámaras, Face ID, MagSafe, pin
+// de carga — todo específico de celular) no se le muestre a un notebook, una
+// tablet o un parlante, que no tienen nada de eso.
+export type TipoDispositivo = 'celular' | 'notebook' | 'tablet' | 'parlante' | 'otro';
+export const TIPOS_DISPOSITIVO: { id: TipoDispositivo; label: string }[] = [
+  { id: 'celular', label: 'Celular' },
+  { id: 'notebook', label: 'Notebook' },
+  { id: 'tablet', label: 'Tablet' },
+  { id: 'parlante', label: 'Parlante' },
+  { id: 'otro', label: 'Otro' },
+];
+
 // Tipo de bloqueo del equipo recibido — opcional, "ninguno" (el default) no
 // se guarda como valor real (queda null), solo existe para que el selector
 // arranque en un estado neutro. 'pin'/'contrasena' reusan codigo_desbloqueo

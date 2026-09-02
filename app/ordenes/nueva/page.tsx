@@ -24,8 +24,9 @@ import { generarCronograma, sumarMesConClamp, aFechaISO } from '../../lib/financ
 import { decimalesMoneda } from '../../lib/monedas';
 import { generarComisionesAccion } from '../../comisiones/acciones';
 import CampoFecha from '../../CampoFecha';
-import { ITEMS_CHECKLIST_INGRESO, CAMPOS_DEPENDEN_MODULO, generarTextoCondicionIngreso, type TipoBloqueo } from '../../lib/reparaciones';
+import { ITEMS_CHECKLIST_INGRESO, CAMPOS_DEPENDEN_MODULO, generarTextoCondicionIngreso, type TipoBloqueo, type TipoDispositivo } from '../../lib/reparaciones';
 import CapturarBloqueo from '../../CapturarBloqueo';
+import SelectorTipoDispositivo from '../../SelectorTipoDispositivo';
 import SelectorColorAuto from '../../SelectorColorAuto';
 import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
 import { limpiarImei } from '../../lib/imei';
@@ -109,6 +110,7 @@ type Derivacion = {
   prioritario: boolean;
   desdeTrabajo: boolean;
   editar: boolean;
+  tipoDispositivo: TipoDispositivo;
   tipoBloqueo: TipoBloqueo | '';
   codigoDesbloqueo: string;
   patronDesbloqueo: string;
@@ -907,6 +909,7 @@ export default function NuevaOrden() {
         prioritario: true,
         desdeTrabajo: false,
         editar: !(disp?.modelo ?? '').trim(),
+        tipoDispositivo: 'celular',
         tipoBloqueo: '',
         codigoDesbloqueo: '',
         patronDesbloqueo: '',
@@ -925,6 +928,7 @@ export default function NuevaOrden() {
         prioritario: false,
         desdeTrabajo: true,
         editar: false,
+        tipoDispositivo: 'celular',
         tipoBloqueo: '',
         codigoDesbloqueo: '',
         patronDesbloqueo: '',
@@ -942,6 +946,7 @@ export default function NuevaOrden() {
         prioritario: false,
         desdeTrabajo: false,
         editar: true,
+        tipoDispositivo: 'celular',
         tipoBloqueo: '',
         codigoDesbloqueo: '',
         patronDesbloqueo: '',
@@ -1213,6 +1218,7 @@ export default function NuevaOrden() {
             capacidad_gb: der.capacidad,
             color: der.color.trim() || null,
             imei: limpiarImei(der.imei) || null,
+            tipo_dispositivo: der.tipoDispositivo,
             tipo_bloqueo: der.tipoBloqueo || null,
             codigo_desbloqueo: der.tipoBloqueo === 'pin' || der.tipoBloqueo === 'contrasena' ? der.codigoDesbloqueo.trim() || null : null,
             patron_desbloqueo: der.tipoBloqueo === 'patron' ? der.patronDesbloqueo || null : null,
@@ -2537,6 +2543,10 @@ export default function NuevaOrden() {
                       <div className="flex flex-col gap-2 pl-6">
                         {(der.editar || !der.modelo.trim()) && (
                           <>
+                            <SelectorTipoDispositivo
+                              value={der.tipoDispositivo}
+                              onChange={(v) => actualizarDerivacion(der.key, { tipoDispositivo: v })}
+                            />
                             <input
                               value={der.modelo}
                               onChange={(e) => actualizarDerivacion(der.key, { modelo: e.target.value })}

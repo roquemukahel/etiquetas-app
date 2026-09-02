@@ -19,8 +19,9 @@ import Avatar from '../../Avatar';
 import SelectorColorAuto from '../../SelectorColorAuto';
 import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
 import { useSucursalActual } from '../../lib/sucursal';
-import { type TipoBloqueo } from '../../lib/reparaciones';
+import { type TipoBloqueo, type TipoDispositivo } from '../../lib/reparaciones';
 import CapturarBloqueo from '../../CapturarBloqueo';
+import SelectorTipoDispositivo from '../../SelectorTipoDispositivo';
 
 const ESTADOS = ['pendiente', 'pagado', 'entregado'];
 const FORMAS_PAGO = ['Efectivo', 'Transferencia', 'Tarjeta'];
@@ -221,6 +222,7 @@ export default function DetalleOrden() {
   const [derivarCapacidad, setDerivarCapacidad] = useState<number | null>(null);
   const [derivarColor, setDerivarColor] = useState('');
   const [derivarImei, setDerivarImei] = useState('');
+  const [derivarTipoDispositivo, setDerivarTipoDispositivo] = useState<TipoDispositivo>('celular');
   const [derivarTipoBloqueo, setDerivarTipoBloqueo] = useState<TipoBloqueo | ''>('');
   const [derivarCodigoDesbloqueo, setDerivarCodigoDesbloqueo] = useState('');
   const [derivarPatronDesbloqueo, setDerivarPatronDesbloqueo] = useState('');
@@ -305,6 +307,7 @@ export default function DetalleOrden() {
     setDerivarCapacidad(null);
     setDerivarColor(ci.color || '');
     setDerivarImei(ci.imei || '');
+    setDerivarTipoDispositivo('celular');
     setDerivarTipoBloqueo('');
     setDerivarCodigoDesbloqueo('');
     setDerivarPatronDesbloqueo('');
@@ -328,6 +331,7 @@ export default function DetalleOrden() {
         capacidad_gb: derivarCapacidad,
         color: derivarColor.trim() || null,
         imei: limpiarImei(derivarImei) || null,
+        tipo_dispositivo: derivarTipoDispositivo,
         tipo_bloqueo: derivarTipoBloqueo || null,
         codigo_desbloqueo: derivarTipoBloqueo === 'pin' || derivarTipoBloqueo === 'contrasena' ? derivarCodigoDesbloqueo.trim() || null : null,
         patron_desbloqueo: derivarTipoBloqueo === 'patron' ? derivarPatronDesbloqueo || null : null,
@@ -1687,6 +1691,7 @@ export default function DetalleOrden() {
       {derivarAbierto && (
         <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-3 flex flex-col gap-2">
           <p className="text-xs font-medium text-muted dark:text-dark-text-secondary">{t('Datos del equipo a derivar')}</p>
+          <SelectorTipoDispositivo value={derivarTipoDispositivo} onChange={setDerivarTipoDispositivo} />
           <input
             value={derivarModelo}
             onChange={(e) => setDerivarModelo(e.target.value)}

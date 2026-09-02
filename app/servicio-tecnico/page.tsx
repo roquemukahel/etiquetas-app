@@ -25,8 +25,10 @@ import {
   FINALIZADOS,
   esDemorado,
   type TipoBloqueo,
+  type TipoDispositivo,
 } from '../lib/reparaciones';
 import CapturarBloqueo from '../CapturarBloqueo';
+import SelectorTipoDispositivo from '../SelectorTipoDispositivo';
 import Avatar from '../Avatar';
 import SelectorColorAuto from '../SelectorColorAuto';
 import CheckTri from '../CheckTri';
@@ -59,6 +61,7 @@ type EquipoIngreso = {
   falla: string;
   ubicacion: string;
   checklist: ChecklistIngreso;
+  tipoDispositivo: TipoDispositivo;
   tipoBloqueo: TipoBloqueo | '';
   codigoDesbloqueo: string;
   patronDesbloqueo: string;
@@ -173,6 +176,7 @@ export default function ServicioTecnico() {
   const [nuevaCapacidad, setNuevaCapacidad] = useState<number | null>(null);
   const [nuevoColor, setNuevoColor] = useState('');
   const [nuevoImei, setNuevoImei] = useState('');
+  const [nuevoTipoDispositivo, setNuevoTipoDispositivo] = useState<TipoDispositivo>('celular');
   const [nuevoTipoBloqueo, setNuevoTipoBloqueo] = useState<TipoBloqueo | ''>('');
   const [nuevoCodigoDesbloqueo, setNuevoCodigoDesbloqueo] = useState('');
   const [nuevoPatronDesbloqueo, setNuevoPatronDesbloqueo] = useState('');
@@ -511,6 +515,7 @@ export default function ServicioTecnico() {
         falla: nuevaFalla.trim(),
         ubicacion: nuevaUbicacion.trim(),
         checklist: datosChecklistNuevo(),
+        tipoDispositivo: nuevoTipoDispositivo,
         tipoBloqueo: nuevoTipoBloqueo,
         codigoDesbloqueo: nuevoCodigoDesbloqueo.trim(),
         patronDesbloqueo: nuevoPatronDesbloqueo,
@@ -527,6 +532,7 @@ export default function ServicioTecnico() {
     setNuevoImei('');
     setNuevaFalla('');
     setNuevaUbicacion('');
+    setNuevoTipoDispositivo('celular');
     setNuevoTipoBloqueo('');
     setNuevoCodigoDesbloqueo('');
     setNuevoPatronDesbloqueo('');
@@ -629,6 +635,7 @@ export default function ServicioTecnico() {
           capacidad_gb: eq.capacidad_gb,
           color: eq.color || null,
           imei: limpiarImei(eq.imei),
+          tipo_dispositivo: eq.tipoDispositivo,
           tipo_bloqueo: eq.tipoBloqueo || null,
           codigo_desbloqueo: eq.tipoBloqueo === 'pin' || eq.tipoBloqueo === 'contrasena' ? eq.codigoDesbloqueo || null : null,
           patron_desbloqueo: eq.tipoBloqueo === 'patron' ? eq.patronDesbloqueo || null : null,
@@ -979,6 +986,7 @@ export default function ServicioTecnico() {
               <p className="text-xs font-medium text-muted dark:text-dark-text-secondary">
                 {equiposAgregados.length > 0 ? `${t('Equipo')} ${equiposAgregados.length + 1}` : t('Datos del equipo')}
               </p>
+              <SelectorTipoDispositivo value={nuevoTipoDispositivo} onChange={setNuevoTipoDispositivo} />
               <input
                 value={nuevoModelo}
                 onChange={(e) => setNuevoModelo(e.target.value)}
@@ -1031,18 +1039,19 @@ export default function ServicioTecnico() {
                 {t('¿Cómo entra el equipo? (para saber qué se garantiza al entregarlo)')}
               </p>
               <CheckTri label={t('Enciende')} valor={nuevoEnciende} onChange={setNuevoEnciende} />
-              {ITEMS_CHECKLIST_INGRESO.map((item) => {
-                const deshabilitado = CAMPOS_DEPENDEN_MODULO.includes(item.campo) && nuevoChecklist.modulo_ok === false;
-                return (
-                  <CheckTri
-                    key={item.campo}
-                    label={t(item.label)}
-                    disabled={deshabilitado}
-                    valor={deshabilitado ? null : nuevoChecklist[item.campo] ?? null}
-                    onChange={(v) => setNuevoChecklist((p) => ({ ...p, [item.campo]: v }))}
-                  />
-                );
-              })}
+              {nuevoTipoDispositivo === 'celular' &&
+                ITEMS_CHECKLIST_INGRESO.map((item) => {
+                  const deshabilitado = CAMPOS_DEPENDEN_MODULO.includes(item.campo) && nuevoChecklist.modulo_ok === false;
+                  return (
+                    <CheckTri
+                      key={item.campo}
+                      label={t(item.label)}
+                      disabled={deshabilitado}
+                      valor={deshabilitado ? null : nuevoChecklist[item.campo] ?? null}
+                      onChange={(v) => setNuevoChecklist((p) => ({ ...p, [item.campo]: v }))}
+                    />
+                  );
+                })}
               <CheckTri label={t('Humedad / manipulación')} valor={nuevaHumedad} onChange={setNuevaHumedad} invertido />
               <textarea
                 value={nuevaExcepcionGarantia}
