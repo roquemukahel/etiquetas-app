@@ -25,6 +25,8 @@ function describirRegla(r: Regla, moneda: string, productos: Producto[], t: (tex
     r.alcance === 'todas' ? t('todas las ventas')
     : r.alcance === 'minorista' ? t('las ventas minoristas')
     : r.alcance === 'mayorista' ? t('las ventas mayoristas')
+    : r.alcance === 'contado' ? t('las ventas de contado')
+    : r.alcance === 'financiado' ? t('las ventas financiadas (en cuotas)')
     : r.alcance === 'tipo_item' ? t(TIPO_ITEM_LABEL[r.tipo_item || ''] ?? 'un tipo de ítem')
     : `${t('el producto')} ${productos.find((p) => p.id === r.producto_id)?.nombre ?? ''}`.trim();
 
@@ -167,6 +169,8 @@ export default function PlanesComisiones() {
               <option value="producto">{t('Un producto puntual del catálogo')}</option>
               <option value="minorista">{t('Todas las ventas minoristas')}</option>
               <option value="mayorista">{t('Todas las ventas mayoristas')}</option>
+              <option value="contado">{t('Todas las ventas de contado')}</option>
+              <option value="financiado">{t('Todas las ventas financiadas (en cuotas)')}</option>
               <option value="todas">{t('Todas las ventas')}</option>
             </select>
 

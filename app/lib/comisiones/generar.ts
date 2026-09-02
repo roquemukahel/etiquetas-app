@@ -13,7 +13,7 @@ export async function generarComisionesDeOrden(supabase: any, ordenId: string): 
   // 1. Venta + ítems
   const { data: orden, error: eOrden } = await supabase
     .from('ordenes')
-    .select('id, negocio_id, vendedor_id, tipo_venta, estado, created_at, moneda, orden_items ( id, tipo, producto_id, cantidad, precio_unitario, costo )')
+    .select('id, negocio_id, vendedor_id, tipo_venta, cuotas, estado, created_at, moneda, orden_items ( id, tipo, producto_id, cantidad, precio_unitario, costo )')
     .eq('id', ordenId)
     .single();
   if (eOrden || !orden) return { generadas: 0, error: eOrden?.message || 'Venta no encontrada' };
@@ -69,6 +69,9 @@ export async function generarComisionesDeOrden(supabase: any, ordenId: string): 
   const items: FilaItem[] = orden.orden_items ?? [];
   const venta: Venta = {
     tipo_venta: orden.tipo_venta === 'mayorista' ? 'mayorista' : 'minorista',
+    // Mismo criterio que ya usa la UI de Nueva Orden (app/ordenes/nueva/page.tsx):
+    // 0 cuotas = contado, 1+ = financiado con recargo.
+    es_financiado: (orden.cuotas ?? 0) > 0,
     lineas: items.map((it) => ({
       id: it.id,
       tipo_item: it.tipo || 'producto',

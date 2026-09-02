@@ -19,7 +19,11 @@ export type TipoCalculo =
 
 // A qué se aplica una regla. "categoria" en Qovento se mapea al TIPO de ítem
 // (dispositivo/producto/trabajo), que es lo más parecido que existe hoy.
-export type AlcanceRegla = 'todas' | 'minorista' | 'mayorista' | 'tipo_item' | 'producto';
+// 'contado'/'financiado' son la misma idea que minorista/mayorista pero sobre
+// otra dimensión de la venta (cómo se pagó, no a quién se le vendió) — no se
+// combinan entre sí: una regla es de una dimensión U OTRA, igual que ya
+// pasaba entre minorista/mayorista y tipo_item/producto.
+export type AlcanceRegla = 'todas' | 'minorista' | 'mayorista' | 'contado' | 'financiado' | 'tipo_item' | 'producto';
 
 export type TipoVenta = 'minorista' | 'mayorista';
 
@@ -29,6 +33,8 @@ const ESPECIFICIDAD: Record<AlcanceRegla, number> = {
   tipo_item: 3,
   minorista: 2,
   mayorista: 2,
+  contado: 2,
+  financiado: 2,
   todas: 1,
 };
 
@@ -57,6 +63,9 @@ export type LineaVenta = {
 
 export type Venta = {
   tipo_venta: TipoVenta;
+  // true si la venta se financió (tiene cuotas con recargo) — false/ausente
+  // para contado, incluyendo pagos con tarjeta/transferencia en un solo pago.
+  es_financiado?: boolean;
   lineas: LineaVenta[];
   descuento_general?: number; // descuento a nivel venta (hoy 0), se prorratea entre líneas
 };
@@ -131,6 +140,10 @@ function reglaAplicaALinea(r: Regla, l: LineaVenta, venta: Venta): boolean {
     case 'minorista':
     case 'mayorista':
       return venta.tipo_venta === r.alcance;
+    case 'contado':
+      return !venta.es_financiado;
+    case 'financiado':
+      return !!venta.es_financiado;
     case 'tipo_item':
       return !!r.tipo_item && l.tipo_item === r.tipo_item;
     case 'producto':

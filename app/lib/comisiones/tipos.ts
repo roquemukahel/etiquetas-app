@@ -17,6 +17,8 @@ export const LABEL_ALCANCE: Record<AlcanceRegla, string> = {
   todas: 'Todas las ventas',
   minorista: 'Ventas minoristas',
   mayorista: 'Ventas mayoristas',
+  contado: 'Ventas de contado',
+  financiado: 'Ventas financiadas (en cuotas)',
   tipo_item: 'Un tipo de ítem',
   producto: 'Un producto',
 };

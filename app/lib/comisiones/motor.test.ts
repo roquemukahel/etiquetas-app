@@ -33,6 +33,23 @@ describe('motor de comisiones', () => {
     expect(calcularComisionVenta(venta, reglas, DEC).comision).toBe(4000);
   });
 
+  it('regla de "financiado" solo aplica si la venta se financió', () => {
+    const contado: Venta = { tipo_venta: 'minorista', es_financiado: false, lineas: [linea({ precio_unitario: 100000 })] };
+    const financiado: Venta = { tipo_venta: 'minorista', es_financiado: true, lineas: [linea({ precio_unitario: 100000 })] };
+    const reglas: Regla[] = [
+      { id: 'c', tipo_calculo: 'porcentaje_venta', valor: 3, alcance: 'contado' },
+      { id: 'f', tipo_calculo: 'porcentaje_venta', valor: 1, alcance: 'financiado' },
+    ];
+    expect(calcularComisionVenta(contado, reglas, DEC).comision).toBe(3000);
+    expect(calcularComisionVenta(financiado, reglas, DEC).comision).toBe(1000);
+  });
+
+  it('sin es_financiado (undefined) una venta cuenta como de contado', () => {
+    const venta: Venta = { tipo_venta: 'minorista', lineas: [linea({ precio_unitario: 100000 })] };
+    const reglas: Regla[] = [{ id: 'c', tipo_calculo: 'porcentaje_venta', valor: 3, alcance: 'contado' }];
+    expect(calcularComisionVenta(venta, reglas, DEC).comision).toBe(3000);
+  });
+
   // §24.3 — venta compartida 70/30 sobre 1.800 → 1.260 / 540
   it('reparte 70/30 sin perder ni sumar centavos', () => {
     const r = repartir(1800, [
