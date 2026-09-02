@@ -2038,6 +2038,18 @@ export default function FichaReparacion() {
           >
             <IconoChico nombre="etiqueta" /> {t('Imprimir etiqueta')}
           </Link>
+          {r.orden_cobro_id && (
+            // Antes había que ir a "Ver orden de cobro" → "Ver boleta" →
+            // "Imprimir" para conseguir esto — 3 pasos para algo que se
+            // necesita seguido (el cliente sin WhatsApp a mano en el
+            // mostrador). Directo a la boleta de una.
+            <Link
+              href={`/ordenes/${r.orden_cobro_id}/boleta`}
+              className="flex items-center justify-center gap-1 rounded-xl border border-border dark:border-dark-border py-2.5 text-center text-xs font-medium"
+            >
+              <IconoChico nombre="documento" /> {t('Imprimir boleta')}
+            </Link>
+          )}
 
           {!editando && (
             <>

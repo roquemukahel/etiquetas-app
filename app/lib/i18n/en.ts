@@ -845,6 +845,7 @@ export const EN: Record<string, string> = {
   'Eliminar definitivamente': 'Delete permanently',
   Entregado: 'Delivered',
   'Entregado al cliente': 'Delivered to customer',
+  'Imprimir boleta': 'Print receipt',
   'Imprimir etiqueta': 'Print label',
   'Marcar entregado al cliente': 'Mark delivered to customer',
   'Presupuesto:': 'Quote:',
@@ -1616,6 +1617,9 @@ export const EN: Record<string, string> = {
   Desactivado: 'Disabled',
   'Ejemplo: una venta minorista neta de': 'Example: a net retail sale of',
   'Empieza a regir': 'Takes effect',
+  'Mostrar el selector de tipo de venta al cargar una orden': 'Show the sale type selector when creating an order',
+  'Si no distinguís minorista/mayorista, desactivalo: toda venta nueva queda como minorista sin preguntar.':
+    "If you don't distinguish retail/wholesale, turn it off: every new sale stays retail without asking.",
   'Ir al panel de comisiones →': 'Go to the commissions panel →',
   'No pudimos guardar.': "We couldn't save.",
   'No se pudo crear el plan': "The plan couldn't be created",

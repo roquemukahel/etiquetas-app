@@ -24,6 +24,7 @@ export default function ConfiguracionComisiones() {
   const [desde, setDesde] = useState<string>('');
   const [minorista, setMinorista] = useState('2');
   const [mayorista, setMayorista] = useState('0.5');
+  const [mostrarTipoVenta, setMostrarTipoVenta] = useState(true);
   const [planId, setPlanId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [guardando, setGuardando] = useState(false);
@@ -36,13 +37,17 @@ export default function ConfiguracionComisiones() {
       if (!user) return setLoading(false);
       const { data: perfil } = await supabase
         .from('perfiles')
-        .select('negocio_id, negocios ( comisiones_activas, comisiones_desde, comision_plan_default_id )')
+        .select('negocio_id, negocios ( comisiones_activas, comisiones_desde, comision_plan_default_id, mostrar_tipo_venta )')
         .eq('id', user.id)
         .single();
       const neg = (perfil as any)?.negocios;
       setNegocioId((perfil as any)?.negocio_id ?? null);
       setActivas(!!neg?.comisiones_activas);
       setDesde(neg?.comisiones_desde ?? new Date().toISOString().slice(0, 10));
+      // "?? true": si el negocio todavía no corrió tipo_venta_opcional_supabase.sql,
+      // la columna no existe y viene undefined — se mantiene el comportamiento de
+      // siempre (selector visible) en vez de ocultarlo sin que nadie lo haya pedido.
+      setMostrarTipoVenta(neg?.mostrar_tipo_venta ?? true);
       const pid = neg?.comision_plan_default_id ?? null;
       setPlanId(pid);
       if (pid) {
@@ -101,7 +106,7 @@ export default function ConfiguracionComisiones() {
       // 3. Config del negocio.
       const { error: eNeg } = await supabase
         .from('negocios')
-        .update({ comisiones_activas: encender, comisiones_desde: desde || null, comision_plan_default_id: pid })
+        .update({ comisiones_activas: encender, comisiones_desde: desde || null, comision_plan_default_id: pid, mostrar_tipo_venta: mostrarTipoVenta })
         .eq('id', negocioId);
       if (eNeg) throw new Error(eNeg.message);
 
@@ -175,6 +180,21 @@ export default function ConfiguracionComisiones() {
             {t('Ejemplo: una venta minorista neta de')} <strong>$100.000</strong> {t('con')} {Number(pct(minorista)) || 0}% →
             {t('comisión de')} <strong>${previewMin.toLocaleString('es-AR')}</strong> {t('para el vendedor.')}
           </div>
+
+          <label className="flex items-center gap-3 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={mostrarTipoVenta}
+              onChange={(e) => setMostrarTipoVenta(e.target.checked)}
+              className="h-5 w-5 accent-ink shrink-0"
+            />
+            <span className="text-sm">
+              <span className="font-medium block">{t('Mostrar el selector de tipo de venta al cargar una orden')}</span>
+              <span className="text-xs text-muted dark:text-dark-text-secondary">
+                {t('Si no distinguís minorista/mayorista, desactivalo: toda venta nueva queda como minorista sin preguntar.')}
+              </span>
+            </span>
+          </label>
 
           <div className="flex flex-col sm:flex-row gap-2">
             <button

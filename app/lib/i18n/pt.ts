@@ -846,6 +846,7 @@ export const PT: Record<string, string> = {
   'Eliminar definitivamente': 'Excluir definitivamente',
   Entregado: 'Entregue',
   'Entregado al cliente': 'Entregue ao cliente',
+  'Imprimir boleta': 'Imprimir recibo',
   'Imprimir etiqueta': 'Imprimir etiqueta',
   'Marcar entregado al cliente': 'Marcar entregue ao cliente',
   'Presupuesto:': 'Orçamento:',
@@ -1617,6 +1618,9 @@ export const PT: Record<string, string> = {
   Desactivado: 'Desativado',
   'Ejemplo: una venta minorista neta de': 'Exemplo: uma venda varejo líquida de',
   'Empieza a regir': 'Começa a valer',
+  'Mostrar el selector de tipo de venta al cargar una orden': 'Mostrar o seletor de tipo de venda ao criar um pedido',
+  'Si no distinguís minorista/mayorista, desactivalo: toda venta nueva queda como minorista sin preguntar.':
+    'Se você não distingue varejo/atacado, desative: toda venda nova fica como varejo sem perguntar.',
   'Ir al panel de comisiones →': 'Ir para o painel de comissões →',
   'No pudimos guardar.': 'Não conseguimos salvar.',
   'No se pudo crear el plan': 'Não foi possível criar o plano',

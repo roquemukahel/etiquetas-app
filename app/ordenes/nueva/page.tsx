@@ -307,6 +307,7 @@ export default function NuevaOrden() {
   // Minorista/mayorista: clasifica la venta (para comisiones). Default minorista.
   const [tipoVenta, setTipoVenta] = useState<'minorista' | 'mayorista'>('minorista');
   const [comisionesActivas, setComisionesActivas] = useState(false);
+  const [mostrarTipoVenta, setMostrarTipoVenta] = useState(true);
   const [imagenesCarpetas, setImagenesCarpetas] = useState<Map<string, string>>(new Map());
   const [monedasDisponibles, setMonedasDisponibles] = useState<string[]>(['ARS']);
   const [monedaOrden, setMonedaOrden] = useState('ARS');
@@ -330,7 +331,7 @@ export default function NuevaOrden() {
       if (!user) return;
       const { data: perfil } = await supabase
         .from('perfiles')
-        .select('negocios ( garantia_dias, moneda, monedas_habilitadas, tipo_cambio, interes_cuotas, comisiones_activas )')
+        .select('negocios ( garantia_dias, moneda, monedas_habilitadas, tipo_cambio, interes_cuotas, comisiones_activas, mostrar_tipo_venta )')
         .eq('id', user.id)
         .single();
       setGarantiaDias((perfil as any)?.negocios?.garantia_dias ?? null);
@@ -341,6 +342,7 @@ export default function NuevaOrden() {
       setMonedaOrden(negocio?.moneda || monedas[0]);
       setTipoCambio(negocio?.tipo_cambio ?? null);
       setComisionesActivas(!!negocio?.comisiones_activas);
+      setMostrarTipoVenta(negocio?.mostrar_tipo_venta ?? true);
     })();
     (async () => {
       const data = await obtenerTodasLasFilas<Cliente>(
@@ -1932,7 +1934,7 @@ export default function NuevaOrden() {
         </div>
       )}
 
-      {comisionesActivas && (
+      {comisionesActivas && mostrarTipoVenta && (
         <div className="flex items-center justify-between gap-2">
           <label className="text-xs text-muted dark:text-dark-text-secondary">{t('Tipo de venta')}</label>
           <div className="inline-flex items-center gap-1 rounded-xl bg-canvas dark:bg-dark-bg p-0.5">
