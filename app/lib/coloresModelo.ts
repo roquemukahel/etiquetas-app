@@ -635,6 +635,238 @@ const GALAXY_A14: ModeloColores = {
   ],
 };
 
+// ---------------------------------------------------------------------------
+// Motorola. Fotos propias recortadas a partir de renders de marketplace
+// (MercadoLibre). Nombres de color verificados por WebSearch contra las listas
+// oficiales de Motorola/Pantone para cada modelo; donde el color de la foto no
+// calzaba con exactitud con el nombre Pantone oficial (o el modelo trae más
+// fotos que colores oficiales listados) se usó un nombre descriptivo en
+// español, igual que se hace en el resto del archivo.
+
+// Moto E22 — colores oficiales: Astro Black, Crystal Blue (+ variante blanca
+// vista en fotos de marketplace).
+const MOTO_E22: ModeloColores = {
+  carpeta: 'moto-e22',
+  colores: [
+    { nombre: 'Negro', archivo: 'negro', hex: '#2b2e33' },
+    { nombre: 'Azul', archivo: 'azul', hex: '#a9c8e0' },
+    { nombre: 'Blanco', archivo: 'blanco', hex: '#f2f2f0' },
+  ],
+};
+
+// Moto G04s — colores oficiales: Satin Blue, Cosmic Black, Aurora Green,
+// Sunrise Orange (fotos disponibles: azul y verde).
+const MOTO_G04S: ModeloColores = {
+  carpeta: 'moto-g04s',
+  colores: [
+    { nombre: 'Azul', archivo: 'azul', hex: '#2c3e5c' },
+    { nombre: 'Verde', archivo: 'verde', hex: '#1f5c52' },
+  ],
+};
+
+// Moto G05 — colores oficiales: Plum Red, Forest Green, Fresh Lavender,
+// Misty Blue (fotos disponibles: rojo y verde).
+const MOTO_G05: ModeloColores = {
+  carpeta: 'moto-g05',
+  colores: [
+    { nombre: 'Rojo', archivo: 'rojo', hex: '#9c1f2e' },
+    { nombre: 'Verde', archivo: 'verde', hex: '#1e6b4f' },
+  ],
+};
+
+// Moto G06 — colores oficiales: Pantone Tapestry (azul), Pantone Tendril
+// (verde), Pantone Arabesque (naranja).
+const MOTO_G06: ModeloColores = {
+  carpeta: 'moto-g06',
+  colores: [
+    { nombre: 'Verde', archivo: 'verde', hex: '#5c7a3a' },
+    { nombre: 'Azul', archivo: 'azul', hex: '#1c4a5c' },
+    { nombre: 'Naranja', archivo: 'naranja', hex: '#d9673c' },
+  ],
+};
+
+// Moto G14 — colores oficiales: gris, azul, lila, crema.
+const MOTO_G14: ModeloColores = {
+  carpeta: 'moto-g14',
+  colores: [
+    { nombre: 'Gris', archivo: 'gris', hex: '#3a3c40' },
+    { nombre: 'Crema', archivo: 'crema', hex: '#d9c9a3' },
+    { nombre: 'Lila', archivo: 'lila', hex: '#c9c2d6' },
+  ],
+};
+
+// Moto G15 — colores oficiales: Gravity Grey, Iguana Green, Sunrise Orange,
+// Sea Blue, Glacier Blue.
+const MOTO_G15: ModeloColores = {
+  carpeta: 'moto-g15',
+  colores: [
+    { nombre: 'Naranja', archivo: 'naranja', hex: '#d99a2b' },
+    { nombre: 'Gris', archivo: 'gris', hex: '#4a4c4f' },
+    { nombre: 'Verde', archivo: 'verde', hex: '#6b7d3d' },
+  ],
+};
+
+// Moto G17 — colores oficiales: Pantone Bordeaux, Pantone Evening Blue,
+// Pantone Alaskan Blue. (Se excluyó 1 foto que era Moto G17 Power, un modelo
+// distinto.)
+const MOTO_G17: ModeloColores = {
+  carpeta: 'moto-g17',
+  colores: [
+    { nombre: 'Rosa', archivo: 'rosa', hex: '#b06a86' },
+    { nombre: 'Bordeaux', archivo: 'purpura', hex: '#7a3a5c' },
+    { nombre: 'Azul noche', archivo: 'azul', hex: '#33344f' },
+  ],
+};
+
+// Moto G24 — colores oficiales: Matte Charcoal, Ice Green, Pink Lavender,
+// Blueberry. (Se excluyó 1 foto que era Moto G24 Power, un modelo distinto.)
+const MOTO_G24: ModeloColores = {
+  carpeta: 'moto-g24',
+  colores: [
+    { nombre: 'Azul marino', archivo: 'azul', hex: '#2e3a4a' },
+    { nombre: 'Plateado', archivo: 'plateado', hex: '#a8b8c0' },
+  ],
+};
+
+// Moto G35 — colores oficiales: Leaf Green, Guava Red, Midnight Black, Sage
+// Green (única foto disponible: negro).
+const MOTO_G35: ModeloColores = {
+  carpeta: 'moto-g35',
+  colores: [{ nombre: 'Negro', archivo: 'negro', hex: '#26262e' }],
+};
+
+// Moto G47 — colores oficiales: Pantone Impenetrable, Pantone Capri, Pantone
+// Fuchsia Red, Pantone Nautical Blue.
+const MOTO_G47: ModeloColores = {
+  carpeta: 'moto-g47',
+  colores: [
+    { nombre: 'Negro', archivo: 'negro', hex: '#26282b' },
+    { nombre: 'Turquesa', archivo: 'turquesa', hex: '#1fa3a8' },
+    { nombre: 'Fucsia', archivo: 'fucsia', hex: '#c22a7a' },
+    { nombre: 'Azul', archivo: 'azul', hex: '#1c3fae' },
+  ],
+};
+
+// Moto G56 — colores oficiales: Pantone Black Oyster, Pantone Gray Mist,
+// Pantone Dazzling Blue, Pantone Dill.
+const MOTO_G56: ModeloColores = {
+  carpeta: 'moto-g56',
+  colores: [
+    { nombre: 'Azul', archivo: 'azul', hex: '#1e4fa8' },
+    { nombre: 'Negro', archivo: 'negro', hex: '#3a3a3e' },
+    { nombre: 'Gris', archivo: 'gris', hex: '#8a9a94' },
+    { nombre: 'Verde', archivo: 'verde', hex: '#3d5c2e' },
+  ],
+};
+
+// Moto G67 — colores oficiales: Pantone Arctic Seal (gris), Pantone Nile
+// (verde lima).
+const MOTO_G67: ModeloColores = {
+  carpeta: 'moto-g67',
+  colores: [
+    { nombre: 'Gris', archivo: 'gris', hex: '#3f4247' },
+    { nombre: 'Verde', archivo: 'verde', hex: '#8a9a5c' },
+  ],
+};
+
+// Moto G77 — colores oficiales: Pantone Shaded Spruce (esmeralda), Pantone
+// Black Olive (café oscuro).
+const MOTO_G77: ModeloColores = {
+  carpeta: 'moto-g77',
+  colores: [
+    { nombre: 'Verde esmeralda', archivo: 'verde', hex: '#0f6b5c' },
+    { nombre: 'Negro', archivo: 'negro', hex: '#2b2e26' },
+  ],
+};
+
+// Moto G85 — colores oficiales: Cobalt Blue, Olive Green, Urban Grey (única
+// foto disponible: gris).
+const MOTO_G85: ModeloColores = {
+  carpeta: 'moto-g85',
+  colores: [{ nombre: 'Gris', archivo: 'gris', hex: '#3f4145' }],
+};
+
+// Moto G86 — colores oficiales: Pantone Cosmic Sky, Pantone Chrysanthemum,
+// Pantone Golden Cypress, Pantone Spellbound. (Se excluyeron 2 fotos que eran
+// Moto G86 Power, un modelo distinto; se descartaron además 3 fotos
+// duplicadas/casi-duplicadas del mismo color quedándonos con la mejor toma de
+// cada tono.)
+const MOTO_G86: ModeloColores = {
+  carpeta: 'moto-g86',
+  colores: [
+    { nombre: 'Púrpura', archivo: 'purpura', hex: '#a084b8' },
+    { nombre: 'Verde', archivo: 'verde', hex: '#8ba33c' },
+    { nombre: 'Verde azulado', archivo: 'verdeazulado', hex: '#1e5c52' },
+    { nombre: 'Rojo', archivo: 'rojo', hex: '#a8283a' },
+    { nombre: 'Negro', archivo: 'negro', hex: '#33384a' },
+  ],
+};
+
+// Moto G Max — colores oficiales curados por Pantone: azul, gris oscuro, rosa
+// (única foto disponible: gris oscuro).
+const MOTO_G_MAX: ModeloColores = {
+  carpeta: 'moto-g-max',
+  colores: [{ nombre: 'Gris oscuro', archivo: 'gris', hex: '#33363e' }],
+};
+
+// Edge 50 — colores oficiales: Jungle Green, Koala Grey, Peach Fuzz (las 2
+// fotos disponibles son ambas tonos de verde).
+const EDGE_50: ModeloColores = {
+  carpeta: 'edge-50',
+  colores: [
+    { nombre: 'Verde', archivo: 'verde', hex: '#5c7a3a' },
+    { nombre: 'Verde claro', archivo: 'verdeclaro', hex: '#c3d6d3' },
+  ],
+};
+
+// Edge 60 Fusion — colores oficiales: Pantone Zephyr (rosa), Pantone
+// Slipstream (azul metálico), Pantone Amazonite (verde). NOTA: la carpeta
+// original subida por el usuario decía "Edge 60", pero las 8 fotos muestran
+// en pantalla "EDGE 60 FUSION" — no hay ninguna foto genuina del Edge 60 base,
+// así que el modelo se cargó como "Edge 60 Fusion".
+const EDGE_60_FUSION: ModeloColores = {
+  carpeta: 'edge-60-fusion',
+  colores: [
+    { nombre: 'Rosa', archivo: 'rosa', hex: '#d9a8a0' },
+    { nombre: 'Azul', archivo: 'azul', hex: '#4a5670' },
+    { nombre: 'Verde', archivo: 'verde', hex: '#2e8a80' },
+  ],
+};
+
+// Edge 60 Pro — colores oficiales: Pantone Shadow, Pantone Dazzling Blue,
+// Pantone Sparkling Grape.
+const EDGE_60_PRO: ModeloColores = {
+  carpeta: 'edge-60-pro',
+  colores: [
+    { nombre: 'Verde', archivo: 'verde', hex: '#6b7d68' },
+    { nombre: 'Azul', archivo: 'azul', hex: '#2438a8' },
+    { nombre: 'Púrpura', archivo: 'purpura', hex: '#7a1f7a' },
+  ],
+};
+
+// Edge 70 Pro — colores oficiales ("Collections by Motorola"): Pantone Lily
+// White (mármol), Pantone Tea (verde), Pantone Titan (azul); acabados
+// adicionales en madera (marrón) y seda roja (vino).
+const EDGE_70_PRO: ModeloColores = {
+  carpeta: 'edge-70-pro',
+  colores: [
+    { nombre: 'Blanco', archivo: 'blanco', hex: '#e2ddd3' },
+    { nombre: 'Marrón', archivo: 'marron', hex: '#4a3226' },
+    { nombre: 'Azul', archivo: 'azul', hex: '#1c2c42' },
+    { nombre: 'Vino', archivo: 'vino', hex: '#5c2430' },
+  ],
+};
+
+// Razr 70 Ultra — colores oficiales: Pantone Orient Blue (Alcantara), Pantone
+// Cocoa (madera).
+const RAZR_70_ULTRA: ModeloColores = {
+  carpeta: 'razr-70-ultra',
+  colores: [
+    { nombre: 'Cacao', archivo: 'bronce', hex: '#5a3f30' },
+    { nombre: 'Azul', archivo: 'azul', hex: '#3f47a8' },
+  ],
+};
+
 // Clave de modelo normalizada: "iPhone 11", "iphone 11", "iPhone11" -> "iphone11".
 const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   iphone7: IPHONE_7,
@@ -705,6 +937,27 @@ const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   galaxys23ultra: GALAXY_S23_ULTRA,
   redmi15c: REDMI_15C,
   galaxya14: GALAXY_A14,
+  motoe22: MOTO_E22,
+  motog04s: MOTO_G04S,
+  motog05: MOTO_G05,
+  motog06: MOTO_G06,
+  motog14: MOTO_G14,
+  motog15: MOTO_G15,
+  motog17: MOTO_G17,
+  motog24: MOTO_G24,
+  motog35: MOTO_G35,
+  motog47: MOTO_G47,
+  motog56: MOTO_G56,
+  motog67: MOTO_G67,
+  motog77: MOTO_G77,
+  motog85: MOTO_G85,
+  motog86: MOTO_G86,
+  motogmax: MOTO_G_MAX,
+  edge50: EDGE_50,
+  edge60fusion: EDGE_60_FUSION,
+  edge60pro: EDGE_60_PRO,
+  edge70pro: EDGE_70_PRO,
+  razr70ultra: RAZR_70_ULTRA,
 };
 
 function claveModelo(modelo: string | null | undefined): string {

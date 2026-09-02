@@ -2,6 +2,7 @@ export const MARCAS_DISPONIBLES = [
   { id: 'iphone', nombre: 'iPhone' },
   { id: 'samsung', nombre: 'Samsung' },
   { id: 'xiaomi', nombre: 'Xiaomi' },
+  { id: 'motorola', nombre: 'Motorola' },
   { id: 'otras', nombre: 'Otras marcas' },
 ];
 
@@ -185,6 +186,29 @@ export const CATALOGO_MODELOS: Record<string, string[]> = {
     'Xiaomi 14',
     'Xiaomi 14T',
   ],
+  motorola: [
+    'Moto E22',
+    'Moto G04s',
+    'Moto G05',
+    'Moto G06',
+    'Moto G14',
+    'Moto G15',
+    'Moto G17',
+    'Moto G24',
+    'Moto G35',
+    'Moto G47',
+    'Moto G56',
+    'Moto G67',
+    'Moto G77',
+    'Moto G85',
+    'Moto G86',
+    'Moto G Max',
+    'Edge 50',
+    'Edge 60 Fusion',
+    'Edge 60 Pro',
+    'Edge 70 Pro',
+    'Razr 70 Ultra',
+  ],
 };
 
 export function normalizarNombreModelo(nombre: string) {
@@ -200,7 +224,7 @@ export function normalizarNombreModelo(nombre: string) {
 const ORDEN_MODELOS: Map<string, number> = (() => {
   const mapa = new Map<string, number>();
   let i = 0;
-  for (const marca of ['iphone', 'samsung', 'xiaomi']) {
+  for (const marca of ['iphone', 'samsung', 'xiaomi', 'motorola']) {
     for (const nombre of CATALOGO_MODELOS[marca]) {
       mapa.set(normalizarNombreModelo(nombre), i++);
     }
