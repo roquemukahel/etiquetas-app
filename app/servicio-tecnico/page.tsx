@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../lib/supabase/client';
 import { asegurarModelo, normalizarNombreModelo } from '../lib/modelos';
+import { TODOS_LOS_MODELOS_CATALOGO } from '../lib/catalogosMarcas';
 import { limpiarImei } from '../lib/imei';
 import { armarLinkWhatsApp, mensajeSeguimientoServicio, mensajeListoServicio } from '../lib/whatsapp';
 import { codigoLlamada } from '../lib/paises';
@@ -264,7 +265,15 @@ export default function ServicioTecnico() {
     })();
     (async () => {
       const { data } = await supabase.from('modelos_stock').select('nombre').order('nombre');
-      setCarpetasStock((data ?? []).map((m) => m.nombre));
+      // El buscador de "qué equipo entra" no debería depender de qué marcas
+      // el negocio activó para VENDER (Configuración > Datos del negocio):
+      // se puede recibir a reparar un Motorola, o cualquier otro modelo del
+      // catálogo, aunque el negocio nunca haya tildado esa marca. Se suma
+      // el catálogo completo a las carpetas de stock ya creadas, sin
+      // duplicar los que ya están en las dos listas.
+      const yaEnStock = new Set((data ?? []).map((m) => m.nombre.toLowerCase()));
+      const delCatalogo = TODOS_LOS_MODELOS_CATALOGO.filter((m) => !yaEnStock.has(m.toLowerCase()));
+      setCarpetasStock([...(data ?? []).map((m) => m.nombre), ...delCatalogo]);
     })();
     (async () => setImagenesCarpetas(await obtenerImagenesCarpetas(supabase)))();
     (async () => {

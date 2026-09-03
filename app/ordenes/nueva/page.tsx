@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { useT } from '../../lib/idioma';
 import { asegurarModelo, normalizarNombreModelo } from '../../lib/modelos';
+import { TODOS_LOS_MODELOS_CATALOGO } from '../../lib/catalogosMarcas';
 import { obtenerTodasLasFilas } from '../../lib/db';
 import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../../lib/carpetas';
 import { simboloMoneda } from '../../lib/monedas';
@@ -227,6 +228,16 @@ export default function NuevaOrden() {
   const [trabajoManualNombre, setTrabajoManualNombre] = useState('');
   const [trabajoManualPrecio, setTrabajoManualPrecio] = useState('');
   const [trabajoModelo, setTrabajoModelo] = useState('');
+  // A diferencia de "Cargar dispositivo nuevo" (que sí depende de qué marcas
+  // el negocio activó para vender), describir a qué equipo corresponde un
+  // TRABAJO no debería depender de eso — se puede hacer un trabajo sobre un
+  // Motorola, o cualquier modelo del catálogo, aunque el negocio no venda
+  // esa marca. Se arma sumando el catálogo completo a las carpetas de stock
+  // ya creadas, sin duplicar los que ya están en las dos listas.
+  const carpetasStockTrabajo = useMemo(() => {
+    const yaEnStock = new Set(carpetasStock.map((m) => m.toLowerCase()));
+    return [...carpetasStock, ...TODOS_LOS_MODELOS_CATALOGO.filter((m) => !yaEnStock.has(m.toLowerCase()))];
+  }, [carpetasStock]);
   const [trabajoImei, setTrabajoImei] = useState('');
   const [trabajoColor, setTrabajoColor] = useState('');
   // Datos del equipo de servicio técnico (modelo/imei/color + checklist),
@@ -1666,7 +1677,7 @@ export default function NuevaOrden() {
                 className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
               />
               <datalist id="carpetas-stock-trabajo">
-                {carpetasStock.map((c) => (
+                {carpetasStockTrabajo.map((c) => (
                   <option key={c} value={c} />
                 ))}
               </datalist>

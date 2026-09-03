@@ -261,3 +261,14 @@ const MARCA_POR_MODELO: Map<string, string> = (() => {
 export function marcaDeModelo(modelo: string | null): string {
   return modelo ? MARCA_POR_MODELO.get(normalizarNombreModelo(modelo)) ?? '' : '';
 }
+
+// Todos los modelos de TODAS las marcas del catálogo, sin importar si el
+// negocio las tildó en "Marcas que vendés" — pensado para el buscador de
+// Servicio Técnico (recibir un equipo a reparar no depende de que el
+// negocio también lo venda: se puede recibir un Motorola aunque nunca se
+// haya activado esa marca en Configuración). Stock y Nueva Orden siguen
+// usando solo las carpetas ya creadas (`modelos_stock`), porque esas sí
+// representan inventario real para vender.
+export const TODOS_LOS_MODELOS_CATALOGO: string[] = Object.values(CATALOGO_MODELOS)
+  .flat()
+  .sort(compararModelosPorSalida);
