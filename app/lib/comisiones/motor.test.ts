@@ -50,6 +50,27 @@ describe('motor de comisiones', () => {
     expect(calcularComisionVenta(venta, reglas, DEC).comision).toBe(3000);
   });
 
+  // Una venta mayorista Y financiada matchea dos reglas de "dimensiones"
+  // distintas (mayorista y financiado) — antes empataban en especificidad y
+  // ganaba una u otra según el orden alfabético del id (arbitrario). Ahora
+  // financiado/contado están un escalón por encima: gana financiado siempre
+  // que la venta lo sea, sin importar el id de ninguna de las dos reglas.
+  it('venta mayorista y financiada: gana la regla de financiado, no la de mayorista', () => {
+    const venta: Venta = { tipo_venta: 'mayorista', es_financiado: true, lineas: [linea({ precio_unitario: 100000 })] };
+    const reglasIdMayoristaMenor: Regla[] = [
+      { id: 'a-mayorista', tipo_calculo: 'porcentaje_venta', valor: 2, alcance: 'mayorista' },
+      { id: 'z-financiado', tipo_calculo: 'porcentaje_venta', valor: 5, alcance: 'financiado' },
+    ];
+    const reglasIdFinanciadoMenor: Regla[] = [
+      { id: 'z-mayorista', tipo_calculo: 'porcentaje_venta', valor: 2, alcance: 'mayorista' },
+      { id: 'a-financiado', tipo_calculo: 'porcentaje_venta', valor: 5, alcance: 'financiado' },
+    ];
+    // En los dos casos debe ganar "financiado" (5%), sin importar qué id es
+    // menor alfabéticamente — si esto fallara, volvió el desempate arbitrario.
+    expect(calcularComisionVenta(venta, reglasIdMayoristaMenor, DEC).comision).toBe(5000);
+    expect(calcularComisionVenta(venta, reglasIdFinanciadoMenor, DEC).comision).toBe(5000);
+  });
+
   // §24.3 — venta compartida 70/30 sobre 1.800 → 1.260 / 540
   it('reparte 70/30 sin perder ni sumar centavos', () => {
     const r = repartir(1800, [

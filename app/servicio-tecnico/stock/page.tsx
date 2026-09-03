@@ -219,8 +219,12 @@ export default function StockRepuestos() {
   // Solo por sucursal (no por búsqueda/categoría/etc.) — es la base de los
   // indicadores y del catálogo de categorías, que no deberían achicarse
   // porque alguien esté buscando texto o filtrando por calidad.
+  // Un repuesto con sucursal_id null es uno cargado antes de esta función (o
+  // antes de tocar "Volver a sincronizar") — se muestra en CUALQUIER sucursal
+  // que se filtre, en vez de desaparecer, para no dar la falsa impresión de
+  // que se perdió stock ya cargado.
   const repuestosDeLaSucursal = useMemo(
-    () => (filtroSucursal ? repuestos.filter((r) => r.sucursal_id === filtroSucursal) : repuestos),
+    () => (filtroSucursal ? repuestos.filter((r) => r.sucursal_id === filtroSucursal || r.sucursal_id == null) : repuestos),
     [repuestos, filtroSucursal]
   );
 
@@ -354,9 +358,16 @@ export default function StockRepuestos() {
     // sucursal es la condición clave: sin ella, cargar "Pantalla iPhone 11"
     // para la Sucursal 2 terminaría sumándose al stock de la Sucursal 1 si
     // ya existía ahí, mezclando el stock de dos locales distintos.
+    // Un repuesto con sucursal_id null (cargado antes de esta función, o
+    // creado sin sucursal desde el catálogo de precios de proveedor en
+    // Servicio Técnico → Repuestos de un proveedor) también cuenta como
+    // "el mismo" — se lo adopta para esta sucursal en vez de crear otra fila
+    // separada que quedaría divergiendo de la original.
     const sucursalNueva = sucursalActual.id || null;
     const existente = repuestos.find(
-      (r) => r.nombre.trim().toLowerCase() === form.nombre.trim().toLowerCase() && r.sucursal_id === sucursalNueva
+      (r) =>
+        r.nombre.trim().toLowerCase() === form.nombre.trim().toLowerCase() &&
+        (r.sucursal_id === sucursalNueva || r.sucursal_id == null)
     );
     if (existente) {
       const nuevaCantidad = existente.cantidad_stock + (Number(form.cantidad_stock) || 0);
@@ -365,6 +376,7 @@ export default function StockRepuestos() {
         .update({
           cantidad_stock: nuevaCantidad,
           costo_unitario: form.costo_unitario ? Number(form.costo_unitario) : existente.costo_unitario,
+          ...(sucursalNueva && existente.sucursal_id == null ? { sucursal_id: sucursalNueva } : {}),
           ...payloadComun,
         })
         .eq('id', existente.id);

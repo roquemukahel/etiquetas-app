@@ -28,13 +28,21 @@ export type AlcanceRegla = 'todas' | 'minorista' | 'mayorista' | 'contado' | 'fi
 export type TipoVenta = 'minorista' | 'mayorista';
 
 // Especificidad para desempatar qué regla aplica (más alto = más específico).
+// contado/financiado quedan un escalón por encima de minorista/mayorista: a
+// diferencia de esas dos (mutuamente excluyentes, nunca empatan entre sí),
+// financiado/contado son ortogonales y SÍ pueden coincidir con una regla de
+// minorista/mayorista en la misma línea (ej. una venta mayorista Y
+// financiada). Sin este desnivel, ese caso empataba en especificidad y el
+// desempate cayera en el id (arbitrario para quien lo mira desde afuera). Con
+// el desnivel, financiado/contado gana de forma predecible: "no importa si
+// es minorista o mayorista, si es financiado se aplica esta regla".
 const ESPECIFICIDAD: Record<AlcanceRegla, number> = {
   producto: 4,
   tipo_item: 3,
+  contado: 2.5,
+  financiado: 2.5,
   minorista: 2,
   mayorista: 2,
-  contado: 2,
-  financiado: 2,
   todas: 1,
 };
 

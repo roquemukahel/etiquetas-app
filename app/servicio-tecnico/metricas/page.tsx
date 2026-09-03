@@ -84,7 +84,7 @@ export default function MetricasServicioTecnico() {
           'id, modelo, estado, tecnico_id, fecha_ingreso_servicio, fecha_reparado, fecha_entrega, fecha_estimada, estado_actualizado_at, importe_total, presupuesto_estado, presupuesto_respondido_at, tipo_ingreso, trabajos_realizados, sucursal_id'
         ),
         obtenerTodasLasFilas<RepuestoUsoMetrica>(supabase, 'reparaciones_repuestos', 'reparacion_id, nombre_repuesto, cantidad, costo_unitario'),
-        supabase.from('repuestos').select('id, nombre, cantidad_stock, cantidad_reservada, stock_minimo'),
+        supabase.from('repuestos').select('id, nombre, cantidad_stock, cantidad_reservada, stock_minimo, sucursal_id'),
         supabase.from('tecnicos').select('id, nombre').order('nombre'),
       ]);
       setReparaciones(reps);
@@ -128,11 +128,18 @@ export default function MetricasServicioTecnico() {
   );
   const antiguedad = useMemo(() => ordenesAbiertasPorAntiguedad(reparacionesFiltradas, hasta), [reparacionesFiltradas, hasta]);
   const carga = useMemo(() => cargaPorTecnico(reparacionesSucursal, nombreTecnico), [reparacionesSucursal, tecnicos]);
-  const bajaRotacion = useMemo(
-    () => repuestosBajaRotacion(repuestos, usosRepuestos, reparaciones, desde, hasta),
-    [repuestos, usosRepuestos, reparaciones, desde, hasta]
+  // Igual criterio que reparacionesSucursal: un repuesto con sucursal_id
+  // null (todavía no sincronizado a una sucursal) se cuenta en cualquier
+  // filtro en vez de desaparecer o duplicarse solo en "Todas".
+  const repuestosSucursal = useMemo(
+    () => repuestos.filter((r) => !filtroSucursal || r.sucursal_id === filtroSucursal || r.sucursal_id == null),
+    [repuestos, filtroSucursal]
   );
-  const stockCritico = useMemo(() => repuestosStockCritico(repuestos), [repuestos]);
+  const bajaRotacion = useMemo(
+    () => repuestosBajaRotacion(repuestosSucursal, usosRepuestos, reparaciones, desde, hasta),
+    [repuestosSucursal, usosRepuestos, reparaciones, desde, hasta]
+  );
+  const stockCritico = useMemo(() => repuestosStockCritico(repuestosSucursal), [repuestosSucursal]);
 
   if (!puedeVerEstadisticas) {
     return (

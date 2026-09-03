@@ -64,7 +64,14 @@ export type ReparacionMetrica = {
 };
 
 export type RepuestoUsoMetrica = { reparacion_id: string; nombre_repuesto: string; cantidad: number; costo_unitario: number | null };
-export type RepuestoMetrica = { id: string; nombre: string; cantidad_stock: number; cantidad_reservada: number; stock_minimo: number | null };
+export type RepuestoMetrica = {
+  id: string;
+  nombre: string;
+  cantidad_stock: number;
+  cantidad_reservada: number;
+  stock_minimo: number | null;
+  sucursal_id: string | null;
+};
 
 export type KpisMetricas = {
   ingresadas: number;

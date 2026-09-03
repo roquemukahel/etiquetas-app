@@ -251,6 +251,11 @@ export default function NuevaOrden() {
   const [trabajoChecklist, setTrabajoChecklist] = useState<Record<string, boolean | null>>({});
   const [trabajoHumedad, setTrabajoHumedad] = useState<boolean | null>(null);
   const [trabajoExcepcionGarantia, setTrabajoExcepcionGarantia] = useState('');
+  // Default 'celular' para no cambiar el comportamiento de nadie que no
+  // toque este selector — igual que en los otros 3 puntos donde se recibe
+  // un equipo. Sin esto, el checklist técnico (cámaras, Face ID, MagSafe)
+  // salía siempre, aunque el trabajo fuera para una notebook o un parlante.
+  const [trabajoTipoDispositivo, setTrabajoTipoDispositivo] = useState<TipoDispositivo>('celular');
 
   // --- confirmar ---
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
@@ -764,6 +769,7 @@ export default function NuevaOrden() {
     setTrabajoExcepcionGarantia('');
     setTrabajoImei('');
     setTrabajoColor('');
+    setTrabajoTipoDispositivo('celular');
   };
 
   const agregarTrabajoDelCatalogo = (trab: Trabajo) => {
@@ -1679,11 +1685,13 @@ export default function NuevaOrden() {
             <SelectorColorAuto label={t('Color del equipo (opcional)')} modelo={trabajoModelo} value={trabajoColor} onChange={setTrabajoColor} />
 
             <div className="flex flex-col gap-2 border-t border-border dark:border-dark-border pt-3">
+              <SelectorTipoDispositivo value={trabajoTipoDispositivo} onChange={setTrabajoTipoDispositivo} />
               <p className="text-xs font-medium text-muted dark:text-dark-text-secondary">
                 {t('¿Cómo entra el equipo? (para saber qué se garantiza al entregarlo)')}
               </p>
               <CheckTri label={t('Enciende')} valor={trabajoEnciende} onChange={setTrabajoEnciende} />
-              {ITEMS_CHECKLIST_INGRESO.map((item) => {
+              {trabajoTipoDispositivo === 'celular' &&
+                ITEMS_CHECKLIST_INGRESO.map((item) => {
                 const deshabilitado = CAMPOS_DEPENDEN_MODULO.includes(item.campo) && trabajoChecklist.modulo_ok === false;
                 return (
                   <CheckTri

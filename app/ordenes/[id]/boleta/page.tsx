@@ -147,48 +147,74 @@ export default function Boleta() {
 
   useEffect(() => {
     (async () => {
-      const { data: ordenData, error: ordenError } = await supabase
-        .from('ordenes')
-        .select(
-          '*, clientes ( nombre, apellido, telefono, email, dni, domicilio ), vendedores ( nombre ), orden_items ( descripcion, cantidad, precio_unitario, tipo, dispositivos ( garantia_vencimiento, estado ) )'
-        )
-        .eq('id', id)
-        .single();
-      if (ordenError) setError(ordenError.message);
-      setOrden(ordenData as any);
-
-      const { data: canjesData } = await supabase
-        .from('canjes')
-        .select('modelo, capacidad_gb, color, imei, salud_bateria, detalles, monto, vendedores ( nombre )')
-        .eq('orden_id', id)
-        .eq('estado', 'en_canje')
-        .order('created_at');
-      setCanjes((canjesData as any) ?? []);
-
-      // Solo el bloqueo que el cliente declaró para ESTE recibo — nunca en la
-      // boleta pública compartible por link/QR (app/boleta/[token]/page.tsx),
-      // solo acá, en la que se imprime en el momento y se entrega en mano.
-      const { data: bloqueosData } = await supabase
-        .from('reparaciones')
-        .select('modelo, tipo_bloqueo, codigo_desbloqueo, patron_desbloqueo')
-        .eq('orden_cobro_id', id)
-        .not('tipo_bloqueo', 'is', null);
-      setBloqueos((bloqueosData as any) ?? []);
-
-      // Desglose real de cómo se pagó — antes la boleta solo mostraba
-      // "Efectivo + Cuenta corriente" (la etiqueta armada en forma_pago) sin
-      // los montos de cada medio, así que un pago mixto no se podía auditar
-      // desde la boleta. `pagos` tiene la plata que entró de contado; lo que
-      // quedó a cuenta corriente no genera fila en `pagos` (ver
-      // construirPagos() en ordenes/nueva), así que se suma aparte desde
-      // cta_cte_movimientos.
-      const [{ data: pagosData }, { data: ctaCteData }] = await Promise.all([
+      // Las 6 consultas de acá abajo son independientes entre sí (todas
+      // cuelgan solo del `id` de la orden, no del resultado de las otras) —
+      // van todas juntas en un solo Promise.all en vez de una atrás de la
+      // otra, para que la boleta (a la que ahora se llega directo con el
+      // botón "Imprimir boleta") no tarde 6 round-trips seguidos en abrir.
+      const [
+        { data: ordenData, error: ordenError },
+        { data: canjesData },
+        { data: bloqueosData },
+        { data: pagosData },
+        { data: ctaCteData },
+        {
+          data: { user },
+        },
+      ] = await Promise.all([
+        supabase
+          .from('ordenes')
+          .select(
+            '*, clientes ( nombre, apellido, telefono, email, dni, domicilio ), vendedores ( nombre ), orden_items ( descripcion, cantidad, precio_unitario, tipo, dispositivos ( garantia_vencimiento, estado ) )'
+          )
+          .eq('id', id)
+          .single(),
+        supabase
+          .from('canjes')
+          .select('modelo, capacidad_gb, color, imei, salud_bateria, detalles, monto, vendedores ( nombre )')
+          .eq('orden_id', id)
+          .eq('estado', 'en_canje')
+          .order('created_at'),
+        // Solo el bloqueo que el cliente declaró para ESTE recibo — nunca en
+        // la boleta pública compartible por link/QR
+        // (app/boleta/[token]/page.tsx), solo acá, en la que se imprime en
+        // el momento y se entrega en mano. Se trae tipo_bloqueo Y
+        // codigo_desbloqueo sin filtrar por columna todavía (el filtro real,
+        // que incluye el caso legacy, se aplica abajo al procesar) — una
+        // reparación cargada ANTES de que existiera tipo_bloqueo tiene
+        // codigo_desbloqueo pero tipo_bloqueo null, y la ficha ya trata ese
+        // caso como "PIN" (ver app/servicio-tecnico/[id]/page.tsx); si acá
+        // se filtraba solo por tipo_bloqueo no nulo, esas reparaciones viejas
+        // quedaban afuera y el código no salía impreso.
+        supabase
+          .from('reparaciones')
+          .select('modelo, tipo_bloqueo, codigo_desbloqueo, patron_desbloqueo')
+          .eq('orden_cobro_id', id)
+          .or('tipo_bloqueo.not.is.null,codigo_desbloqueo.not.is.null'),
+        // Desglose real de cómo se pagó — antes la boleta solo mostraba
+        // "Efectivo + Cuenta corriente" (la etiqueta armada en forma_pago)
+        // sin los montos de cada medio, así que un pago mixto no se podía
+        // auditar desde la boleta. `pagos` tiene la plata que entró de
+        // contado; lo que quedó a cuenta corriente no genera fila en
+        // `pagos` (ver construirPagos() en ordenes/nueva), así que se suma
+        // aparte desde cta_cte_movimientos.
         supabase.from('pagos').select('medio, monto').eq('orden_id', id).eq('anulado', false),
         // 'venta' = cargo único (cuenta corriente normal); 'cuota' = cada
         // cuota de "Financiar en cuotas propias" (financiacion_crear_plan) —
         // ambos representan plata de ESTA orden que quedó a cuenta corriente.
         supabase.from('cta_cte_movimientos').select('monto').eq('orden_id', id).in('concepto', ['venta', 'cuota']).eq('anulado', false),
+        supabase.auth.getUser(),
       ]);
+      if (ordenError) setError(ordenError.message);
+      setOrden(ordenData as any);
+      setCanjes((canjesData as any) ?? []);
+      setBloqueos(
+        ((bloqueosData as any as BloqueoEquipo[]) ?? []).map((b) => ({
+          ...b,
+          tipo_bloqueo: b.tipo_bloqueo ?? (b.codigo_desbloqueo ? 'pin' : null),
+        }))
+      );
+
       const porMedio = new Map<string, number>();
       for (const p of (pagosData as { medio: string; monto: number }[]) ?? []) {
         porMedio.set(p.medio, (porMedio.get(p.medio) ?? 0) + p.monto);
@@ -202,9 +228,6 @@ export default function Boleta() {
         QRCode.toDataURL(url, { margin: 0, width: 200 }).then(setQr).catch(() => setQr(null));
       }
 
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
       if (user) {
         const { data: perfil } = await supabase
           .from('perfiles')

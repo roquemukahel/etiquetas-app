@@ -383,12 +383,16 @@ export default function Productos() {
 
         const categoriaTexto = valorDe(fila, 'categoria', 'categoría', 'category');
         const categoriaId = categoriaTexto ? categoriasPorNombre.get(normalizar(categoriaTexto)) ?? null : null;
+        // sanitizarDecimal acepta tanto "1500.50" como "1500,50" (formato
+        // argentino) — sin esto, un precio con coma decimal daba NaN/null en
+        // silencio (mismo bug ya corregido en los inputs manuales de esta
+        // pantalla, líneas 643 y 652, que faltaba aplicar acá).
         const precioTexto = valorDe(fila, 'precio', 'price');
-        const precio = precioTexto ? Number(precioTexto) : null;
+        const precio = precioTexto ? Number(sanitizarDecimal(precioTexto)) : null;
         const costoTexto = valorDe(fila, 'costo', 'cost');
-        const costo = costoTexto ? Number(costoTexto) : null;
+        const costo = costoTexto ? Number(sanitizarDecimal(costoTexto)) : null;
         const cantidadTexto = valorDe(fila, 'cantidad', 'stock_total', 'stock', 'quantity');
-        const cantidad = cantidadTexto ? Math.max(0, Math.floor(Number(cantidadTexto) || 0)) : 0;
+        const cantidad = cantidadTexto ? Math.max(0, Math.floor(Number(sanitizarDecimal(cantidadTexto)) || 0)) : 0;
 
         let productoMaestroId = maestrosPorClave.get(clave) ?? null;
         if (!productoMaestroId) {
