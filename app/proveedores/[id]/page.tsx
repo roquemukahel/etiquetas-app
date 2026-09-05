@@ -13,6 +13,9 @@ import { medioLabel } from '../../lib/cuentaCorriente';
 import SelectorColorAuto from '../../SelectorColorAuto';
 import { hexColorDe } from '../../lib/coloresIphone';
 import { useT } from '../../lib/idioma';
+import { useSucursalActual } from '../../lib/sucursal';
+import { obtenerSucursales, type Sucursal } from '../../lib/sucursales';
+import { obtenerAreasEgresos, type AreaEgreso } from '../../lib/egresos';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 
@@ -26,6 +29,8 @@ type CompraManual = {
   precio_unitario: number | null;
   detalles: string | null;
   created_at: string;
+  sucursal_id: string | null;
+  area_id: string | null;
 };
 type DispositivoComprado = {
   id: string;
@@ -34,6 +39,7 @@ type DispositivoComprado = {
   color: string | null;
   costo: number | null;
   created_at: string;
+  sucursal_id: string | null;
 };
 // Cuenta corriente con el proveedor: lo que el negocio le debe. cargo =
 // aumenta la deuda; abono = le pagaste. El saldo se calcula, no se guarda.
@@ -45,6 +51,8 @@ type Movimiento = {
   medio: string | null;
   observacion: string | null;
   fecha: string;
+  sucursal_id: string | null;
+  area_id: string | null;
 };
 
 // Una sola lista para mostrar, mezclando las dos fuentes: lo cargado a
@@ -61,6 +69,8 @@ type FilaCompra = {
   origen: 'manual' | 'stock';
   detalles: string | null;
   idManual: string | null;
+  sucursalId: string | null;
+  areaId: string | null;
 };
 
 export default function DetalleProveedor() {
@@ -71,6 +81,7 @@ export default function DetalleProveedor() {
   const t = useT();
   const puedeVer = tienePermiso(actor, 'ver_proveedores');
   const puedeEliminar = tienePermiso(actor, 'eliminar');
+  const sucursalActual = useSucursalActual();
 
   const [proveedor, setProveedor] = useState<Proveedor | null>(null);
   const [compras, setCompras] = useState<CompraManual[]>([]);
@@ -79,11 +90,27 @@ export default function DetalleProveedor() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Sucursal/Área — mismo patrón que Egresos: arrancan en la sucursal
+  // activa del panel, pero son editables acá antes de guardar (una compra o
+  // un pago puede corresponder a otra sucursal, ej. el dueño cargando desde
+  // su celular una factura que llegó a otro local).
+  const [sucursales, setSucursales] = useState<Sucursal[]>([]);
+  const [areas, setAreas] = useState<AreaEgreso[]>([]);
+  useEffect(() => {
+    (async () => {
+      setSucursales(await obtenerSucursales(supabase, false));
+      setAreas(await obtenerAreasEgresos(supabase, false));
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Cuenta corriente con el proveedor (lo que le debés)
   const [accionCta, setAccionCta] = useState<null | 'deuda' | 'pago'>(null);
   const [montoCta, setMontoCta] = useState('');
   const [medioCta, setMedioCta] = useState('efectivo');
   const [obsCta, setObsCta] = useState('');
+  const [sucursalCta, setSucursalCta] = useState('');
+  const [areaCta, setAreaCta] = useState('');
   const [guardandoCta, setGuardandoCta] = useState(false);
 
   const [editandoPerfil, setEditandoPerfil] = useState(false);
@@ -102,6 +129,8 @@ export default function DetalleProveedor() {
   const [cantidad, setCantidad] = useState('1');
   const [precioUnitario, setPrecioUnitario] = useState('');
   const [detallesCompra, setDetallesCompra] = useState('');
+  const [sucursalCompra, setSucursalCompra] = useState('');
+  const [areaCompra, setAreaCompra] = useState('');
   const [guardandoCompra, setGuardandoCompra] = useState(false);
 
   const cargar = async () => {
@@ -109,17 +138,17 @@ export default function DetalleProveedor() {
       supabase.from('proveedores').select('id, nombre, telefono, detalles').eq('id', id).maybeSingle(),
       supabase
         .from('compras_proveedor')
-        .select('id, modelo, capacidad_gb, color, cantidad, precio_unitario, detalles, created_at')
+        .select('id, modelo, capacidad_gb, color, cantidad, precio_unitario, detalles, created_at, sucursal_id, area_id')
         .eq('proveedor_id', id)
         .order('created_at', { ascending: false }),
       supabase
         .from('dispositivos')
-        .select('id, modelo, capacidad_gb, color, costo, created_at')
+        .select('id, modelo, capacidad_gb, color, costo, created_at, sucursal_id')
         .eq('proveedor_id', id)
         .order('created_at', { ascending: false }),
       supabase
         .from('proveedor_movimientos')
-        .select('id, tipo, concepto, monto, medio, observacion, fecha')
+        .select('id, tipo, concepto, monto, medio, observacion, fecha, sucursal_id, area_id')
         .eq('proveedor_id', id)
         .eq('anulado', false)
         .order('fecha', { ascending: false }),
@@ -160,6 +189,8 @@ export default function DetalleProveedor() {
       origen: 'manual',
       detalles: c.detalles,
       idManual: c.id,
+      sucursalId: c.sucursal_id,
+      areaId: c.area_id,
     }));
     const deStock: FilaCompra[] = dispositivos.map((d) => ({
       key: `s-${d.id}`,
@@ -172,6 +203,8 @@ export default function DetalleProveedor() {
       origen: 'stock',
       detalles: null,
       idManual: null,
+      sucursalId: d.sucursal_id,
+      areaId: null,
     }));
     return [...deManual, ...deStock].sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
   }, [compras, dispositivos]);
@@ -206,6 +239,8 @@ export default function DetalleProveedor() {
         observacion: obsCta.trim() || null,
         registrado_por_nombre: actor?.nombre ?? null,
         registrado_por_foto_url: actor?.fotoUrl ?? null,
+        sucursal_id: sucursalCta || null,
+        area_id: areaCta || null,
       })
       .select('id')
       .single();
@@ -219,6 +254,8 @@ export default function DetalleProveedor() {
     setMontoCta('');
     setObsCta('');
     setMedioCta('efectivo');
+    setSucursalCta('');
+    setAreaCta('');
     // Se abre directo el comprobante para imprimirlo o mandarlo — es lo que
     // pidió el usuario: un comprobante del pago/deuda recién generado.
     if (nuevoMov?.id) {
@@ -282,6 +319,8 @@ export default function DetalleProveedor() {
     setCantidad('1');
     setPrecioUnitario('');
     setDetallesCompra('');
+    setSucursalCompra(sucursalActual.id ?? '');
+    setAreaCompra('');
   };
 
   const abrirNuevaCompra = () => {
@@ -298,6 +337,8 @@ export default function DetalleProveedor() {
     setCantidad(String(c.cantidad ?? 1));
     setPrecioUnitario(c.precio_unitario != null ? String(c.precio_unitario) : '');
     setDetallesCompra(c.detalles ?? '');
+    setSucursalCompra(c.sucursal_id ?? '');
+    setAreaCompra(c.area_id ?? '');
     setCompraEditandoId(c.id);
     setAgregandoCompra(true);
     setError(null);
@@ -320,6 +361,8 @@ export default function DetalleProveedor() {
       cantidad: Math.max(1, Number(cantidad) || 1),
       precio_unitario: precioUnitario ? Number(precioUnitario) : null,
       detalles: detallesCompra.trim() || null,
+      sucursal_id: sucursalCompra || null,
+      area_id: areaCompra || null,
     };
     const { error: dbError } = compraEditandoId
       ? await supabase.from('compras_proveedor').update(datos).eq('id', compraEditandoId)
@@ -458,6 +501,8 @@ export default function DetalleProveedor() {
               setAccionCta(accionCta === 'deuda' ? null : 'deuda');
               setMontoCta('');
               setObsCta('');
+              setSucursalCta(sucursalActual.id ?? '');
+              setAreaCta('');
               setError(null);
             }}
             className="flex-1 rounded-xl border border-border dark:border-dark-border py-2 text-sm font-medium"
@@ -469,6 +514,8 @@ export default function DetalleProveedor() {
               setAccionCta(accionCta === 'pago' ? null : 'pago');
               setMontoCta('');
               setObsCta('');
+              setSucursalCta(sucursalActual.id ?? '');
+              setAreaCta('');
               setError(null);
             }}
             className="flex-1 rounded-xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-sm font-medium text-white"
@@ -499,6 +546,38 @@ export default function DetalleProveedor() {
                 <option value="usdt">USDT</option>
                 <option value="cheque">{t('Cheque')}</option>
               </select>
+            )}
+            {(sucursales.length > 1 || areas.length > 0) && (
+              <div className="flex gap-2">
+                {sucursales.length > 1 && (
+                  <select
+                    value={sucursalCta}
+                    onChange={(e) => setSucursalCta(e.target.value)}
+                    className="flex-1 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                  >
+                    <option value="">🏬 {t('Sin sucursal')}</option>
+                    {sucursales.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        🏬 {s.nombre}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {areas.length > 0 && (
+                  <select
+                    value={areaCta}
+                    onChange={(e) => setAreaCta(e.target.value)}
+                    className="flex-1 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                  >
+                    <option value="">{t('Sin área')}</option>
+                    {areas.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.nombre}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
             )}
             <input
               value={obsCta}
@@ -531,7 +610,11 @@ export default function DetalleProveedor() {
                     {m.medio ? ` · ${medioLabel(m.medio, t)}` : ''}
                     {m.observacion ? ` · ${m.observacion}` : ''}
                   </p>
-                  <p className="text-[11px] text-muted dark:text-dark-text-secondary">{new Date(m.fecha).toLocaleDateString('es-AR')}</p>
+                  <p className="text-[11px] text-muted dark:text-dark-text-secondary">
+                    {new Date(m.fecha).toLocaleDateString('es-AR')}
+                    {m.sucursal_id && sucursales.length > 1 ? ` · 🏬 ${sucursales.find((s) => s.id === m.sucursal_id)?.nombre ?? ''}` : ''}
+                    {m.area_id && areas.length > 0 ? ` · ${areas.find((a) => a.id === m.area_id)?.nombre ?? ''}` : ''}
+                  </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <p className={`text-sm font-medium ${m.tipo === 'cargo' ? 'text-bad' : 'text-good'}`}>
@@ -606,6 +689,38 @@ export default function DetalleProveedor() {
               />
             </div>
           </div>
+          {(sucursales.length > 1 || areas.length > 0) && (
+            <div className="flex gap-2">
+              {sucursales.length > 1 && (
+                <select
+                  value={sucursalCompra}
+                  onChange={(e) => setSucursalCompra(e.target.value)}
+                  className="flex-1 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                >
+                  <option value="">🏬 {t('Sin sucursal')}</option>
+                  {sucursales.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      🏬 {s.nombre}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {areas.length > 0 && (
+                <select
+                  value={areaCompra}
+                  onChange={(e) => setAreaCompra(e.target.value)}
+                  className="flex-1 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                >
+                  <option value="">{t('Sin área')}</option>
+                  {areas.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.nombre}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          )}
           <textarea
             value={detallesCompra}
             onChange={(e) => setDetallesCompra(e.target.value)}
@@ -666,6 +781,8 @@ export default function DetalleProveedor() {
               <p className="text-xs text-muted dark:text-dark-text-secondary">
                 {new Date(f.fecha).toLocaleDateString('es-AR')} ·{' '}
                 {f.origen === 'stock' ? t('cargado al Stock') : t('compra cargada a mano')}
+                {f.sucursalId && sucursales.length > 1 ? ` · 🏬 ${sucursales.find((s) => s.id === f.sucursalId)?.nombre ?? ''}` : ''}
+                {f.areaId && areas.length > 0 ? ` · ${areas.find((a) => a.id === f.areaId)?.nombre ?? ''}` : ''}
               </p>
               {f.detalles && <p className="text-xs text-muted dark:text-dark-text-secondary">{f.detalles}</p>}
             </div>

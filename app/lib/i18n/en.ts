@@ -1667,6 +1667,7 @@ export const EN: Record<string, string> = {
   'Sin sucursal': 'No branch',
   Área: 'Area',
   'Filtrar por área': 'Filter by area',
+  'Sin área': 'No area',
   'Todas las áreas': 'All areas',
   'No tenés permiso para gestionar áreas de egresos.': "You don't have permission to manage expense areas.",
   'Un área es un lugar físico dentro de una sucursal (por ejemplo Local o Taller) que querés distinguir al registrar un gasto — se combina con la sucursal, no la reemplaza. Te dejamos "Local" y "Taller" cargados para arrancar; renombralos, agregá los que te sirvan, o archivá los que no uses.':

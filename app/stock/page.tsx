@@ -573,11 +573,28 @@ export default function Stock() {
     setImportando(true);
     setProgresoImport(null);
 
-    const filasConCategoria = planImport.filas.map((f) => ({
-      ...f,
-      ...(categoriaImportId ? { categoria_id: categoriaImportId } : {}),
-      ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
-    }));
+    // Antes esto guardaba "proveedor" del archivo como texto suelto, sin
+    // enlazarlo a la ficha real de Proveedores (proveedor_id) — a diferencia
+    // de cargar un dispositivo a mano (/stock/nuevo) o editarlo acá mismo,
+    // que sí resuelven ese enlace con asegurarProveedor(). El resultado era
+    // que un equipo importado por CSV nunca aparecía en el saldo/historial
+    // de compras de su proveedor. Se resuelve una sola vez por nombre
+    // distinto en el archivo (no una vez por fila) para no repetir el
+    // mismo ida-y-vuelta a la base con archivos grandes.
+    const proveedorIdPorNombre = new Map<string, string | null>();
+    for (const nombre of new Set(planImport.filas.map((f) => f.proveedor as string | null).filter(Boolean) as string[])) {
+      proveedorIdPorNombre.set(nombre, await asegurarProveedor(supabase, nombre));
+    }
+
+    const filasConCategoria = planImport.filas.map((f) => {
+      const nombreProveedor = f.proveedor as string | null;
+      return {
+        ...f,
+        ...(categoriaImportId ? { categoria_id: categoriaImportId } : {}),
+        ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
+        ...(nombreProveedor ? { proveedor_id: proveedorIdPorNombre.get(nombreProveedor) ?? null } : {}),
+      };
+    });
     const { guardadas, error } = await insertarEnTandas(
       (tanda) => supabase.from('dispositivos').insert(tanda),
       filasConCategoria,
