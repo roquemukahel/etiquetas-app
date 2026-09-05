@@ -15,7 +15,6 @@ import {
   obtenerHistorialTurnos,
   obtenerPagosDeCaja,
   obtenerTurnoPorNumero,
-  abrirTurno,
   cerrarTurno,
   reabrirTurno,
   type Caja,
@@ -37,11 +36,13 @@ export default function CajaPage() {
   const sucursalActualGlobal = useSucursalActual();
 
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
+  // Si el actor tiene sucursal FIJA (Configuración → Vendedores/Técnicos),
+  // no puede elegir otra acá — mismo criterio que el switcher global
+  // (AppShell.tsx). Antes este selector ignoraba esa restricción: cualquiera
+  // podía cambiar de sucursal en esta pantalla puntual y ver/operar la caja
+  // de otro local, aunque en el resto de la app tuviera la suya fija.
   const [sucursalId, setSucursalId] = useState<string | null>(sucursalActualGlobal.id ?? null);
   useEffect(() => setSucursalId(sucursalActualGlobal.id ?? null), [sucursalActualGlobal.id]);
-  // La moneda del turno es la del negocio al momento de abrirlo — antes
-  // quedaba hardcodeada en 'ARS' sin importar la configuración real.
-  const [monedaNegocio, setMonedaNegocio] = useState('ARS');
 
   const [tipo, setTipo] = useState<TipoCaja>('venta_diaria');
   const [cajas, setCajas] = useState<Caja[]>([]);
@@ -51,9 +52,6 @@ export default function CajaPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [verHistorial, setVerHistorial] = useState(false);
-
-  const [efectivoInicial, setEfectivoInicial] = useState('');
-  const [abriendo, setAbriendo] = useState(false);
 
   const [cerrando, setCerrando] = useState(false);
   const [modalCierre, setModalCierre] = useState(false);
@@ -67,13 +65,6 @@ export default function CajaPage() {
       } catch {
         // Tabla sucursales todavía no existe en este negocio.
       }
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return;
-      const { data: perfil } = await supabase.from('perfiles').select('negocios ( moneda )').eq('id', user.id).single();
-      const m = (perfil as any)?.negocios?.moneda;
-      if (m) setMonedaNegocio(m);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -127,26 +118,6 @@ export default function CajaPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sucursalId, tipo, puede]);
 
-  const handleAbrir = async () => {
-    if (!cajaActual) return;
-    setAbriendo(true);
-    setError(null);
-    const a = getActor();
-    const { turno: nuevo, error: err } = await abrirTurno(supabase, cajaActual.id, Number(efectivoInicial) || 0, monedaNegocio, a?.nombre ?? null);
-    setAbriendo(false);
-    if (err || !nuevo) {
-      setError(err || t('No pudimos abrir la caja.'));
-      return;
-    }
-    await registrarAuditoria(supabase, {
-      accion: `abrió el turno N° ${nuevo.numero} de ${cajaActual.nombre}${a ? ` con ${formatearMonto(Number(efectivoInicial) || 0)} de inicial` : ''}`,
-      entidad: 'caja_turno',
-      entidadId: nuevo.id,
-    });
-    setEfectivoInicial('');
-    await cargar();
-  };
-
   const handleCerrar = async () => {
     if (!turno) return;
     setCerrando(true);
@@ -172,10 +143,14 @@ export default function CajaPage() {
   const handleReabrir = async (tu: TurnoCaja) => {
     if (!confirm(`${t('¿Reabrir el turno N°')} ${tu.numero}? ${t('Solo se puede si no se cerró ya uno después.')}`)) return;
     setError(null);
-    // caja_reabrir_turno() borra el turno siguiente (auto-creado al cerrar
-    // este) si sigue intacto — eso es un borrado real de un registro
-    // contable, y cualquier borrado en esta app tiene que quedar
-    // auditado. Se busca ANTES de reabrir porque después ya no va a existir.
+    // caja_reabrir_turno() borra el turno siguiente (el que se auto-abrió
+    // solo con la primera venta después de este cierre) si sigue intacto —
+    // eso es un borrado real de un registro contable, y cualquier borrado en
+    // esta app tiene que quedar auditado. Ningún pago se pierde con esto:
+    // las ventas de ese turno siguen existiendo en `pagos` y se vuelven a
+    // sumar dentro de ESTE turno al reabrirlo (la caja no guarda a qué turno
+    // pertenece cada pago, lo calcula por fecha — ver obtenerPagosDeCaja).
+    // Se busca ANTES de reabrir porque después ya no va a existir.
     const sucesor = await obtenerTurnoPorNumero(supabase, tu.caja_id, tu.numero + 1).catch(() => null);
     const { turno: reabierto, error: err } = await reabrirTurno(supabase, tu.id);
     if (err || !reabierto) {
@@ -185,7 +160,7 @@ export default function CajaPage() {
     await registrarAuditoria(supabase, { accion: `reabrió el turno N° ${tu.numero} de ${cajaActual?.nombre ?? ''}`, entidad: 'caja_turno', entidadId: tu.id });
     if (sucesor && sucesor.estado === 'abierta') {
       await registrarAuditoria(supabase, {
-        accion: `eliminó el turno N° ${sucesor.numero} de ${cajaActual?.nombre ?? ''} (se auto-había creado al cerrar el N° ${tu.numero}, y quedó vacío al reabrirlo)`,
+        accion: `eliminó el turno N° ${sucesor.numero} de ${cajaActual?.nombre ?? ''} (se había auto-abierto solo con una venta después del cierre del N° ${tu.numero}; sus pagos pasan a sumarse dentro del N° ${tu.numero} al reabrirlo)`,
         entidad: 'caja_turno',
         entidadId: sucesor.id,
         valorAnterior: { numero: sucesor.numero, efectivo_inicial: sucesor.efectivo_inicial, abierta_en: sucesor.abierta_en },
@@ -216,7 +191,7 @@ export default function CajaPage() {
         <span className="text-lg font-medium">{t('Caja')}</span>
       </header>
 
-      {sucursales.length > 1 && (
+      {sucursales.length > 1 && !sucursalActualGlobal.fija && (
         <select
           value={sucursalId ?? ''}
           onChange={(e) => setSucursalId(e.target.value || null)}
@@ -228,6 +203,11 @@ export default function CajaPage() {
             </option>
           ))}
         </select>
+      )}
+      {sucursales.length > 1 && sucursalActualGlobal.fija && (
+        <p className="text-[11px] text-muted dark:text-dark-text-secondary -mt-1">
+          🏬 {sucursales.find((s) => s.id === sucursalId)?.nombre} · {t('Sucursal fija (Configuración → Vendedores/Técnicos)')}
+        </p>
       )}
 
       <div className="inline-flex items-center gap-1 rounded-xl bg-canvas dark:bg-dark-bg p-1 self-start">
@@ -249,25 +229,14 @@ export default function CajaPage() {
       {loading ? (
         <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{t('Cargando...')}</p>
       ) : !turno ? (
-        <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-4 flex flex-col gap-3">
-          <p className="text-sm font-medium">{t('Caja cerrada — abrila para empezar el turno')}</p>
-          <label className="flex flex-col gap-1">
-            <span className="text-xs text-muted dark:text-dark-text-secondary">{t('Efectivo inicial')}</span>
-            <input
-              value={efectivoInicial}
-              onChange={(e) => setEfectivoInicial(sanitizarDecimal(e.target.value))}
-              inputMode="decimal"
-              placeholder="0"
-              className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
-            />
-          </label>
-          <button
-            disabled={abriendo}
-            onClick={handleAbrir}
-            className="rounded-xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-3 text-sm font-medium text-white disabled:opacity-40"
-          >
-            {abriendo ? t('Abriendo…') : `🔓 ${t('Abrir caja')}`}
-          </button>
+        <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-4 flex flex-col gap-2 text-center items-center">
+          <p className="text-2xl">🔒</p>
+          <p className="text-sm font-medium">{t('Caja cerrada')}</p>
+          <p className="text-xs text-muted dark:text-dark-text-secondary max-w-xs">
+            {t('Se abre sola con la primera venta que se cobre. Va a arrancar con')}{' '}
+            <span className="font-medium text-ink dark:text-dark-text">${formatearMonto(historial[0]?.efectivo_declarado ?? 0)}</span>{' '}
+            {t('de inicial (el vuelto declarado en el último cierre).')}
+          </p>
         </div>
       ) : (
         <>
