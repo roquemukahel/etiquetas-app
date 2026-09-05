@@ -364,11 +364,15 @@ export default function StockRepuestos() {
     // "el mismo" — se lo adopta para esta sucursal en vez de crear otra fila
     // separada que quedaría divergiendo de la original.
     const sucursalNueva = sucursalActual.id || null;
-    const existente = repuestos.find(
-      (r) =>
-        r.nombre.trim().toLowerCase() === form.nombre.trim().toLowerCase() &&
-        (r.sucursal_id === sucursalNueva || r.sucursal_id == null)
-    );
+    const mismoNombre = (r: Repuesto) => r.nombre.trim().toLowerCase() === form.nombre.trim().toLowerCase();
+    // Preferir el match EXACTO de sucursal antes que el legacy sin asignar:
+    // repuestos está ordenado por nombre, no por sucursal, así que si un
+    // .find() único aceptara los dos casos por igual, cuál de las dos filas
+    // "gana" dependería del orden en el array en vez de cuál es la
+    // correcta — con un repuesto que ya tiene fila propia en esta sucursal
+    // Y una fila vieja sin asignar del mismo nombre, eso podía adoptar la
+    // vieja (pisándole la sucursal) en vez de sumar a la que ya era de acá.
+    const existente = repuestos.find((r) => mismoNombre(r) && r.sucursal_id === sucursalNueva) ?? repuestos.find((r) => mismoNombre(r) && r.sucursal_id == null);
     if (existente) {
       const nuevaCantidad = existente.cantidad_stock + (Number(form.cantidad_stock) || 0);
       const { error: updError } = await supabase

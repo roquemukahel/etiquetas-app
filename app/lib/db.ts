@@ -29,15 +29,22 @@ import { SupabaseClient } from '@supabase/supabase-js';
 const CONCURRENCIA_MAXIMA = 6;
 const REINTENTOS_POR_PAGINA = 2;
 
+// "conConteo" se pasa explícito porque la primera página TAMBIÉN necesita
+// reintentos (BUG REAL encontrado en la revisión de esta misma sesión: solo
+// las páginas 2+ reintentaban, así que cualquier tabla de 1000 filas o
+// menos —la mayoría— seguía teniendo el problema original entero: un solo
+// fallo transitorio en esa única página hacía que toda la función
+// devolviera vacío, sin reintento y sin dejar rastro en la consola).
 async function pedirPaginaConReintento(
   construirQuery: (desde: number, hasta: number, conConteo: boolean) => any,
   desde: number,
-  hasta: number
-): Promise<any[]> {
+  hasta: number,
+  conConteo = false
+): Promise<{ data: any[]; count: number | null }> {
   let ultimoError: unknown = null;
   for (let intento = 0; intento <= REINTENTOS_POR_PAGINA; intento++) {
-    const { data, error } = await construirQuery(desde, hasta, false);
-    if (!error && data) return data;
+    const { data, error, count } = await construirQuery(desde, hasta, conConteo);
+    if (!error && data) return { data, count: count ?? null };
     ultimoError = error;
     // Backoff chico entre reintentos — no tiene sentido reintentar
     // instantáneo si la causa fue saturar la cantidad de conexiones.
@@ -50,7 +57,7 @@ async function pedirPaginaConReintento(
   // pueda fallar, y preferimos "faltan algunas filas" (raro, ya con los
   // reintentos de arriba) a que una pantalla entera se quede colgada.
   console.error(`obtenerTodasLasFilas: no se pudo traer una página después de ${REINTENTOS_POR_PAGINA + 1} intentos.`, ultimoError);
-  return [];
+  return { data: [], count: null };
 }
 
 export async function obtenerTodasLasFilas<T>(
@@ -73,8 +80,7 @@ export async function obtenerTodasLasFilas<T>(
     return query.order('id', { ascending: true });
   };
 
-  const primera = await construirQuery(0, TAMANO_PAGINA - 1, true);
-  if (primera.error || !primera.data) return [];
+  const primera = await pedirPaginaConReintento(construirQuery, 0, TAMANO_PAGINA - 1, true);
 
   let todas: T[] = primera.data as T[];
   const total = primera.count ?? todas.length;
@@ -90,7 +96,7 @@ export async function obtenerTodasLasFilas<T>(
     for (let i = 0; i < rangos.length; i += CONCURRENCIA_MAXIMA) {
       const tanda = rangos.slice(i, i + CONCURRENCIA_MAXIMA);
       const resultados = await Promise.all(tanda.map(([desde, hasta]) => pedirPaginaConReintento(construirQuery, desde, hasta)));
-      for (const data of resultados) todas = todas.concat(data as T[]);
+      for (const r of resultados) todas = todas.concat(r.data as T[]);
     }
   }
 

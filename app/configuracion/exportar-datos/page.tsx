@@ -144,6 +144,23 @@ export default function ExportarDatos() {
     return filas.map((f) => (cfg.perfilCategoria ? { ...f, categoria: nombreCategoria(f.categoria_id) } : f));
   };
 
+  // Conteo real en la base (sin traer datos, solo el total) con el MISMO
+  // filtro que traerFilas — para poder confirmar que lo que se bajó de
+  // verdad es TODO lo que hay, no una cantidad menor por una página que se
+  // haya quedado sin reintentos (obtenerTodasLasFilas puede devolver un
+  // resultado incompleto en silencio, sin tirar error — ver db.ts). Sin
+  // este chequeo, "se descarga el respaldo ANTES de borrar" no alcanza:
+  // el respaldo podía estar incompleto y aun así el borrado "funcionaba",
+  // dejando filas huérfanas sin backup y sin borrar, sin ningún aviso.
+  const contarFilasReales = async (entidad: Entidad): Promise<number | null> => {
+    const catId = categoriaFiltro[entidad];
+    let query = supabase.from(entidad).select('id', { count: 'exact', head: true });
+    if (catId) query = query.eq('categoria_id', catId);
+    const { count, error } = await query;
+    if (error) return null;
+    return count ?? null;
+  };
+
   const exportarSolo = async (entidad: Entidad, formato: 'csv' | 'xlsx') => {
     setExportando(entidad);
     setResultado(null);
@@ -177,6 +194,21 @@ export default function ExportarDatos() {
       setEliminando(false);
       setConfirmando(null);
       setResultado(`${t('No había')} ${t(cfg.titulo).toLowerCase()} ${t('para eliminar.')}`);
+      return;
+    }
+
+    // Confirmar que lo que se trajo es TODO lo que hay antes de bajar el
+    // respaldo y borrar — obtenerTodasLasFilas puede devolver menos filas de
+    // las reales en silencio (sin tirar error) si alguna página agotó sus
+    // reintentos. Sin este chequeo, un respaldo incompleto igual dejaba
+    // "completar" el borrado de lo que sí se trajo, sin avisar que quedaron
+    // filas afuera de las dos cosas (ni en el CSV, ni borradas).
+    const totalReal = await contarFilasReales(entidad);
+    if (totalReal != null && totalReal > filas.length) {
+      setEliminando(false);
+      setResultado(
+        `${t('No se pudo traer todo para el respaldo')} (${filas.length} ${t('de')} ${totalReal}) — ${t('no se borró nada. Volvé a intentar en unos minutos.')}`
+      );
       return;
     }
 

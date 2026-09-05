@@ -23,6 +23,7 @@ type ProductoFila = {
   marca: string | null;
   categoria_id: string | null;
   precio: number | null;
+  costo: number | null;
   cantidad: number;
   sucursal_id: string | null;
   producto_maestro_id: string | null;
@@ -92,7 +93,7 @@ export default function Productos() {
         obtenerTodasLasFilas<ProductoFila>(
           supabase,
           'productos',
-          'id, nombre, marca, categoria_id, precio, cantidad, sucursal_id, producto_maestro_id',
+          'id, nombre, marca, categoria_id, precio, costo, cantidad, sucursal_id, producto_maestro_id',
           [{ columna: 'nombre' }]
         ),
         // Celulares (tabla dispositivos): son "productos" también desde la
@@ -422,7 +423,7 @@ export default function Productos() {
             id: existente.id,
             cantidad,
             precio: precio ?? existente.precio,
-            costo: costo ?? null,
+            costo: costo ?? existente.costo,
           });
           continue;
         }
@@ -507,7 +508,7 @@ export default function Productos() {
           obtenerTodasLasFilas<ProductoFila>(
             supabase,
             'productos',
-            'id, nombre, marca, categoria_id, precio, cantidad, sucursal_id, producto_maestro_id',
+            'id, nombre, marca, categoria_id, precio, costo, cantidad, sucursal_id, producto_maestro_id',
             [{ columna: 'nombre' }]
           ),
           obtenerProductosMaestro(supabase, false),

@@ -97,10 +97,26 @@ export async function reordenarAreasEgresos(supabase: SupabaseClient, ordenIds: 
   return { ok: true };
 }
 
-// Cuántos egresos hay cargados bajo un área — para avisar antes de archivar.
+// Cuántos registros hay cargados bajo un área — para avisar antes de
+// archivar. No es solo `egresos`: proveedores_sucursal_area_supabase.sql
+// sumó `area_id` también a compras_proveedor y proveedor_movimientos (Cargar
+// compra / Registrar pago en la ficha de un proveedor). Sin contar esas dos,
+// un área usada SOLO por compras/pagos a proveedores (cero egresos) parecía
+// "sin uso" y se podía archivar sin aviso — al archivarla, esas compras y
+// pagos quedaban con un area_id que ya no resuelve a ningún nombre (ver
+// obtenerAreasEgresos, que excluye archivadas), mostrando el área en blanco
+// en la ficha del proveedor.
 export async function contarEnAreaEgreso(supabase: SupabaseClient, areaId: string): Promise<number> {
-  const { count } = await supabase.from('egresos').select('id', { count: 'exact', head: true }).eq('area_id', areaId).eq('anulado', false);
-  return count ?? 0;
+  const [egresos, compras, movimientos] = await Promise.all([
+    supabase.from('egresos').select('id', { count: 'exact', head: true }).eq('area_id', areaId).eq('anulado', false),
+    // .eq('area_id', ...) sobre una columna que todavía no existe (negocio
+    // que corrió egresos_areas_supabase.sql pero no
+    // proveedores_sucursal_area_supabase.sql) tira error — se trata como 0,
+    // no como "no hay compras/pagos", mismo criterio que obtenerAreasEgresos.
+    supabase.from('compras_proveedor').select('id', { count: 'exact', head: true }).eq('area_id', areaId),
+    supabase.from('proveedor_movimientos').select('id', { count: 'exact', head: true }).eq('area_id', areaId).eq('anulado', false),
+  ]);
+  return (egresos.count ?? 0) + (compras.error ? 0 : compras.count ?? 0) + (movimientos.error ? 0 : movimientos.count ?? 0);
 }
 
 export async function archivarAreaEgreso(supabase: SupabaseClient, id: string): Promise<{ ok: true } | { error: string }> {

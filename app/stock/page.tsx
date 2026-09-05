@@ -581,10 +581,13 @@ export default function Stock() {
     // de compras de su proveedor. Se resuelve una sola vez por nombre
     // distinto en el archivo (no una vez por fila) para no repetir el
     // mismo ida-y-vuelta a la base con archivos grandes.
-    const proveedorIdPorNombre = new Map<string, string | null>();
-    for (const nombre of new Set(planImport.filas.map((f) => f.proveedor as string | null).filter(Boolean) as string[])) {
-      proveedorIdPorNombre.set(nombre, await asegurarProveedor(supabase, nombre));
-    }
+    // En paralelo (no una espera detrás de otra): son nombres DISTINTOS
+    // entre sí (el Set ya los dedupe), así que no hay dos llamados
+    // resolviendo el mismo nombre al mismo tiempo — nada que puedan pisarse
+    // entre ellos por correr juntos.
+    const nombresProveedor = Array.from(new Set(planImport.filas.map((f) => f.proveedor as string | null).filter(Boolean) as string[]));
+    const idsProveedor = await Promise.all(nombresProveedor.map((nombre) => asegurarProveedor(supabase, nombre)));
+    const proveedorIdPorNombre = new Map<string, string | null>(nombresProveedor.map((nombre, i) => [nombre, idsProveedor[i]]));
 
     const filasConCategoria = planImport.filas.map((f) => {
       const nombreProveedor = f.proveedor as string | null;

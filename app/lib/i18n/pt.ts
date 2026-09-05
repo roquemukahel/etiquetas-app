@@ -1522,7 +1522,9 @@ export const PT: Record<string, string> = {
   'Exportar y eliminar': 'Exportar e excluir',
   'Exportar únicamente': 'Exportar somente',
   'No había': 'Não havia',
+  'No se pudo traer todo para el respaldo': 'Não foi possível trazer tudo para o backup',
   'No tenés permiso para ver esta sección.': 'Você não tem permissão para ver esta seção.',
+  'no se borró nada. Volvé a intentar en unos minutos.': 'nada foi excluído. Tente novamente em alguns minutos.',
   'Para confirmar, escribí': 'Para confirmar, digite',
   'Se descarga primero el CSV de respaldo y después se borran del sistema. No hay retorno atrás. Los que tengan ventas u otro historial vinculado quedan protegidos y no se tocan.':
     'Primeiro o CSV de backup é baixado e depois eles são excluídos do sistema. Não há como voltar atrás. Os que tiverem vendas ou outro histórico vinculado ficam protegidos e não são tocados.',

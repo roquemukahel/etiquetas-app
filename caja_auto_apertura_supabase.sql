@@ -158,9 +158,24 @@ begin
           = coalesce(new.sucursal_id, '00000000-0000-0000-0000-000000000000'::uuid);
   end if;
 
-  if v_caja_id is not null then
-    perform caja_asegurar_turno_abierto(v_caja_id, new.registrado_por_nombre, new.moneda);
+  if v_caja_id is null then
+    return new;
   end if;
+
+  -- Camino rápido: si ya hay un turno abierto (el caso normal — casi toda
+  -- venta del día pasa por acá), no hace falta llamar a
+  -- caja_asegurar_turno_abierto()/caja_abrir_turno() en absoluto. Sin este
+  -- chequeo, CADA pago que se registraba en el sistema (venta, cuota,
+  -- abono de cuenta corriente) pagaba el "for update" de caja_abrir_turno
+  -- sobre la fila de `cajas` — un lock nuevo, en cada venta, que antes de
+  -- este trigger no existía. Con esto, ese lock solo se paga en el
+  -- instante real de abrir un turno (raro: una vez por día por caja), no
+  -- en cada pago mientras ya está abierto.
+  if exists (select 1 from caja_turnos where caja_id = v_caja_id and estado = 'abierta') then
+    return new;
+  end if;
+
+  perform caja_asegurar_turno_abierto(v_caja_id, new.registrado_por_nombre, new.moneda);
 
   return new;
 end;

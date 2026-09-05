@@ -890,11 +890,20 @@ export default function Estadisticas() {
     // casos, y la fila residual terminaba trayendo TODO en vez de solo lo
     // sin asignar (bug real: una venta cargada con "Todas las sucursales"
     // elegida arriba desaparecía de esta tabla sin ningún aviso).
+    //
+    // El residual matchea "no es ninguna de las activas" (no solo "es
+    // null"), porque `sucursales` viene de obtenerSucursales(..., false) —
+    // sin las archivadas. Una venta/egreso con un sucursal_id que apuntaba a
+    // una sucursal que después se archivó no es null, pero tampoco matchea
+    // a ninguna activa: con el criterio viejo (match = sucId == null) esa
+    // fila desaparecía de la tabla igual que el bug del null, solo que para
+    // sucursales archivadas en vez de sin asignar.
+    const idsActivos = new Set(sucursales.map((s) => s.id));
     const grupos: { nombre: string | null; esSinAsignar: boolean; match: (sucId: string | null) => boolean }[] =
       sucursales.length > 0
         ? [
             ...sucursales.map((s) => ({ nombre: s.nombre, esSinAsignar: false, match: (sucId: string | null) => sucId === s.id })),
-            { nombre: null, esSinAsignar: true, match: (sucId: string | null) => sucId == null },
+            { nombre: null, esSinAsignar: true, match: (sucId: string | null) => sucId == null || !idsActivos.has(sucId) },
           ]
         : [{ nombre: null, esSinAsignar: false, match: () => true }];
     const egresosPorArea = (idArea: string | null, egs: EgresoR[]) => egresosPeriodoDe(egs.filter((e) => e.area_id === idArea), rango.inicio, rango.fin);
@@ -1529,7 +1538,7 @@ export default function Estadisticas() {
           los filtros de período, que no tienen sentido en Stock). */}
       {(sucursales.length > 1 || areas.length > 0) && (
         <div className="flex flex-wrap items-center gap-2">
-          {sucursales.length > 1 && (
+          {sucursales.length > 1 && !sucursalGlobal.fija && (
             <select
               value={filtroSucursal}
               onChange={(e) => setFiltroSucursal(e.target.value)}
@@ -1543,6 +1552,16 @@ export default function Estadisticas() {
                 </option>
               ))}
             </select>
+          )}
+          {/* Un actor con sucursal FIJA (Configuración → Vendedores/Técnicos)
+              no puede espiar otra acá — mismo criterio que ya se aplicó a
+              Caja: sin esto, este selector propio de la pantalla dejaba ver
+              ventas/márgenes/saldos de una sucursal a la que ese actor no
+              tiene acceso en ningún otro lado de la app. */}
+          {sucursales.length > 1 && sucursalGlobal.fija && (
+            <p className="text-[11px] text-muted dark:text-dark-text-secondary">
+              🏬 {sucursales.find((s) => s.id === filtroSucursal)?.nombre} · {t('Sucursal fija (Configuración → Vendedores/Técnicos)')}
+            </p>
           )}
           {areas.length > 0 && (
             <select

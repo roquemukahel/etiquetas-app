@@ -57,6 +57,17 @@ describe('obtenerTodasLasFilas', () => {
     expect(filas).toHaveLength(300);
   });
 
+  it('reintenta la PRIMERA página igual que las siguientes (antes solo pages 2+ tenían reintento)', async () => {
+    // Con 300 filas (una sola página) el único pedido que se hace es
+    // justo el de la primera página — si esta no reintentara, el bug
+    // original (una tabla de hasta 1000 filas, la mayoría de las tablas de
+    // la app) seguiría intacto pese al fix.
+    const fallos = new Map([['0-999', 1]]);
+    const supabase = crearSupabaseFake(filasDe(300), fallos);
+    const filas = await obtenerTodasLasFilas<Fila>(supabase, 'productos', 'id');
+    expect(filas).toHaveLength(300);
+  });
+
   it('pagina correctamente cuando hay más filas que el límite de una sola página (catálogo grande)', async () => {
     const total = 2500; // 3 páginas de 1000
     const supabase = crearSupabaseFake(filasDe(total));
