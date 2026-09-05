@@ -868,7 +868,8 @@ export default function Estadisticas() {
   const areaTallerId = useMemo(() => areas.find((a) => a.nombre.trim().toLowerCase() === 'taller')?.id ?? null, [areas]);
 
   type FilaRentabilidad = {
-    sucursalNombre: string | null; // null = "todo el negocio" (sin multisucursal)
+    sucursalNombre: string | null; // null = "todo el negocio" (sin multisucursal) o "sin sucursal" (ver esSinAsignar)
+    esSinAsignar: boolean;
     local: ReturnType<typeof bloqueVentasPorArea>;
     taller: ReturnType<typeof bloqueVentasPorArea>;
     egresosLocal: number;
@@ -880,12 +881,26 @@ export default function Estadisticas() {
     // de esta pantalla — el objetivo de esta tabla es justamente mostrar el
     // corte por sucursal de una sola vez, no repetirlo una vez por cada
     // sucursal elegida a mano.
-    const grupos: { nombre: string | null; sucursalId: string | null }[] =
-      sucursales.length > 0 ? sucursales.map((s) => ({ nombre: s.nombre, sucursalId: s.id })) : [{ nombre: null, sucursalId: null }];
+    //
+    // "match" (no comparar contra un id fijo) porque `sucursalId: null` tiene
+    // DOS significados distintos acá: "el negocio no usa multisucursal, traé
+    // todo" (cuando `sucursales` está vacío) vs. "sucursal quedó sin asignar
+    // en un registro puntual" (fila residual cuando SÍ hay multisucursal) —
+    // un solo ternario comparando por igualdad no puede distinguir los dos
+    // casos, y la fila residual terminaba trayendo TODO en vez de solo lo
+    // sin asignar (bug real: una venta cargada con "Todas las sucursales"
+    // elegida arriba desaparecía de esta tabla sin ningún aviso).
+    const grupos: { nombre: string | null; esSinAsignar: boolean; match: (sucId: string | null) => boolean }[] =
+      sucursales.length > 0
+        ? [
+            ...sucursales.map((s) => ({ nombre: s.nombre, esSinAsignar: false, match: (sucId: string | null) => sucId === s.id })),
+            { nombre: null, esSinAsignar: true, match: (sucId: string | null) => sucId == null },
+          ]
+        : [{ nombre: null, esSinAsignar: false, match: () => true }];
     const egresosPorArea = (idArea: string | null, egs: EgresoR[]) => egresosPeriodoDe(egs.filter((e) => e.area_id === idArea), rango.inicio, rango.fin);
     return grupos.map((g) => {
-      const ordenesDeGrupo = g.sucursalId ? ordenesRaw.filter((o) => o.sucursal_id === g.sucursalId) : ordenesRaw;
-      const egresosDeGrupo = g.sucursalId ? egresosRaw.filter((e) => e.sucursal_id === g.sucursalId) : egresosRaw;
+      const ordenesDeGrupo = ordenesRaw.filter((o) => g.match(o.sucursal_id ?? null));
+      const egresosDeGrupo = egresosRaw.filter((e) => g.match(e.sucursal_id ?? null));
       const local = bloqueVentasPorArea(ordenesDeGrupo, itemsPorOrden, rango.inicio, rango.fin, false);
       const taller = bloqueVentasPorArea(ordenesDeGrupo, itemsPorOrden, rango.inicio, rango.fin, true);
       const egresosLocal = egresosPorArea(areaLocalId, egresosDeGrupo);
@@ -895,8 +910,12 @@ export default function Estadisticas() {
         rango.inicio,
         rango.fin
       );
-      return { sucursalNombre: g.nombre, local, taller, egresosLocal, egresosTaller, egresosSinAsignar };
-    });
+      return { sucursalNombre: g.nombre, esSinAsignar: g.esSinAsignar, local, taller, egresosLocal, egresosTaller, egresosSinAsignar };
+    })
+    .filter((f) => !f.esSinAsignar || f.local.ventas > 0 || f.taller.ventas > 0 || f.egresosLocal > 0 || f.egresosTaller > 0 || f.egresosSinAsignar > 0);
+    // La fila residual "Sin sucursal" solo se muestra si de verdad tiene algo
+    // — para un negocio con todo bien etiquetado, no tiene sentido sumar una
+    // fila en cero.
   }, [sucursales, ordenesRaw, egresosRaw, itemsPorOrden, rango, areaLocalId, areaTallerId]);
   // Ojo: esta tabla siempre muestra TODAS las sucursales (a propósito, ver
   // comentario de filasRentabilidad más arriba), así que si hay algo para
@@ -1675,7 +1694,9 @@ export default function Estadisticas() {
                         const resultadoTotal = resultadoLocal + resultadoTaller - f.egresosSinAsignar;
                         return (
                           <tr key={f.sucursalNombre ?? '_todo'} className="border-t border-border dark:border-dark-border">
-                            <td className="py-2 pr-3 font-medium whitespace-nowrap">{f.sucursalNombre ?? t('Todo el negocio')}</td>
+                            <td className="py-2 pr-3 font-medium whitespace-nowrap">
+                              {f.sucursalNombre ?? (f.esSinAsignar ? t('Sin sucursal') : t('Todo el negocio'))}
+                            </td>
                             <td className="py-2 px-3 text-right tabular-nums">{m(f.local.ventas)}</td>
                             <td className={`py-2 px-3 text-right tabular-nums font-medium ${resultadoLocal >= 0 ? 'text-good' : 'text-bad'}`}>{m(resultadoLocal)}</td>
                             <td className="py-2 px-3 text-right tabular-nums">{m(f.taller.ventas)}</td>
