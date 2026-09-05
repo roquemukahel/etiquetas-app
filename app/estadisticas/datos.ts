@@ -370,10 +370,53 @@ export function resumenComisionesDe(movimientos: ComisionMovR[], inicio: Date, f
 // `new Date(fechaISO)`, que para una fecha "pelada" cae en medianoche UTC, no
 // local — podía correr un egreso al mes de al lado cerca del límite del
 // período según el huso horario del que mira la pantalla.
-export type EgresoR = { importe: number; fecha: string; sucursal_id?: string | null };
+export type EgresoR = { importe: number; fecha: string; sucursal_id?: string | null; area_id?: string | null };
 
 export function egresosPeriodoDe(egresos: EgresoR[], inicio: Date, fin: Date): number {
   return egresos.filter((e) => entre(e.fecha + 'T00:00:00', inicio, fin)).reduce((a, e) => a + e.importe, 0);
+}
+
+// ---------- Reparto Local/Taller de una venta (para el dashboard de
+// rentabilidad por sucursal y área) ----------
+// No hace falta una columna de "área" nueva en ventas: 'trabajo' es el tipo
+// de línea que generarOrdenDeReparacion() ya crea al cobrar una reparación
+// (ver app/lib/ordenesServicio.ts) — toda otra línea (producto, dispositivo,
+// devolución) es venta de local/mostrador. El tipo de línea YA distingue
+// esto en cada venta, desde siempre.
+export function esLineaDeTaller(tipo: string | null | undefined): boolean {
+  return tipo === 'trabajo';
+}
+
+export type ItemAreaR = ItemR & { tipo?: string | null };
+
+export type BloqueArea = { ventas: number; ventasConCosto: number; ganancia: number };
+
+// Mismo cálculo que bloqueVentas() (ventas/ventasConCosto/ganancia), pero
+// recortado a las líneas de un solo lado (Local o Taller) — para poder
+// mostrar el resultado operativo cortado por área, no solo el total
+// combinado del negocio entero.
+export function bloqueVentasPorArea(
+  ordenes: OrdenR[],
+  itemsPorOrden: Map<string, ItemAreaR[]>,
+  desde: Date,
+  hasta: Date,
+  esTaller: boolean
+): BloqueArea {
+  const cobradas = ordenes.filter((o) => ESTADOS_COBRADOS.includes(o.estado) && entre(o.created_at, desde, hasta));
+  let ventas = 0;
+  let ganancia = 0;
+  let ventasConCosto = 0;
+  for (const o of cobradas) {
+    const items = (itemsPorOrden.get(o.id) ?? []).filter((it) => esLineaDeTaller(it.tipo) === esTaller);
+    for (const it of items) {
+      ventas += (it.precio_unitario || 0) * (it.cantidad || 0);
+      if (it.costo != null && it.precio_unitario != null) {
+        ganancia += (it.precio_unitario - it.costo) * (it.cantidad || 0);
+        ventasConCosto += it.precio_unitario * (it.cantidad || 0);
+      }
+    }
+  }
+  return { ventas, ventasConCosto, ganancia };
 }
 
 // ---------- Ranking por producto y por categoría (para Estadísticas) ----------

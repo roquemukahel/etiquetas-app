@@ -1261,12 +1261,16 @@ export const EN: Record<string, string> = {
   'Lo que se sumó a cuentas corrientes en el período (todavía no entró a la caja).':
     "What was added to running balances in the period (hasn't hit the register yet).",
   'Lo que te costó el stock que tenés (a precio de compra).': 'What the stock you have cost you (at purchase price).',
+  'Local: ventas de mostrador (productos y dispositivos). Taller: mano de obra de reparaciones. Estimado — no incluye impuestos ni otras obligaciones contables.':
+    'Store: counter sales (products and devices). Workshop: repair labor. Estimate — does not include taxes or other accounting obligations.',
   'Línea llena:': 'Solid line:',
   'Medios de pago': 'Payment methods',
   'Mejores compradores': 'Top buyers',
   'Mismas categorías que Configuración → Categorías de stock.': 'Same categories as Settings → Stock categories.',
   'Montos ocultos': 'Amounts hidden',
   'Mostrar montos': 'Show amounts',
+  'No encontramos áreas llamadas "Local" ni "Taller" en Configuración → Egresos, así que los egresos no se descuentan de ningún lado acá abajo — solo se muestra la venta y la ganancia bruta.':
+    'We couldn\'t find areas named exactly "Local" or "Taller" (in Spanish — that\'s the name this match looks for) in Settings → Expenses, so expenses aren\'t deducted from either side below — only the sale and gross profit are shown.',
   'No hay saldos pendientes de cobro.': 'No outstanding balances to collect.',
   'No tenés permiso para ver Estadísticas.': "You don't have permission to view Analytics.",
   'Nuevos créditos': 'New credit plans',
@@ -1296,8 +1300,12 @@ export const EN: Record<string, string> = {
   'Ranking de vendedores': 'Salesperson ranking',
   'Rendimiento de': 'Performance of',
   'Rendimiento por vendedor': 'Performance by salesperson',
+  'Rentabilidad por sucursal y área': 'Profitability by branch and area',
   'Reparaciones terminadas en el período.': 'Repairs completed in the period.',
+  'Resultado Local': 'Store result',
   'Resultado operativo estimado': 'Estimated operating result',
+  'Resultado Taller': 'Workshop result',
+  'Resultado total': 'Total result',
   'Saldo con proveedores': 'Balance with suppliers',
   'Saldo en cuotas': 'Installment balance',
   'Saldo por cobrar': 'Balance receivable',
@@ -1325,6 +1333,7 @@ export const EN: Record<string, string> = {
   Torta: 'Pie',
   'Total gastado en compras a proveedores (dispositivos + compras manuales) en el período. Esto es lo COMPRADO, no necesariamente lo pagado.':
     'Total spent on purchases from suppliers (devices + manual purchases) in the period. This is what was PURCHASED, not necessarily what was paid.',
+  'Todo el negocio': 'Whole business',
   'Tramo anterior': 'Previous stretch',
   'Tramo siguiente': 'Next stretch',
   'Técnicos activos': 'Active technicians',
@@ -1335,6 +1344,8 @@ export const EN: Record<string, string> = {
   'Vendido al contado': 'Sold for cash',
   'Ventas de': 'Sales by',
   'Ventas del período que NO se financiaron en cuenta corriente.': 'Sales in the period that were NOT financed on a running balance.',
+  'Ventas Local': 'Store sales',
+  'Ventas Taller': 'Workshop sales',
   'Ventas financiadas con cronograma propio — un crédito no es dinero cobrado hasta que se registra el pago.':
     "Sales financed with our own schedule — a credit isn't collected money until the payment is recorded.",
   'Todo lo que facturaste en el período, incluido lo vendido a cuenta corriente/fiado — no es plata en mano. Para ver lo que realmente cobraste, mirá "Dinero ingresado".':
@@ -2473,6 +2484,9 @@ export const EN: Record<string, string> = {
 
   // Multisucursal Fase 2 — segunda tanda de auditoría (barrido de portugués).
   "Tocá 'Mostrar montos' arriba para ver el gráfico.": 'Tap "Show amounts" above to see the chart.',
+  "Tocá 'Mostrar montos' arriba para ver esta tabla.": 'Tap "Show amounts" above to see this table.',
+  'Si creás áreas "Local" y "Taller" en Configuración → Egresos, sus egresos se van a descontar automáticamente del resultado que corresponda.':
+    'If you create areas named exactly "Local" and "Taller" (in Spanish) in Settings → Expenses, their expenses will be automatically deducted from the matching result.',
   'Plan de ahorro / seña': 'Savings plan / deposit',
   'Módulo': 'Screen module',
   'Señal': 'Signal',

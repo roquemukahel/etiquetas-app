@@ -8,7 +8,11 @@ import {
   rankingCategoriasDe,
   pagadoPorProveedorDe,
   evolucionMediosPagoDe,
+  esLineaDeTaller,
+  bloqueVentasPorArea,
   type ItemProductoR,
+  type ItemAreaR,
+  type OrdenR,
 } from './datos';
 
 // "Ahora" fijo para que los tests sean deterministas: miércoles 19 de
@@ -228,6 +232,88 @@ describe('egresosPeriodoDe', () => {
 
   it('sin egresos en el rango, devuelve 0', () => {
     expect(egresosPeriodoDe([], INICIO_AGOSTO, FIN_AGOSTO)).toBe(0);
+  });
+});
+
+describe('esLineaDeTaller / bloqueVentasPorArea', () => {
+  const INICIO = new Date(2026, 7, 1, 0, 0, 0, 0);
+  const FIN = new Date(2026, 7, 31, 23, 59, 59, 999);
+
+  it('esLineaDeTaller: solo el tipo "trabajo" (mano de obra de una reparación) es Taller', () => {
+    expect(esLineaDeTaller('trabajo')).toBe(true);
+    expect(esLineaDeTaller('producto')).toBe(false);
+    expect(esLineaDeTaller('dispositivo')).toBe(false);
+    expect(esLineaDeTaller('devolucion')).toBe(false);
+    expect(esLineaDeTaller(null)).toBe(false);
+    expect(esLineaDeTaller(undefined)).toBe(false);
+  });
+
+  it('bloqueVentasPorArea separa una misma orden en su parte Local y su parte Taller', () => {
+    // Una orden mixta: un accesorio (local) + la mano de obra de una
+    // reparación (taller) cobrados juntos en la misma boleta — pasa seguido
+    // cuando el cliente aprovecha a comprar algo mientras retira el equipo.
+    const ordenes: OrdenR[] = [
+      {
+        id: 'o1',
+        vendedor_id: null,
+        cliente_id: null,
+        total: 15000,
+        anticipo: 0,
+        monto_canje: 0,
+        estado: 'entregado',
+        forma_pago: 'efectivo',
+        created_at: '2026-08-10T12:00:00Z',
+      },
+    ];
+    const items: ItemAreaR[] = [
+      { orden_id: 'o1', cantidad: 1, precio_unitario: 5000, costo: 3000, tipo: 'producto' },
+      { orden_id: 'o1', cantidad: 1, precio_unitario: 10000, costo: 4000, tipo: 'trabajo' },
+    ];
+    const itemsPorOrden = new Map<string, ItemAreaR[]>([['o1', items]]);
+
+    const local = bloqueVentasPorArea(ordenes, itemsPorOrden, INICIO, FIN, false);
+    expect(local.ventas).toBe(5000);
+    expect(local.ganancia).toBe(2000);
+
+    const taller = bloqueVentasPorArea(ordenes, itemsPorOrden, INICIO, FIN, true);
+    expect(taller.ventas).toBe(10000);
+    expect(taller.ganancia).toBe(6000);
+
+    // Local + Taller reconstruye el total de la orden — no se pierde ni se
+    // duplica ninguna línea entre los dos cortes.
+    expect(local.ventas + taller.ventas).toBe(15000);
+  });
+
+  it('bloqueVentasPorArea ignora órdenes fuera del rango o no cobradas', () => {
+    const ordenes: OrdenR[] = [
+      {
+        id: 'o1',
+        vendedor_id: null,
+        cliente_id: null,
+        total: 1000,
+        anticipo: 0,
+        monto_canje: 0,
+        estado: 'pendiente', // no está en ESTADOS_COBRADOS
+        forma_pago: 'efectivo',
+        created_at: '2026-08-10T12:00:00Z',
+      },
+      {
+        id: 'o2',
+        vendedor_id: null,
+        cliente_id: null,
+        total: 1000,
+        anticipo: 0,
+        monto_canje: 0,
+        estado: 'entregado',
+        forma_pago: 'efectivo',
+        created_at: '2026-06-01T12:00:00Z', // fuera del rango
+      },
+    ];
+    const itemsPorOrden = new Map<string, ItemAreaR[]>([
+      ['o1', [{ orden_id: 'o1', cantidad: 1, precio_unitario: 1000, costo: null, tipo: 'producto' }]],
+      ['o2', [{ orden_id: 'o2', cantidad: 1, precio_unitario: 1000, costo: null, tipo: 'producto' }]],
+    ]);
+    expect(bloqueVentasPorArea(ordenes, itemsPorOrden, INICIO, FIN, false)).toEqual({ ventas: 0, ventasConCosto: 0, ganancia: 0 });
   });
 });
 

@@ -1262,12 +1262,16 @@ export const PT: Record<string, string> = {
   'Lo que se sumó a cuentas corrientes en el período (todavía no entró a la caja).':
     'O que foi somado a contas correntes no período (ainda não entrou no caixa).',
   'Lo que te costó el stock que tenés (a precio de compra).': 'O que custou o estoque que você tem (a preço de compra).',
+  'Local: ventas de mostrador (productos y dispositivos). Taller: mano de obra de reparaciones. Estimado — no incluye impuestos ni otras obligaciones contables.':
+    'Loja: vendas de balcão (produtos e aparelhos). Oficina: mão de obra de reparos. Estimativa — não inclui impostos nem outras obrigações contábeis.',
   'Línea llena:': 'Linha cheia:',
   'Medios de pago': 'Formas de pagamento',
   'Mejores compradores': 'Melhores compradores',
   'Mismas categorías que Configuración → Categorías de stock.': 'Mesmas categorias que Configurações → Categorias de estoque.',
   'Montos ocultos': 'Valores ocultos',
   'Mostrar montos': 'Mostrar valores',
+  'No encontramos áreas llamadas "Local" ni "Taller" en Configuración → Egresos, así que los egresos no se descuentan de ningún lado acá abajo — solo se muestra la venta y la ganancia bruta.':
+    'Não encontramos áreas chamadas exatamente "Local" ou "Taller" (em espanhol — é esse o nome que essa comparação procura) em Configurações → Despesas, então as despesas não são descontadas de nenhum dos dois lados abaixo — só aparece a venda e o lucro bruto.',
   'No hay saldos pendientes de cobro.': 'Não há saldos pendentes de recebimento.',
   'No tenés permiso para ver Estadísticas.': 'Você não tem permissão para ver Estatísticas.',
   'Nuevos créditos': 'Novos créditos',
@@ -1297,8 +1301,12 @@ export const PT: Record<string, string> = {
   'Ranking de vendedores': 'Ranking de vendedores',
   'Rendimiento de': 'Desempenho de',
   'Rendimiento por vendedor': 'Desempenho por vendedor',
+  'Rentabilidad por sucursal y área': 'Rentabilidade por filial e área',
   'Reparaciones terminadas en el período.': 'Reparos concluídos no período.',
+  'Resultado Local': 'Resultado Loja',
   'Resultado operativo estimado': 'Resultado operacional estimado',
+  'Resultado Taller': 'Resultado Oficina',
+  'Resultado total': 'Resultado total',
   'Saldo con proveedores': 'Saldo com fornecedores',
   'Saldo en cuotas': 'Saldo em parcelas',
   'Saldo por cobrar': 'Saldo a receber',
@@ -1323,6 +1331,7 @@ export const PT: Record<string, string> = {
     'Tudo o que você faturou no período (inclui o que foi vendido a conta corrente/fiado).',
   'Todo lo que facturaste en el período (incluye lo vendido a cuenta corriente/fiado).':
     'Tudo o que você faturou no período (inclui o vendido a conta corrente/fiado).',
+  'Todo el negocio': 'Todo o negócio',
   Torta: 'Pizza',
   'Total gastado en compras a proveedores (dispositivos + compras manuales) en el período. Esto es lo COMPRADO, no necesariamente lo pagado.':
     'Total gasto em compras a fornecedores (aparelhos + compras manuais) no período. Isto é o COMPRADO, não necessariamente o pago.',
@@ -1336,6 +1345,8 @@ export const PT: Record<string, string> = {
   'Vendido al contado': 'Vendido à vista',
   'Ventas de': 'Vendas de',
   'Ventas del período que NO se financiaron en cuenta corriente.': 'Vendas do período que NÃO foram financiadas em conta corrente.',
+  'Ventas Local': 'Vendas Loja',
+  'Ventas Taller': 'Vendas Oficina',
   'Ventas financiadas con cronograma propio — un crédito no es dinero cobrado hasta que se registra el pago.':
     'Vendas financiadas com cronograma próprio — um crédito não é dinheiro recebido até que o pagamento seja registrado.',
   'Todo lo que facturaste en el período, incluido lo vendido a cuenta corriente/fiado — no es plata en mano. Para ver lo que realmente cobraste, mirá "Dinero ingresado".':
@@ -2474,6 +2485,9 @@ export const PT: Record<string, string> = {
 
   // Multisucursal Fase 2 — segunda tanda de auditoría (barrido de portugués).
   "Tocá 'Mostrar montos' arriba para ver el gráfico.": 'Toque em "Mostrar valores" acima para ver o gráfico.',
+  "Tocá 'Mostrar montos' arriba para ver esta tabla.": 'Toque em "Mostrar valores" acima para ver esta tabela.',
+  'Si creás áreas "Local" y "Taller" en Configuración → Egresos, sus egresos se van a descontar automáticamente del resultado que corresponda.':
+    'Se você criar áreas chamadas exatamente "Local" e "Taller" (em espanhol) em Configurações → Despesas, as despesas delas vão ser descontadas automaticamente do resultado correspondente.',
   'Plan de ahorro / seña': 'Plano de poupança / sinal',
   'Módulo': 'Módulo',
   'Señal': 'Sinal',

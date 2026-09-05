@@ -30,6 +30,8 @@ import {
   rankingCategoriasDe,
   pagadoPorProveedorDe,
   evolucionMediosPagoDe,
+  esLineaDeTaller,
+  bloqueVentasPorArea,
   PlanFinR,
   CuotaFinR,
   PagoFinR,
@@ -37,6 +39,7 @@ import {
   EgresoR,
   ItemProductoR,
   FilaRankingProducto,
+  ItemAreaR,
 } from './datos';
 import { StatCard, SeccionCard, EmptyState, SegmentedChips, AnalyticsTabs, formatMoneda } from './ui';
 import { LineAreaChart } from './charts';
@@ -45,6 +48,8 @@ import { QoviState } from '../QoviState';
 import CampoFecha from '../CampoFecha';
 import { useT, useIdioma, type Idioma } from '../lib/idioma';
 import { useSucursalActual } from '../lib/sucursal';
+import { obtenerSucursales, type Sucursal } from '../lib/sucursales';
+import { obtenerAreasEgresos, type AreaEgreso } from '../lib/egresos';
 
 type VistaRanking = 'barras' | 'torta';
 // Rankings separados por métrica, no un puntaje opaco de "producto/categoría
@@ -227,11 +232,31 @@ export default function Estadisticas() {
   const [actualizado, setActualizado] = useState<Date | null>(null);
   const [errorCarga, setErrorCarga] = useState<string | null>(null);
 
-  // Selección global del panel lateral — filtra las 7 tablas que Fase 1
-  // etiquetó por sucursal (ordenes, reparaciones, pagos, cta_cte_movimientos,
-  // egresos, y dispositivos vía stock/compras/altas). Clientes, proveedores,
-  // comisiones y cuentas por pagar quedan compartidos, sin filtrar.
-  const { id: sucursalId } = useSucursalActual();
+  // Filtro de sucursal PROPIO de esta pantalla — arranca en la sucursal
+  // elegida en el panel lateral, pero se puede "espiar" otra acá sin cambiar
+  // el contexto de trabajo global (mismo criterio que Egresos y Servicio
+  // Técnico → Métricas, los dos lugares que ya tenían este filtro). Antes
+  // esto dependía directo de useSucursalActual(): para ver la analítica de
+  // otra sucursal había que cambiar la sucursal activa de TODA la app,
+  // arriesgando cargar algo real (una venta, un ingreso) etiquetado mal por
+  // olvidarse de volver a cambiarla.
+  const sucursalGlobal = useSucursalActual();
+  const [sucursales, setSucursales] = useState<Sucursal[]>([]);
+  const [filtroSucursal, setFiltroSucursal] = useState(sucursalGlobal.id ?? '');
+  useEffect(() => setFiltroSucursal(sucursalGlobal.id ?? ''), [sucursalGlobal.id]);
+  const sucursalId = filtroSucursal || null;
+
+  // Áreas de egresos (Local/Taller/lo que el negocio use) — mismo filtro que
+  // ya existe en /egresos, ver app/lib/egresos.ts. Vacío si el negocio no
+  // corrió esa migración o no definió áreas: el selector simplemente no aparece.
+  const [areas, setAreas] = useState<AreaEgreso[]>([]);
+  const [filtroArea, setFiltroArea] = useState('');
+
+  // Filtra las 7 tablas que Fase 1 etiquetó por sucursal (ordenes,
+  // reparaciones, pagos, cta_cte_movimientos, egresos, y dispositivos vía
+  // stock/compras/altas). Clientes, proveedores, comisiones y cuentas por
+  // pagar quedan compartidos, sin filtrar (esas tablas todavía no tienen
+  // columna de sucursal).
   const ordenes = useMemo(() => (sucursalId ? ordenesRaw.filter((o) => o.sucursal_id === sucursalId) : ordenesRaw), [ordenesRaw, sucursalId]);
   const pagos = useMemo(() => (sucursalId ? pagosRaw.filter((p) => p.sucursal_id === sucursalId) : pagosRaw), [pagosRaw, sucursalId]);
   const credito = useMemo(() => (sucursalId ? creditoRaw.filter((c) => c.sucursal_id === sucursalId) : creditoRaw), [creditoRaw, sucursalId]);
@@ -252,7 +277,25 @@ export default function Estadisticas() {
     () => (sucursalId ? registrosDispositivosRaw.filter((r) => r.sucursal_id === sucursalId) : registrosDispositivosRaw),
     [registrosDispositivosRaw, sucursalId]
   );
-  const egresos = useMemo(() => (sucursalId ? egresosRaw.filter((e) => e.sucursal_id === sucursalId) : egresosRaw), [egresosRaw, sucursalId]);
+  const egresos = useMemo(
+    () =>
+      egresosRaw
+        .filter((e) => !sucursalId || e.sucursal_id === sucursalId)
+        .filter((e) => !filtroArea || e.area_id === filtroArea),
+    [egresosRaw, sucursalId, filtroArea]
+  );
+
+  // Lista de sucursales/áreas para los selectores del filtro propio de esta
+  // pantalla — independiente del Promise.all grande de más abajo (que trae
+  // los DATOS del período) porque esto no depende del período ni cambia con
+  // los filtros, alcanza con traerlo una sola vez.
+  useEffect(() => {
+    (async () => {
+      setSucursales(await obtenerSucursales(supabase, false));
+      setAreas(await obtenerAreasEgresos(supabase, false));
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Preferencia de "ocultar montos" (ojito), recordada en este dispositivo.
   useEffect(() => {
@@ -375,7 +418,7 @@ export default function Estadisticas() {
         obtenerTodasLasFilas<ComisionMovR>(supabase, 'comision_movimientos', 'comision, estado, fecha_hecho, created_at', [], (q) =>
           q.neq('estado', 'revertida').gte('created_at', desde.toISOString())
         ),
-        obtenerTodasLasFilas<EgresoR>(supabase, 'egresos', 'importe, fecha, sucursal_id', [], (q) =>
+        obtenerTodasLasFilas<EgresoR>(supabase, 'egresos', 'importe, fecha, sucursal_id, area_id', [], (q) =>
           q.eq('anulado', false).gte('fecha', desde.toISOString().slice(0, 10))
         ),
         obtenerTodasLasFilas<DispositivoCompra>(supabase, 'dispositivos', 'proveedor_id, costo, created_at, sucursal_id', [], (q) =>
@@ -496,7 +539,10 @@ export default function Estadisticas() {
   };
 
   const itemsPorOrden = useMemo(() => {
-    const mapa = new Map<string, ItemR[]>();
+    // ItemPeriodoR (no ItemR) para que el mapa siga trayendo `tipo` — lo
+    // necesita bloqueVentasPorArea() para separar Local de Taller en el
+    // panel de Rentabilidad más abajo.
+    const mapa = new Map<string, ItemPeriodoR[]>();
     for (const it of ordenItems) {
       const arr = mapa.get(it.orden_id) ?? [];
       arr.push(it);
@@ -807,6 +853,60 @@ export default function Estadisticas() {
   const egresosPeriodo = useMemo(() => egresosPeriodoDe(egresos, inicio, rango.fin), [egresos, inicio, rango.fin]);
   const hayEgresos = egresos.length > 0;
   const resultadoOperativoEstimado = actualB.ganancia - egresosPeriodo;
+
+  // ---------- Rentabilidad por sucursal y área (pedido explícito de un
+  // cliente: "cortado por área, no solo para todo el negocio combinado") ----------
+  // Local/Taller de la VENTA sale de esLineaDeTaller() (el tipo de línea de
+  // cada orden_item, ver datos.ts) — no depende del filtro de Área de acá
+  // arriba, que solo existe para egresos. El cruce con el Área CONFIGURADA
+  // (Configuración → Egresos → Áreas) es por nombre: si el negocio tiene un
+  // área llamada "Local" y/o "Taller" (como este cliente), sus egresos se
+  // descuentan del bucket que corresponde; el resto de las áreas (u
+  // egresos sin área) se muestran aparte, sin atribuir a ninguno de los dos
+  // lados, para no inventar una asignación que nadie cargó.
+  const areaLocalId = useMemo(() => areas.find((a) => a.nombre.trim().toLowerCase() === 'local')?.id ?? null, [areas]);
+  const areaTallerId = useMemo(() => areas.find((a) => a.nombre.trim().toLowerCase() === 'taller')?.id ?? null, [areas]);
+
+  type FilaRentabilidad = {
+    sucursalNombre: string | null; // null = "todo el negocio" (sin multisucursal)
+    local: ReturnType<typeof bloqueVentasPorArea>;
+    taller: ReturnType<typeof bloqueVentasPorArea>;
+    egresosLocal: number;
+    egresosTaller: number;
+    egresosSinAsignar: number;
+  };
+  const filasRentabilidad = useMemo((): FilaRentabilidad[] => {
+    // Siempre a partir de los datos SIN filtrar por el selector de sucursal
+    // de esta pantalla — el objetivo de esta tabla es justamente mostrar el
+    // corte por sucursal de una sola vez, no repetirlo una vez por cada
+    // sucursal elegida a mano.
+    const grupos: { nombre: string | null; sucursalId: string | null }[] =
+      sucursales.length > 0 ? sucursales.map((s) => ({ nombre: s.nombre, sucursalId: s.id })) : [{ nombre: null, sucursalId: null }];
+    const egresosPorArea = (idArea: string | null, egs: EgresoR[]) => egresosPeriodoDe(egs.filter((e) => e.area_id === idArea), rango.inicio, rango.fin);
+    return grupos.map((g) => {
+      const ordenesDeGrupo = g.sucursalId ? ordenesRaw.filter((o) => o.sucursal_id === g.sucursalId) : ordenesRaw;
+      const egresosDeGrupo = g.sucursalId ? egresosRaw.filter((e) => e.sucursal_id === g.sucursalId) : egresosRaw;
+      const local = bloqueVentasPorArea(ordenesDeGrupo, itemsPorOrden, rango.inicio, rango.fin, false);
+      const taller = bloqueVentasPorArea(ordenesDeGrupo, itemsPorOrden, rango.inicio, rango.fin, true);
+      const egresosLocal = egresosPorArea(areaLocalId, egresosDeGrupo);
+      const egresosTaller = egresosPorArea(areaTallerId, egresosDeGrupo);
+      const egresosSinAsignar = egresosPeriodoDe(
+        egresosDeGrupo.filter((e) => e.area_id !== areaLocalId && e.area_id !== areaTallerId),
+        rango.inicio,
+        rango.fin
+      );
+      return { sucursalNombre: g.nombre, local, taller, egresosLocal, egresosTaller, egresosSinAsignar };
+    });
+  }, [sucursales, ordenesRaw, egresosRaw, itemsPorOrden, rango, areaLocalId, areaTallerId]);
+  // Ojo: esta tabla siempre muestra TODAS las sucursales (a propósito, ver
+  // comentario de filasRentabilidad más arriba), así que si hay algo para
+  // mostrar no puede salir de actualB/hayEgresos (que sí respetan el filtro
+  // de sucursal propio de esta pantalla) — una sucursal filtrada sin datos
+  // no debe ocultar la tabla si OTRA sucursal sí tiene datos en el período.
+  const hayRentabilidadParaMostrar =
+    puedeVerCostos &&
+    puedeVerEgresos &&
+    filasRentabilidad.some((f) => f.local.ventas > 0 || f.taller.ventas > 0 || f.egresosLocal > 0 || f.egresosTaller > 0 || f.egresosSinAsignar > 0);
 
   // Evolución mensual por medio de pago (efectivo/tarjeta/transferencia a lo
   // largo del tiempo, no solo la foto del período elegido) — pedido real de
@@ -1406,6 +1506,43 @@ export default function Estadisticas() {
 
       <AnalyticsTabs valor={tab} tabs={TABS_T} onChange={setTab} />
 
+      {/* Sucursal/Área: aplica a las 8 pestañas por igual (a diferencia de
+          los filtros de período, que no tienen sentido en Stock). */}
+      {(sucursales.length > 1 || areas.length > 0) && (
+        <div className="flex flex-wrap items-center gap-2">
+          {sucursales.length > 1 && (
+            <select
+              value={filtroSucursal}
+              onChange={(e) => setFiltroSucursal(e.target.value)}
+              aria-label={t('Filtrar por sucursal')}
+              className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2.5 py-1.5 text-xs"
+            >
+              <option value="">🏬 {t('Todas las sucursales')}</option>
+              {sucursales.map((s) => (
+                <option key={s.id} value={s.id}>
+                  🏬 {s.nombre}
+                </option>
+              ))}
+            </select>
+          )}
+          {areas.length > 0 && (
+            <select
+              value={filtroArea}
+              onChange={(e) => setFiltroArea(e.target.value)}
+              aria-label={t('Filtrar por área')}
+              className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2.5 py-1.5 text-xs"
+            >
+              <option value="">{t('Todas las áreas')}</option>
+              {areas.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.nombre}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+      )}
+
       {/* Filtros de período (no aplican a Stock, que es la foto de hoy). */}
       {tab !== 'stock' && filtros}
 
@@ -1502,6 +1639,64 @@ export default function Estadisticas() {
               oculto={ocultarMontos}
             />
           </div>
+
+          {/* Rentabilidad por sucursal y área — pedido explícito de un
+              cliente: "cortado por área, no solo para todo el negocio
+              combinado". Local/Taller sale del tipo de línea de cada venta
+              (esLineaDeTaller); los egresos se descuentan del lado que
+              corresponde solo si el negocio tiene áreas configuradas
+              literalmente llamadas "Local"/"Taller" en Configuración →
+              Egresos → Áreas — si no, se muestran aparte sin inventar a qué
+              lado pertenecen. */}
+          {hayRentabilidadParaMostrar && (
+            <SeccionCard
+              titulo={t('Rentabilidad por sucursal y área')}
+              subtitulo={t('Local: ventas de mostrador (productos y dispositivos). Taller: mano de obra de reparaciones. Estimado — no incluye impuestos ni otras obligaciones contables.')}
+            >
+              {ocultarMontos ? (
+                <EmptyState icono="🙈" titulo={t('Montos ocultos')} texto={t("Tocá 'Mostrar montos' arriba para ver esta tabla.")} />
+              ) : (
+                <div className="overflow-x-auto -mx-1">
+                  <table className="w-full text-sm border-collapse min-w-[640px]">
+                    <thead>
+                      <tr className="text-left text-[11px] uppercase tracking-wide text-muted dark:text-dark-text-secondary">
+                        <th className="py-2 pr-3 font-medium">{t('Sucursal')}</th>
+                        <th className="py-2 px-3 font-medium text-right">{t('Ventas Local')}</th>
+                        <th className="py-2 px-3 font-medium text-right">{t('Resultado Local')}</th>
+                        <th className="py-2 px-3 font-medium text-right">{t('Ventas Taller')}</th>
+                        <th className="py-2 px-3 font-medium text-right">{t('Resultado Taller')}</th>
+                        <th className="py-2 pl-3 font-medium text-right">{t('Resultado total')}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filasRentabilidad.map((f) => {
+                        const resultadoLocal = f.local.ganancia - f.egresosLocal;
+                        const resultadoTaller = f.taller.ganancia - f.egresosTaller;
+                        const resultadoTotal = resultadoLocal + resultadoTaller - f.egresosSinAsignar;
+                        return (
+                          <tr key={f.sucursalNombre ?? '_todo'} className="border-t border-border dark:border-dark-border">
+                            <td className="py-2 pr-3 font-medium whitespace-nowrap">{f.sucursalNombre ?? t('Todo el negocio')}</td>
+                            <td className="py-2 px-3 text-right tabular-nums">{m(f.local.ventas)}</td>
+                            <td className={`py-2 px-3 text-right tabular-nums font-medium ${resultadoLocal >= 0 ? 'text-good' : 'text-bad'}`}>{m(resultadoLocal)}</td>
+                            <td className="py-2 px-3 text-right tabular-nums">{m(f.taller.ventas)}</td>
+                            <td className={`py-2 px-3 text-right tabular-nums font-medium ${resultadoTaller >= 0 ? 'text-good' : 'text-bad'}`}>{m(resultadoTaller)}</td>
+                            <td className={`py-2 pl-3 text-right tabular-nums font-semibold ${resultadoTotal >= 0 ? 'text-good' : 'text-bad'}`}>{m(resultadoTotal)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {areaLocalId == null && areaTallerId == null && (
+                <p className="text-[11px] text-muted dark:text-dark-text-secondary">
+                  {areas.length > 0
+                    ? t('No encontramos áreas llamadas "Local" ni "Taller" en Configuración → Egresos, así que los egresos no se descuentan de ningún lado acá abajo — solo se muestra la venta y la ganancia bruta.')
+                    : t('Si creás áreas "Local" y "Taller" en Configuración → Egresos, sus egresos se van a descontar automáticamente del resultado que corresponda.')}
+                </p>
+              )}
+            </SeccionCard>
+          )}
 
           {/* Gráfico principal */}
           <SeccionCard
