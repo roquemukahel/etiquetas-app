@@ -9,6 +9,7 @@
 // enlazados, se archiva.
 // ============================================================
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { obtenerTodasLasFilas } from './db';
 
 export type ProductoMaestro = {
   id: string;
@@ -30,11 +31,17 @@ export type ProductoMaestro = {
 const COLUMNAS =
   'id, nombre, marca, categoria_id, precio, costo, sku, codigo_barras, descripcion, garantia_dias, stock_minimo, proveedor_id, imagen_url, archivado';
 
+// Un .select() plano acá se cortaba en 1000 filas (límite de PostgREST) con
+// catálogos grandes (miles de productos_maestro) — el resto de los maestros
+// no llegaba nunca al mapa que usa la grilla de Productos para saber a qué
+// maestro está enlazada cada fila. El síntoma: productos que SÍ tienen
+// producto_maestro_id cargado igual aparecían "sin enlazar" (sin el lápiz
+// de editar), porque su maestro específico había quedado afuera de esas
+// primeras 1000 filas.
 export async function obtenerProductosMaestro(supabase: SupabaseClient, incluirArchivados = false): Promise<ProductoMaestro[]> {
-  let query = supabase.from('productos_maestro').select(COLUMNAS).order('nombre', { ascending: true });
-  if (!incluirArchivados) query = query.eq('archivado', false);
-  const { data } = await query;
-  return (data as ProductoMaestro[]) ?? [];
+  return obtenerTodasLasFilas<ProductoMaestro>(supabase, 'productos_maestro', COLUMNAS, [{ columna: 'nombre' }], (q) =>
+    incluirArchivados ? q : q.eq('archivado', false)
+  );
 }
 
 // Igual que nombreDuplicado (categorias.ts): comparación case-insensitive

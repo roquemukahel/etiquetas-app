@@ -360,13 +360,28 @@ export default function Productos() {
       const categoriasPorNombre = new Map(categorias.map((c) => [normalizar(c.nombre), c.id]));
       const maestrosPorClave = new Map(maestros.map((m) => [`${normalizar(m.nombre)}|${normalizar(m.marca)}`, m.id]));
       const sucursalId = sucursalActual.id || null;
-      const clavesYaEnSucursal = new Set(
-        productos.filter((p) => p.sucursal_id === sucursalId).map((p) => `${normalizar(p.nombre)}|${normalizar(p.marca)}`)
+      // Antes: un producto que ya existía en la sucursal activa se saltaba
+      // entero (ver commit previo) — mal para un catálogo COMPARTIDO entre
+      // sucursales importado sucursal por sucursal (ej. migrando desde otro
+      // sistema): la cantidad de la segunda sucursal nunca se cargaba porque
+      // la fila ya "existía" (con cantidad de la primera). Ahora, si ya
+      // existe, se actualiza esa fila (cantidad, y precio/costo si el
+      // archivo trae un valor) en vez de descartarla.
+      const productosYaEnSucursal = new Map(
+        productos.filter((p) => p.sucursal_id === sucursalId).map((p) => [`${normalizar(p.nombre)}|${normalizar(p.marca)}`, p])
       );
 
       let omitidosSinNombre = 0;
-      let omitidosDuplicados = 0;
+      let omitidosDuplicadosEnArchivo = 0;
       const nuevasFilas: Record<string, unknown>[] = [];
+      // Mapa (no array) para que si el mismo nombre+marca aparece dos veces
+      // en el archivo, la segunda aparición pise a la primera en vez de
+      // mandar dos updates para la misma fila.
+      const actualizacionesPorClave = new Map<string, { id: string; cantidad: number; precio: number | null; costo: number | null }>();
+      // Si el mismo nombre+marca aparece dos veces en el archivo Y es un
+      // producto NUEVO (todavía no insertado), la segunda aparición pisa los
+      // valores de la fila ya encolada en vez de sumar otra fila nueva.
+      const indiceNuevaPorClave = new Map<string, number>();
 
       for (const fila of filasArchivo) {
         const nombre = valorDe(fila, 'nombre', 'producto', 'name');
@@ -376,10 +391,6 @@ export default function Productos() {
         }
         const marca = valorDe(fila, 'marca', 'brand') || null;
         const clave = `${normalizar(nombre)}|${normalizar(marca)}`;
-        if (clavesYaEnSucursal.has(clave)) {
-          omitidosDuplicados++;
-          continue;
-        }
 
         const categoriaTexto = valorDe(fila, 'categoria', 'categoría', 'category');
         const categoriaId = categoriaTexto ? categoriasPorNombre.get(normalizar(categoriaTexto)) ?? null : null;
@@ -394,6 +405,28 @@ export default function Productos() {
         const cantidadTexto = valorDe(fila, 'cantidad', 'stock_total', 'stock', 'quantity');
         const cantidad = cantidadTexto ? Math.max(0, Math.floor(Number(sanitizarDecimal(cantidadTexto)) || 0)) : 0;
 
+        // Ya existe una fila de este producto para la sucursal activa: se
+        // actualiza su cantidad (y precio/costo si el archivo trae un
+        // valor) en vez de descartar la fila — es lo que hace falta para
+        // reconciliar un catálogo compartido importándolo sucursal por
+        // sucursal, o para volver a importar el mismo archivo corregido.
+        const indicePendiente = indiceNuevaPorClave.get(clave);
+        if (indicePendiente != null) {
+          nuevasFilas[indicePendiente] = { ...nuevasFilas[indicePendiente], precio, costo, cantidad };
+          continue;
+        }
+
+        const existente = productosYaEnSucursal.get(clave);
+        if (existente) {
+          actualizacionesPorClave.set(clave, {
+            id: existente.id,
+            cantidad,
+            precio: precio ?? existente.precio,
+            costo: costo ?? null,
+          });
+          continue;
+        }
+
         let productoMaestroId = maestrosPorClave.get(clave) ?? null;
         if (!productoMaestroId) {
           const resultadoMaestro = await crearProductoMaestro(supabase, { nombre, marca, categoriaId, precio, costo });
@@ -401,13 +434,14 @@ export default function Productos() {
             // Ej. dos filas del archivo con el mismo nombre+marca, o alguien
             // más lo cargó justo ahora — se omite solo esta fila, no se
             // corta todo el import por un choque puntual.
-            omitidosDuplicados++;
+            omitidosDuplicadosEnArchivo++;
             continue;
           }
           productoMaestroId = resultadoMaestro.id;
           maestrosPorClave.set(clave, productoMaestroId);
         }
 
+        indiceNuevaPorClave.set(clave, nuevasFilas.length);
         nuevasFilas.push({
           nombre,
           marca,
@@ -418,8 +452,9 @@ export default function Productos() {
           producto_maestro_id: productoMaestroId,
           ...(sucursalId ? { sucursal_id: sucursalId } : {}),
         });
-        clavesYaEnSucursal.add(clave);
       }
+
+      const actualizacionesFilas = Array.from(actualizacionesPorClave.values());
 
       const { guardadas, error } = await insertarEnTandas(
         (tanda) => supabase.from('productos').insert(tanda),
@@ -428,17 +463,46 @@ export default function Productos() {
         (hechas, total) => setProgresoImport({ hechas, total })
       );
 
-      const omitidos = omitidosSinNombre + omitidosDuplicados;
+      // Los updates van uno por fila (valores distintos cada uno, Supabase
+      // no tiene un "insert...on conflict update" desde el cliente JS) —
+      // en tandas de a 20 en simultáneo en vez de secuencial, para no
+      // demorar de más con catálogos grandes donde la mayoría de las filas
+      // termina siendo una actualización (ej. reconciliar sucursal por
+      // sucursal, como este mismo cambio está pensado para resolver).
+      let actualizados = 0;
+      let errorActualizacion: string | null = null;
+      const TANDA_ACTUALIZACION = 20;
+      for (let i = 0; i < actualizacionesFilas.length && !errorActualizacion; i += TANDA_ACTUALIZACION) {
+        const tanda = actualizacionesFilas.slice(i, i + TANDA_ACTUALIZACION);
+        const resultados = await Promise.all(
+          tanda.map((f) => supabase.from('productos').update({ cantidad: f.cantidad, precio: f.precio, costo: f.costo }).eq('id', f.id))
+        );
+        for (const r of resultados) {
+          if (r.error && !errorActualizacion) errorActualizacion = r.error.message;
+          else if (!r.error) actualizados++;
+        }
+        setProgresoImport({ hechas: guardadas + actualizados, total: nuevasFilas.length + actualizacionesFilas.length });
+      }
+
+      const omitidos = omitidosSinNombre + omitidosDuplicadosEnArchivo;
+      const errorFinal = error ?? errorActualizacion;
       setResultadoImport(
-        error
-          ? `${t('Se guardaron')} ${guardadas} ${t('de')} ${nuevasFilas.length} ${t('antes de un error:')} ${error}`
-          : `${t('Listo: se importaron')} ${guardadas} ${t('productos.')}${
-              omitidos > 0 ? ` ${t('Se omitieron')} ${omitidos} ${t('filas sin nombre o ya cargadas en esta sucursal.')}` : ''
-            }`
+        errorFinal
+          ? `${t('Se guardaron')} ${guardadas + actualizados} ${t('de')} ${
+              nuevasFilas.length + actualizacionesFilas.length
+            } ${t('antes de un error:')} ${errorFinal}`
+          : `${t('Listo: se importaron')} ${guardadas} ${t('productos')}${
+              actualizados > 0 ? ` ${t('y se actualizó la cantidad de')} ${actualizados} ${t('que ya existían en esta sucursal')}` : ''
+            }.${omitidos > 0 ? ` ${t('Se omitieron')} ${omitidos} ${t('filas sin nombre o repetidas en el archivo.')}` : ''}`
       );
 
-      if (guardadas > 0) {
-        await registrarAuditoria(supabase, { accion: `importó ${guardadas} productos desde un archivo`, entidad: 'producto' });
+      if (guardadas > 0 || actualizados > 0) {
+        if (guardadas > 0) await registrarAuditoria(supabase, { accion: `importó ${guardadas} productos desde un archivo`, entidad: 'producto' });
+        if (actualizados > 0)
+          await registrarAuditoria(supabase, {
+            accion: `actualizó la cantidad de ${actualizados} productos existentes desde un archivo`,
+            entidad: 'producto',
+          });
         const [productosActualizados, maestrosActualizados] = await Promise.all([
           obtenerTodasLasFilas<ProductoFila>(
             supabase,
