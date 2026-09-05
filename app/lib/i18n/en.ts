@@ -275,6 +275,7 @@ export const EN: Record<string, string> = {
 
   // Stock (lista de dispositivos + accesorios)
   'Administrar carpetas': 'Manage folders',
+  'Compartir stock (enlace público)': 'Share stock (public link)',
   'Agregado por': 'Added by',
   Agregar: 'Add',
   'Agregar al catálogo': 'Add to catalog',

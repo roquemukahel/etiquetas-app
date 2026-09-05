@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { ESLOGAN } from '../../lib/eslogan';
 import { imagenColorDeModelo } from '../../lib/coloresModelo';
+import { compararModelosPorSalida } from '../../lib/catalogosMarcas';
 import MiniaturaDispositivo from '../../MiniaturaDispositivo';
 import { useT } from '../../lib/idioma';
 import SelectorIdiomaFlotante from '../../SelectorIdiomaFlotante';
@@ -69,6 +70,14 @@ export default function StockPublico() {
     if (!porModelo.has(clave)) porModelo.set(clave, []);
     porModelo.get(clave)!.push(m);
   }
+  // El RPC trae los modelos en orden alfabético (order by t.modelo en el
+  // SQL) — eso deja gama baja como "iPhone 7" o "iPhone 8 Plus" al final,
+  // después de "iPhone 11/12/13...", porque como texto "7" ordena después
+  // que "1". Se reordena acá por fecha real de salida (mismo criterio que
+  // ya usa el resto de la app, ver catalogosMarcas.ts) en vez de tocar el
+  // SQL, porque ese orden cronológico es un dato del catálogo de marcas de
+  // esta app, no algo que la base de datos pueda saber.
+  const modelosOrdenados = Array.from(porModelo.entries()).sort(([a], [b]) => compararModelosPorSalida(a, b));
 
   // bg-canvas/text-ink fijos (sin variantes dark:) en TODO este componente a
   // propósito: es una página PÚBLICA que ve cualquier cliente con el link, no
@@ -96,7 +105,7 @@ export default function StockPublico() {
           </p>
         ) : (
           <div className="flex flex-col gap-4">
-            {Array.from(porModelo.entries()).map(([modelo, variantes]) => (
+            {modelosOrdenados.map(([modelo, variantes]) => (
               <div key={modelo} className="rounded-2xl bg-white border border-border shadow-card p-4 flex flex-col gap-3">
                 <p className="text-base font-semibold">{modelo}</p>
                 <div className="flex flex-col gap-2">

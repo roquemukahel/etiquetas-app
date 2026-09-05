@@ -1374,6 +1374,14 @@ export default function Stock() {
                   >
                     {t('Administrar carpetas')}
                   </Link>
+                  <div className="my-1 border-t border-border dark:border-dark-border" />
+                  <Link
+                    href="/configuracion/stock-publico"
+                    onClick={() => setMenuAbierto(null)}
+                    className="px-3.5 py-2.5 text-sm hover:bg-canvas dark:hover:bg-dark-bg"
+                  >
+                    {t('Compartir stock (enlace público)')}
+                  </Link>
                 </div>
               )}
             </div>
