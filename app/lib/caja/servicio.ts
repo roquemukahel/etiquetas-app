@@ -104,23 +104,6 @@ export async function obtenerPagosDeCaja(
   return (data as PagoParaCaja[]) ?? [];
 }
 
-export async function abrirTurno(
-  supabase: SupabaseClient,
-  cajaId: string,
-  efectivoInicial: number,
-  moneda: string,
-  abiertaPor: string | null
-): Promise<{ turno: TurnoCaja | null; error: string | null }> {
-  const { data, error } = await supabase.rpc('caja_abrir_turno', {
-    p_caja_id: cajaId,
-    p_efectivo_inicial: efectivoInicial,
-    p_moneda: moneda,
-    p_abierta_por: abiertaPor,
-  });
-  if (error) return { turno: null, error: error.message };
-  return { turno: data as TurnoCaja, error: null };
-}
-
 export async function cerrarTurno(
   supabase: SupabaseClient,
   turnoId: string,
