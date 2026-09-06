@@ -20,6 +20,11 @@ const RUTAS_SIN_SELECTOR = [
   '/seguimiento',
   '/cuenta/',
   '/boleta',
+  // Página pública (el link que se comparte para mostrar el stock
+  // disponible) — la ve gente ajena al sistema, sin ninguna sesión ni
+  // vendedor/técnico propio. Preguntarle "¿con quién tengo el gusto?" no
+  // tiene sentido ahí; esa pregunta es para quien YA usa la app por dentro.
+  '/stock-publico',
 ];
 
 const KEY_POSTERGADO = 'qovento:actor-postergado';

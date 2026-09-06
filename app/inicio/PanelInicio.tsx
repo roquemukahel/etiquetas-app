@@ -63,7 +63,9 @@ export default async function PanelInicio({
       { count: countStock },
       { count: countPendientes },
       { count: countClientes },
-      { data: ordenesRecientes },
+      { data: ordenesResumen },
+      { data: itemsMasVendidos },
+      { data: ventasRecientes },
       { data: carpetasStock },
       { data: catalogoProductos },
       { data: reparacionesRecientes },
@@ -89,13 +91,43 @@ export default async function PanelInicio({
       porSucursal(supabase.from('dispositivos').select('id', { count: 'exact', head: true }).eq('en_stock', true)),
       porSucursal(supabase.from('ordenes').select('id', { count: 'exact', head: true }).eq('estado', 'pendiente')),
       supabase.from('clientes').select('id', { count: 'exact', head: true }),
+      // Antes esto era UNA sola consulta de 2 meses con los 3 joins pesados
+      // (orden_items → dispositivos, vendedores, clientes) — la mayoría de
+      // esas columnas no hacen falta para nada de lo que se calcula acá
+      // (los totales del mes solo necesitan total/anticipo/monto_canje/
+      // estado/created_at). Separado en 3 consultas más chicas y livianas
+      // en su lugar: menos datos viajando, menos trabajo de join en la base,
+      // y las 3 corren en paralelo igual (mismo Promise.all), así que no
+      // suma ninguna espera extra.
+      porSucursal(
+        supabase
+          .from('ordenes')
+          .select('total, anticipo, monto_canje, estado, created_at')
+          .gte('created_at', inicioMesPasado.toISOString())
+      ),
+      // Ranking de más vendidos: solo hace falta el mes ACTUAL (no los 2
+      // meses), y ni vendedor ni cliente entran en ese cálculo.
+      porSucursal(
+        supabase
+          .from('ordenes')
+          .select('estado, orden_items ( descripcion, cantidad, tipo, dispositivos ( modelo, color ) )')
+          .in('estado', ESTADOS_COBRADOS)
+          .gte('created_at', inicioMes.toISOString())
+      ),
+      // Actividad reciente: las últimas 8 ventas COBRADAS de verdad (antes
+      // se tomaban 8 cualquiera del rango de 2 meses, sin ordenar por
+      // fecha, y recién después se filtraban/ordenaban en JS — con el
+      // .order()+.limit() acá directamente se traen las correctas y nada
+      // más, en vez de un lote grande para terminar usando 8).
       porSucursal(
         supabase
           .from('ordenes')
           .select(
-            'total, anticipo, monto_canje, estado, created_at, vendedores ( nombre, foto_url ), clientes ( nombre, apellido ), orden_items ( descripcion, cantidad, tipo, dispositivos ( modelo, color ) )'
+            'total, anticipo, monto_canje, estado, created_at, vendedores ( nombre, foto_url ), clientes ( nombre, apellido ), orden_items ( descripcion, cantidad )'
           )
-          .gte('created_at', inicioMesPasado.toISOString())
+          .in('estado', ESTADOS_COBRADOS)
+          .order('created_at', { ascending: false })
+          .limit(8)
       ),
       supabase.from('modelos_stock').select('nombre, imagen_url'),
       supabase.from('productos').select('nombre, imagen_url'),
@@ -176,7 +208,7 @@ export default async function PanelInicio({
   const pendientes = countPendientes ?? 0;
   const totalClientes = countClientes ?? 0;
 
-  const cobradas = (ordenesRecientes ?? []).filter((o) => ESTADOS_COBRADOS.includes(o.estado));
+  const cobradas = (ordenesResumen ?? []).filter((o) => ESTADOS_COBRADOS.includes(o.estado));
   // montoVenta (total + anticipo + monto_canje) es el mismo criterio que
   // usa Estadísticas para "Ventas netas" — el "total" solo, sin sumar
   // anticipo/canje, subestima cualquier venta que los tuviera. Antes
@@ -228,7 +260,10 @@ export default async function PanelInicio({
   // sin eso, un modelo bien vendido igual aparecía con el ícono genérico.
   const telefonoInfo = new Map<string, { modelo: string | null; color: string | null }>();
   const conteoAccesorios = new Map<string, number>();
-  for (const o of cobradas.filter((o: any) => new Date(o.created_at) >= inicioMes)) {
+  // itemsMasVendidos ya viene acotado al mes actual y solo a estados
+  // cobrados desde la propia consulta (ver arriba) — no hace falta volver
+  // a filtrar acá.
+  for (const o of (itemsMasVendidos as any[]) ?? []) {
     for (const item of (o as any).orden_items ?? []) {
       if (item.tipo === 'dispositivo') {
         // El IMEI hace única a cada descripción de dispositivo — lo sacamos
@@ -271,7 +306,11 @@ export default async function PanelInicio({
     actorFoto: string | null;
   }[] = [];
 
-  for (const o of cobradas.slice(0, 8) as any[]) {
+  // ventasRecientes ya son las últimas 8 cobradas de verdad, ordenadas por
+  // fecha desde la propia consulta — antes se tomaban 8 cualquiera del
+  // rango de 2 meses (sin ordenar), así que una venta reciente podía
+  // quedar afuera de "Actividad reciente" si no estaba entre esas 8 al azar.
+  for (const o of (ventasRecientes as any[]) ?? []) {
     const primerItem = o.orden_items?.[0]?.descripcion?.split(' · IMEI')[0];
     const extra = (o.orden_items?.length ?? 0) > 1 ? ` y ${o.orden_items.length - 1} más` : '';
     const vendedor = o.vendedores?.nombre;
