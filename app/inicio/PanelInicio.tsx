@@ -110,7 +110,7 @@ export default async function PanelInicio({
       porSucursal(
         supabase
           .from('ordenes')
-          .select('estado, orden_items ( descripcion, cantidad, tipo, dispositivos ( modelo, color ) )')
+          .select('orden_items ( descripcion, cantidad, tipo, dispositivos ( modelo, color ) )')
           .in('estado', ESTADOS_COBRADOS)
           .gte('created_at', inicioMes.toISOString())
       ),
