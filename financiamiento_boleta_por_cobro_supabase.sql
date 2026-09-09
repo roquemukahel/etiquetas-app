@@ -1,0 +1,21 @@
+-- ============================================================
+-- FINANCIAMIENTO: cada cobro de cuota/cta-corriente genera su propia
+-- boleta (2026-09-09) — pedido real de un cliente, relayado por roque.
+--
+-- Hasta ahora "Registrar pago" en la ficha del cliente (cobrar una cuenta
+-- corriente o una cuota ya existente) solo insertaba en `pagos` +
+-- `cta_cte_movimientos` — nunca tocaba `ordenes`. Eso significaba que un
+-- cobro de financiamiento NO aparecía en Órdenes (ni en "Ventas" ni en
+-- ningún lado): si una vendedora cobraba algo por error, la única forma
+-- de notarlo era entrando puntualmente a la ficha de ESE cliente. Tampoco
+-- había boleta para entregarle al cliente, ni un link real desde Caja
+-- (los movimientos de cobranza tienen orden_id null, así que el botón
+-- "Ver boleta" nunca aparecía para ellos).
+--
+-- Se agrega `orden_original_id`: cuando el cobro corresponde a un plan de
+-- financiación con una venta de origen (financiacion_planes.orden_id), la
+-- nueva boleta del cobro queda enlazada a esa venta original, para poder
+-- auditar de dónde viene cada cobro desde Órdenes.
+-- ============================================================
+
+alter table ordenes add column if not exists orden_original_id uuid references ordenes(id) on delete set null;

@@ -11,9 +11,8 @@ import { simboloMoneda } from '../../lib/monedas';
 import { armarLinkWhatsApp } from '../../lib/whatsapp';
 import { codigoLlamada } from '../../lib/paises';
 import { MEDIOS_PAGO, calcularSaldo, estadoCuenta, ESTADO_INFO, diasDeMora } from '../../lib/cuentaCorriente';
-import { aplicarPagoAFinanciacion } from '../../lib/financiacion/servicio';
+import { registrarCobroFinanciamiento } from '../../lib/financiacion/servicio';
 import { sanitizarDecimal, formatearMonto } from '../../lib/numeros';
-import { CAJA_DE_COBRANZA } from '../../lib/caja/motor';
 import { ESTADOS_COBRADOS } from '../../estadisticas/datos';
 import FinanciacionCliente from '../../FinanciacionCliente';
 import { useT, useIdioma } from '../../lib/idioma';
@@ -233,76 +232,31 @@ export default function DetalleCliente() {
     }
     setGuardandoPago(true);
     setError(null);
-    const a = getActor();
-    const { data: pago, error: pErr } = await supabase
-      .from('pagos')
-      .insert({
-        cliente_id: id,
-        orden_id: null,
-        medio: pagoMedio,
-        monto,
-        moneda: monedaCodigo,
-        // Cobrar una cuenta corriente/cuota ya existente siempre es plata
-        // de la caja Financiamiento (a diferencia del pago EN EL MOMENTO
-        // de una venta, que puede ser Venta diaria o Financiamiento según
-        // si deja deuda — ver app/lib/caja/motor.ts).
-        caja_tipo: CAJA_DE_COBRANZA,
-        observacion: pagoObs.trim() || null,
-        registrado_por_nombre: a?.nombre ?? null,
-        registrado_por_foto_url: a?.fotoUrl ?? null,
-        ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
-      })
-      .select()
-      .single();
-    if (pErr || !pago) {
-      setError(`${t('No pudimos registrar el pago:')} ` + (pErr?.message ?? ''));
-      setGuardandoPago(false);
-      return;
-    }
-    const { data: nuevoMov, error: mErr } = await supabase
-      .from('cta_cte_movimientos')
-      .insert({
-        cliente_id: id,
-        tipo: 'abono',
-        concepto: 'pago',
-        monto,
-        moneda: monedaCodigo,
-        pago_id: pago.id,
-        observacion: pagoObs.trim() || null,
-        registrado_por_nombre: a?.nombre ?? null,
-        registrado_por_foto_url: a?.fotoUrl ?? null,
-        ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
-      })
-      .select('id')
-      .single();
-    if (mErr) {
-      setError(`${t('El pago se guardó pero no se pudo asentar en la cuenta:')} ` + mErr.message);
-      setGuardandoPago(false);
-      return;
-    }
-    // Si este cliente tiene financiaciones activas, el pago se reparte solo
-    // entre sus cuotas pendientes (vencidas primero) — no hace falta elegir
-    // nada a mano. El pago YA quedó asentado en la cuenta corriente arriba
-    // pase lo que pase acá; esto solo decide a qué cuota se le atribuye.
-    const resultadoCuotas = await aplicarPagoAFinanciacion(supabase, {
-      pagoId: pago.id,
+    // El pago se reparte solo entre las cuotas pendientes del cliente
+    // (vencidas primero) si tiene financiaciones activas — no hace falta
+    // elegir nada a mano. Genera además su propia boleta (ver
+    // registrarCobroFinanciamiento) — antes esto solo quedaba asentado en
+    // la cuenta corriente, sin ningún rastro visible desde Órdenes.
+    const resultado = await registrarCobroFinanciamiento(supabase, {
       clienteId: String(id),
       monto,
+      medio: pagoMedio,
       moneda: monedaCodigo,
+      sucursalId: sucursalActual.id,
+      observacion: pagoObs,
     });
-    if ('error' in resultadoCuotas) {
-      setError(`${t('El pago se registró, pero no pudimos aplicarlo a las cuotas:')} ` + resultadoCuotas.error);
+    if ('error' in resultado) {
+      setError(`${t('No pudimos registrar el pago:')} ` + resultado.error);
+      setGuardandoPago(false);
+      return;
     }
+    if (resultado.avisoCuotas) setError(t(resultado.avisoCuotas));
     setGuardandoPago(false);
     setRegistrandoPago(false);
     setRecargarFinanciacion((n) => n + 1);
-    // Se abre directo el comprobante para imprimirlo o mandarlo — mismo
-    // criterio que ya usa Proveedores para un pago/ajuste recién generado.
-    if (nuevoMov?.id) {
-      router.push(`/clientes/${id}/comprobante/${nuevoMov.id}`);
-      return;
-    }
-    await cargarMovimientos();
+    // Se abre directo la boleta para imprimirla o mandarla — mismo criterio
+    // que ya usa el resto de la app con una boleta recién generada.
+    router.push(`/ordenes/${resultado.ordenId}/boleta`);
   };
 
   const abrirAjuste = () => {

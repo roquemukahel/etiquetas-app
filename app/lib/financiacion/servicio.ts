@@ -8,6 +8,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { getActor } from '../actor';
 import { registrarAuditoria } from '../auditoria';
 import { decimalesMoneda } from '../monedas';
+import { CAJA_DE_COBRANZA } from '../caja/motor';
 import {
   generarCronograma,
   aplicarPagoACuotas,
@@ -149,6 +150,116 @@ export async function aplicarPagoAFinanciacion(
 
   const aplicado = asignaciones.reduce((acc, a) => acc + a.monto, 0);
   return { aplicado, sobrante };
+}
+
+// ---------- Cobrar una cuota/cta-corriente, generando su propia boleta ----------
+// Pedido real de un cliente: un cobro de financiamiento no dejaba ningún
+// rastro en Órdenes (nunca se tocaba `ordenes`) — si una vendedora cobraba
+// algo por error, la única forma de notarlo era entrando puntualmente a la
+// ficha de ESE cliente. Ahora cada cobro genera su propia orden/boleta, YA
+// pagada (no hay nada más que cobrar), enlazada a la venta original cuando
+// existe — así aparece en Órdenes como cualquier otra venta y Caja puede
+// linkearla como boleta real en vez de un movimiento suelto sin destino.
+// Reemplaza el insert manual a pagos/cta_cte_movimientos que antes vivía
+// directo en la ficha del cliente (ver registrarPago en
+// app/clientes/[id]/page.tsx) — misma lógica, un solo lugar.
+export async function registrarCobroFinanciamiento(
+  supabase: SupabaseClient,
+  params: {
+    clienteId: string;
+    monto: number;
+    medio: string;
+    moneda: string;
+    sucursalId?: string | null;
+    observacion?: string | null;
+    ordenOriginalId?: string | null;
+    cuotaIdElegida?: string;
+  }
+): Promise<{ ordenId: string; avisoCuotas?: string } | { error: string }> {
+  const actor = getActor();
+
+  const { data: orden, error: ordenError } = await supabase
+    .from('ordenes')
+    .insert({
+      cliente_id: params.clienteId,
+      estado: 'pagada',
+      total: params.monto,
+      moneda: params.moneda,
+      nota: 'Cobro de financiamiento / cuenta corriente.',
+      orden_original_id: params.ordenOriginalId ?? null,
+      ...(params.sucursalId ? { sucursal_id: params.sucursalId } : {}),
+    })
+    .select('id')
+    .single();
+  if (ordenError || !orden) return { error: 'No pudimos generar la boleta del cobro: ' + (ordenError?.message ?? '') };
+
+  const { error: itemError } = await supabase.from('orden_items').insert({
+    orden_id: orden.id,
+    descripcion: 'Cobro de financiamiento / cuenta corriente',
+    cantidad: 1,
+    precio_unitario: params.monto,
+    tipo: 'financiamiento',
+  });
+  if (itemError) return { error: 'No pudimos armar la boleta del cobro: ' + itemError.message };
+
+  const { data: pago, error: pagoError } = await supabase
+    .from('pagos')
+    .insert({
+      cliente_id: params.clienteId,
+      orden_id: orden.id,
+      medio: params.medio,
+      monto: params.monto,
+      moneda: params.moneda,
+      // Cobrar una cuenta corriente/cuota ya existente siempre es plata de
+      // la caja Financiamiento (a diferencia del pago EN EL MOMENTO de una
+      // venta, que puede ser Venta diaria o Financiamiento según si deja
+      // deuda — ver app/lib/caja/motor.ts).
+      caja_tipo: CAJA_DE_COBRANZA,
+      observacion: params.observacion?.trim() || null,
+      registrado_por_nombre: actor?.nombre ?? null,
+      registrado_por_foto_url: actor?.fotoUrl ?? null,
+      ...(params.sucursalId ? { sucursal_id: params.sucursalId } : {}),
+    })
+    .select('id')
+    .single();
+  if (pagoError || !pago) return { error: 'La boleta se generó pero no pudimos registrar el pago: ' + (pagoError?.message ?? '') };
+
+  const { error: movError } = await supabase.from('cta_cte_movimientos').insert({
+    cliente_id: params.clienteId,
+    tipo: 'abono',
+    concepto: 'pago',
+    monto: params.monto,
+    moneda: params.moneda,
+    pago_id: pago.id,
+    observacion: params.observacion?.trim() || null,
+    registrado_por_nombre: actor?.nombre ?? null,
+    registrado_por_foto_url: actor?.fotoUrl ?? null,
+    ...(params.sucursalId ? { sucursal_id: params.sucursalId } : {}),
+  });
+  if (movError) return { error: 'El pago se guardó pero no se pudo asentar en la cuenta corriente: ' + movError.message };
+
+  // Si esto falla, la plata YA está cobrada y asentada arriba — no se debe
+  // reportar como si todo hubiera fallado, solo avisar que el reparto entre
+  // cuotas quedó pendiente (mismo criterio que ya usaba registrarPago).
+  const resultadoCuotas = await aplicarPagoAFinanciacion(supabase, {
+    pagoId: pago.id,
+    clienteId: params.clienteId,
+    monto: params.monto,
+    moneda: params.moneda,
+    cuotaIdElegida: params.cuotaIdElegida,
+  });
+
+  await registrarAuditoria(supabase, {
+    accion: `cobró ${params.monto} de financiamiento/cuenta corriente`,
+    entidad: 'cliente',
+    entidadId: params.clienteId,
+    valorNuevo: { monto: params.monto, medio: params.medio, orden_id: orden.id },
+  });
+
+  if ('error' in resultadoCuotas) {
+    return { ordenId: orden.id, avisoCuotas: 'El pago se registró, pero no pudimos aplicarlo a las cuotas: ' + resultadoCuotas.error };
+  }
+  return { ordenId: orden.id };
 }
 
 // ---------- Ajuste (reduce deuda futura, sin tocar cuotas pagadas) ----------
