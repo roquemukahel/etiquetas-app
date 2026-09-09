@@ -2668,8 +2668,9 @@ export const EN: Record<string, string> = {
     "For security, the existing PIN isn't shown. Leave it as is to keep it, or type a new one to replace it.",
 
   // Productos (cross-branch master catalog) + Internal transfer.
-  'Vista de todo el catálogo. Tocá el ✏️ de una fila para editar categoría, marca, costo, precio y más — la cantidad se sigue ajustando desde Stock.':
-    "A view of the whole catalog. Tap the ✏️ on a row to edit category, brand, cost, price, and more — quantity still gets adjusted from Stock.",
+  'Vista de todo el catálogo. Tocá el ✏️ de una fila para editar categoría, marca, costo, precio, cantidad y más.':
+    'A view of the whole catalog. Tap the ✏️ on a row to edit category, brand, cost, price, quantity, and more.',
+  'por sucursal': 'per branch',
   'Nuevo remito': 'New transfer',
   'Buscar producto o marca...': 'Search product or brand...',
   'Buscar producto, marca, IMEI o código de barra...': 'Search product, brand, IMEI, or barcode...',

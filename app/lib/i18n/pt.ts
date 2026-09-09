@@ -2669,8 +2669,9 @@ export const PT: Record<string, string> = {
     'Por segurança, o PIN já cadastrado não é exibido. Deixe assim para não mudá-lo, ou digite um novo para substituí-lo.',
 
   // Productos (catálogo maestro cruzado entre sucursales) + Remito Interno.
-  'Vista de todo el catálogo. Tocá el ✏️ de una fila para editar categoría, marca, costo, precio y más — la cantidad se sigue ajustando desde Stock.':
-    'Visualização de todo o catálogo. Toque no ✏️ de uma linha para editar categoria, marca, custo, preço e mais — a quantidade continua se ajustando em Estoque.',
+  'Vista de todo el catálogo. Tocá el ✏️ de una fila para editar categoría, marca, costo, precio, cantidad y más.':
+    'Visualização de todo o catálogo. Toque no ✏️ de uma linha para editar categoria, marca, custo, preço, quantidade e mais.',
+  'por sucursal': 'por filial',
   'Nuevo remito': 'Nova transferência',
   'Buscar producto o marca...': 'Buscar produto ou marca...',
   'Buscar producto, marca, IMEI o código de barra...': 'Buscar produto, marca, IMEI ou código de barras...',

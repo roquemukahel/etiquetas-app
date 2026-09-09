@@ -79,6 +79,12 @@ export default function Productos() {
   const [formCodigoBarras, setFormCodigoBarras] = useState('');
   const [formGarantiaDias, setFormGarantiaDias] = useState('');
   const [formStockMinimo, setFormStockMinimo] = useState('');
+  // Cantidad, A DIFERENCIA de nombre/marca/categoría/precio/costo, es un
+  // dato POR SUCURSAL (una fila de `productos` por sucursal para el mismo
+  // maestro) — no tiene sentido un solo campo "cantidad" acá si el negocio
+  // tiene más de una sucursal. Se edita como un mapa id de fila → texto,
+  // una fila de productos por sucursal donde este maestro ya está cargado.
+  const [formCantidades, setFormCantidades] = useState<Record<string, string>>({});
   const [guardandoEdicion, setGuardandoEdicion] = useState(false);
   const [errorEdicion, setErrorEdicion] = useState<string | null>(null);
   const [exportando, setExportando] = useState(false);
@@ -131,6 +137,9 @@ export default function Productos() {
     setFormCodigoBarras(maestro.codigo_barras ?? '');
     setFormGarantiaDias(maestro.garantia_dias != null ? String(maestro.garantia_dias) : '');
     setFormStockMinimo(maestro.stock_minimo != null ? String(maestro.stock_minimo) : '');
+    setFormCantidades(
+      Object.fromEntries(productos.filter((p) => p.producto_maestro_id === maestro.id).map((p) => [p.id, String(p.cantidad)]))
+    );
     setErrorEdicion(null);
   };
 
@@ -167,6 +176,23 @@ export default function Productos() {
     // grilla ya prioriza el precio del maestro) pero no cambiaba nada de lo
     // que en verdad se cobra, quedando la edición en los hechos ignorada.
     await supabase.from('productos').update({ costo: nuevoCosto, precio: nuevoPrecio }).eq('producto_maestro_id', editando.id);
+
+    // Cantidad: por fila de `productos` (una por sucursal), no por maestro —
+    // pedido real de un cliente ("necesito modificar las cantidades y no me
+    // da la opción" desde Productos, antes solo se podía desde Stock
+    // buscando a mano fila por fila). Solo se actualizan las filas que de
+    // verdad cambiaron, para no pisar auditoría/updated_at de las que no.
+    const cantidadesCambiadas = Object.entries(formCantidades)
+      .map(([id, texto]) => ({ id, cantidad: Math.max(0, Math.floor(Number(texto) || 0)) }))
+      .filter(({ id, cantidad }) => productos.find((p) => p.id === id)?.cantidad !== cantidad);
+    if (cantidadesCambiadas.length > 0) {
+      await Promise.all(cantidadesCambiadas.map(({ id, cantidad }) => supabase.from('productos').update({ cantidad }).eq('id', id)));
+      await registrarAuditoria(supabase, {
+        accion: `ajustó la cantidad de "${formNombre.trim()}" en ${cantidadesCambiadas.length} ${cantidadesCambiadas.length === 1 ? 'sucursal' : 'sucursales'}`,
+        entidad: 'producto',
+      });
+    }
+
     await registrarAuditoria(supabase, {
       accion: `editó el producto "${formNombre.trim()}" del catálogo`,
       entidad: 'producto_maestro',
@@ -190,7 +216,14 @@ export default function Productos() {
           : m
       )
     );
-    setProductos((prev) => prev.map((p) => (p.producto_maestro_id === editando.id ? { ...p, precio: nuevoPrecio } : p)));
+    const mapaCantidadesNuevas = new Map(cantidadesCambiadas.map(({ id, cantidad }) => [id, cantidad]));
+    setProductos((prev) =>
+      prev.map((p) =>
+        p.producto_maestro_id === editando.id
+          ? { ...p, precio: nuevoPrecio, costo: nuevoCosto, cantidad: mapaCantidadesNuevas.get(p.id) ?? p.cantidad }
+          : p
+      )
+    );
     setGuardandoEdicion(false);
     setEditando(null);
   };
@@ -290,23 +323,29 @@ export default function Productos() {
   }, [productos, dispositivos, maestros, nombreCategoria, sucursalActual.id]);
 
   const filasFiltradas = useMemo(() => {
-    const q = busqueda.trim().toLowerCase();
+    // Por PALABRAS, no por una sola frase exacta — bug real reportado por
+    // un cliente: buscar "funda a06" no encontraba "Funda silicona A06"
+    // porque antes esto pedía que "funda a06" apareciera TAL CUAL, junto y
+    // en ese orden, como una sola coincidencia — cualquier palabra en el
+    // medio (como "silicona") o el orden cambiado rompía la búsqueda. Ahora
+    // cada palabra tipeada se busca por separado (en cualquier orden, en
+    // cualquiera de los campos combinados) y tienen que estar TODAS para
+    // que la fila coincida — así "a06 funda" y "funda a06" encuentran lo
+    // mismo, sin importar qué campo tenga cada palabra.
+    const palabras = busqueda.trim().toLowerCase().split(/\s+/).filter(Boolean);
     return filas.filter((f) => {
       if (filtroCategoria && f.categoriaId !== filtroCategoria) return false;
-      if (!q) return true;
-      // El código de barra/SKU/IMEI se busca por coincidencia exacta
-      // primero (así un lector de código de barra, que escribe el código
-      // completo de una sola vez, encuentra el producto aunque el nombre
-      // no tenga nada que ver con lo tipeado) y si no, por substring como
-      // el resto. El IMEI es propio de cada unidad (celulares no tienen
-      // catálogo maestro), así que se busca en la lista de IMEIs del grupo.
-      return (
-        f.nombre.toLowerCase().includes(q) ||
-        f.marca.toLowerCase().includes(q) ||
-        f.maestro?.sku?.toLowerCase().includes(q) ||
-        f.maestro?.codigo_barras?.toLowerCase().includes(q) ||
-        f.imeis.some((imei) => imei.toLowerCase().includes(q))
-      );
+      if (palabras.length === 0) return true;
+      // El código de barra/SKU se lee de un lector (escribe el código
+      // completo de una sola vez, sin espacios) — coincidencia exacta
+      // aparte, no partida en palabras. El IMEI es propio de cada unidad
+      // (celulares no tienen catálogo maestro), se busca en la lista de
+      // IMEIs del grupo.
+      const q = busqueda.trim().toLowerCase();
+      if (f.maestro?.sku?.toLowerCase().includes(q) || f.maestro?.codigo_barras?.toLowerCase().includes(q)) return true;
+      if (f.imeis.some((imei) => imei.toLowerCase().includes(q))) return true;
+      const textoCombinado = `${f.nombre} ${f.marca} ${f.categoria}`.toLowerCase();
+      return palabras.every((palabra) => textoCombinado.includes(palabra));
     });
   }, [filas, busqueda, filtroCategoria]);
 
@@ -534,7 +573,7 @@ export default function Productos() {
         <div className="flex-1">
           <h1 className="text-xl font-semibold">{t('Productos')}</h1>
           <p className="text-sm text-muted dark:text-dark-text-secondary">
-            {t('Vista de todo el catálogo. Tocá el ✏️ de una fila para editar categoría, marca, costo, precio y más — la cantidad se sigue ajustando desde Stock.')}
+            {t('Vista de todo el catálogo. Tocá el ✏️ de una fila para editar categoría, marca, costo, precio, cantidad y más.')}
           </p>
         </div>
         {puedeAgregarStock && sucursales.length > 1 && (
@@ -758,6 +797,33 @@ export default function Productos() {
                 />
               </div>
             </div>
+            {Object.keys(formCantidades).length > 0 && (
+              <div className="flex flex-col gap-2 border-t border-border dark:border-dark-border pt-3">
+                <span className="text-xs font-medium text-muted dark:text-dark-text-secondary">
+                  {t('Cantidad')}
+                  {sucursales.length > 1 ? ` (${t('por sucursal')})` : ''}
+                </span>
+                {productos
+                  .filter((p) => p.producto_maestro_id === editando?.id)
+                  .map((p) => (
+                    <div key={p.id} className="flex items-center gap-2">
+                      {sucursales.length > 1 && (
+                        <span className="text-xs text-muted dark:text-dark-text-secondary flex-1 truncate">
+                          🏬 {sucursales.find((s) => s.id === p.sucursal_id)?.nombre ?? t('Sin sucursal')}
+                        </span>
+                      )}
+                      <input
+                        value={formCantidades[p.id] ?? ''}
+                        onChange={(e) => setFormCantidades((prev) => ({ ...prev, [p.id]: e.target.value.replace(/[^\d]/g, '') }))}
+                        inputMode="numeric"
+                        className={`bg-white dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm ${
+                          sucursales.length > 1 ? 'w-24' : 'w-full'
+                        }`}
+                      />
+                    </div>
+                  ))}
+              </div>
+            )}
             {errorEdicion && <p className="text-xs text-bad bg-bad/10 rounded-lg px-3 py-2">{errorEdicion}</p>}
             <div className="flex gap-2 justify-end">
               <button

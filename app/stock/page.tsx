@@ -226,6 +226,11 @@ export default function Stock() {
   const [productosMaestroDisponibles, setProductosMaestroDisponibles] = useState<ProductoMaestro[]>([]);
   // Filtro de la grilla de accesorios por categoría — '' = todas.
   const [filtroCategoriaProducto, setFiltroCategoriaProducto] = useState('');
+  // Buscador de la grilla de accesorios — antes NO existía acá (a
+  // diferencia de la pestaña Dispositivos, que sí tiene uno), así que con
+  // un catálogo grande la única forma de encontrar algo era bajar con el
+  // mouse categoría por categoría. Pedido real de un cliente.
+  const [busquedaProducto, setBusquedaProducto] = useState('');
   const [guardandoProducto, setGuardandoProducto] = useState(false);
   const [errorProducto, setErrorProducto] = useState<string | null>(null);
   const [editandoCantidad, setEditandoCantidad] = useState<string | null>(null);
@@ -1062,8 +1067,19 @@ export default function Stock() {
     if (filtroCategoriaProducto === '__sin_categoria__') lista = lista.filter((p) => !p.categoria_id);
     else if (filtroCategoriaProducto) lista = lista.filter((p) => p.categoria_id === filtroCategoriaProducto);
     if (filtroSucursal) lista = lista.filter((p) => p.sucursal_id === filtroSucursal);
+    // Por PALABRAS (todas tienen que aparecer, en cualquier orden y en
+    // cualquier campo), no por una frase exacta — mismo criterio que ya se
+    // usa en /productos, para que "funda a06" encuentre "Funda silicona
+    // A06" igual que "a06 funda".
+    const palabras = busquedaProducto.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (palabras.length > 0) {
+      lista = lista.filter((p) => {
+        const texto = `${p.nombre} ${p.marca ?? ''} ${p.sku ?? ''} ${p.codigo_barras ?? ''} ${p.numero_serie ?? ''}`.toLowerCase();
+        return palabras.every((palabra) => texto.includes(palabra));
+      });
+    }
     return lista;
-  }, [productos, filtroCategoriaProducto, filtroSucursal]);
+  }, [productos, filtroCategoriaProducto, filtroSucursal, busquedaProducto]);
 
   // Con un catálogo de accesorios grande, pintar TODAS las tarjetas de una
   // (cada una con su imagen) es lo que hace sentir lenta la pantalla — mismo
@@ -2247,6 +2263,24 @@ export default function Stock() {
               </button>
             </div>
           )}
+
+          <div className="relative">
+            <input
+              value={busquedaProducto}
+              onChange={(e) => setBusquedaProducto(e.target.value)}
+              placeholder={t('Buscar por nombre, marca, código o serie…')}
+              className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl pl-4 pr-9 py-3 text-sm"
+            />
+            {busquedaProducto && (
+              <button
+                onClick={() => setBusquedaProducto('')}
+                aria-label={t('Limpiar búsqueda')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 h-6 w-6 rounded-full text-muted dark:text-dark-text-secondary hover:bg-canvas dark:hover:bg-dark-bg flex items-center justify-center"
+              >
+                ✕
+              </button>
+            )}
+          </div>
 
           {categoriasStock.some((c) => c.perfil_default === 'generico') && (
             <div className="flex flex-wrap gap-1.5">
