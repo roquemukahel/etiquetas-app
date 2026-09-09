@@ -207,6 +207,13 @@ export default function NuevaOrden() {
   const [dispositivosStock, setDispositivosStock] = useState<Dispositivo[]>([]);
   const [carpetasStock, setCarpetasStock] = useState<string[]>([]);
   const [buscarDispositivo, setBuscarDispositivo] = useState('');
+  // Equipos señados (Plan de ahorro con un dispositivo puntual reservado):
+  // "señar" no toca dispositivos.en_stock (solo pasa a completar la venta,
+  // ver senar_dispositivo_supabase.sql), así que sin este filtro un equipo
+  // ya prometido a un cliente seguía apareciendo acá como disponible para
+  // cualquier otro — pedido real de un cliente, dos personas terminaban
+  // llevándose (o creyendo llevarse) el mismo equipo.
+  const [dispositivosSenados, setDispositivosSenados] = useState<Set<string>>(new Set());
   const [buscarProducto, setBuscarProducto] = useState('');
   const [modoDispositivo, setModoDispositivo] = useState<'stock' | 'nuevo'>('stock');
   const [nuevoModelo, setNuevoModelo] = useState('');
@@ -403,6 +410,10 @@ export default function NuevaOrden() {
       setDispositivosStock(data);
     })();
     (async () => {
+      const { data } = await supabase.from('planes_ahorro').select('dispositivo_id').eq('estado', 'activo').not('dispositivo_id', 'is', null);
+      setDispositivosSenados(new Set(((data ?? []) as { dispositivo_id: string }[]).map((p) => p.dispositivo_id)));
+    })();
+    (async () => {
       // Mismo bug que tenían los dispositivos (ver comentario arriba):
       // select() sin paginar se corta en 1000 filas sin avisar. Con un
       // catálogo de accesorios grande, los productos que quedaban afuera
@@ -446,8 +457,9 @@ export default function NuevaOrden() {
     const q = buscarDispositivo.trim().toLowerCase();
     return dispositivosStock
       .filter((d) => !idsEnCarrito.has(d.id))
+      .filter((d) => !dispositivosSenados.has(d.id))
       .filter((d) => !q || [d.modelo, d.imei].filter(Boolean).some((c) => c!.toLowerCase().includes(q)));
-  }, [dispositivosStock, buscarDispositivo, idsEnCarrito]);
+  }, [dispositivosStock, buscarDispositivo, idsEnCarrito, dispositivosSenados]);
 
   // Mismo criterio que dispositivosFiltrados: buscador en vivo, sin
   // debounce (el catálogo de productos es chico). También filtra por la
@@ -1008,6 +1020,24 @@ export default function NuevaOrden() {
     let ordenCreadaId: string | null = null;
 
     try {
+      // Chequeo de último momento: el picker filtra los equipos señados con
+      // lo que ya se sabía al abrir esta pantalla, pero alguien pudo haber
+      // señado uno de estos MISMOS equipos (desde Plan de ahorro) mientras
+      // esta pantalla seguía abierta — el "eq" de en_stock de más abajo no
+      // lo detecta porque señar no toca en_stock.
+      if (dispositivoIds.length > 0) {
+        const { data: senadosAhora } = await supabase
+          .from('planes_ahorro')
+          .select('dispositivo_id')
+          .eq('estado', 'activo')
+          .in('dispositivo_id', dispositivoIds);
+        if (senadosAhora && senadosAhora.length > 0) {
+          throw new Error(
+            t('Uno o más de estos dispositivos se señaron para otro cliente recién — volvé a la pantalla anterior y actualizá el carrito.')
+          );
+        }
+      }
+
       // Se reserva el stock ANTES de crear la orden, y solo se marca
       // en_stock:false si todavía figuraba en_stock:true en ese momento
       // (el "eq" corre en el motor de la base, así que si dos vendedores

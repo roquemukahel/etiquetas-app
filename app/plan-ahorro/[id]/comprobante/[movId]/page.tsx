@@ -29,7 +29,13 @@ type Plan = {
   capacidad_gb: number | null;
   color: string | null;
   monto_objetivo: number;
+  detalles: string | null;
   clientes: { nombre: string; apellido: string | null; telefono: string | null } | null;
+  // Solo si esto es una SEÑA (equipo puntual reservado, no un ahorro para
+  // "algún modelo"). El IMEI vive en `dispositivos`, nunca se copia acá —
+  // sin este join, dos unidades idénticas del mismo modelo/color eran
+  // indistinguibles en el comprobante.
+  dispositivos: { imei: string | null } | null;
 };
 
 type Negocio = {
@@ -72,7 +78,11 @@ export default function ComprobantePlanAhorro() {
   useEffect(() => {
     (async () => {
       const [{ data: planData }, { data: mov, error: movError }, { data: todosMov, error: todosMovError }] = await Promise.all([
-        supabase.from('planes_ahorro').select('id, modelo, capacidad_gb, color, monto_objetivo, clientes ( nombre, apellido, telefono )').eq('id', id).maybeSingle(),
+        supabase
+          .from('planes_ahorro')
+          .select('id, modelo, capacidad_gb, color, monto_objetivo, detalles, clientes ( nombre, apellido, telefono ), dispositivos ( imei )')
+          .eq('id', id)
+          .maybeSingle(),
         supabase
           .from('plan_ahorro_movimientos')
           .select('id, monto, medio, observacion, fecha, registrado_por_nombre, anulado, token_publico')
@@ -228,6 +238,8 @@ export default function ComprobantePlanAhorro() {
             {plan.capacidad_gb ? ` · ${plan.capacidad_gb}GB` : ''}
             {plan.color ? ` · ${plan.color}` : ''}
           </p>
+          {plan.dispositivos?.imei && <p className="text-muted">{t('IMEI:')} {plan.dispositivos.imei}</p>}
+          {plan.detalles && <p className="text-muted">{t('Detalles:')} {plan.detalles}</p>}
           {movimiento.medio && <p className="text-muted">{t('Medio:')} {movimiento.medio}</p>}
           {movimiento.observacion && <p className="text-muted">{t('Observación:')} {movimiento.observacion}</p>}
           {movimiento.registrado_por_nombre && <p className="text-muted">{t('Registrado por:')} {movimiento.registrado_por_nombre}</p>}

@@ -141,6 +141,11 @@ export default function Stock() {
   const [tab, setTab] = useState<'celulares' | 'accesorios'>('celulares');
 
   const [dispositivos, setDispositivos] = useState<Dispositivo[]>([]);
+  // Equipos con un plan de ahorro/seña ACTIVO apuntándolos — señar no toca
+  // en_stock (solo pasa al completar la venta), así que sin esto un equipo
+  // ya prometido a un cliente se veía igual que cualquier otro disponible.
+  // Pedido real de un cliente: que se note acá que "está señado".
+  const [dispositivosSenados, setDispositivosSenados] = useState<Set<string>>(new Set());
   // "Vendidos" puede tener miles de filas (el historial completo) contra
   // un puñado "en stock" — traerlas de arranque es exactamente lo que hacía
   // lenta a esta pantalla. Ahora solo se cargan la primera vez que el
@@ -378,7 +383,7 @@ export default function Stock() {
   // memoria o no.
   const cargarDispositivos = async (opts?: { incluirVendidos?: boolean }) => {
     const incluirVendidos = opts?.incluirVendidos ?? vendidosCargados;
-    const [enStock, vendidos, { count: countVendidos }, { count: countTotal }] = await Promise.all([
+    const [enStock, vendidos, { count: countVendidos }, { count: countTotal }, { data: senados }] = await Promise.all([
       obtenerTodasLasFilas<Dispositivo>(supabase, 'dispositivos', COLUMNAS_DISPOSITIVO, ORDEN_DISPOSITIVO, (q) =>
         q.eq('en_stock', true)
       ),
@@ -389,8 +394,10 @@ export default function Stock() {
         : Promise.resolve([]),
       supabase.from('dispositivos').select('id', { count: 'exact', head: true }).eq('en_stock', false),
       supabase.from('dispositivos').select('id', { count: 'exact', head: true }),
+      supabase.from('planes_ahorro').select('dispositivo_id').eq('estado', 'activo').not('dispositivo_id', 'is', null),
     ]);
     setDispositivos([...enStock, ...vendidos]);
+    setDispositivosSenados(new Set(((senados ?? []) as { dispositivo_id: string }[]).map((p) => p.dispositivo_id)));
     setVendidosCargados(incluirVendidos);
     setTotalVendidos(countVendidos ?? 0);
     setTotalDispositivos(countTotal ?? 0);
@@ -1975,6 +1982,11 @@ export default function Stock() {
                               {sellado && (
                                 <span className="text-[10px] font-bold text-black bg-gradient-to-b from-amber-300 to-amber-500 border border-black/40 rounded-full px-2 py-0.5">
                                   ✦ {t('SELLADO')}
+                                </span>
+                              )}
+                              {dispositivosSenados.has(d.id) && (
+                                <span className="text-[10px] font-bold text-white bg-diag rounded-full px-2 py-0.5">
+                                  🔒 {t('SEÑADO')}
                                 </span>
                               )}
                             </p>

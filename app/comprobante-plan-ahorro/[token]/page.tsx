@@ -18,7 +18,15 @@ type Comprobante = {
   fecha: string;
   registrado_por_nombre: string | null;
   anulado: boolean;
-  plan: { id: string; modelo: string | null; capacidad_gb: number | null; color: string | null; monto_objetivo: number };
+  plan: {
+    id: string;
+    modelo: string | null;
+    capacidad_gb: number | null;
+    color: string | null;
+    monto_objetivo: number;
+    detalles: string | null;
+    imei: string | null;
+  };
   cliente_nombre: string | null;
   negocio: {
     nombre: string;
@@ -142,6 +150,8 @@ export default function ComprobantePlanAhorroPublico() {
             {c.plan.capacidad_gb ? ` · ${c.plan.capacidad_gb}GB` : ''}
             {c.plan.color ? ` · ${c.plan.color}` : ''}
           </p>
+          {c.plan.imei && <p className="text-muted">{t('IMEI:')} {c.plan.imei}</p>}
+          {c.plan.detalles && <p className="text-muted">{t('Detalles:')} {c.plan.detalles}</p>}
           {c.medio && <p className="text-muted">{t('Medio:')} {c.medio}</p>}
           {c.observacion && <p className="text-muted">{t('Observación:')} {c.observacion}</p>}
           {c.registrado_por_nombre && <p className="text-muted">{t('Registrado por:')} {c.registrado_por_nombre}</p>}
