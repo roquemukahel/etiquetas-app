@@ -621,12 +621,17 @@ export default function ServicioTecnico() {
           })
           .filter(Boolean)
           .join('\n\n') || null;
+      // Si algún equipo ya tiene precio acordado, el total de la boleta
+      // tiene que reflejarlo desde el ingreso — dejarlo en 0 (como cuando
+      // ningún equipo tiene precio) hacía que la boleta y la lista de
+      // Órdenes mostraran $0 pese a que el ítem sí tenía un precio real.
+      const totalAcordado = equiposEfectivos.reduce((acc, eq) => acc + (eq.precioAcordado ? Number(eq.precioAcordado) || 0 : 0), 0);
       const { data: orden, error: ordenError } = await supabase
         .from('ordenes')
         .insert({
           cliente_id: clienteId,
           estado: 'pendiente',
-          total: 0,
+          total: totalAcordado,
           nota: notaCondicion,
           ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
         })
@@ -730,7 +735,14 @@ export default function ServicioTecnico() {
         actor_nombre: actorRecepcion?.nombre ?? null,
       }));
     if (evidenciasNuevas.length > 0) {
-      await supabase.from('reparaciones_evidencias').insert(evidenciasNuevas);
+      const { error: evidenciaError } = await supabase.from('reparaciones_evidencias').insert(evidenciasNuevas);
+      // El equipo YA se recibió bien (lo de arriba se guardó) — no hay que
+      // bloquear ni deshacer nada por esto, pero si la foto no se guardó de
+      // verdad hay que avisar: es justamente la constancia que se quería
+      // dejar antes de que el equipo pase por el técnico.
+      if (evidenciaError) {
+        alert('⚠️ ' + t('El equipo se recibió bien, pero no pudimos guardar la foto de evidencia:') + ' ' + evidenciaError.message);
+      }
     }
 
     // Si alguno de los modelos es nuevo (no existía como carpeta en Stock),

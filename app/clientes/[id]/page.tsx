@@ -189,7 +189,21 @@ export default function DetalleCliente() {
   }, [movimientos]);
 
   const ordenesServicio = useMemo(() => ordenes.filter((o) => o.orden_items.some((i) => i.tipo === 'trabajo')), [ordenes]);
-  const ordenesCompra = useMemo(() => ordenes.filter((o) => !o.orden_items.some((i) => i.tipo === 'trabajo')), [ordenes]);
+  // Un cobro de financiamiento/cuenta corriente (ver registrarCobroFinanciamiento)
+  // arma su boleta con un único ítem tipo 'financiamiento' — no es ni una
+  // venta de producto ni un arreglo, así que no va en ninguna de las dos
+  // listas de acá (su detalle ya vive en la pestaña "Financiación" más
+  // abajo). Sin esto, cada cuota cobrada aparecía en "Compras" como si el
+  // cliente hubiera comprado algo.
+  const ordenesCompra = useMemo(
+    () =>
+      ordenes.filter(
+        (o) =>
+          !o.orden_items.some((i) => i.tipo === 'trabajo') &&
+          !(o.orden_items.length > 0 && o.orden_items.every((i) => i.tipo === 'financiamiento'))
+      ),
+    [ordenes]
+  );
   // Mismo criterio que Estadísticas (ESTADOS_COBRADOS): una orden pendiente
   // o cancelada no es una compra "cumplida" — sumarla acá infla el total
   // histórico que se le muestra al vendedor sobre este cliente.
@@ -250,10 +264,15 @@ export default function DetalleCliente() {
       setGuardandoPago(false);
       return;
     }
-    if (resultado.avisoCuotas) setError(t(resultado.avisoCuotas));
     setGuardandoPago(false);
     setRegistrandoPago(false);
     setRecargarFinanciacion((n) => n + 1);
+    // El pago y la boleta YA se guardaron bien — esto solo avisa que el
+    // reparto a cuotas puntuales quedó pendiente. Un alert() es lo único
+    // que sigue siendo visible después de la navegación de abajo (un error
+    // puesto en el estado de esta pantalla desaparecería con ella al
+    // redirigir a la boleta).
+    if (resultado.avisoCuotas) alert('⚠️ ' + resultado.avisoCuotas);
     // Se abre directo la boleta para imprimirla o mandarla — mismo criterio
     // que ya usa el resto de la app con una boleta recién generada.
     router.push(`/ordenes/${resultado.ordenId}/boleta`);

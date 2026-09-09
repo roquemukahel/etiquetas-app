@@ -8,7 +8,6 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { getActor } from '../actor';
 import { registrarAuditoria } from '../auditoria';
 import { decimalesMoneda } from '../monedas';
-import { CAJA_DE_COBRANZA } from '../caja/motor';
 import {
   generarCronograma,
   aplicarPagoACuotas,
@@ -178,88 +177,54 @@ export async function registrarCobroFinanciamiento(
 ): Promise<{ ordenId: string; avisoCuotas?: string } | { error: string }> {
   const actor = getActor();
 
-  const { data: orden, error: ordenError } = await supabase
-    .from('ordenes')
-    .insert({
-      cliente_id: params.clienteId,
-      estado: 'pagada',
-      total: params.monto,
-      moneda: params.moneda,
-      nota: 'Cobro de financiamiento / cuenta corriente.',
-      orden_original_id: params.ordenOriginalId ?? null,
-      ...(params.sucursalId ? { sucursal_id: params.sucursalId } : {}),
-    })
-    .select('id')
-    .single();
-  if (ordenError || !orden) return { error: 'No pudimos generar la boleta del cobro: ' + (ordenError?.message ?? '') };
-
-  const { error: itemError } = await supabase.from('orden_items').insert({
-    orden_id: orden.id,
-    descripcion: 'Cobro de financiamiento / cuenta corriente',
-    cantidad: 1,
-    precio_unitario: params.monto,
-    tipo: 'financiamiento',
+  // Las 4 escrituras (orden, orden_items, pago, movimiento de cta cte) pasan
+  // por UN solo RPC atómico (financiacion_registrar_cobro) — antes eran 4
+  // inserts sueltos desde acá: si el de cta_cte_movimientos fallaba después
+  // de que el pago ya se hubiera insertado, la plata quedaba cobrada de
+  // verdad (Caja la cuenta) pero el saldo del cliente nunca bajaba. Con el
+  // RPC, si cualquier paso falla, Postgres deshace todo — nunca queda a
+  // mitad de camino. La aplicación a cuotas puntuales sigue siendo un paso
+  // aparte porque decidir A QUÉ CUOTA se aplica es lógica de dominio en
+  // TypeScript (motor.ts), no algo que deba vivir en SQL.
+  const { data, error } = await supabase.rpc('financiacion_registrar_cobro', {
+    p_cliente_id: params.clienteId,
+    p_monto: params.monto,
+    p_medio: params.medio,
+    p_moneda: params.moneda,
+    p_sucursal_id: params.sucursalId ?? null,
+    p_observacion: params.observacion?.trim() || null,
+    p_orden_original_id: params.ordenOriginalId ?? null,
+    p_usuario: actor?.nombre ?? null,
   });
-  if (itemError) return { error: 'No pudimos armar la boleta del cobro: ' + itemError.message };
-
-  const { data: pago, error: pagoError } = await supabase
-    .from('pagos')
-    .insert({
-      cliente_id: params.clienteId,
-      orden_id: orden.id,
-      medio: params.medio,
-      monto: params.monto,
-      moneda: params.moneda,
-      // Cobrar una cuenta corriente/cuota ya existente siempre es plata de
-      // la caja Financiamiento (a diferencia del pago EN EL MOMENTO de una
-      // venta, que puede ser Venta diaria o Financiamiento según si deja
-      // deuda — ver app/lib/caja/motor.ts).
-      caja_tipo: CAJA_DE_COBRANZA,
-      observacion: params.observacion?.trim() || null,
-      registrado_por_nombre: actor?.nombre ?? null,
-      registrado_por_foto_url: actor?.fotoUrl ?? null,
-      ...(params.sucursalId ? { sucursal_id: params.sucursalId } : {}),
-    })
-    .select('id')
-    .single();
-  if (pagoError || !pago) return { error: 'La boleta se generó pero no pudimos registrar el pago: ' + (pagoError?.message ?? '') };
-
-  const { error: movError } = await supabase.from('cta_cte_movimientos').insert({
-    cliente_id: params.clienteId,
-    tipo: 'abono',
-    concepto: 'pago',
-    monto: params.monto,
-    moneda: params.moneda,
-    pago_id: pago.id,
-    observacion: params.observacion?.trim() || null,
-    registrado_por_nombre: actor?.nombre ?? null,
-    registrado_por_foto_url: actor?.fotoUrl ?? null,
-    ...(params.sucursalId ? { sucursal_id: params.sucursalId } : {}),
-  });
-  if (movError) return { error: 'El pago se guardó pero no se pudo asentar en la cuenta corriente: ' + movError.message };
+  if (error || !data) return { error: 'No pudimos registrar el cobro: ' + (error?.message ?? '') };
+  const ordenId = (data as { orden_id: string; pago_id: string }).orden_id;
+  const pagoId = (data as { orden_id: string; pago_id: string }).pago_id;
 
   // Si esto falla, la plata YA está cobrada y asentada arriba — no se debe
   // reportar como si todo hubiera fallado, solo avisar que el reparto entre
-  // cuotas quedó pendiente (mismo criterio que ya usaba registrarPago).
-  const resultadoCuotas = await aplicarPagoAFinanciacion(supabase, {
-    pagoId: pago.id,
-    clienteId: params.clienteId,
-    monto: params.monto,
-    moneda: params.moneda,
-    cuotaIdElegida: params.cuotaIdElegida,
-  });
-
-  await registrarAuditoria(supabase, {
-    accion: `cobró ${params.monto} de financiamiento/cuenta corriente`,
-    entidad: 'cliente',
-    entidadId: params.clienteId,
-    valorNuevo: { monto: params.monto, medio: params.medio, orden_id: orden.id },
-  });
+  // cuotas quedó pendiente. Corre en paralelo con la auditoría: ninguna de
+  // las dos depende del resultado de la otra, solo de lo que ya devolvió
+  // el RPC de arriba.
+  const [resultadoCuotas] = await Promise.all([
+    aplicarPagoAFinanciacion(supabase, {
+      pagoId,
+      clienteId: params.clienteId,
+      monto: params.monto,
+      moneda: params.moneda,
+      cuotaIdElegida: params.cuotaIdElegida,
+    }),
+    registrarAuditoria(supabase, {
+      accion: `cobró ${params.monto} de financiamiento/cuenta corriente`,
+      entidad: 'cliente',
+      entidadId: params.clienteId,
+      valorNuevo: { monto: params.monto, medio: params.medio, orden_id: ordenId },
+    }),
+  ]);
 
   if ('error' in resultadoCuotas) {
-    return { ordenId: orden.id, avisoCuotas: 'El pago se registró, pero no pudimos aplicarlo a las cuotas: ' + resultadoCuotas.error };
+    return { ordenId, avisoCuotas: 'El pago se registró, pero no pudimos aplicarlo a las cuotas: ' + resultadoCuotas.error };
   }
-  return { ordenId: orden.id };
+  return { ordenId };
 }
 
 // ---------- Ajuste (reduce deuda futura, sin tocar cuotas pagadas) ----------

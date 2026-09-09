@@ -11,6 +11,7 @@ import { getActor, useActor } from '../lib/actor';
 import { tienePermiso } from '../lib/permisos';
 import { leerArchivoDatos, valorDe, descargarCSV, descargarDatos, insertarEnTandas } from '../lib/csv';
 import { obtenerTodasLasFilas } from '../lib/db';
+import { obtenerDispositivosSenados } from '../lib/planAhorro';
 import { asegurarModelo, normalizarNombreModelo } from '../lib/modelos';
 import { compararModelosPorSalida } from '../lib/catalogosMarcas';
 import { sanitizarDecimal, formatearMonto } from '../lib/numeros';
@@ -383,7 +384,7 @@ export default function Stock() {
   // memoria o no.
   const cargarDispositivos = async (opts?: { incluirVendidos?: boolean }) => {
     const incluirVendidos = opts?.incluirVendidos ?? vendidosCargados;
-    const [enStock, vendidos, { count: countVendidos }, { count: countTotal }, { data: senados }] = await Promise.all([
+    const [enStock, vendidos, { count: countVendidos }, { count: countTotal }, senados] = await Promise.all([
       obtenerTodasLasFilas<Dispositivo>(supabase, 'dispositivos', COLUMNAS_DISPOSITIVO, ORDEN_DISPOSITIVO, (q) =>
         q.eq('en_stock', true)
       ),
@@ -394,10 +395,10 @@ export default function Stock() {
         : Promise.resolve([]),
       supabase.from('dispositivos').select('id', { count: 'exact', head: true }).eq('en_stock', false),
       supabase.from('dispositivos').select('id', { count: 'exact', head: true }),
-      supabase.from('planes_ahorro').select('dispositivo_id').eq('estado', 'activo').not('dispositivo_id', 'is', null),
+      obtenerDispositivosSenados(supabase),
     ]);
     setDispositivos([...enStock, ...vendidos]);
-    setDispositivosSenados(new Set(((senados ?? []) as { dispositivo_id: string }[]).map((p) => p.dispositivo_id)));
+    setDispositivosSenados(senados);
     setVendidosCargados(incluirVendidos);
     setTotalVendidos(countVendidos ?? 0);
     setTotalDispositivos(countTotal ?? 0);
@@ -1177,16 +1178,39 @@ export default function Stock() {
 
     const cantidadNueva = esSerializado ? 1 : Math.max(0, Math.floor(Number(cantidadInicialProducto) || 0));
 
-    const { error: insertError } = existente
-      ? await supabase
+    let insertError: { message: string } | null = null;
+    if (existente) {
+      // La cantidad se suma con el mismo RPC atómico que usa el resto de la
+      // app (producto_mover_stock, con "select ... for update") en vez de
+      // `existente.cantidad + cantidadNueva` calculado en el navegador — ese
+      // cálculo usa la cantidad que esta pestaña tenía en memoria, así que
+      // si dos personas agregan stock del mismo producto/sucursal casi al
+      // mismo tiempo, una de las dos sumas se pierde en silencio. Precio y
+      // costo (que no tienen ese problema de concurrencia) se actualizan
+      // aparte, en un update normal.
+      if (cantidadNueva > 0) {
+        const actorStock = getActor();
+        const { error: rpcError } = await supabase.rpc('producto_mover_stock', {
+          p_producto_id: existente.id,
+          p_tipo: 'entrada',
+          p_cantidad: cantidadNueva,
+          p_motivo: 'Ingreso de stock',
+          p_usuario: actorStock?.nombre ?? null,
+        });
+        if (rpcError) insertError = rpcError;
+      }
+      if (!insertError && (precioProducto || costoProducto)) {
+        const { error: precioError } = await supabase
           .from('productos')
           .update({
-            cantidad: existente.cantidad + cantidadNueva,
             precio: precioProducto ? Number(precioProducto) : existente.precio,
             costo: costoProducto ? Number(costoProducto) : existente.costo,
           })
-          .eq('id', existente.id)
-      : await supabase.from('productos').insert({
+          .eq('id', existente.id);
+        insertError = precioError;
+      }
+    } else {
+      const { error } = await supabase.from('productos').insert({
           nombre: nombreLimpio,
           precio: precioProducto ? Number(precioProducto) : null,
           costo: costoProducto ? Number(costoProducto) : null,
@@ -1207,6 +1231,8 @@ export default function Stock() {
               }
             : {}),
         });
+      insertError = error;
+    }
     if (insertError) {
       setErrorProducto(`${t('No pudimos guardar:')} ` + insertError.message);
       setGuardandoProducto(false);

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { obtenerTodasLasFilas } from '../../lib/db';
 import { sanitizarDecimal } from '../../lib/numeros';
+import { obtenerDispositivosSenados } from '../../lib/planAhorro';
 import SelectorColorAuto from '../../SelectorColorAuto';
 import { useT } from '../../lib/idioma';
 
@@ -70,14 +71,14 @@ export default function NuevoPlanAhorro() {
       setCarpetas((data ?? []).map((m) => m.nombre));
     })();
     (async () => {
-      const [{ data: disp }, { data: planes }] = await Promise.all([
+      const [{ data: disp }, senados] = await Promise.all([
         supabase.from('dispositivos').select('id, modelo, capacidad_gb, color, imei, precio').eq('en_stock', true).order('modelo'),
         // Un equipo ya señado por otro plan activo no debería poder volver a
         // señarse — si no, dos clientes podrían terminar reservando el mismo.
-        supabase.from('planes_ahorro').select('dispositivo_id').not('dispositivo_id', 'is', null).not('estado', 'in', '(completado,cancelado)'),
+        obtenerDispositivosSenados(supabase),
       ]);
       setDispositivosStock((disp as DispositivoStock[]) ?? []);
-      setReservados(new Set(((planes ?? []) as { dispositivo_id: string }[]).map((p) => p.dispositivo_id)));
+      setReservados(senados);
     })();
   }, []);
 

@@ -9,7 +9,7 @@ import { useActor } from '../lib/actor';
 import { tienePermiso } from '../lib/permisos';
 import { registrarAuditoria } from '../lib/auditoria';
 import { generarOrdenDeReparacion } from '../lib/ordenesServicio';
-import { registrarCobroFinanciamiento } from '../lib/financiacion/servicio';
+import { registrarCobroFinanciamiento, aFechaISO } from '../lib/financiacion/servicio';
 import { MEDIOS_PAGO, medioLabel } from '../lib/cuentaCorriente';
 import { simboloMoneda } from '../lib/monedas';
 import { formatearMonto, sanitizarDecimal } from '../lib/numeros';
@@ -342,7 +342,12 @@ export default function Ordenes() {
   // resumen de FinanciacionCliente en la ficha (Σ importe_pagado de cuotas
   // no anuladas, restado del importe financiado).
   const resumenFinanciamiento = useMemo(() => {
-    const hoyISO = new Date().toISOString().slice(0, 10);
+    // aFechaISO (no toISOString().slice()) — toISOString da la fecha en
+    // UTC, así que en Argentina (UTC-3) desde ~21hs locales el día UTC ya
+    // pasó a mañana y una cuota podía marcarse "vencida" horas antes de
+    // vencer de verdad en el huso horario local (mismo criterio que usa
+    // estadoVisualCuota en motor.ts para esto mismo).
+    const hoyISO = aFechaISO(new Date());
     const cuotasPorPlan = new Map<string, CuotaFinanciamiento[]>();
     for (const c of cuotasFinanciamiento) {
       cuotasPorPlan.set(c.plan_id, [...(cuotasPorPlan.get(c.plan_id) ?? []), c]);
@@ -420,6 +425,11 @@ export default function Ordenes() {
     setCobrando(null);
     setFinanciamientoCargado(false);
     await cargarFinanciamiento();
+    // El cobro y la boleta YA se guardaron bien — esto solo avisa que el
+    // reparto a cuotas puntuales quedó pendiente. Un alert() es lo único
+    // que sigue siendo visible después de la navegación de abajo (un error
+    // puesto en el estado de esta pantalla desaparecería con ella).
+    if (resultado.avisoCuotas) alert('⚠️ ' + resultado.avisoCuotas);
     router.push(`/ordenes/${resultado.ordenId}/boleta`);
   };
 
@@ -431,7 +441,12 @@ export default function Ordenes() {
       .filter((o) => {
         if (filtroTipo === 'todas') return true;
         if (filtroTipo === 'financiamiento') return false;
-        return filtroTipo === 'servicio' ? esServicioTecnico(o) : !esServicioTecnico(o);
+        if (filtroTipo === 'servicio') return esServicioTecnico(o);
+        // "Ventas" = ni servicio técnico ni un cobro de financiamiento/cta
+        // corriente — sin este segundo chequeo, las boletas que genera el
+        // botón "Cobrar" de la pestaña Financiamiento aparecían mezcladas
+        // acá como si fueran una venta de producto más.
+        return !esServicioTecnico(o) && !esCobroFinanciamiento(o);
       })
       .filter((o) => {
         if (!q) return true;

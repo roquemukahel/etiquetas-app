@@ -9,6 +9,7 @@ import { asegurarModelo, normalizarNombreModelo } from '../../lib/modelos';
 import { TODOS_LOS_MODELOS_CATALOGO } from '../../lib/catalogosMarcas';
 import { obtenerTodasLasFilas } from '../../lib/db';
 import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../../lib/carpetas';
+import { obtenerDispositivosSenados } from '../../lib/planAhorro';
 import { simboloMoneda } from '../../lib/monedas';
 import { getActor, useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
@@ -410,8 +411,7 @@ export default function NuevaOrden() {
       setDispositivosStock(data);
     })();
     (async () => {
-      const { data } = await supabase.from('planes_ahorro').select('dispositivo_id').eq('estado', 'activo').not('dispositivo_id', 'is', null);
-      setDispositivosSenados(new Set(((data ?? []) as { dispositivo_id: string }[]).map((p) => p.dispositivo_id)));
+      setDispositivosSenados(await obtenerDispositivosSenados(supabase));
     })();
     (async () => {
       // Mismo bug que tenían los dispositivos (ver comentario arriba):
@@ -1029,7 +1029,7 @@ export default function NuevaOrden() {
         const { data: senadosAhora } = await supabase
           .from('planes_ahorro')
           .select('dispositivo_id')
-          .eq('estado', 'activo')
+          .not('estado', 'in', '(completado,cancelado)')
           .in('dispositivo_id', dispositivoIds);
         if (senadosAhora && senadosAhora.length > 0) {
           throw new Error(

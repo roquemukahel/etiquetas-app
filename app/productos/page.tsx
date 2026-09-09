@@ -175,22 +175,55 @@ export default function Productos() {
     // Sin este paso, editar "Costo"/Final acá parecía funcionar (esta
     // grilla ya prioriza el precio del maestro) pero no cambiaba nada de lo
     // que en verdad se cobra, quedando la edición en los hechos ignorada.
-    await supabase.from('productos').update({ costo: nuevoCosto, precio: nuevoPrecio }).eq('producto_maestro_id', editando.id);
+    const { error: precioError } = await supabase
+      .from('productos')
+      .update({ costo: nuevoCosto, precio: nuevoPrecio })
+      .eq('producto_maestro_id', editando.id);
+    if (precioError) {
+      setErrorEdicion(t('No pudimos guardar el precio/costo:') + ' ' + precioError.message);
+      setGuardandoEdicion(false);
+      return;
+    }
 
     // Cantidad: por fila de `productos` (una por sucursal), no por maestro —
     // pedido real de un cliente ("necesito modificar las cantidades y no me
     // da la opción" desde Productos, antes solo se podía desde Stock
     // buscando a mano fila por fila). Solo se actualizan las filas que de
     // verdad cambiaron, para no pisar auditoría/updated_at de las que no.
+    // Se pasa por el mismo RPC atómico que ya usa Stock (producto_mover_stock,
+    // con "select ... for update") en vez de escribir la cantidad absoluta
+    // directo — un update directo (lo que había antes) puede pisar en
+    // silencio el cambio de otra persona si dos ediciones caen casi al
+    // mismo tiempo, y tampoco deja rastro en producto_movimientos.
     const cantidadesCambiadas = Object.entries(formCantidades)
       .map(([id, texto]) => ({ id, cantidad: Math.max(0, Math.floor(Number(texto) || 0)) }))
-      .filter(({ id, cantidad }) => productos.find((p) => p.id === id)?.cantidad !== cantidad);
+      .map(({ id, cantidad }) => ({ id, cantidad, actual: productos.find((p) => p.id === id)?.cantidad ?? cantidad }))
+      .filter(({ cantidad, actual }) => actual !== cantidad);
+    let errorCantidad: string | null = null;
+    let cantidadesExitosas: typeof cantidadesCambiadas = [];
     if (cantidadesCambiadas.length > 0) {
-      await Promise.all(cantidadesCambiadas.map(({ id, cantidad }) => supabase.from('productos').update({ cantidad }).eq('id', id)));
-      await registrarAuditoria(supabase, {
-        accion: `ajustó la cantidad de "${formNombre.trim()}" en ${cantidadesCambiadas.length} ${cantidadesCambiadas.length === 1 ? 'sucursal' : 'sucursales'}`,
-        entidad: 'producto',
-      });
+      const resultados = await Promise.all(
+        cantidadesCambiadas.map(({ id, cantidad, actual }) =>
+          supabase.rpc('producto_mover_stock', {
+            p_producto_id: id,
+            p_tipo: 'ajuste',
+            p_cantidad: cantidad - actual,
+            p_motivo: 'Ajuste manual desde Productos',
+            p_usuario: actor?.nombre ?? null,
+          })
+        )
+      );
+      const fallidos = resultados.filter((r) => r.error);
+      if (fallidos.length > 0) {
+        errorCantidad = `${t('No pudimos ajustar la cantidad en')} ${fallidos.length} ${fallidos.length === 1 ? t('sucursal') : t('sucursales')}: ${fallidos[0].error!.message}`;
+      }
+      cantidadesExitosas = cantidadesCambiadas.filter((_, i) => !resultados[i].error);
+      if (cantidadesExitosas.length > 0) {
+        await registrarAuditoria(supabase, {
+          accion: `ajustó la cantidad de "${formNombre.trim()}" en ${cantidadesExitosas.length} ${cantidadesExitosas.length === 1 ? 'sucursal' : 'sucursales'}`,
+          entidad: 'producto',
+        });
+      }
     }
 
     await registrarAuditoria(supabase, {
@@ -216,7 +249,7 @@ export default function Productos() {
           : m
       )
     );
-    const mapaCantidadesNuevas = new Map(cantidadesCambiadas.map(({ id, cantidad }) => [id, cantidad]));
+    const mapaCantidadesNuevas = new Map(cantidadesExitosas.map(({ id, cantidad }) => [id, cantidad]));
     setProductos((prev) =>
       prev.map((p) =>
         p.producto_maestro_id === editando.id
@@ -226,6 +259,10 @@ export default function Productos() {
     );
     setGuardandoEdicion(false);
     setEditando(null);
+    // El modal ya se cierra (el resto se guardó bien) — un alert() es lo
+    // único que sigue siendo visible después de eso, a diferencia de un
+    // error puesto en el estado del propio modal (que desaparece con él).
+    if (errorCantidad) alert('⚠️ ' + errorCantidad);
   };
 
   const nombreCategoria = useMemo(() => {
