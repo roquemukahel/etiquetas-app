@@ -5,7 +5,7 @@
 // distintas al mismo tiempo, o la misma caja desde dos pestañas, no
 // generen números de turno pisados.
 import { SupabaseClient } from '@supabase/supabase-js';
-import { TipoCaja, PagoParaCaja } from './motor';
+import { TipoCaja } from './motor';
 
 export type Caja = {
   id: string;
@@ -79,33 +79,68 @@ export async function obtenerHistorialTurnos(supabase: SupabaseClient, cajaId: s
   return (data as TurnoCaja[]) ?? [];
 }
 
-// Pagos de una caja dentro de un rango de fechas — usado tanto para el
-// total EN VIVO del turno actual (desde=abierta_en, sin "hasta") como para
-// reimprimir un cierre viejo (desde=abierta_en, hasta=cerrada_en del turno).
-// "hasta" es OPCIONAL a propósito: para el turno abierto, filtrar por
-// `fecha &lt;= new Date().toISOString()` compara contra el reloj del
-// NAVEGADOR, no el del servidor — si el reloj del cajero está unos segundos
-// atrasado, una venta recién cobrada (con fecha puesta por el servidor)
-// podía quedar afuera del total en vivo. Sin "hasta", simplemente se trae
-// todo desde que abrió, sin ese límite frágil.
+// Movimientos de una caja dentro de un rango de fechas — línea por línea
+// (cliente, medio, monto, comprobante), no solo el total por medio de pago.
+// Pedido real de un cliente: "necesitaría un historial... fecha,
+// movimiento, cliente, número de comprobante" para poder revisar de dónde
+// sale un número que no cierra a simple vista — antes esta función solo
+// traía medio/monto/moneda para sumar el total, sin ningún detalle para
+// mostrar o imprimir.
+//
+// Usada tanto para el total EN VIVO del turno actual (desde=abierta_en,
+// sin "hasta") como para reimprimir un cierre viejo (desde=abierta_en,
+// hasta=cerrada_en del turno). "hasta" es OPCIONAL a propósito: para el
+// turno abierto, filtrar por `fecha &lt;= new Date().toISOString()` compara
+// contra el reloj del NAVEGADOR, no el del servidor — si el reloj del
+// cajero está unos segundos atrasado, una venta recién cobrada (con fecha
+// puesta por el servidor) podía quedar afuera del total en vivo. Sin
+// "hasta", simplemente se trae todo desde que abrió, sin ese límite frágil.
 //
 // "moneda" también es opcional: si se pasa, filtra solo esa moneda — el
 // turno opera en una sola moneda (ver caja_cerrar_turno), así que un pago en
 // otra moneda no debe sumarse a este cierre.
-export async function obtenerPagosDeCaja(
+export type MovimientoCaja = {
+  id: string;
+  fecha: string;
+  medio: string;
+  monto: number;
+  moneda: string;
+  orden_id: string | null;
+  observacion: string | null;
+  registrado_por_nombre: string | null;
+  cliente_nombre: string | null;
+};
+
+export async function obtenerMovimientosDeCaja(
   supabase: SupabaseClient,
   caja: Pick<Caja, 'tipo' | 'sucursal_id'>,
   desde: string,
   hasta?: string,
   moneda?: string
-): Promise<PagoParaCaja[]> {
-  let q = supabase.from('pagos').select('medio, monto, moneda').eq('caja_tipo', caja.tipo).eq('anulado', false).gte('fecha', desde);
+): Promise<MovimientoCaja[]> {
+  let q = supabase
+    .from('pagos')
+    .select('id, fecha, medio, monto, moneda, orden_id, observacion, registrado_por_nombre, clientes ( nombre, apellido )')
+    .eq('caja_tipo', caja.tipo)
+    .eq('anulado', false)
+    .gte('fecha', desde)
+    .order('fecha', { ascending: false });
   if (hasta) q = q.lte('fecha', hasta);
   if (moneda) q = q.eq('moneda', moneda);
   q = caja.sucursal_id ? q.eq('sucursal_id', caja.sucursal_id) : q.is('sucursal_id', null);
   const { data, error } = await q;
   if (error) throw new Error(error.message);
-  return (data as PagoParaCaja[]) ?? [];
+  return ((data as any[]) ?? []).map((p) => ({
+    id: p.id,
+    fecha: p.fecha,
+    medio: p.medio,
+    monto: p.monto,
+    moneda: p.moneda,
+    orden_id: p.orden_id,
+    observacion: p.observacion,
+    registrado_por_nombre: p.registrado_por_nombre,
+    cliente_nombre: p.clientes ? `${p.clientes.nombre} ${p.clientes.apellido || ''}`.trim() : null,
+  }));
 }
 
 export async function cerrarTurno(

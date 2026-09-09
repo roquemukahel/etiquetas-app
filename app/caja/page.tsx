@@ -13,12 +13,13 @@ import {
   obtenerCajas,
   obtenerTurnoAbierto,
   obtenerHistorialTurnos,
-  obtenerPagosDeCaja,
+  obtenerMovimientosDeCaja,
   obtenerTurnoPorNumero,
   cerrarTurno,
   reabrirTurno,
   type Caja,
   type TurnoCaja,
+  type MovimientoCaja,
 } from '../lib/caja/servicio';
 import { totalesPorMedio, totalGeneral, efectivoEsperado, diferenciaArqueo, MEDIOS_CAJA, NOMBRE_CAJA, type TipoCaja } from '../lib/caja/motor';
 import { sanitizarDecimal, formatearMonto } from '../lib/numeros';
@@ -49,6 +50,13 @@ export default function CajaPage() {
   const [turno, setTurno] = useState<TurnoCaja | null>(null);
   const [totales, setTotales] = useState(totalesPorMedio([]));
   const [historial, setHistorial] = useState<TurnoCaja[]>([]);
+  // Detalle línea por línea del turno actual — pedido real de un cliente
+  // ("necesitaría un historial... fecha, movimiento, cliente, comprobante"
+  // para poder revisar de dónde sale un número que no cierra a simple
+  // vista). Se pide junto con los totales (mismo fetch, ver cargar() más
+  // abajo) para no duplicar la consulta a `pagos`.
+  const [movimientos, setMovimientos] = useState<MovimientoCaja[]>([]);
+  const [verMovimientos, setVerMovimientos] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [verHistorial, setVerHistorial] = useState(false);
@@ -106,9 +114,11 @@ export default function CajaPage() {
           // Sin "hasta": filtrar contra el reloj del navegador podía dejar
           // afuera una venta recién cobrada si ese reloj estaba atrasado
           // respecto al del servidor (que es quien pone la fecha real).
-          const pagos = await obtenerPagosDeCaja(supabase, caja, t1.abierta_en, undefined, t1.moneda);
-          setTotales(totalesPorMedio(pagos));
+          const movs = await obtenerMovimientosDeCaja(supabase, caja, t1.abierta_en, undefined, t1.moneda);
+          setMovimientos(movs);
+          setTotales(totalesPorMedio(movs));
         } else {
+          setMovimientos([]);
           setTotales(totalesPorMedio([]));
         }
       }
@@ -163,7 +173,7 @@ export default function CajaPage() {
     // esta app tiene que quedar auditado. Ningún pago se pierde con esto:
     // las ventas de ese turno siguen existiendo en `pagos` y se vuelven a
     // sumar dentro de ESTE turno al reabrirlo (la caja no guarda a qué turno
-    // pertenece cada pago, lo calcula por fecha — ver obtenerPagosDeCaja).
+    // pertenece cada pago, lo calcula por fecha — ver obtenerMovimientosDeCaja).
     // Se busca ANTES de reabrir porque después ya no va a existir.
     const sucesor = await obtenerTurnoPorNumero(supabase, tu.caja_id, tu.numero + 1).catch(() => null);
     const { turno: reabierto, error: err } = await reabrirTurno(supabase, tu.id);
@@ -290,6 +300,39 @@ export default function CajaPage() {
               {t('Efectivo inicial')} ${formatearMonto(turno.efectivo_inicial)} + {t('efectivo cobrado')} ${formatearMonto(totales.efectivo)} = {t('efectivo esperado')}{' '}
               <span className="font-medium text-ink dark:text-dark-text">${formatearMonto(esperado)}</span>
             </p>
+
+            <button onClick={() => setVerMovimientos((v) => !v)} className="text-xs text-accent dark:text-dark-accent underline self-start">
+              {verMovimientos ? t('Ocultar movimientos') : t('Ver movimientos')} ({movimientos.length})
+            </button>
+            {verMovimientos && (
+              <div className="flex flex-col gap-2 border-t border-border dark:border-dark-border pt-2 max-h-64 overflow-y-auto">
+                {movimientos.length === 0 && (
+                  <p className="text-xs text-muted dark:text-dark-text-secondary text-center">{t('Todavía no hay movimientos en este turno.')}</p>
+                )}
+                {movimientos.map((m) => (
+                  <div key={m.id} className="flex items-center justify-between gap-2 text-xs">
+                    <div className="min-w-0">
+                      <p className="truncate">
+                        {m.cliente_nombre ?? t('Consumidor final')} · {medioLabel(m.medio, t)}
+                        {m.observacion ? ` · ${m.observacion}` : ''}
+                      </p>
+                      <p className="text-[11px] text-muted dark:text-dark-text-secondary">
+                        {new Date(m.fecha).toLocaleString(locale)}
+                        {m.registrado_por_nombre && ` · ${m.registrado_por_nombre}`}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="font-medium tabular-nums">${formatearMonto(m.monto)}</span>
+                      {m.orden_id && (
+                        <Link href={`/ordenes/${m.orden_id}/boleta`} className="text-accent dark:text-dark-accent underline whitespace-nowrap">
+                          {t('Ver')}
+                        </Link>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
 
             <button
               onClick={() => {

@@ -6,7 +6,7 @@ import { useParams } from 'next/navigation';
 import { crearClienteNavegador } from '../../../lib/supabase/client';
 import { useActor } from '../../../lib/actor';
 import { tienePermiso } from '../../../lib/permisos';
-import { obtenerPagosDeCaja, type Caja, type TurnoCaja } from '../../../lib/caja/servicio';
+import { obtenerMovimientosDeCaja, type Caja, type TurnoCaja, type MovimientoCaja } from '../../../lib/caja/servicio';
 import { totalesPorMedio, totalGeneral, efectivoEsperado, MEDIOS_CAJA, NOMBRE_CAJA } from '../../../lib/caja/motor';
 import { formatearMonto } from '../../../lib/numeros';
 import { medioLabel } from '../../../lib/cuentaCorriente';
@@ -34,6 +34,7 @@ export default function DetalleTurnoCaja() {
   const [negocio, setNegocio] = useState<Negocio | null>(null);
   const [sucursalNombre, setSucursalNombre] = useState<string | null>(null);
   const [totales, setTotales] = useState(totalesPorMedio([]));
+  const [movimientos, setMovimientos] = useState<MovimientoCaja[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -70,11 +71,12 @@ export default function DetalleTurnoCaja() {
         setNegocio((perfil as any)?.negocios ?? null);
       }
       // Turno abierto: sin "hasta" (evita depender del reloj del navegador,
-      // ver comentario en obtenerPagosDeCaja). Turno cerrado: hasta su
+      // ver comentario en obtenerMovimientosDeCaja). Turno cerrado: hasta su
       // cerrada_en real, y filtrado por su propia moneda para no mezclar
       // efectivo de distintas monedas en un mismo total.
-      const pagos = await obtenerPagosDeCaja(supabase, c as Caja, tu.abierta_en, tu.cerrada_en ?? undefined, tu.moneda);
-      setTotales(totalesPorMedio(pagos));
+      const movs = await obtenerMovimientosDeCaja(supabase, c as Caja, tu.abierta_en, tu.cerrada_en ?? undefined, tu.moneda);
+      setMovimientos(movs);
+      setTotales(totalesPorMedio(movs));
       setLoading(false);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -187,6 +189,18 @@ export default function DetalleTurnoCaja() {
               <span className="tabular-nums">${formatearMonto(turno.efectivo_declarado)}</span>
             </div>
           )}
+          {turno.efectivo_vuelto != null && (
+            <div className="flex justify-between">
+              <span className="text-muted dark:text-dark-text-secondary">{t('Vuelto dejado')}</span>
+              <span className="tabular-nums">${formatearMonto(turno.efectivo_vuelto)}</span>
+            </div>
+          )}
+          {turno.efectivo_declarado != null && turno.efectivo_vuelto != null && turno.efectivo_declarado - turno.efectivo_vuelto > 0.009 && (
+            <div className="flex justify-between">
+              <span className="text-muted dark:text-dark-text-secondary">{t('Retiro')}</span>
+              <span className="tabular-nums">${formatearMonto(turno.efectivo_declarado - turno.efectivo_vuelto)}</span>
+            </div>
+          )}
           {turno.diferencia != null && (
             <div className="flex justify-between font-medium">
               <span>{t('Diferencia')}</span>
@@ -197,6 +211,21 @@ export default function DetalleTurnoCaja() {
           )}
           {turno.observacion && <p className="text-xs text-muted dark:text-dark-text-secondary mt-1">{t('Obs:')} {turno.observacion}</p>}
         </div>
+
+        {movimientos.length > 0 && (
+          <div className="border-t border-border dark:border-dark-border pt-3 flex flex-col gap-1.5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted dark:text-dark-text-secondary">{t('Movimientos')}</p>
+            {movimientos.map((m) => (
+              <div key={m.id} className="flex items-center justify-between gap-2 text-xs">
+                <div className="min-w-0">
+                  <p className="truncate">{m.cliente_nombre ?? t('Consumidor final')} · {medioLabel(m.medio, t)}</p>
+                  <p className="text-[10px] text-muted dark:text-dark-text-secondary">{new Date(m.fecha).toLocaleString(locale)}</p>
+                </div>
+                <span className="font-medium tabular-nums shrink-0">${formatearMonto(m.monto)}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </main>
   );
