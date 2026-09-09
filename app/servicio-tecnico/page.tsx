@@ -15,6 +15,8 @@ import { liberarRepuestosDeReparaciones } from '../lib/repuestos';
 import { getActor, useActor, MENSAJE_ACTOR_REQUERIDO } from '../lib/actor';
 import { tienePermiso } from '../lib/permisos';
 import { obtenerTodasLasFilas } from '../lib/db';
+import { sanitizarDecimal } from '../lib/numeros';
+import { comprimirImagen } from '../lib/comprimirImagen';
 import {
   calcularAlertas,
   esHoy,
@@ -66,6 +68,13 @@ type EquipoIngreso = {
   tipoBloqueo: TipoBloqueo | '';
   codigoDesbloqueo: string;
   patronDesbloqueo: string;
+  // Ambos opcionales — pedido real de un cliente: poder cotizar en el
+  // momento (sin pasar por la pestaña Presupuesto de la ficha) cuando el
+  // precio ya se acordó de palabra con el cliente, y poder dejar una foto
+  // de cómo llegó el equipo (ej. una pantalla rota en una reparación que
+  // solo es de batería) antes de que exista la reparación en la lista.
+  precioAcordado: string;
+  evidenciaFoto: string | null;
 };
 
 type Cliente = { id: string; nombre: string; apellido: string | null; telefono: string | null };
@@ -183,6 +192,9 @@ export default function ServicioTecnico() {
   const [nuevoPatronDesbloqueo, setNuevoPatronDesbloqueo] = useState('');
   const [nuevaFalla, setNuevaFalla] = useState('');
   const [nuevaUbicacion, setNuevaUbicacion] = useState('');
+  const [nuevoPrecioAcordado, setNuevoPrecioAcordado] = useState('');
+  const [nuevaEvidenciaFoto, setNuevaEvidenciaFoto] = useState<string | null>(null);
+  const [cargandoEvidenciaNueva, setCargandoEvidenciaNueva] = useState(false);
   // Equipos ya confirmados con "+ Agregar otro equipo" en este mismo
   // ingreso (además del que esté cargado en el formulario sin agregar).
   const [equiposAgregados, setEquiposAgregados] = useState<EquipoIngreso[]>([]);
@@ -528,6 +540,8 @@ export default function ServicioTecnico() {
         tipoBloqueo: nuevoTipoBloqueo,
         codigoDesbloqueo: nuevoCodigoDesbloqueo.trim(),
         patronDesbloqueo: nuevoPatronDesbloqueo,
+        precioAcordado: nuevoPrecioAcordado,
+        evidenciaFoto: nuevaEvidenciaFoto,
       }
     : null;
   const equiposEfectivos: EquipoIngreso[] = equipoEnProgreso ? [...equiposAgregados, equipoEnProgreso] : equiposAgregados;
@@ -545,6 +559,8 @@ export default function ServicioTecnico() {
     setNuevoTipoBloqueo('');
     setNuevoCodigoDesbloqueo('');
     setNuevoPatronDesbloqueo('');
+    setNuevoPrecioAcordado('');
+    setNuevaEvidenciaFoto(null);
     setNuevoEnciende(null);
     setNuevaPantalla('');
     setNuevoChecklist({});
@@ -553,6 +569,18 @@ export default function ServicioTecnico() {
   };
 
   const quitarEquipoAgregado = (tempId: string) => setEquiposAgregados((eqs) => eqs.filter((e) => e.tempId !== tempId));
+
+  const elegirEvidenciaNueva = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setCargandoEvidenciaNueva(true);
+    try {
+      setNuevaEvidenciaFoto(await comprimirImagen(file));
+    } catch {
+      setErrorNuevo(t('No pudimos leer la foto.'));
+    }
+    setCargandoEvidenciaNueva(false);
+  };
 
   const recibirEquipos = async () => {
     if (equiposEfectivos.length === 0 || !puedeRecibir) return;
@@ -625,7 +653,10 @@ export default function ServicioTecnico() {
             eq.color ? ` ${eq.color}` : ''
           }${eq.imei ? ` · IMEI ${eq.imei}` : ''}`,
           cantidad: 1,
-          precio_unitario: 0,
+          // Si ya se acordó un precio con el cliente en la recepción, la
+          // boleta lo refleja de una — si no, sigue en 0 hasta que se
+          // presupueste/cobre más adelante como hasta ahora.
+          precio_unitario: eq.precioAcordado ? Number(eq.precioAcordado) || 0 : 0,
           tipo: 'trabajo',
         }))
       );
@@ -636,33 +667,70 @@ export default function ServicioTecnico() {
       }
     }
 
+    const actorRecepcion = getActor();
     const { data: creadas, error: repError } = await supabase
       .from('reparaciones')
       .insert(
-        equiposEfectivos.map((eq) => ({
-          modelo: eq.modelo ? normalizarNombreModelo(eq.modelo) : eq.modelo,
-          capacidad_gb: eq.capacidad_gb,
-          color: eq.color || null,
-          imei: limpiarImei(eq.imei),
-          tipo_dispositivo: eq.tipoDispositivo,
-          tipo_bloqueo: eq.tipoBloqueo || null,
-          codigo_desbloqueo: eq.tipoBloqueo === 'pin' || eq.tipoBloqueo === 'contrasena' ? eq.codigoDesbloqueo || null : null,
-          patron_desbloqueo: eq.tipoBloqueo === 'patron' ? eq.patronDesbloqueo || null : null,
-          falla_declarada: eq.falla || null,
-          ubicacion_fisica: eq.ubicacion || null,
-          estado: 'recibido',
-          cliente_id: clienteId,
-          tecnico_id: asignadoTecnicoId || null,
-          orden_cobro_id: ordenId,
-          ...eq.checklist,
-          ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
-        }))
+        equiposEfectivos.map((eq) => {
+          // Precio ya acordado con el cliente (opcional): se guarda como un
+          // presupuesto YA APROBADO — mismo criterio que
+          // registrarRespuestaPresupuestoManual en la ficha (aprobación
+          // registrada en persona, no por el link de seguimiento) — para
+          // no obligar a pasar por el paso formal de enviar/esperar
+          // aprobación cuando el precio ya se charló en el mostrador.
+          const precio = eq.precioAcordado ? Number(eq.precioAcordado) : null;
+          return {
+            modelo: eq.modelo ? normalizarNombreModelo(eq.modelo) : eq.modelo,
+            capacidad_gb: eq.capacidad_gb,
+            color: eq.color || null,
+            imei: limpiarImei(eq.imei),
+            tipo_dispositivo: eq.tipoDispositivo,
+            tipo_bloqueo: eq.tipoBloqueo || null,
+            codigo_desbloqueo: eq.tipoBloqueo === 'pin' || eq.tipoBloqueo === 'contrasena' ? eq.codigoDesbloqueo || null : null,
+            patron_desbloqueo: eq.tipoBloqueo === 'patron' ? eq.patronDesbloqueo || null : null,
+            falla_declarada: eq.falla || null,
+            ubicacion_fisica: eq.ubicacion || null,
+            estado: 'recibido',
+            cliente_id: clienteId,
+            tecnico_id: asignadoTecnicoId || null,
+            orden_cobro_id: ordenId,
+            ...eq.checklist,
+            ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
+            ...(precio && precio > 0
+              ? {
+                  presupuesto_mano_obra: precio,
+                  presupuesto_estado: 'aprobado',
+                  presupuesto_medio: 'manual',
+                  presupuesto_respondido_at: new Date().toISOString(),
+                  presupuesto_importe_aceptado: precio,
+                }
+              : {}),
+          };
+        })
       )
-      .select('modelo, token_seguimiento');
+      .select('id, modelo, token_seguimiento');
     if (repError) {
       setErrorNuevo('No pudimos registrar los equipos: ' + repError.message);
       setGuardandoNuevo(false);
       return;
+    }
+
+    // Evidencia fotográfica al recepcionar (opcional) — mismo destino
+    // (reparaciones_evidencias) que la pestaña "Evidencias" de la ficha,
+    // así que aparece igual ahí y en el portal público de seguimiento, sin
+    // duplicar ningún concepto nuevo. `creadas` respeta el orden del
+    // insert, así que se puede aparear con equiposEfectivos por índice.
+    const evidenciasNuevas = equiposEfectivos
+      .map((eq, i) => ({ eq, creada: creadas?.[i] }))
+      .filter(({ eq, creada }) => eq.evidenciaFoto && creada)
+      .map(({ eq, creada }) => ({
+        reparacion_id: creada!.id,
+        foto_url: eq.evidenciaFoto,
+        nota: t('Foto tomada al recepcionar el equipo.'),
+        actor_nombre: actorRecepcion?.nombre ?? null,
+      }));
+    if (evidenciasNuevas.length > 0) {
+      await supabase.from('reparaciones_evidencias').insert(evidenciasNuevas);
     }
 
     // Si alguno de los modelos es nuevo (no existía como carpeta en Stock),
@@ -707,6 +775,8 @@ export default function ServicioTecnico() {
     setNuevoChecklist({});
     setNuevaHumedad(null);
     setNuevaExcepcionGarantia('');
+    setNuevoPrecioAcordado('');
+    setNuevaEvidenciaFoto(null);
     setPanelNuevo(false);
     setGuardandoNuevo(false);
     cargar();
@@ -1044,6 +1114,22 @@ export default function ServicioTecnico() {
                 className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
               />
 
+              {/* Opcional — pedido real de un cliente: si el precio ya se
+                  acordó de palabra con el cliente en el momento (ej. "un
+                  cambio de batería, $100.000"), cargarlo acá evita el paso
+                  formal de Presupuesto (enviar/esperar aprobación) para
+                  reparaciones simples donde eso ya está resuelto. Queda
+                  guardado como presupuesto YA aprobado — igual que
+                  "registrar que el cliente aprobó" en la ficha, pero en el
+                  momento de recepcionar en vez de después. */}
+              <input
+                value={nuevoPrecioAcordado}
+                onChange={(e) => setNuevoPrecioAcordado(sanitizarDecimal(e.target.value))}
+                inputMode="decimal"
+                placeholder={t('Precio ya acordado con el cliente (opcional — evita el paso de Presupuesto)')}
+                className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+              />
+
               <p className="text-xs font-medium text-muted dark:text-dark-text-secondary mt-1">
                 {t('¿Cómo entra el equipo? (para saber qué se garantiza al entregarlo)')}
               </p>
@@ -1070,6 +1156,35 @@ export default function ServicioTecnico() {
                 className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
               />
               <TextoCondicionGenerado datos={datosChecklistNuevo()} />
+
+              {/* Opcional — pedido real de un cliente: poder dejar
+                  constancia fotográfica de cómo llegó el equipo (ej. una
+                  pantalla rota en una reparación que solo es de batería)
+                  desde el momento de la recepción, sin tener que esperar a
+                  que exista la ficha para ir a su pestaña Evidencias. */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-muted dark:text-dark-text-secondary">
+                  {t('Foto de evidencia (opcional)')}
+                </label>
+                {nuevaEvidenciaFoto ? (
+                  <div className="flex items-center gap-2">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={nuevaEvidenciaFoto} alt="" className="h-16 w-16 rounded-lg object-cover border border-border dark:border-dark-border" />
+                    <button
+                      type="button"
+                      onClick={() => setNuevaEvidenciaFoto(null)}
+                      className="text-xs text-bad underline"
+                    >
+                      {t('Quitar')}
+                    </button>
+                  </div>
+                ) : (
+                  <label className="self-start rounded-lg border border-dashed border-border dark:border-dark-border px-3 py-2 text-xs font-medium text-accent dark:text-dark-accent cursor-pointer">
+                    {cargandoEvidenciaNueva ? t('Cargando...') : `📷 ${t('Sacar/elegir foto')}`}
+                    <input type="file" accept="image/*" capture="environment" className="hidden" onChange={elegirEvidenciaNueva} disabled={cargandoEvidenciaNueva} />
+                  </label>
+                )}
+              </div>
 
               <input
                 value={nuevaUbicacion}
