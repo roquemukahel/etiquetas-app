@@ -1136,27 +1136,54 @@ export default function Stock() {
       }
     }
 
-    const { error: insertError } = await supabase.from('productos').insert({
-      nombre: nombreLimpio,
-      precio: precioProducto ? Number(precioProducto) : null,
-      costo: costoProducto ? Number(costoProducto) : null,
-      cantidad: esSerializado ? 1 : Math.max(0, Math.floor(Number(cantidadInicialProducto) || 0)),
-      ...(productoMaestroId ? { producto_maestro_id: productoMaestroId } : {}),
-      ...(categoriaProducto ? { categoria_id: categoriaProducto, modalidad: modalidadProducto } : {}),
-      ...(sucursalAgregarProducto ? { sucursal_id: sucursalAgregarProducto } : {}),
-      ...(esSerializado ? { marca: marcaLimpia, numero_serie: numeroSerieProducto.trim() || null } : {}),
-      ...(mostrarMasCamposProducto
-        ? {
-            sku: skuProducto.trim() || null,
-            codigo_barras: codigoBarrasProducto.trim() || null,
-            proveedor_id: proveedorId,
-            stock_minimo: stockMinimoProducto ? Math.max(0, Math.floor(Number(stockMinimoProducto))) : null,
-            garantia_dias: garantiaDiasProducto ? Math.max(0, Math.floor(Number(garantiaDiasProducto))) : null,
-            descripcion: descripcionProducto.trim() || null,
-            notas: notasProducto.trim() || null,
-          }
-        : {}),
-    });
+    // BUG REAL corregido acá (2026-09-08, reportado por un cliente —
+    // "Afeitadora inalámbrica Aitech" se le duplicaba al sumar stock para
+    // otra sucursal): esto insertaba una fila nueva SIEMPRE, sin importar
+    // si esta sucursal ya tenía cargado este mismo producto — el catálogo
+    // maestro (productoMaestroId) se deduplicaba bien, pero la fila de
+    // `productos` (una por sucursal) no. Mismo criterio que ya se usa en
+    // la importación CSV de este mismo archivo (app/productos/page.tsx):
+    // si ya existe una fila de este producto para ESTA sucursal, se suma
+    // la cantidad en vez de crear otra. No aplica a serializados (cada
+    // unidad es distinta, con su propio número de serie — no tiene sentido
+    // "sumar cantidad" ahí, cada alta es una fila nueva a propósito).
+    const sucursalDestino = sucursalAgregarProducto || null;
+    const existente = !esSerializado
+      ? productos.find((p) => productoMaestroId && p.producto_maestro_id === productoMaestroId && (p.sucursal_id ?? null) === sucursalDestino)
+      : undefined;
+
+    const cantidadNueva = esSerializado ? 1 : Math.max(0, Math.floor(Number(cantidadInicialProducto) || 0));
+
+    const { error: insertError } = existente
+      ? await supabase
+          .from('productos')
+          .update({
+            cantidad: existente.cantidad + cantidadNueva,
+            precio: precioProducto ? Number(precioProducto) : existente.precio,
+            costo: costoProducto ? Number(costoProducto) : existente.costo,
+          })
+          .eq('id', existente.id)
+      : await supabase.from('productos').insert({
+          nombre: nombreLimpio,
+          precio: precioProducto ? Number(precioProducto) : null,
+          costo: costoProducto ? Number(costoProducto) : null,
+          cantidad: cantidadNueva,
+          ...(productoMaestroId ? { producto_maestro_id: productoMaestroId } : {}),
+          ...(categoriaProducto ? { categoria_id: categoriaProducto, modalidad: modalidadProducto } : {}),
+          ...(sucursalAgregarProducto ? { sucursal_id: sucursalAgregarProducto } : {}),
+          ...(esSerializado ? { marca: marcaLimpia, numero_serie: numeroSerieProducto.trim() || null } : {}),
+          ...(mostrarMasCamposProducto
+            ? {
+                sku: skuProducto.trim() || null,
+                codigo_barras: codigoBarrasProducto.trim() || null,
+                proveedor_id: proveedorId,
+                stock_minimo: stockMinimoProducto ? Math.max(0, Math.floor(Number(stockMinimoProducto))) : null,
+                garantia_dias: garantiaDiasProducto ? Math.max(0, Math.floor(Number(garantiaDiasProducto))) : null,
+                descripcion: descripcionProducto.trim() || null,
+                notas: notasProducto.trim() || null,
+              }
+            : {}),
+        });
     if (insertError) {
       setErrorProducto(`${t('No pudimos guardar:')} ` + insertError.message);
       setGuardandoProducto(false);

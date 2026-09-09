@@ -1157,7 +1157,17 @@ export default function NuevaOrden() {
       // que nace). La etiqueta de la orden ya resume el medio; el detalle
       // real vive acá para poder armar la caja por medio de pago.
       const actorCobro = getActor();
-      const pagosNuevos = construirPagos();
+      // BUG REAL corregido acá (2026-09-08, reportado por un cliente): esto
+      // insertaba en `pagos` (lo que suma a Caja) apenas se cargaba una
+      // forma de pago, SIN IMPORTAR el estado elegido — una orden creada
+      // como "Pendiente" con "Efectivo" ya sumaba a Caja en ese momento, y
+      // cuando más tarde alguien la confirmaba desde su ficha
+      // (confirmarCobro en app/ordenes/[id]/page.tsx) se insertaba un
+      // SEGUNDO pago por el mismo importe — doble cobro real en Caja. Una
+      // orden "Pendiente" todavía no cobró nada de verdad (la forma de pago
+      // cargada acá es solo la que se espera usar), así que no debe generar
+      // ningún movimiento de caja hasta que se confirme el cobro.
+      const pagosNuevos = estadoOrden === 'pendiente' ? [] : construirPagos();
       if (pagosNuevos.length > 0) {
         // Si la venta deja saldo en cuenta corriente (con o sin cronograma
         // propio), lo cobrado en el momento es un ANTICIPO de crédito nuevo
