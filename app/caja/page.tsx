@@ -56,6 +56,14 @@ export default function CajaPage() {
   const [cerrando, setCerrando] = useState(false);
   const [modalCierre, setModalCierre] = useState(false);
   const [efectivoDeclarado, setEfectivoDeclarado] = useState('');
+  // Cuánto de lo contado se deja en el cajón para el turno siguiente — a
+  // propósito SEPARADO de efectivoDeclarado (bug real reportado por un
+  // cliente): antes un solo campo servía para comparar contra lo esperado
+  // Y para heredar como inicial de mañana, así que declarar solo el vuelto
+  // (ej. $50.000) marcaba un "faltante" que no era real, y declarar el
+  // total contado hacía que mañana arrancara con TODA la recaudación del
+  // día como si fuera cambio. Ver caja_vuelto_separado_supabase.sql.
+  const [efectivoVuelto, setEfectivoVuelto] = useState('');
   const [observacion, setObservacion] = useState('');
 
   useEffect(() => {
@@ -123,19 +131,25 @@ export default function CajaPage() {
     setCerrando(true);
     setError(null);
     const a = getActor();
-    const { turno: cerrado, error: err } = await cerrarTurno(supabase, turno.id, Number(efectivoDeclarado) || 0, observacion.trim() || null, a?.nombre ?? null);
+    const declarado = Number(efectivoDeclarado) || 0;
+    const vuelto = Math.min(declarado, Number(efectivoVuelto) || 0);
+    const { turno: cerrado, error: err } = await cerrarTurno(supabase, turno.id, declarado, observacion.trim() || null, a?.nombre ?? null, vuelto);
     setCerrando(false);
     if (err || !cerrado) {
       setError(err || t('No pudimos cerrar la caja.'));
       return;
     }
+    const retiro = Math.max(0, declarado - vuelto);
     await registrarAuditoria(supabase, {
-      accion: `cerró el turno N° ${cerrado.numero} de ${cajaActual?.nombre ?? ''} (declarado ${formatearMonto(Number(efectivoDeclarado) || 0)}, diferencia ${formatearMonto(cerrado.diferencia ?? 0)})`,
+      accion:
+        `cerró el turno N° ${cerrado.numero} de ${cajaActual?.nombre ?? ''} (contado ${formatearMonto(declarado)}, diferencia ${formatearMonto(cerrado.diferencia ?? 0)}` +
+        (retiro > 0.009 ? `, retiro automático de ${formatearMonto(retiro)}, quedan ${formatearMonto(vuelto)} de vuelto)` : ')'),
       entidad: 'caja_turno',
       entidadId: cerrado.id,
     });
     setModalCierre(false);
     setEfectivoDeclarado('');
+    setEfectivoVuelto('');
     setObservacion('');
     await cargar();
   };
@@ -234,8 +248,10 @@ export default function CajaPage() {
           <p className="text-sm font-medium">{t('Caja cerrada')}</p>
           <p className="text-xs text-muted dark:text-dark-text-secondary max-w-xs">
             {t('Se abre sola con la primera venta que se cobre. Va a arrancar con')}{' '}
-            <span className="font-medium text-ink dark:text-dark-text">${formatearMonto(historial[0]?.efectivo_declarado ?? 0)}</span>{' '}
-            {t('de inicial (el vuelto declarado en el último cierre).')}
+            <span className="font-medium text-ink dark:text-dark-text">
+              ${formatearMonto(historial[0]?.efectivo_vuelto ?? historial[0]?.efectivo_declarado ?? 0)}
+            </span>{' '}
+            {t('de inicial (el vuelto que se dejó en el último cierre).')}
           </p>
         </div>
       ) : (
@@ -278,6 +294,14 @@ export default function CajaPage() {
             <button
               onClick={() => {
                 setEfectivoDeclarado(String(Math.round(esperado * 100) / 100));
+                // Vuelto por defecto = lo que se dejó la ÚLTIMA vez que se
+                // cerró esta caja (efectivo_vuelto, con fallback a
+                // efectivo_declarado para turnos de antes de esta
+                // migración) — la mayoría de los locales dejan siempre el
+                // mismo monto de cambio, así que no hace falta re-tipearlo
+                // en cada cierre, solo ajustarlo si cambia.
+                const ultimoVuelto = historial[0]?.efectivo_vuelto ?? historial[0]?.efectivo_declarado ?? null;
+                setEfectivoVuelto(ultimoVuelto != null ? String(ultimoVuelto) : '');
                 setModalCierre(true);
               }}
               className="rounded-xl border border-border dark:border-dark-border py-3 text-sm font-medium mt-1"
@@ -309,6 +333,20 @@ export default function CajaPage() {
                   </p>
                 )}
                 <label className="flex flex-col gap-1">
+                  <span className="text-xs text-muted dark:text-dark-text-secondary">{t('Vuelto para mañana (lo que dejás en el cajón)')}</span>
+                  <input
+                    value={efectivoVuelto}
+                    onChange={(e) => setEfectivoVuelto(sanitizarDecimal(e.target.value))}
+                    inputMode="decimal"
+                    className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                  />
+                </label>
+                {efectivoDeclarado !== '' && efectivoVuelto !== '' && Number(efectivoDeclarado) - Number(efectivoVuelto) > 0.009 && (
+                  <p className="text-xs text-muted dark:text-dark-text-secondary">
+                    {t('El resto')} (${formatearMonto(Number(efectivoDeclarado) - Number(efectivoVuelto))}) {t('se registra solo como un retiro de caja.')}
+                  </p>
+                )}
+                <label className="flex flex-col gap-1">
                   <span className="text-xs text-muted dark:text-dark-text-secondary">{t('Observación (opcional)')}</span>
                   <textarea
                     value={observacion}
@@ -322,7 +360,7 @@ export default function CajaPage() {
                     {t('Cancelar')}
                   </button>
                   <button
-                    disabled={cerrando || efectivoDeclarado === ''}
+                    disabled={cerrando || efectivoDeclarado === '' || efectivoVuelto === ''}
                     onClick={handleCerrar}
                     className="flex-1 rounded-xl bg-accent dark:bg-dark-accent text-white py-2.5 text-sm font-medium disabled:opacity-40"
                   >
@@ -353,6 +391,13 @@ export default function CajaPage() {
                 {h.diferencia != null && Math.abs(h.diferencia) > 0.009 && (
                   <p className={`text-xs font-medium ${h.diferencia > 0 ? 'text-good' : 'text-bad'}`}>
                     {h.diferencia > 0 ? t('Sobró') : t('Faltó')} ${formatearMonto(Math.abs(h.diferencia))}
+                  </p>
+                )}
+                {h.efectivo_vuelto != null && h.efectivo_declarado != null && (
+                  <p className="text-xs text-muted dark:text-dark-text-secondary">
+                    {t('Vuelto dejado')} ${formatearMonto(h.efectivo_vuelto)}
+                    {h.efectivo_declarado - h.efectivo_vuelto > 0.009 &&
+                      ` · ${t('retiro')} $${formatearMonto(h.efectivo_declarado - h.efectivo_vuelto)}`}
                   </p>
                 )}
               </div>

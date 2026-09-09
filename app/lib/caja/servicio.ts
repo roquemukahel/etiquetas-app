@@ -26,6 +26,10 @@ export type TurnoCaja = {
   cerrada_en: string | null;
   cerrada_por: string | null;
   efectivo_declarado: number | null;
+  // Cuánto de lo declarado se decidió dejar para el turno siguiente (el
+  // resto se registra solo como retiro) — ver caja_vuelto_separado_supabase.sql.
+  // null en turnos cerrados ANTES de esa migración.
+  efectivo_vuelto: number | null;
   efectivo_esperado: number | null;
   diferencia: number | null;
   observacion: string | null;
@@ -109,13 +113,15 @@ export async function cerrarTurno(
   turnoId: string,
   efectivoDeclarado: number,
   observacion: string | null,
-  cerradaPor: string | null
+  cerradaPor: string | null,
+  efectivoVuelto: number
 ): Promise<{ turno: TurnoCaja | null; error: string | null }> {
   const { data, error } = await supabase.rpc('caja_cerrar_turno', {
     p_turno_id: turnoId,
     p_efectivo_declarado: efectivoDeclarado,
     p_observacion: observacion,
     p_cerrada_por: cerradaPor,
+    p_efectivo_vuelto: efectivoVuelto,
   });
   if (error) return { turno: null, error: error.message };
   return { turno: data as TurnoCaja, error: null };
