@@ -119,7 +119,6 @@ type Derivacion = {
 };
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
-const ESTADOS_ORDEN = ['pendiente', 'pagado', 'entregado'];
 
 function idTemporal() {
   return Math.random().toString(36).slice(2);
@@ -292,7 +291,6 @@ export default function NuevaOrden() {
   const [saldoClienteError, setSaldoClienteError] = useState(false);
   const [anticipo, setAnticipo] = useState('');
   const [impuesto, setImpuesto] = useState('');
-  const [estadoOrden, setEstadoOrden] = useState('pendiente');
   const [nota, setNota] = useState('');
   const [incluirGarantia, setIncluirGarantia] = useState(true);
 
@@ -1095,6 +1093,22 @@ export default function NuevaOrden() {
         clienteId = data.id;
       }
 
+      // Estado derivado, no elegido a mano: pedido real de un cliente
+      // (2026-09-11) — el selector manual Pendiente/Pagado/Entregado quedaba
+      // en "Pendiente" por defecto, y si el vendedor no lo cambiaba a
+      // propósito (apurado, o directamente no sabía que hacía falta), la
+      // venta ni sumaba a Caja ni contaba como cobrada en Estadísticas pese
+      // a que el cliente SÍ pagó — le afectaba las estadísticas reales del
+      // negocio sin que nadie lo notara. Ahora se calcula solo: si se cargó
+      // algún medio de pago real o quedó un saldo en cuenta corriente (venta
+      // a crédito, igualmente una venta concretada), la orden nace
+      // "entregado" — el flujo de Nueva Orden siempre asume que el cliente
+      // se lleva lo que compró. Si de verdad no se cobró ni se dejó nada a
+      // crédito (una reserva sin cobrar todavía), queda "pendiente".
+      const pagosNuevos = construirPagos();
+      const huboCobroOAlFiado = pagosNuevos.length > 0 || montoCuentaCorriente > 0.009;
+      const estadoOrden = total <= 0 || huboCobroOAlFiado ? 'entregado' : 'pendiente';
+
       const { data: orden, error: oErr } = await supabase
         .from('ordenes')
         .insert({
@@ -1186,18 +1200,11 @@ export default function NuevaOrden() {
       // Cobro: pagos (plata que entra) + cargo de cuenta corriente (deuda
       // que nace). La etiqueta de la orden ya resume el medio; el detalle
       // real vive acá para poder armar la caja por medio de pago.
+      // pagosNuevos ya se calculó arriba (es lo que decide si esta orden
+      // nace "entregado" o "pendiente") — no hay que recalcularlo ni
+      // volver a gatillarlo por estadoOrden: acá va siempre que haya algo
+      // que cobrar, sin importar en qué terminó estadoOrden.
       const actorCobro = getActor();
-      // BUG REAL corregido acá (2026-09-08, reportado por un cliente): esto
-      // insertaba en `pagos` (lo que suma a Caja) apenas se cargaba una
-      // forma de pago, SIN IMPORTAR el estado elegido — una orden creada
-      // como "Pendiente" con "Efectivo" ya sumaba a Caja en ese momento, y
-      // cuando más tarde alguien la confirmaba desde su ficha
-      // (confirmarCobro en app/ordenes/[id]/page.tsx) se insertaba un
-      // SEGUNDO pago por el mismo importe — doble cobro real en Caja. Una
-      // orden "Pendiente" todavía no cobró nada de verdad (la forma de pago
-      // cargada acá es solo la que se espera usar), así que no debe generar
-      // ningún movimiento de caja hasta que se confirme el cobro.
-      const pagosNuevos = estadoOrden === 'pendiente' ? [] : construirPagos();
       if (pagosNuevos.length > 0) {
         // Si la venta deja saldo en cuenta corriente (con o sin cronograma
         // propio), lo cobrado en el momento es un ANTICIPO de crédito nuevo
@@ -2511,23 +2518,6 @@ export default function NuevaOrden() {
             </p>
           </div>
         )}
-      </div>
-
-      <div>
-        <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Estado')}</label>
-        <div className="flex gap-2">
-          {ESTADOS_ORDEN.map((e) => (
-            <button
-              key={e}
-              onClick={() => setEstadoOrden(e)}
-              className={`flex-1 rounded-xl py-2 text-sm font-medium capitalize ${
-                estadoOrden === e ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
-              }`}
-            >
-              {t(e)}
-            </button>
-          ))}
-        </div>
       </div>
 
       <div className="flex items-center justify-between text-lg font-medium border-t border-border dark:border-dark-border pt-3">
