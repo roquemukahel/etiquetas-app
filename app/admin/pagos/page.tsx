@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ChevronLeft, ChevronRight, ZoomIn } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ZoomIn, Pencil } from 'lucide-react';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { EmptyState, Skeleton, SegmentedChips } from '../_ui';
 
@@ -50,6 +50,10 @@ export default function AdminPagos() {
   const [planAprobar, setPlanAprobar] = useState('mensual');
   const [imagenAmpliada, setImagenAmpliada] = useState<string | null>(null);
   const [errorCarga, setErrorCarga] = useState<string | null>(null);
+  const [editandoId, setEditandoId] = useState<string | null>(null);
+  const [montoEditar, setMontoEditar] = useState('');
+  const [monedaEditar, setMonedaEditar] = useState('');
+  const [guardandoEdicion, setGuardandoEdicion] = useState(false);
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -105,6 +109,37 @@ export default function AdminPagos() {
       alert('No se pudo rechazar el pago:\n' + error.message);
       return;
     }
+    cargar();
+  };
+
+  const abrirEditar = (p: Pago) => {
+    if (editandoId === p.id) {
+      setEditandoId(null);
+      return;
+    }
+    setEditandoId(p.id);
+    setMontoEditar(String(p.monto));
+    setMonedaEditar(p.moneda);
+  };
+
+  const guardarEdicion = async (p: Pago) => {
+    const monto = Number(montoEditar.replace(',', '.'));
+    if (!monto || monto <= 0) {
+      alert('Ingresá un monto válido, mayor a 0.');
+      return;
+    }
+    setGuardandoEdicion(true);
+    const { error } = await supabase.rpc('admin_editar_pago', {
+      comprobante_id: p.id,
+      nuevo_monto: monto,
+      nueva_moneda: monedaEditar.trim() || null,
+    });
+    setGuardandoEdicion(false);
+    if (error) {
+      alert('No se pudo corregir el pago:\n' + error.message);
+      return;
+    }
+    setEditandoId(null);
     cargar();
   };
 
@@ -171,12 +206,54 @@ export default function AdminPagos() {
                     </span>
                   </div>
                 </div>
-                <p className="text-sm">
-                  {p.monto} {p.moneda}
-                  {p.referencia && <span className="text-xs text-dark-text-secondary"> · ref: {p.referencia}</span>}
-                  <span className="text-xs text-dark-text-secondary"> · enviado {formatearFecha(p.created_at)}</span>
-                  {p.revisado_at && <span className="text-xs text-dark-text-secondary"> · revisado {formatearFecha(p.revisado_at)}</span>}
+                <p className="text-sm flex items-center gap-1.5">
+                  <span>
+                    {p.monto} {p.moneda}
+                  </span>
+                  {p.referencia && <span className="text-xs text-dark-text-secondary">· ref: {p.referencia}</span>}
+                  <span className="text-xs text-dark-text-secondary">· enviado {formatearFecha(p.created_at)}</span>
+                  {p.revisado_at && <span className="text-xs text-dark-text-secondary">· revisado {formatearFecha(p.revisado_at)}</span>}
+                  <button
+                    type="button"
+                    onClick={() => abrirEditar(p)}
+                    className="text-dark-text-secondary hover:text-dark-text"
+                    aria-label="Corregir monto"
+                    title="Corregir monto (por ejemplo, si cargó mal el plan)"
+                  >
+                    <Pencil className="h-3 w-3" />
+                  </button>
                 </p>
+                {editandoId === p.id && (
+                  <div className="rounded-lg bg-dark-bg p-2 flex flex-col gap-2">
+                    <p className="text-[10px] text-dark-text-secondary">
+                      Corregí el monto real que pagó (por ejemplo, si el comprobante quedó cargado como mensual pero en
+                      realidad pagó el anual). Esto no cambia la activación de la cuenta, solo el registro para las
+                      estadísticas de ingresos.
+                    </p>
+                    <div className="flex gap-2">
+                      <input
+                        value={montoEditar}
+                        onChange={(e) => setMontoEditar(e.target.value)}
+                        inputMode="decimal"
+                        className="w-28 bg-dark-surface border border-dark-border rounded-lg px-2 py-1.5 text-xs"
+                        placeholder="Monto"
+                      />
+                      <input
+                        value={monedaEditar}
+                        onChange={(e) => setMonedaEditar(e.target.value)}
+                        className="w-24 bg-dark-surface border border-dark-border rounded-lg px-2 py-1.5 text-xs"
+                        placeholder="Moneda"
+                      />
+                    </div>
+                    <button
+                      disabled={guardandoEdicion}
+                      onClick={() => guardarEdicion(p)}
+                      className="rounded-lg bg-dark-accent text-white py-2 text-xs font-medium disabled:opacity-40"
+                    >
+                      {guardandoEdicion ? 'Guardando...' : 'Guardar corrección'}
+                    </button>
+                  </div>
+                )}
                 {p.nota_admin && <p className="text-xs text-dark-text-secondary">Motivo: {p.nota_admin}</p>}
                 {p.comprobante_imagen && (
                   <button type="button" onClick={() => setImagenAmpliada(p.comprobante_imagen)} className="self-start relative" aria-label="Ampliar comprobante">
