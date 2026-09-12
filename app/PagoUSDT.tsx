@@ -64,13 +64,17 @@ export default function PagoUSDT({
     setEnviando(true);
     setError(null);
     const monto = plan === 'mensual' ? PRECIO_USDT_MENSUAL : PRECIO_USDT_ANUAL;
-    const { error: insertError } = await supabase.from('comprobantes_pago').insert({
-      negocio_id: negocioId,
-      monto,
-      moneda: 'USDT',
-      comprobante_imagen: imagen,
-      referencia: referencia.trim() || null,
-    });
+    const { data: insertData, error: insertError } = await supabase
+      .from('comprobantes_pago')
+      .insert({
+        negocio_id: negocioId,
+        monto,
+        moneda: 'USDT',
+        comprobante_imagen: imagen,
+        referencia: referencia.trim() || null,
+      })
+      .select('id')
+      .single();
     if (insertError) {
       setError(t('No pudimos enviar el comprobante:') + ' ' + insertError.message);
       setEnviando(false);
@@ -81,7 +85,14 @@ export default function PagoUSDT({
     fetch('/api/notificar-comprobante', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nombreNegocio, monto, moneda: 'USDT', referencia: referencia.trim() || null, metodo: 'USDT (cripto)' }),
+      body: JSON.stringify({
+        nombreNegocio,
+        monto,
+        moneda: 'USDT',
+        referencia: referencia.trim() || null,
+        metodo: 'USDT (cripto)',
+        comprobanteId: insertData?.id,
+      }),
     }).catch(() => {});
     setEnviando(false);
     setAbierto(false);

@@ -58,13 +58,17 @@ export default function PagoTransferenciaARS({
     setEnviando(true);
     setError(null);
     const monto = plan === 'mensual' ? PRECIO_ARS_MENSUAL : PRECIO_ARS_ANUAL;
-    const { error: insertError } = await supabase.from('comprobantes_pago').insert({
-      negocio_id: negocioId,
-      monto,
-      moneda: 'ARS',
-      comprobante_imagen: imagen,
-      referencia: referencia.trim() || null,
-    });
+    const { data: insertData, error: insertError } = await supabase
+      .from('comprobantes_pago')
+      .insert({
+        negocio_id: negocioId,
+        monto,
+        moneda: 'ARS',
+        comprobante_imagen: imagen,
+        referencia: referencia.trim() || null,
+      })
+      .select('id')
+      .single();
     if (insertError) {
       setError(t('No pudimos enviar el comprobante:') + ' ' + insertError.message);
       setEnviando(false);
@@ -75,7 +79,14 @@ export default function PagoTransferenciaARS({
     fetch('/api/notificar-comprobante', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nombreNegocio, monto, moneda: 'ARS', referencia: referencia.trim() || null, metodo: 'Transferencia (ARS)' }),
+      body: JSON.stringify({
+        nombreNegocio,
+        monto,
+        moneda: 'ARS',
+        referencia: referencia.trim() || null,
+        metodo: 'Transferencia (ARS)',
+        comprobanteId: insertData?.id,
+      }),
     }).catch(() => {});
     setEnviando(false);
     setAbierto(false);

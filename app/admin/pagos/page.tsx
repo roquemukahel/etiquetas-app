@@ -18,6 +18,7 @@ type Pago = {
   nota_admin: string | null;
   created_at: string;
   revisado_at: string | null;
+  telegram_avisado: boolean;
   total_count: number;
 };
 
@@ -152,13 +153,23 @@ export default function AdminPagos() {
                   <Link href={`/admin/negocios/${p.negocio_id}`} className="text-sm font-medium hover:underline">
                     {p.nombre_negocio}
                   </Link>
-                  <span
-                    className={`text-[10px] font-semibold rounded px-1.5 py-0.5 ${
-                      p.estado === 'aprobado' ? 'text-good bg-good/10' : p.estado === 'rechazado' ? 'text-bad bg-bad/10' : 'text-warn bg-warn/10'
-                    }`}
-                  >
-                    {p.estado}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className={`text-[10px] font-semibold rounded px-1.5 py-0.5 ${
+                        p.telegram_avisado ? 'text-good bg-good/10' : 'text-warn bg-warn/10'
+                      }`}
+                      title={p.telegram_avisado ? 'El aviso de Telegram se envió' : 'El aviso de Telegram no llegó a enviarse'}
+                    >
+                      {p.telegram_avisado ? '📨 Avisado' : '⚠️ Sin avisar'}
+                    </span>
+                    <span
+                      className={`text-[10px] font-semibold rounded px-1.5 py-0.5 ${
+                        p.estado === 'aprobado' ? 'text-good bg-good/10' : p.estado === 'rechazado' ? 'text-bad bg-bad/10' : 'text-warn bg-warn/10'
+                      }`}
+                    >
+                      {p.estado}
+                    </span>
+                  </div>
                 </div>
                 <p className="text-sm">
                   {p.monto} {p.moneda}
