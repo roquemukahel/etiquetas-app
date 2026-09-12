@@ -30,6 +30,7 @@ type Modulo = {
 
 const OPERACION: Modulo[] = [
   { href: '/ordenes', titulo: 'Órdenes', desc: 'Ventas, boletas y canjes', ilustracion: 'ordenes' },
+  { href: '/caja', titulo: 'Caja', desc: 'Abrir, cerrar y ver el arqueo del turno', ilustracion: 'caja' },
   { href: '/stock', titulo: 'Stock', desc: 'Dispositivos disponibles en tu local', ilustracion: 'stock' },
   { href: '/servicio-tecnico', titulo: 'Servicio Técnico', desc: 'Equipos derivados a reparación', ilustracion: 'servicio' },
   { href: '/clientes', titulo: 'Clientes', desc: 'Tu base de clientes', ilustracion: 'clientes' },

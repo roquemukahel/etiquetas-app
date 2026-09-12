@@ -9,7 +9,7 @@ import { useActor } from '../lib/actor';
 import { tienePermiso } from '../lib/permisos';
 import { registrarAuditoria } from '../lib/auditoria';
 import { generarOrdenDeReparacion } from '../lib/ordenesServicio';
-import { registrarCobroFinanciamiento, aFechaISO } from '../lib/financiacion/servicio';
+import { registrarCobroFinanciamiento } from '../lib/financiacion/servicio';
 import { MEDIOS_PAGO, medioLabel } from '../lib/cuentaCorriente';
 import { simboloMoneda } from '../lib/monedas';
 import { formatearMonto, sanitizarDecimal } from '../lib/numeros';
@@ -75,20 +75,23 @@ const TIPOS: { id: 'todas' | 'ventas' | 'servicio' | 'financiamiento'; label: st
   { id: 'financiamiento', label: 'Financiamiento' },
 ];
 
-// Pedido real de un cliente: poder ver y cobrar desde Órdenes los planes de
-// financiación propia activos (antes solo se veían/cobraban entrando a la
-// ficha puntual de cada cliente, así que un cobro mal hecho por una
-// vendedora quedaba invisible). Un plan por venta financiada; un mismo
-// cliente puede tener varios planes activos a la vez (ver
-// financiacion_planes — sin unique en cliente_id).
+// Pedido real de un cliente: poder ver y cobrar desde Órdenes a CUALQUIER
+// cliente que le deba plata — no solo a los que tienen un plan de
+// financiación en cuotas formal. Muchos negocios solo "fían" a cuenta
+// corriente simple (Nueva Orden con "Cuenta corriente" como forma de pago,
+// sin activar "financiar en cuotas"), que nunca crea fila en
+// financiacion_planes — antes esos clientes no aparecían acá aunque sí le
+// debieran plata de verdad. El saldo real siempre sale de
+// saldos_cuenta_corriente() (el libro mayor, Σcargos−Σabonos — mismo RPC
+// que ya usa Cuentas por cobrar); financiacion_planes/cuotas solo aporta
+// información complementaria (próximo vencimiento, a qué venta enlazar el
+// cobro) cuando existe un plan formal.
 type PlanFinanciamiento = {
   id: string;
   cliente_id: string;
   orden_id: string | null;
   moneda: string;
-  importe_financiado: number;
   estado: string;
-  clientes: { nombre: string; apellido: string | null } | null;
 };
 type CuotaFinanciamiento = {
   id: string;
@@ -98,14 +101,14 @@ type CuotaFinanciamiento = {
   importe_pagado: number;
   estado: string;
 };
-// Resumen agrupado por cliente+moneda (no por plan): a la vendedora que
-// entra a cobrar le importa "cuánto me debe este cliente en total", no
-// tener que elegir entre varios planes activos del mismo cliente.
+type SaldoCtaCte = { clienteId: string; saldo: number; vencido: number };
+// Resumen por cliente (uno solo, aunque tenga varios planes activos): a la
+// vendedora que entra a cobrar le importa "cuánto me debe este cliente en
+// total", no elegir entre planes.
 type ResumenFinanciamiento = {
   clienteId: string;
   clienteNombre: string;
   moneda: string;
-  totalFinanciado: number;
   saldo: number;
   proximoVencimiento: string | null;
   enMora: boolean;
@@ -155,6 +158,11 @@ export default function Ordenes() {
   // pantalla que más se abre) y quedan en caché el resto de la sesión.
   const [planesFinanciamiento, setPlanesFinanciamiento] = useState<PlanFinanciamiento[]>([]);
   const [cuotasFinanciamiento, setCuotasFinanciamiento] = useState<CuotaFinanciamiento[]>([]);
+  const [saldosCtaCte, setSaldosCtaCte] = useState<SaldoCtaCte[]>([]);
+  const [nombresClientesFinanciamiento, setNombresClientesFinanciamiento] = useState<Map<string, string>>(new Map());
+  // Moneda de respaldo para un cliente con fiado simple (sin ningún plan de
+  // cuotas propio que indique en qué moneda es su saldo) — la del negocio.
+  const [monedaNegocio, setMonedaNegocio] = useState('ARS');
   const [cargandoFinanciamiento, setCargandoFinanciamiento] = useState(false);
   const [financiamientoCargado, setFinanciamientoCargado] = useState(false);
   const [cobrando, setCobrando] = useState<ResumenFinanciamiento | null>(null);
@@ -234,12 +242,31 @@ export default function Ordenes() {
 
   const cargarFinanciamiento = async () => {
     setCargandoFinanciamiento(true);
-    const { data: planesData } = await supabase
-      .from('financiacion_planes')
-      .select('id, cliente_id, orden_id, moneda, importe_financiado, estado, clientes ( nombre, apellido )')
-      .eq('estado', 'activo');
-    const planes = (planesData as any as PlanFinanciamiento[]) ?? [];
+    // saldos_cuenta_corriente(): el libro mayor real (Σcargos−Σabonos), trae
+    // a CUALQUIER cliente con saldo — con o sin plan de cuotas formal. Mismo
+    // RPC que ya usa /cuentas-por-cobrar para esto mismo.
+    const [{ data: saldosData }, { data: planesData }] = await Promise.all([
+      supabase.rpc('saldos_cuenta_corriente'),
+      supabase.from('financiacion_planes').select('id, cliente_id, orden_id, moneda, estado').eq('estado', 'activo'),
+    ]);
+    const saldos = (((saldosData ?? []) as { cliente_id: string; saldo: number; vencido: number }[])
+      .map((s) => ({ clienteId: s.cliente_id, saldo: Number(s.saldo) || 0, vencido: Number(s.vencido) || 0 }))
+      .filter((s) => s.saldo > 0.009));
+    setSaldosCtaCte(saldos);
+
+    const planes = (planesData as PlanFinanciamiento[]) ?? [];
     setPlanesFinanciamiento(planes);
+
+    const idsClientes = Array.from(new Set(saldos.map((s) => s.clienteId)));
+    if (idsClientes.length > 0) {
+      const { data: clientesData } = await supabase.from('clientes').select('id, nombre, apellido').in('id', idsClientes);
+      setNombresClientesFinanciamiento(
+        new Map(((clientesData ?? []) as { id: string; nombre: string; apellido: string | null }[]).map((c) => [c.id, `${c.nombre} ${c.apellido || ''}`.trim()]))
+      );
+    } else {
+      setNombresClientesFinanciamiento(new Map());
+    }
+
     if (planes.length > 0) {
       // Se traen TODAS las cuotas (no solo las pendientes): una cuota
       // parcialmente pagada sigue en estado 'pendiente' con importe_pagado
@@ -278,6 +305,19 @@ export default function Ordenes() {
       } catch {
         // Tabla sucursales todavía no existe en este negocio.
       }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: perfil } = await supabase.from('perfiles').select('negocios ( moneda )').eq('id', user.id).single();
+      const cod = (perfil as any)?.negocios?.moneda;
+      if (cod) setMonedaNegocio(cod);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -336,59 +376,49 @@ export default function Ordenes() {
     return mapa;
   }, [canjes]);
 
-  // Agrupado por cliente+moneda (no por plan): a quien va a cobrar le
-  // importa "cuánto me debe este cliente en total", no elegir entre varios
-  // planes activos del mismo cliente. Mismo cálculo de saldo que el
-  // resumen de FinanciacionCliente en la ficha (Σ importe_pagado de cuotas
-  // no anuladas, restado del importe financiado).
+  // El saldo (y "en mora") siempre sale de saldosCtaCte — el libro mayor
+  // real, cubre a cualquier cliente que deba plata, tenga o no un plan de
+  // cuotas formal. financiacion_planes/cuotas solo aporta acá información
+  // COMPLEMENTARIA (próximo vencimiento, moneda del plan, a qué venta
+  // enlazar el cobro) cuando existe un plan activo — nunca decide el saldo
+  // ni quién aparece en la lista.
   const resumenFinanciamiento = useMemo(() => {
-    // aFechaISO (no toISOString().slice()) — toISOString da la fecha en
-    // UTC, así que en Argentina (UTC-3) desde ~21hs locales el día UTC ya
-    // pasó a mañana y una cuota podía marcarse "vencida" horas antes de
-    // vencer de verdad en el huso horario local (mismo criterio que usa
-    // estadoVisualCuota en motor.ts para esto mismo).
-    const hoyISO = aFechaISO(new Date());
     const cuotasPorPlan = new Map<string, CuotaFinanciamiento[]>();
     for (const c of cuotasFinanciamiento) {
       cuotasPorPlan.set(c.plan_id, [...(cuotasPorPlan.get(c.plan_id) ?? []), c]);
     }
-    const porClienteYMoneda = new Map<string, ResumenFinanciamiento>();
+    const infoPorCliente = new Map<string, { proximoVencimiento: string | null; cantidadPlanes: number; ordenOriginalId: string | null; moneda: string }>();
     for (const p of planesFinanciamiento) {
       const cuotas = (cuotasPorPlan.get(p.id) ?? []).filter((c) => c.estado !== 'anulada');
-      const pagado = cuotas.reduce((acc, c) => acc + c.importe_pagado, 0);
-      const saldoPlan = Math.max(0, p.importe_financiado - pagado);
       const pendientes = cuotas.filter((c) => c.estado === 'pendiente').sort((a, b) => a.fecha_vencimiento.localeCompare(b.fecha_vencimiento));
       const proximoPlan = pendientes[0]?.fecha_vencimiento ?? null;
-      const clienteNombre = p.clientes ? `${p.clientes.nombre} ${p.clientes.apellido || ''}`.trim() : t('Cliente');
-      const clave = `${p.cliente_id}::${p.moneda}`;
-      const existente = porClienteYMoneda.get(clave);
+      const existente = infoPorCliente.get(p.cliente_id);
       if (existente) {
-        existente.totalFinanciado += p.importe_financiado;
-        existente.saldo += saldoPlan;
         existente.cantidadPlanes += 1;
         existente.ordenOriginalId = null; // más de un plan activo: no hay una venta puntual a la que enlazar
         if (proximoPlan && (!existente.proximoVencimiento || proximoPlan < existente.proximoVencimiento)) {
           existente.proximoVencimiento = proximoPlan;
         }
-        if (proximoPlan && proximoPlan < hoyISO) existente.enMora = true;
       } else {
-        porClienteYMoneda.set(clave, {
-          clienteId: p.cliente_id,
-          clienteNombre,
-          moneda: p.moneda,
-          totalFinanciado: p.importe_financiado,
-          saldo: saldoPlan,
-          proximoVencimiento: proximoPlan,
-          enMora: !!proximoPlan && proximoPlan < hoyISO,
-          cantidadPlanes: 1,
-          ordenOriginalId: p.orden_id,
-        });
+        infoPorCliente.set(p.cliente_id, { proximoVencimiento: proximoPlan, cantidadPlanes: 1, ordenOriginalId: p.orden_id, moneda: p.moneda });
       }
     }
-    return Array.from(porClienteYMoneda.values())
-      .filter((r) => r.saldo > 0.009)
+    return saldosCtaCte
+      .map((s) => {
+        const info = infoPorCliente.get(s.clienteId);
+        return {
+          clienteId: s.clienteId,
+          clienteNombre: nombresClientesFinanciamiento.get(s.clienteId) ?? t('Cliente'),
+          moneda: info?.moneda ?? monedaNegocio,
+          saldo: s.saldo,
+          proximoVencimiento: info?.proximoVencimiento ?? null,
+          enMora: s.vencido > 0.009,
+          cantidadPlanes: info?.cantidadPlanes ?? 0,
+          ordenOriginalId: info?.ordenOriginalId ?? null,
+        };
+      })
       .sort((a, b) => (a.proximoVencimiento ?? '9999-99-99').localeCompare(b.proximoVencimiento ?? '9999-99-99'));
-  }, [planesFinanciamiento, cuotasFinanciamiento, t]);
+  }, [planesFinanciamiento, cuotasFinanciamiento, saldosCtaCte, nombresClientesFinanciamiento, monedaNegocio, t]);
 
   const abrirCobro = (r: ResumenFinanciamiento) => {
     setCobrando(r);
@@ -440,7 +470,13 @@ export default function Ordenes() {
       .filter((o) => !filtroSucursal || o.sucursal_id === filtroSucursal)
       .filter((o) => {
         if (filtroTipo === 'todas') return true;
-        if (filtroTipo === 'financiamiento') return false;
+        // Pedido real de un cliente: la pestaña Financiamiento mostraba solo
+        // el resumen de "quién me debe", nunca el historial de boletas de
+        // cobros ya hechos — un dueño que vuelve a revisar (no estuvo en el
+        // mostrador cuando un empleado cobró) no tenía dónde auditarlo. Se
+        // filtra igual que "servicio" para reusar esta misma lista de
+        // tarjetas debajo del resumen de saldos.
+        if (filtroTipo === 'financiamiento') return esCobroFinanciamiento(o);
         if (filtroTipo === 'servicio') return esServicioTecnico(o);
         // "Ventas" = ni servicio técnico ni un cobro de financiamiento/cta
         // corriente — sin este segundo chequeo, las boletas que genera el
@@ -667,20 +703,20 @@ export default function Ordenes() {
         </section>
       )}
 
-      {filtroTipo === 'financiamiento' ? (
+      {filtroTipo === 'financiamiento' && (
         <>
           {cargandoFinanciamiento && (
             <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{t('Cargando...')}</p>
           )}
           {!cargandoFinanciamiento && resumenFinanciamiento.length === 0 && (
             <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">
-              {t('No hay clientes con financiamiento activo.')}
+              {t('No hay clientes que deban plata en cuenta corriente.')}
             </p>
           )}
           <div className="flex flex-col gap-2">
             {resumenFinanciamiento.map((r) => (
               <div
-                key={`${r.clienteId}::${r.moneda}`}
+                key={r.clienteId}
                 className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex items-center justify-between gap-3"
               >
                 <div className="min-w-0">
@@ -690,10 +726,16 @@ export default function Ordenes() {
                     {formatearMonto(r.saldo)}
                     {r.cantidadPlanes > 1 && ` · ${r.cantidadPlanes} ${t('planes')}`}
                   </p>
-                  {r.proximoVencimiento && (
+                  {/* enMora sale del saldo real (vencido > 0), independiente
+                      de si hay un plan de cuotas con próximo vencimiento —
+                      un fiado simple vencido también tiene que marcarse acá. */}
+                  {(r.enMora || r.proximoVencimiento) && (
                     <p className={`text-xs mt-0.5 ${r.enMora ? 'text-bad font-medium' : 'text-muted dark:text-dark-text-secondary'}`}>
-                      {r.enMora ? t('Vencida desde') : t('Próximo vencimiento')}:{' '}
-                      {new Date(r.proximoVencimiento + 'T00:00:00').toLocaleDateString(locale)}
+                      {r.enMora
+                        ? r.proximoVencimiento
+                          ? `${t('Vencida desde')}: ${new Date(r.proximoVencimiento + 'T00:00:00').toLocaleDateString(locale)}`
+                          : t('Tiene saldo vencido')
+                        : `${t('Próximo vencimiento')}: ${new Date(r.proximoVencimiento! + 'T00:00:00').toLocaleDateString(locale)}`}
                     </p>
                   )}
                 </div>
@@ -713,9 +755,19 @@ export default function Ordenes() {
               </div>
             ))}
           </div>
+
+          {/* Historial de boletas de cobros ya hechos — pedido real de un
+              cliente: poder auditar después (sin haber estado presente
+              cuando un empleado cobró) qué se cobró, a quién y cuándo,
+              mismo criterio que ya tienen las boletas de Ventas/Servicio
+              técnico acá abajo. */}
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted dark:text-dark-text-secondary mt-2">
+            {t('Boletas de cobros')}
+          </p>
         </>
-      ) : (
-        <>
+      )}
+
+      <>
           {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{t('Cargando...')}</p>}
 
           {!loading && filtradas.length === 0 && (busqueda.trim() !== '' || filtroEstado !== 'todas' || filtroTipo !== 'todas') && (
@@ -807,8 +859,7 @@ export default function Ordenes() {
               {t('Mostrar')} {Math.min(PASO_VISIBLES, filtradas.length - visibles)} {t('más')}
             </button>
           )}
-        </>
-      )}
+      </>
 
       {cobrando && (
         <Modal titulo={`${t('Cobrar a')} ${cobrando.clienteNombre}`} onClose={() => (guardandoCobro ? null : setCobrando(null))}>

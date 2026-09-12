@@ -46,6 +46,7 @@ type Dispositivo = {
   capacidad_gb: number | null;
   color: string | null;
   precio: number | null;
+  costo: number | null;
   imei: string | null;
   salud_bateria: number | null;
 };
@@ -66,6 +67,7 @@ type Producto = {
   id: string;
   nombre: string;
   precio: number | null;
+  costo: number | null;
   imagen_url: string | null;
   marca?: string | null;
   sku?: string | null;
@@ -402,7 +404,7 @@ export default function NuevaOrden() {
       const data = await obtenerTodasLasFilas<Dispositivo>(
         supabase,
         'dispositivos',
-        'id, modelo, capacidad_gb, color, precio, imei, salud_bateria',
+        'id, modelo, capacidad_gb, color, precio, costo, imei, salud_bateria',
         [],
         (q) => q.eq('en_stock', true)
       );
@@ -419,7 +421,7 @@ export default function NuevaOrden() {
       const data = await obtenerTodasLasFilas<Producto>(
         supabase,
         'productos',
-        'id, nombre, precio, imagen_url, marca, sku, codigo_barras, sucursal_id'
+        'id, nombre, precio, costo, imagen_url, marca, sku, codigo_barras, sucursal_id'
       );
       setProductos(data);
     })();
@@ -668,7 +670,7 @@ export default function NuevaOrden() {
         cantidad: 1,
         precioUnitario: d.precio ?? 0,
         dispositivoId: d.id,
-        costo: (d as any).costo ?? null,
+        costo: d.costo ?? null,
         tipo: 'dispositivo',
       },
     ]);
@@ -717,7 +719,7 @@ export default function NuevaOrden() {
   const agregarProductoDelCatalogo = (p: Producto) => {
     setCarrito((c) => [
       ...c,
-      { tempId: idTemporal(), descripcion: p.nombre, cantidad: 1, precioUnitario: p.precio ?? 0, productoId: p.id, costo: (p as any).costo ?? null, tipo: 'producto' },
+      { tempId: idTemporal(), descripcion: p.nombre, cantidad: 1, precioUnitario: p.precio ?? 0, productoId: p.id, costo: p.costo ?? null, tipo: 'producto' },
     ]);
     setPanelAbierto(null);
   };

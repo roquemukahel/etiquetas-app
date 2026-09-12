@@ -408,6 +408,13 @@ export default function Estadisticas() {
         obtenerTodasLasFilas<MovProveedorR>(supabase, 'proveedor_movimientos', 'proveedor_id, tipo, monto, fecha', [], (q) =>
           q.eq('anulado', false).gte('fecha', desde.toISOString())
         ),
+        // OJO: a propósito SIN filtro de fecha (a diferencia del resto de las
+        // tablas de acá abajo) — resumenFinanciacionDe() necesita el saldo
+        // pendiente/vencido TOTAL de todas las cuotas activas y el total
+        // financiado de todos los planes activos/completados, sin importar
+        // cuándo se crearon o vencieron; filtrar por `desde` escondería
+        // deuda vieja todavía impaga (justo la que más importa marcar como
+        // "vencida") y subestimaría "Total financiado activo".
         obtenerTodasLasFilas<CuotaFinR>(supabase, 'financiacion_cuotas', 'importe_original, importe_pagado, estado, fecha_vencimiento', [], (q) =>
           q.neq('estado', 'anulada')
         ),
@@ -418,8 +425,19 @@ export default function Estadisticas() {
         obtenerTodasLasFilas<ComisionMovR>(supabase, 'comision_movimientos', 'comision, estado, fecha_hecho, created_at', [], (q) =>
           q.neq('estado', 'revertida').gte('created_at', desde.toISOString())
         ),
+        // tipo != 'retiro': un retiro de caja (ver caja_vuelto_separado_supabase.sql)
+        // es plata que sale del cajón hacia otro lado (depósito, retiro del
+        // dueño), NO un gasto operativo real — sigue siendo plata del
+        // negocio, solo cambia de lugar. Bug real reportado por un cliente:
+        // antes esto SÍ se sumaba acá igual que un gasto real, y como un
+        // retiro suele acercarse al total vendido en efectivo del día
+        // (mucho más grande que el margen/ganancia del período), "Resultado
+        // operativo estimado" terminaba dando negativo con solo cerrar caja
+        // dejando vuelto — sin que el negocio haya perdido plata de verdad.
+        // El detalle completo (incluidos los retiros) se sigue viendo entero
+        // en /egresos, esto solo lo excluye del cálculo de resultado acá.
         obtenerTodasLasFilas<EgresoR>(supabase, 'egresos', 'importe, fecha, sucursal_id, area_id', [], (q) =>
-          q.eq('anulado', false).gte('fecha', desde.toISOString().slice(0, 10))
+          q.eq('anulado', false).neq('tipo', 'retiro').gte('fecha', desde.toISOString().slice(0, 10))
         ),
         obtenerTodasLasFilas<DispositivoCompra>(supabase, 'dispositivos', 'proveedor_id, costo, created_at, sucursal_id', [], (q) =>
           q.not('proveedor_id', 'is', null).gte('created_at', desde.toISOString())
@@ -475,13 +493,6 @@ export default function Estadisticas() {
           ].filter(Boolean) as string[]
         )
       );
-      const nombres = new Map<string, string>();
-      for (let i = 0; i < idsClientes.length; i += 300) {
-        const { data: cs } = await supabase.from('clientes').select('id, nombre, apellido').in('id', idsClientes.slice(i, i + 300));
-        for (const c of (cs as Cliente[] | null) ?? []) nombres.set(c.id, `${c.nombre} ${c.apellido || ''}`.trim());
-      }
-      setNombresClientes(nombres);
-
       // Modelo/categoría SOLO de los dispositivos/productos vendidos en el
       // período (no todo el catálogo) — para el ranking por producto y por
       // categoría de la pestaña Ventas. Se busca por id, no por texto libre
@@ -490,15 +501,44 @@ export default function Estadisticas() {
       // pequeñas diferencias de redacción.
       const idsDispositivos = Array.from(new Set(itemsPeriodo.map((it) => it.dispositivo_id).filter(Boolean) as string[]));
       const idsProductos = Array.from(new Set(itemsPeriodo.map((it) => it.producto_id).filter(Boolean) as string[]));
+
+      // Las 3 búsquedas de nombres (clientes/dispositivos/productos) son
+      // independientes entre sí, y cada una puede necesitar varias tandas de
+      // 300 ids — antes corrían todas en serie (una tanda atrás de la otra,
+      // recién después de que terminara la carga grande de arriba), lo que
+      // sumaba varios viajes de ida y vuelta encadenados al final de cada
+      // visita a esta pantalla. Con Promise.all corren todas en paralelo.
+      const tandasDe = <T,>(ids: string[]) => {
+        const tandas: string[][] = [];
+        for (let i = 0; i < ids.length; i += 300) tandas.push(ids.slice(i, i + 300));
+        return tandas;
+      };
+      const [resultadosClientes, resultadosDispositivos, resultadosProductos] = await Promise.all([
+        Promise.all(
+          tandasDe(idsClientes).map((tanda) => supabase.from('clientes').select('id, nombre, apellido').in('id', tanda))
+        ),
+        Promise.all(
+          tandasDe(idsDispositivos).map((tanda) => supabase.from('dispositivos').select('id, modelo, categoria_id').in('id', tanda))
+        ),
+        Promise.all(
+          tandasDe(idsProductos).map((tanda) => supabase.from('productos').select('id, nombre, categoria_id').in('id', tanda))
+        ),
+      ]);
+
+      const nombres = new Map<string, string>();
+      for (const { data: cs } of resultadosClientes) {
+        for (const c of (cs as Cliente[] | null) ?? []) nombres.set(c.id, `${c.nombre} ${c.apellido || ''}`.trim());
+      }
+      setNombresClientes(nombres);
+
       const dispInfo = new Map<string, DispositivoInfo>();
-      for (let i = 0; i < idsDispositivos.length; i += 300) {
-        const { data: ds } = await supabase.from('dispositivos').select('id, modelo, categoria_id').in('id', idsDispositivos.slice(i, i + 300));
+      for (const { data: ds } of resultadosDispositivos) {
         for (const d of (ds as ({ id: string } & DispositivoInfo)[] | null) ?? []) dispInfo.set(d.id, { modelo: d.modelo, categoria_id: d.categoria_id });
       }
       setDispositivosInfo(dispInfo);
+
       const prodInfo = new Map<string, ProductoInfo>();
-      for (let i = 0; i < idsProductos.length; i += 300) {
-        const { data: ps } = await supabase.from('productos').select('id, nombre, categoria_id').in('id', idsProductos.slice(i, i + 300));
+      for (const { data: ps } of resultadosProductos) {
         for (const p of (ps as ({ id: string } & ProductoInfo)[] | null) ?? []) prodInfo.set(p.id, { nombre: p.nombre, categoria_id: p.categoria_id });
       }
       setProductosInfo(prodInfo);

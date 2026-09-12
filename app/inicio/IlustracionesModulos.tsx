@@ -427,8 +427,39 @@ function Soporte({ className }: Props) {
   );
 }
 
+// Caja: cajón de efectivo abierto con billetes adentro + moneda (acento).
+function Caja({ className }: Props) {
+  return (
+    <Svg className={className}>
+      <Piso />
+      <rect x="20" y="46" width="56" height="30" rx="6" fill={AZUL_OSC} />
+      <rect x="18" y="43" width="56" height="30" rx="6" fill={AZUL} />
+      <rect x="24" y="48" width="44" height="10" rx="2.5" fill={CIELO} />
+      <rect x="27" y="50.5" width="9" height="5" rx="1" fill={AZUL_CLARO} />
+      <rect x="39" y="50.5" width="9" height="5" rx="1" fill={AZUL_CLARO} />
+      <rect x="51" y="50.5" width="9" height="5" rx="1" fill={AZUL_CLARO} />
+      {/* billete asomando por arriba del cajón */}
+      <g transform="rotate(-4 42 37)">
+        <rect x="30" y="30" width="24" height="15" rx="2" fill={BLANCO} stroke={LINEA} strokeWidth="1.6" />
+        <circle cx="42" cy="37.5" r="4" fill={AZUL_CLARO} />
+      </g>
+      {/* acento: moneda verde */}
+      <circle cx="67" cy="33" r="10" fill="#16A34A" />
+      <path
+        d="M67 28v10M63.6 30.6c0-1.4 1.3-2.2 3-2.2s3 .8 3 2-1 1.8-3 2.3-3 1-3 2.3 1.3 2 3 2 3-.8 3-2.2"
+        stroke={BLANCO}
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+    </Svg>
+  );
+}
+
 const MAPA: Record<string, (p: Props) => React.ReactElement> = {
   ordenes: Ordenes,
+  caja: Caja,
   compra: Compra,
   proveedores: Proveedores,
   stock: Stock,
