@@ -7,6 +7,7 @@ import { crearClienteNavegador } from '../../../../lib/supabase/client';
 import { ESLOGAN } from '../../../../lib/eslogan';
 import EtiquetaSeccion from '../../../../EtiquetaSeccion';
 import { armarLinkWhatsApp, mensajeComprobantePlanAhorro } from '../../../../lib/whatsapp';
+import { medioLabel } from '../../../../lib/cuentaCorriente';
 import { codigoLlamada } from '../../../../lib/paises';
 import { useT, useIdioma } from '../../../../lib/idioma';
 import { localeDe } from '../../../../lib/i18n/traducir';
@@ -240,7 +241,7 @@ export default function ComprobantePlanAhorro() {
           </p>
           {plan.dispositivos?.imei && <p className="text-muted">{t('IMEI:')} {plan.dispositivos.imei}</p>}
           {plan.detalles && <p className="text-muted">{t('Detalles:')} {plan.detalles}</p>}
-          {movimiento.medio && <p className="text-muted">{t('Medio:')} {movimiento.medio}</p>}
+          {movimiento.medio && <p className="text-muted">{t('Medio:')} {medioLabel(movimiento.medio, t)}</p>}
           {movimiento.observacion && <p className="text-muted">{t('Observación:')} {movimiento.observacion}</p>}
           {movimiento.registrado_por_nombre && <p className="text-muted">{t('Registrado por:')} {movimiento.registrado_por_nombre}</p>}
         </div>

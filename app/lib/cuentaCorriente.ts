@@ -30,6 +30,7 @@ const MEDIO_LABELS_EXTRA: Record<string, string> = {
   débito: 'Débito',
   crédito: 'Crédito',
   cheque: 'Cheque',
+  canje: 'Plan canje',
 };
 
 // t opcional (default identidad) — igual criterio que mensajeComprobantePlanAhorro

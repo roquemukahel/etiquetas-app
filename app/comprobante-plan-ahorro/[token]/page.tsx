@@ -8,6 +8,7 @@ import EtiquetaSeccion from '../../EtiquetaSeccion';
 import { useT, useIdioma } from '../../lib/idioma';
 import { localeDe } from '../../lib/i18n/traducir';
 import { formatearMonto } from '../../lib/numeros';
+import { medioLabel } from '../../lib/cuentaCorriente';
 import SelectorIdiomaFlotante from '../../SelectorIdiomaFlotante';
 
 type Comprobante = {
@@ -152,7 +153,7 @@ export default function ComprobantePlanAhorroPublico() {
           </p>
           {c.plan.imei && <p className="text-muted">{t('IMEI:')} {c.plan.imei}</p>}
           {c.plan.detalles && <p className="text-muted">{t('Detalles:')} {c.plan.detalles}</p>}
-          {c.medio && <p className="text-muted">{t('Medio:')} {c.medio}</p>}
+          {c.medio && <p className="text-muted">{t('Medio:')} {medioLabel(c.medio, t)}</p>}
           {c.observacion && <p className="text-muted">{t('Observación:')} {c.observacion}</p>}
           {c.registrado_por_nombre && <p className="text-muted">{t('Registrado por:')} {c.registrado_por_nombre}</p>}
         </div>

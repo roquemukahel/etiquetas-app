@@ -9,7 +9,10 @@ import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import { sanitizarDecimal, formatearMonto } from '../../lib/numeros';
 import { medioLabel } from '../../lib/cuentaCorriente';
+import { normalizarNombreModelo } from '../../lib/modelos';
+import { limpiarImei } from '../../lib/imei';
 import SelectorColorAuto from '../../SelectorColorAuto';
+import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
 import { ICONOS } from '../../Iconos';
 import { useT } from '../../lib/idioma';
 import { useSucursalActual } from '../../lib/sucursal';
@@ -26,6 +29,7 @@ type Plan = {
   detalles: string | null;
   estado: string;
   dispositivo_id: string | null;
+  orden_id: string | null;
   clientes: { nombre: string; apellido: string | null; telefono: string | null } | null;
 };
 
@@ -59,6 +63,18 @@ export default function DetallePlanAhorro() {
   const [medioPago, setMedioPago] = useState('efectivo');
   const [obsPago, setObsPago] = useState('');
   const [guardandoPago, setGuardandoPago] = useState(false);
+
+  // Plan canje: el cliente entrega un equipo usado como parte de pago del
+  // plan de ahorro — mismos campos que Nueva Orden, el equipo entra a la
+  // cola de Plan Canje (tabla canjes) igual que si viniera de una venta.
+  const [canjeModelo, setCanjeModelo] = useState('');
+  const [canjeCapacidad, setCanjeCapacidad] = useState<number | null>(null);
+  const [canjeColor, setCanjeColor] = useState('');
+  const [canjeImei, setCanjeImei] = useState('');
+  const [canjeBateria, setCanjeBateria] = useState('');
+  const [canjeDetalles, setCanjeDetalles] = useState('');
+  const [canjeCondicion, setCanjeCondicion] = useState('usado');
+  const [canjeUbicacion, setCanjeUbicacion] = useState('');
 
   const [editando, setEditando] = useState(false);
   const [editModelo, setEditModelo] = useState('');
@@ -111,15 +127,51 @@ export default function DetallePlanAhorro() {
       setError(t('Poné un monto válido'));
       return;
     }
+    if (medioPago === 'canje' && !canjeModelo.trim()) {
+      setError(t('Poné el modelo del equipo que recibís como parte de pago'));
+      return;
+    }
     setGuardandoPago(true);
     setError(null);
+
+    let canjeId: string | null = null;
+    let observacionFinal = obsPago.trim() || null;
+    if (medioPago === 'canje') {
+      const modeloNormalizado = normalizarNombreModelo(canjeModelo.trim());
+      const { data: nuevoCanje, error: canjeError } = await supabase
+        .from('canjes')
+        .insert({
+          cliente_id: plan.cliente_id,
+          modelo: modeloNormalizado,
+          capacidad_gb: canjeCapacidad,
+          color: canjeColor.trim() || null,
+          imei: limpiarImei(canjeImei),
+          salud_bateria: canjeBateria ? Number(canjeBateria) : null,
+          detalles: canjeDetalles.trim() || null,
+          monto,
+          condicion: canjeCondicion,
+          ubicacion_fisica: canjeUbicacion.trim() || null,
+        })
+        .select('id')
+        .single();
+      if (canjeError || !nuevoCanje) {
+        setError(t('No pudimos cargar el equipo de canje:') + ' ' + (canjeError?.message || ''));
+        setGuardandoPago(false);
+        return;
+      }
+      canjeId = nuevoCanje.id;
+      const descripcionCanje = `${modeloNormalizado}${canjeCapacidad ? ` ${canjeCapacidad}GB` : ''}${canjeColor.trim() ? ` ${canjeColor.trim()}` : ''}`;
+      observacionFinal = observacionFinal ? `${descripcionCanje} · ${observacionFinal}` : descripcionCanje;
+    }
+
     const { data: nuevoMov, error: dbError } = await supabase
       .from('plan_ahorro_movimientos')
       .insert({
         plan_id: plan.id,
         monto,
         medio: medioPago,
-        observacion: obsPago.trim() || null,
+        observacion: observacionFinal,
+        canje_id: canjeId,
         registrado_por_nombre: actor?.nombre ?? null,
         registrado_por_foto_url: actor?.fotoUrl ?? null,
       })
@@ -135,6 +187,14 @@ export default function DetallePlanAhorro() {
     setMontoPago('');
     setObsPago('');
     setMedioPago('efectivo');
+    setCanjeModelo('');
+    setCanjeCapacidad(null);
+    setCanjeColor('');
+    setCanjeImei('');
+    setCanjeBateria('');
+    setCanjeDetalles('');
+    setCanjeCondicion('usado');
+    setCanjeUbicacion('');
     if (nuevoMov?.id) {
       router.push(`/plan-ahorro/${plan.id}/comprobante/${nuevoMov.id}`);
       return;
@@ -166,18 +226,13 @@ export default function DetallePlanAhorro() {
     cargar();
   };
 
-  const cambiarEstado = async (nuevoEstado: string) => {
+  const cambiarEstado = async (nuevoEstado: 'cancelado' | 'activo') => {
     if (!plan || procesando) return;
     const mensajes: Record<string, string> = {
-      completado: t('¿Marcar este plan como completado y entregar el equipo?'),
       cancelado: t('¿Cancelar este plan de ahorro?'),
       activo: t('¿Reactivar este plan?'),
     };
-    if (nuevoEstado === 'completado' && !completo) {
-      if (!confirm(`${t('Todavía le faltan')} $${formatearMonto(falta)} ${t('para completar el objetivo.')} ${mensajes.completado}`)) return;
-    } else if (!confirm(mensajes[nuevoEstado])) {
-      return;
-    }
+    if (!confirm(mensajes[nuevoEstado])) return;
     setProcesando(true);
     await supabase.from('planes_ahorro').update({ estado: nuevoEstado }).eq('id', plan.id);
     await registrarAuditoria(supabase, {
@@ -191,85 +246,41 @@ export default function DetallePlanAhorro() {
     cargar();
   };
 
-  // Para una seña (plan con un dispositivo puntual reservado): "entregar"
-  // no es solo cambiar el estado del plan, es una venta de verdad — genera
-  // la orden de cobro (misma tabla que usa el resto de Órdenes) y saca el
-  // equipo de Stock, todo junto.
-  const confirmarEntregaSena = async () => {
-    if (!plan || !plan.dispositivo_id || procesando) return;
+  // Al completarse (con o sin seña), el plan pasa a ser una venta de
+  // verdad: se genera la orden/boleta (misma tabla que usa el resto de
+  // Órdenes) en una sola transacción — si tenía un equipo puntual
+  // reservado, también sale de Stock ahí mismo. Todo vive en la función
+  // plan_ahorro_completar (RPC) en vez de hacerse a mano acá, para que no
+  // pueda quedar a mitad de camino (equipo fuera de stock sin ninguna
+  // venta real detrás, por ejemplo).
+  const completarPlan = async () => {
+    if (!plan || procesando) return;
     const aviso = completo
-      ? t('¿Confirmar la entrega y generar la venta de este equipo?')
+      ? t('¿Confirmar la entrega y generar la venta?')
       : `${t('Todavía le faltan')} $${formatearMonto(falta)} ${t('para completar el objetivo.')} ${t('¿Generar la venta igual?')}`;
     if (!confirm(aviso)) return;
 
     setProcesando(true);
     setError(null);
-
-    // Atómico: se reserva el dispositivo ANTES de crear nada — si dos
-    // pestañas confirman la entrega casi al mismo tiempo, solo la primera
-    // consigue pasar en_stock de true a false (mismo patrón ya usado en
-    // Compras/Canje). Si no devuelve fila, alguien más ya lo vendió — se
-    // aborta en vez de generar una segunda orden para el mismo equipo.
-    const { data: disp, error: dispError } = await supabase
-      .from('dispositivos')
-      .update({ en_stock: false })
-      .eq('id', plan.dispositivo_id)
-      .eq('en_stock', true)
-      .select('modelo, capacidad_gb, color, imei')
-      .maybeSingle();
-    if (dispError) {
-      setError(t('No pudimos encontrar el dispositivo reservado.') + ' ' + dispError.message);
-      setProcesando(false);
-      return;
-    }
-    if (!disp) {
-      setError(t('Este equipo ya no figura en Stock (puede que ya se haya vendido o dado de baja).'));
-      setProcesando(false);
-      return;
-    }
-
-    const descripcion = `${disp.modelo || t('Equipo')}${disp.capacidad_gb ? ` ${disp.capacidad_gb}GB` : ''}${disp.color ? ` ${disp.color}` : ''}${disp.imei ? ` · IMEI ${disp.imei}` : ''}`;
-
-    const { data: orden, error: ordenError } = await supabase
-      .from('ordenes')
-      .insert({
-        cliente_id: plan.cliente_id,
-        dispositivo_id: plan.dispositivo_id,
-        total: plan.monto_objetivo,
-        estado: 'pagado',
-        forma_pago: 'Plan de ahorro / seña',
-        ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
-      })
-      .select()
-      .single();
-    if (ordenError || !orden) {
-      // El dispositivo ya se reservó arriba — si la orden no se pudo crear,
-      // hay que devolverlo a Stock, si no quedaría fuera de stock sin
-      // ninguna venta real detrás.
-      await supabase.from('dispositivos').update({ en_stock: true }).eq('id', plan.dispositivo_id);
-      setError(t('No pudimos generar la venta:') + ' ' + (ordenError?.message || ''));
-      setProcesando(false);
-      return;
-    }
-    await supabase.from('orden_items').insert({
-      orden_id: orden.id,
-      dispositivo_id: plan.dispositivo_id,
-      descripcion,
-      cantidad: 1,
-      precio_unitario: plan.monto_objetivo,
-      tipo: 'dispositivo',
+    const { data, error: rpcError } = await supabase.rpc('plan_ahorro_completar', {
+      p_plan_id: plan.id,
+      p_sucursal_id: sucursalActual.id || null,
     });
-    await supabase.from('planes_ahorro').update({ estado: 'completado' }).eq('id', plan.id);
-
+    if (rpcError || !data?.orden_id) {
+      setError(t('No pudimos generar la venta:') + ' ' + (rpcError?.message || ''));
+      setProcesando(false);
+      return;
+    }
     await registrarAuditoria(supabase, {
-      accion: `entregó el equipo señado a ${nombreCliente(plan)} y generó la venta (${descripcion})`,
+      accion: plan.dispositivo_id
+        ? `entregó el equipo señado a ${nombreCliente(plan)} y generó la venta`
+        : `completó el plan de ahorro de ${nombreCliente(plan)} y generó la venta`,
       entidad: 'plan_ahorro',
       entidadId: plan.id,
-      valorNuevo: { orden_id: orden.id },
+      valorNuevo: { orden_id: data.orden_id },
     });
-
     setProcesando(false);
-    router.push(`/ordenes/${orden.id}`);
+    router.push(`/ordenes/${data.orden_id}`);
   };
 
   const abrirEdicion = () => {
@@ -386,13 +397,20 @@ export default function DetallePlanAhorro() {
       )}
 
       {plan.estado !== 'activo' && (
-        <span
-          className={`self-start text-xs font-semibold px-2.5 py-1 rounded-full ${
-            plan.estado === 'completado' ? 'bg-good/15 text-good' : 'bg-bad/15 text-bad'
-          }`}
-        >
-          {plan.estado === 'completado' ? t('Completado y entregado') : t('Cancelado')}
-        </span>
+        <div className="flex items-center gap-2">
+          <span
+            className={`self-start text-xs font-semibold px-2.5 py-1 rounded-full ${
+              plan.estado === 'completado' ? 'bg-good/15 text-good' : 'bg-bad/15 text-bad'
+            }`}
+          >
+            {plan.estado === 'completado' ? t('Completado y entregado') : t('Cancelado')}
+          </span>
+          {plan.estado === 'completado' && plan.orden_id && (
+            <Link href={`/ordenes/${plan.orden_id}`} className="text-xs text-accent dark:text-dark-accent underline">
+              {t('Ver boleta')}
+            </Link>
+          )}
+        </div>
       )}
 
       {editando ? (
@@ -499,11 +517,11 @@ export default function DetallePlanAhorro() {
               {registrandoPago ? t('Cancelar') : `+ ${t('Registrar pago')}`}
             </button>
             <button
-              onClick={() => (plan.dispositivo_id ? confirmarEntregaSena() : cambiarEstado('completado'))}
+              onClick={completarPlan}
               disabled={procesando}
               className="flex-1 rounded-xl border border-border dark:border-dark-border py-2 text-sm font-medium disabled:opacity-40"
             >
-              {plan.dispositivo_id ? t('Entregar y generar venta') : t('Entregar equipo')}
+              {plan.dispositivo_id ? t('Entregar y generar venta') : t('Completar y generar venta')}
             </button>
           </div>
         )}
@@ -524,7 +542,7 @@ export default function DetallePlanAhorro() {
               onChange={(e) => setMontoPago(sanitizarDecimal(e.target.value))}
               inputMode="decimal"
               autoFocus
-              placeholder={t('Monto que paga hoy')}
+              placeholder={medioPago === 'canje' ? t('Monto reconocido del plan canje') : t('Monto que paga hoy')}
               className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
             />
             <select
@@ -537,7 +555,64 @@ export default function DetallePlanAhorro() {
               <option value="débito">{t('Débito')}</option>
               <option value="crédito">{t('Crédito')}</option>
               <option value="usdt">USDT</option>
+              <option value="canje">{t('Plan canje (dispositivo)')}</option>
             </select>
+
+            {medioPago === 'canje' && (
+              <div className="flex flex-col gap-2 rounded-lg bg-canvas dark:bg-dark-bg p-2.5">
+                <p className="text-[11px] text-muted dark:text-dark-text-secondary">
+                  {t('El monto reconocido de arriba se suma al plan de ahorro, y el equipo se guarda en Plan Canje para revisarlo después.')}
+                </p>
+                <input
+                  value={canjeModelo}
+                  onChange={(e) => setCanjeModelo(e.target.value)}
+                  placeholder={t('Modelo del equipo que recibís')}
+                  className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                />
+                <SelectorEstadoDispositivo value={canjeCondicion} onChange={setCanjeCondicion} label={t('Estado')} />
+                <div className="flex gap-2">
+                  {STORAGE_OPTIONS.map((gb) => (
+                    <button
+                      key={gb}
+                      type="button"
+                      onClick={() => setCanjeCapacidad(canjeCapacidad === gb ? null : gb)}
+                      className={`flex-1 rounded-lg py-1.5 text-xs font-medium ${
+                        canjeCapacidad === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
+                      }`}
+                    >
+                      {gb}GB
+                    </button>
+                  ))}
+                </div>
+                <SelectorColorAuto modelo={canjeModelo} value={canjeColor} onChange={setCanjeColor} />
+                <input
+                  value={canjeBateria}
+                  onChange={(e) => setCanjeBateria(e.target.value)}
+                  inputMode="numeric"
+                  placeholder={t('Salud de batería % (opcional)')}
+                  className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                />
+                <input
+                  value={canjeImei}
+                  onChange={(e) => setCanjeImei(e.target.value)}
+                  placeholder={t('IMEI (opcional)')}
+                  className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                />
+                <input
+                  value={canjeUbicacion}
+                  onChange={(e) => setCanjeUbicacion(e.target.value)}
+                  placeholder={t('Ubicación física (opcional)')}
+                  className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                />
+                <input
+                  value={canjeDetalles}
+                  onChange={(e) => setCanjeDetalles(e.target.value)}
+                  placeholder={t('Detalles (opcional)')}
+                  className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+            )}
+
             <input
               value={obsPago}
               onChange={(e) => setObsPago(e.target.value)}
@@ -545,7 +620,7 @@ export default function DetallePlanAhorro() {
               className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
             />
             <button
-              disabled={guardandoPago || !montoPago}
+              disabled={guardandoPago || !montoPago || (medioPago === 'canje' && !canjeModelo.trim())}
               onClick={registrarPago}
               className="rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
             >
