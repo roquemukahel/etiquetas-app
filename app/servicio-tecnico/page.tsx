@@ -70,11 +70,12 @@ type EquipoIngreso = {
   patronDesbloqueo: string;
   // Ambos opcionales — pedido real de un cliente: poder cotizar en el
   // momento (sin pasar por la pestaña Presupuesto de la ficha) cuando el
-  // precio ya se acordó de palabra con el cliente, y poder dejar una foto
-  // de cómo llegó el equipo (ej. una pantalla rota en una reparación que
-  // solo es de batería) antes de que exista la reparación en la lista.
+  // precio ya se acordó de palabra con el cliente, y poder dejar una o
+  // varias fotos de cómo llegó el equipo (ej. una pantalla rota en una
+  // reparación que solo es de batería) antes de que exista la reparación
+  // en la lista.
   precioAcordado: string;
-  evidenciaFoto: string | null;
+  evidenciaFotos: string[];
 };
 
 type Cliente = { id: string; nombre: string; apellido: string | null; telefono: string | null };
@@ -193,7 +194,7 @@ export default function ServicioTecnico() {
   const [nuevaFalla, setNuevaFalla] = useState('');
   const [nuevaUbicacion, setNuevaUbicacion] = useState('');
   const [nuevoPrecioAcordado, setNuevoPrecioAcordado] = useState('');
-  const [nuevaEvidenciaFoto, setNuevaEvidenciaFoto] = useState<string | null>(null);
+  const [nuevaEvidenciaFotos, setNuevaEvidenciaFotos] = useState<string[]>([]);
   const [cargandoEvidenciaNueva, setCargandoEvidenciaNueva] = useState(false);
   // Equipos ya confirmados con "+ Agregar otro equipo" en este mismo
   // ingreso (además del que esté cargado en el formulario sin agregar).
@@ -541,7 +542,7 @@ export default function ServicioTecnico() {
         codigoDesbloqueo: nuevoCodigoDesbloqueo.trim(),
         patronDesbloqueo: nuevoPatronDesbloqueo,
         precioAcordado: nuevoPrecioAcordado,
-        evidenciaFoto: nuevaEvidenciaFoto,
+        evidenciaFotos: nuevaEvidenciaFotos,
       }
     : null;
   const equiposEfectivos: EquipoIngreso[] = equipoEnProgreso ? [...equiposAgregados, equipoEnProgreso] : equiposAgregados;
@@ -560,7 +561,7 @@ export default function ServicioTecnico() {
     setNuevoCodigoDesbloqueo('');
     setNuevoPatronDesbloqueo('');
     setNuevoPrecioAcordado('');
-    setNuevaEvidenciaFoto(null);
+    setNuevaEvidenciaFotos([]);
     setNuevoEnciende(null);
     setNuevaPantalla('');
     setNuevoChecklist({});
@@ -570,17 +571,26 @@ export default function ServicioTecnico() {
 
   const quitarEquipoAgregado = (tempId: string) => setEquiposAgregados((eqs) => eqs.filter((e) => e.tempId !== tempId));
 
+  // Varias fotos por equipo — pedido real de un cliente (una sola no
+  // alcanzaba para dejar constancia completa del estado de un equipo,
+  // ej. frente + dorso + un golpe puntual). Se pueden elegir varias juntas
+  // (input multiple) o ir agregando de a una; cada una se comprime igual
+  // que antes.
   const elegirEvidenciaNueva = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
     setCargandoEvidenciaNueva(true);
     try {
-      setNuevaEvidenciaFoto(await comprimirImagen(file));
+      const comprimidas = await Promise.all(files.map((file) => comprimirImagen(file)));
+      setNuevaEvidenciaFotos((prev) => [...prev, ...comprimidas]);
     } catch {
       setErrorNuevo(t('No pudimos leer la foto.'));
     }
     setCargandoEvidenciaNueva(false);
+    e.target.value = '';
   };
+
+  const quitarEvidenciaNueva = (idx: number) => setNuevaEvidenciaFotos((prev) => prev.filter((_, i) => i !== idx));
 
   const recibirEquipos = async () => {
     if (equiposEfectivos.length === 0 || !puedeRecibir) return;
@@ -720,20 +730,23 @@ export default function ServicioTecnico() {
       return;
     }
 
-    // Evidencia fotográfica al recepcionar (opcional) — mismo destino
-    // (reparaciones_evidencias) que la pestaña "Evidencias" de la ficha,
-    // así que aparece igual ahí y en el portal público de seguimiento, sin
-    // duplicar ningún concepto nuevo. `creadas` respeta el orden del
-    // insert, así que se puede aparear con equiposEfectivos por índice.
+    // Evidencia fotográfica al recepcionar (opcional, una o varias por
+    // equipo) — mismo destino (reparaciones_evidencias) que la pestaña
+    // "Evidencias" de la ficha, así que aparece igual ahí y en el portal
+    // público de seguimiento, sin duplicar ningún concepto nuevo. `creadas`
+    // respeta el orden del insert, así que se puede aparear con
+    // equiposEfectivos por índice.
     const evidenciasNuevas = equiposEfectivos
       .map((eq, i) => ({ eq, creada: creadas?.[i] }))
-      .filter(({ eq, creada }) => eq.evidenciaFoto && creada)
-      .map(({ eq, creada }) => ({
-        reparacion_id: creada!.id,
-        foto_url: eq.evidenciaFoto,
-        nota: t('Foto tomada al recepcionar el equipo.'),
-        actor_nombre: actorRecepcion?.nombre ?? null,
-      }));
+      .filter(({ eq, creada }) => eq.evidenciaFotos.length > 0 && creada)
+      .flatMap(({ eq, creada }) =>
+        eq.evidenciaFotos.map((foto) => ({
+          reparacion_id: creada!.id,
+          foto_url: foto,
+          nota: t('Foto tomada al recepcionar el equipo.'),
+          actor_nombre: actorRecepcion?.nombre ?? null,
+        }))
+      );
     if (evidenciasNuevas.length > 0) {
       const { error: evidenciaError } = await supabase.from('reparaciones_evidencias').insert(evidenciasNuevas);
       // El equipo YA se recibió bien (lo de arriba se guardó) — no hay que
@@ -788,7 +801,7 @@ export default function ServicioTecnico() {
     setNuevaHumedad(null);
     setNuevaExcepcionGarantia('');
     setNuevoPrecioAcordado('');
-    setNuevaEvidenciaFoto(null);
+    setNuevaEvidenciaFotos([]);
     setPanelNuevo(false);
     setGuardandoNuevo(false);
     cargar();
@@ -1173,29 +1186,43 @@ export default function ServicioTecnico() {
                   constancia fotográfica de cómo llegó el equipo (ej. una
                   pantalla rota en una reparación que solo es de batería)
                   desde el momento de la recepción, sin tener que esperar a
-                  que exista la ficha para ir a su pestaña Evidencias. */}
+                  que exista la ficha para ir a su pestaña Evidencias. Ahora
+                  admite varias fotos (frente, dorso, un golpe puntual,
+                  etc.), no solo una. */}
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium text-muted dark:text-dark-text-secondary">
-                  {t('Foto de evidencia (opcional)')}
+                  {t('Fotos de evidencia (opcional)')}
                 </label>
-                {nuevaEvidenciaFoto ? (
-                  <div className="flex items-center gap-2">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={nuevaEvidenciaFoto} alt="" className="h-16 w-16 rounded-lg object-cover border border-border dark:border-dark-border" />
-                    <button
-                      type="button"
-                      onClick={() => setNuevaEvidenciaFoto(null)}
-                      className="text-xs text-bad underline"
-                    >
-                      {t('Quitar')}
-                    </button>
+                {nuevaEvidenciaFotos.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {nuevaEvidenciaFotos.map((foto, idx) => (
+                      <div key={idx} className="relative">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={foto} alt="" className="h-16 w-16 rounded-lg object-cover border border-border dark:border-dark-border" />
+                        <button
+                          type="button"
+                          onClick={() => quitarEvidenciaNueva(idx)}
+                          aria-label={t('Quitar')}
+                          className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-bad text-white text-xs leading-5 text-center"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
                   </div>
-                ) : (
-                  <label className="self-start rounded-lg border border-dashed border-border dark:border-dark-border px-3 py-2 text-xs font-medium text-accent dark:text-dark-accent cursor-pointer">
-                    {cargandoEvidenciaNueva ? t('Cargando...') : `📷 ${t('Sacar/elegir foto')}`}
-                    <input type="file" accept="image/*" capture="environment" className="hidden" onChange={elegirEvidenciaNueva} disabled={cargandoEvidenciaNueva} />
-                  </label>
                 )}
+                <label className="self-start rounded-lg border border-dashed border-border dark:border-dark-border px-3 py-2 text-xs font-medium text-accent dark:text-dark-accent cursor-pointer">
+                  {cargandoEvidenciaNueva ? t('Cargando...') : `📷 ${t(nuevaEvidenciaFotos.length > 0 ? 'Agregar otra foto' : 'Sacar/elegir foto')}`}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    multiple
+                    className="hidden"
+                    onChange={elegirEvidenciaNueva}
+                    disabled={cargandoEvidenciaNueva}
+                  />
+                </label>
               </div>
 
               <input
