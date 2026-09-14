@@ -17,13 +17,11 @@ type Comprobante = {
 
 export default function PagoUSDT({
   negocioId,
-  nombreNegocio,
   comprobante,
   onEnviado,
   abiertoPorDefecto = false,
 }: {
   negocioId: string;
-  nombreNegocio?: string | null;
   comprobante: Comprobante | null;
   onEnviado: () => void;
   abiertoPorDefecto?: boolean;
@@ -64,36 +62,22 @@ export default function PagoUSDT({
     setEnviando(true);
     setError(null);
     const monto = plan === 'mensual' ? PRECIO_USDT_MENSUAL : PRECIO_USDT_ANUAL;
-    const { data: insertData, error: insertError } = await supabase
-      .from('comprobantes_pago')
-      .insert({
-        negocio_id: negocioId,
-        monto,
-        moneda: 'USDT',
-        comprobante_imagen: imagen,
-        referencia: referencia.trim() || null,
-      })
-      .select('id')
-      .single();
+    // El aviso de Telegram lo dispara un trigger en la base de datos apenas
+    // se guarda esta fila (ver notificar_comprobante_pago_supabase.sql) —
+    // no depende de que este fetch llegue a salir del navegador, así que
+    // acá no hace falta avisar nada más.
+    const { error: insertError } = await supabase.from('comprobantes_pago').insert({
+      negocio_id: negocioId,
+      monto,
+      moneda: 'USDT',
+      comprobante_imagen: imagen,
+      referencia: referencia.trim() || null,
+    });
     if (insertError) {
       setError(t('No pudimos enviar el comprobante:') + ' ' + insertError.message);
       setEnviando(false);
       return;
     }
-    // Best-effort: si el aviso falla, no rompe el flujo del negocio que
-    // recién pagó — su comprobante ya quedó guardado, eso es lo que importa.
-    fetch('/api/notificar-comprobante', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        nombreNegocio,
-        monto,
-        moneda: 'USDT',
-        referencia: referencia.trim() || null,
-        metodo: 'USDT (cripto)',
-        comprobanteId: insertData?.id,
-      }),
-    }).catch(() => {});
     setEnviando(false);
     setAbierto(false);
     setImagen(null);

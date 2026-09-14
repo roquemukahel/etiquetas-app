@@ -132,13 +132,8 @@ export default function Suscripcion() {
             textoBotonMensual={necesitaPagar ? t('Suscribirme — Mensual') : t('Antes de que termine la prueba — Mensual')}
             textoBotonAnual={necesitaPagar ? t('Suscribirme — Anual') : t('Antes de que termine la prueba — Anual')}
           />
-          <PagoUSDT negocioId={negocio.id} nombreNegocio={negocio.nombre} comprobante={comprobante} onEnviado={() => cargarComprobante(negocio.id)} />
-          <PagoTransferenciaARS
-            negocioId={negocio.id}
-            nombreNegocio={negocio.nombre}
-            comprobante={comprobante}
-            onEnviado={() => cargarComprobante(negocio.id)}
-          />
+          <PagoUSDT negocioId={negocio.id} comprobante={comprobante} onEnviado={() => cargarComprobante(negocio.id)} />
+          <PagoTransferenciaARS negocioId={negocio.id} comprobante={comprobante} onEnviado={() => cargarComprobante(negocio.id)} />
         </>
       )}
     </main>
