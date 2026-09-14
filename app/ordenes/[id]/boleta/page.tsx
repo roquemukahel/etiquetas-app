@@ -75,6 +75,13 @@ type CanjeEntregado = {
   vendedores: { nombre: string } | null;
 };
 
+type CuotaPlanAhorro = {
+  monto: number;
+  medio: string | null;
+  observacion: string | null;
+  fecha: string;
+};
+
 type Negocio = {
   nombre: string;
   telefono: string | null;
@@ -139,6 +146,7 @@ export default function Boleta() {
   const [orden, setOrden] = useState<Orden | null>(null);
   const [desglosePagos, setDesglosePagos] = useState<{ medio: string; monto: number }[]>([]);
   const [canjes, setCanjes] = useState<CanjeEntregado[]>([]);
+  const [cuotasPlanAhorro, setCuotasPlanAhorro] = useState<CuotaPlanAhorro[]>([]);
   const [bloqueos, setBloqueos] = useState<BloqueoEquipo[]>([]);
   const [negocio, setNegocio] = useState<Negocio | null>(null);
   const [loading, setLoading] = useState(true);
@@ -158,6 +166,7 @@ export default function Boleta() {
         { data: bloqueosData },
         { data: pagosData },
         { data: ctaCteData },
+        { data: planAhorroData },
         {
           data: { user },
         },
@@ -203,6 +212,10 @@ export default function Boleta() {
         // cuota de "Financiar en cuotas propias" (financiacion_crear_plan) —
         // ambos representan plata de ESTA orden que quedó a cuenta corriente.
         supabase.from('cta_cte_movimientos').select('monto').eq('orden_id', id).in('concepto', ['venta', 'cuota']).eq('anulado', false),
+        // Si esta orden nació de completar un plan de ahorro, planes_ahorro
+        // guarda el link (orden_id) — de ahí se saca el historial de cuotas
+        // que se muestra más abajo (ver fetch después de este Promise.all).
+        supabase.from('planes_ahorro').select('id').eq('orden_id', id).maybeSingle(),
         supabase.auth.getUser(),
       ]);
       if (ordenError) setError(ordenError.message);
@@ -228,16 +241,33 @@ export default function Boleta() {
         QRCode.toDataURL(url, { margin: 0, width: 200 }).then(setQr).catch(() => setQr(null));
       }
 
-      if (user) {
-        const { data: perfil } = await supabase
-          .from('perfiles')
-          .select(
-            'negocios ( nombre, telefono, direccion, eslogan, logo_url, texto_garantia, texto_garantia_servicio, texto_garantia_tamano, texto_garantia_servicio_tamano, instagram, facebook, tiktok, mostrar_instagram, mostrar_facebook, mostrar_tiktok, moneda, pais )'
-          )
-          .eq('id', user.id)
-          .single();
-        setNegocio((perfil as any)?.negocios ?? null);
-      }
+      // Independientes entre sí (una cuelga de `user`, la otra de si esta
+      // orden vino de un plan de ahorro) — en paralelo, mismo criterio que
+      // el Promise.all de arriba.
+      await Promise.all([
+        (async () => {
+          if (!user) return;
+          const { data: perfil } = await supabase
+            .from('perfiles')
+            .select(
+              'negocios ( nombre, telefono, direccion, eslogan, logo_url, texto_garantia, texto_garantia_servicio, texto_garantia_tamano, texto_garantia_servicio_tamano, instagram, facebook, tiktok, mostrar_instagram, mostrar_facebook, mostrar_tiktok, moneda, pais )'
+            )
+            .eq('id', user.id)
+            .single();
+          setNegocio((perfil as any)?.negocios ?? null);
+        })(),
+        (async () => {
+          const planId = (planAhorroData as { id: string } | null)?.id;
+          if (!planId) return;
+          const { data: movsData } = await supabase
+            .from('plan_ahorro_movimientos')
+            .select('monto, medio, observacion, fecha')
+            .eq('plan_id', planId)
+            .eq('anulado', false)
+            .order('fecha');
+          setCuotasPlanAhorro((movsData as CuotaPlanAhorro[]) ?? []);
+        })(),
+      ]);
 
       setLoading(false);
     })();
@@ -578,6 +608,23 @@ export default function Boleta() {
             <span className="font-medium">{orden.forma_pago}</span>
           )}
         </div>
+
+        {cuotasPlanAhorro.length > 0 && (
+          <div className="flex flex-col gap-1 text-sm">
+            <span className="text-muted">{t('Cuotas del plan de ahorro')}</span>
+            <div className="flex flex-col gap-0.5">
+              {cuotasPlanAhorro.map((c, idx) => (
+                <div key={idx} className="flex justify-between gap-4 max-w-[420px]">
+                  <span className="text-muted">
+                    {formatearFecha(c.fecha, locale)} · {c.medio ? medioLabel(c.medio, t) : t('Pago')}
+                    {c.observacion ? ` · ${c.observacion}` : ''}
+                  </span>
+                  <span className="font-medium shrink-0">{fmt(c.monto)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="flex flex-wrap gap-x-8 gap-y-1 text-sm">
           {orden.vendedores?.nombre && (

@@ -19,6 +19,23 @@ import { useSucursalActual } from '../../lib/sucursal';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 
+function idTemporal() {
+  return Math.random().toString(36).slice(2);
+}
+
+type CanjeCarritoItem = {
+  tempId: string;
+  modelo: string;
+  capacidad_gb: number | null;
+  color: string;
+  imei: string;
+  salud_bateria: string;
+  monto: string;
+  detalles: string;
+  condicion: string;
+  ubicacion_fisica: string;
+};
+
 type Plan = {
   id: string;
   cliente_id: string | null;
@@ -64,14 +81,19 @@ export default function DetallePlanAhorro() {
   const [obsPago, setObsPago] = useState('');
   const [guardandoPago, setGuardandoPago] = useState(false);
 
-  // Plan canje: el cliente entrega un equipo usado como parte de pago del
-  // plan de ahorro — mismos campos que Nueva Orden, el equipo entra a la
-  // cola de Plan Canje (tabla canjes) igual que si viniera de una venta.
+  // Plan canje: el cliente entrega uno o más equipos usados como parte de
+  // pago del plan de ahorro — mismo carrito que Nueva Orden, cada equipo
+  // entra a la cola de Plan Canje (tabla canjes) igual que si viniera de
+  // una venta. canjesCarrito son los ya agregados con "+ Agregar"; los
+  // campos sueltos de abajo son el que se está por agregar (o el único,
+  // si nunca se toca "+ Agregar" — igual criterio que Nueva Orden).
+  const [canjesCarrito, setCanjesCarrito] = useState<CanjeCarritoItem[]>([]);
   const [canjeModelo, setCanjeModelo] = useState('');
   const [canjeCapacidad, setCanjeCapacidad] = useState<number | null>(null);
   const [canjeColor, setCanjeColor] = useState('');
   const [canjeImei, setCanjeImei] = useState('');
   const [canjeBateria, setCanjeBateria] = useState('');
+  const [canjeMonto, setCanjeMonto] = useState('');
   const [canjeDetalles, setCanjeDetalles] = useState('');
   const [canjeCondicion, setCanjeCondicion] = useState('usado');
   const [canjeUbicacion, setCanjeUbicacion] = useState('');
@@ -120,47 +142,125 @@ export default function DetallePlanAhorro() {
   const pct = plan && plan.monto_objetivo > 0 ? Math.min(100, Math.round((pagado / plan.monto_objetivo) * 100)) : 0;
   const completo = plan ? pagado >= plan.monto_objetivo : false;
 
+  // Los canjes que efectivamente cuentan: los ya agregados con el botón MÁS
+  // el que se está tipeando ahora — si alguien completa un solo equipo y se
+  // olvida de tocar "+ Agregar", igual se suma (mismo criterio que Nueva
+  // Orden en agregarCanje/canjesEfectivos).
+  const canjesEfectivos = useMemo<CanjeCarritoItem[]>(() => {
+    const enProgreso: CanjeCarritoItem[] = canjeModelo.trim()
+      ? [
+          {
+            tempId: '__actual__',
+            modelo: canjeModelo.trim(),
+            capacidad_gb: canjeCapacidad,
+            color: canjeColor,
+            imei: canjeImei,
+            salud_bateria: canjeBateria,
+            monto: canjeMonto,
+            detalles: canjeDetalles,
+            condicion: canjeCondicion,
+            ubicacion_fisica: canjeUbicacion,
+          },
+        ]
+      : [];
+    return [...canjesCarrito, ...enProgreso];
+  }, [canjesCarrito, canjeModelo, canjeCapacidad, canjeColor, canjeImei, canjeBateria, canjeMonto, canjeDetalles, canjeCondicion, canjeUbicacion]);
+
+  const montoCanjeTotal = useMemo(() => canjesEfectivos.reduce((acc, c) => acc + (Number(c.monto) || 0), 0), [canjesEfectivos]);
+
+  const agregarCanje = () => {
+    if (!canjeModelo.trim()) return;
+    setCanjesCarrito((c) => [
+      ...c,
+      {
+        tempId: idTemporal(),
+        modelo: canjeModelo.trim(),
+        capacidad_gb: canjeCapacidad,
+        color: canjeColor.trim(),
+        imei: canjeImei.trim(),
+        salud_bateria: canjeBateria,
+        monto: canjeMonto,
+        detalles: canjeDetalles.trim(),
+        condicion: canjeCondicion,
+        ubicacion_fisica: canjeUbicacion.trim(),
+      },
+    ]);
+    setCanjeModelo('');
+    setCanjeCapacidad(null);
+    setCanjeColor('');
+    setCanjeImei('');
+    setCanjeBateria('');
+    setCanjeMonto('');
+    setCanjeDetalles('');
+    setCanjeCondicion('usado');
+    setCanjeUbicacion('');
+  };
+
+  const quitarCanje = (tempId: string) => setCanjesCarrito((c) => c.filter((x) => x.tempId !== tempId));
+
+  const actualizarMontoCanje = (tempId: string, monto: string) =>
+    setCanjesCarrito((c) => c.map((x) => (x.tempId === tempId ? { ...x, monto } : x)));
+
+  const limpiarFormularioPago = () => {
+    setMontoPago('');
+    setObsPago('');
+    setMedioPago('efectivo');
+    setCanjesCarrito([]);
+    setCanjeModelo('');
+    setCanjeCapacidad(null);
+    setCanjeColor('');
+    setCanjeImei('');
+    setCanjeBateria('');
+    setCanjeMonto('');
+    setCanjeDetalles('');
+    setCanjeCondicion('usado');
+    setCanjeUbicacion('');
+  };
+
   const registrarPago = async () => {
     if (!plan) return;
-    const monto = Number(montoPago);
+    const esCanje = medioPago === 'canje';
+    const monto = esCanje ? montoCanjeTotal : Number(montoPago);
     if (!monto || monto <= 0) {
-      setError(t('Poné un monto válido'));
+      setError(esCanje ? t('Cargá al menos un equipo con un monto reconocido válido') : t('Poné un monto válido'));
       return;
     }
-    if (medioPago === 'canje' && !canjeModelo.trim()) {
-      setError(t('Poné el modelo del equipo que recibís como parte de pago'));
+    if (esCanje && canjesEfectivos.some((c) => !c.modelo.trim())) {
+      setError(t('Poné el modelo de cada equipo que recibís como parte de pago'));
       return;
     }
     setGuardandoPago(true);
     setError(null);
 
-    let canjeId: string | null = null;
     let observacionFinal = obsPago.trim() || null;
-    if (medioPago === 'canje') {
-      const modeloNormalizado = normalizarNombreModelo(canjeModelo.trim());
-      const { data: nuevoCanje, error: canjeError } = await supabase
+    let canjeIds: string[] = [];
+    if (esCanje) {
+      const { data: nuevosCanjes, error: canjesError } = await supabase
         .from('canjes')
-        .insert({
-          cliente_id: plan.cliente_id,
-          modelo: modeloNormalizado,
-          capacidad_gb: canjeCapacidad,
-          color: canjeColor.trim() || null,
-          imei: limpiarImei(canjeImei),
-          salud_bateria: canjeBateria ? Number(canjeBateria) : null,
-          detalles: canjeDetalles.trim() || null,
-          monto,
-          condicion: canjeCondicion,
-          ubicacion_fisica: canjeUbicacion.trim() || null,
-        })
-        .select('id')
-        .single();
-      if (canjeError || !nuevoCanje) {
-        setError(t('No pudimos cargar el equipo de canje:') + ' ' + (canjeError?.message || ''));
+        .insert(
+          canjesEfectivos.map((c) => ({
+            cliente_id: plan.cliente_id,
+            modelo: normalizarNombreModelo(c.modelo.trim()),
+            capacidad_gb: c.capacidad_gb,
+            color: c.color.trim() || null,
+            imei: limpiarImei(c.imei),
+            salud_bateria: c.salud_bateria ? Number(c.salud_bateria) : null,
+            detalles: c.detalles.trim() || null,
+            monto: Number(c.monto) || 0,
+            condicion: c.condicion,
+            ubicacion_fisica: c.ubicacion_fisica.trim() || null,
+          }))
+        )
+        .select('id');
+      if (canjesError || !nuevosCanjes) {
+        setError(t('No pudimos cargar el/los equipo/s de canje:') + ' ' + (canjesError?.message || ''));
         setGuardandoPago(false);
         return;
       }
-      canjeId = nuevoCanje.id;
-      const descripcionCanje = `${modeloNormalizado}${canjeCapacidad ? ` ${canjeCapacidad}GB` : ''}${canjeColor.trim() ? ` ${canjeColor.trim()}` : ''}`;
+      canjeIds = nuevosCanjes.map((c) => c.id);
+      const descripcionCanje = canjesEfectivos
+        .map((c) => `${normalizarNombreModelo(c.modelo.trim())}${c.capacidad_gb ? ` ${c.capacidad_gb}GB` : ''}${c.color.trim() ? ` ${c.color.trim()}` : ''}`)
+        .join(' + ');
       observacionFinal = observacionFinal ? `${descripcionCanje} · ${observacionFinal}` : descripcionCanje;
     }
 
@@ -171,30 +271,29 @@ export default function DetallePlanAhorro() {
         monto,
         medio: medioPago,
         observacion: observacionFinal,
-        canje_id: canjeId,
         registrado_por_nombre: actor?.nombre ?? null,
         registrado_por_foto_url: actor?.fotoUrl ?? null,
       })
       .select('id')
       .single();
     if (dbError) {
+      // Los canjes ya insertados arriba no se pierden aunque esto falle
+      // (quedan sueltos en Plan Canje, igual que si una venta normal
+      // falla después de cargar el canje) — se puede reconciliar a mano.
       setError(t('No pudimos guardar el pago:') + ' ' + dbError.message);
       setGuardandoPago(false);
       return;
     }
+    // Best-effort: vincula los canjes con este abono para que la boleta
+    // final (al completar el plan) pueda encontrarlos. Si esto falla, la
+    // plata y los equipos ya quedaron registrados igual — no vale la pena
+    // bloquear al usuario por un link que es solo para la boleta.
+    if (canjeIds.length > 0 && nuevoMov?.id) {
+      await supabase.from('canjes').update({ plan_ahorro_movimiento_id: nuevoMov.id }).in('id', canjeIds);
+    }
     setGuardandoPago(false);
     setRegistrandoPago(false);
-    setMontoPago('');
-    setObsPago('');
-    setMedioPago('efectivo');
-    setCanjeModelo('');
-    setCanjeCapacidad(null);
-    setCanjeColor('');
-    setCanjeImei('');
-    setCanjeBateria('');
-    setCanjeDetalles('');
-    setCanjeCondicion('usado');
-    setCanjeUbicacion('');
+    limpiarFormularioPago();
     if (nuevoMov?.id) {
       router.push(`/plan-ahorro/${plan.id}/comprobante/${nuevoMov.id}`);
       return;
@@ -508,8 +607,7 @@ export default function DetallePlanAhorro() {
             <button
               onClick={() => {
                 setRegistrandoPago((v) => !v);
-                setMontoPago('');
-                setObsPago('');
+                limpiarFormularioPago();
                 setError(null);
               }}
               className="flex-1 rounded-xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-sm font-medium text-white"
@@ -537,14 +635,6 @@ export default function DetallePlanAhorro() {
 
         {registrandoPago && (
           <div className="flex flex-col gap-2 border-t border-border dark:border-dark-border pt-3">
-            <input
-              value={montoPago}
-              onChange={(e) => setMontoPago(sanitizarDecimal(e.target.value))}
-              inputMode="decimal"
-              autoFocus
-              placeholder={medioPago === 'canje' ? t('Monto reconocido del plan canje') : t('Monto que paga hoy')}
-              className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
-            />
             <select
               value={medioPago}
               onChange={(e) => setMedioPago(e.target.value)}
@@ -558,11 +648,42 @@ export default function DetallePlanAhorro() {
               <option value="canje">{t('Plan canje (dispositivo)')}</option>
             </select>
 
-            {medioPago === 'canje' && (
+            {medioPago === 'canje' ? (
               <div className="flex flex-col gap-2 rounded-lg bg-canvas dark:bg-dark-bg p-2.5">
                 <p className="text-[11px] text-muted dark:text-dark-text-secondary">
-                  {t('El monto reconocido de arriba se suma al plan de ahorro, y el equipo se guarda en Plan Canje para revisarlo después.')}
+                  {t('El monto reconocido de cada equipo se suma al plan de ahorro, y los equipos se guardan en Plan Canje para revisarlos después.')}
                 </p>
+
+                {canjesCarrito.length > 0 && (
+                  <div className="flex flex-col gap-2">
+                    {canjesCarrito.map((c, idx) => (
+                      <div
+                        key={c.tempId}
+                        className="rounded-lg border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-3 py-2 flex items-center justify-between gap-2 text-sm"
+                      >
+                        <p className="font-medium truncate">
+                          {canjesCarrito.length > 1 ? `${idx + 1}. ` : ''}
+                          {c.modelo}
+                          {c.capacidad_gb ? ` · ${c.capacidad_gb}GB` : ''}
+                          {c.color ? ` · ${c.color}` : ''}
+                        </p>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <input
+                            value={c.monto}
+                            onChange={(e) => actualizarMontoCanje(c.tempId, sanitizarDecimal(e.target.value))}
+                            inputMode="decimal"
+                            placeholder={t('Monto')}
+                            className="w-20 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded px-2 py-1 text-sm"
+                          />
+                          <button type="button" onClick={() => quitarCanje(c.tempId)} className="text-bad text-xs font-medium">
+                            {t('Quitar')}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 <input
                   value={canjeModelo}
                   onChange={(e) => setCanjeModelo(e.target.value)}
@@ -605,12 +726,39 @@ export default function DetallePlanAhorro() {
                   className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                 />
                 <input
+                  value={canjeMonto}
+                  onChange={(e) => setCanjeMonto(sanitizarDecimal(e.target.value))}
+                  inputMode="decimal"
+                  placeholder={t('Monto reconocido')}
+                  className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                />
+                <input
                   value={canjeDetalles}
                   onChange={(e) => setCanjeDetalles(e.target.value)}
                   placeholder={t('Detalles (opcional)')}
                   className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                 />
+                <button
+                  type="button"
+                  onClick={agregarCanje}
+                  disabled={!canjeModelo.trim()}
+                  className="rounded-lg border border-border dark:border-dark-border py-2 text-sm font-medium disabled:opacity-40"
+                >
+                  + {t('Agregar otro equipo')}
+                </button>
+                <p className="text-xs font-medium">
+                  {t('Total a sumar al plan:')} ${formatearMonto(montoCanjeTotal)}
+                </p>
               </div>
+            ) : (
+              <input
+                value={montoPago}
+                onChange={(e) => setMontoPago(sanitizarDecimal(e.target.value))}
+                inputMode="decimal"
+                autoFocus
+                placeholder={t('Monto que paga hoy')}
+                className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+              />
             )}
 
             <input
@@ -620,7 +768,12 @@ export default function DetallePlanAhorro() {
               className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
             />
             <button
-              disabled={guardandoPago || !montoPago || (medioPago === 'canje' && !canjeModelo.trim())}
+              disabled={
+                guardandoPago ||
+                (medioPago === 'canje'
+                  ? montoCanjeTotal <= 0 || canjesEfectivos.some((c) => !c.modelo.trim())
+                  : !montoPago)
+              }
               onClick={registrarPago}
               className="rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
             >
