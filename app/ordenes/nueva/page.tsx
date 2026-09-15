@@ -1094,8 +1094,10 @@ export default function NuevaOrden() {
   // opcionalmente (caso "lo compró y quiere subir batería" → prioritario por
   // defecto). El equipo de la ficha técnica ("+ Servicio técnico") no entra
   // acá — ese siempre se deriva solo, ver derivacionTrabajo más abajo. Si no
-  // hay ningún dispositivo vendido, deja una fila manual en blanco para
-  // cargar un equipo a mano (ej. un walk-in que no compró nada).
+  // hay ningún dispositivo vendido en el carrito, la lista queda vacía y
+  // este panel opcional directamente no se muestra (ver más abajo,
+  // hayDispositivoVendido) — no tiene sentido ofrecer "derivar un
+  // dispositivo vendido" cuando no se está vendiendo ningún dispositivo.
   const construirDerivaciones = (): Derivacion[] => {
     const lista: Derivacion[] = [];
     for (const item of carrito) {
@@ -1112,25 +1114,6 @@ export default function NuevaOrden() {
         prioritario: true,
         desdeTrabajo: false,
         editar: !(disp?.modelo ?? '').trim(),
-        tipoDispositivo: 'celular',
-        tipoBloqueo: '',
-        codigoDesbloqueo: '',
-        patronDesbloqueo: '',
-        fotos: [],
-      });
-    }
-    if (lista.length === 0) {
-      lista.push({
-        key: 'manual',
-        incluir: true,
-        modelo: '',
-        capacidad: null,
-        color: '',
-        imei: '',
-        motivo: '',
-        prioritario: false,
-        desdeTrabajo: false,
-        editar: true,
         tipoDispositivo: 'celular',
         tipoBloqueo: '',
         codigoDesbloqueo: '',
@@ -2794,7 +2777,7 @@ export default function NuevaOrden() {
         </div>
       )}
 
-      {puedeRecibirServicioTecnico && (
+      {puedeRecibirServicioTecnico && carrito.some((i) => i.tipo === 'dispositivo') && (
         <div className="rounded-2xl border-2 border-amber-400 bg-amber-50 dark:bg-amber-400/10 dark:border-amber-400/50 p-4 flex flex-col gap-2">
           <label className="flex items-start gap-2 cursor-pointer">
             <input
