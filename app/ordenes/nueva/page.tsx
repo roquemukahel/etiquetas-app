@@ -176,12 +176,16 @@ function InputDecimal({
   );
 }
 
-// Tarjeta del equipo de la ficha técnica a derivar a Servicio Técnico —
-// siempre se deriva (sin casillero), pero acá se puede completar el
-// motivo, la prioridad, datos del equipo y fotos de evidencia.
+// Tarjeta de un equipo a derivar a Servicio Técnico — la misma pinta se usa
+// para el equipo de la ficha técnica (siempre se deriva, sin casillero) y
+// para cada dispositivo vendido que se quiera derivar opcionalmente (con
+// casillero). Evita mantener dos copias del bloque de checklist/bloqueo/
+// fotos.
 function DerivacionCard({
   der,
   t,
+  mostrarCheckbox,
+  onIncluirChange,
   onChange,
   cargandoFoto,
   onElegirFoto,
@@ -189,6 +193,8 @@ function DerivacionCard({
 }: {
   der: Derivacion;
   t: (s: string) => string;
+  mostrarCheckbox: boolean;
+  onIncluirChange?: (v: boolean) => void;
   onChange: (cambios: Partial<Derivacion>) => void;
   cargandoFoto: boolean;
   onElegirFoto: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -198,25 +204,44 @@ function DerivacionCard({
     der.imei.trim() ? ` · IMEI ${der.imei.trim()}` : ''
   }`;
   return (
-    <div className="rounded-lg border p-3 flex flex-col gap-2 bg-white/70 dark:bg-white/5 border-amber-300/70 dark:border-amber-400/30">
+    <div
+      className={`rounded-lg border p-3 flex flex-col gap-2 ${
+        der.incluir
+          ? 'bg-white/70 dark:bg-white/5 border-amber-300/70 dark:border-amber-400/30'
+          : 'bg-transparent border-amber-200/60 dark:border-amber-400/15 opacity-70'
+      }`}
+    >
       <div className="flex items-start gap-2">
-        <span className="min-w-0 flex-1">
-          <span className="block text-sm font-medium text-amber-950 dark:text-amber-100 break-words">
-            {der.modelo.trim() ? resumen : t('Equipo a cargar')}
+        <label className={`flex items-start gap-2 min-w-0 flex-1 ${mostrarCheckbox ? 'cursor-pointer' : ''}`}>
+          {mostrarCheckbox && (
+            <input
+              type="checkbox"
+              checked={der.incluir}
+              onChange={(e) => onIncluirChange?.(e.target.checked)}
+              className="h-4 w-4 accent-amber-500 mt-0.5 shrink-0"
+            />
+          )}
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-medium text-amber-950 dark:text-amber-100 break-words">
+              {der.modelo.trim() ? resumen : t('Equipo a cargar')}
+            </span>
+            {der.desdeTrabajo && (
+              <span className="block text-[11px] text-amber-700/80 dark:text-amber-300/70">
+                {t('Va a Servicio Técnico automáticamente al confirmar la orden (lleva su checklist)')}
+              </span>
+            )}
           </span>
-          <span className="block text-[11px] text-amber-700/80 dark:text-amber-300/70">
-            {t('Va a Servicio Técnico automáticamente al confirmar la orden (lleva su checklist)')}
-          </span>
-        </span>
-        {der.modelo.trim() && !der.editar && (
+        </label>
+        {der.incluir && der.modelo.trim() && !der.editar && (
           <button type="button" onClick={() => onChange({ editar: true })} className="shrink-0 text-xs text-amber-800 dark:text-amber-300 underline">
             {t('Cambiar')}
           </button>
         )}
       </div>
 
-      <div className="flex flex-col gap-2">
-        {(der.editar || !der.modelo.trim()) && (
+      {der.incluir && (
+        <div className={`flex flex-col gap-2 ${mostrarCheckbox ? 'pl-6' : ''}`}>
+          {(der.editar || !der.modelo.trim()) && (
             <>
               <SelectorTipoDispositivo value={der.tipoDispositivo} onChange={(v) => onChange({ tipoDispositivo: v })} />
               <input
@@ -298,6 +323,7 @@ function DerivacionCard({
             </label>
           </div>
         </div>
+      )}
     </div>
   );
 }
@@ -385,15 +411,21 @@ export default function NuevaOrden() {
   // derivar a Servicio Técnico NO haya que recargar nada.
   const [checklistOrden, setChecklistOrden] = useState<Record<string, unknown> | null>(null);
 
-  // El equipo de la ficha técnica ("+ Servicio técnico") va a Servicio
-  // Técnico siempre, sin casillero — pedido real de un cliente ("no tiene
-  // sentido tildar un cartel para algo que obviamente se deriva"). Se arma
-  // solo a partir de checklistOrden. Es la ÚNICA vía de derivación desde
-  // Nueva Orden — antes había un segundo cartel opcional para derivar
-  // dispositivos vendidos, pero mostrar dos cartelos de "derivar a Servicio
-  // Técnico" en la misma pantalla confundía más de lo que ayudaba.
+  // Derivar a Servicio Técnico al confirmar la boleta, para dispositivos
+  // VENDIDOS (ej. subir batería de un equipo que el cliente ya compró) — acá
+  // sí es una decisión del vendedor, por eso sigue siendo opcional con
+  // casillero. Lista: un candidato por cada dispositivo vendido, para poder
+  // derivar varios de una misma boleta.
+  const [derivarActivo, setDerivarActivo] = useState(false);
+  const [derivaciones, setDerivaciones] = useState<Derivacion[]>([]);
+  // El equipo de la ficha técnica ("+ Servicio técnico") NO es opcional: si
+  // se cargó un trabajo de recepción, siempre va a Servicio Técnico al
+  // confirmar — pedido real de un cliente ("no tiene sentido tildar un
+  // cartel para algo que obviamente se deriva"). Se arma solo a partir de
+  // checklistOrden, sin casillero.
   const [derivacionTrabajo, setDerivacionTrabajo] = useState<Derivacion | null>(null);
   const [cargandoFotoTrabajo, setCargandoFotoTrabajo] = useState(false);
+  const [cargandoFotoDerivacion, setCargandoFotoDerivacion] = useState<string | null>(null);
 
   // Checklist de recepción para el equipo que se deja a reparar acá mismo
   // (venta directa, sin pasar por el circuito completo de Servicio
@@ -1058,6 +1090,86 @@ export default function NuevaOrden() {
     setLineasPago((ls) => ls.map((l) => (l.tempId === tempId ? { ...l, [campo]: valor } : l)));
   const quitarLineaPago = (tempId: string) => setLineasPago((ls) => ls.filter((l) => l.tempId !== tempId));
 
+  // Construye la lista de dispositivos VENDIDOS que se pueden derivar
+  // opcionalmente (caso "lo compró y quiere subir batería" → prioritario por
+  // defecto). El equipo de la ficha técnica ("+ Servicio técnico") no entra
+  // acá — ese siempre se deriva solo, ver derivacionTrabajo más abajo. Si no
+  // hay ningún dispositivo vendido en el carrito, la lista queda vacía y
+  // este panel opcional directamente no se muestra (ver más abajo,
+  // hayDispositivoVendido) — no tiene sentido ofrecer "derivar un
+  // dispositivo vendido" cuando no se está vendiendo ningún dispositivo.
+  const construirDerivaciones = (): Derivacion[] => {
+    const lista: Derivacion[] = [];
+    for (const item of carrito) {
+      if (item.tipo !== 'dispositivo' || !item.dispositivoId) continue;
+      const disp = dispositivosStock.find((d) => d.id === item.dispositivoId);
+      lista.push({
+        key: item.dispositivoId,
+        incluir: true,
+        modelo: disp?.modelo ?? '',
+        capacidad: disp?.capacidad_gb ?? null,
+        color: disp?.color ?? '',
+        imei: disp?.imei ?? '',
+        motivo: '',
+        prioritario: true,
+        desdeTrabajo: false,
+        editar: !(disp?.modelo ?? '').trim(),
+        tipoDispositivo: 'celular',
+        tipoBloqueo: '',
+        codigoDesbloqueo: '',
+        patronDesbloqueo: '',
+        fotos: [],
+      });
+    }
+    return lista;
+  };
+
+  const toggleDerivar = () => {
+    setDerivarActivo((prev) => {
+      const nuevo = !prev;
+      setDerivaciones(nuevo ? construirDerivaciones() : []);
+      return nuevo;
+    });
+  };
+
+  const actualizarDerivacion = (key: string, cambios: Partial<Derivacion>) =>
+    setDerivaciones((ds) => ds.map((d) => (d.key === key ? { ...d, ...cambios } : d)));
+
+  const elegirFotoDerivacion = async (key: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
+    setCargandoFotoDerivacion(key);
+    try {
+      const comprimidas = await Promise.all(files.map((file) => comprimirImagen(file)));
+      actualizarDerivacion(key, { fotos: [...(derivaciones.find((d) => d.key === key)?.fotos ?? []), ...comprimidas] });
+    } catch {
+      setError(t('No pudimos leer la foto.'));
+    }
+    setCargandoFotoDerivacion(null);
+    e.target.value = '';
+  };
+
+  const quitarFotoDerivacion = (key: string, idx: number) => {
+    const der = derivaciones.find((d) => d.key === key);
+    if (!der) return;
+    actualizarDerivacion(key, { fotos: der.fotos.filter((_, i) => i !== idx) });
+  };
+
+  // Si el carrito cambia con el panel de derivar ya abierto (el vendedor volvió a
+  // "Ítems" y sumó/quitó un equipo), se reconstruye la lista para no derivar un
+  // equipo que se sacó ni omitir uno que se agregó — preservando lo que ya
+  // editó por equipo (incluir, motivo, prioritario, datos).
+  useEffect(() => {
+    if (!derivarActivo) return;
+    setDerivaciones((prev) =>
+      construirDerivaciones().map((nueva) => {
+        const anterior = prev.find((p) => p.key === nueva.key);
+        return anterior ? { ...nueva, ...anterior } : nueva;
+      })
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [carrito]);
+
   // El equipo de la ficha técnica ("+ Servicio técnico") se deriva SIEMPRE, sin
   // casillero — pedido real de un cliente: si ya se está recepcionando un
   // equipo para reparar, no tiene sentido tener que tildar aparte que se
@@ -1365,15 +1477,20 @@ export default function NuevaOrden() {
         }
       }
 
-      // Derivar a Servicio Técnico: si se cargó un equipo de la ficha técnica
-      // ("+ Servicio técnico"), crea la reparación de verdad (ligada a esta
-      // orden por orden_origen_id, con su checklist) — siempre, sin
-      // casillero que tildar. No rompe la venta si falla (la boleta ya se
-      // hizo) — se avisa aparte.
-      const aDerivar = derivacionTrabajo && derivacionTrabajo.modelo.trim() ? [derivacionTrabajo] : [];
+      // Derivar a Servicio Técnico: crea UNA reparación por cada equipo tildado
+      // (ligada a esta orden por orden_origen_id) para que el técnico las
+      // trabaje. No rompe la venta si falla (la boleta ya se hizo) — se avisa
+      // por cada una. El checklist solo se copia al equipo de la ficha técnica
+      // ("+ Servicio técnico"); los dispositivos vendidos no tienen checklist.
+      // El equipo de la ficha técnica SIEMPRE se deriva (no depende de
+      // derivarActivo, que es solo para los dispositivos vendidos, opcional) —
+      // pedido real de un cliente: recepcionar un equipo para reparar y
+      // tener que tildar aparte que se derive no tiene sentido.
+      const aDerivarDispositivos = derivarActivo ? derivaciones.filter((d) => d.incluir && d.modelo.trim()) : [];
+      const aDerivar = derivacionTrabajo && derivacionTrabajo.modelo.trim() ? [derivacionTrabajo, ...aDerivarDispositivos] : aDerivarDispositivos;
       const actorDerivar = getActor();
       for (const der of aDerivar) {
-        const ci = (checklistOrden ?? {}) as any;
+        const ci = (der.desdeTrabajo ? checklistOrden ?? {} : {}) as any;
         const { data: repNueva, error: repErr } = await supabase
           .from('reparaciones')
           .insert({
@@ -2651,11 +2768,54 @@ export default function NuevaOrden() {
           <DerivacionCard
             der={derivacionTrabajo}
             t={t}
+            mostrarCheckbox={false}
             onChange={actualizarDerivacionTrabajo}
             cargandoFoto={cargandoFotoTrabajo}
             onElegirFoto={elegirFotoTrabajo}
             onQuitarFoto={quitarFotoTrabajo}
           />
+        </div>
+      )}
+
+      {puedeRecibirServicioTecnico && carrito.some((i) => i.tipo === 'dispositivo') && (
+        <div className="rounded-2xl border-2 border-amber-400 bg-amber-50 dark:bg-amber-400/10 dark:border-amber-400/50 p-4 flex flex-col gap-2">
+          <label className="flex items-start gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={derivarActivo}
+              onChange={toggleDerivar}
+              className="h-5 w-5 accent-amber-500 mt-0.5 shrink-0"
+            />
+            <span>
+              <span className="font-semibold text-amber-900 dark:text-amber-300">🔧 {t('Derivar un dispositivo vendido a Servicio Técnico')}</span>
+              <span className="block text-xs text-amber-800/90 dark:text-amber-300/70 mt-0.5">
+                {t('El equipo pasa directo a reparación al hacer la boleta. Recomendado para celulares que se venden con batería baja (ej.: subir batería de un equipo que el cliente ya compró y está esperando).')}
+              </span>
+            </span>
+          </label>
+
+          {derivarActivo && (
+            <div className="flex flex-col gap-2 mt-1">
+              {derivaciones.length > 1 && (
+                <p className="text-xs text-amber-800 dark:text-amber-300">
+                  {t('Tildá los equipos que van a Servicio Técnico. Podés derivar varios de una misma boleta.')}
+                </p>
+              )}
+              {derivaciones.map((der) => (
+                <DerivacionCard
+                  key={der.key}
+                  der={der}
+                  t={t}
+                  mostrarCheckbox
+                  onIncluirChange={(v) => actualizarDerivacion(der.key, { incluir: v })}
+                  onChange={(cambios) => actualizarDerivacion(der.key, cambios)}
+                  cargandoFoto={cargandoFotoDerivacion === der.key}
+                  onElegirFoto={(e) => elegirFotoDerivacion(der.key, e)}
+                  onQuitarFoto={(idx) => quitarFotoDerivacion(der.key, idx)}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
