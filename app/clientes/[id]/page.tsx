@@ -23,7 +23,9 @@ type Cliente = {
   id: string;
   nombre: string;
   apellido: string | null;
+  apodo: string | null;
   domicilio: string | null;
+  localidad: string | null;
   email: string | null;
   telefono: string | null;
   dni: string | null;
@@ -92,6 +94,13 @@ export default function DetalleCliente() {
   const [pagoObs, setPagoObs] = useState('');
   const [guardandoPago, setGuardandoPago] = useState(false);
   const [linkCopiado, setLinkCopiado] = useState(false);
+  // A qué se aplica el pago: 'cuenta_corriente' (fiado sin cuota puntual) o
+  // el id de una cuota de financiación pendiente — pedido real de un cliente
+  // que tiene las dos cosas a la vez (financiación en cuotas + fiado aparte)
+  // y necesitaba elegir bien cuál está pagando, en vez de que el pago se
+  // reparta solo entre cuotas sin que nadie lo haya pedido.
+  const [cuotasPendientesPago, setCuotasPendientesPago] = useState<{ id: string; numero: number; fecha_vencimiento: string; saldo: number }[]>([]);
+  const [pagoDestino, setPagoDestino] = useState<string>('');
 
   // Ajuste manual / nota de crédito
   const [ajustando, setAjustando] = useState(false);
@@ -214,7 +223,7 @@ export default function DetalleCliente() {
 
   const campo = (k: keyof Cliente, valor: string) => setC((prev) => (prev ? { ...prev, [k]: valor } : prev));
 
-  const abrirRegistrarPago = () => {
+  const abrirRegistrarPago = async () => {
     // Sin redondear: si el saldo tiene centavos (ej. $1.500,64) y se
     // sugiere "1500" a secas, un pago "por el total" con el monto sugerido
     // dejaba una deuda fantasma de $0,64 para siempre — mismo bug que el
@@ -223,8 +232,32 @@ export default function DetalleCliente() {
     setPagoMedio('efectivo');
     setPagoObs('');
     setError(null);
+    setPagoDestino('');
+    setCuotasPendientesPago([]);
     setRegistrandoPago(true);
+
+    // Mismo criterio que usa aplicarPagoAFinanciacion para decidir qué
+    // cuotas están "en juego" — así la lista de acá coincide siempre con lo
+    // que el pago realmente podría tocar.
+    const { data } = await supabase
+      .from('financiacion_cuotas')
+      .select('id, numero, fecha_vencimiento, importe_original, importe_pagado, estado, financiacion_planes!inner(cliente_id, moneda, estado)')
+      .eq('financiacion_planes.cliente_id', id)
+      .eq('financiacion_planes.moneda', monedaCodigo)
+      .eq('financiacion_planes.estado', 'activo')
+      .eq('estado', 'pendiente')
+      .order('fecha_vencimiento', { ascending: true });
+    const pendientes = ((data as any[]) ?? [])
+      .map((c) => ({ id: c.id, numero: c.numero, fecha_vencimiento: c.fecha_vencimiento, saldo: c.importe_original - c.importe_pagado }))
+      .filter((c) => c.saldo > 0.009);
+    setCuotasPendientesPago(pendientes);
+
+    const cuentaCorrientePura = Math.max(0, saldo - pendientes.reduce((acc, c) => acc + c.saldo, 0));
+    if (cuentaCorrientePura > 0.009 && pendientes.length === 0) setPagoDestino('cuenta_corriente');
+    else if (cuentaCorrientePura <= 0.009 && pendientes.length === 1) setPagoDestino(pendientes[0].id);
   };
+
+  const cuentaCorrientePuraPago = Math.max(0, saldo - cuotasPendientesPago.reduce((acc, c) => acc + c.saldo, 0));
 
   // Entrar desde /clientes/[id]?abrirPago=1 (ej. el botón "Cobrar" de la
   // planilla de Cuentas por cobrar) abre el modal de pago directo, sin que
@@ -244,13 +277,19 @@ export default function DetalleCliente() {
       setError(t('Poné un monto mayor a cero.'));
       return;
     }
+    if (!pagoDestino) {
+      setError(t('Elegí a qué se aplica este pago: cuenta corriente o una cuota puntual.'));
+      return;
+    }
     setGuardandoPago(true);
     setError(null);
-    // El pago se reparte solo entre las cuotas pendientes del cliente
-    // (vencidas primero) si tiene financiaciones activas — no hace falta
-    // elegir nada a mano. Genera además su propia boleta (ver
-    // registrarCobroFinanciamiento) — antes esto solo quedaba asentado en
-    // la cuenta corriente, sin ningún rastro visible desde Órdenes.
+    // A qué se aplica lo elige quien cobra (ver pagoDestino) — antes el pago
+    // se repartía solo entre las cuotas pendientes del cliente (vencidas
+    // primero) sin preguntar nada, y un pago pensado para la cuenta
+    // corriente podía terminar marcando una cuota de financiación como
+    // pagada. Genera además su propia boleta (ver registrarCobroFinanciamiento)
+    // — antes esto solo quedaba asentado en la cuenta corriente, sin ningún
+    // rastro visible desde Órdenes.
     const resultado = await registrarCobroFinanciamiento(supabase, {
       clienteId: String(id),
       monto,
@@ -258,6 +297,7 @@ export default function DetalleCliente() {
       moneda: monedaCodigo,
       sucursalId: sucursalActual.id,
       observacion: pagoObs,
+      ...(pagoDestino === 'cuenta_corriente' ? { omitirFinanciacion: true } : { cuotaIdElegida: pagoDestino }),
     });
     if ('error' in resultado) {
       setError(`${t('No pudimos registrar el pago:')} ` + resultado.error);
@@ -403,7 +443,9 @@ export default function DetalleCliente() {
       .update({
         nombre: c.nombre.trim(),
         apellido: c.apellido?.trim() || null,
+        apodo: c.apodo?.trim() || null,
         domicilio: c.domicilio?.trim() || null,
+        localidad: c.localidad?.trim() || null,
         email: c.email?.trim() || null,
         telefono: c.telefono?.trim() || null,
         dni: c.dni?.trim() || null,
@@ -760,7 +802,9 @@ export default function DetalleCliente() {
           <div className="flex flex-col gap-3">
             <Campo label={t('Nombre')} valor={c.nombre} onChange={(v) => campo('nombre', v)} />
             <Campo label={t('Apellido')} valor={c.apellido ?? ''} onChange={(v) => campo('apellido', v)} />
+            <Campo label={t('Apodo (opcional)')} valor={c.apodo ?? ''} onChange={(v) => campo('apodo', v)} />
             <Campo label={t('Domicilio')} valor={c.domicilio ?? ''} onChange={(v) => campo('domicilio', v)} />
+            <Campo label={t('Localidad (opcional)')} valor={c.localidad ?? ''} onChange={(v) => campo('localidad', v)} />
             <Campo label="Email" valor={c.email ?? ''} onChange={(v) => campo('email', v)} />
             <Campo label={t('Teléfono')} valor={c.telefono ?? ''} onChange={(v) => campo('telefono', v)} />
             <Campo label="DNI" valor={c.dni ?? ''} onChange={(v) => campo('dni', v)} />
@@ -791,6 +835,44 @@ export default function DetalleCliente() {
           <div className="w-full max-w-sm bg-white dark:bg-dark-surface rounded-2xl shadow-elevated p-5 flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
             <p className="text-base font-semibold">{t('Registrar pago de')} {c.nombre}</p>
             {saldo > 0 && <p className="text-xs text-muted dark:text-dark-text-secondary">{t('Debe')} {fmt(saldo)}.</p>}
+
+            {(cuentaCorrientePuraPago > 0.009 || cuotasPendientesPago.length > 0) && (
+              <div>
+                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('¿A qué se aplica este pago?')}</label>
+                <div className="flex flex-col gap-1.5">
+                  {cuentaCorrientePuraPago > 0.009 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPagoDestino('cuenta_corriente');
+                        setPagoMonto(String(cuentaCorrientePuraPago));
+                      }}
+                      className={`text-left rounded-lg border px-3 py-2 text-sm ${
+                        pagoDestino === 'cuenta_corriente' ? 'border-accent dark:border-dark-accent bg-accent-soft dark:bg-dark-accent-soft' : 'border-border dark:border-dark-border'
+                      }`}
+                    >
+                      {t('Cuenta corriente (sin cuota puntual)')} — {fmt(cuentaCorrientePuraPago)}
+                    </button>
+                  )}
+                  {cuotasPendientesPago.map((cu) => (
+                    <button
+                      key={cu.id}
+                      type="button"
+                      onClick={() => {
+                        setPagoDestino(cu.id);
+                        setPagoMonto(String(cu.saldo));
+                      }}
+                      className={`text-left rounded-lg border px-3 py-2 text-sm ${
+                        pagoDestino === cu.id ? 'border-accent dark:border-dark-accent bg-accent-soft dark:bg-dark-accent-soft' : 'border-border dark:border-dark-border'
+                      }`}
+                    >
+                      {t('Cuota')} {cu.numero} — {t('vence')} {new Date(cu.fecha_vencimiento + 'T00:00:00').toLocaleDateString(locale)} — {fmt(cu.saldo)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div>
               <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Monto')}</label>
               <input value={pagoMonto} onChange={(e) => setPagoMonto(sanitizarDecimal(e.target.value))} inputMode="decimal" autoFocus placeholder="0" className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2.5 text-lg" />
@@ -811,7 +893,7 @@ export default function DetalleCliente() {
                 {t('Cancelar')}
               </button>
               <button
-                disabled={guardandoPago || !pagoMonto}
+                disabled={guardandoPago || !pagoMonto || !pagoDestino}
                 onClick={registrarPago}
                 className="flex-1 rounded-xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2.5 text-sm font-medium text-white disabled:opacity-40"
               >

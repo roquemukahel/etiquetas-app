@@ -173,6 +173,15 @@ export async function registrarCobroFinanciamiento(
     observacion?: string | null;
     ordenOriginalId?: string | null;
     cuotaIdElegida?: string;
+    // Pedido real de un cliente (2026-09): antes, si no se elegía una cuota
+    // puntual, el pago se repartía igual entre CUALQUIER cuota pendiente que
+    // hubiera (la más vieja/vencida primero) — si el cliente tenía a la vez
+    // una financiación en cuotas y una cuenta corriente aparte (fiado sin
+    // plan formal), un pago pensado para la cuenta corriente terminaba
+    // marcando una cuota como pagada sin que nadie lo eligiera, y el saldo
+    // de esa cuota quedaba mal. Con esto en true, el pago queda SOLO en la
+    // cuenta corriente — no se intenta aplicar a ninguna cuota.
+    omitirFinanciacion?: boolean;
   }
 ): Promise<{ ordenId: string; avisoCuotas?: string } | { error: string }> {
   const actor = getActor();
@@ -200,6 +209,20 @@ export async function registrarCobroFinanciamiento(
   const ordenId = (data as { orden_id: string; pago_id: string }).orden_id;
   const pagoId = (data as { orden_id: string; pago_id: string }).pago_id;
 
+  const auditoria = registrarAuditoria(supabase, {
+    accion: `cobró ${params.monto} de financiamiento/cuenta corriente${params.omitirFinanciacion ? ' (cuenta corriente, sin tocar cuotas)' : ''}`,
+    entidad: 'cliente',
+    entidadId: params.clienteId,
+    valorNuevo: { monto: params.monto, medio: params.medio, orden_id: ordenId },
+  });
+
+  // Pago explícitamente de cuenta corriente: no se intenta repartir entre
+  // cuotas de financiación, aunque el cliente tenga alguna pendiente.
+  if (params.omitirFinanciacion) {
+    await auditoria;
+    return { ordenId };
+  }
+
   // Si esto falla, la plata YA está cobrada y asentada arriba — no se debe
   // reportar como si todo hubiera fallado, solo avisar que el reparto entre
   // cuotas quedó pendiente. Corre en paralelo con la auditoría: ninguna de
@@ -213,12 +236,7 @@ export async function registrarCobroFinanciamiento(
       moneda: params.moneda,
       cuotaIdElegida: params.cuotaIdElegida,
     }),
-    registrarAuditoria(supabase, {
-      accion: `cobró ${params.monto} de financiamiento/cuenta corriente`,
-      entidad: 'cliente',
-      entidadId: params.clienteId,
-      valorNuevo: { monto: params.monto, medio: params.medio, orden_id: ordenId },
-    }),
+    auditoria,
   ]);
 
   if ('error' in resultadoCuotas) {

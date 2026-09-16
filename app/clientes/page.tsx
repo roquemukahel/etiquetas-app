@@ -18,7 +18,9 @@ type Cliente = {
   id: string;
   nombre: string;
   apellido: string | null;
+  apodo: string | null;
   domicilio: string | null;
+  localidad: string | null;
   email: string | null;
   telefono: string | null;
   dni: string | null;
@@ -61,7 +63,7 @@ export default function Clientes() {
     const data = await obtenerTodasLasFilas<Cliente>(
       supabase,
       'clientes',
-      'id, nombre, apellido, domicilio, email, telefono, dni, cta_cte_habilitada',
+      'id, nombre, apellido, apodo, domicilio, localidad, email, telefono, dni, cta_cte_habilitada',
       [{ columna: 'nombre' }]
     );
     setClientes(data);
@@ -100,7 +102,7 @@ export default function Clientes() {
     try {
       await descargarDatos(
         'clientes-qovento',
-        ['nombre', 'apellido', 'email', 'telefono', 'dni', 'domicilio'],
+        ['nombre', 'apellido', 'apodo', 'email', 'telefono', 'dni', 'domicilio', 'localidad'],
         clientes,
         formato
       );
@@ -133,10 +135,12 @@ export default function Clientes() {
           return {
             nombre,
             apellido: valorDe(fila, 'apellido', 'lastname') || null,
+            apodo: valorDe(fila, 'apodo', 'nickname', 'alias') || null,
             email: valorDe(fila, 'email') || null,
             telefono: valorDe(fila, 'telefono', 'phone') || null,
             dni: valorDe(fila, 'dni') || null,
             domicilio: valorDe(fila, 'domicilio', 'direccion', 'address', 'contactdescription') || null,
+            localidad: valorDe(fila, 'localidad', 'ciudad', 'city') || null,
             agregado_por_nombre: actor?.nombre ?? null,
             agregado_por_foto_url: actor?.fotoUrl ?? null,
           };
@@ -254,7 +258,7 @@ export default function Clientes() {
     let base = clientes;
     if (q) {
       base = base.filter((c) =>
-        [c.nombre, c.apellido, c.email, c.telefono, c.dni]
+        [c.nombre, c.apellido, c.apodo, c.email, c.telefono, c.dni, c.localidad]
           .filter(Boolean)
           .some((campo) => campo!.toLowerCase().includes(q))
       );
@@ -289,7 +293,7 @@ export default function Clientes() {
       <input
         value={busqueda}
         onChange={(e) => setBusqueda(e.target.value)}
-        placeholder={t('Buscar por nombre, email, teléfono, DNI...')}
+        placeholder={t('Buscar por nombre, apodo, email, teléfono, DNI, localidad...')}
         className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
       />
 
@@ -466,8 +470,12 @@ export default function Clientes() {
                 <div className="min-w-0">
                   <p className="text-sm font-medium truncate">
                     {c.nombre} {c.apellido || ''}
+                    {c.apodo && <span className="text-muted dark:text-dark-text-secondary font-normal"> ({c.apodo})</span>}
                   </p>
-                  <p className="text-xs text-muted dark:text-dark-text-secondary truncate">{c.telefono || c.email || t('sin contacto')}</p>
+                  <p className="text-xs text-muted dark:text-dark-text-secondary truncate">
+                    {c.telefono || c.email || t('sin contacto')}
+                    {c.localidad ? ` · ${c.localidad}` : ''}
+                  </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   {saldoChip}

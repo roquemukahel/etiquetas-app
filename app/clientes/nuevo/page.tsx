@@ -14,7 +14,9 @@ export default function NuevoCliente() {
 
   const [nombre, setNombre] = useState('');
   const [apellido, setApellido] = useState('');
+  const [apodo, setApodo] = useState('');
   const [domicilio, setDomicilio] = useState('');
+  const [localidad, setLocalidad] = useState('');
   const [email, setEmail] = useState('');
   const [telefono, setTelefono] = useState('');
   const [dni, setDni] = useState('');
@@ -32,7 +34,9 @@ export default function NuevoCliente() {
     const { error: insertError } = await supabase.from('clientes').insert({
       nombre: nombre.trim(),
       apellido: apellido.trim() || null,
+      apodo: apodo.trim() || null,
       domicilio: domicilio.trim() || null,
+      localidad: localidad.trim() || null,
       email: email.trim() || null,
       telefono: telefono.trim() || null,
       dni: dni.trim() || null,
@@ -64,7 +68,9 @@ export default function NuevoCliente() {
       <div className="flex flex-col gap-3">
         <Campo label={t('Nombre')} valor={nombre} onChange={setNombre} />
         <Campo label={t('Apellido')} valor={apellido} onChange={setApellido} />
+        <Campo label={t('Apodo (opcional)')} valor={apodo} onChange={setApodo} />
         <Campo label={t('Domicilio')} valor={domicilio} onChange={setDomicilio} />
+        <Campo label={t('Localidad (opcional)')} valor={localidad} onChange={setLocalidad} />
         <Campo label={t('Email')} valor={email} onChange={setEmail} />
         <Campo label={t('Teléfono')} valor={telefono} onChange={setTelefono} />
         <Campo label={t('DNI')} valor={dni} onChange={setDni} />

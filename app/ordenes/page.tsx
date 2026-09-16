@@ -96,6 +96,7 @@ type PlanFinanciamiento = {
 type CuotaFinanciamiento = {
   id: string;
   plan_id: string;
+  numero: number;
   fecha_vencimiento: string;
   importe_original: number;
   importe_pagado: number;
@@ -169,6 +170,12 @@ export default function Ordenes() {
   const [cobroMonto, setCobroMonto] = useState('');
   const [cobroMedio, setCobroMedio] = useState('efectivo');
   const [cobroObs, setCobroObs] = useState('');
+  // A qué se aplica el pago: 'cuenta_corriente' (fiado sin cuota puntual) o
+  // el id de una cuota de financiación puntual — pedido real de un cliente
+  // que tiene las dos cosas a la vez y necesitaba elegir bien cuál está
+  // pagando, en vez de que el sistema reparta solo (ver
+  // registrarCobroFinanciamiento/omitirFinanciacion).
+  const [cobroDestino, setCobroDestino] = useState<string>('');
   const [guardandoCobro, setGuardandoCobro] = useState(false);
   const [errorCobro, setErrorCobro] = useState<string | null>(null);
   // Por defecto se trae solo lo reciente (últimos 90 días) — con miles de
@@ -274,7 +281,7 @@ export default function Ordenes() {
       // (mismo criterio que el resumen de FinanciacionCliente en la ficha).
       const { data: cuotasData } = await supabase
         .from('financiacion_cuotas')
-        .select('id, plan_id, fecha_vencimiento, importe_original, importe_pagado, estado')
+        .select('id, plan_id, numero, fecha_vencimiento, importe_original, importe_pagado, estado')
         .in(
           'plan_id',
           planes.map((p) => p.id)
@@ -420,19 +427,53 @@ export default function Ordenes() {
       .sort((a, b) => (a.proximoVencimiento ?? '9999-99-99').localeCompare(b.proximoVencimiento ?? '9999-99-99'));
   }, [planesFinanciamiento, cuotasFinanciamiento, saldosCtaCte, nombresClientesFinanciamiento, monedaNegocio, t]);
 
+  // Opciones concretas para elegir A QUÉ se aplica el cobro del cliente
+  // abierto en el modal: la cuenta corriente "pura" (lo que no corresponde a
+  // ninguna cuota puntual) y cada cuota de financiación pendiente, por
+  // separado. Antes no existía esta elección — el pago se repartía solo
+  // entre cuotas pendientes sin importar si el cliente lo estaba pagando
+  // para la cuenta corriente.
+  const opcionesCobro = useMemo(() => {
+    if (!cobrando) return { cuentaCorrientePura: 0, cuotas: [] as CuotaFinanciamiento[] };
+    const planesDelCliente = new Set(
+      planesFinanciamiento.filter((p) => p.cliente_id === cobrando.clienteId && p.moneda === cobrando.moneda).map((p) => p.id)
+    );
+    const cuotasPendientes = cuotasFinanciamiento
+      .filter((c) => planesDelCliente.has(c.plan_id) && c.estado === 'pendiente' && c.importe_original - c.importe_pagado > 0.009)
+      .sort((a, b) => a.fecha_vencimiento.localeCompare(b.fecha_vencimiento));
+    const totalCuotas = cuotasPendientes.reduce((acc, c) => acc + (c.importe_original - c.importe_pagado), 0);
+    return { cuentaCorrientePura: Math.max(0, cobrando.saldo - totalCuotas), cuotas: cuotasPendientes };
+  }, [cobrando, planesFinanciamiento, cuotasFinanciamiento]);
+
   const abrirCobro = (r: ResumenFinanciamiento) => {
     setCobrando(r);
     setCobroMonto(String(r.saldo));
     setCobroMedio('efectivo');
     setCobroObs('');
     setErrorCobro(null);
+    setCobroDestino('');
   };
+
+  // Si el cliente solo tiene UNA opción posible (o cuenta corriente sola, o
+  // una sola cuota pendiente), se preselecciona — no tiene sentido obligar a
+  // elegir cuando no hay ninguna ambigüedad real.
+  useEffect(() => {
+    if (!cobrando || cobroDestino) return;
+    const { cuentaCorrientePura, cuotas } = opcionesCobro;
+    if (cuentaCorrientePura > 0.009 && cuotas.length === 0) setCobroDestino('cuenta_corriente');
+    else if (cuentaCorrientePura <= 0.009 && cuotas.length === 1) setCobroDestino(cuotas[0].id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cobrando, opcionesCobro]);
 
   const confirmarCobro = async () => {
     if (!cobrando) return;
     const monto = Number(cobroMonto);
     if (!monto || monto <= 0) {
       setErrorCobro(t('Poné un monto mayor a cero.'));
+      return;
+    }
+    if (!cobroDestino) {
+      setErrorCobro(t('Elegí a qué se aplica este cobro: cuenta corriente o una cuota puntual.'));
       return;
     }
     setGuardandoCobro(true);
@@ -445,6 +486,7 @@ export default function Ordenes() {
       sucursalId: sucursalActual.id,
       observacion: cobroObs,
       ordenOriginalId: cobrando.ordenOriginalId,
+      ...(cobroDestino === 'cuenta_corriente' ? { omitirFinanciacion: true } : { cuotaIdElegida: cobroDestino }),
     });
     if ('error' in resultado) {
       setErrorCobro(resultado.error);
@@ -868,6 +910,56 @@ export default function Ordenes() {
             {t('Saldo total')}: {simboloMoneda(cobrando.moneda)}
             {formatearMonto(cobrando.saldo)}
           </p>
+
+          {(opcionesCobro.cuentaCorrientePura > 0.009 || opcionesCobro.cuotas.length > 0) && (
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-muted dark:text-dark-text-secondary">
+                {t('¿A qué se aplica este cobro?')}
+              </label>
+              <div className="flex flex-col gap-1.5">
+                {opcionesCobro.cuentaCorrientePura > 0.009 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCobroDestino('cuenta_corriente');
+                      setCobroMonto(String(opcionesCobro.cuentaCorrientePura));
+                    }}
+                    className={`text-left rounded-lg border px-3 py-2 text-sm ${
+                      cobroDestino === 'cuenta_corriente'
+                        ? 'border-accent dark:border-dark-accent bg-accent-soft dark:bg-dark-accent-soft'
+                        : 'border-border dark:border-dark-border'
+                    }`}
+                  >
+                    {t('Cuenta corriente (sin cuota puntual)')} — {simboloMoneda(cobrando.moneda)}
+                    {formatearMonto(opcionesCobro.cuentaCorrientePura)}
+                  </button>
+                )}
+                {opcionesCobro.cuotas.map((c) => {
+                  const saldoCuota = c.importe_original - c.importe_pagado;
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => {
+                        setCobroDestino(c.id);
+                        setCobroMonto(String(saldoCuota));
+                      }}
+                      className={`text-left rounded-lg border px-3 py-2 text-sm ${
+                        cobroDestino === c.id
+                          ? 'border-accent dark:border-dark-accent bg-accent-soft dark:bg-dark-accent-soft'
+                          : 'border-border dark:border-dark-border'
+                      }`}
+                    >
+                      {t('Cuota')} {c.numero} — {t('vence')} {new Date(c.fecha_vencimiento + 'T00:00:00').toLocaleDateString(locale)} —{' '}
+                      {simboloMoneda(cobrando.moneda)}
+                      {formatearMonto(saldoCuota)}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <label className="text-xs font-medium text-muted dark:text-dark-text-secondary">{t('Monto a cobrar')}</label>
           <input
             value={cobroMonto}
@@ -904,7 +996,7 @@ export default function Ordenes() {
             </button>
             <button
               onClick={confirmarCobro}
-              disabled={guardandoCobro}
+              disabled={guardandoCobro || !cobroDestino}
               className="flex-1 rounded-xl bg-good hover:opacity-90 transition-opacity py-2.5 text-sm font-medium text-white disabled:opacity-50"
             >
               {guardandoCobro ? t('Guardando...') : t('Cobrar y generar boleta')}
