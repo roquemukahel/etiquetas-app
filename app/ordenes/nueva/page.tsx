@@ -1046,8 +1046,15 @@ export default function NuevaOrden() {
   // Configuración, no hay de quién elegir — exigirlo igual dejaría a ese
   // negocio sin poder vender nunca más, así que en ese caso puntual no se
   // bloquea.
+  // Pedido real de un cliente: evitar facturar por error un ítem sin precio
+  // cargado (ej. un dispositivo que nunca se le puso precio en Stock, o un
+  // trabajo/producto manual donde se olvidó tipear el monto) — antes eso
+  // se podía confirmar igual y la boleta salía con un ítem en $0.
+  const hayItemSinPrecio = carrito.some((i) => i.precioUnitario <= 0);
+
   const puedeConfirmar =
     carrito.length > 0 &&
+    !hayItemSinPrecio &&
     puedeVender &&
     (vendedores.length === 0 || !!vendedorId) &&
     asignacionOk &&
@@ -2091,9 +2098,14 @@ export default function NuevaOrden() {
                   <InputDecimal
                     value={i.precioUnitario}
                     onChange={(n) => actualizarPrecioItem(i.tempId, n)}
-                    className="w-20 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded px-1 py-0.5 text-xs"
+                    className={`w-20 bg-white dark:bg-dark-surface border rounded px-1 py-0.5 text-xs ${
+                      i.precioUnitario <= 0 ? 'border-bad text-bad' : 'border-border dark:border-dark-border'
+                    }`}
                   />
                 </div>
+                {i.precioUnitario <= 0 && (
+                  <p className="text-[11px] text-bad mt-0.5">⚠️ {t('Cargá el valor de la unidad')}</p>
+                )}
               </div>
               <div className="flex items-center gap-3">
                 <p className="text-sm font-medium">{moneda}{(i.cantidad * i.precioUnitario).toLocaleString('es-AR')}</p>
@@ -2112,8 +2124,14 @@ export default function NuevaOrden() {
           </div>
         )}
 
+        {hayItemSinPrecio && (
+          <p className="text-xs text-bad text-center">
+            {t('Hay un ítem sin precio cargado — no se puede facturar así. Cargá el valor de la unidad para continuar.')}
+          </p>
+        )}
+
         <button
-          disabled={carrito.length === 0}
+          disabled={carrito.length === 0 || hayItemSinPrecio}
           onClick={() => {
             setAnticipo('');
             setImpuesto('');
@@ -2821,6 +2839,11 @@ export default function NuevaOrden() {
 
       {!puedeVender && (
         <p className="text-xs text-bad text-center">{t('No tenés permiso para crear órdenes.')}</p>
+      )}
+      {hayItemSinPrecio && (
+        <p className="text-xs text-bad text-center">
+          {t('Hay un ítem sin precio cargado — volvé a "Ítems" y cargá el valor de la unidad.')}
+        </p>
       )}
       <button
         disabled={!puedeConfirmar || guardando}
