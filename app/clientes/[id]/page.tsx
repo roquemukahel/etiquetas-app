@@ -53,6 +53,7 @@ type Movimiento = {
   vencimiento: string | null;
   observacion: string | null;
   pago_id: string | null;
+  orden_id: string | null;
   anulado: boolean;
   fecha: string;
 };
@@ -123,7 +124,7 @@ export default function DetalleCliente() {
   const cargarMovimientos = async () => {
     const { data, error } = await supabase
       .from('cta_cte_movimientos')
-      .select('id, tipo, concepto, monto, vencimiento, observacion, pago_id, anulado, fecha')
+      .select('id, tipo, concepto, monto, vencimiento, observacion, pago_id, orden_id, anulado, fecha')
       .eq('cliente_id', id)
       .eq('anulado', false)
       .order('fecha', { ascending: true });
@@ -763,6 +764,11 @@ export default function DetalleCliente() {
                         </p>
                         <p className="text-[11px] text-muted dark:text-dark-text-secondary">{t('saldo')} {fmt(m.saldoAcum)}</p>
                         <div className="flex items-center gap-2 justify-end mt-0.5">
+                          {m.orden_id && (
+                            <Link href={`/ordenes/${m.orden_id}`} className="text-[10px] text-accent dark:text-dark-accent underline">
+                              {t('Ver orden')}
+                            </Link>
+                          )}
                           <Link href={`/clientes/${id}/comprobante/${m.id}`} className="text-[10px] text-accent dark:text-dark-accent underline">
                             {t('Comprobante')}
                           </Link>

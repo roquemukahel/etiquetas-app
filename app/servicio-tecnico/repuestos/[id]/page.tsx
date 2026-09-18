@@ -12,12 +12,13 @@ import { sanitizarDecimal } from '../../../lib/numeros';
 import { codigoLlamada } from '../../../lib/paises';
 import { armarLinkWhatsApp, mensajeConsultaProveedor } from '../../../lib/whatsapp';
 import { extraerStockInsuficiente } from '../../../lib/repuestos';
+import { useSucursalActual } from '../../../lib/sucursal';
 import Modal from '../../../Modal';
 import { ICONOS } from '../../../Iconos';
 import { useT } from '../../../lib/idioma';
 
 type Proveedor = { id: string; nombre: string; telefono: string | null };
-type Repuesto = { id: string; nombre: string };
+type Repuesto = { id: string; nombre: string; sucursal_id: string | null };
 type Precio = {
   id: string;
   repuesto_id: string;
@@ -61,6 +62,7 @@ export default function ProveedorRepuestos() {
   // mismo permiso que ya usa Repuestos (agregar_stock), no el de gestionar
   // el catálogo de proveedores.
   const puedeAgregarStock = tienePermiso(actor, 'agregar_stock');
+  const sucursalActual = useSucursalActual();
 
   const [proveedor, setProveedor] = useState<Proveedor | null>(null);
   const [repuestos, setRepuestos] = useState<Repuesto[]>([]);
@@ -82,7 +84,7 @@ export default function ProveedorRepuestos() {
   const cargar = async () => {
     const [{ data: prov }, { data: rep }, { data: pre }] = await Promise.all([
       supabase.from('proveedores_repuestos').select('id, nombre, telefono').eq('id', id).single(),
-      supabase.from('repuestos').select('id, nombre').order('nombre'),
+      supabase.from('repuestos').select('id, nombre, sucursal_id').order('nombre'),
       supabase
         .from('repuestos_precios')
         .select('id, repuesto_id, proveedor_id, precio, actualizado_at, disponible, tiempo_entrega_dias, garantia_dias, observaciones'),
@@ -197,9 +199,24 @@ export default function ProveedorRepuestos() {
       return;
     }
 
-    let repuestoId = repuestos.find((r) => r.nombre.toLowerCase() === form.nombre.trim().toLowerCase())?.id;
+    // Mismo criterio que Servicio Técnico → Repuestos (stock/page.tsx): un
+    // repuesto ya cargado para ESTA sucursal (o legacy sin sucursal, r.
+    // sucursal_id null) es "el mismo"; uno cargado para OTRA sucursal no —
+    // antes esto matcheaba solo por nombre, así que cargar el precio de
+    // "Pantalla iPhone 11" en la Sucursal 2 terminaba reusando la fila de
+    // stock de la Sucursal 1 si el nombre coincidía, mezclando el inventario
+    // de dos locales distintos.
+    const sucursalNueva = sucursalActual.id || null;
+    const nombreBuscado = form.nombre.trim().toLowerCase();
+    let repuestoId =
+      repuestos.find((r) => r.nombre.toLowerCase() === nombreBuscado && r.sucursal_id === sucursalNueva)?.id ??
+      repuestos.find((r) => r.nombre.toLowerCase() === nombreBuscado && r.sucursal_id == null)?.id;
     if (!repuestoId) {
-      const { data: nuevoRepuesto } = await supabase.from('repuestos').insert({ nombre: form.nombre.trim() }).select('id').single();
+      const { data: nuevoRepuesto } = await supabase
+        .from('repuestos')
+        .insert({ nombre: form.nombre.trim(), ...(sucursalNueva ? { sucursal_id: sucursalNueva } : {}) })
+        .select('id')
+        .single();
       repuestoId = nuevoRepuesto?.id;
     }
     if (!repuestoId) {

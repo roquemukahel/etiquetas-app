@@ -90,6 +90,7 @@ type FormState = {
   stock_minimo: string;
   garantia_dias: string;
   observaciones: string;
+  sucursal_id: string;
 };
 
 const FORM_VACIO: FormState = {
@@ -107,6 +108,7 @@ const FORM_VACIO: FormState = {
   stock_minimo: '',
   garantia_dias: '',
   observaciones: '',
+  sucursal_id: '',
 };
 
 export default function StockRepuestos() {
@@ -271,7 +273,7 @@ export default function StockRepuestos() {
 
   const abrirNuevo = () => {
     setEditandoId(null);
-    setForm(FORM_VACIO);
+    setForm({ ...FORM_VACIO, sucursal_id: sucursalActual.id ?? '' });
     setError(null);
     setMenuAbierto(null);
     setModalAbierto(true);
@@ -294,6 +296,7 @@ export default function StockRepuestos() {
       stock_minimo: r.stock_minimo != null ? String(r.stock_minimo) : '',
       garantia_dias: r.garantia_dias != null ? String(r.garantia_dias) : '',
       observaciones: r.observaciones ?? '',
+      sucursal_id: r.sucursal_id ?? '',
     });
     setError(null);
     setMenuAbierto(null);
@@ -333,6 +336,7 @@ export default function StockRepuestos() {
         .update({
           nombre: form.nombre.trim(),
           costo_unitario: form.costo_unitario ? Number(form.costo_unitario) : null,
+          sucursal_id: form.sucursal_id || null,
           ...payloadComun,
         })
         .eq('id', editandoId);
@@ -363,7 +367,7 @@ export default function StockRepuestos() {
     // Servicio Técnico → Repuestos de un proveedor) también cuenta como
     // "el mismo" — se lo adopta para esta sucursal en vez de crear otra fila
     // separada que quedaría divergiendo de la original.
-    const sucursalNueva = sucursalActual.id || null;
+    const sucursalNueva = form.sucursal_id || null;
     const mismoNombre = (r: Repuesto) => r.nombre.trim().toLowerCase() === form.nombre.trim().toLowerCase();
     // Preferir el match EXACTO de sucursal antes que el legacy sin asignar:
     // repuestos está ordenado por nombre, no por sucursal, así que si un
@@ -872,6 +876,24 @@ export default function StockRepuestos() {
                 ))}
               </datalist>
             </div>
+
+            {sucursales.length > 1 && (
+              <div>
+                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Sucursal')}</label>
+                <select
+                  value={form.sucursal_id}
+                  onChange={(e) => setForm((f) => ({ ...f, sucursal_id: e.target.value }))}
+                  className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                >
+                  <option value="">{t('Sin asignar (visible en todas)')}</option>
+                  {sucursales.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-2">
               <div>

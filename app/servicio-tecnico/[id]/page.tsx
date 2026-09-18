@@ -195,7 +195,7 @@ type Evidencia = {
   created_at: string;
 };
 
-type RepuestoStock = { id: string; nombre: string; cantidad_stock: number; costo_unitario: number | null };
+type RepuestoStock = { id: string; nombre: string; cantidad_stock: number; costo_unitario: number | null; sucursal_id: string | null };
 type RepuestoUsado = {
   id: string;
   repuesto_id: string | null;
@@ -329,7 +329,7 @@ export default function FichaReparacion() {
       setTrabajos((data as Trabajo[]) ?? []);
     })();
     (async () => {
-      const { data } = await supabase.from('repuestos').select('id, nombre, cantidad_stock, costo_unitario').order('nombre');
+      const { data } = await supabase.from('repuestos').select('id, nombre, cantidad_stock, costo_unitario, sucursal_id').order('nombre');
       setRepuestosStock((data as RepuestoStock[]) ?? []);
     })();
     (async () => {
@@ -667,8 +667,17 @@ export default function FichaReparacion() {
     cargar();
   };
 
+  // Un repuesto con sucursal_id null es stock viejo (cargado antes de la
+  // función multisucursal, o desde el catálogo de precios de un proveedor) —
+  // se muestra en cualquier sucursal, igual que en Stock de repuestos, para
+  // no esconder stock real. Pero uno YA asignado a otra sucursal no debería
+  // aparecer acá: antes se podía consumir repuestos de otro local sin darse
+  // cuenta, porque este selector no filtraba por sucursal en absoluto.
   const repuestosFiltrados = repuestosStock.filter(
-    (rp) => rp.cantidad_stock > 0 && rp.nombre.toLowerCase().includes(buscarRepuesto.trim().toLowerCase())
+    (rp) =>
+      rp.cantidad_stock > 0 &&
+      rp.nombre.toLowerCase().includes(buscarRepuesto.trim().toLowerCase()) &&
+      (rp.sucursal_id == null || rp.sucursal_id === sucursalActual.id)
   );
 
   // Consumir un repuesto pasa por la función repuesto_consumir (RPC) en vez
@@ -725,7 +734,7 @@ export default function FichaReparacion() {
     setGuardandoRepuesto(false);
     cargar();
     (async () => {
-      const { data } = await supabase.from('repuestos').select('id, nombre, cantidad_stock, costo_unitario').order('nombre');
+      const { data } = await supabase.from('repuestos').select('id, nombre, cantidad_stock, costo_unitario, sucursal_id').order('nombre');
       setRepuestosStock((data as RepuestoStock[]) ?? []);
     })();
   };
@@ -749,7 +758,7 @@ export default function FichaReparacion() {
     });
     cargar();
     (async () => {
-      const { data } = await supabase.from('repuestos').select('id, nombre, cantidad_stock, costo_unitario').order('nombre');
+      const { data } = await supabase.from('repuestos').select('id, nombre, cantidad_stock, costo_unitario, sucursal_id').order('nombre');
       setRepuestosStock((data as RepuestoStock[]) ?? []);
     })();
   };

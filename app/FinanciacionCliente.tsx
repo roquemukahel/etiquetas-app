@@ -5,6 +5,7 @@
 // (pestaña "Cuenta cte.") sigue siendo el libro general; esto es la vista
 // específica de cuotas con cronograma propio.
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { crearClienteNavegador } from './lib/supabase/client';
 import { useActor } from './lib/actor';
 import { tienePermiso } from './lib/permisos';
@@ -197,6 +198,13 @@ export default function FinanciacionCliente({
                       <p>{t('Importe de la venta:')} {simboloMoneda(p.moneda)}{formatearMonto(p.importe_original)}</p>
                       {p.entrega_inicial > 0 && <p>{t('Entrega inicial:')} {simboloMoneda(p.moneda)}{formatearMonto(p.entrega_inicial)}</p>}
                       {p.observaciones && <p className="col-span-2">{t('Obs:')} {p.observaciones}</p>}
+                      {p.orden_id && (
+                        <p className="col-span-2">
+                          <Link href={`/ordenes/${p.orden_id}`} className="text-accent dark:text-dark-accent underline">
+                            {t('Ver orden / detalle de lo financiado')}
+                          </Link>
+                        </p>
+                      )}
                     </div>
 
                     <div className="flex flex-col gap-1">
@@ -217,6 +225,11 @@ export default function FinanciacionCliente({
                               )}
                             </span>
                             <span className={`shrink-0 rounded-full px-2 py-0.5 font-medium ${COLOR_ESTADO[estadoVisual]}`}>{t(ETIQUETA_ESTADO[estadoVisual])}</span>
+                            {p.orden_id && (
+                              <Link href={`/ordenes/${p.orden_id}`} className="shrink-0 text-accent dark:text-dark-accent underline" title={t('Ver orden / detalle de lo financiado')}>
+                                {t('Ver orden')}
+                              </Link>
+                            )}
                           </div>
                         );
                       })}
