@@ -115,6 +115,7 @@ export default function DetalleCompra() {
       color: compra.color,
       imei: compra.imei,
       estado: compra.condicion || 'usado',
+      detalles: compra.detalles,
       en_stock: true,
       agregado_por_nombre: actor?.nombre ?? null,
       agregado_por_foto_url: actor?.fotoUrl ?? null,

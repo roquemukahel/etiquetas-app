@@ -167,6 +167,7 @@ export default function PlanCanje() {
       imei: c.imei,
       salud_bateria: c.salud_bateria,
       estado: c.condicion || 'usado',
+      detalles: c.detalles,
       en_stock: true,
       agregado_por_nombre: actor?.nombre ?? null,
       agregado_por_foto_url: actor?.fotoUrl ?? null,
