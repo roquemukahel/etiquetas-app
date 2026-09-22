@@ -53,6 +53,9 @@ export const CATALOGO_MODELOS: Record<string, string[]> = {
     'iPhone 17 Pro Max',
     'iPhone 17e',
     'iPhone Air',
+    'iPhone 18',
+    'iPhone 18 Pro',
+    'iPhone 18 Pro Max',
   ],
   samsung: [
     'Galaxy S8',
