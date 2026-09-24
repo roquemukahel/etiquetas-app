@@ -246,6 +246,17 @@ const IPHONE_17_PRO: ModeloColores = {
   ],
 };
 
+// iPhone 18 Pro / Pro Max — nombres oficiales de Apple (2026).
+const IPHONE_18_PRO: ModeloColores = {
+  carpeta: 'iphone-18-pro',
+  colores: [
+    { nombre: 'Negro', archivo: 'negro', hex: '#2f3033' },
+    { nombre: 'Plata', archivo: 'plata', hex: '#e8eae9' },
+    { nombre: 'Glaciar', archivo: 'glaciar', hex: '#c7d6df' },
+    { nombre: 'Borgoña', archivo: 'borgona', hex: '#4a2530' },
+  ],
+};
+
 // iPhone X — 2 colores oficiales.
 const IPHONE_X: ModeloColores = {
   carpeta: 'iphone-x',
@@ -908,6 +919,8 @@ const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   iphone17promax: IPHONE_17_PRO,
   iphone17e: IPHONE_17E,
   iphoneair: IPHONE_AIR,
+  iphone18pro: IPHONE_18_PRO,
+  iphone18promax: IPHONE_18_PRO,
   galaxya32: GALAXY_A32,
   galaxya07: GALAXY_A07,
   galaxya17: GALAXY_A17,
