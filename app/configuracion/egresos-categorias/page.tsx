@@ -15,7 +15,10 @@ import {
   archivarCategoriaEgreso,
   restaurarCategoriaEgreso,
   contarEnCategoriaEgreso,
+  cambiarTipoGastoCategoria,
+  ETIQUETA_TIPO_GASTO,
   type CategoriaEgreso,
+  type TipoGastoCategoria,
 } from '../../lib/egresos';
 import { Boton, BotonIcono } from '../../Boton';
 import { ICONOS } from '../../Iconos';
@@ -100,6 +103,25 @@ export default function CategoriasEgresos() {
     setProcesando(c.id);
     await activarCategoriaEgreso(supabase, c.id, !c.activa);
     setProcesando(null);
+    await cargar();
+  };
+
+  const cambiarTipoGasto = async (c: CategoriaEgreso, tipo_gasto: TipoGastoCategoria) => {
+    if (tipo_gasto === c.tipo_gasto) return;
+    setProcesando(c.id);
+    setError(null);
+    const resultado = await cambiarTipoGastoCategoria(supabase, c.id, tipo_gasto);
+    setProcesando(null);
+    if ('error' in resultado) {
+      setError(t(resultado.error));
+      return;
+    }
+    await registrarAuditoria(supabase, {
+      accion: `cambió el tipo de gasto de la categoría "${c.nombre}" a "${ETIQUETA_TIPO_GASTO[tipo_gasto]}"`,
+      entidad: 'egreso_categoria',
+      entidadId: c.id,
+      valorAnterior: { tipo_gasto: c.tipo_gasto },
+    });
     await cargar();
   };
 
@@ -204,6 +226,18 @@ export default function CategoriasEgresos() {
                 )}
                 {!c.activa && <p className="text-[11px] text-muted dark:text-dark-text-secondary">{t('Inactiva')}</p>}
               </div>
+              <select
+                value={c.tipo_gasto}
+                disabled={procesando === c.id}
+                onChange={(e) => cambiarTipoGasto(c, e.target.value as TipoGastoCategoria)}
+                className="shrink-0 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-1 text-xs"
+              >
+                {(Object.keys(ETIQUETA_TIPO_GASTO) as TipoGastoCategoria[]).map((tg) => (
+                  <option key={tg} value={tg}>
+                    {t(ETIQUETA_TIPO_GASTO[tg])}
+                  </option>
+                ))}
+              </select>
               <div className="flex items-center gap-1 shrink-0">
                 {editandoId === c.id ? (
                   <BotonIcono icono={ICONOS.check} ariaLabel={t('Guardar nombre')} variante="ghost" tamano="sm" disabled={procesando === c.id} onClick={() => guardarNombre(c)} />

@@ -1242,8 +1242,8 @@ export const EN: Record<string, string> = {
   Ganancia: 'Profit',
   'Ganancia bruta menos egresos operativos del período. Es una ESTIMACIÓN: no incluye impuestos ni otras obligaciones contables, no lo confundas con una ganancia neta real.':
     'Gross profit minus operating expenses for the period. This is an ESTIMATE: it does not include taxes or other accounting obligations — do not confuse it with real net income.',
-  'Gasto operativo, retiro de dinero y ajustes registrados en el período (no incluye compras de mercadería ni pagos a proveedores, esos ya tienen su propio total).':
-    "Operating expenses, cash withdrawals, and adjustments logged in the period (doesn't include merchandise purchases or supplier payments, those already have their own total).",
+  'Gasto operativo y ajustes registrados en el período — no incluye retiros de caja (no son un gasto) ni compras de mercadería o pagos a proveedores (esos ya tienen su propio total).':
+    "Operating expenses and adjustments logged in the period — doesn't include cash-drawer withdrawals (not an expense) or merchandise purchases and supplier payments (those already have their own total).",
   'Gasto operativo, retiros y ajustes — distinto de compras y pagos a proveedores.':
     'Operating expenses, withdrawals, and adjustments — different from purchases and supplier payments.',
   'Importe financiado de los planes activos o completados (a hoy, no depende del período).':

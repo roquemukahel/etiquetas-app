@@ -20,12 +20,21 @@ export const ETIQUETA_TIPO_EGRESO: Record<TipoEgreso, string> = {
   otro: 'Otro egreso',
 };
 
+export type TipoGastoCategoria = 'fijo' | 'variable' | 'no_es_gasto';
+
+export const ETIQUETA_TIPO_GASTO: Record<TipoGastoCategoria, string> = {
+  fijo: 'Fijo',
+  variable: 'Variable',
+  no_es_gasto: 'No es gasto',
+};
+
 export type CategoriaEgreso = {
   id: string;
   nombre: string;
   orden: number;
   activa: boolean;
   archivada: boolean;
+  tipo_gasto: TipoGastoCategoria;
 };
 
 export type AreaEgreso = {
@@ -136,7 +145,7 @@ export async function restaurarAreaEgreso(supabase: SupabaseClient, id: string, 
 
 // ---------- Categorías ----------
 export async function obtenerCategoriasEgresos(supabase: SupabaseClient, incluirArchivadas = false): Promise<CategoriaEgreso[]> {
-  let query = supabase.from('egresos_categorias').select('id, nombre, orden, activa, archivada').order('orden', { ascending: true });
+  let query = supabase.from('egresos_categorias').select('id, nombre, orden, activa, archivada, tipo_gasto').order('orden', { ascending: true });
   if (!incluirArchivadas) query = query.eq('archivada', false);
   const { data } = await query;
   return (data as CategoriaEgreso[]) ?? [];
@@ -175,6 +184,16 @@ export async function reordenarCategoriasEgresos(supabase: SupabaseClient, orden
 
 export async function activarCategoriaEgreso(supabase: SupabaseClient, id: string, activa: boolean): Promise<{ ok: true } | { error: string }> {
   const { error } = await supabase.from('egresos_categorias').update({ activa }).eq('id', id);
+  if (error) return { error: error.message };
+  return { ok: true };
+}
+
+export async function cambiarTipoGastoCategoria(
+  supabase: SupabaseClient,
+  id: string,
+  tipo_gasto: TipoGastoCategoria
+): Promise<{ ok: true } | { error: string }> {
+  const { error } = await supabase.from('egresos_categorias').update({ tipo_gasto }).eq('id', id);
   if (error) return { error: error.message };
   return { ok: true };
 }

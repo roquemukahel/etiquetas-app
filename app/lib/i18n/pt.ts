@@ -1243,8 +1243,8 @@ export const PT: Record<string, string> = {
   Ganancia: 'Ganho',
   'Ganancia bruta menos egresos operativos del período. Es una ESTIMACIÓN: no incluye impuestos ni otras obligaciones contables, no lo confundas con una ganancia neta real.':
     'Ganho bruto menos saídas operacionais do período. É uma ESTIMATIVA: não inclui impostos nem outras obrigações contábeis, não confunda com um lucro líquido real.',
-  'Gasto operativo, retiro de dinero y ajustes registrados en el período (no incluye compras de mercadería ni pagos a proveedores, esos ya tienen su propio total).':
-    'Gasto operacional, retirada de dinheiro e ajustes registrados no período (não inclui compras de mercadoria nem pagamentos a fornecedores, esses já têm seu próprio total).',
+  'Gasto operativo y ajustes registrados en el período — no incluye retiros de caja (no son un gasto) ni compras de mercadería o pagos a proveedores (esos ya tienen su propio total).':
+    'Gasto operacional e ajustes registrados no período — não inclui retiradas de caixa (não são um gasto) nem compras de mercadoria ou pagamentos a fornecedores (esses já têm seu próprio total).',
   'Gasto operativo, retiros y ajustes — distinto de compras y pagos a proveedores.':
     'Gasto operacional, retiradas e ajustes — diferente de compras e pagamentos a fornecedores.',
   'Importe financiado de los planes activos o completados (a hoy, no depende del período).':

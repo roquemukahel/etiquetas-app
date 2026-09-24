@@ -148,10 +148,25 @@ export default function Egresos() {
     [egresos, filtroSucursal, filtroArea]
   );
 
-  // Total por moneda — nunca se suman monedas distintas.
+  // Total por moneda — nunca se suman monedas distintas. Los "Retiro de
+  // dinero" (los genera solo el cierre de turno de Caja) no son un gasto
+  // real — es plata que sale del cajón hacia otro lado (depósito, retiro
+  // del dueño) — así que van aparte, no adentro del Total.
   const totalesPorMoneda = useMemo(() => {
     const mapa = new Map<string, number>();
-    for (const e of egresosFiltrados) mapa.set(e.moneda, (mapa.get(e.moneda) ?? 0) + e.importe);
+    for (const e of egresosFiltrados) {
+      if (e.tipo === 'retiro') continue;
+      mapa.set(e.moneda, (mapa.get(e.moneda) ?? 0) + e.importe);
+    }
+    return Array.from(mapa.entries());
+  }, [egresosFiltrados]);
+
+  const retirosPorMoneda = useMemo(() => {
+    const mapa = new Map<string, number>();
+    for (const e of egresosFiltrados) {
+      if (e.tipo !== 'retiro') continue;
+      mapa.set(e.moneda, (mapa.get(e.moneda) ?? 0) + e.importe);
+    }
     return Array.from(mapa.entries());
   }, [egresosFiltrados]);
 
@@ -240,6 +255,20 @@ export default function Egresos() {
           ))
         )}
       </QCard>
+
+      {retirosPorMoneda.length > 0 && (
+        <QCard padding="sm" className="flex flex-wrap gap-4">
+          {retirosPorMoneda.map(([mon, total]) => (
+            <div key={mon}>
+              <p className="text-base font-display font-semibold leading-none text-muted dark:text-dark-text-secondary">
+                {simboloMoneda(mon)}
+                {formatearMonto(total)}
+              </p>
+              <p className="text-[11px] text-muted dark:text-dark-text-secondary mt-1">{t('Retiros de caja')} {mon} · {t('no es gasto, aparte del Total')}</p>
+            </div>
+          ))}
+        </QCard>
+      )}
 
       <Boton variante="primario" tamano="md" onClick={() => setModalNuevo(true)} className="self-start">
         + {t('Registrar egreso')}

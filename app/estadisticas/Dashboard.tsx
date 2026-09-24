@@ -137,7 +137,7 @@ type Persona = { id: string; nombre: string; foto_url: string | null };
 type Cliente = { id: string; nombre: string; apellido: string | null };
 type ItemPeriodoR = ItemR & { created_at: string; dispositivo_id: string | null; producto_id: string | null; descripcion: string; tipo: string };
 type DispositivoInfo = { modelo: string | null; categoria_id: string | null };
-type ProductoInfo = { nombre: string; categoria_id: string | null };
+type ProductoInfo = { nombre: string; categoria_id: string | null; producto_maestro_id: string | null; excluir_de_estadisticas: boolean };
 type Proveedor = { id: string; nombre: string };
 type Reparacion = { tecnico_id: string | null; fecha_reparado: string; sucursal_id: string | null };
 type IngresoServicio = { cliente_id: string | null; fecha_ingreso_servicio: string; sucursal_id: string | null };
@@ -252,12 +252,40 @@ export default function Estadisticas() {
   const [areas, setAreas] = useState<AreaEgreso[]>([]);
   const [filtroArea, setFiltroArea] = useState('');
 
+  // Órdenes que son 100% un ajuste contable (ej. "CREDITO ANTIGUO", para
+  // dejar asentada una deuda vieja — no una venta nueva): se excluyen de
+  // "Ventas netas" y de todo lo que se calcule a partir de `ordenes`. Si un
+  // día una orden mezclara un ajuste con un ítem de venta real, esta orden
+  // NO se excluye (a propósito: "every" exige que TODOS los ítems sean de
+  // ajuste) — perder de vista una venta real sería peor que dejar pasar el
+  // ajuste en ese caso puntual.
+  const idsOrdenesAjusteContable = useMemo(() => {
+    const porOrden = new Map<string, ItemPeriodoR[]>();
+    for (const it of ordenItems) {
+      if (it.tipo !== 'dispositivo' && it.tipo !== 'producto') continue;
+      (porOrden.get(it.orden_id) ?? porOrden.set(it.orden_id, []).get(it.orden_id)!).push(it);
+    }
+    const out = new Set<string>();
+    for (const [ordenId, items] of porOrden) {
+      if (items.length > 0 && items.every((it) => it.producto_id && productosInfo.get(it.producto_id)?.excluir_de_estadisticas)) {
+        out.add(ordenId);
+      }
+    }
+    return out;
+  }, [ordenItems, productosInfo]);
+
   // Filtra las 7 tablas que Fase 1 etiquetó por sucursal (ordenes,
   // reparaciones, pagos, cta_cte_movimientos, egresos, y dispositivos vía
   // stock/compras/altas). Clientes, proveedores, comisiones y cuentas por
   // pagar quedan compartidos, sin filtrar (esas tablas todavía no tienen
   // columna de sucursal).
-  const ordenes = useMemo(() => (sucursalId ? ordenesRaw.filter((o) => o.sucursal_id === sucursalId) : ordenesRaw), [ordenesRaw, sucursalId]);
+  const ordenes = useMemo(
+    () =>
+      (sucursalId ? ordenesRaw.filter((o) => o.sucursal_id === sucursalId) : ordenesRaw).filter(
+        (o) => !idsOrdenesAjusteContable.has(o.id)
+      ),
+    [ordenesRaw, sucursalId, idsOrdenesAjusteContable]
+  );
   const pagos = useMemo(() => (sucursalId ? pagosRaw.filter((p) => p.sucursal_id === sucursalId) : pagosRaw), [pagosRaw, sucursalId]);
   const credito = useMemo(() => (sucursalId ? creditoRaw.filter((c) => c.sucursal_id === sucursalId) : creditoRaw), [creditoRaw, sucursalId]);
   const reparaciones = useMemo(
@@ -521,7 +549,9 @@ export default function Estadisticas() {
           tandasDe(idsDispositivos).map((tanda) => supabase.from('dispositivos').select('id, modelo, categoria_id').in('id', tanda))
         ),
         Promise.all(
-          tandasDe(idsProductos).map((tanda) => supabase.from('productos').select('id, nombre, categoria_id').in('id', tanda))
+          tandasDe(idsProductos).map((tanda) =>
+            supabase.from('productos').select('id, nombre, categoria_id, producto_maestro_id, excluir_de_estadisticas').in('id', tanda)
+          )
         ),
       ]);
 
@@ -539,7 +569,13 @@ export default function Estadisticas() {
 
       const prodInfo = new Map<string, ProductoInfo>();
       for (const { data: ps } of resultadosProductos) {
-        for (const p of (ps as ({ id: string } & ProductoInfo)[] | null) ?? []) prodInfo.set(p.id, { nombre: p.nombre, categoria_id: p.categoria_id });
+        for (const p of (ps as ({ id: string } & ProductoInfo)[] | null) ?? [])
+          prodInfo.set(p.id, {
+            nombre: p.nombre,
+            categoria_id: p.categoria_id,
+            producto_maestro_id: p.producto_maestro_id ?? null,
+            excluir_de_estadisticas: !!p.excluir_de_estadisticas,
+          });
       }
       setProductosInfo(prodInfo);
 
@@ -773,7 +809,11 @@ export default function Estadisticas() {
         categoriaNombre = nombreCategoria(info?.categoria_id ?? null);
       } else if (it.producto_id) {
         const info = productosInfo.get(it.producto_id);
-        clave = `prod:${it.producto_id}`;
+        if (info?.excluir_de_estadisticas) continue; // ej. "CREDITO ANTIGUO": ajuste, no venta.
+        // `productos` es una fila POR SUCURSAL — el mismo producto cargado en
+        // dos locales tiene dos producto_id distintos y sin producto_maestro_id
+        // salía dos veces en el ranking. Con maestro_id, se agrupan en una sola fila.
+        clave = info?.producto_maestro_id ? `prod-maestro:${info.producto_maestro_id}` : `prod:${it.producto_id}`;
         nombre = info?.nombre || it.descripcion;
         categoriaNombre = nombreCategoria(info?.categoria_id ?? null);
       } else {
@@ -948,7 +988,7 @@ export default function Estadisticas() {
         : [{ nombre: null, esSinAsignar: false, match: () => true }];
     const egresosPorArea = (idArea: string | null, egs: EgresoR[]) => egresosPeriodoDe(egs.filter((e) => e.area_id === idArea), rango.inicio, rango.fin);
     return grupos.map((g) => {
-      const ordenesDeGrupo = ordenesRaw.filter((o) => g.match(o.sucursal_id ?? null));
+      const ordenesDeGrupo = ordenesRaw.filter((o) => g.match(o.sucursal_id ?? null) && !idsOrdenesAjusteContable.has(o.id));
       const egresosDeGrupo = egresosRaw.filter((e) => g.match(e.sucursal_id ?? null));
       const local = bloqueVentasPorArea(ordenesDeGrupo, itemsPorOrden, rango.inicio, rango.fin, false);
       const taller = bloqueVentasPorArea(ordenesDeGrupo, itemsPorOrden, rango.inicio, rango.fin, true);
@@ -965,7 +1005,7 @@ export default function Estadisticas() {
     // La fila residual "Sin sucursal" solo se muestra si de verdad tiene algo
     // — para un negocio con todo bien etiquetado, no tiene sentido sumar una
     // fila en cero.
-  }, [sucursales, ordenesRaw, egresosRaw, itemsPorOrden, rango, areaLocalId, areaTallerId]);
+  }, [sucursales, ordenesRaw, egresosRaw, itemsPorOrden, rango, areaLocalId, areaTallerId, idsOrdenesAjusteContable]);
   // Ojo: esta tabla siempre muestra TODAS las sucursales (a propósito, ver
   // comentario de filasRentabilidad más arriba), así que si hay algo para
   // mostrar no puede salir de actualB/hayEgresos (que sí respetan el filtro
@@ -1660,7 +1700,7 @@ export default function Estadisticas() {
               <StatCard
                 etiqueta={t('Egresos operativos')}
                 valor={m(egresosPeriodo)}
-                tooltip={t('Gasto operativo, retiro de dinero y ajustes registrados en el período (no incluye compras de mercadería ni pagos a proveedores, esos ya tienen su propio total).')}
+                tooltip={t('Gasto operativo y ajustes registrados en el período — no incluye retiros de caja (no son un gasto) ni compras de mercadería o pagos a proveedores (esos ya tienen su propio total).')}
                 moneda={moneda}
                 tono="text-bad"
                 sensible
