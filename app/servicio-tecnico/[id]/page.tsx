@@ -195,13 +195,21 @@ type Evidencia = {
   created_at: string;
 };
 
-type RepuestoStock = { id: string; nombre: string; cantidad_stock: number; costo_unitario: number | null; sucursal_id: string | null };
+type RepuestoStock = {
+  id: string;
+  nombre: string;
+  cantidad_stock: number;
+  costo_unitario: number | null;
+  precio_venta: number | null;
+  sucursal_id: string | null;
+};
 type RepuestoUsado = {
   id: string;
   repuesto_id: string | null;
   nombre_repuesto: string;
   cantidad: number;
   costo_unitario: number | null;
+  precio_venta_unitario: number | null;
   created_at: string;
 };
 
@@ -216,6 +224,11 @@ export default function FichaReparacion() {
   const supabase = crearClienteNavegador();
   const actor = useActor();
   const puedeGestionar = tienePermiso(actor, 'gestionar_servicio_tecnico');
+  // Costo y margen de repuestos son información de rentabilidad — solo
+  // para administradores (mismo permiso que ya se usa en Estadísticas y en
+  // Servicio Técnico → Repuestos). Un técnico puede seguir usando un
+  // repuesto en la reparación sin necesidad de ver cuánto cuesta.
+  const puedeVerCostos = tienePermiso(actor, 'ver_costos');
   // El agregado a Stock es una actividad distinta de "gestionar la reparación":
   // un técnico puede tener permiso para trabajar la reparación pero no para
   // agregar al Stock (esa tarea suele quedar en manos de otra persona, p.ej.
@@ -290,7 +303,7 @@ export default function FichaReparacion() {
         .order('created_at', { ascending: false }),
       supabase
         .from('reparaciones_repuestos')
-        .select('id, repuesto_id, nombre_repuesto, cantidad, costo_unitario, created_at')
+        .select('id, repuesto_id, nombre_repuesto, cantidad, costo_unitario, precio_venta_unitario, created_at')
         .eq('reparacion_id', id)
         .order('created_at', { ascending: false }),
       supabase
@@ -329,7 +342,7 @@ export default function FichaReparacion() {
       setTrabajos((data as Trabajo[]) ?? []);
     })();
     (async () => {
-      const { data } = await supabase.from('repuestos').select('id, nombre, cantidad_stock, costo_unitario, sucursal_id').order('nombre');
+      const { data } = await supabase.from('repuestos').select('id, nombre, cantidad_stock, costo_unitario, precio_venta, sucursal_id').order('nombre');
       setRepuestosStock((data as RepuestoStock[]) ?? []);
     })();
     (async () => {
@@ -379,6 +392,7 @@ export default function FichaReparacion() {
   // levantado para poder mostrarlo también en el panel lateral fijo, no
   // solo adentro de la pestaña de Servicios y repuestos.
   const costoRepuestosTotal = repuestosUsados.reduce((acc, ru) => acc + (ru.costo_unitario ?? 0) * ru.cantidad, 0);
+  const precioVentaRepuestosTotal = repuestosUsados.reduce((acc, ru) => acc + (ru.precio_venta_unitario ?? 0) * ru.cantidad, 0);
   const hayCostosFaltantes = repuestosUsados.some((ru) => ru.costo_unitario == null);
   const presupuestoSuma = r ? (r.presupuesto_mano_obra || 0) + (r.presupuesto_repuestos || 0) : 0;
   const cobrado = r ? r.importe_total ?? (presupuestoSuma > 0 ? presupuestoSuma : null) : null;
@@ -734,7 +748,7 @@ export default function FichaReparacion() {
     setGuardandoRepuesto(false);
     cargar();
     (async () => {
-      const { data } = await supabase.from('repuestos').select('id, nombre, cantidad_stock, costo_unitario, sucursal_id').order('nombre');
+      const { data } = await supabase.from('repuestos').select('id, nombre, cantidad_stock, costo_unitario, precio_venta, sucursal_id').order('nombre');
       setRepuestosStock((data as RepuestoStock[]) ?? []);
     })();
   };
@@ -758,7 +772,7 @@ export default function FichaReparacion() {
     });
     cargar();
     (async () => {
-      const { data } = await supabase.from('repuestos').select('id, nombre, cantidad_stock, costo_unitario, sucursal_id').order('nombre');
+      const { data } = await supabase.from('repuestos').select('id, nombre, cantidad_stock, costo_unitario, precio_venta, sucursal_id').order('nombre');
       setRepuestosStock((data as RepuestoStock[]) ?? []);
     })();
   };
@@ -1724,7 +1738,13 @@ export default function FichaReparacion() {
                         </span>
                         <span className="flex items-center gap-2 shrink-0">
                           <span className="text-muted dark:text-dark-text-secondary">
-                            {ru.costo_unitario != null ? `$${(ru.costo_unitario * ru.cantidad).toLocaleString('es-AR')}` : t('sin costo')}
+                            {puedeVerCostos
+                              ? ru.costo_unitario != null
+                                ? `$${(ru.costo_unitario * ru.cantidad).toLocaleString('es-AR')}`
+                                : t('sin costo')
+                              : ru.precio_venta_unitario != null
+                              ? `$${(ru.precio_venta_unitario * ru.cantidad).toLocaleString('es-AR')}`
+                              : ''}
                           </span>
                           {puedeGestionar && (
                             <button onClick={() => quitarRepuestoUsado(ru)} className="text-xs text-bad underline">
@@ -1734,18 +1754,26 @@ export default function FichaReparacion() {
                         </span>
                       </div>
                     ))}
-                    <div className="flex flex-col gap-0.5 pt-1 text-xs">
-                      <div className="flex justify-between">
-                        <span className="text-muted dark:text-dark-text-secondary">{t('Costo repuestos')} {hayCostosFaltantes && t('(parcial)')}</span>
-                        <span className="font-medium">${costoRepuestosTotal.toLocaleString('es-AR')}</span>
+                    {precioVentaRepuestosTotal > 0 && (
+                      <div className="flex justify-between text-xs pt-1">
+                        <span className="text-muted dark:text-dark-text-secondary">{t('Precio repuestos (cargalo en "Repuestos ($)" del presupuesto)')}</span>
+                        <span className="font-medium text-good">${precioVentaRepuestosTotal.toLocaleString('es-AR')}</span>
                       </div>
-                      {margen != null && (
+                    )}
+                    {puedeVerCostos && (
+                      <div className="flex flex-col gap-0.5 pt-1 text-xs">
                         <div className="flex justify-between">
-                          <span className="text-muted dark:text-dark-text-secondary">{t('Margen (cobrado − repuestos)')}</span>
-                          <span className={`font-medium ${margen >= 0 ? 'text-good' : 'text-bad'}`}>${margen.toLocaleString('es-AR')}</span>
+                          <span className="text-muted dark:text-dark-text-secondary">{t('Costo repuestos')} {hayCostosFaltantes && t('(parcial)')}</span>
+                          <span className="font-medium">${costoRepuestosTotal.toLocaleString('es-AR')}</span>
                         </div>
-                      )}
-                    </div>
+                        {margen != null && (
+                          <div className="flex justify-between">
+                            <span className="text-muted dark:text-dark-text-secondary">{t('Margen (cobrado − repuestos)')}</span>
+                            <span className={`font-medium ${margen >= 0 ? 'text-good' : 'text-bad'}`}>${margen.toLocaleString('es-AR')}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1783,7 +1811,10 @@ export default function FichaReparacion() {
                                 className="rounded-lg border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-3 py-2 text-left text-xs flex items-center justify-between gap-2"
                               >
                                 <span>{rp.nombre}</span>
-                                <span className="text-muted dark:text-dark-text-secondary shrink-0">{t('Stock:')} {rp.cantidad_stock}</span>
+                                <span className="text-muted dark:text-dark-text-secondary shrink-0">
+                                  {t('Stock:')} {rp.cantidad_stock}
+                                  {rp.precio_venta != null && ` · $${rp.precio_venta.toLocaleString('es-AR')}`}
+                                </span>
                               </button>
                             ))}
                           </div>
@@ -2021,7 +2052,7 @@ export default function FichaReparacion() {
                 <span className="font-medium">${r.importe_total.toLocaleString('es-AR')}</span>
               </div>
             )}
-            {puedeGestionar && repuestosUsados.length > 0 && (
+            {puedeVerCostos && repuestosUsados.length > 0 && (
               <>
                 <div className="flex justify-between">
                   <span className="text-muted dark:text-dark-text-secondary">{t('Costo repuestos')}</span>

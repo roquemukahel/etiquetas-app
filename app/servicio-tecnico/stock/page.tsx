@@ -32,6 +32,7 @@ type Repuesto = {
   cantidad_stock: number;
   cantidad_reservada: number;
   costo_unitario: number | null;
+  precio_venta: number | null;
   categoria: string | null;
   compatibilidad: string | null;
   calidad: string | null;
@@ -79,6 +80,7 @@ type FormState = {
   nombre: string;
   cantidad_stock: string;
   costo_unitario: string;
+  precio_venta: string;
   categoria: string;
   compatibilidad: string;
   calidad: string;
@@ -97,6 +99,7 @@ const FORM_VACIO: FormState = {
   nombre: '',
   cantidad_stock: '',
   costo_unitario: '',
+  precio_venta: '',
   categoria: '',
   compatibilidad: '',
   calidad: '',
@@ -117,6 +120,10 @@ export default function StockRepuestos() {
   const t = useT();
   const puedeGestionar = tienePermiso(actor, 'agregar_stock');
   const puedeEliminar = tienePermiso(actor, 'eliminar');
+  // Costo y mano de obra son información sensible de rentabilidad — solo
+  // para administradores, igual que en Estadísticas. Técnicos/vendedores
+  // ven nombre, stock y precio final al cliente, nada más.
+  const puedeVerCostos = tienePermiso(actor, 'ver_costos');
   const sucursalActual = useSucursalActual();
 
   const [repuestos, setRepuestos] = useState<Repuesto[]>([]);
@@ -285,6 +292,7 @@ export default function StockRepuestos() {
       nombre: r.nombre,
       cantidad_stock: String(r.cantidad_stock),
       costo_unitario: r.costo_unitario != null ? String(r.costo_unitario) : '',
+      precio_venta: r.precio_venta != null ? String(r.precio_venta) : '',
       categoria: r.categoria ?? '',
       compatibilidad: r.compatibilidad ?? '',
       calidad: r.calidad ?? '',
@@ -336,6 +344,7 @@ export default function StockRepuestos() {
         .update({
           nombre: form.nombre.trim(),
           costo_unitario: form.costo_unitario ? Number(form.costo_unitario) : null,
+          precio_venta: form.precio_venta ? Number(form.precio_venta) : null,
           sucursal_id: form.sucursal_id || null,
           ...payloadComun,
         })
@@ -384,6 +393,7 @@ export default function StockRepuestos() {
         .update({
           cantidad_stock: nuevaCantidad,
           costo_unitario: form.costo_unitario ? Number(form.costo_unitario) : existente.costo_unitario,
+          precio_venta: form.precio_venta ? Number(form.precio_venta) : existente.precio_venta,
           ...(sucursalNueva && existente.sucursal_id == null ? { sucursal_id: sucursalNueva } : {}),
           ...payloadComun,
         })
@@ -398,6 +408,7 @@ export default function StockRepuestos() {
         nombre: form.nombre.trim(),
         cantidad_stock: Number(form.cantidad_stock) || 0,
         costo_unitario: form.costo_unitario ? Number(form.costo_unitario) : null,
+        precio_venta: form.precio_venta ? Number(form.precio_venta) : null,
         ...(sucursalNueva ? { sucursal_id: sucursalNueva } : {}),
         ...payloadComun,
       });
@@ -650,13 +661,15 @@ export default function StockRepuestos() {
             </span>
             <span className="text-muted dark:text-dark-text-secondary">{t('Sin stock')}</span>
           </button>
-          <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-2.5 py-2 flex flex-col gap-0.5 col-span-2">
-            <span className="text-base font-semibold">
-              {moneda}
-              {formatearMonto(indicadores.valorTotal)}
-            </span>
-            <span className="text-muted dark:text-dark-text-secondary">{t('Valor del inventario (a costo)')}</span>
-          </div>
+          {puedeVerCostos && (
+            <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-2.5 py-2 flex flex-col gap-0.5 col-span-2">
+              <span className="text-base font-semibold">
+                {moneda}
+                {formatearMonto(indicadores.valorTotal)}
+              </span>
+              <span className="text-muted dark:text-dark-text-secondary">{t('Valor del inventario (a costo)')}</span>
+            </div>
+          )}
         </div>
       )}
 
@@ -825,10 +838,22 @@ export default function StockRepuestos() {
               <span className={sinStock(r) ? 'text-bad font-medium' : stockBajo(r) ? 'text-warn font-medium' : 'text-good font-medium'}>
                 {t('Disponible:')} {disponible(r)}
               </span>
-              {r.costo_unitario != null && (
+              {r.precio_venta != null && (
+                <span className="text-good font-medium">
+                  · {t('precio')} {moneda}
+                  {r.precio_venta.toLocaleString('es-AR')}
+                </span>
+              )}
+              {puedeVerCostos && r.costo_unitario != null && (
                 <span className="text-muted dark:text-dark-text-secondary">
                   · {t('costo c/u')} {moneda}
                   {r.costo_unitario.toLocaleString('es-AR')}
+                </span>
+              )}
+              {puedeVerCostos && r.precio_venta != null && r.costo_unitario != null && (
+                <span className="text-muted dark:text-dark-text-secondary">
+                  · {t('mano de obra')} {moneda}
+                  {(r.precio_venta - r.costo_unitario).toLocaleString('es-AR')}
                 </span>
               )}
               {sinStock(r) && <span className="text-[10px] font-semibold text-bad bg-bad/10 rounded-full px-2 py-0.5">{t('Sin stock')}</span>}
@@ -913,16 +938,39 @@ export default function StockRepuestos() {
                 )}
               </div>
               <div>
-                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Costo por unidad')}</label>
+                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Precio final al cliente')}</label>
                 <input
-                  value={form.costo_unitario}
-                  onChange={(e) => setForm((f) => ({ ...f, costo_unitario: sanitizarDecimal(e.target.value) }))}
+                  value={form.precio_venta}
+                  onChange={(e) => setForm((f) => ({ ...f, precio_venta: sanitizarDecimal(e.target.value) }))}
                   inputMode="decimal"
                   placeholder={t('Sin cargar')}
                   className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                 />
               </div>
             </div>
+
+            {puedeVerCostos && (
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Costo por unidad')}</label>
+                  <input
+                    value={form.costo_unitario}
+                    onChange={(e) => setForm((f) => ({ ...f, costo_unitario: sanitizarDecimal(e.target.value) }))}
+                    inputMode="decimal"
+                    placeholder={t('Sin cargar')}
+                    className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Mano de obra (calculada)')}</label>
+                  <div className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm text-muted dark:text-dark-text-secondary">
+                    {form.precio_venta && form.costo_unitario
+                      ? `${moneda}${(Number(form.precio_venta) - Number(form.costo_unitario)).toLocaleString('es-AR')}`
+                      : '—'}
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-2">
               <div>
@@ -1161,7 +1209,7 @@ export default function StockRepuestos() {
                       inputMode="numeric"
                       className="flex-1 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                     />
-                    {movTipo === 'entrada' && (
+                    {movTipo === 'entrada' && puedeVerCostos && (
                       <input
                         value={movCosto}
                         onChange={(e) => setMovCosto(sanitizarDecimal(e.target.value))}

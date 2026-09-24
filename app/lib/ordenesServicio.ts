@@ -35,6 +35,22 @@ export async function generarOrdenDeReparacion(
 ): Promise<{ ordenId: string | null; total: number; error: string | null }> {
   const marcarEntregado = opciones.marcarEntregado ?? true;
   const total = r.importe_total ?? (r.presupuesto_mano_obra || 0) + (r.presupuesto_repuestos || 0);
+  // Costo real de los repuestos usados en esta reparación (foto tomada al
+  // momento de usarlos, ver reparaciones_repuestos.costo_unitario) — sin
+  // esto, el ítem de la boleta quedaba con costo=null y Estadísticas no
+  // podía calcular ninguna ganancia de taller (quedaba siempre en $0,
+  // aunque "Ventas taller" sí tuviera montos). Se pasa siempre, incluso en
+  // $0 (trabajo sin repuestos = 100% mano de obra, costo real cero), para
+  // que esa reparación SÍ cuente como ganancia real y no quede afuera del
+  // cálculo por tener costo=null.
+  const { data: repuestosUsados } = await supabase
+    .from('reparaciones_repuestos')
+    .select('cantidad, costo_unitario')
+    .eq('reparacion_id', r.id);
+  const costoRepuestos = ((repuestosUsados as { cantidad: number; costo_unitario: number | null }[]) ?? []).reduce(
+    (acc, u) => acc + (u.costo_unitario ?? 0) * (u.cantidad ?? 0),
+    0
+  );
   // Modelo/capacidad/color/IMEI se cargaron al recibir el equipo — sin esto,
   // al generar la orden de cobro se pisaba la línea de la boleta (que sí los
   // tenía desde el ingreso) con una que solo decía "Servicio técnico — modelo".
@@ -73,9 +89,11 @@ export async function generarOrdenDeReparacion(
     if (itemBuscarError) return { ordenId: null, total, error: 'No pudimos actualizar el ítem de la orden: ' + itemBuscarError.message };
 
     if (itemExistente) {
-      await supabase.from('orden_items').update({ descripcion, precio_unitario: total }).eq('id', itemExistente.id);
+      await supabase.from('orden_items').update({ descripcion, precio_unitario: total, costo: costoRepuestos }).eq('id', itemExistente.id);
     } else {
-      await supabase.from('orden_items').insert({ orden_id: ordenId, descripcion, cantidad: 1, precio_unitario: total, tipo: 'trabajo' });
+      await supabase
+        .from('orden_items')
+        .insert({ orden_id: ordenId, descripcion, cantidad: 1, precio_unitario: total, costo: costoRepuestos, tipo: 'trabajo' });
     }
   } else {
     // Reparaciones sin cliente al recibirse (equipo propio) o cargadas antes de
@@ -101,6 +119,7 @@ export async function generarOrdenDeReparacion(
       descripcion,
       cantidad: 1,
       precio_unitario: total,
+      costo: costoRepuestos,
       tipo: 'trabajo',
     });
   }
