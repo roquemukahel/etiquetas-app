@@ -1090,7 +1090,11 @@ export default function NuevaOrden() {
     const usados = new Set(lineasPago.map((l) => l.medio));
     const medioLibre = [...MEDIOS_PAGO.map((m) => m.codigo), CUENTA_CORRIENTE].find((m) => !usados.has(m)) ?? 'efectivo';
     // La nueva línea arranca con lo que falta asignar, para el caso típico.
-    const sugerido = restantePorAsignar > 0 ? String(Math.round(restantePorAsignar)) : '';
+    // Math.round() sin decimales acá redondeaba un saldo de US$0,95 a "1" —
+    // en una venta chica (ej. en dólares) eso hacía parecer que el sistema no
+    // dejaba cobrar montos menores a 1, cuando en realidad solo el sugerido
+    // estaba mal calculado (el campo es editable, pero nadie lo notaba).
+    const sugerido = restantePorAsignar > 0 ? String(Math.round(restantePorAsignar * 100) / 100) : '';
     setLineasPago((ls) => [...ls, { tempId: idTemporal(), medio: medioLibre, monto: sugerido }]);
   };
   const actualizarLineaPago = (tempId: string, campo: 'medio' | 'monto', valor: string) =>
