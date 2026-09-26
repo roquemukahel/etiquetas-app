@@ -1107,6 +1107,7 @@ export const PT: Record<string, string> = {
 
   // Plan de ahorro — lista
   Activos: 'Ativos',
+  Archivados: 'Arquivados',
   'Buscar por cliente o modelo...': 'Buscar por cliente ou modelo...',
   Cancelados: 'Cancelados',
   Completados: 'Concluídos',
@@ -1139,7 +1140,11 @@ export const PT: Record<string, string> = {
   'no se pudo crear el plan': 'não foi possível criar o plano',
 
   // Plan de ahorro — detalle
+  'Archivar (se resolvió por fuera del sistema)': 'Arquivar (foi resolvido fora do sistema)',
+  'Buscar en Stock': 'Buscar no Estoque',
+  'Buscando...': 'Buscando...',
   Cancelado: 'Cancelado',
+  'Cargar equipo nuevo': 'Cadastrar aparelho novo',
   'Completado y entregado': 'Concluído e entregue',
   'Eliminar plan': 'Excluir plano',
   'Entregar equipo': 'Entregar aparelho',
@@ -1147,18 +1152,24 @@ export const PT: Record<string, string> = {
   'Este equipo ya no figura en Stock (puede que ya se haya vendido o dado de baja).':
     'Este aparelho não está mais no Estoque (pode já ter sido vendido ou dado de baixa).',
   Faltan: 'Faltam',
+  'Guardar y entregar': 'Salvar e entregar',
   'Guardar y ver comprobante': 'Salvar e ver comprovante',
   Juntado: 'Juntado',
   'Modelo deseado': 'Modelo desejado',
   'Monto que paga hoy': 'Valor que paga hoje',
   'No encontramos ese plan.': 'Não encontramos esse plano.',
+  'No hay equipos en Stock que matcheen esa búsqueda.': 'Não há aparelhos no Estoque que combinem com essa busca.',
   'No pudimos cargar los pagos — el total de abajo puede no ser real. Recargá la página.':
     'Não conseguimos carregar os pagamentos — o total abaixo pode não ser real. Recarregue a página.',
   'No pudimos encontrar el dispositivo reservado.': 'Não conseguimos encontrar o aparelho reservado.',
   'No pudimos generar la venta:': 'Não conseguimos gerar a venda:',
+  'No pudimos guardar el equipo:': 'Não conseguimos salvar o aparelho:',
   'No pudimos guardar el pago:': 'Não conseguimos salvar o pagamento:',
+  'No pudimos vincular el equipo:': 'Não conseguimos vincular o aparelho:',
   'Poné un monto objetivo válido': 'Coloque um valor objetivo válido',
+  '¿Qué equipo le vas a entregar?': 'Qual aparelho você vai entregar?',
   'Reactivar plan': 'Reativar plano',
+  'Usar este': 'Usar este',
   'SEÑA — equipo reservado': 'SINAL — aparelho reservado',
   'Se pierde el historial de pagos. No se puede deshacer.': 'Perde-se o histórico de pagamentos. Não pode ser desfeito.',
   'Todavía le faltan': 'Ainda faltam',
@@ -1168,6 +1179,8 @@ export const PT: Record<string, string> = {
   '¡Objetivo completado!': 'Meta concluída!',
   '¿Anular este pago? Deja de contar para el total juntado (queda registrado como anulado, no se borra).':
     'Anular este pagamento? Deixa de contar para o total juntado (fica registrado como anulado, não é apagado).',
+  '¿Archivar este plan? Usalo cuando la venta ya se resolvió por fuera del sistema (ej. se hizo la boleta desde Órdenes) — deja de contar como activo, pero no se borra nada.':
+    'Arquivar este plano? Use quando a venda já foi resolvida fora do sistema (ex. o recibo foi feito em Pedidos) — deixa de contar como ativo, mas nada é apagado.',
   '¿Cancelar este plan de ahorro?': 'Cancelar este plano de poupança?',
   '¿Confirmar la entrega y generar la venta de este equipo?': 'Confirmar a entrega e gerar a venda deste aparelho?',
   '¿Eliminar este plan de ahorro de': 'Excluir este plano de poupança de',

@@ -25,6 +25,7 @@ const TABS: { id: string; label: string }[] = [
   { id: 'activo', label: 'Activos' },
   { id: 'completado', label: 'Completados' },
   { id: 'cancelado', label: 'Cancelados' },
+  { id: 'archivado', label: 'Archivados' },
 ];
 
 export default function PlanAhorro() {

@@ -1106,6 +1106,7 @@ export const EN: Record<string, string> = {
 
   // Plan de ahorro — lista
   Activos: 'Active',
+  Archivados: 'Archived',
   'Buscar por cliente o modelo...': 'Search by customer or model...',
   Cancelados: 'Cancelled',
   Completados: 'Completed',
@@ -1138,7 +1139,11 @@ export const EN: Record<string, string> = {
   'no se pudo crear el plan': "the plan couldn't be created",
 
   // Plan de ahorro — detalle
+  'Archivar (se resolvió por fuera del sistema)': 'Archive (resolved outside the system)',
+  'Buscar en Stock': 'Search Stock',
+  'Buscando...': 'Searching...',
   Cancelado: 'Cancelled',
+  'Cargar equipo nuevo': 'Add new device',
   'Completado y entregado': 'Completed and delivered',
   'Eliminar plan': 'Delete plan',
   'Entregar equipo': 'Hand over device',
@@ -1146,18 +1151,24 @@ export const EN: Record<string, string> = {
   'Este equipo ya no figura en Stock (puede que ya se haya vendido o dado de baja).':
     "This device is no longer listed in Stock (it may have already been sold or removed).",
   Faltan: 'Remaining',
+  'Guardar y entregar': 'Save and hand over',
   'Guardar y ver comprobante': 'Save and view receipt',
   Juntado: 'Saved so far',
   'Modelo deseado': 'Desired model',
   'Monto que paga hoy': "Today's payment amount",
   'No encontramos ese plan.': "We couldn't find that plan.",
+  'No hay equipos en Stock que matcheen esa búsqueda.': 'No devices in Stock match that search.',
   'No pudimos cargar los pagos — el total de abajo puede no ser real. Recargá la página.':
     "We couldn't load the payments — the total below may not be accurate. Reload the page.",
   'No pudimos encontrar el dispositivo reservado.': "We couldn't find the reserved device.",
   'No pudimos generar la venta:': "We couldn't create the sale:",
+  'No pudimos guardar el equipo:': "We couldn't save the device:",
   'No pudimos guardar el pago:': "We couldn't save the payment:",
+  'No pudimos vincular el equipo:': "We couldn't link the device:",
   'Poné un monto objetivo válido': 'Enter a valid target amount',
+  '¿Qué equipo le vas a entregar?': 'Which device are you handing over?',
   'Reactivar plan': 'Reactivate plan',
+  'Usar este': 'Use this one',
   'SEÑA — equipo reservado': 'DEPOSIT — device reserved',
   'Se pierde el historial de pagos. No se puede deshacer.': 'The payment history will be lost. This cannot be undone.',
   'Todavía le faltan': 'They still need',
@@ -1167,6 +1178,8 @@ export const EN: Record<string, string> = {
   '¡Objetivo completado!': 'Target reached!',
   '¿Anular este pago? Deja de contar para el total juntado (queda registrado como anulado, no se borra).':
     'Void this payment? It stops counting toward the total saved (it stays on record as voided, not deleted).',
+  '¿Archivar este plan? Usalo cuando la venta ya se resolvió por fuera del sistema (ej. se hizo la boleta desde Órdenes) — deja de contar como activo, pero no se borra nada.':
+    "Archive this plan? Use it when the sale was already resolved outside the system (e.g. the receipt was made from Orders) — it stops counting as active, but nothing is deleted.",
   '¿Cancelar este plan de ahorro?': 'Cancel this savings plan?',
   '¿Confirmar la entrega y generar la venta de este equipo?': 'Confirm the handover and create the sale for this device?',
   '¿Eliminar este plan de ahorro de': 'Delete this savings plan from',

@@ -31,6 +31,18 @@ describe('normalizarNombreModelo', () => {
     expect(normalizarNombreModelo('iphone reacondicionado')).toBe('iPhone reacondicionado');
     expect(normalizarNombreModelo('Heladera 4K')).toBe('Heladera 4K');
   });
+
+  it('saca el fabricante de una etiqueta/caja (ej. "Apple iPhone 14 Pro Max") para encontrar la carpeta del catálogo', () => {
+    expect(normalizarNombreModelo('Apple iPhone 14 Pro Max')).toBe('iPhone 14 Pro Max');
+    expect(normalizarNombreModelo('apple iphone 14 pro max')).toBe('iPhone 14 Pro Max');
+    expect(normalizarNombreModelo('Samsung Galaxy S23 Ultra')).toBe('Galaxy S23 Ultra');
+    expect(normalizarNombreModelo('Apple iPhone 18 Pro')).toBe('iPhone 18 Pro');
+  });
+
+  it('no toca carpetas genéricas que sí llevan la marca en el nombre y no matchean el catálogo', () => {
+    expect(normalizarNombreModelo('Apple Watch')).toBe('Apple Watch');
+    expect(normalizarNombreModelo('Apple TV')).toBe('Apple TV');
+  });
 });
 
 describe('sugerirCarpetas', () => {

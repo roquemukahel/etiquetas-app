@@ -26,10 +26,26 @@ const CANONICO_POR_COMPARACION: Map<string, string> = new Map(
 // La base de datos también normaliza "iPhone" solo (ver trigger en
 // schema.sql) como red de seguridad final; esto es la primera línea de
 // defensa, y además es la única capa que conoce el catálogo completo.
+// Una etiqueta o caja imprime a veces el fabricante antes del modelo (ej.
+// "Apple iPhone 14 Pro Max", tal cual lo copia "Cargar con foto") — sin sacar
+// ese prefijo no matchea el catálogo: crea una carpeta nueva ("Apple iPhone
+// 14 Pro Max") en vez de usar la que ya existe ("iPhone 14 Pro Max"), y el
+// selector de color por foto tampoco lo reconoce (queda en la paleta genérica
+// en vez de mostrar las fotos reales del modelo). Se prueba SOLO para
+// encontrar el canónico del catálogo — si sacarlo no matchea nada, se deja el
+// texto tal cual se escribió, para no tocar carpetas genéricas que sí llevan
+// la marca en el nombre (ej. "Apple Watch", "Apple TV").
+const PREFIJO_MARCA = /^(apple|samsung|xiaomi|motorola)\s+/i;
+
 export function normalizarNombreModelo(nombre: string): string {
   const limpio = nombre.trim().replace(/\s+/g, ' ');
   const canonico = CANONICO_POR_COMPARACION.get(squishComparar(limpio));
   if (canonico) return canonico;
+  const sinMarca = limpio.replace(PREFIJO_MARCA, '');
+  if (sinMarca !== limpio) {
+    const canonicoSinMarca = CANONICO_POR_COMPARACION.get(squishComparar(sinMarca));
+    if (canonicoSinMarca) return canonicoSinMarca;
+  }
   return limpio.replace(/\biphone\b/gi, 'iPhone');
 }
 

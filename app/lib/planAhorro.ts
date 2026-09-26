@@ -4,11 +4,14 @@
 // nuevas de este query usaban `estado = 'activo'` mientras la original en
 // Plan de ahorro usaba "no completado ni cancelado" — equivalentes solo
 // mientras existan exactamente esos 3 estados; un estado nuevo el día de
-// mañana las desincroniza en silencio). "No completado ni cancelado" (en
-// vez de "= activo") es a propósito la versión más cautelosa: cualquier
-// estado que no sea explícitamente uno de esos dos términos sigue
-// contando como reservado, así que un estado nuevo que se agregue después
-// no hace que un equipo señado vuelva a parecer disponible por error.
+// mañana las desincroniza en silencio, como pasó acá mismo al sumar
+// 'archivado': un plan archivado significa "ya se resolvió, no reserva
+// nada", igual que completado/cancelado, así que va en la misma lista —
+// dejarlo afuera habría bloqueado ese equipo para siempre en pantallas como
+// "Nuevo plan de ahorro", que sí siguen mirando este set). Cualquier estado
+// que se agregue después y NO signifique "esto ya no reserva el equipo"
+// sigue contando como reservado por default, así que un estado nuevo no
+// hace que un equipo señado vuelva a parecer disponible por error.
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export async function obtenerDispositivosSenados(supabase: SupabaseClient): Promise<Set<string>> {
@@ -16,6 +19,6 @@ export async function obtenerDispositivosSenados(supabase: SupabaseClient): Prom
     .from('planes_ahorro')
     .select('dispositivo_id')
     .not('dispositivo_id', 'is', null)
-    .not('estado', 'in', '(completado,cancelado)');
+    .not('estado', 'in', '(completado,cancelado,archivado)');
   return new Set(((data ?? []) as { dispositivo_id: string }[]).map((p) => p.dispositivo_id));
 }

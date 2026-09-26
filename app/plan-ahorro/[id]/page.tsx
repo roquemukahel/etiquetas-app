@@ -5,12 +5,14 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { registrarAuditoria } from '../../lib/auditoria';
-import { useActor } from '../../lib/actor';
+import { useActor, getActor, MENSAJE_ACTOR_REQUERIDO } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import { sanitizarDecimal, formatearMonto } from '../../lib/numeros';
 import { medioLabel } from '../../lib/cuentaCorriente';
-import { normalizarNombreModelo } from '../../lib/modelos';
+import { asegurarModelo, normalizarNombreModelo } from '../../lib/modelos';
 import { limpiarImei } from '../../lib/imei';
+import { obtenerCategorias } from '../../lib/categorias';
+import { obtenerDispositivosSenados } from '../../lib/planAhorro';
 import SelectorColorAuto from '../../SelectorColorAuto';
 import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
 import { ICONOS } from '../../Iconos';
@@ -58,6 +60,15 @@ type Movimiento = {
   fecha: string;
 };
 
+type DispositivoStock = {
+  id: string;
+  modelo: string | null;
+  capacidad_gb: number | null;
+  color: string | null;
+  imei: string | null;
+  precio: number | null;
+};
+
 export default function DetallePlanAhorro() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -67,6 +78,7 @@ export default function DetallePlanAhorro() {
   const sucursalActual = useSucursalActual();
   const puedeVer = tienePermiso(actor, 'ver_plan_ahorro');
   const puedeEliminar = tienePermiso(actor, 'eliminar');
+  const puedeAgregarStock = tienePermiso(actor, 'agregar_stock');
 
   const [plan, setPlan] = useState<Plan | null>(null);
   const [movimientos, setMovimientos] = useState<Movimiento[]>([]);
@@ -106,6 +118,32 @@ export default function DetallePlanAhorro() {
   const [editDetalles, setEditDetalles] = useState('');
   const [guardandoEdicion, setGuardandoEdicion] = useState(false);
 
+  // Al completar un plan SIN equipo puntual señado (el caso más común: "algún
+  // día un iPhone 13"), plan_ahorro_completar generaba la boleta con una
+  // línea de texto suelta, sin ningún dispositivo real vinculado — el equipo
+  // nunca salía de Stock. Este selector aparece justo antes de completar para
+  // elegir CON qué equipo real se entrega (uno que ya está en Stock, o uno
+  // nuevo cargado en el momento); una vez elegido, se lo "seña" al plan
+  // (mismo campo dispositivo_id que ya usa el flujo de seña normal) y recién
+  // ahí se llama a la misma función de siempre — así sale de Stock y queda
+  // linkeado en la boleta igual que cualquier venta con equipo puntual.
+  const [eligiendoEquipo, setEligiendoEquipo] = useState(false);
+  const [modoNuevoEquipo, setModoNuevoEquipo] = useState(false);
+  const [busquedaEquipo, setBusquedaEquipo] = useState('');
+  const [equiposStock, setEquiposStock] = useState<DispositivoStock[]>([]);
+  const [buscandoEquipos, setBuscandoEquipos] = useState(false);
+  const [categoriaEquipoId, setCategoriaEquipoId] = useState('');
+
+  const [nuevoModelo, setNuevoModelo] = useState('');
+  const [nuevoCapacidad, setNuevoCapacidad] = useState<number | null>(null);
+  const [nuevoColor, setNuevoColor] = useState('');
+  const [nuevoImei, setNuevoImei] = useState('');
+  const [nuevoBateria, setNuevoBateria] = useState('');
+  const [nuevoPrecio, setNuevoPrecio] = useState('');
+  const [nuevoCosto, setNuevoCosto] = useState('');
+  const [nuevoEstadoEquipo, setNuevoEstadoEquipo] = useState('usado');
+  const [guardandoNuevoEquipo, setGuardandoNuevoEquipo] = useState(false);
+
   const nombreCliente = (p: Plan) => (p.clientes ? `${p.clientes.nombre} ${p.clientes.apellido || ''}`.trim() : t('sin cliente'));
 
   const cargar = async () => {
@@ -135,6 +173,45 @@ export default function DetallePlanAhorro() {
     cargar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, puedeVer]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await obtenerCategorias(supabase, false);
+        const deDispositivo = data.filter((c) => c.perfil_default === 'dispositivo');
+        const sugerida = deDispositivo.find((c) => c.nombre.toLowerCase() === 'celulares') ?? deDispositivo[0];
+        if (sugerida) setCategoriaEquipoId(sugerida.id);
+      } catch {
+        // Tabla stock_categorias todavía no existe en este negocio.
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Búsqueda de equipos EN STOCK para vincular al completar un plan sin
+  // dispositivo puntual — se dispara al abrir el selector (precargado con el
+  // modelo del plan) y en cada letra que se escribe después. Se excluyen los
+  // que ya están señados por OTRO plan activo (mismo chequeo que "Nuevo plan
+  // de ahorro" al elegir equipo) — sin esto, se podía ofrecer acá un equipo
+  // que otro cliente ya tiene reservado.
+  useEffect(() => {
+    if (!eligiendoEquipo || modoNuevoEquipo) return;
+    (async () => {
+      setBuscandoEquipos(true);
+      let query = supabase
+        .from('dispositivos')
+        .select('id, modelo, capacidad_gb, color, imei, precio')
+        .eq('en_stock', true)
+        .order('modelo')
+        .limit(30);
+      const q = busquedaEquipo.trim();
+      if (q) query = query.or(`modelo.ilike.%${q}%,imei.ilike.%${q}%,color.ilike.%${q}%`);
+      const [{ data }, senados] = await Promise.all([query, obtenerDispositivosSenados(supabase)]);
+      const disponibles = ((data as DispositivoStock[]) ?? []).filter((d) => !senados.has(d.id));
+      setEquiposStock(disponibles);
+      setBuscandoEquipos(false);
+    })();
+  }, [eligiendoEquipo, modoNuevoEquipo, busquedaEquipo, supabase]);
 
   // Pagado = suma de abonos (nunca se guarda, se calcula siempre).
   const pagado = useMemo(() => movimientos.reduce((acc, m) => acc + m.monto, 0), [movimientos]);
@@ -325,11 +402,14 @@ export default function DetallePlanAhorro() {
     cargar();
   };
 
-  const cambiarEstado = async (nuevoEstado: 'cancelado' | 'activo') => {
+  const cambiarEstado = async (nuevoEstado: 'cancelado' | 'activo' | 'archivado') => {
     if (!plan || procesando) return;
     const mensajes: Record<string, string> = {
       cancelado: t('¿Cancelar este plan de ahorro?'),
       activo: t('¿Reactivar este plan?'),
+      archivado: t(
+        '¿Archivar este plan? Usalo cuando la venta ya se resolvió por fuera del sistema (ej. se hizo la boleta desde Órdenes) — deja de contar como activo, pero no se borra nada.'
+      ),
     };
     if (!confirm(mensajes[nuevoEstado])) return;
     setProcesando(true);
@@ -352,7 +432,7 @@ export default function DetallePlanAhorro() {
   // plan_ahorro_completar (RPC) en vez de hacerse a mano acá, para que no
   // pueda quedar a mitad de camino (equipo fuera de stock sin ninguna
   // venta real detrás, por ejemplo).
-  const completarPlan = async () => {
+  const completarPlan = async (dispositivoIdElegido?: string) => {
     if (!plan || procesando) return;
     const aviso = completo
       ? t('¿Confirmar la entrega y generar la venta?')
@@ -361,6 +441,26 @@ export default function DetallePlanAhorro() {
 
     setProcesando(true);
     setError(null);
+    setEligiendoEquipo(false);
+    setModoNuevoEquipo(false);
+
+    // Si se eligió recién un equipo (del selector, para un plan que no tenía
+    // uno puntual reservado), primero se lo "seña" al plan — mismo campo que
+    // ya usa el flujo de seña normal — para que plan_ahorro_completar lo
+    // saque de Stock y lo linkee en la boleta como cualquier venta con
+    // equipo puntual, en vez de dejar solo una línea de texto suelta.
+    if (dispositivoIdElegido) {
+      const { error: vincularError } = await supabase
+        .from('planes_ahorro')
+        .update({ dispositivo_id: dispositivoIdElegido })
+        .eq('id', plan.id);
+      if (vincularError) {
+        setError(t('No pudimos vincular el equipo:') + ' ' + vincularError.message);
+        setProcesando(false);
+        return;
+      }
+    }
+
     const { data, error: rpcError } = await supabase.rpc('plan_ahorro_completar', {
       p_plan_id: plan.id,
       p_sucursal_id: sucursalActual.id || null,
@@ -371,7 +471,7 @@ export default function DetallePlanAhorro() {
       return;
     }
     await registrarAuditoria(supabase, {
-      accion: plan.dispositivo_id
+      accion: plan.dispositivo_id || dispositivoIdElegido
         ? `entregó el equipo señado a ${nombreCliente(plan)} y generó la venta`
         : `completó el plan de ahorro de ${nombreCliente(plan)} y generó la venta`,
       entidad: 'plan_ahorro',
@@ -380,6 +480,66 @@ export default function DetallePlanAhorro() {
     });
     setProcesando(false);
     router.push(`/ordenes/${data.orden_id}`);
+  };
+
+  const abrirEligiendoEquipo = () => {
+    if (!plan) return;
+    setBusquedaEquipo(plan.modelo || '');
+    setModoNuevoEquipo(false);
+    setEligiendoEquipo(true);
+    setError(null);
+  };
+
+  const abrirNuevoEquipo = () => {
+    if (!plan) return;
+    setNuevoModelo(plan.modelo || '');
+    setNuevoCapacidad(plan.capacidad_gb);
+    setNuevoColor(plan.color || '');
+    setNuevoImei('');
+    setNuevoBateria('');
+    setNuevoPrecio(String(plan.monto_objetivo || ''));
+    setNuevoCosto('');
+    setNuevoEstadoEquipo('usado');
+    setModoNuevoEquipo(true);
+  };
+
+  const guardarNuevoEquipoYCompletar = async () => {
+    if (!plan || !nuevoModelo.trim() || !puedeAgregarStock) return;
+    const actorAlta = getActor();
+    if (!actorAlta) {
+      setError(t(MENSAJE_ACTOR_REQUERIDO));
+      return;
+    }
+    setGuardandoNuevoEquipo(true);
+    setError(null);
+    const modeloNormalizado = normalizarNombreModelo(nuevoModelo.trim());
+    const { data: nuevoDisp, error: insError } = await supabase
+      .from('dispositivos')
+      .insert({
+        modelo: modeloNormalizado,
+        capacidad_gb: nuevoCapacidad,
+        imei: limpiarImei(nuevoImei) || null,
+        salud_bateria: nuevoBateria ? Number(nuevoBateria) : null,
+        color: nuevoColor.trim() || null,
+        precio: nuevoPrecio ? Number(nuevoPrecio) : null,
+        costo: nuevoCosto ? Number(nuevoCosto) : null,
+        estado: nuevoEstadoEquipo,
+        ...(categoriaEquipoId ? { categoria_id: categoriaEquipoId } : {}),
+        ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
+        en_stock: true,
+        agregado_por_nombre: actorAlta.nombre ?? null,
+        agregado_por_foto_url: actorAlta.fotoUrl ?? null,
+      })
+      .select('id')
+      .single();
+    if (insError || !nuevoDisp) {
+      setError(t('No pudimos guardar el equipo:') + ' ' + (insError?.message || ''));
+      setGuardandoNuevoEquipo(false);
+      return;
+    }
+    await asegurarModelo(supabase, modeloNormalizado);
+    setGuardandoNuevoEquipo(false);
+    await completarPlan(nuevoDisp.id);
   };
 
   const abrirEdicion = () => {
@@ -499,10 +659,14 @@ export default function DetallePlanAhorro() {
         <div className="flex items-center gap-2">
           <span
             className={`self-start text-xs font-semibold px-2.5 py-1 rounded-full ${
-              plan.estado === 'completado' ? 'bg-good/15 text-good' : 'bg-bad/15 text-bad'
+              plan.estado === 'completado'
+                ? 'bg-good/15 text-good'
+                : plan.estado === 'archivado'
+                ? 'bg-muted/15 text-muted dark:text-dark-text-secondary'
+                : 'bg-bad/15 text-bad'
             }`}
           >
-            {plan.estado === 'completado' ? t('Completado y entregado') : t('Cancelado')}
+            {plan.estado === 'completado' ? t('Completado y entregado') : plan.estado === 'archivado' ? t('Archivado') : t('Cancelado')}
           </span>
           {plan.estado === 'completado' && plan.orden_id && (
             <Link href={`/ordenes/${plan.orden_id}`} className="text-xs text-accent dark:text-dark-accent underline">
@@ -562,6 +726,15 @@ export default function DetallePlanAhorro() {
           >
             {t('Guardar')}
           </button>
+          {plan.estado === 'activo' && (
+            <button
+              onClick={() => cambiarEstado('archivado')}
+              disabled={procesando}
+              className="rounded-lg border border-border dark:border-dark-border py-2 text-sm font-medium disabled:opacity-40"
+            >
+              {t('Archivar (se resolvió por fuera del sistema)')}
+            </button>
+          )}
           {puedeEliminar && (
             <button onClick={eliminarPlan} className="rounded-lg border border-bad/30 py-2 text-sm font-medium text-bad">
               {t('Eliminar plan')}
@@ -607,6 +780,7 @@ export default function DetallePlanAhorro() {
             <button
               onClick={() => {
                 setRegistrandoPago((v) => !v);
+                setEligiendoEquipo(false);
                 limpiarFormularioPago();
                 setError(null);
               }}
@@ -615,7 +789,14 @@ export default function DetallePlanAhorro() {
               {registrandoPago ? t('Cancelar') : `+ ${t('Registrar pago')}`}
             </button>
             <button
-              onClick={completarPlan}
+              onClick={() => {
+                if (plan.dispositivo_id) {
+                  completarPlan();
+                  return;
+                }
+                setRegistrandoPago(false);
+                abrirEligiendoEquipo();
+              }}
               disabled={procesando}
               className="flex-1 rounded-xl border border-border dark:border-dark-border py-2 text-sm font-medium disabled:opacity-40"
             >
@@ -631,6 +812,142 @@ export default function DetallePlanAhorro() {
           >
             {t('Reactivar plan')}
           </button>
+        )}
+
+        {eligiendoEquipo && (
+          <div className="flex flex-col gap-2 border-t border-border dark:border-dark-border pt-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-medium">{t('¿Qué equipo le vas a entregar?')}</p>
+              <button onClick={() => setEligiendoEquipo(false)} className="text-xs text-muted dark:text-dark-text-secondary underline">
+                {t('Cerrar')}
+              </button>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setModoNuevoEquipo(false)}
+                className={`flex-1 rounded-lg py-2 text-xs font-medium ${
+                  !modoNuevoEquipo ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
+                }`}
+              >
+                {t('Buscar en Stock')}
+              </button>
+              {puedeAgregarStock && (
+                <button
+                  onClick={abrirNuevoEquipo}
+                  className={`flex-1 rounded-lg py-2 text-xs font-medium ${
+                    modoNuevoEquipo ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
+                  }`}
+                >
+                  + {t('Cargar equipo nuevo')}
+                </button>
+              )}
+            </div>
+
+            {!modoNuevoEquipo ? (
+              <div className="flex flex-col gap-2">
+                <input
+                  value={busquedaEquipo}
+                  onChange={(e) => setBusquedaEquipo(e.target.value)}
+                  autoFocus
+                  placeholder={t('Buscar por modelo, color o IMEI...')}
+                  className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                />
+                {buscandoEquipos && <p className="text-xs text-muted dark:text-dark-text-secondary">{t('Buscando...')}</p>}
+                {!buscandoEquipos && equiposStock.length === 0 && (
+                  <p className="text-xs text-muted dark:text-dark-text-secondary">{t('No hay equipos en Stock que matcheen esa búsqueda.')}</p>
+                )}
+                <div className="flex flex-col gap-1.5 max-h-64 overflow-y-auto">
+                  {equiposStock.map((d) => (
+                    <div
+                      key={d.id}
+                      className="rounded-lg border border-border dark:border-dark-border bg-canvas dark:bg-dark-bg px-3 py-2 flex items-center justify-between gap-2 text-sm"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-medium truncate">
+                          {d.modelo || t('Sin modelo')}
+                          {d.capacidad_gb ? ` · ${d.capacidad_gb}GB` : ''}
+                          {d.color ? ` · ${d.color}` : ''}
+                        </p>
+                        {(d.imei || d.precio != null) && (
+                          <p className="text-[11px] text-muted dark:text-dark-text-secondary truncate">
+                            {d.imei ? `IMEI ${d.imei}` : ''}
+                            {d.imei && d.precio != null ? ' · ' : ''}
+                            {d.precio != null ? `$${formatearMonto(d.precio)}` : ''}
+                          </p>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => completarPlan(d.id)}
+                        disabled={procesando}
+                        className="shrink-0 rounded-lg bg-accent dark:bg-dark-accent text-white px-3 py-1.5 text-xs font-medium disabled:opacity-40"
+                      >
+                        {t('Usar este')}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                <input
+                  value={nuevoModelo}
+                  onChange={(e) => setNuevoModelo(e.target.value)}
+                  placeholder={t('Modelo')}
+                  className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                />
+                <div className="flex gap-2">
+                  {STORAGE_OPTIONS.map((gb) => (
+                    <button
+                      key={gb}
+                      type="button"
+                      onClick={() => setNuevoCapacidad(nuevoCapacidad === gb ? null : gb)}
+                      className={`flex-1 rounded-lg py-1.5 text-xs font-medium ${
+                        nuevoCapacidad === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
+                      }`}
+                    >
+                      {gb}GB
+                    </button>
+                  ))}
+                </div>
+                <SelectorColorAuto modelo={nuevoModelo} value={nuevoColor} onChange={setNuevoColor} />
+                <input
+                  value={nuevoImei}
+                  onChange={(e) => setNuevoImei(e.target.value)}
+                  placeholder={t('IMEI (opcional)')}
+                  className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm font-mono"
+                />
+                <input
+                  value={nuevoBateria}
+                  onChange={(e) => setNuevoBateria(sanitizarDecimal(e.target.value))}
+                  inputMode="decimal"
+                  placeholder={t('Salud de batería % (opcional)')}
+                  className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                />
+                <SelectorEstadoDispositivo value={nuevoEstadoEquipo} onChange={setNuevoEstadoEquipo} />
+                <input
+                  value={nuevoPrecio}
+                  onChange={(e) => setNuevoPrecio(sanitizarDecimal(e.target.value))}
+                  inputMode="decimal"
+                  placeholder={t('Precio')}
+                  className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                />
+                <input
+                  value={nuevoCosto}
+                  onChange={(e) => setNuevoCosto(sanitizarDecimal(e.target.value))}
+                  inputMode="decimal"
+                  placeholder={t('Costo (opcional)')}
+                  className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                />
+                <button
+                  disabled={!nuevoModelo.trim() || guardandoNuevoEquipo || procesando}
+                  onClick={guardarNuevoEquipoYCompletar}
+                  className="rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
+                >
+                  {guardandoNuevoEquipo ? t('Guardando...') : t('Guardar y entregar')}
+                </button>
+              </div>
+            )}
+          </div>
         )}
 
         {registrandoPago && (
