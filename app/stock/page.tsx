@@ -985,11 +985,22 @@ export default function Stock() {
       if (!mapa.has(clave)) mapa.set(clave, []);
       mapa.get(clave)!.push(d);
     }
-    // Dentro de cada carpeta, agrupados por capacidad ascendente (todos los
-    // de 128GB primero, después todos los de 256GB, etc.) en vez de mezclados
-    // por fecha de carga.
+    // Dentro de cada carpeta, en vez de mezclados por fecha de carga:
+    // primero todos los "usado" y al final los "sellado" (pedido real — un
+    // sellado a estrenar no se ofrece junto con los usados); dentro de cada
+    // uno de esos dos grupos, por capacidad ascendente (todos los de 128GB
+    // primero, después 256GB, etc.); y a igual capacidad, por batería
+    // descendente (el de mejor batería primero).
     for (const lista of mapa.values()) {
-      lista.sort((a, b) => (a.capacidad_gb ?? Infinity) - (b.capacidad_gb ?? Infinity));
+      lista.sort((a, b) => {
+        const selladoA = a.estado === 'sellado' ? 1 : 0;
+        const selladoB = b.estado === 'sellado' ? 1 : 0;
+        if (selladoA !== selladoB) return selladoA - selladoB;
+        const capA = a.capacidad_gb ?? Infinity;
+        const capB = b.capacidad_gb ?? Infinity;
+        if (capA !== capB) return capA - capB;
+        return (b.salud_bateria ?? -1) - (a.salud_bateria ?? -1);
+      });
     }
     const ordenado = Array.from(mapa.entries()).sort(([a], [b]) => compararModelosPorSalida(a, b));
     const clave = imeiExactoModelo || 'Sin modelo';
