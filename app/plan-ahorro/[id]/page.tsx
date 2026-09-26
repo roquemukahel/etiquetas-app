@@ -130,7 +130,8 @@ export default function DetallePlanAhorro() {
   const [eligiendoEquipo, setEligiendoEquipo] = useState(false);
   const [modoNuevoEquipo, setModoNuevoEquipo] = useState(false);
   const [busquedaEquipo, setBusquedaEquipo] = useState('');
-  const [equiposStock, setEquiposStock] = useState<DispositivoStock[]>([]);
+  const [equiposStockRaw, setEquiposStockRaw] = useState<DispositivoStock[]>([]);
+  const [equiposSenados, setEquiposSenados] = useState<Set<string>>(new Set());
   const [buscandoEquipos, setBuscandoEquipos] = useState(false);
   const [categoriaEquipoId, setCategoriaEquipoId] = useState('');
 
@@ -188,9 +189,10 @@ export default function DetallePlanAhorro() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Búsqueda de equipos EN STOCK para vincular al completar un plan sin
-  // dispositivo puntual — se dispara al abrir el selector (precargado con el
-  // modelo del plan) y en cada letra que se escribe después. Se excluyen los
+  // Equipos EN STOCK para vincular al completar un plan sin dispositivo
+  // puntual — se traen UNA sola vez al abrir el selector (no en cada letra
+  // tipeada: mismo criterio que "Nuevo plan de ahorro", que ya resuelve esto
+  // así) y de ahí en más el buscador filtra en el cliente. Se excluyen los
   // que ya están señados por OTRO plan activo (mismo chequeo que "Nuevo plan
   // de ahorro" al elegir equipo) — sin esto, se podía ofrecer acá un equipo
   // que otro cliente ya tiene reservado.
@@ -198,20 +200,26 @@ export default function DetallePlanAhorro() {
     if (!eligiendoEquipo || modoNuevoEquipo) return;
     (async () => {
       setBuscandoEquipos(true);
-      let query = supabase
-        .from('dispositivos')
-        .select('id, modelo, capacidad_gb, color, imei, precio')
-        .eq('en_stock', true)
-        .order('modelo')
-        .limit(30);
-      const q = busquedaEquipo.trim();
-      if (q) query = query.or(`modelo.ilike.%${q}%,imei.ilike.%${q}%,color.ilike.%${q}%`);
-      const [{ data }, senados] = await Promise.all([query, obtenerDispositivosSenados(supabase)]);
-      const disponibles = ((data as DispositivoStock[]) ?? []).filter((d) => !senados.has(d.id));
-      setEquiposStock(disponibles);
+      const [{ data }, senados] = await Promise.all([
+        supabase.from('dispositivos').select('id, modelo, capacidad_gb, color, imei, precio').eq('en_stock', true).order('modelo'),
+        obtenerDispositivosSenados(supabase),
+      ]);
+      setEquiposStockRaw((data as DispositivoStock[]) ?? []);
+      setEquiposSenados(senados);
       setBuscandoEquipos(false);
     })();
-  }, [eligiendoEquipo, modoNuevoEquipo, busquedaEquipo, supabase]);
+  }, [eligiendoEquipo, modoNuevoEquipo, supabase]);
+
+  const equiposDisponibles = useMemo(
+    () => equiposStockRaw.filter((d) => !equiposSenados.has(d.id)),
+    [equiposStockRaw, equiposSenados]
+  );
+
+  const equiposFiltrados = useMemo(() => {
+    const q = busquedaEquipo.trim().toLowerCase();
+    if (!q) return equiposDisponibles;
+    return equiposDisponibles.filter((d) => [d.modelo, d.color, d.imei].filter(Boolean).some((x) => x!.toLowerCase().includes(q)));
+  }, [equiposDisponibles, busquedaEquipo]);
 
   // Pagado = suma de abonos (nunca se guarda, se calcula siempre).
   const pagado = useMemo(() => movimientos.reduce((acc, m) => acc + m.monto, 0), [movimientos]);
@@ -432,12 +440,19 @@ export default function DetallePlanAhorro() {
   // plan_ahorro_completar (RPC) en vez de hacerse a mano acá, para que no
   // pueda quedar a mitad de camino (equipo fuera de stock sin ninguna
   // venta real detrás, por ejemplo).
-  const completarPlan = async (dispositivoIdElegido?: string) => {
-    if (!plan || procesando) return;
-    const aviso = completo
+  const avisoCompletar = () =>
+    completo
       ? t('¿Confirmar la entrega y generar la venta?')
       : `${t('Todavía le faltan')} $${formatearMonto(falta)} ${t('para completar el objetivo.')} ${t('¿Generar la venta igual?')}`;
-    if (!confirm(aviso)) return;
+
+  // `yaConfirmado` lo pasa guardarNuevoEquipoYCompletar: ese flujo necesita
+  // preguntar ANTES de crear el equipo nuevo (si se confirma acá con el
+  // equipo ya insertado y la persona cancela el diálogo nativo, quedaba un
+  // equipo real en Stock sin ninguna venta detrás, y un reintento creaba un
+  // segundo equipo duplicado).
+  const completarPlan = async (dispositivoIdElegido?: string, yaConfirmado = false) => {
+    if (!plan || procesando) return;
+    if (!yaConfirmado && !confirm(avisoCompletar())) return;
 
     setProcesando(true);
     setError(null);
@@ -450,6 +465,17 @@ export default function DetallePlanAhorro() {
     // saque de Stock y lo linkee en la boleta como cualquier venta con
     // equipo puntual, en vez de dejar solo una línea de texto suelta.
     if (dispositivoIdElegido) {
+      // Chequeo de último momento (mismo criterio que "Nuevo plan de
+      // ahorro" y Nueva Orden): el selector se armó con lo que se sabía al
+      // abrirlo, pero alguien pudo haber señado este mismo equipo desde
+      // otra pantalla mientras este quedaba abierto.
+      const senadosAhora = await obtenerDispositivosSenados(supabase);
+      if (senadosAhora.has(dispositivoIdElegido)) {
+        setError(t('Este equipo ya lo señó otra persona en este mismo momento. Elegí otro.'));
+        setProcesando(false);
+        setEligiendoEquipo(true);
+        return;
+      }
       const { error: vincularError } = await supabase
         .from('planes_ahorro')
         .update({ dispositivo_id: dispositivoIdElegido })
@@ -468,6 +494,10 @@ export default function DetallePlanAhorro() {
     if (rpcError || !data?.orden_id) {
       setError(t('No pudimos generar la venta:') + ' ' + (rpcError?.message || ''));
       setProcesando(false);
+      // El equipo ya pudo haber quedado señado (paso de arriba) aunque la
+      // venta en sí no se generó — se recarga para que la pantalla refleje
+      // eso (no queda mostrando "sin equipo" cuando ya tiene uno linkeado).
+      if (dispositivoIdElegido) cargar();
       return;
     }
     await registrarAuditoria(supabase, {
@@ -510,6 +540,16 @@ export default function DetallePlanAhorro() {
       setError(t(MENSAJE_ACTOR_REQUERIDO));
       return;
     }
+    const imeiLimpio = limpiarImei(nuevoImei);
+    if (imeiLimpio) {
+      // Mismo aviso que /stock/nuevo y /stock/foto: fácil escanear o tipear
+      // dos veces el mismo IMEI sin querer.
+      const { data: existente } = await supabase.from('dispositivos').select('id').eq('imei', imeiLimpio).maybeSingle();
+      if (existente && !confirm(`${t('Ya hay un dispositivo en Stock con el IMEI')} ${imeiLimpio}. ${t('¿Agregarlo igual?')}`)) return;
+    }
+    // Se confirma ACÁ, antes de crear el equipo — completarPlan(id, true) se
+    // llama ya confirmado (ver comentario en completarPlan).
+    if (!confirm(avisoCompletar())) return;
     setGuardandoNuevoEquipo(true);
     setError(null);
     const modeloNormalizado = normalizarNombreModelo(nuevoModelo.trim());
@@ -518,7 +558,7 @@ export default function DetallePlanAhorro() {
       .insert({
         modelo: modeloNormalizado,
         capacidad_gb: nuevoCapacidad,
-        imei: limpiarImei(nuevoImei) || null,
+        imei: imeiLimpio || null,
         salud_bateria: nuevoBateria ? Number(nuevoBateria) : null,
         color: nuevoColor.trim() || null,
         precio: nuevoPrecio ? Number(nuevoPrecio) : null,
@@ -539,7 +579,7 @@ export default function DetallePlanAhorro() {
     }
     await asegurarModelo(supabase, modeloNormalizado);
     setGuardandoNuevoEquipo(false);
-    await completarPlan(nuevoDisp.id);
+    await completarPlan(nuevoDisp.id, true);
   };
 
   const abrirEdicion = () => {
@@ -853,11 +893,11 @@ export default function DetallePlanAhorro() {
                   className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                 />
                 {buscandoEquipos && <p className="text-xs text-muted dark:text-dark-text-secondary">{t('Buscando...')}</p>}
-                {!buscandoEquipos && equiposStock.length === 0 && (
+                {!buscandoEquipos && equiposFiltrados.length === 0 && (
                   <p className="text-xs text-muted dark:text-dark-text-secondary">{t('No hay equipos en Stock que matcheen esa búsqueda.')}</p>
                 )}
                 <div className="flex flex-col gap-1.5 max-h-64 overflow-y-auto">
-                  {equiposStock.map((d) => (
+                  {equiposFiltrados.map((d) => (
                     <div
                       key={d.id}
                       className="rounded-lg border border-border dark:border-dark-border bg-canvas dark:bg-dark-bg px-3 py-2 flex items-center justify-between gap-2 text-sm"

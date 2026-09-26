@@ -1247,12 +1247,14 @@ export default function NuevaOrden() {
       // esta pantalla seguía abierta — el "eq" de en_stock de más abajo no
       // lo detecta porque señar no toca en_stock.
       if (dispositivoIds.length > 0) {
-        const { data: senadosAhora } = await supabase
-          .from('planes_ahorro')
-          .select('dispositivo_id')
-          .not('estado', 'in', '(completado,cancelado)')
-          .in('dispositivo_id', dispositivoIds);
-        if (senadosAhora && senadosAhora.length > 0) {
+        // Mismo helper que carga el picker al abrir esta pantalla (línea
+        // ~579) — antes esto repetía la consulta a mano con su propio
+        // criterio de qué estados cuentan como "reservado", y quedó
+        // desactualizado cuando se agregó el estado 'archivado' en Plan de
+        // ahorro (un plan archivado no reserva nada, pero esta copia seguía
+        // bloqueando la venta de un equipo que ya estaba libre).
+        const senadosAhora = await obtenerDispositivosSenados(supabase);
+        if (dispositivoIds.some((id) => senadosAhora.has(id))) {
           throw new Error(
             t('Uno o más de estos dispositivos se señaron para otro cliente recién — volvé a la pantalla anterior y actualizá el carrito.')
           );
