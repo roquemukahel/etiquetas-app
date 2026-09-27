@@ -989,8 +989,11 @@ export default function Stock() {
     // primero todos los "usado" y al final los "sellado" (pedido real — un
     // sellado a estrenar no se ofrece junto con los usados); dentro de cada
     // uno de esos dos grupos, por capacidad ascendente (todos los de 128GB
-    // primero, después 256GB, etc.); y a igual capacidad, por batería
-    // descendente (el de mejor batería primero).
+    // primero, después 256GB, etc.); a igual capacidad, agrupados por color
+    // (todos los de un mismo color a la par, en vez de mezclados); y a igual
+    // color, por batería descendente (el de mejor batería primero). Los
+    // que no tienen color cargado van al final de su grupo de capacidad, no
+    // mezclados entre los colores sí identificados.
     for (const lista of mapa.values()) {
       lista.sort((a, b) => {
         const selladoA = a.estado === 'sellado' ? 1 : 0;
@@ -999,6 +1002,13 @@ export default function Stock() {
         const capA = a.capacidad_gb ?? Infinity;
         const capB = b.capacidad_gb ?? Infinity;
         if (capA !== capB) return capA - capB;
+        const colorA = (a.color ?? '').trim().toLowerCase();
+        const colorB = (b.color ?? '').trim().toLowerCase();
+        if (colorA !== colorB) {
+          if (!colorA) return 1;
+          if (!colorB) return -1;
+          return colorA.localeCompare(colorB);
+        }
         return (b.salud_bateria ?? -1) - (a.salud_bateria ?? -1);
       });
     }
