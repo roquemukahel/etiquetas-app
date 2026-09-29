@@ -13,6 +13,7 @@ import EtiquetaSeccion from '../../../EtiquetaSeccion';
 import { medioLabel } from '../../../lib/cuentaCorriente';
 import { useT, useIdioma } from '../../../lib/idioma';
 import { localeDe } from '../../../lib/i18n/traducir';
+import { formatearFechaHora } from '../../../lib/fechas';
 import { TIPOS_BLOQUEO, type TipoBloqueo } from '../../../lib/reparaciones';
 import PatronDesbloqueo from '../../../PatronDesbloqueo';
 
@@ -129,7 +130,7 @@ function IconoTiktok() {
 }
 
 function formatearFecha(iso: string, locale: string) {
-  return new Date(iso).toLocaleString(locale);
+  return formatearFechaHora(iso, locale);
 }
 
 function Divisor() {

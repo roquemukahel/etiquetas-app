@@ -8,6 +8,7 @@ import { ESLOGAN } from '../../lib/eslogan';
 import EtiquetaSeccion from '../../EtiquetaSeccion';
 import { useT, useIdioma } from '../../lib/idioma';
 import { localeDe } from '../../lib/i18n/traducir';
+import { formatearFechaHora } from '../../lib/fechas';
 import SelectorIdiomaFlotante from '../../SelectorIdiomaFlotante';
 
 type Item = {
@@ -63,7 +64,7 @@ type Boleta = {
 };
 
 function formatearFecha(iso: string, locale: string) {
-  return new Date(iso).toLocaleString(locale);
+  return formatearFechaHora(iso, locale);
 }
 
 function Divisor() {

@@ -9,6 +9,7 @@ import { armarLinkWhatsApp } from '../../../lib/whatsapp';
 import EtiquetaSeccion from '../../../EtiquetaSeccion';
 import { useT, useIdioma } from '../../../lib/idioma';
 import { localeDe } from '../../../lib/i18n/traducir';
+import { formatearFechaHora } from '../../../lib/fechas';
 
 type Remito = {
   id: string;
@@ -36,7 +37,7 @@ type Negocio = {
 };
 
 function formatearFecha(iso: string, locale: string) {
-  return new Date(iso).toLocaleString(locale);
+  return formatearFechaHora(iso, locale);
 }
 
 function Divisor() {

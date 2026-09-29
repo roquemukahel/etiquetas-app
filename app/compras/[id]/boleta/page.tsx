@@ -10,6 +10,7 @@ import EtiquetaSeccion from '../../../EtiquetaSeccion';
 import { useT, useIdioma } from '../../../lib/idioma';
 import { localeDe } from '../../../lib/i18n/traducir';
 import { formatearMonto } from '../../../lib/numeros';
+import { formatearFechaHora } from '../../../lib/fechas';
 
 type Compra = {
   id: string;
@@ -43,7 +44,7 @@ type Negocio = {
 };
 
 function formatearFecha(iso: string, locale: string) {
-  return new Date(iso).toLocaleString(locale);
+  return formatearFechaHora(iso, locale);
 }
 
 function Divisor() {

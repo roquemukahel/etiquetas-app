@@ -6,7 +6,9 @@ import { crearClienteNavegador } from '../../lib/supabase/client';
 import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import { useT, useIdioma } from '../../lib/idioma';
+import { localeDe } from '../../lib/i18n/traducir';
 import { traducirAccion } from '../../lib/i18n/traducirAccion';
+import { formatearFechaHora } from '../../lib/fechas';
 
 type Registro = {
   id: string;
@@ -16,16 +18,6 @@ type Registro = {
   entidad: string;
   created_at: string;
 };
-
-function formatearFecha(iso: string) {
-  return new Date(iso).toLocaleString('es-AR', {
-    day: 'numeric',
-    month: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
 
 export default function Auditoria() {
   const supabase = crearClienteNavegador();
@@ -128,7 +120,7 @@ export default function Auditoria() {
               <strong>{r.actor_nombre}</strong> {traducirAccion(r.accion, idioma)}
             </p>
             <p className="text-xs text-muted dark:text-dark-text-secondary capitalize">
-              {r.actor_tipo} · {formatearFecha(r.created_at)}
+              {r.actor_tipo} · {formatearFechaHora(r.created_at, localeDe(idioma))}
             </p>
           </div>
         ))}

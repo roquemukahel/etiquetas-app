@@ -8,6 +8,7 @@ import EtiquetaSeccion from '../../EtiquetaSeccion';
 import { useT, useIdioma } from '../../lib/idioma';
 import { localeDe } from '../../lib/i18n/traducir';
 import { formatearMonto } from '../../lib/numeros';
+import { formatearFechaHora } from '../../lib/fechas';
 import { medioLabel } from '../../lib/cuentaCorriente';
 import SelectorIdiomaFlotante from '../../SelectorIdiomaFlotante';
 
@@ -42,7 +43,7 @@ type Comprobante = {
 };
 
 function formatearFecha(iso: string, locale: string) {
-  return new Date(iso).toLocaleString(locale);
+  return formatearFechaHora(iso, locale);
 }
 
 function Divisor() {
