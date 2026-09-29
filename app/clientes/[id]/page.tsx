@@ -282,6 +282,29 @@ export default function DetalleCliente() {
       setError(t('Elegí a qué se aplica este pago: cuenta corriente o una cuota puntual.'));
       return;
     }
+    // Bug real reportado por un cliente (2026-09): el monto quedaba editable
+    // sin límite después de elegir el destino, así que un pago que en
+    // realidad cubría una cuota podía cargarse igual como "cuenta corriente,
+    // sin tocar cuotas" — la cuota seguía figurando impaga aunque el cliente
+    // ya hubiera pagado. Acá se pone un techo duro: cada destino no puede
+    // recibir más de lo que realmente representa.
+    if (pagoDestino === 'cuenta_corriente' && monto > cuentaCorrientePuraPago + 0.01) {
+      setError(
+        `${t('La cuenta corriente (sin cuota) cubre hasta')} ${fmt(cuentaCorrientePuraPago)} — ${t(
+          'el resto corresponde a una cuota. Elegí la cuota o ajustá el monto.'
+        )}`
+      );
+      return;
+    }
+    const cuotaElegidaPago = cuotasPendientesPago.find((c) => c.id === pagoDestino);
+    if (cuotaElegidaPago && monto > cuotaElegidaPago.saldo + 0.01) {
+      setError(
+        `${t('Esta cuota tiene un saldo de')} ${fmt(cuotaElegidaPago.saldo)} — ${t(
+          'si el cliente pagó de más, registrá el resto como otro pago (otra cuota o cuenta corriente).'
+        )}`
+      );
+      return;
+    }
     setGuardandoPago(true);
     setError(null);
     // A qué se aplica lo elige quien cobra (ver pagoDestino) — antes el pago

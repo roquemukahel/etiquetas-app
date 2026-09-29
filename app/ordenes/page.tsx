@@ -476,6 +476,33 @@ export default function Ordenes() {
       setErrorCobro(t('Elegí a qué se aplica este cobro: cuenta corriente o una cuota puntual.'));
       return;
     }
+    // Bug real reportado por un cliente (2026-09): el monto quedaba editable
+    // sin límite después de elegir el destino, así que un cobro que en
+    // realidad cubría una cuota podía cargarse igual como "cuenta corriente,
+    // sin tocar cuotas" (o al revés, de más sobre una cuota puntual) — la
+    // cuota seguía figurando impaga aunque el cliente ya hubiera pagado. Acá
+    // se pone un techo duro: cada destino no puede recibir más de lo que
+    // realmente representa.
+    if (cobroDestino === 'cuenta_corriente' && monto > opcionesCobro.cuentaCorrientePura + 0.01) {
+      setErrorCobro(
+        `${t('La cuenta corriente (sin cuota) cubre hasta')} ${simboloMoneda(cobrando.moneda)}${formatearMonto(
+          opcionesCobro.cuentaCorrientePura
+        )} — ${t('el resto corresponde a una cuota. Elegí la cuota o ajustá el monto.')}`
+      );
+      return;
+    }
+    const cuotaElegida = opcionesCobro.cuotas.find((c) => c.id === cobroDestino);
+    if (cuotaElegida) {
+      const saldoCuotaElegida = cuotaElegida.importe_original - cuotaElegida.importe_pagado;
+      if (monto > saldoCuotaElegida + 0.01) {
+        setErrorCobro(
+          `${t('Esta cuota tiene un saldo de')} ${simboloMoneda(cobrando.moneda)}${formatearMonto(saldoCuotaElegida)} — ${t(
+            'si el cliente pagó de más, registrá el resto como otro cobro (otra cuota o cuenta corriente).'
+          )}`
+        );
+        return;
+      }
+    }
     setGuardandoCobro(true);
     setErrorCobro(null);
     const resultado = await registrarCobroFinanciamiento(supabase, {
