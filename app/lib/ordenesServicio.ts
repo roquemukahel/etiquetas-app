@@ -1,4 +1,7 @@
 import { generarTextoCondicionIngreso, type ChecklistIngreso } from './reparaciones';
+import { getActor } from './actor';
+import { vencimientoDesdeHoy } from './cuentaCorriente';
+import { crearPlanFinanciacion } from './financiacion/servicio';
 
 // Datos mínimos de una reparación necesarios para armar/actualizar su orden de
 // cobro. Se aceptan además los campos del checklist de ingreso (para la nota de
@@ -20,6 +23,19 @@ export type ReparacionParaOrden = {
   fecha_reparado: string | null;
 } & Partial<ChecklistIngreso>;
 
+// Pedido real de un cliente (2026-09): poder cobrar un Servicio Técnico a
+// cuenta corriente o financiado, igual que ya se puede en Nueva Orden — antes
+// "Forma de pago" acá era solo una etiqueta de texto, nunca generaba un cargo
+// real ni un plan de cuotas. Solo aplica al CREAR la orden (no a un
+// "actualizar" posterior): cambiar de forma de pago después de ya haber
+// generado el cargo/plan necesita corregirse a mano, mismo criterio que ya
+// tiene el resto del cobro de financiamiento.
+export type CuentaCorrienteServicioTecnico = {
+  moneda: string;
+  plazoDias: number | null;
+  financiar?: { cantidadCuotas: number; primeraFecha: string };
+};
+
 // Arma (o actualiza, si ya existía desde que se recibió el equipo) la orden de
 // cobro de una reparación y deja la reparación como "entregado". Es la MISMA
 // lógica que usa la ficha de Servicio Técnico y la sección "Listos para cobrar"
@@ -31,9 +47,14 @@ export async function generarOrdenDeReparacion(
   // le genera una boleta (ej. costo de diagnóstico) — no tiene sentido que
   // eso la pase a "Entregado": el equipo sigue sin repararse, solo se está
   // cobrando (o dejando constancia con $0) el diagnóstico.
-  opciones: { marcarEntregado?: boolean; sucursalId?: string | null } = {}
+  opciones: {
+    marcarEntregado?: boolean;
+    sucursalId?: string | null;
+    cuentaCorriente?: CuentaCorrienteServicioTecnico;
+  } = {}
 ): Promise<{ ordenId: string | null; total: number; error: string | null }> {
   const marcarEntregado = opciones.marcarEntregado ?? true;
+  const esOrdenNueva = !r.orden_cobro_id;
   const total = r.importe_total ?? (r.presupuesto_mano_obra || 0) + (r.presupuesto_repuestos || 0);
   // Costo real de los repuestos usados en esta reparación (foto tomada al
   // momento de usarlos, ver reparaciones_repuestos.costo_unitario) — sin
@@ -137,6 +158,42 @@ export async function generarOrdenDeReparacion(
 
   const { error: repError } = await supabase.from('reparaciones').update(cambiosReparacion).eq('id', r.id);
   if (repError) return { ordenId, total, error: 'La orden se generó pero no pudimos actualizar la reparación: ' + repError.message };
+
+  // Cuenta corriente / financiamiento: solo al CREAR la orden (esOrdenNueva),
+  // y solo si de verdad queda algo por cobrar — mismo criterio que Nueva
+  // Orden (montoCuentaCorriente > 0.009 en app/ordenes/nueva/page.tsx).
+  if (esOrdenNueva && r.forma_pago === 'Cuenta corriente' && r.cliente_id && opciones.cuentaCorriente && total > 0.009) {
+    const cc = opciones.cuentaCorriente;
+    if (cc.financiar) {
+      const resultadoPlan = await crearPlanFinanciacion(supabase, {
+        clienteId: r.cliente_id,
+        ordenId,
+        moneda: cc.moneda,
+        importeOriginal: total,
+        entregaInicial: 0,
+        cantidadCuotas: cc.financiar.cantidadCuotas,
+        primeraFecha: cc.financiar.primeraFecha,
+        observaciones: 'Financiación generada al cobrar un Servicio Técnico.',
+        sucursalId: opciones.sucursalId ?? null,
+      });
+      if ('error' in resultadoPlan) return { ordenId, total, error: 'La orden se generó pero no pudimos crear el plan de financiación: ' + resultadoPlan.error };
+    } else {
+      const actor = getActor();
+      const { error: movError } = await supabase.from('cta_cte_movimientos').insert({
+        cliente_id: r.cliente_id,
+        tipo: 'cargo',
+        concepto: 'venta',
+        monto: total,
+        moneda: cc.moneda,
+        orden_id: ordenId,
+        vencimiento: vencimientoDesdeHoy(cc.plazoDias),
+        registrado_por_nombre: actor?.nombre ?? null,
+        registrado_por_foto_url: actor?.fotoUrl ?? null,
+        ...(opciones.sucursalId ? { sucursal_id: opciones.sucursalId } : {}),
+      });
+      if (movError) return { ordenId, total, error: 'La orden se generó pero no pudimos cargarla a la cuenta corriente: ' + movError.message };
+    }
+  }
 
   return { ordenId, total, error: null };
 }

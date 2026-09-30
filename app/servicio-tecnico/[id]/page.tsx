@@ -31,6 +31,8 @@ import { cambiarEstadoReparacion } from '../../lib/estadoReparacion';
 import { generarOrdenDeReparacion } from '../../lib/ordenesServicio';
 import { extraerStockInsuficiente } from '../../lib/repuestos';
 import { sanitizarDecimal, formatearMonto } from '../../lib/numeros';
+import { calcularSaldo } from '../../lib/cuentaCorriente';
+import { aFechaISO, sumarMesConClamp } from '../../lib/financiacion/motor';
 import { comprimirImagen } from '../../lib/comprimirImagen';
 import SelectorColorAuto from '../../SelectorColorAuto';
 import Avatar from '../../Avatar';
@@ -273,6 +275,22 @@ export default function FichaReparacion() {
   // hace 3 ingresos, no el último).
   const [reparacionRelacionadaElegida, setReparacionRelacionadaElegida] = useState<string | null>(null);
 
+  // Cuenta corriente / financiamiento al cobrar (pedido real de un cliente,
+  // 2026-09): mismos datos que ya usa Nueva Orden para habilitar el botón y
+  // topear el crédito, pero cargados acá porque esta ficha no pasa por esa
+  // pantalla.
+  const [clienteCta, setClienteCta] = useState<{
+    cta_cte_habilitada: boolean;
+    suspendido: boolean;
+    limite_credito: number | null;
+    plazo_dias: number | null;
+  } | null>(null);
+  const [saldoCliente, setSaldoCliente] = useState(0);
+  const [monedaNegocio, setMonedaNegocio] = useState('ARS');
+  const [financiarActivo, setFinanciarActivo] = useState(false);
+  const [financiarCuotas, setFinanciarCuotas] = useState('3');
+  const [financiarPrimeraFecha, setFinanciarPrimeraFecha] = useState('');
+
   const [f, setFm] = useState<Record<string, any>>({});
 
   const cargar = async () => {
@@ -350,10 +368,28 @@ export default function FichaReparacion() {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) return;
-      const { data: perfil } = await supabase.from('perfiles').select('negocios ( pais )').eq('id', user.id).single();
+      const { data: perfil } = await supabase.from('perfiles').select('negocios ( pais, moneda )').eq('id', user.id).single();
       setCodigoPais(codigoLlamada((perfil as any)?.negocios?.pais));
+      if ((perfil as any)?.negocios?.moneda) setMonedaNegocio((perfil as any).negocios.moneda);
     })();
   }, [id]);
+
+  // Cuenta corriente disponible: solo si esta reparación es de un cliente
+  // real (no equipo propio del local) y ese cliente la tiene habilitada.
+  useEffect(() => {
+    if (!r?.cliente_id) {
+      setClienteCta(null);
+      return;
+    }
+    (async () => {
+      const [{ data: cliente }, { data: movs }] = await Promise.all([
+        supabase.from('clientes').select('cta_cte_habilitada, suspendido, limite_credito, plazo_dias').eq('id', r.cliente_id).single(),
+        supabase.from('cta_cte_movimientos').select('tipo, monto').eq('cliente_id', r.cliente_id).eq('anulado', false),
+      ]);
+      setClienteCta((cliente as any) ?? null);
+      setSaldoCliente(calcularSaldo((movs as { tipo: string; monto: number }[]) ?? []));
+    })();
+  }, [r?.cliente_id, supabase]);
 
   // Garantías y retrabajos (sección 21): reparaciones anteriores del MISMO
   // equipo (mismo IMEI), para poder clasificar este ingreso. Se busca recién
@@ -397,6 +433,21 @@ export default function FichaReparacion() {
   const presupuestoSuma = r ? (r.presupuesto_mano_obra || 0) + (r.presupuesto_repuestos || 0) : 0;
   const cobrado = r ? r.importe_total ?? (presupuestoSuma > 0 ? presupuestoSuma : null) : null;
   const margen = cobrado != null ? cobrado - costoRepuestosTotal : null;
+
+  // Mismo criterio que app/ordenes/nueva/page.tsx (ctaCteDisponible): la
+  // cuenta corriente solo se ofrece si el cliente la tiene habilitada y no
+  // está suspendido.
+  const ctaCteDisponible = !!clienteCta?.cta_cte_habilitada && !clienteCta?.suspendido;
+  const creditoDisponible = clienteCta?.limite_credito != null ? clienteCta.limite_credito - saldoCliente : Infinity;
+  const totalAEditar = f.importe_total ? Number(f.importe_total) : 0;
+  const superaCreditoDisponible = f.forma_pago === 'Cuenta corriente' && totalAEditar > creditoDisponible + 0.009;
+  const financiarCuotasNum = Number(financiarCuotas) || 0;
+  // Mismo chequeo que arriba pero contra lo YA GUARDADO (r, no f) — para
+  // deshabilitar el botón "Generar orden de cobro" cuando corresponde,
+  // sin depender de que el formulario de edición siga abierto.
+  const totalGuardado = r ? r.importe_total ?? (r.presupuesto_mano_obra || 0) + (r.presupuesto_repuestos || 0) : 0;
+  const bloqueadoPorCredito =
+    !!r && r.forma_pago === 'Cuenta corriente' && !r.orden_cobro_id && totalGuardado > creditoDisponible + 0.009;
 
   // Checklist de control de calidad aplicable a esta reparación (sección
   // 17): unión de checklist_tecnico de los servicios realizados (Fase 4,
@@ -869,9 +920,40 @@ export default function FichaReparacion() {
       ? t('¿Actualizar la orden de cobro con el importe actual de esta reparación? Si el presupuesto cambió después de generarla, la orden se va a corregir.')
       : t('¿Generar la orden de cobro con el importe de esta reparación?');
     if (!confirm(mensaje)) return;
+
+    // Cuenta corriente/financiamiento solo aplica la primera vez que se
+    // genera la orden (ver comentario de esOrdenNueva en ordenesServicio.ts).
+    const esCtaCteNueva = r.forma_pago === 'Cuenta corriente' && !!r.cliente_id && !r.orden_cobro_id;
+    if (esCtaCteNueva) {
+      if (!ctaCteDisponible) {
+        setError(t('Este cliente no tiene cuenta corriente habilitada — se puede activar desde su ficha.'));
+        return;
+      }
+      const totalAGenerar = r.importe_total ?? (r.presupuesto_mano_obra || 0) + (r.presupuesto_repuestos || 0);
+      if (totalAGenerar > creditoDisponible + 0.009) {
+        setError(`${t('Supera el límite de crédito (disponible')} ${monedaNegocio}${formatearMonto(Math.max(0, creditoDisponible))}). ${t('No se puede confirmar hasta cobrarle o subirle el límite.')}`);
+        return;
+      }
+      if (financiarActivo && (!financiarCuotasNum || !financiarPrimeraFecha)) {
+        setError(t('Completá cantidad de cuotas y fecha de la 1ª para ver el cronograma.'));
+        return;
+      }
+    }
+
     setGuardando(true);
     // Misma lógica compartida que usa la sección "Listos para cobrar" de Órdenes.
-    const { ordenId, total, error: genError } = await generarOrdenDeReparacion(supabase, r as any, { sucursalId: sucursalActual.id });
+    const { ordenId, total, error: genError } = await generarOrdenDeReparacion(supabase, r as any, {
+      sucursalId: sucursalActual.id,
+      ...(esCtaCteNueva
+        ? {
+            cuentaCorriente: {
+              moneda: monedaNegocio,
+              plazoDias: clienteCta?.plazo_dias ?? null,
+              ...(financiarActivo && financiarCuotasNum ? { financiar: { cantidadCuotas: financiarCuotasNum, primeraFecha: financiarPrimeraFecha } } : {}),
+            },
+          }
+        : {}),
+    });
     if (genError || !ordenId) {
       setError(genError || t('No pudimos generar la orden.'));
       setGuardando(false);
@@ -1661,8 +1743,8 @@ export default function FichaReparacion() {
                     <Campo label={t('Importe total ($)')} valor={f.importe_total} onChange={(v) => setFm((p) => ({ ...p, importe_total: v }))} numerico />
                     <div>
                       <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Forma de pago')}</label>
-                      <div className="flex gap-2">
-                        {FORMAS_PAGO.map((fp) => (
+                      <div className="flex gap-2 flex-wrap">
+                        {[...FORMAS_PAGO, ...(r.cliente_id && ctaCteDisponible ? ['Cuenta corriente'] : [])].map((fp) => (
                           <button
                             key={fp}
                             onClick={() => setFm((p) => ({ ...p, forma_pago: fp }))}
@@ -1674,7 +1756,60 @@ export default function FichaReparacion() {
                           </button>
                         ))}
                       </div>
+                      {r.cliente_id && !ctaCteDisponible && (
+                        <p className="text-[10px] text-muted dark:text-dark-text-secondary mt-1">
+                          {t('Este cliente no tiene cuenta corriente habilitada — se puede activar desde su ficha.')}
+                        </p>
+                      )}
                     </div>
+
+                    {f.forma_pago === 'Cuenta corriente' && (
+                      <div className="rounded-lg border border-dashed border-border dark:border-dark-border p-2.5 flex flex-col gap-2">
+                        {clienteCta?.limite_credito != null && (
+                          <p className="text-[10px] text-muted dark:text-dark-text-secondary">
+                            {t('Crédito disponible:')} {monedaNegocio}{formatearMonto(Math.max(0, creditoDisponible))}
+                          </p>
+                        )}
+                        {superaCreditoDisponible && (
+                          <p className="text-[10px] text-bad">
+                            {t('Supera el límite de crédito (disponible')} {monedaNegocio}
+                            {formatearMonto(Math.max(0, creditoDisponible))}). {t('No se puede confirmar hasta cobrarle o subirle el límite.')}
+                          </p>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const nuevo = !financiarActivo;
+                            setFinanciarActivo(nuevo);
+                            if (nuevo && !financiarPrimeraFecha) setFinanciarPrimeraFecha(aFechaISO(sumarMesConClamp(new Date(), 1)));
+                          }}
+                          className="flex items-center justify-between text-xs font-medium"
+                        >
+                          <span>🧾 {t('Financiar en cuotas propias (con vencimientos)')}</span>
+                          <span className={`rounded-full px-2 py-0.5 ${financiarActivo ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-canvas dark:bg-dark-bg text-muted dark:text-dark-text-secondary'}`}>
+                            {financiarActivo ? t('Activado') : t('Desactivado')}
+                          </span>
+                        </button>
+                        {financiarActivo && (
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-[10px] text-muted dark:text-dark-text-secondary block mb-1">{t('Cantidad de cuotas')}</label>
+                              <input
+                                value={financiarCuotas}
+                                inputMode="numeric"
+                                onChange={(e) => setFinanciarCuotas(e.target.value.replace(/[^\d]/g, ''))}
+                                className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-muted dark:text-dark-text-secondary block mb-1">{t('Fecha de la 1ª cuota')}</label>
+                              <CampoFecha value={financiarPrimeraFecha} onChange={setFinanciarPrimeraFecha} ancho="completo" />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     <Campo label={t('Garantía de la reparación (días)')} valor={f.garantia_dias} onChange={(v) => setFm((p) => ({ ...p, garantia_dias: v }))} numerico />
                   </div>
                 ) : (
@@ -2140,7 +2275,7 @@ export default function FichaReparacion() {
                       </button>
                     )}
                     <button
-                      disabled={guardando}
+                      disabled={guardando || bloqueadoPorCredito}
                       onClick={generarOrdenCobro}
                       className={`rounded-xl py-2.5 text-center text-xs font-medium disabled:opacity-40 ${
                         r.estado === 'listo_para_entregar' ? 'border border-border dark:border-dark-border' : 'bg-good hover:opacity-90 transition-opacity text-white'
@@ -2148,6 +2283,11 @@ export default function FichaReparacion() {
                     >
                       {t('Generar orden de cobro')}
                     </button>
+                    {bloqueadoPorCredito && (
+                      <p className="text-[10px] text-bad text-center">
+                        {t('Supera el límite de crédito (disponible')} {monedaNegocio}{formatearMonto(Math.max(0, creditoDisponible))}).
+                      </p>
+                    )}
                   </div>
                 )}
 

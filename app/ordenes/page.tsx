@@ -10,7 +10,8 @@ import { tienePermiso } from '../lib/permisos';
 import { registrarAuditoria } from '../lib/auditoria';
 import { generarOrdenDeReparacion } from '../lib/ordenesServicio';
 import { registrarCobroFinanciamiento } from '../lib/financiacion/servicio';
-import { MEDIOS_PAGO, medioLabel } from '../lib/cuentaCorriente';
+import { MEDIOS_PAGO, medioLabel, calcularSaldo } from '../lib/cuentaCorriente';
+import type { CuentaCorrienteServicioTecnico } from '../lib/ordenesServicio';
 import { simboloMoneda } from '../lib/monedas';
 import { formatearMonto, sanitizarDecimal } from '../lib/numeros';
 import { ICONOS } from '../Iconos';
@@ -52,6 +53,7 @@ type ReparacionLista = {
   importe_total: number | null;
   presupuesto_mano_obra: number | null;
   presupuesto_repuestos: number | null;
+  forma_pago: string | null;
   cliente_id: string | null;
   orden_cobro_id: string | null;
   fecha_reparado: string | null;
@@ -329,11 +331,49 @@ export default function Ordenes() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Si la reparación se guardó con forma de pago "Cuenta corriente" (elegida
+  // en su propia ficha de Servicio Técnico), este botón rápido tiene que
+  // generar el cargo real en la cuenta corriente del cliente — si no, la
+  // orden quedaría con la etiqueta "Cuenta corriente" sin que la deuda
+  // exista de verdad. No ofrece financiar en cuotas acá (eso requiere el
+  // formulario completo de la ficha) — siempre es un cargo único, como
+  // "Financiar en cuotas propias" desactivado en Nueva Orden.
+  const prepararCuentaCorrienteReparacion = async (
+    r: ReparacionLista
+  ): Promise<{ opciones?: { cuentaCorriente: CuentaCorrienteServicioTecnico }; error?: string }> => {
+    if (r.forma_pago !== 'Cuenta corriente' || !r.cliente_id || r.orden_cobro_id) return {};
+    const [{ data: cliente }, { data: movs }] = await Promise.all([
+      supabase.from('clientes').select('cta_cte_habilitada, suspendido, limite_credito, plazo_dias').eq('id', r.cliente_id).single(),
+      supabase.from('cta_cte_movimientos').select('tipo, monto').eq('cliente_id', r.cliente_id).eq('anulado', false),
+    ]);
+    const c = cliente as { cta_cte_habilitada: boolean; suspendido: boolean; limite_credito: number | null; plazo_dias: number | null } | null;
+    if (!c?.cta_cte_habilitada || c.suspendido) {
+      return { error: t('Este cliente no tiene cuenta corriente habilitada — se puede activar desde su ficha.') };
+    }
+    const saldo = calcularSaldo((movs as { tipo: string; monto: number }[]) ?? []);
+    const creditoDisponible = c.limite_credito != null ? c.limite_credito - saldo : Infinity;
+    const total = r.importe_total ?? (r.presupuesto_mano_obra || 0) + (r.presupuesto_repuestos || 0);
+    if (total > creditoDisponible + 0.009) {
+      return {
+        error: `${t('Supera el límite de crédito (disponible')} ${monedaNegocio}${formatearMonto(Math.max(0, creditoDisponible))}). ${t(
+          'No se puede confirmar hasta cobrarle o subirle el límite.'
+        )}`,
+      };
+    }
+    return { opciones: { cuentaCorriente: { moneda: monedaNegocio, plazoDias: c.plazo_dias } } };
+  };
+
   const generarBoleta = async (r: ReparacionLista) => {
     if (!puedeVender || generando) return;
     if (!confirm(`${t('¿Generar la boleta de')} ${r.modelo || t('este equipo')}? ${t('Se cobra el importe de la reparación.')}`)) return;
     setGenerando(r.id);
-    const { ordenId, total, error } = await generarOrdenDeReparacion(supabase, r as any, { sucursalId: sucursalActual.id });
+    const { opciones: opcionesCtaCte, error: errorCtaCte } = await prepararCuentaCorrienteReparacion(r);
+    if (errorCtaCte) {
+      alert(errorCtaCte);
+      setGenerando(null);
+      return;
+    }
+    const { ordenId, total, error } = await generarOrdenDeReparacion(supabase, r as any, { sucursalId: sucursalActual.id, ...opcionesCtaCte });
     if (error || !ordenId) {
       alert(error || t('No pudimos generar la boleta.'));
       setGenerando(null);
@@ -357,7 +397,17 @@ export default function Ordenes() {
     )
       return;
     setGenerando(r.id);
-    const { ordenId, total, error } = await generarOrdenDeReparacion(supabase, r as any, { marcarEntregado: false, sucursalId: sucursalActual.id });
+    const { opciones: opcionesCtaCte, error: errorCtaCte } = await prepararCuentaCorrienteReparacion(r);
+    if (errorCtaCte) {
+      alert(errorCtaCte);
+      setGenerando(null);
+      return;
+    }
+    const { ordenId, total, error } = await generarOrdenDeReparacion(supabase, r as any, {
+      marcarEntregado: false,
+      sucursalId: sucursalActual.id,
+      ...opcionesCtaCte,
+    });
     if (error || !ordenId) {
       alert(error || t('No pudimos generar la boleta.'));
       setGenerando(null);
