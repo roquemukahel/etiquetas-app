@@ -2779,6 +2779,10 @@ export const PT: Record<string, string> = {
 
   // Financiamiento — vista de Movimientos (día por día) y filtros.
   'Cartera': 'Carteira de clientes',
+  'Último pago': 'Último pagamento',
+  'Sí': 'Sim',
+  'No': 'Não',
+  'Exportar a Excel': 'Exportar para Excel',
   'Ayer': 'Ontem',
   'Todos los cajeros': 'Todos os caixas',
   'Todas las formas de pago': 'Todas as formas de pagamento',

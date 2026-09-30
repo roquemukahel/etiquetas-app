@@ -2778,6 +2778,10 @@ export const EN: Record<string, string> = {
 
   // Financiamiento — vista de Movimientos (día por día) y filtros.
   'Cartera': 'Client list',
+  'Último pago': 'Last payment',
+  'Sí': 'Yes',
+  'No': 'No',
+  'Exportar a Excel': 'Export to Excel',
   'Ayer': 'Yesterday',
   'Todos los cajeros': 'All cashiers',
   'Todas las formas de pago': 'All payment methods',

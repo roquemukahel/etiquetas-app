@@ -10,11 +10,12 @@ import { tienePermiso } from '../lib/permisos';
 import { registrarAuditoria } from '../lib/auditoria';
 import { generarOrdenDeReparacion } from '../lib/ordenesServicio';
 import { registrarCobroFinanciamiento } from '../lib/financiacion/servicio';
-import { MEDIOS_PAGO, medioLabel, calcularSaldo } from '../lib/cuentaCorriente';
+import { MEDIOS_PAGO, medioLabel, calcularSaldo, diasDeMora } from '../lib/cuentaCorriente';
 import type { CuentaCorrienteServicioTecnico } from '../lib/ordenesServicio';
 import { simboloMoneda } from '../lib/monedas';
 import { formatearMonto, sanitizarDecimal } from '../lib/numeros';
 import { formatearFechaHora } from '../lib/fechas';
+import { descargarXLSX } from '../lib/csv';
 import { ICONOS } from '../Iconos';
 import { QoviState } from '../QoviState';
 import Modal from '../Modal';
@@ -197,6 +198,11 @@ export default function Ordenes() {
   // pasa a ser la vista por defecto; "Cartera" es la lista de clientes de
   // siempre, para cuando lo que hace falta es ver a quién le falta cobrar.
   const [vistaFinanciamiento, setVistaFinanciamiento] = useState<'movimientos' | 'cartera'>('movimientos');
+  // Datos que la vista "Cartera" pide además del saldo: último pago (fecha +
+  // sucursal donde se hizo) y la fecha del cargo vencido más antiguo (para
+  // "días de atraso") — mismo criterio que ya usa la ficha del cliente
+  // (cargosVencidos/vencMasAntiguo), calculado acá por cliente.
+  const [carteraExtra, setCarteraExtra] = useState<Map<string, { ultimoPago: string | null; sucursalUltimoPago: string | null; vencMasAntiguo: string | null }>>(new Map());
   const [movimientosFinanciamiento, setMovimientosFinanciamiento] = useState<MovimientoFinanciamiento[]>([]);
   const [cargandoMovimientos, setCargandoMovimientos] = useState(false);
   const [movimientosCargados, setMovimientosCargados] = useState(false);
@@ -205,6 +211,7 @@ export default function Ordenes() {
   const [filtroMovSucursal, setFiltroMovSucursal] = useState('');
   const [filtroMovCajero, setFiltroMovCajero] = useState('');
   const [filtroMovForma, setFiltroMovForma] = useState('');
+  const [exportandoMovimientos, setExportandoMovimientos] = useState(false);
   const [cobrando, setCobrando] = useState<ResumenFinanciamiento | null>(null);
   const [cobroMonto, setCobroMonto] = useState('');
   const [cobroMedio, setCobroMedio] = useState('efectivo');
@@ -305,12 +312,35 @@ export default function Ordenes() {
 
     const idsClientes = Array.from(new Set(saldos.map((s) => s.clienteId)));
     if (idsClientes.length > 0) {
-      const { data: clientesData } = await supabase.from('clientes').select('id, nombre, apellido').in('id', idsClientes);
+      const [{ data: clientesData }, { data: movsData }] = await Promise.all([
+        supabase.from('clientes').select('id, nombre, apellido').in('id', idsClientes),
+        supabase
+          .from('cta_cte_movimientos')
+          .select('cliente_id, tipo, concepto, monto, vencimiento, fecha, sucursal_id')
+          .in('cliente_id', idsClientes)
+          .eq('anulado', false),
+      ]);
       setNombresClientesFinanciamiento(
         new Map(((clientesData ?? []) as { id: string; nombre: string; apellido: string | null }[]).map((c) => [c.id, `${c.nombre} ${c.apellido || ''}`.trim()]))
       );
+
+      const hoyISO = new Date().toISOString().slice(0, 10);
+      const extra = new Map<string, { ultimoPago: string | null; sucursalUltimoPago: string | null; vencMasAntiguo: string | null }>();
+      for (const m of (movsData as { cliente_id: string; tipo: string; concepto: string; monto: number; vencimiento: string | null; fecha: string; sucursal_id: string | null }[]) ?? []) {
+        const info = extra.get(m.cliente_id) ?? { ultimoPago: null, sucursalUltimoPago: null, vencMasAntiguo: null };
+        if (m.tipo === 'abono' && m.concepto === 'pago' && (!info.ultimoPago || m.fecha > info.ultimoPago)) {
+          info.ultimoPago = m.fecha;
+          info.sucursalUltimoPago = m.sucursal_id;
+        }
+        if (m.tipo === 'cargo' && m.vencimiento && m.vencimiento < hoyISO && (!info.vencMasAntiguo || m.vencimiento < info.vencMasAntiguo)) {
+          info.vencMasAntiguo = m.vencimiento;
+        }
+        extra.set(m.cliente_id, info);
+      }
+      setCarteraExtra(extra);
     } else {
       setNombresClientesFinanciamiento(new Map());
+      setCarteraExtra(new Map());
     }
 
     if (planes.length > 0) {
@@ -510,25 +540,39 @@ export default function Ordenes() {
     for (const c of cuotasFinanciamiento) {
       cuotasPorPlan.set(c.plan_id, [...(cuotasPorPlan.get(c.plan_id) ?? []), c]);
     }
-    const infoPorCliente = new Map<string, { proximoVencimiento: string | null; cantidadPlanes: number; ordenOriginalId: string | null; moneda: string }>();
+    const infoPorCliente = new Map<
+      string,
+      { proximoVencimiento: string | null; cantidadPlanes: number; ordenOriginalId: string | null; moneda: string; cuotasPagas: number; cuotasTotal: number }
+    >();
     for (const p of planesFinanciamiento) {
       const cuotas = (cuotasPorPlan.get(p.id) ?? []).filter((c) => c.estado !== 'anulada');
       const pendientes = cuotas.filter((c) => c.estado === 'pendiente').sort((a, b) => a.fecha_vencimiento.localeCompare(b.fecha_vencimiento));
       const proximoPlan = pendientes[0]?.fecha_vencimiento ?? null;
+      const pagas = cuotas.filter((c) => c.estado === 'pagada').length;
       const existente = infoPorCliente.get(p.cliente_id);
       if (existente) {
         existente.cantidadPlanes += 1;
         existente.ordenOriginalId = null; // más de un plan activo: no hay una venta puntual a la que enlazar
+        existente.cuotasPagas += pagas;
+        existente.cuotasTotal += cuotas.length;
         if (proximoPlan && (!existente.proximoVencimiento || proximoPlan < existente.proximoVencimiento)) {
           existente.proximoVencimiento = proximoPlan;
         }
       } else {
-        infoPorCliente.set(p.cliente_id, { proximoVencimiento: proximoPlan, cantidadPlanes: 1, ordenOriginalId: p.orden_id, moneda: p.moneda });
+        infoPorCliente.set(p.cliente_id, {
+          proximoVencimiento: proximoPlan,
+          cantidadPlanes: 1,
+          ordenOriginalId: p.orden_id,
+          moneda: p.moneda,
+          cuotasPagas: pagas,
+          cuotasTotal: cuotas.length,
+        });
       }
     }
     return saldosCtaCte
       .map((s) => {
         const info = infoPorCliente.get(s.clienteId);
+        const extra = carteraExtra.get(s.clienteId);
         return {
           clienteId: s.clienteId,
           clienteNombre: nombresClientesFinanciamiento.get(s.clienteId) ?? t('Cliente'),
@@ -538,10 +582,15 @@ export default function Ordenes() {
           enMora: s.vencido > 0.009,
           cantidadPlanes: info?.cantidadPlanes ?? 0,
           ordenOriginalId: info?.ordenOriginalId ?? null,
+          cuotasPagas: info?.cuotasTotal ? info.cuotasPagas : null,
+          cuotasTotal: info?.cuotasTotal ?? null,
+          ultimoPago: extra?.ultimoPago ?? null,
+          sucursalUltimoPago: extra?.sucursalUltimoPago ?? null,
+          diasAtraso: s.vencido > 0.009 ? diasDeMora(extra?.vencMasAntiguo ?? null) : null,
         };
       })
       .sort((a, b) => (a.proximoVencimiento ?? '9999-99-99').localeCompare(b.proximoVencimiento ?? '9999-99-99'));
-  }, [planesFinanciamiento, cuotasFinanciamiento, saldosCtaCte, nombresClientesFinanciamiento, monedaNegocio, t]);
+  }, [planesFinanciamiento, cuotasFinanciamiento, saldosCtaCte, nombresClientesFinanciamiento, monedaNegocio, carteraExtra, t]);
 
   // Cajeros que realmente aparecen en lo cargado — no tiene sentido ofrecer
   // en el filtro a alguien que nunca cobró nada en la ventana visible.
@@ -572,6 +621,35 @@ export default function Ordenes() {
       return true;
     });
   }, [movimientosFinanciamiento, filtroMovFecha, filtroMovSucursal, filtroMovCajero, filtroMovForma]);
+
+  // Exporta exactamente lo que se está viendo (respeta los filtros activos),
+  // no todo lo cargado — pedido real de un cliente para poder auditar un
+  // período puntual en Excel.
+  const exportarMovimientosExcel = async () => {
+    setExportandoMovimientos(true);
+    try {
+      const filas = movimientosFiltrados.map((m) => ({
+        fecha_hora: formatearFechaHora(m.fecha, locale),
+        cliente: m.clientes ? `${m.clientes.nombre} ${m.clientes.apellido || ''}`.trim() : '',
+        tipo: m.concepto === 'venta' ? t('Venta a cuenta corriente') : m.concepto === 'pago' ? t('Pago recibido') : m.concepto,
+        cuota: m.financiacion_cuotas ? m.financiacion_cuotas.numero : '',
+        monto: m.tipo === 'cargo' ? m.monto : -m.monto,
+        moneda: m.moneda,
+        forma_pago: m.pagos?.medio ? medioLabel(m.pagos.medio, t) : '',
+        cobrado_por: m.registrado_por_nombre ?? '',
+        sucursal: m.sucursal_id ? sucursales.find((s) => s.id === m.sucursal_id)?.nombre ?? '' : '',
+        anulado: m.anulado ? t('Sí') : t('No'),
+      }));
+      await descargarXLSX(
+        `movimientos-financiamiento-${new Date().toISOString().slice(0, 10)}.xlsx`,
+        ['fecha_hora', 'cliente', 'tipo', 'cuota', 'monto', 'moneda', 'forma_pago', 'cobrado_por', 'sucursal', 'anulado'],
+        filas
+      );
+    } catch (err: any) {
+      alert(t('No pudimos exportar:') + ' ' + (err?.message ?? t('error desconocido')));
+    }
+    setExportandoMovimientos(false);
+  };
 
   // Agrupado por día (más reciente primero), con el total ABONADO de cada
   // día — pedido real de un cliente: ver de un vistazo cuánto entró por día
@@ -1015,6 +1093,13 @@ export default function Ordenes() {
                     </option>
                   ))}
                 </select>
+                <button
+                  onClick={exportarMovimientosExcel}
+                  disabled={exportandoMovimientos || movimientosFiltrados.length === 0}
+                  className="rounded-lg border border-border dark:border-dark-border px-2.5 py-1.5 text-xs font-medium disabled:opacity-40 ml-auto"
+                >
+                  {exportandoMovimientos ? t('Exportando...') : `📊 ${t('Exportar a Excel')}`}
+                </button>
               </div>
 
               {cargandoMovimientos && (
@@ -1138,8 +1223,21 @@ export default function Ordenes() {
                           ? `${t('Vencida desde')}: ${new Date(r.proximoVencimiento + 'T00:00:00').toLocaleDateString(locale)}`
                           : t('Tiene saldo vencido')
                         : `${t('Próximo vencimiento')}: ${new Date(r.proximoVencimiento! + 'T00:00:00').toLocaleDateString(locale)}`}
+                      {r.enMora && r.diasAtraso != null && ` · ${r.diasAtraso} ${t('días')}`}
                     </p>
                   )}
+                  <p className="text-xs text-muted dark:text-dark-text-secondary truncate mt-0.5">
+                    {[
+                      r.cuotasTotal != null ? `${t('Cuotas')} ${r.cuotasPagas}/${r.cuotasTotal}` : null,
+                      r.ultimoPago
+                        ? `${t('Último pago')}: ${new Date(r.ultimoPago).toLocaleDateString(locale)}${
+                            r.sucursalUltimoPago ? ` (${sucursales.find((s) => s.id === r.sucursalUltimoPago)?.nombre ?? ''})` : ''
+                          }`
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <Link href={`/clientes/${r.clienteId}`} className="text-xs text-accent dark:text-dark-accent underline whitespace-nowrap">
