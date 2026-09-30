@@ -34,6 +34,7 @@ type Orden = {
   clientes: { nombre: string; apellido: string | null } | null;
   orden_items: { descripcion: string; tipo: string }[];
   sucursal_id?: string | null;
+  vendedores: { nombre: string } | null;
 };
 
 // Plan canje del dispositivo que el cliente entregó como parte de pago —
@@ -162,6 +163,26 @@ function esCobroFinanciamiento(o: Orden) {
   return o.orden_items.length > 0 && o.orden_items.every((i) => i.tipo === 'financiamiento');
 }
 
+type FiltroFecha = 'hoy' | 'ayer' | 'semana' | 'mes' | 'todo';
+
+// Mismo criterio de rangos que ya usa la vista Movimientos de Financiamiento
+// — un solo lugar para no divergir si el criterio de "semana"/"mes" cambia.
+function estaEnRangoFecha(fechaISO: string, filtro: FiltroFecha): boolean {
+  if (filtro === 'todo') return true;
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+  const inicioDia = (offsetDias: number) => {
+    const d = new Date(hoy);
+    d.setDate(d.getDate() - offsetDias);
+    return d;
+  };
+  const fecha = new Date(fechaISO);
+  if (filtro === 'hoy') return fecha >= inicioDia(0);
+  if (filtro === 'ayer') return fecha >= inicioDia(1) && fecha < inicioDia(0);
+  if (filtro === 'semana') return fecha >= inicioDia(7);
+  return fecha >= inicioDia(30); // mes
+}
+
 export default function Ordenes() {
   const supabase = crearClienteNavegador();
   const router = useRouter();
@@ -180,6 +201,16 @@ export default function Ordenes() {
   const [filtroEstado, setFiltroEstado] = useState('todas');
   const [filtroTipo, setFiltroTipo] = useState<'todas' | 'ventas' | 'servicio' | 'financiamiento'>('todas');
   const [busqueda, setBusqueda] = useState('');
+  // Pedido real de un cliente: la pantalla arrancaba mostrando 90 días de
+  // órdenes mezcladas, así que las de hoy quedaban perdidas entre miles de
+  // otras — el filtro rápido de fecha arranca en "Hoy" (con "Todos los
+  // días" a mano para volver al comportamiento de siempre).
+  const [filtroFecha, setFiltroFecha] = useState<'hoy' | 'ayer' | 'semana' | 'mes' | 'todo'>('hoy');
+  // Reparados/Cancelados empiezan colapsados — antes, con varias reparaciones
+  // pendientes de cobrar, esos bloques empujaban las órdenes de hoy varias
+  // pantallas hacia abajo.
+  const [mostrarReparados, setMostrarReparados] = useState(false);
+  const [mostrarCancelados, setMostrarCancelados] = useState(false);
   // Planes de financiación activos — se cargan recién cuando se entra a
   // esta pestaña por primera vez (no en cada visita a Órdenes, que es la
   // pantalla que más se abre) y quedan en caché el resto de la sesión.
@@ -253,7 +284,7 @@ export default function Ordenes() {
       obtenerTodasLasFilas<Orden>(
         supabase,
         'ordenes',
-        'id, numero_orden, forma_pago, total, estado, created_at, sucursal_id, clientes ( nombre, apellido ), orden_items ( descripcion, tipo )',
+        'id, numero_orden, forma_pago, total, estado, created_at, sucursal_id, clientes ( nombre, apellido ), orden_items ( descripcion, tipo ), vendedores ( nombre )',
         [{ columna: 'created_at', ascending: false }],
         traerTodoElHistorial ? undefined : (q) => q.gte('created_at', desdeReciente.toISOString())
       ),
@@ -600,21 +631,8 @@ export default function Ordenes() {
   );
 
   const movimientosFiltrados = useMemo(() => {
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
-    const inicioDia = (offsetDias: number) => {
-      const d = new Date(hoy);
-      d.setDate(d.getDate() - offsetDias);
-      return d;
-    };
     return movimientosFinanciamiento.filter((m) => {
-      if (filtroMovFecha !== 'todo') {
-        const fechaMov = new Date(m.fecha);
-        if (filtroMovFecha === 'hoy' && fechaMov < inicioDia(0)) return false;
-        if (filtroMovFecha === 'ayer' && (fechaMov < inicioDia(1) || fechaMov >= inicioDia(0))) return false;
-        if (filtroMovFecha === 'semana' && fechaMov < inicioDia(7)) return false;
-        if (filtroMovFecha === 'mes' && fechaMov < inicioDia(30)) return false;
-      }
+      if (!estaEnRangoFecha(m.fecha, filtroMovFecha)) return false;
       if (filtroMovSucursal && m.sucursal_id !== filtroMovSucursal) return false;
       if (filtroMovCajero && m.registrado_por_nombre !== filtroMovCajero) return false;
       if (filtroMovForma && (m.pagos?.medio ?? '') !== filtroMovForma) return false;
@@ -777,6 +795,13 @@ export default function Ordenes() {
     const q = busqueda.trim().toLowerCase();
     return ordenes
       .filter((o) => filtroEstado === 'todas' || o.estado === filtroEstado)
+      // El filtro rápido de fecha no aplica mientras se está buscando texto
+      // — quien busca algo puntual quiere encontrarlo sin importar cuándo
+      // fue, no que "Hoy" se lo esconda.
+      // No aplica dentro de Financiamiento > Cartera: esa lista de boletas de
+      // cobro ya tiene su propia ventana de 90 días, independiente de este
+      // filtro rápido (que es para la pantalla de Órdenes en general).
+      .filter((o) => filtroTipo === 'financiamiento' || q !== '' || estaEnRangoFecha(o.created_at, filtroFecha))
       .filter((o) => !filtroSucursal || o.sucursal_id === filtroSucursal)
       .filter((o) => {
         if (filtroTipo === 'todas') return true;
@@ -811,7 +836,7 @@ export default function Ordenes() {
           .toLowerCase();
         return nombreCliente.includes(q) || itemsTexto.includes(q) || canjesTexto.includes(q);
       });
-  }, [ordenes, filtroEstado, filtroSucursal, filtroTipo, busqueda, canjesPorOrden]);
+  }, [ordenes, filtroEstado, filtroFecha, filtroSucursal, filtroTipo, busqueda, canjesPorOrden]);
 
   // Con "ver todo el historial" activado (años de órdenes), pintar TODAS las
   // tarjetas de una es lo que hace sentir lenta la pantalla que todo vendedor
@@ -822,8 +847,37 @@ export default function Ordenes() {
   const [visibles, setVisibles] = useState(PASO_VISIBLES);
   useEffect(() => {
     setVisibles(PASO_VISIBLES);
-  }, [busqueda, filtroEstado, filtroTipo, filtroSucursal]);
+  }, [busqueda, filtroEstado, filtroFecha, filtroTipo, filtroSucursal]);
   const paraRenderizar = useMemo(() => filtradas.slice(0, visibles), [filtradas, visibles]);
+
+  // Agrupado por día con separador y total — pedido real de un cliente: de
+  // un vistazo, "Hoy · 12 órdenes · $184.300" en vez de tener que contar
+  // tarjeta por tarjeta cuánto se vendió hoy.
+  const ordenesPorDia = useMemo(() => {
+    const hoyClave = new Date().toLocaleDateString('en-CA');
+    const ayer = new Date();
+    ayer.setDate(ayer.getDate() - 1);
+    const ayerClave = ayer.toLocaleDateString('en-CA');
+    const grupos = new Map<string, { label: string; ordenes: Orden[]; total: number }>();
+    for (const o of paraRenderizar) {
+      const clave = new Date(o.created_at).toLocaleDateString('en-CA');
+      if (!grupos.has(clave)) {
+        const label =
+          clave === hoyClave
+            ? t('Hoy')
+            : clave === ayerClave
+              ? t('Ayer')
+              : new Date(o.created_at).toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' });
+        grupos.set(clave, { label, ordenes: [], total: 0 });
+      }
+      const g = grupos.get(clave)!;
+      g.ordenes.push(o);
+      g.total += o.total || 0;
+    }
+    return Array.from(grupos.entries())
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .map(([clave, g]) => ({ clave, ...g }));
+  }, [paraRenderizar, locale, t]);
 
   // Se me había pasado esto en la primera pasada de multisucursal: estas dos
   // NO nacen de la tabla `ordenes` (que sí ya filtraba), sino de
@@ -896,6 +950,30 @@ export default function Ordenes() {
         </div>
       )}
 
+      {filtroTipo !== 'financiamiento' && (
+        <div className="flex items-center gap-1.5 text-xs overflow-x-auto">
+          {(
+            [
+              { id: 'hoy', label: 'Hoy' },
+              { id: 'ayer', label: 'Ayer' },
+              { id: 'semana', label: 'Semana' },
+              { id: 'mes', label: 'Mes' },
+              { id: 'todo', label: 'Todos los días' },
+            ] as const
+          ).map((op) => (
+            <button
+              key={op.id}
+              onClick={() => setFiltroFecha(op.id)}
+              className={`shrink-0 rounded-full px-3 py-1.5 font-medium ${
+                filtroFecha === op.id ? 'bg-ink dark:bg-dark-text text-white dark:text-dark-bg' : 'border border-border dark:border-dark-border'
+              }`}
+            >
+              {t(op.label)}
+            </button>
+          ))}
+        </div>
+      )}
+
       {filtroTipo !== 'financiamiento' && sucursales.length > 1 && (
         <select
           value={filtroSucursal}
@@ -928,10 +1006,16 @@ export default function Ordenes() {
 
       {filtroTipo !== 'financiamiento' && puedeVender && reparacionesListasFiltradas.length > 0 && (
         <section className="rounded-2xl border border-good/40 bg-good/5 p-3 flex flex-col gap-2">
-          <p className="text-sm font-medium text-good">
-            🔧 {t('Reparados por el técnico · listos para cobrar')} ({reparacionesListasFiltradas.length})
-          </p>
-          {reparacionesListasFiltradas.map((r) => {
+          <button
+            onClick={() => setMostrarReparados((v) => !v)}
+            className="text-sm font-medium text-good flex items-center justify-between"
+          >
+            <span>
+              🔧 {t('Reparados por el técnico · listos para cobrar')} ({reparacionesListasFiltradas.length})
+            </span>
+            <span aria-hidden="true">{mostrarReparados ? '▲' : '▼'}</span>
+          </button>
+          {mostrarReparados && reparacionesListasFiltradas.map((r) => {
             const importe = r.importe_total ?? (r.presupuesto_mano_obra || 0) + (r.presupuesto_repuestos || 0);
             return (
               <div
@@ -971,10 +1055,16 @@ export default function Ordenes() {
 
       {filtroTipo !== 'financiamiento' && puedeVender && reparacionesCanceladasFiltradas.length > 0 && (
         <section className="rounded-2xl border border-bad/40 bg-bad/5 p-3 flex flex-col gap-2">
-          <p className="text-sm font-medium text-bad">
-            🔴 {t('Cancelados sin solución')} ({reparacionesCanceladasFiltradas.length})
-          </p>
-          {reparacionesCanceladasFiltradas.map((r) => {
+          <button
+            onClick={() => setMostrarCancelados((v) => !v)}
+            className="text-sm font-medium text-bad flex items-center justify-between"
+          >
+            <span>
+              🔴 {t('Cancelados sin solución')} ({reparacionesCanceladasFiltradas.length})
+            </span>
+            <span aria-hidden="true">{mostrarCancelados ? '▲' : '▼'}</span>
+          </button>
+          {mostrarCancelados && reparacionesCanceladasFiltradas.map((r) => {
             const importe = r.importe_total ?? (r.presupuesto_mano_obra || 0) + (r.presupuesto_repuestos || 0);
             return (
               <div
@@ -1273,7 +1363,7 @@ export default function Ordenes() {
         <>
           {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{t('Cargando...')}</p>}
 
-          {!loading && filtradas.length === 0 && (busqueda.trim() !== '' || filtroEstado !== 'todas' || filtroTipo !== 'todas') && (
+          {!loading && filtradas.length === 0 && (busqueda.trim() !== '' || filtroEstado !== 'todas' || filtroTipo !== 'todas' || filtroFecha !== 'hoy') && (
             <QoviState
               escena="sinResultados"
               tamano="sm"
@@ -1286,7 +1376,9 @@ export default function Ordenes() {
               accionPrimaria={
                 !historialCompleto && busqueda.trim() !== ''
                   ? { label: cargandoHistorial ? t('Cargando…') : t('Buscar en todo el historial'), onClick: verHistorialCompleto }
-                  : undefined
+                  : filtroFecha === 'hoy'
+                    ? { label: t('Ver todos los días'), onClick: () => setFiltroFecha('todo') }
+                    : undefined
               }
               accionSecundaria={{
                 label: t('Limpiar filtros'),
@@ -1294,64 +1386,86 @@ export default function Ordenes() {
                   setBusqueda('');
                   setFiltroEstado('todas');
                   setFiltroTipo('todas');
+                  setFiltroFecha('todo');
                 },
               }}
             />
           )}
-          {!loading && filtradas.length === 0 && busqueda.trim() === '' && filtroEstado === 'todas' && filtroTipo === 'todas' && (
-            <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{t('No hay órdenes para mostrar.')}</p>
+          {!loading && filtradas.length === 0 && busqueda.trim() === '' && filtroEstado === 'todas' && filtroTipo === 'todas' && filtroFecha === 'hoy' && (
+            <QoviState
+              escena="sinResultados"
+              tamano="sm"
+              titulo={t('Todavía no hay órdenes hoy')}
+              descripcion={t('Cuando se cargue la primera venta o cobro del día, va a aparecer acá.')}
+              accionPrimaria={{ label: t('Ver todos los días'), onClick: () => setFiltroFecha('todo') }}
+            />
           )}
 
-          <div className="flex flex-col gap-2">
-            {paraRenderizar.map((o) => {
-              const servicio = esServicioTecnico(o);
-              const cobroFinanciamiento = !servicio && esCobroFinanciamiento(o);
-              const colorTipo = servicio ? 'text-repar' : cobroFinanciamiento ? 'text-good' : 'text-accent dark:text-dark-accent';
-              const icono = servicio ? 'herramienta' : cobroFinanciamiento ? 'cobrar' : 'ordenes';
-              const etiquetaTipo = servicio ? t('Servicio técnico') : cobroFinanciamiento ? t('Cobro financiamiento') : t('Venta');
-              const estadoInfo = ESTADO_ORDEN_COLOR[o.estado] ?? ESTADO_ORDEN_COLOR.pendiente;
-              return (
-                <Link
-                  key={o.id}
-                  href={`/ordenes/${o.id}`}
-                  className="relative overflow-hidden rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card pl-4 pr-4 py-3 flex items-center justify-between gap-3"
-                >
-                  <span
-                    className={`absolute left-0 top-0 bottom-0 w-1 ${servicio ? 'bg-repar' : cobroFinanciamiento ? 'bg-good' : 'bg-accent dark:bg-dark-accent'}`}
-                    aria-hidden="true"
-                  />
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium truncate flex items-center gap-1.5">
-                      <span aria-hidden="true" className={`shrink-0 [&_svg]:h-3.5 [&_svg]:w-3.5 ${colorTipo}`}>
-                        {ICONOS[icono]}
-                      </span>
-                      <span className="truncate">
-                        {o.orden_items.length > 0
-                          ? `${o.orden_items[0].descripcion}${o.orden_items.length > 1 ? ` +${o.orden_items.length - 1}` : ''}`
-                          : t('Orden vacía')}
-                      </span>
-                    </p>
-                    <p className="text-xs text-muted dark:text-dark-text-secondary truncate">
-                      <span className={`font-medium ${colorTipo}`}>{etiquetaTipo}</span>
-                      {' · '}
-                      {o.clientes ? `${o.clientes.nombre} ${o.clientes.apellido || ''}` : t('Sin cliente')}
-                      {o.numero_orden && <span className="text-muted dark:text-dark-text-secondary"> · {o.numero_orden}</span>}
-                    </p>
-                    {(canjesPorOrden.get(o.id) ?? []).length > 0 && (
-                      <p className="text-[11px] text-accent dark:text-dark-accent mt-0.5 truncate">
-                        {t('Canje:')} {(canjesPorOrden.get(o.id) ?? []).map((c) => c.modelo || t('equipo')).join(', ')}
-                      </p>
-                    )}
-                  </div>
-                  <div className="text-right shrink-0">
-                    {o.total != null && <p className="text-sm font-medium">${o.total.toLocaleString('es-AR')}</p>}
-                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium capitalize mt-0.5 ${estadoInfo}`}>
-                      {t(o.estado)}
-                    </span>
-                  </div>
-                </Link>
-              );
-            })}
+          <div className="flex flex-col gap-4">
+            {ordenesPorDia.map((dia) => (
+              <div key={dia.clave} className="flex flex-col gap-2">
+                <div className="flex items-baseline justify-between px-1">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted dark:text-dark-text-secondary capitalize">
+                    {dia.label} · {dia.ordenes.length} {dia.ordenes.length === 1 ? t('orden') : t('órdenes')}
+                  </p>
+                  {dia.total > 0 && <p className="text-xs font-semibold">${dia.total.toLocaleString('es-AR')}</p>}
+                </div>
+                {dia.ordenes.map((o) => {
+                  const servicio = esServicioTecnico(o);
+                  const cobroFinanciamiento = !servicio && esCobroFinanciamiento(o);
+                  const colorTipo = servicio ? 'text-repar' : cobroFinanciamiento ? 'text-good' : 'text-accent dark:text-dark-accent';
+                  const icono = servicio ? 'herramienta' : cobroFinanciamiento ? 'cobrar' : 'ordenes';
+                  const etiquetaTipo = servicio ? t('Servicio técnico') : cobroFinanciamiento ? t('Cobro financiamiento') : t('Venta');
+                  const estadoInfo = ESTADO_ORDEN_COLOR[o.estado] ?? ESTADO_ORDEN_COLOR.pendiente;
+                  return (
+                    <Link
+                      key={o.id}
+                      href={`/ordenes/${o.id}`}
+                      className="relative overflow-hidden rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card pl-4 pr-4 py-3 flex items-center justify-between gap-3"
+                    >
+                      <span
+                        className={`absolute left-0 top-0 bottom-0 w-1 ${servicio ? 'bg-repar' : cobroFinanciamiento ? 'bg-good' : 'bg-accent dark:bg-dark-accent'}`}
+                        aria-hidden="true"
+                      />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate flex items-center gap-1.5">
+                          <span aria-hidden="true" className={`shrink-0 [&_svg]:h-3.5 [&_svg]:w-3.5 ${colorTipo}`}>
+                            {ICONOS[icono]}
+                          </span>
+                          <span className="truncate">
+                            {o.orden_items.length > 0
+                              ? `${o.orden_items[0].descripcion}${o.orden_items.length > 1 ? ` +${o.orden_items.length - 1}` : ''}`
+                              : t('Orden vacía')}
+                          </span>
+                        </p>
+                        <p className="text-xs text-muted dark:text-dark-text-secondary truncate">
+                          <span className={`font-medium ${colorTipo}`}>{etiquetaTipo}</span>
+                          {' · '}
+                          {o.clientes ? `${o.clientes.nombre} ${o.clientes.apellido || ''}` : t('Sin cliente')}
+                          {o.numero_orden && <span className="text-muted dark:text-dark-text-secondary"> · {o.numero_orden}</span>}
+                        </p>
+                        <p className="text-[11px] text-muted dark:text-dark-text-secondary truncate">
+                          {[formatearFechaHora(o.created_at, locale), o.vendedores?.nombre, o.forma_pago ? t(o.forma_pago) : null]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </p>
+                        {(canjesPorOrden.get(o.id) ?? []).length > 0 && (
+                          <p className="text-[11px] text-accent dark:text-dark-accent mt-0.5 truncate">
+                            {t('Canje:')} {(canjesPorOrden.get(o.id) ?? []).map((c) => c.modelo || t('equipo')).join(', ')}
+                          </p>
+                        )}
+                      </div>
+                      <div className="text-right shrink-0">
+                        {o.total != null && <p className="text-sm font-medium">${o.total.toLocaleString('es-AR')}</p>}
+                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium capitalize mt-0.5 ${estadoInfo}`}>
+                          {t(o.estado)}
+                        </span>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            ))}
           </div>
 
           {visibles < filtradas.length && (

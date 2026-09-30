@@ -2789,4 +2789,12 @@ export const PT: Record<string, string> = {
   'No hay movimientos de cuenta corriente en este período.': 'Não há movimentações de conta corrente nesse período.',
   'Ver todo el historial': 'Ver todo o histórico',
   'ANULADO': 'ANULADO',
+
+  // Órdenes — filtro rápido de fecha y agrupado por día.
+  'Todos los días': 'Todos os dias',
+  'Ver todos los días': 'Ver todos os dias',
+  'Todavía no hay órdenes hoy': 'Ainda não há pedidos hoje',
+  'Cuando se cargue la primera venta o cobro del día, va a aparecer acá.': 'Assim que a primeira venda ou cobrança do dia for cadastrada, aparece aqui.',
+  'orden': 'pedido',
+  'órdenes': 'pedidos',
 };

@@ -2788,4 +2788,12 @@ export const EN: Record<string, string> = {
   'No hay movimientos de cuenta corriente en este período.': 'No account-balance transactions in this period.',
   'Ver todo el historial': 'View full history',
   'ANULADO': 'VOIDED',
+
+  // Órdenes — filtro rápido de fecha y agrupado por día.
+  'Todos los días': 'All days',
+  'Ver todos los días': 'View all days',
+  'Todavía no hay órdenes hoy': 'No orders yet today',
+  'Cuando se cargue la primera venta o cobro del día, va a aparecer acá.': "It'll show up here as soon as the first sale or payment of the day comes in.",
+  'orden': 'order',
+  'órdenes': 'orders',
 };
