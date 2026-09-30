@@ -14,6 +14,7 @@ import { MEDIOS_PAGO, medioLabel, calcularSaldo } from '../lib/cuentaCorriente';
 import type { CuentaCorrienteServicioTecnico } from '../lib/ordenesServicio';
 import { simboloMoneda } from '../lib/monedas';
 import { formatearMonto, sanitizarDecimal } from '../lib/numeros';
+import { formatearFechaHora } from '../lib/fechas';
 import { ICONOS } from '../Iconos';
 import { QoviState } from '../QoviState';
 import Modal from '../Modal';
@@ -105,6 +106,28 @@ type CuotaFinanciamiento = {
   estado: string;
 };
 type SaldoCtaCte = { clienteId: string; saldo: number; vencido: number };
+
+// Una fila por cada cargo/abono real (ver cuenta_corriente_supabase.sql) —
+// esto es lo que la vista "Movimientos" muestra agrupado por día, a
+// diferencia de resumenFinanciamiento (que resume por cliente, no por
+// evento). pagos/financiacion_cuotas se traen embebidos vía pago_id/cuota_id.
+type MovimientoFinanciamiento = {
+  id: string;
+  fecha: string;
+  cliente_id: string;
+  tipo: string;
+  concepto: string;
+  monto: number;
+  moneda: string;
+  anulado: boolean;
+  observacion: string | null;
+  registrado_por_nombre: string | null;
+  sucursal_id: string | null;
+  orden_id: string | null;
+  clientes: { nombre: string; apellido: string | null } | null;
+  financiacion_cuotas: { numero: number } | null;
+  pagos: { medio: string } | null;
+};
 // Resumen por cliente (uno solo, aunque tenga varios planes activos): a la
 // vendedora que entra a cobrar le importa "cuánto me debe este cliente en
 // total", no elegir entre planes.
@@ -168,6 +191,20 @@ export default function Ordenes() {
   const [monedaNegocio, setMonedaNegocio] = useState('ARS');
   const [cargandoFinanciamiento, setCargandoFinanciamiento] = useState(false);
   const [financiamientoCargado, setFinanciamientoCargado] = useState(false);
+  // Pedido real de un cliente: por defecto la pestaña Financiamiento mostraba
+  // primero una tarjeta por cliente con saldo (~12 pantallas de scroll antes
+  // de llegar a ver un solo pago) — "Movimientos" (día por día, con total)
+  // pasa a ser la vista por defecto; "Cartera" es la lista de clientes de
+  // siempre, para cuando lo que hace falta es ver a quién le falta cobrar.
+  const [vistaFinanciamiento, setVistaFinanciamiento] = useState<'movimientos' | 'cartera'>('movimientos');
+  const [movimientosFinanciamiento, setMovimientosFinanciamiento] = useState<MovimientoFinanciamiento[]>([]);
+  const [cargandoMovimientos, setCargandoMovimientos] = useState(false);
+  const [movimientosCargados, setMovimientosCargados] = useState(false);
+  const [movHistorialCompleto, setMovHistorialCompleto] = useState(false);
+  const [filtroMovFecha, setFiltroMovFecha] = useState<'hoy' | 'ayer' | 'semana' | 'mes' | 'todo'>('mes');
+  const [filtroMovSucursal, setFiltroMovSucursal] = useState('');
+  const [filtroMovCajero, setFiltroMovCajero] = useState('');
+  const [filtroMovForma, setFiltroMovForma] = useState('');
   const [cobrando, setCobrando] = useState<ResumenFinanciamiento | null>(null);
   const [cobroMonto, setCobroMonto] = useState('');
   const [cobroMedio, setCobroMedio] = useState('efectivo');
@@ -296,12 +333,41 @@ export default function Ordenes() {
     setFinanciamientoCargado(true);
   };
 
+  const MOV_DIAS_VENTANA_RECIENTE = 90;
+
+  const cargarMovimientosFinanciamiento = async (traerTodoElHistorial = false) => {
+    setCargandoMovimientos(true);
+    let query = supabase
+      .from('cta_cte_movimientos')
+      .select(
+        'id, fecha, cliente_id, tipo, concepto, monto, moneda, anulado, observacion, registrado_por_nombre, sucursal_id, orden_id, clientes ( nombre, apellido ), financiacion_cuotas ( numero ), pagos ( medio )'
+      )
+      .order('fecha', { ascending: false });
+    if (!traerTodoElHistorial) {
+      const desde = new Date();
+      desde.setDate(desde.getDate() - MOV_DIAS_VENTANA_RECIENTE);
+      query = query.gte('fecha', desde.toISOString());
+    }
+    const { data } = await query;
+    setMovimientosFinanciamiento((data as any) ?? []);
+    setCargandoMovimientos(false);
+    setMovimientosCargados(true);
+    if (traerTodoElHistorial) setMovHistorialCompleto(true);
+  };
+
   useEffect(() => {
     if (filtroTipo === 'financiamiento' && !financiamientoCargado && !cargandoFinanciamiento) {
       cargarFinanciamiento();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtroTipo]);
+
+  useEffect(() => {
+    if (filtroTipo === 'financiamiento' && vistaFinanciamiento === 'movimientos' && !movimientosCargados && !cargandoMovimientos) {
+      cargarMovimientosFinanciamiento();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtroTipo, vistaFinanciamiento]);
 
   useEffect(() => {
     cargar();
@@ -476,6 +542,53 @@ export default function Ordenes() {
       })
       .sort((a, b) => (a.proximoVencimiento ?? '9999-99-99').localeCompare(b.proximoVencimiento ?? '9999-99-99'));
   }, [planesFinanciamiento, cuotasFinanciamiento, saldosCtaCte, nombresClientesFinanciamiento, monedaNegocio, t]);
+
+  // Cajeros que realmente aparecen en lo cargado — no tiene sentido ofrecer
+  // en el filtro a alguien que nunca cobró nada en la ventana visible.
+  const cajerosFinanciamiento = useMemo(
+    () => Array.from(new Set(movimientosFinanciamiento.map((m) => m.registrado_por_nombre).filter((n): n is string => !!n))).sort(),
+    [movimientosFinanciamiento]
+  );
+
+  const movimientosFiltrados = useMemo(() => {
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const inicioDia = (offsetDias: number) => {
+      const d = new Date(hoy);
+      d.setDate(d.getDate() - offsetDias);
+      return d;
+    };
+    return movimientosFinanciamiento.filter((m) => {
+      if (filtroMovFecha !== 'todo') {
+        const fechaMov = new Date(m.fecha);
+        if (filtroMovFecha === 'hoy' && fechaMov < inicioDia(0)) return false;
+        if (filtroMovFecha === 'ayer' && (fechaMov < inicioDia(1) || fechaMov >= inicioDia(0))) return false;
+        if (filtroMovFecha === 'semana' && fechaMov < inicioDia(7)) return false;
+        if (filtroMovFecha === 'mes' && fechaMov < inicioDia(30)) return false;
+      }
+      if (filtroMovSucursal && m.sucursal_id !== filtroMovSucursal) return false;
+      if (filtroMovCajero && m.registrado_por_nombre !== filtroMovCajero) return false;
+      if (filtroMovForma && (m.pagos?.medio ?? '') !== filtroMovForma) return false;
+      return true;
+    });
+  }, [movimientosFinanciamiento, filtroMovFecha, filtroMovSucursal, filtroMovCajero, filtroMovForma]);
+
+  // Agrupado por día (más reciente primero), con el total ABONADO de cada
+  // día — pedido real de un cliente: ver de un vistazo cuánto entró por día
+  // sin tener que sumar tarjeta por tarjeta.
+  const movimientosPorDia = useMemo(() => {
+    const grupos = new Map<string, { fechaLabel: string; movimientos: MovimientoFinanciamiento[]; totalAbonado: number }>();
+    for (const m of movimientosFiltrados) {
+      const clave = new Date(m.fecha).toLocaleDateString('en-CA'); // YYYY-MM-DD estable para ordenar/agrupar
+      if (!grupos.has(clave)) grupos.set(clave, { fechaLabel: new Date(m.fecha).toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' }), movimientos: [], totalAbonado: 0 });
+      const g = grupos.get(clave)!;
+      g.movimientos.push(m);
+      if (m.tipo === 'abono' && !m.anulado) g.totalAbonado += m.monto;
+    }
+    return Array.from(grupos.entries())
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .map(([clave, g]) => ({ clave, ...g }));
+  }, [movimientosFiltrados, locale]);
 
   // Opciones concretas para elegir A QUÉ se aplica el cobro del cliente
   // abierto en el modal: la cuenta corriente "pura" (lo que no corresponde a
@@ -824,6 +937,176 @@ export default function Ordenes() {
 
       {filtroTipo === 'financiamiento' && (
         <>
+          <div className="flex gap-1.5 mb-1">
+            {(['movimientos', 'cartera'] as const).map((v) => (
+              <button
+                key={v}
+                onClick={() => setVistaFinanciamiento(v)}
+                className={`rounded-full px-3 py-1.5 text-xs font-medium ${
+                  vistaFinanciamiento === v ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
+                }`}
+              >
+                {v === 'movimientos' ? t('Movimientos') : t('Cartera')}
+              </button>
+            ))}
+          </div>
+
+          {vistaFinanciamiento === 'movimientos' && (
+            <>
+              <div className="flex gap-1.5 flex-wrap">
+                {(
+                  [
+                    { id: 'hoy', label: 'Hoy' },
+                    { id: 'ayer', label: 'Ayer' },
+                    { id: 'semana', label: 'Semana' },
+                    { id: 'mes', label: 'Mes' },
+                    { id: 'todo', label: 'Todo' },
+                  ] as const
+                ).map((op) => (
+                  <button
+                    key={op.id}
+                    onClick={() => setFiltroMovFecha(op.id)}
+                    className={`rounded-full px-3 py-1.5 text-xs font-medium ${
+                      filtroMovFecha === op.id ? 'bg-ink dark:bg-dark-text text-white dark:text-dark-bg' : 'border border-border dark:border-dark-border'
+                    }`}
+                  >
+                    {t(op.label)}
+                  </button>
+                ))}
+              </div>
+              <div className="flex gap-1.5 flex-wrap">
+                {sucursales.length > 1 && (
+                  <select
+                    value={filtroMovSucursal}
+                    onChange={(e) => setFiltroMovSucursal(e.target.value)}
+                    className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-1.5 text-xs"
+                  >
+                    <option value="">{t('Todas las sucursales')}</option>
+                    {sucursales.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.nombre}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {cajerosFinanciamiento.length > 1 && (
+                  <select
+                    value={filtroMovCajero}
+                    onChange={(e) => setFiltroMovCajero(e.target.value)}
+                    className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-1.5 text-xs"
+                  >
+                    <option value="">{t('Todos los cajeros')}</option>
+                    {cajerosFinanciamiento.map((n) => (
+                      <option key={n} value={n}>
+                        {n}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <select
+                  value={filtroMovForma}
+                  onChange={(e) => setFiltroMovForma(e.target.value)}
+                  className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-1.5 text-xs"
+                >
+                  <option value="">{t('Todas las formas de pago')}</option>
+                  {MEDIOS_PAGO.map((m) => (
+                    <option key={m.codigo} value={m.codigo}>
+                      {medioLabel(m.codigo, t)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {cargandoMovimientos && (
+                <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{t('Cargando...')}</p>
+              )}
+              {!cargandoMovimientos && movimientosPorDia.length === 0 && (
+                <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">
+                  {t('No hay movimientos de cuenta corriente en este período.')}
+                </p>
+              )}
+              <div className="flex flex-col gap-4">
+                {movimientosPorDia.map((dia) => (
+                  <div key={dia.clave} className="flex flex-col gap-2">
+                    <div className="flex items-baseline justify-between px-1">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted dark:text-dark-text-secondary capitalize">
+                        {dia.fechaLabel} · {dia.movimientos.length}
+                      </p>
+                      {dia.totalAbonado > 0.009 && (
+                        <p className="text-xs font-semibold text-good">
+                          +{simboloMoneda(monedaNegocio)}{formatearMonto(dia.totalAbonado)}
+                        </p>
+                      )}
+                    </div>
+                    {dia.movimientos.map((m) => {
+                      const esCargo = m.tipo === 'cargo';
+                      const clienteNombre = m.clientes ? `${m.clientes.nombre} ${m.clientes.apellido || ''}`.trim() : t('Cliente');
+                      const tipoLabel =
+                        m.concepto === 'venta'
+                          ? t('Venta a cuenta corriente')
+                          : m.concepto === 'pago'
+                            ? t('Pago recibido')
+                            : m.concepto.replace('_', ' ');
+                      return (
+                        <div
+                          key={m.id}
+                          className={`rounded-xl border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex items-center justify-between gap-3 ${
+                            m.anulado ? 'border-bad/30 opacity-60' : 'border-border dark:border-dark-border'
+                          }`}
+                        >
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">
+                              <Link href={`/clientes/${m.cliente_id}`} className="hover:underline">
+                                {clienteNombre}
+                              </Link>
+                              {m.anulado && <span className="ml-1.5 text-[10px] font-semibold text-bad">{t('ANULADO')}</span>}
+                            </p>
+                            <p className="text-xs text-muted dark:text-dark-text-secondary truncate">
+                              {formatearFechaHora(m.fecha, locale)} · {tipoLabel}
+                              {m.financiacion_cuotas && ` · ${t('Cuota')} ${m.financiacion_cuotas.numero}`}
+                            </p>
+                            <p className="text-xs text-muted dark:text-dark-text-secondary truncate">
+                              {[
+                                m.pagos?.medio ? medioLabel(m.pagos.medio, t) : null,
+                                m.registrado_por_nombre,
+                                m.sucursal_id ? sucursales.find((s) => s.id === m.sucursal_id)?.nombre : null,
+                              ]
+                                .filter(Boolean)
+                                .join(' · ')}
+                            </p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className={`text-sm font-semibold ${esCargo ? 'text-bad' : 'text-good'}`}>
+                              {esCargo ? '+' : '−'}
+                              {simboloMoneda(m.moneda)}{formatearMonto(m.monto)}
+                            </p>
+                            {m.orden_id && (
+                              <Link href={`/ordenes/${m.orden_id}`} className="text-[10px] text-accent dark:text-dark-accent underline">
+                                {t('Ver orden')}
+                              </Link>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+
+              {!movHistorialCompleto && (
+                <button
+                  onClick={() => cargarMovimientosFinanciamiento(true)}
+                  disabled={cargandoMovimientos}
+                  className="w-full rounded-xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium disabled:opacity-40"
+                >
+                  {cargandoMovimientos ? t('Cargando…') : t('Ver todo el historial')}
+                </button>
+              )}
+            </>
+          )}
+
+          {vistaFinanciamiento === 'cartera' && (
+            <>
           {cargandoFinanciamiento && (
             <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{t('Cargando...')}</p>
           )}
@@ -883,10 +1166,13 @@ export default function Ordenes() {
           <p className="text-xs font-semibold uppercase tracking-wide text-muted dark:text-dark-text-secondary mt-2">
             {t('Boletas de cobros')}
           </p>
+            </>
+          )}
         </>
       )}
 
-      <>
+      {(filtroTipo !== 'financiamiento' || vistaFinanciamiento === 'cartera') && (
+        <>
           {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{t('Cargando...')}</p>}
 
           {!loading && filtradas.length === 0 && (busqueda.trim() !== '' || filtroEstado !== 'todas' || filtroTipo !== 'todas') && (
@@ -978,7 +1264,8 @@ export default function Ordenes() {
               {t('Mostrar')} {Math.min(PASO_VISIBLES, filtradas.length - visibles)} {t('más')}
             </button>
           )}
-      </>
+        </>
+      )}
 
       {cobrando && (
         <Modal titulo={`${t('Cobrar a')} ${cobrando.clienteNombre}`} onClose={() => (guardandoCobro ? null : setCobrando(null))}>

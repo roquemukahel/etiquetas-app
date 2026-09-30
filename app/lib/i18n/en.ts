@@ -2775,4 +2775,13 @@ export const EN: Record<string, string> = {
   'Si no lo usás, lo apagás desde Configuración y no vuelve a aparecer al cargar una venta.':
     "If you don't use it, turn it off in Settings and it won't show up again when loading a sale.",
   'Configuración → Comisiones': 'Settings → Commissions',
+
+  // Financiamiento — vista de Movimientos (día por día) y filtros.
+  'Cartera': 'Client list',
+  'Ayer': 'Yesterday',
+  'Todos los cajeros': 'All cashiers',
+  'Todas las formas de pago': 'All payment methods',
+  'No hay movimientos de cuenta corriente en este período.': 'No account-balance transactions in this period.',
+  'Ver todo el historial': 'View full history',
+  'ANULADO': 'VOIDED',
 };

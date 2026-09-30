@@ -10,14 +10,16 @@ import { tienePermiso } from '../../lib/permisos';
 import { simboloMoneda } from '../../lib/monedas';
 import { armarLinkWhatsApp } from '../../lib/whatsapp';
 import { codigoLlamada } from '../../lib/paises';
-import { MEDIOS_PAGO, calcularSaldo, estadoCuenta, ESTADO_INFO, diasDeMora } from '../../lib/cuentaCorriente';
+import { MEDIOS_PAGO, calcularSaldo, estadoCuenta, ESTADO_INFO, diasDeMora, medioLabel } from '../../lib/cuentaCorriente';
 import { registrarCobroFinanciamiento } from '../../lib/financiacion/servicio';
 import { sanitizarDecimal, formatearMonto } from '../../lib/numeros';
+import { formatearFechaHora } from '../../lib/fechas';
 import { ESTADOS_COBRADOS } from '../../estadisticas/datos';
 import FinanciacionCliente from '../../FinanciacionCliente';
 import { useT, useIdioma } from '../../lib/idioma';
 import { localeDe } from '../../lib/i18n/traducir';
 import { useSucursalActual } from '../../lib/sucursal';
+import { obtenerSucursales, type Sucursal } from '../../lib/sucursales';
 
 type Cliente = {
   id: string;
@@ -56,6 +58,9 @@ type Movimiento = {
   orden_id: string | null;
   anulado: boolean;
   fecha: string;
+  registrado_por_nombre: string | null;
+  sucursal_id: string | null;
+  pagos: { medio: string } | null;
 };
 
 export default function DetalleCliente() {
@@ -79,6 +84,7 @@ export default function DetalleCliente() {
   const [monedaCodigo, setMonedaCodigo] = useState('ARS');
   const [negocioNombre, setNegocioNombre] = useState('');
   const [codigoPais, setCodigoPais] = useState('54');
+  const [sucursales, setSucursales] = useState<Sucursal[]>([]);
   const [loading, setLoading] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -124,12 +130,12 @@ export default function DetalleCliente() {
   const cargarMovimientos = async () => {
     const { data, error } = await supabase
       .from('cta_cte_movimientos')
-      .select('id, tipo, concepto, monto, vencimiento, observacion, pago_id, orden_id, anulado, fecha')
+      .select('id, tipo, concepto, monto, vencimiento, observacion, pago_id, orden_id, anulado, fecha, registrado_por_nombre, sucursal_id, pagos ( medio )')
       .eq('cliente_id', id)
       .eq('anulado', false)
       .order('fecha', { ascending: true });
     setMovimientosError(!!error);
-    setMovimientos(error ? [] : ((data as Movimiento[]) ?? []));
+    setMovimientos(error ? [] : ((data as any) ?? []));
   };
 
   useEffect(() => {
@@ -171,6 +177,17 @@ export default function DetalleCliente() {
     cargarMovimientos();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        setSucursales(await obtenerSucursales(supabase, false));
+      } catch {
+        // Tabla sucursales todavía no existe en este negocio.
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // --- Cálculos de cuenta corriente ---
   const saldo = useMemo(() => calcularSaldo(movimientos), [movimientos]);
@@ -775,8 +792,17 @@ export default function DetalleCliente() {
                           {m.concepto === 'venta' ? t('Venta a cuenta corriente') : m.concepto === 'pago' ? t('Pago recibido') : m.concepto.replace('_', ' ')}
                         </p>
                         <p className="text-xs text-muted dark:text-dark-text-secondary">
-                          {new Date(m.fecha).toLocaleDateString(locale)}
+                          {formatearFechaHora(m.fecha, locale)}
                           {esCargo && m.vencimiento ? ` · ${t('vence')} ${new Date(m.vencimiento).toLocaleDateString(locale)}` : ''}
+                        </p>
+                        <p className="text-xs text-muted dark:text-dark-text-secondary truncate">
+                          {[
+                            m.pagos?.medio ? medioLabel(m.pagos.medio, t) : null,
+                            m.registrado_por_nombre,
+                            m.sucursal_id ? sucursales.find((s) => s.id === m.sucursal_id)?.nombre : null,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}
                         </p>
                         {m.observacion && <p className="text-xs text-muted dark:text-dark-text-secondary truncate">{m.observacion}</p>}
                       </div>

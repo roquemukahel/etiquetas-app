@@ -2776,4 +2776,13 @@ export const PT: Record<string, string> = {
   'Si no lo usás, lo apagás desde Configuración y no vuelve a aparecer al cargar una venta.':
     'Se você não usa, desativa em Configurações e ele não aparece mais ao cadastrar uma venda.',
   'Configuración → Comisiones': 'Configurações → Comissões',
+
+  // Financiamiento — vista de Movimientos (día por día) y filtros.
+  'Cartera': 'Carteira de clientes',
+  'Ayer': 'Ontem',
+  'Todos los cajeros': 'Todos os caixas',
+  'Todas las formas de pago': 'Todas as formas de pagamento',
+  'No hay movimientos de cuenta corriente en este período.': 'Não há movimentações de conta corrente nesse período.',
+  'Ver todo el historial': 'Ver todo o histórico',
+  'ANULADO': 'ANULADO',
 };
