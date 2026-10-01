@@ -395,6 +395,17 @@ const GALAXY_A32: ModeloColores = {
   ],
 };
 
+// Samsung Galaxy A52 — colores oficiales: Awesome Black, Awesome White,
+// Awesome Violet, Awesome Blue (fotos disponibles: negro, blanco, azul).
+const GALAXY_A52: ModeloColores = {
+  carpeta: 'galaxy-a52',
+  colores: [
+    { nombre: 'Blanco', archivo: 'blanco', hex: '#f3f3ef' },
+    { nombre: 'Azul', archivo: 'azul', hex: '#5fa8cc' },
+    { nombre: 'Negro', archivo: 'negro', hex: '#1c1c1e' },
+  ],
+};
+
 // Samsung Galaxy A07 — colores oficiales: Black, Light Violet, Green.
 const GALAXY_A07: ModeloColores = {
   carpeta: 'galaxy-a07',
@@ -935,6 +946,7 @@ const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   iphone18pro: IPHONE_18_PRO,
   iphone18promax: IPHONE_18_PRO,
   galaxya32: GALAXY_A32,
+  galaxya52: GALAXY_A52,
   galaxya07: GALAXY_A07,
   galaxya17: GALAXY_A17,
   galaxya26: GALAXY_A26,
