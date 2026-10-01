@@ -46,6 +46,7 @@ type Orden = {
   boleta_moneda: string | null;
   aclaraciones_tecnico: string | null;
   incluir_aclaraciones_tecnico: boolean;
+  cliente_id: string | null;
   clientes: {
     nombre: string;
     apellido: string | null;
@@ -153,6 +154,14 @@ export default function Boleta() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [qr, setQr] = useState<string | null>(null);
+  // Reclamo real de un cliente: la boleta de un cobro de cuota/cuenta
+  // corriente no mostraba a qué cuota se aplicó ni cuánto quedaba debiendo
+  // después de ese pago — solo el monto cobrado, igual que cualquier venta.
+  const [cobroFinanciamiento, setCobroFinanciamiento] = useState<{
+    cuotaNumero: number | null;
+    cuotaSaldoRestante: number | null;
+    saldoCuentaCorriente: number | null;
+  } | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -268,6 +277,35 @@ export default function Boleta() {
             .order('fecha');
           setCuotasPlanAhorro((movsData as CuotaPlanAhorro[]) ?? []);
         })(),
+        (async () => {
+          const o = ordenData as Orden | null;
+          const soloFinanciamiento = !!o && o.orden_items.length > 0 && o.orden_items.every((i) => i.tipo === 'financiamiento');
+          if (!soloFinanciamiento || !o?.cliente_id) return;
+          const [{ data: movCobro }, { data: saldosData }] = await Promise.all([
+            supabase.from('cta_cte_movimientos').select('cuota_id').eq('orden_id', id).eq('tipo', 'abono').eq('anulado', false).maybeSingle(),
+            supabase.rpc('saldos_cuenta_corriente'),
+          ]);
+          const cuotaId = (movCobro as { cuota_id: string | null } | null)?.cuota_id ?? null;
+          let cuotaNumero: number | null = null;
+          let cuotaSaldoRestante: number | null = null;
+          if (cuotaId) {
+            const { data: cuota } = await supabase
+              .from('financiacion_cuotas')
+              .select('numero, importe_original, importe_pagado')
+              .eq('id', cuotaId)
+              .maybeSingle();
+            if (cuota) {
+              cuotaNumero = cuota.numero;
+              cuotaSaldoRestante = Math.max(0, cuota.importe_original - cuota.importe_pagado);
+            }
+          }
+          const fila = ((saldosData ?? []) as { cliente_id: string; saldo: number }[]).find((s) => s.cliente_id === o.cliente_id);
+          setCobroFinanciamiento({
+            cuotaNumero,
+            cuotaSaldoRestante,
+            saldoCuentaCorriente: fila ? Number(fila.saldo) || 0 : 0,
+          });
+        })(),
       ]);
 
       setLoading(false);
@@ -296,7 +334,11 @@ export default function Boleta() {
 
   const subtotal = orden.orden_items.reduce((acc, i) => acc + i.cantidad * i.precio_unitario, 0);
   const tieneTrabajos = orden.orden_items.some((i) => i.tipo === 'trabajo');
-  const tieneProductos = orden.orden_items.some((i) => i.tipo !== 'trabajo');
+  // 'financiamiento' (cobro de cuota/cuenta corriente) no es ni un producto
+  // vendido ni un trabajo — antes contaba como "producto" acá y la boleta de
+  // un cobro de financiamiento terminaba imprimiendo el texto de garantía de
+  // un producto que nunca se vendió en esta orden.
+  const tieneProductos = orden.orden_items.some((i) => i.tipo !== 'trabajo' && i.tipo !== 'financiamiento');
   const clienteNombre = orden.clientes ? `${orden.clientes.nombre} ${orden.clientes.apellido || ''}`.trim() : '';
   const moneda = simboloMoneda(orden.moneda || negocio?.moneda);
   const totalNum = orden.total ?? subtotal;
@@ -545,6 +587,23 @@ export default function Boleta() {
             ))}
           </tbody>
         </table>
+
+        {cobroFinanciamiento && (
+          <div className="rounded-lg bg-canvas px-3 py-2 text-sm flex flex-col gap-0.5">
+            {cobroFinanciamiento.cuotaNumero != null && (
+              <div className="flex justify-between">
+                <span className="text-muted">
+                  {t('Cuota')} {cobroFinanciamiento.cuotaNumero} — {t('saldo restante')}
+                </span>
+                <span className="font-medium">{fmt(cobroFinanciamiento.cuotaSaldoRestante ?? 0)}</span>
+              </div>
+            )}
+            <div className="flex justify-between">
+              <span className="text-muted">{t('Saldo de cuenta corriente')}</span>
+              <span className="font-medium">{fmt(cobroFinanciamiento.saldoCuentaCorriente ?? 0)}</span>
+            </div>
+          </div>
+        )}
 
         <div className="self-end w-full max-w-[280px] flex flex-col gap-2 text-sm">
           {orden.anticipo != null && orden.anticipo > 0 && (

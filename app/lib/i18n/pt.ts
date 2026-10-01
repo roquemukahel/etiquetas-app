@@ -2797,4 +2797,11 @@ export const PT: Record<string, string> = {
   'Cuando se cargue la primera venta o cobro del día, va a aparecer acá.': 'Assim que a primeira venda ou cobrança do dia for cadastrada, aparece aqui.',
   'orden': 'pedido',
   'órdenes': 'pedidos',
+
+  // Anular con motivo + boleta de cobro de financiamiento.
+  'No tenés permiso para anular movimientos de cuenta corriente.': 'Você não tem permissão para anular movimentações de conta corrente.',
+  '¿Por qué anulás este movimiento? El motivo queda registrado y es obligatorio.': 'Por que você está anulando esta movimentação? O motivo fica registrado e é obrigatório.',
+  'Tenés que indicar un motivo para anular.': 'Você precisa indicar um motivo para anular.',
+  'saldo restante': 'saldo restante',
+  'Saldo de cuenta corriente': 'Saldo da conta corrente',
 };

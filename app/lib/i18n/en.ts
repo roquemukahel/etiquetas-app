@@ -2796,4 +2796,11 @@ export const EN: Record<string, string> = {
   'Cuando se cargue la primera venta o cobro del día, va a aparecer acá.': "It'll show up here as soon as the first sale or payment of the day comes in.",
   'orden': 'order',
   'órdenes': 'orders',
+
+  // Anular con motivo + boleta de cobro de financiamiento.
+  'No tenés permiso para anular movimientos de cuenta corriente.': "You don't have permission to void account-balance transactions.",
+  '¿Por qué anulás este movimiento? El motivo queda registrado y es obligatorio.': 'Why are you voiding this transaction? The reason is logged and required.',
+  'Tenés que indicar un motivo para anular.': 'You need to enter a reason to void it.',
+  'saldo restante': 'remaining balance',
+  'Saldo de cuenta corriente': 'Account balance',
 };

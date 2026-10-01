@@ -409,20 +409,36 @@ export default function DetalleCliente() {
   };
 
   const anularMovimiento = async (m: Movimiento) => {
-    if (
-      !confirm(
-        t(
-          '¿Anular este movimiento? Deja de contar en el saldo (queda registrado como anulado, no se borra). Sirve para corregir un error de carga.'
-        )
-      )
-    )
+    // Mismo permiso que ya restringe ajustar/reprogramar/anular un plan de
+    // financiación — anular acá también condona o reescribe deuda, no es
+    // una acción del día a día de un vendedor cualquiera.
+    if (!tienePermiso(actor, 'ajustar_financiacion')) {
+      setError(t('No tenés permiso para anular movimientos de cuenta corriente.'));
       return;
+    }
+    const motivo = prompt(
+      t('¿Por qué anulás este movimiento? El motivo queda registrado y es obligatorio.')
+    );
+    if (motivo === null) return;
+    if (!motivo.trim()) {
+      setError(t('Tenés que indicar un motivo para anular.'));
+      return;
+    }
     setError(null);
-    const { error: mErr } = await supabase.from('cta_cte_movimientos').update({ anulado: true }).eq('id', m.id);
+    const { error: mErr } = await supabase
+      .from('cta_cte_movimientos')
+      .update({ anulado: true, motivo_anulacion: motivo.trim() })
+      .eq('id', m.id);
     if (mErr) {
       setError(`${t('No pudimos anular el movimiento:')} ` + mErr.message);
       return;
     }
+    await registrarAuditoria(supabase, {
+      accion: `anuló un movimiento de cuenta corriente (${m.concepto}, ${m.monto}) — motivo: ${motivo.trim()}`,
+      entidad: 'cliente',
+      entidadId: String(id),
+      valorNuevo: { movimiento_id: m.id, motivo: motivo.trim() },
+    });
     // Si el movimiento venía de un pago, también anulamos ese pago para que
     // no siga contando en la caja de Estadísticas.
     if (m.pago_id) {
@@ -821,9 +837,11 @@ export default function DetalleCliente() {
                           <Link href={`/clientes/${id}/comprobante/${m.id}`} className="text-[10px] text-accent dark:text-dark-accent underline">
                             {t('Comprobante')}
                           </Link>
-                          <button onClick={() => anularMovimiento(m)} className="text-[10px] text-bad underline">
-                            {t('Anular')}
-                          </button>
+                          {tienePermiso(actor, 'ajustar_financiacion') && (
+                            <button onClick={() => anularMovimiento(m)} className="text-[10px] text-bad underline">
+                              {t('Anular')}
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>

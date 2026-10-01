@@ -123,6 +123,7 @@ type MovimientoFinanciamiento = {
   moneda: string;
   anulado: boolean;
   observacion: string | null;
+  motivo_anulacion: string | null;
   registrado_por_nombre: string | null;
   sucursal_id: string | null;
   orden_id: string | null;
@@ -401,7 +402,7 @@ export default function Ordenes() {
     let query = supabase
       .from('cta_cte_movimientos')
       .select(
-        'id, fecha, cliente_id, tipo, concepto, monto, moneda, anulado, observacion, registrado_por_nombre, sucursal_id, orden_id, clientes ( nombre, apellido ), financiacion_cuotas ( numero ), pagos ( medio )'
+        'id, fecha, cliente_id, tipo, concepto, monto, moneda, anulado, observacion, motivo_anulacion, registrado_por_nombre, sucursal_id, orden_id, clientes ( nombre, apellido ), financiacion_cuotas ( numero ), pagos ( medio )'
       )
       .order('fecha', { ascending: false });
     if (!traerTodoElHistorial) {
@@ -1249,6 +1250,9 @@ export default function Ordenes() {
                                 .filter(Boolean)
                                 .join(' · ')}
                             </p>
+                            {m.anulado && m.motivo_anulacion && (
+                              <p className="text-xs text-bad truncate">{t('Motivo')}: {m.motivo_anulacion}</p>
+                            )}
                           </div>
                           <div className="text-right shrink-0">
                             <p className={`text-sm font-semibold ${esCargo ? 'text-bad' : 'text-good'}`}>
