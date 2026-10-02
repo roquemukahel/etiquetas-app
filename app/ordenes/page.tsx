@@ -276,12 +276,18 @@ export default function Ordenes() {
     setFiltroSucursal(sucursalActual.id ?? '');
   }, [sucursalActual.id]);
 
+  const [fechasEntregaPorOrden, setFechasEntregaPorOrden] = useState<Map<string, string>>(new Map());
+  const fechaEfectiva = (o: Orden) => {
+    const entrega = fechasEntregaPorOrden.get(o.id);
+    return entrega && entrega > o.created_at ? entrega : o.created_at;
+  };
+
   const DIAS_VENTANA_RECIENTE = 90;
 
   const cargar = async (traerTodoElHistorial = false) => {
     const desdeReciente = new Date();
     desdeReciente.setDate(desdeReciente.getDate() - DIAS_VENTANA_RECIENTE);
-    const [ordenesData, { data: listasData }, { data: canceladasData }, canjesData] = await Promise.all([
+    const [ordenesData, { data: listasData }, { data: canceladasData }, canjesData, entregasData] = await Promise.all([
       obtenerTodasLasFilas<Orden>(
         supabase,
         'ordenes',
@@ -309,7 +315,22 @@ export default function Ordenes() {
       // Plan canje de cada orden, para poder buscar por el equipo que el
       // cliente entregó (no solo por el que se llevó).
       obtenerTodasLasFilas<CanjeOrden>(supabase, 'canjes', 'orden_id, modelo, imei, color', [], (q) => q.not('orden_id', 'is', null)),
+      // Fecha en que se entregó/cobró cada reparación: la orden de un Servicio
+      // Técnico nace al RECIBIR el equipo (días antes de cobrarlo), así que
+      // sin esta fecha "Generar boleta" dejaba la orden escondida en un día
+      // viejo y el filtro "Hoy" parecía que no se había guardado.
+      obtenerTodasLasFilas<{ orden_cobro_id: string; fecha_entrega: string }>(
+        supabase,
+        'reparaciones',
+        'orden_cobro_id, fecha_entrega',
+        [{ columna: 'fecha_entrega', ascending: false }],
+        (q) => {
+          const filtrada = q.not('orden_cobro_id', 'is', null).not('fecha_entrega', 'is', null);
+          return traerTodoElHistorial ? filtrada : filtrada.gte('fecha_entrega', desdeReciente.toISOString());
+        }
+      ),
     ]);
+    setFechasEntregaPorOrden(new Map(entregasData.map((e) => [e.orden_cobro_id, e.fecha_entrega])));
     setOrdenes(ordenesData);
     setReparacionesListas((listasData as any) ?? []);
     setReparacionesCanceladas((canceladasData as any) ?? []);
@@ -802,7 +823,7 @@ export default function Ordenes() {
       // No aplica dentro de Financiamiento > Cartera: esa lista de boletas de
       // cobro ya tiene su propia ventana de 90 días, independiente de este
       // filtro rápido (que es para la pantalla de Órdenes en general).
-      .filter((o) => filtroTipo === 'financiamiento' || q !== '' || estaEnRangoFecha(o.created_at, filtroFecha))
+      .filter((o) => filtroTipo === 'financiamiento' || q !== '' || estaEnRangoFecha(fechaEfectiva(o), filtroFecha))
       .filter((o) => !filtroSucursal || o.sucursal_id === filtroSucursal)
       .filter((o) => {
         if (filtroTipo === 'todas') return true;
@@ -836,8 +857,10 @@ export default function Ordenes() {
           .join(' ')
           .toLowerCase();
         return nombreCliente.includes(q) || itemsTexto.includes(q) || canjesTexto.includes(q);
-      });
-  }, [ordenes, filtroEstado, filtroFecha, filtroSucursal, filtroTipo, busqueda, canjesPorOrden]);
+      })
+      .sort((a, b) => fechaEfectiva(b).localeCompare(fechaEfectiva(a)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ordenes, filtroEstado, filtroFecha, filtroSucursal, filtroTipo, busqueda, canjesPorOrden, fechasEntregaPorOrden]);
 
   // Con "ver todo el historial" activado (años de órdenes), pintar TODAS las
   // tarjetas de una es lo que hace sentir lenta la pantalla que todo vendedor
@@ -861,14 +884,15 @@ export default function Ordenes() {
     const ayerClave = ayer.toLocaleDateString('en-CA');
     const grupos = new Map<string, { label: string; ordenes: Orden[]; total: number }>();
     for (const o of paraRenderizar) {
-      const clave = new Date(o.created_at).toLocaleDateString('en-CA');
+      const fechaOrden = fechaEfectiva(o);
+      const clave = new Date(fechaOrden).toLocaleDateString('en-CA');
       if (!grupos.has(clave)) {
         const label =
           clave === hoyClave
             ? t('Hoy')
             : clave === ayerClave
               ? t('Ayer')
-              : new Date(o.created_at).toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' });
+              : new Date(fechaOrden).toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' });
         grupos.set(clave, { label, ordenes: [], total: 0 });
       }
       const g = grupos.get(clave)!;
@@ -878,7 +902,8 @@ export default function Ordenes() {
     return Array.from(grupos.entries())
       .sort((a, b) => b[0].localeCompare(a[0]))
       .map(([clave, g]) => ({ clave, ...g }));
-  }, [paraRenderizar, locale, t]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paraRenderizar, locale, t, fechasEntregaPorOrden]);
 
   // Se me había pasado esto en la primera pasada de multisucursal: estas dos
   // NO nacen de la tabla `ordenes` (que sí ya filtraba), sino de
@@ -1449,7 +1474,7 @@ export default function Ordenes() {
                           {o.numero_orden && <span className="text-muted dark:text-dark-text-secondary"> · {o.numero_orden}</span>}
                         </p>
                         <p className="text-[11px] text-muted dark:text-dark-text-secondary truncate">
-                          {[formatearFechaHora(o.created_at, locale), o.vendedores?.nombre, o.forma_pago ? t(o.forma_pago) : null]
+                          {[formatearFechaHora(fechaEfectiva(o), locale), o.vendedores?.nombre, o.forma_pago ? t(o.forma_pago) : null]
                             .filter(Boolean)
                             .join(' · ')}
                         </p>
