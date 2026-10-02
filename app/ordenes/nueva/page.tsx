@@ -1272,7 +1272,7 @@ export default function NuevaOrden() {
         if (garantiaDias) {
           const vencimiento = new Date();
           vencimiento.setDate(vencimiento.getDate() + garantiaDias);
-          actualizacionReserva.garantia_vencimiento = vencimiento.toISOString().slice(0, 10);
+          actualizacionReserva.garantia_vencimiento = aFechaISO(vencimiento);
         }
         const { data: reservados, error: reservaErr } = await supabase
           .from('dispositivos')

@@ -78,9 +78,11 @@ export const ESTADO_INFO: Record<EstadoCuenta, { label: string; texto: string; f
 // Días de mora del cargo vencido más antiguo (para "vencido hace N días").
 export function diasDeMora(vencimientoMasAntiguo: string | null | undefined): number | null {
   if (!vencimientoMasAntiguo) return null;
-  const venc = new Date(vencimientoMasAntiguo);
+  // 'YYYY-MM-DD' a secas se interpreta como UTC: en Argentina (UTC-3) eso es
+  // el día ANTERIOR a las 21 h, así que la mora salía con un día de más.
+  const [anio, mes, dia] = vencimientoMasAntiguo.slice(0, 10).split('-').map(Number);
+  const venc = new Date(anio, (mes || 1) - 1, dia || 1);
   const hoy = new Date();
-  venc.setHours(0, 0, 0, 0);
   hoy.setHours(0, 0, 0, 0);
   const dias = Math.floor((hoy.getTime() - venc.getTime()) / 86400000);
   return dias > 0 ? dias : null;
@@ -92,5 +94,7 @@ export function vencimientoDesdeHoy(plazoDias: number | null | undefined): strin
   if (!plazoDias || plazoDias <= 0) return null;
   const d = new Date();
   d.setDate(d.getDate() + plazoDias);
-  return d.toISOString().slice(0, 10);
+  // Fecha LOCAL: toISOString() es UTC y, pasadas las 21 h en Argentina, da el
+  // día siguiente (el vencimiento quedaba un día más tarde de lo pactado).
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }

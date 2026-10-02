@@ -2800,6 +2800,7 @@ export const PT: Record<string, string> = {
 
   // Anular con motivo + boleta de cobro de financiamiento.
   'No tenés permiso para anular movimientos de cuenta corriente.': 'Você não tem permissão para anular movimentações de conta corrente.',
+  'No pudimos verificar la cuenta corriente de esta orden. Probá de nuevo.': 'Não conseguimos verificar a conta corrente deste pedido. Tente novamente.',
   '¿Por qué anulás este movimiento? El motivo queda registrado y es obligatorio.': 'Por que você está anulando esta movimentação? O motivo fica registrado e é obrigatório.',
   'Tenés que indicar un motivo para anular.': 'Você precisa indicar um motivo para anular.',
   'saldo restante': 'saldo restante',

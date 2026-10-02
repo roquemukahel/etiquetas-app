@@ -12,6 +12,7 @@ import { armarLinkWhatsApp } from '../../lib/whatsapp';
 import { codigoLlamada } from '../../lib/paises';
 import { MEDIOS_PAGO, calcularSaldo, estadoCuenta, ESTADO_INFO, diasDeMora, medioLabel } from '../../lib/cuentaCorriente';
 import { registrarCobroFinanciamiento } from '../../lib/financiacion/servicio';
+import { aFechaISO } from '../../lib/financiacion/motor';
 import { sanitizarDecimal, formatearMonto } from '../../lib/numeros';
 import { formatearFechaHora } from '../../lib/fechas';
 import { ESTADOS_COBRADOS } from '../../estadisticas/datos';
@@ -191,7 +192,7 @@ export default function DetalleCliente() {
 
   // --- Cálculos de cuenta corriente ---
   const saldo = useMemo(() => calcularSaldo(movimientos), [movimientos]);
-  const hoyISO = new Date().toISOString().slice(0, 10);
+  const hoyISO = aFechaISO(new Date());
   const cargosVencidos = useMemo(
     () => movimientos.filter((m) => m.tipo === 'cargo' && m.vencimiento && m.vencimiento < hoyISO),
     [movimientos, hoyISO]
@@ -809,7 +810,7 @@ export default function DetalleCliente() {
                         </p>
                         <p className="text-xs text-muted dark:text-dark-text-secondary">
                           {formatearFechaHora(m.fecha, locale)}
-                          {esCargo && m.vencimiento ? ` · ${t('vence')} ${new Date(m.vencimiento).toLocaleDateString(locale)}` : ''}
+                          {esCargo && m.vencimiento ? ` · ${t('vence')} ${new Date(m.vencimiento + 'T00:00:00').toLocaleDateString(locale)}` : ''}
                         </p>
                         <p className="text-xs text-muted dark:text-dark-text-secondary truncate">
                           {[

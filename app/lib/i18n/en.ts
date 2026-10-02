@@ -2799,6 +2799,7 @@ export const EN: Record<string, string> = {
 
   // Anular con motivo + boleta de cobro de financiamiento.
   'No tenés permiso para anular movimientos de cuenta corriente.': "You don't have permission to void account-balance transactions.",
+  'No pudimos verificar la cuenta corriente de esta orden. Probá de nuevo.': "We couldn't check this order's account balance. Please try again.",
   '¿Por qué anulás este movimiento? El motivo queda registrado y es obligatorio.': 'Why are you voiding this transaction? The reason is logged and required.',
   'Tenés que indicar un motivo para anular.': 'You need to enter a reason to void it.',
   'saldo restante': 'remaining balance',

@@ -8,11 +8,12 @@ import { obtenerTodasLasFilas } from '../lib/db';
 import { useActor } from '../lib/actor';
 import { tienePermiso } from '../lib/permisos';
 import { registrarAuditoria } from '../lib/auditoria';
-import { generarOrdenDeReparacion } from '../lib/ordenesServicio';
+import { generarOrdenDeReparacion, ordenYaTieneCargoCuentaCorriente } from '../lib/ordenesServicio';
 import { registrarCobroFinanciamiento } from '../lib/financiacion/servicio';
 import { MEDIOS_PAGO, medioLabel, calcularSaldo, diasDeMora } from '../lib/cuentaCorriente';
 import type { CuentaCorrienteServicioTecnico } from '../lib/ordenesServicio';
 import { simboloMoneda } from '../lib/monedas';
+import { aFechaISO } from '../lib/financiacion/motor';
 import { formatearMonto, sanitizarDecimal } from '../lib/numeros';
 import { formatearFechaHora } from '../lib/fechas';
 import { descargarXLSX } from '../lib/csv';
@@ -164,6 +165,9 @@ function esCobroFinanciamiento(o: Orden) {
   return o.orden_items.length > 0 && o.orden_items.every((i) => i.tipo === 'financiamiento');
 }
 
+const COLUMNAS_ORDEN_LISTA =
+  'id, numero_orden, forma_pago, total, estado, created_at, sucursal_id, clientes ( nombre, apellido ), orden_items ( descripcion, tipo ), vendedores ( nombre )';
+
 type FiltroFecha = 'hoy' | 'ayer' | 'semana' | 'mes' | 'todo';
 
 // Mismo criterio de rangos que ya usa la vista Movimientos de Financiamiento
@@ -287,11 +291,11 @@ export default function Ordenes() {
   const cargar = async (traerTodoElHistorial = false) => {
     const desdeReciente = new Date();
     desdeReciente.setDate(desdeReciente.getDate() - DIAS_VENTANA_RECIENTE);
-    const [ordenesData, { data: listasData }, { data: canceladasData }, canjesData, entregasData] = await Promise.all([
+    const [ordenesBase, { data: listasData }, { data: canceladasData }, canjesData, entregasData] = await Promise.all([
       obtenerTodasLasFilas<Orden>(
         supabase,
         'ordenes',
-        'id, numero_orden, forma_pago, total, estado, created_at, sucursal_id, clientes ( nombre, apellido ), orden_items ( descripcion, tipo ), vendedores ( nombre )',
+        COLUMNAS_ORDEN_LISTA,
         [{ columna: 'created_at', ascending: false }],
         traerTodoElHistorial ? undefined : (q) => q.gte('created_at', desdeReciente.toISOString())
       ),
@@ -330,6 +334,22 @@ export default function Ordenes() {
         }
       ),
     ]);
+    // Una reparación recibida hace más de 90 días y cobrada recién ahora tiene
+    // su orden FUERA de la ventana de arriba (esa filtra por created_at) — se
+    // traen aparte, por id, solo las que faltan (normalmente ninguna, así que
+    // el caso común no paga ninguna consulta extra).
+    let ordenesData = ordenesBase;
+    if (!traerTodoElHistorial) {
+      const yaCargadas = new Set(ordenesBase.map((o) => o.id));
+      const faltantes = Array.from(new Set(entregasData.map((e) => e.orden_cobro_id))).filter((id) => !yaCargadas.has(id));
+      if (faltantes.length > 0) {
+        const lotes: string[][] = [];
+        for (let i = 0; i < faltantes.length; i += 100) lotes.push(faltantes.slice(i, i + 100));
+        const resultados = await Promise.all(lotes.map((ids) => supabase.from('ordenes').select(COLUMNAS_ORDEN_LISTA).in('id', ids)));
+        const extras = resultados.flatMap((r) => ((r.data as unknown as Orden[]) ?? []));
+        ordenesData = [...ordenesBase, ...extras];
+      }
+    }
     setFechasEntregaPorOrden(new Map(entregasData.map((e) => [e.orden_cobro_id, e.fecha_entrega])));
     setOrdenes(ordenesData);
     setReparacionesListas((listasData as any) ?? []);
@@ -351,35 +371,66 @@ export default function Ordenes() {
     // saldos_cuenta_corriente(): el libro mayor real (Σcargos−Σabonos), trae
     // a CUALQUIER cliente con saldo — con o sin plan de cuotas formal. Mismo
     // RPC que ya usa /cuentas-por-cobrar para esto mismo.
-    const [{ data: saldosData }, { data: planesData }] = await Promise.all([
+    // Todo lo que no depende del saldo (planes y cuotas) se pide en paralelo
+    // con el saldo, en vez de esperar uno detrás de otro. Cada tabla pasa por
+    // obtenerTodasLasFilas: PostgREST corta en silencio a las 1000 filas, y
+    // con muchos planes activos las cuotas (varias por plan) lo superan
+    // fácil — la Cartera mostraba cuotas/próximo vencimiento incompletos.
+    // Las cuotas se filtran por el estado de su plan con un join (igual que
+    // aplicarPagoAFinanciacion) en vez de .in(plan_id, [cientos de ids]), que
+    // revienta el largo máximo de la URL. Se traen TODAS las cuotas (no solo
+    // las pendientes): una cuota parcialmente pagada sigue en 'pendiente' con
+    // importe_pagado > 0, así que hace falta verlas todas para sumar bien lo
+    // ya cobrado (mismo criterio que el resumen de FinanciacionCliente).
+    const [{ data: saldosData }, planes, cuotasData] = await Promise.all([
       supabase.rpc('saldos_cuenta_corriente'),
-      supabase.from('financiacion_planes').select('id, cliente_id, orden_id, moneda, estado').eq('estado', 'activo'),
+      obtenerTodasLasFilas<PlanFinanciamiento>(supabase, 'financiacion_planes', 'id, cliente_id, orden_id, moneda, estado', [], (q) =>
+        q.eq('estado', 'activo')
+      ),
+      obtenerTodasLasFilas<CuotaFinanciamiento>(
+        supabase,
+        'financiacion_cuotas',
+        'id, plan_id, numero, fecha_vencimiento, importe_original, importe_pagado, estado, financiacion_planes!inner(estado)',
+        [],
+        (q) => q.eq('financiacion_planes.estado', 'activo')
+      ),
     ]);
     const saldos = (((saldosData ?? []) as { cliente_id: string; saldo: number; vencido: number }[])
       .map((s) => ({ clienteId: s.cliente_id, saldo: Number(s.saldo) || 0, vencido: Number(s.vencido) || 0 }))
       .filter((s) => s.saldo > 0.009));
     setSaldosCtaCte(saldos);
-
-    const planes = (planesData as PlanFinanciamiento[]) ?? [];
     setPlanesFinanciamiento(planes);
+    setCuotasFinanciamiento(cuotasData);
 
     const idsClientes = Array.from(new Set(saldos.map((s) => s.clienteId)));
     if (idsClientes.length > 0) {
-      const [{ data: clientesData }, { data: movsData }] = await Promise.all([
-        supabase.from('clientes').select('id, nombre, apellido').in('id', idsClientes),
-        supabase
-          .from('cta_cte_movimientos')
-          .select('cliente_id, tipo, concepto, monto, vencimiento, fecha, sucursal_id')
-          .in('cliente_id', idsClientes)
-          .eq('anulado', false),
+      // En lotes: con cientos de clientes con saldo, una sola lista en
+      // .in(...) supera el largo máximo de la URL y la consulta fallaba entera.
+      const lotes: string[][] = [];
+      for (let i = 0; i < idsClientes.length; i += 100) lotes.push(idsClientes.slice(i, i + 100));
+      const [clientesLotes, movsLotes] = await Promise.all([
+        Promise.all(lotes.map((ids) => supabase.from('clientes').select('id, nombre, apellido').in('id', ids))),
+        Promise.all(
+          lotes.map((ids) =>
+            obtenerTodasLasFilas<{ cliente_id: string; tipo: string; concepto: string; monto: number; vencimiento: string | null; fecha: string; sucursal_id: string | null }>(
+              supabase,
+              'cta_cte_movimientos',
+              'cliente_id, tipo, concepto, monto, vencimiento, fecha, sucursal_id',
+              [],
+              (q) => q.in('cliente_id', ids).eq('anulado', false)
+            )
+          )
+        ),
       ]);
-      setNombresClientesFinanciamiento(
-        new Map(((clientesData ?? []) as { id: string; nombre: string; apellido: string | null }[]).map((c) => [c.id, `${c.nombre} ${c.apellido || ''}`.trim()]))
-      );
+      const clientesData = clientesLotes.flatMap((r) => ((r.data ?? []) as { id: string; nombre: string; apellido: string | null }[]));
+      const movsData = movsLotes.flat();
+      setNombresClientesFinanciamiento(new Map(clientesData.map((c) => [c.id, `${c.nombre} ${c.apellido || ''}`.trim()])));
 
-      const hoyISO = new Date().toISOString().slice(0, 10);
+      // Fecha LOCAL (no toISOString, que es UTC): pasadas las 21 h en
+      // Argentina ya da el día siguiente y marcaba cargos como vencidos un día antes.
+      const hoyISO = aFechaISO(new Date());
       const extra = new Map<string, { ultimoPago: string | null; sucursalUltimoPago: string | null; vencMasAntiguo: string | null }>();
-      for (const m of (movsData as { cliente_id: string; tipo: string; concepto: string; monto: number; vencimiento: string | null; fecha: string; sucursal_id: string | null }[]) ?? []) {
+      for (const m of movsData) {
         const info = extra.get(m.cliente_id) ?? { ultimoPago: null, sucursalUltimoPago: null, vencMasAntiguo: null };
         if (m.tipo === 'abono' && m.concepto === 'pago' && (!info.ultimoPago || m.fecha > info.ultimoPago)) {
           info.ultimoPago = m.fecha;
@@ -396,22 +447,6 @@ export default function Ordenes() {
       setCarteraExtra(new Map());
     }
 
-    if (planes.length > 0) {
-      // Se traen TODAS las cuotas (no solo las pendientes): una cuota
-      // parcialmente pagada sigue en estado 'pendiente' con importe_pagado
-      // > 0, así que hace falta ver todas para sumar bien lo ya cobrado
-      // (mismo criterio que el resumen de FinanciacionCliente en la ficha).
-      const { data: cuotasData } = await supabase
-        .from('financiacion_cuotas')
-        .select('id, plan_id, numero, fecha_vencimiento, importe_original, importe_pagado, estado')
-        .in(
-          'plan_id',
-          planes.map((p) => p.id)
-        );
-      setCuotasFinanciamiento((cuotasData as CuotaFinanciamiento[]) ?? []);
-    } else {
-      setCuotasFinanciamiento([]);
-    }
     setCargandoFinanciamiento(false);
     setFinanciamientoCargado(true);
   };
@@ -420,19 +455,19 @@ export default function Ordenes() {
 
   const cargarMovimientosFinanciamiento = async (traerTodoElHistorial = false) => {
     setCargandoMovimientos(true);
-    let query = supabase
-      .from('cta_cte_movimientos')
-      .select(
-        'id, fecha, cliente_id, tipo, concepto, monto, moneda, anulado, observacion, motivo_anulacion, registrado_por_nombre, sucursal_id, orden_id, clientes ( nombre, apellido ), financiacion_cuotas ( numero ), pagos ( medio )'
-      )
-      .order('fecha', { ascending: false });
-    if (!traerTodoElHistorial) {
-      const desde = new Date();
-      desde.setDate(desde.getDate() - MOV_DIAS_VENTANA_RECIENTE);
-      query = query.gte('fecha', desde.toISOString());
-    }
-    const { data } = await query;
-    setMovimientosFinanciamiento((data as any) ?? []);
+    const desde = new Date();
+    desde.setDate(desde.getDate() - MOV_DIAS_VENTANA_RECIENTE);
+    // Paginado: antes un solo .select() se cortaba en silencio a las 1000
+    // filas, y con mucha actividad en 90 días los movimientos y los totales
+    // por día quedaban incompletos sin ningún aviso.
+    const data = await obtenerTodasLasFilas<MovimientoFinanciamiento>(
+      supabase,
+      'cta_cte_movimientos',
+      'id, fecha, cliente_id, tipo, concepto, monto, moneda, anulado, observacion, motivo_anulacion, registrado_por_nombre, sucursal_id, orden_id, clientes ( nombre, apellido ), financiacion_cuotas ( numero ), pagos ( medio )',
+      [{ columna: 'fecha', ascending: false }],
+      traerTodoElHistorial ? undefined : (q) => q.gte('fecha', desde.toISOString())
+    );
+    setMovimientosFinanciamiento(data);
     setCargandoMovimientos(false);
     setMovimientosCargados(true);
     if (traerTodoElHistorial) setMovHistorialCompleto(true);
@@ -490,7 +525,14 @@ export default function Ordenes() {
   const prepararCuentaCorrienteReparacion = async (
     r: ReparacionLista
   ): Promise<{ opciones?: { cuentaCorriente: CuentaCorrienteServicioTecnico }; error?: string }> => {
-    if (r.forma_pago !== 'Cuenta corriente' || !r.cliente_id || r.orden_cobro_id) return {};
+    if (r.forma_pago !== 'Cuenta corriente' || !r.cliente_id) return {};
+    // La orden suele existir desde la recepción: lo que importa es si ya tiene
+    // su cargo (en ese caso no hay nada nuevo que validar ni cargar).
+    if (r.orden_cobro_id) {
+      const yaTiene = await ordenYaTieneCargoCuentaCorriente(supabase, r.orden_cobro_id);
+      if (yaTiene === null) return { error: t('No pudimos verificar la cuenta corriente de esta orden. Probá de nuevo.') };
+      if (yaTiene) return {};
+    }
     const [{ data: cliente }, { data: movs }] = await Promise.all([
       supabase.from('clientes').select('cta_cte_habilitada, suspendido, limite_credito, plazo_dias').eq('id', r.cliente_id).single(),
       supabase.from('cta_cte_movimientos').select('tipo, monto').eq('cliente_id', r.cliente_id).eq('anulado', false),
@@ -897,7 +939,9 @@ export default function Ordenes() {
       }
       const g = grupos.get(clave)!;
       g.ordenes.push(o);
-      g.total += o.total || 0;
+      // Una orden cancelada sigue visible en la lista pero no es plata vendida:
+      // sumarla inflaba el total del día (Estadísticas ya la excluye).
+      if (o.estado !== 'cancelado') g.total += o.total || 0;
     }
     return Array.from(grupos.entries())
       .sort((a, b) => b[0].localeCompare(a[0]))

@@ -36,6 +36,27 @@ export type CuentaCorrienteServicioTecnico = {
   financiar?: { cantidadCuotas: number; primeraFecha: string };
 };
 
+// ¿Esta orden ya generó su cargo a cuenta corriente (o un plan de cuotas)?
+// Devuelve null si no se pudo verificar — quien llama NO debe asumir "no" en
+// ese caso, porque cobrar dos veces la misma deuda es peor que pedir reintentar.
+export async function ordenYaTieneCargoCuentaCorriente(supabase: any, ordenId: string): Promise<boolean | null> {
+  const [movs, planes] = await Promise.all([
+    supabase
+      .from('cta_cte_movimientos')
+      .select('id', { count: 'exact', head: true })
+      .eq('orden_id', ordenId)
+      .eq('tipo', 'cargo')
+      .eq('anulado', false),
+    supabase
+      .from('financiacion_planes')
+      .select('id', { count: 'exact', head: true })
+      .eq('orden_id', ordenId)
+      .not('estado', 'in', '(anulado,cancelado)'),
+  ]);
+  if (movs.error || planes.error) return null;
+  return (movs.count ?? 0) > 0 || (planes.count ?? 0) > 0;
+}
+
 // Arma (o actualiza, si ya existía desde que se recibió el equipo) la orden de
 // cobro de una reparación y deja la reparación como "entregado". Es la MISMA
 // lógica que usa la ficha de Servicio Técnico y la sección "Listos para cobrar"
@@ -54,8 +75,22 @@ export async function generarOrdenDeReparacion(
   } = {}
 ): Promise<{ ordenId: string | null; total: number; error: string | null }> {
   const marcarEntregado = opciones.marcarEntregado ?? true;
-  const esOrdenNueva = !r.orden_cobro_id;
   const total = r.importe_total ?? (r.presupuesto_mano_obra || 0) + (r.presupuesto_repuestos || 0);
+
+  // Antes el cargo solo se generaba si la orden era "nueva" (!orden_cobro_id),
+  // pero hoy TODA reparación con cliente ya nace con su orden desde la
+  // recepción — así que el cargo a cuenta corriente/financiación nunca se
+  // generaba y la deuda quedaba sin registrar. Lo que importa es si ESTA
+  // orden ya tiene su cargo, no si se acaba de crear. Se verifica antes de
+  // tocar nada, para no dejar una orden a medias si la verificación falla.
+  let generarCargo = r.forma_pago === 'Cuenta corriente' && !!r.cliente_id && !!opciones.cuentaCorriente && total > 0.009;
+  if (generarCargo && r.orden_cobro_id) {
+    const yaTiene = await ordenYaTieneCargoCuentaCorriente(supabase, r.orden_cobro_id);
+    if (yaTiene === null) {
+      return { ordenId: null, total, error: 'No pudimos verificar si esta orden ya está cargada a la cuenta corriente. Probá de nuevo.' };
+    }
+    generarCargo = !yaTiene;
+  }
   // Costo real de los repuestos usados en esta reparación (foto tomada al
   // momento de usarlos, ver reparaciones_repuestos.costo_unitario) — sin
   // esto, el ítem de la boleta quedaba con costo=null y Estadísticas no
@@ -159,10 +194,11 @@ export async function generarOrdenDeReparacion(
   const { error: repError } = await supabase.from('reparaciones').update(cambiosReparacion).eq('id', r.id);
   if (repError) return { ordenId, total, error: 'La orden se generó pero no pudimos actualizar la reparación: ' + repError.message };
 
-  // Cuenta corriente / financiamiento: solo al CREAR la orden (esOrdenNueva),
-  // y solo si de verdad queda algo por cobrar — mismo criterio que Nueva
-  // Orden (montoCuentaCorriente > 0.009 en app/ordenes/nueva/page.tsx).
-  if (esOrdenNueva && r.forma_pago === 'Cuenta corriente' && r.cliente_id && opciones.cuentaCorriente && total > 0.009) {
+  // Cuenta corriente / financiamiento: solo la primera vez (generarCargo ya
+  // descartó las órdenes con cargo existente) y solo si de verdad queda algo
+  // por cobrar — mismo criterio que Nueva Orden (montoCuentaCorriente > 0.009
+  // en app/ordenes/nueva/page.tsx).
+  if (generarCargo && opciones.cuentaCorriente && r.cliente_id) {
     const cc = opciones.cuentaCorriente;
     if (cc.financiar) {
       const resultadoPlan = await crearPlanFinanciacion(supabase, {

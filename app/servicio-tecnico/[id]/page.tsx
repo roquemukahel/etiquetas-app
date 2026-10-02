@@ -28,7 +28,7 @@ import CapturarBloqueo from '../../CapturarBloqueo';
 import MostrarBloqueo from '../../MostrarBloqueo';
 import SelectorTipoDispositivo from '../../SelectorTipoDispositivo';
 import { cambiarEstadoReparacion } from '../../lib/estadoReparacion';
-import { generarOrdenDeReparacion } from '../../lib/ordenesServicio';
+import { generarOrdenDeReparacion, ordenYaTieneCargoCuentaCorriente } from '../../lib/ordenesServicio';
 import { extraerStockInsuficiente } from '../../lib/repuestos';
 import { sanitizarDecimal, formatearMonto } from '../../lib/numeros';
 import { calcularSaldo } from '../../lib/cuentaCorriente';
@@ -286,6 +286,9 @@ export default function FichaReparacion() {
     plazo_dias: number | null;
   } | null>(null);
   const [saldoCliente, setSaldoCliente] = useState(0);
+  // La orden de cobro suele existir desde la recepción: si ya tiene su cargo a
+  // cuenta corriente no hay que volver a validar crédito ni a cargarla.
+  const [ordenCobroConCargo, setOrdenCobroConCargo] = useState(false);
   const [monedaNegocio, setMonedaNegocio] = useState('ARS');
   const [financiarActivo, setFinanciarActivo] = useState(false);
   const [financiarCuotas, setFinanciarCuotas] = useState('3');
@@ -391,6 +394,21 @@ export default function FichaReparacion() {
     })();
   }, [r?.cliente_id, supabase]);
 
+  useEffect(() => {
+    if (!r?.orden_cobro_id || r.forma_pago !== 'Cuenta corriente') {
+      setOrdenCobroConCargo(false);
+      return;
+    }
+    let cancelado = false;
+    (async () => {
+      const yaTiene = await ordenYaTieneCargoCuentaCorriente(supabase, r.orden_cobro_id!);
+      if (!cancelado) setOrdenCobroConCargo(yaTiene === true);
+    })();
+    return () => {
+      cancelado = true;
+    };
+  }, [r?.orden_cobro_id, r?.forma_pago, supabase]);
+
   // Garantías y retrabajos (sección 21): reparaciones anteriores del MISMO
   // equipo (mismo IMEI), para poder clasificar este ingreso. Se busca recién
   // cuando ya sabemos el IMEI de esta reparación, no en el efecto de arriba.
@@ -447,7 +465,7 @@ export default function FichaReparacion() {
   // sin depender de que el formulario de edición siga abierto.
   const totalGuardado = r ? r.importe_total ?? (r.presupuesto_mano_obra || 0) + (r.presupuesto_repuestos || 0) : 0;
   const bloqueadoPorCredito =
-    !!r && r.forma_pago === 'Cuenta corriente' && !r.orden_cobro_id && totalGuardado > creditoDisponible + 0.009;
+    !!r && r.forma_pago === 'Cuenta corriente' && !ordenCobroConCargo && totalGuardado > creditoDisponible + 0.009;
 
   // Checklist de control de calidad aplicable a esta reparación (sección
   // 17): unión de checklist_tecnico de los servicios realizados (Fase 4,
@@ -923,7 +941,16 @@ export default function FichaReparacion() {
 
     // Cuenta corriente/financiamiento solo aplica la primera vez que se
     // genera la orden (ver comentario de esOrdenNueva en ordenesServicio.ts).
-    const esCtaCteNueva = r.forma_pago === 'Cuenta corriente' && !!r.cliente_id && !r.orden_cobro_id;
+    let cargoYaGenerado = false;
+    if (r.forma_pago === 'Cuenta corriente' && r.cliente_id && r.orden_cobro_id) {
+      const yaTiene = await ordenYaTieneCargoCuentaCorriente(supabase, r.orden_cobro_id);
+      if (yaTiene === null) {
+        setError(t('No pudimos verificar la cuenta corriente de esta orden. Probá de nuevo.'));
+        return;
+      }
+      cargoYaGenerado = yaTiene;
+    }
+    const esCtaCteNueva = r.forma_pago === 'Cuenta corriente' && !!r.cliente_id && !cargoYaGenerado;
     if (esCtaCteNueva) {
       if (!ctaCteDisponible) {
         setError(t('Este cliente no tiene cuenta corriente habilitada — se puede activar desde su ficha.'));

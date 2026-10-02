@@ -10,7 +10,8 @@ import { ESLOGAN } from '../../../lib/eslogan';
 import { armarLinkWhatsApp } from '../../../lib/whatsapp';
 import { codigoLlamada } from '../../../lib/paises';
 import EtiquetaSeccion from '../../../EtiquetaSeccion';
-import { medioLabel } from '../../../lib/cuentaCorriente';
+import { medioLabel, calcularSaldo } from '../../../lib/cuentaCorriente';
+import { obtenerTodasLasFilas } from '../../../lib/db';
 import { useT, useIdioma } from '../../../lib/idioma';
 import { localeDe } from '../../../lib/i18n/traducir';
 import { formatearFechaHora } from '../../../lib/fechas';
@@ -281,11 +282,25 @@ export default function Boleta() {
           const o = ordenData as Orden | null;
           const soloFinanciamiento = !!o && o.orden_items.length > 0 && o.orden_items.every((i) => i.tipo === 'financiamiento');
           if (!soloFinanciamiento || !o?.cliente_id) return;
-          const [{ data: movCobro }, { data: saldosData }] = await Promise.all([
-            supabase.from('cta_cte_movimientos').select('cuota_id').eq('orden_id', id).eq('tipo', 'abono').eq('anulado', false).maybeSingle(),
-            supabase.rpc('saldos_cuenta_corriente'),
+          // .limit(1) y no .maybeSingle(): un cobro repartido en varias cuotas
+          // deja varios abonos con la misma orden y maybeSingle() falla con
+          // más de una fila (se perdía la cuota). El saldo se calcula solo con
+          // los movimientos de ESTE cliente — antes se pedía el saldo de todos
+          // los clientes del negocio (saldos_cuenta_corriente) para usar una fila.
+          const [{ data: movsCobro }, movsCliente] = await Promise.all([
+            supabase
+              .from('cta_cte_movimientos')
+              .select('cuota_id')
+              .eq('orden_id', id)
+              .eq('tipo', 'abono')
+              .eq('anulado', false)
+              .order('fecha', { ascending: false })
+              .limit(1),
+            obtenerTodasLasFilas<{ tipo: string; monto: number }>(supabase, 'cta_cte_movimientos', 'tipo, monto', [], (q) =>
+              q.eq('cliente_id', o.cliente_id).eq('anulado', false)
+            ),
           ]);
-          const cuotaId = (movCobro as { cuota_id: string | null } | null)?.cuota_id ?? null;
+          const cuotaId = (movsCobro as { cuota_id: string | null }[] | null)?.[0]?.cuota_id ?? null;
           let cuotaNumero: number | null = null;
           let cuotaSaldoRestante: number | null = null;
           if (cuotaId) {
@@ -299,11 +314,10 @@ export default function Boleta() {
               cuotaSaldoRestante = Math.max(0, cuota.importe_original - cuota.importe_pagado);
             }
           }
-          const fila = ((saldosData ?? []) as { cliente_id: string; saldo: number }[]).find((s) => s.cliente_id === o.cliente_id);
           setCobroFinanciamiento({
             cuotaNumero,
             cuotaSaldoRestante,
-            saldoCuentaCorriente: fila ? Number(fila.saldo) || 0 : 0,
+            saldoCuentaCorriente: calcularSaldo(movsCliente),
           });
         })(),
       ]);
