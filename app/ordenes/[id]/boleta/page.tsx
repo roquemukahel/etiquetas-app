@@ -155,6 +155,7 @@ export default function Boleta() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [qr, setQr] = useState<string | null>(null);
+  const [numerosST, setNumerosST] = useState<string[]>([]);
   // Reclamo real de un cliente: la boleta de un cobro de cuota/cuenta
   // corriente no mostraba a qué cuota se aplicó ni cuánto quedaba debiendo
   // después de ese pago — solo el monto cobrado, igual que cualquier venta.
@@ -178,6 +179,7 @@ export default function Boleta() {
         { data: pagosData },
         { data: ctaCteData },
         { data: planAhorroData },
+        { data: repsCobroData },
         {
           data: { user },
         },
@@ -227,9 +229,13 @@ export default function Boleta() {
         // guarda el link (orden_id) — de ahí se saca el historial de cuotas
         // que se muestra más abajo (ver fetch después de este Promise.all).
         supabase.from('planes_ahorro').select('id').eq('orden_id', id).maybeSingle(),
+        // Número(s) ST de la(s) reparación(es) que esta boleta cobra — para
+        // identificar la orden de Servicio Técnico junto al número de orden.
+        supabase.from('reparaciones').select('numero_orden').eq('orden_cobro_id', id).order('created_at'),
         supabase.auth.getUser(),
       ]);
       if (ordenError) setError(ordenError.message);
+      setNumerosST(((repsCobroData as { numero_orden: string | null }[]) ?? []).map((r) => r.numero_orden).filter((n): n is string => !!n));
       setOrden(ordenData as any);
       setCanjes((canjesData as any) ?? []);
       setBloqueos(
@@ -452,6 +458,7 @@ export default function Boleta() {
           <div className="flex items-start gap-3">
             <div className="text-right text-sm text-muted leading-relaxed mt-1">
               <p className="font-medium text-ink">{t('Orden #')}{orden.numero_orden || orden.id.slice(0, 8)}</p>
+              {numerosST.length > 0 && <p className="font-medium text-ink">{t('Servicio técnico')} {numerosST.join(', ')}</p>}
               <p>{formatearFecha(orden.created_at, locale)}</p>
               {orden.fecha_entrega && <p>{t('Entregado:')} {formatearFecha(orden.fecha_entrega, locale)}</p>}
               <span

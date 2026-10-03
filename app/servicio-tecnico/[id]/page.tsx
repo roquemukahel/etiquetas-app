@@ -35,6 +35,7 @@ import { calcularSaldo } from '../../lib/cuentaCorriente';
 import { aFechaISO, sumarMesConClamp } from '../../lib/financiacion/motor';
 import { comprimirImagen } from '../../lib/comprimirImagen';
 import SelectorColorAuto from '../../SelectorColorAuto';
+import SelectorFormaPago from '../../SelectorFormaPago';
 import Avatar from '../../Avatar';
 import CheckTri from '../../CheckTri';
 import TextoCondicionGenerado from '../../TextoCondicionGenerado';
@@ -58,8 +59,6 @@ function IconoChico({ nombre, className = '' }: { nombre: string; className?: st
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 const ACCESORIOS_OPCIONES = ['Funda', 'Cargador', 'SIM', 'Bandeja SIM'];
-const FORMAS_PAGO = ['Efectivo', 'Transferencia', 'Tarjeta'];
-
 type Tab = 'resumen' | 'recepcion' | 'diagnostico' | 'presupuesto' | 'servicios' | 'control' | 'evidencias' | 'comunicacion' | 'historial';
 
 const TABS: { id: Tab; label: string }[] = [
@@ -1770,19 +1769,11 @@ export default function FichaReparacion() {
                     <Campo label={t('Importe total ($)')} valor={f.importe_total} onChange={(v) => setFm((p) => ({ ...p, importe_total: v }))} numerico />
                     <div>
                       <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Forma de pago')}</label>
-                      <div className="flex gap-2 flex-wrap">
-                        {[...FORMAS_PAGO, ...(r.cliente_id && ctaCteDisponible ? ['Cuenta corriente'] : [])].map((fp) => (
-                          <button
-                            key={fp}
-                            onClick={() => setFm((p) => ({ ...p, forma_pago: fp }))}
-                            className={`flex-1 rounded-lg py-2 text-xs font-medium ${
-                              f.forma_pago === fp ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
-                            }`}
-                          >
-                            {t(fp)}
-                          </button>
-                        ))}
-                      </div>
+                      <SelectorFormaPago
+                        value={f.forma_pago || ''}
+                        onChange={(etiqueta) => setFm((p) => ({ ...p, forma_pago: etiqueta }))}
+                        permitirCuentaCorriente={!!r.cliente_id && ctaCteDisponible}
+                      />
                       {r.cliente_id && !ctaCteDisponible && (
                         <p className="text-[10px] text-muted dark:text-dark-text-secondary mt-1">
                           {t('Este cliente no tiene cuenta corriente habilitada — se puede activar desde su ficha.')}
@@ -1867,7 +1858,7 @@ export default function FichaReparacion() {
                     {r.forma_pago && (
                       <p>
                         <span className="text-muted dark:text-dark-text-secondary">{t('Forma de pago:')} </span>
-                        {t(r.forma_pago)}
+                        {r.forma_pago.split(' + ').map((fp) => t(fp)).join(' + ')}
                       </p>
                     )}
                     {r.garantia_dias != null && (

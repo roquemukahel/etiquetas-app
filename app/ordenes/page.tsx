@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../lib/supabase/client';
@@ -16,6 +16,7 @@ import { simboloMoneda } from '../lib/monedas';
 import { aFechaISO } from '../lib/financiacion/motor';
 import { formatearMonto, sanitizarDecimal } from '../lib/numeros';
 import { formatearFechaHora } from '../lib/fechas';
+import { infoEstado } from '../lib/reparaciones';
 import { descargarXLSX } from '../lib/csv';
 import { ICONOS } from '../Iconos';
 import { QoviState } from '../QoviState';
@@ -165,6 +166,29 @@ function esCobroFinanciamiento(o: Orden) {
   return o.orden_items.length > 0 && o.orden_items.every((i) => i.tipo === 'financiamiento');
 }
 
+// Lo que las tarjetas de Servicio Técnico muestran de la reparación asociada
+// (número ST, trabajo, técnico, estado) — se trae solo para las tarjetas que
+// están a la vista, no para todo el historial.
+type RepST = {
+  orden_cobro_id: string;
+  numero_orden: string | null;
+  modelo: string | null;
+  falla_declarada: string | null;
+  diagnostico: string | null;
+  resultado_final: string | null;
+  estado: string;
+  forma_pago: string | null;
+  tecnicos: { nombre: string } | null;
+};
+const COLUMNAS_REP_ST =
+  'orden_cobro_id, numero_orden, modelo, falla_declarada, diagnostico, resultado_final, estado, forma_pago, tecnicos ( nombre )';
+
+// "Cambio de módulo" si el técnico lo cargó; si no, el diagnóstico; si no, la
+// falla que contó el cliente al dejar el equipo.
+function trabajoDeRep(r: RepST): string | null {
+  return r.resultado_final?.trim() || r.diagnostico?.trim() || r.falla_declarada?.trim() || null;
+}
+
 const COLUMNAS_ORDEN_LISTA =
   'id, numero_orden, forma_pago, total, estado, created_at, sucursal_id, clientes ( nombre, apellido ), orden_items ( descripcion, tipo ), vendedores ( nombre )';
 
@@ -281,6 +305,8 @@ export default function Ordenes() {
   }, [sucursalActual.id]);
 
   const [fechasEntregaPorOrden, setFechasEntregaPorOrden] = useState<Map<string, string>>(new Map());
+  const [repsPorOrden, setRepsPorOrden] = useState<Map<string, RepST[]>>(new Map());
+  const repsSolicitadas = useRef<Set<string>>(new Set());
   const fechaEfectiva = (o: Orden) => {
     const entrega = fechasEntregaPorOrden.get(o.id);
     return entrega && entrega > o.created_at ? entrega : o.created_at;
@@ -916,6 +942,35 @@ export default function Ordenes() {
   }, [busqueda, filtroEstado, filtroFecha, filtroTipo, filtroSucursal]);
   const paraRenderizar = useMemo(() => filtradas.slice(0, visibles), [filtradas, visibles]);
 
+  // Detalle de Servicio Técnico (número ST, trabajo, técnico, estado) solo de
+  // las tarjetas que se están mostrando, en lotes — traerlo para todo el
+  // historial haría más lenta la pantalla que más se abre.
+  useEffect(() => {
+    const ids = paraRenderizar.filter((o) => esServicioTecnico(o) && !repsSolicitadas.current.has(o.id)).map((o) => o.id);
+    if (ids.length === 0) return;
+    ids.forEach((id) => repsSolicitadas.current.add(id));
+    (async () => {
+      const lotes: string[][] = [];
+      for (let i = 0; i < ids.length; i += 100) lotes.push(ids.slice(i, i + 100));
+      const resultados = await Promise.all(
+        lotes.map(async (lote) => {
+          const { data, error } = await supabase.from('reparaciones').select(COLUMNAS_REP_ST).in('orden_cobro_id', lote);
+          // Si falla, se vuelve a intentar la próxima vez que esas tarjetas se muestren.
+          if (error) lote.forEach((id) => repsSolicitadas.current.delete(id));
+          return error ? [] : ((data as unknown as RepST[]) ?? []);
+        })
+      );
+      const nuevas = resultados.flat();
+      if (nuevas.length === 0) return;
+      setRepsPorOrden((previo) => {
+        const mapa = new Map(previo);
+        for (const r of nuevas) mapa.set(r.orden_cobro_id, [...(mapa.get(r.orden_cobro_id) ?? []).filter((x) => x.numero_orden !== r.numero_orden), r]);
+        return mapa;
+      });
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paraRenderizar]);
+
   // Agrupado por día con separador y total — pedido real de un cliente: de
   // un vistazo, "Hoy · 12 órdenes · $184.300" en vez de tener que contar
   // tarjeta por tarjeta cuánto se vendió hoy.
@@ -1490,6 +1545,21 @@ export default function Ordenes() {
                   const icono = servicio ? 'herramienta' : cobroFinanciamiento ? 'cobrar' : 'ordenes';
                   const etiquetaTipo = servicio ? t('Servicio técnico') : cobroFinanciamiento ? t('Cobro financiamiento') : t('Venta');
                   const estadoInfo = ESTADO_ORDEN_COLOR[o.estado] ?? ESTADO_ORDEN_COLOR.pendiente;
+                  // Servicio técnico: en vez del genérico "Servicio técnico — modelo",
+                  // el trabajo/falla; más el número ST, el técnico y el estado de la
+                  // reparación — para identificarlas sin entrar a cada una.
+                  const reps = servicio ? repsPorOrden.get(o.id) ?? [] : [];
+                  const trabajoST = reps[0] ? trabajoDeRep(reps[0]) : null;
+                  const tituloOrden =
+                    servicio && reps[0] && trabajoST
+                      ? `${trabajoST}${reps[0].modelo ? ` — ${reps[0].modelo}` : ''}${reps.length > 1 ? ` +${reps.length - 1}` : ''}`
+                      : o.orden_items.length > 0
+                        ? `${o.orden_items[0].descripcion}${o.orden_items.length > 1 ? ` +${o.orden_items.length - 1}` : ''}`
+                        : t('Orden vacía');
+                  const numerosST = reps.map((r) => r.numero_orden).filter(Boolean).join(', ');
+                  const tecnicosST = Array.from(new Set(reps.map((r) => r.tecnicos?.nombre).filter((n): n is string => !!n))).join(', ');
+                  const formaPagoOrden = o.forma_pago || reps.find((r) => r.forma_pago)?.forma_pago || null;
+                  const estadoRep = reps[0] ? infoEstado(reps[0].estado) : null;
                   return (
                     <Link
                       key={o.id}
@@ -1505,20 +1575,22 @@ export default function Ordenes() {
                           <span aria-hidden="true" className={`shrink-0 [&_svg]:h-3.5 [&_svg]:w-3.5 ${colorTipo}`}>
                             {ICONOS[icono]}
                           </span>
-                          <span className="truncate">
-                            {o.orden_items.length > 0
-                              ? `${o.orden_items[0].descripcion}${o.orden_items.length > 1 ? ` +${o.orden_items.length - 1}` : ''}`
-                              : t('Orden vacía')}
-                          </span>
+                          <span className="truncate">{tituloOrden}</span>
                         </p>
                         <p className="text-xs text-muted dark:text-dark-text-secondary truncate">
                           <span className={`font-medium ${colorTipo}`}>{etiquetaTipo}</span>
                           {' · '}
                           {o.clientes ? `${o.clientes.nombre} ${o.clientes.apellido || ''}` : t('Sin cliente')}
                           {o.numero_orden && <span className="text-muted dark:text-dark-text-secondary"> · {o.numero_orden}</span>}
+                          {numerosST && <span className="text-repar font-medium"> · {numerosST}</span>}
                         </p>
                         <p className="text-[11px] text-muted dark:text-dark-text-secondary truncate">
-                          {[formatearFechaHora(fechaEfectiva(o), locale), o.vendedores?.nombre, o.forma_pago ? t(o.forma_pago) : null]
+                          {[
+                            formatearFechaHora(fechaEfectiva(o), locale),
+                            o.vendedores?.nombre ? `${t('Vend.:')} ${o.vendedores.nombre}` : servicio ? `${t('Vend.:')} ${t('Sin asignar')}` : null,
+                            tecnicosST ? `${t('Téc.:')} ${tecnicosST}` : null,
+                            formaPagoOrden ? formaPagoOrden.split(' + ').map((f) => t(f)).join(' + ') : t('Sin definir'),
+                          ]
                             .filter(Boolean)
                             .join(' · ')}
                         </p>
@@ -1530,9 +1602,16 @@ export default function Ordenes() {
                       </div>
                       <div className="text-right shrink-0">
                         {o.total != null && <p className="text-sm font-medium">${o.total.toLocaleString('es-AR')}</p>}
-                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium capitalize mt-0.5 ${estadoInfo}`}>
-                          {t(o.estado)}
-                        </span>
+                        <div className="flex flex-col items-end gap-0.5 mt-0.5">
+                          {estadoRep && (
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${estadoRep.color}`}>
+                              {t(estadoRep.label)}
+                            </span>
+                          )}
+                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium capitalize ${estadoInfo}`}>
+                            {t(o.estado)}
+                          </span>
+                        </div>
                       </div>
                     </Link>
                   );
