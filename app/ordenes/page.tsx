@@ -170,7 +170,8 @@ function esCobroFinanciamiento(o: Orden) {
 // (número ST, trabajo, técnico, estado) — se trae solo para las tarjetas que
 // están a la vista, no para todo el historial.
 type RepST = {
-  orden_cobro_id: string;
+  orden_cobro_id: string | null;
+  orden_origen_id: string | null;
   numero_orden: string | null;
   modelo: string | null;
   falla_declarada: string | null;
@@ -181,7 +182,7 @@ type RepST = {
   tecnicos: { nombre: string } | null;
 };
 const COLUMNAS_REP_ST =
-  'orden_cobro_id, numero_orden, modelo, falla_declarada, diagnostico, resultado_final, estado, forma_pago, tecnicos ( nombre )';
+  'orden_cobro_id, orden_origen_id, numero_orden, modelo, falla_declarada, diagnostico, resultado_final, estado, forma_pago, tecnicos ( nombre )';
 
 // "Cambio de módulo" si el técnico lo cargó; si no, el diagnóstico; si no, la
 // falla que contó el cliente al dejar el equipo.
@@ -954,7 +955,13 @@ export default function Ordenes() {
       for (let i = 0; i < ids.length; i += 100) lotes.push(ids.slice(i, i + 100));
       const resultados = await Promise.all(
         lotes.map(async (lote) => {
-          const { data, error } = await supabase.from('reparaciones').select(COLUMNAS_REP_ST).in('orden_cobro_id', lote);
+          // Una reparación se liga a la orden por su COBRO (orden_cobro_id) o por la
+          // venta de la que se DERIVÓ (orden_origen_id): las dos son "su orden".
+          const lista = lote.join(',');
+          const { data, error } = await supabase
+            .from('reparaciones')
+            .select(COLUMNAS_REP_ST)
+            .or(`orden_cobro_id.in.(${lista}),orden_origen_id.in.(${lista})`);
           // Si falla, se vuelve a intentar la próxima vez que esas tarjetas se muestren.
           if (error) lote.forEach((id) => repsSolicitadas.current.delete(id));
           return error ? [] : ((data as unknown as RepST[]) ?? []);
@@ -964,7 +971,12 @@ export default function Ordenes() {
       if (nuevas.length === 0) return;
       setRepsPorOrden((previo) => {
         const mapa = new Map(previo);
-        for (const r of nuevas) mapa.set(r.orden_cobro_id, [...(mapa.get(r.orden_cobro_id) ?? []).filter((x) => x.numero_orden !== r.numero_orden), r]);
+        for (const r of nuevas) {
+          for (const ordenId of new Set([r.orden_cobro_id, r.orden_origen_id])) {
+            if (!ordenId) continue;
+            mapa.set(ordenId, [...(mapa.get(ordenId) ?? []).filter((x) => x.numero_orden !== r.numero_orden), r]);
+          }
+        }
         return mapa;
       });
     })();

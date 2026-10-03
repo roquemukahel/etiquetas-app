@@ -273,7 +273,7 @@ export default function DetalleOrden() {
         .eq('orden_id', id)
         .eq('estado', 'en_canje')
         .order('created_at'),
-      supabase.from('reparaciones').select('id, numero_orden, modelo, tecnicos ( nombre )').eq('orden_cobro_id', id).order('created_at'),
+      supabase.from('reparaciones').select('id, numero_orden, modelo, orden_cobro_id, tecnicos ( nombre )').or(`orden_cobro_id.eq.${id},orden_origen_id.eq.${id}`).order('created_at'),
     ]);
     setOrden(data as any);
     setReparacionesCobro((reparacionesDeCobro as any) ?? []);
