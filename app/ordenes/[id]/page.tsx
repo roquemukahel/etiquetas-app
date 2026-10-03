@@ -31,7 +31,7 @@ import {
   restanteDeLineas,
   type LineaCobro,
 } from '../../lib/formaPago';
-import { etiquetaCuotas, interesDe, planesActivos, valorCuota } from '../../lib/cuotas';
+import { cuotasEfectivasDeOrden, etiquetaCuotas, interesDe, interesGuardadoDeOrden, planesActivos, valorCuota } from '../../lib/cuotas';
 
 const ESTADOS = ['pendiente', 'pagado', 'entregado'];
 const STORAGE_OPTIONS = [64, 128, 256, 512];
@@ -398,7 +398,7 @@ export default function DetalleOrden() {
   const empezarEdicion = () => {
     if (!orden) return;
     setFormaPagoEdit(orden.forma_pago || 'Efectivo');
-    setCuotasEdit(orden.cuotas ?? 0);
+    setCuotasEdit(cuotasEfectivasDeOrden(orden));
     setNotaEdit(orden.nota || '');
     setIncluirGarantiaEdit(orden.incluir_garantia);
     setAclaracionesEdit(orden.aclaraciones_tecnico || '');
@@ -629,16 +629,10 @@ export default function DetalleOrden() {
   // viejas al editarlas. Antes el total de edición ignoraba por completo el
   // interés: editar una orden en cuotas le sacaba el recargo en silencio.
   const planesDisponibles = planesActivos(interesCuotasConfig);
-  const interesGuardado = (() => {
-    if (!orden || !orden.cuotas || orden.cuotas <= 0) return null;
-    const subtotalOriginal = orden.orden_items.reduce((acc, i) => acc + i.cantidad * i.precio_unitario, 0);
-    if (subtotalOriginal <= 0) return null;
-    const conImpuesto = (orden.total ?? 0) + (orden.anticipo || 0) + (orden.monto_canje || 0);
-    const sinImpuesto = conImpuesto / (1 + (orden.impuesto_porcentaje || 0) / 100);
-    return Math.max(0, Math.round((sinImpuesto / subtotalOriginal - 1) * 10000) / 100);
-  })();
+  const interesGuardado = interesGuardadoDeOrden(orden);
+  const cuotasOriginales = cuotasEfectivasDeOrden(orden);
   const interesEdit =
-    orden && cuotasEdit === (orden.cuotas ?? 0) && interesGuardado != null ? interesGuardado : interesDe(interesCuotasConfig, cuotasEdit);
+    orden && cuotasEdit === cuotasOriginales && interesGuardado != null ? interesGuardado : interesDe(interesCuotasConfig, cuotasEdit);
   const subtotalFinanciadoEdit = subtotalEdit * (1 + interesEdit / 100);
 
   // Sin Math.max(0, ...) a propósito: un anticipo mayor al precio puede dejar
@@ -653,7 +647,7 @@ export default function DetalleOrden() {
 
     const cambios: Record<string, { antes: unknown; despues: unknown }> = {};
     if ((orden.forma_pago || '') !== formaPagoEdit) cambios.forma_pago = { antes: orden.forma_pago, despues: formaPagoEdit };
-    if ((orden.cuotas ?? 0) !== cuotasEdit) cambios.cuotas = { antes: orden.cuotas ?? 0, despues: cuotasEdit };
+    if (cuotasEfectivasDeOrden(orden) !== cuotasEdit) cambios.cuotas = { antes: orden.cuotas ?? 0, despues: cuotasEdit };
     if ((orden.nota || '') !== notaEdit.trim()) cambios.nota = { antes: orden.nota, despues: notaEdit.trim() || null };
     if (orden.incluir_garantia !== incluirGarantiaEdit) cambios.incluir_garantia = { antes: orden.incluir_garantia, despues: incluirGarantiaEdit };
     if ((orden.aclaraciones_tecnico || '') !== aclaracionesEdit.trim())
@@ -884,7 +878,7 @@ export default function DetalleOrden() {
       .from('ordenes')
       .update({
         forma_pago: formaPagoEdit,
-        cuotas: cuotasEdit,
+        ...(cuotasEfectivasDeOrden(orden) !== cuotasEdit ? { cuotas: cuotasEdit } : {}),
         nota: notaEdit.trim() || null,
         incluir_garantia: incluirGarantiaEdit,
         aclaraciones_tecnico: aclaracionesEdit.trim() || null,
