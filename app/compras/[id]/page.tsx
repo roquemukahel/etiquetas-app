@@ -14,6 +14,7 @@ import SelectorColorAuto from '../../SelectorColorAuto';
 import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
 import { useT } from '../../lib/idioma';
 import { useSucursalActual } from '../../lib/sucursal';
+import { falla } from '../../lib/escritura';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 
@@ -165,7 +166,7 @@ export default function DetalleCompra() {
       setProcesando(false);
       return;
     }
-    await supabase.from('compras').update({ estado: 'servicio_tecnico' }).eq('id', id);
+    await falla(supabase.from('compras').update({ estado: 'servicio_tecnico' }).eq('id', id), t, 'marcar la compra como derivada a Servicio Técnico');
     await registrarAuditoria(supabase, {
       accion: `derivó a Servicio Técnico un dispositivo comprado (${nueva?.numero_orden || ''}, ${compra.modelo || 'sin modelo'}${compra.imei ? `, IMEI ${compra.imei}` : ''}) de ${nombreCliente(compra)}`,
       entidad: 'reparacion',

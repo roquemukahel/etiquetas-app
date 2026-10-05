@@ -9,6 +9,7 @@ import { PAISES } from '../../lib/paises';
 import { MARCAS_DISPONIBLES, CATALOGO_MODELOS, normalizarNombreModelo } from '../../lib/catalogosMarcas';
 import { registrarAuditoria } from '../../lib/auditoria';
 import { useT } from '../../lib/idioma';
+import { registrarFallo } from '../../lib/escritura';
 
 type Negocio = {
   id: string;
@@ -237,7 +238,9 @@ export default function DatosNegocio() {
       }
     }
     if (nuevasCarpetas.length > 0) {
-      await supabase.from('modelos_stock').insert(nuevasCarpetas.map((nombre) => ({ nombre })));
+      const { error: carpetasError } = await supabase.from('modelos_stock').insert(nuevasCarpetas.map((nombre) => ({ nombre })));
+      // No frena el guardado (la configuración ya se guardó arriba), pero deja rastro.
+      if (carpetasError) registrarFallo(carpetasError, 'crear carpetas de las marcas elegidas');
     }
 
     router.push('/configuracion');

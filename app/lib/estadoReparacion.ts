@@ -69,7 +69,14 @@ export async function cambiarEstadoReparacion(
   if ((nuevoEstado === 'listo_para_entregar' || nuevoEstado === 'entregado') && !r.fecha_reparado) {
     cambios.fecha_reparado = new Date().toISOString();
   }
-  await supabase.from('reparaciones').update(cambios).eq('id', r.id);
+  const { error: cambioError } = await supabase.from('reparaciones').update(cambios).eq('id', r.id);
+  if (cambioError) {
+    // Si el cambio no se guardó no hay que seguir (ni liberar repuestos ni
+    // dejar auditado un cambio que no ocurrió). Los dos llamadores tratan
+    // 'cancelado' como "no se aplicó nada".
+    alert('No pudimos cambiar el estado de la reparación. No se modificó nada.\n' + cambioError.message);
+    return 'cancelado';
+  }
 
   // Cancelar (a diferencia de eliminar) no borraba la reparación, así que
   // nadie liberaba los repuestos que tuviera reservados/consumidos — quedaban

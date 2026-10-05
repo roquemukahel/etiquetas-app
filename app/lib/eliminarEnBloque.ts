@@ -10,7 +10,7 @@ export async function eliminarEnBloque(
   supabase: SupabaseClient,
   tabla: string,
   ids: string[],
-  tamanoTanda = 500
+  tamanoTanda = 100
 ): Promise<{ eliminados: string[]; bloqueados: string[] }> {
   const eliminados: string[] = [];
   const bloqueados: string[] = [];

@@ -10,6 +10,8 @@ import { registrarAuditoria } from '../../lib/auditoria';
 import { LABEL_TIPO_CALCULO } from '../../lib/comisiones/tipos';
 import type { TipoCalculo, AlcanceRegla } from '../../lib/comisiones/motor';
 import { useT } from '../../lib/idioma';
+import { falla } from '../../lib/escritura';
+import { obtenerTodasLasFilas } from '../../lib/db';
 
 type Regla = { id: string; tipo_calculo: TipoCalculo; valor: number; alcance: AlcanceRegla; tipo_item: string | null; producto_id: string | null };
 type Producto = { id: string; nombre: string };
@@ -69,8 +71,8 @@ export default function PlanesComisiones() {
       const { data: rg } = await supabase.from('comision_reglas').select('id, tipo_calculo, valor, alcance, tipo_item, producto_id').eq('plan_id', pid).eq('activo', true).order('created_at');
       setReglas((rg as any) ?? []);
     }
-    const { data: prod } = await supabase.from('productos').select('id, nombre').order('nombre');
-    setProductos((prod as any) ?? []);
+    const prod = await obtenerTodasLasFilas<any>(supabase, 'productos', 'id, nombre', [{ columna: 'nombre' }]);
+    setProductos(prod);
     setLoading(false);
   };
 
@@ -107,7 +109,7 @@ export default function PlanesComisiones() {
   const eliminar = async (id: string) => {
     if (!planId || !puede) return;
     if (!confirm(t('¿Eliminar esta regla? Las comisiones ya generadas no cambian.'))) return;
-    await supabase.from('comision_reglas').update({ activo: false }).eq('id', id);
+    if (await falla(supabase.from('comision_reglas').update({ activo: false }).eq('id', id), t, 'eliminar regla de comisión')) return;
     await subirVersion(planId);
     await registrarAuditoria(supabase, { accion: 'eliminó una regla de comisión', entidad: 'comision_regla', entidadId: id });
     cargar();

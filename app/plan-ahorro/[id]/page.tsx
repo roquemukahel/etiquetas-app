@@ -18,6 +18,8 @@ import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
 import { ICONOS } from '../../Iconos';
 import { useT } from '../../lib/idioma';
 import { useSucursalActual } from '../../lib/sucursal';
+import { falla } from '../../lib/escritura';
+import { obtenerTodasLasFilas } from '../../lib/db';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 
@@ -201,7 +203,9 @@ export default function DetallePlanAhorro() {
     (async () => {
       setBuscandoEquipos(true);
       const [{ data }, senados] = await Promise.all([
-        supabase.from('dispositivos').select('id, modelo, capacidad_gb, color, imei, precio').eq('en_stock', true).order('modelo'),
+        obtenerTodasLasFilas<DispositivoStock>(supabase, 'dispositivos', 'id, modelo, capacidad_gb, color, imei, precio', [{ columna: 'modelo' }], (q) =>
+          q.eq('en_stock', true)
+        ).then((data) => ({ data })),
         obtenerDispositivosSenados(supabase),
       ]);
       setEquiposStockRaw((data as DispositivoStock[]) ?? []);
@@ -388,7 +392,7 @@ export default function DetallePlanAhorro() {
 
   const anularMovimiento = async (movId: string) => {
     if (!confirm(t('¿Anular este pago? Deja de contar para el total juntado (queda registrado como anulado, no se borra).'))) return;
-    await supabase.from('plan_ahorro_movimientos').update({ anulado: true }).eq('id', movId);
+    if (await falla(supabase.from('plan_ahorro_movimientos').update({ anulado: true }).eq('id', movId), t, 'anular pago del plan de ahorro')) return;
     // Si este pago era parte de lo que había completado el plan, anularlo
     // lo deja por debajo del objetivo otra vez, pero el plan sigue
     // figurando "completado" (y si era una seña, el equipo ya se entregó
@@ -421,7 +425,10 @@ export default function DetallePlanAhorro() {
     };
     if (!confirm(mensajes[nuevoEstado])) return;
     setProcesando(true);
-    await supabase.from('planes_ahorro').update({ estado: nuevoEstado }).eq('id', plan.id);
+    if (await falla(supabase.from('planes_ahorro').update({ estado: nuevoEstado }).eq('id', plan.id), t, 'cambiar el estado del plan')) {
+      setProcesando(false);
+      return;
+    }
     await registrarAuditoria(supabase, {
       accion: `cambió el estado del plan de ahorro de ${nombreCliente(plan)} de "${plan.estado}" a "${nuevoEstado}"`,
       entidad: 'plan_ahorro',
@@ -599,16 +606,25 @@ export default function DetallePlanAhorro() {
     }
     setGuardandoEdicion(true);
     const nuevoMontoObjetivo = Number(editMontoObjetivo);
-    await supabase
-      .from('planes_ahorro')
-      .update({
-        modelo: editModelo.trim() || null,
-        capacidad_gb: editCapacidad,
-        color: editColor.trim() || null,
-        monto_objetivo: nuevoMontoObjetivo,
-        detalles: editDetalles.trim() || null,
-      })
-      .eq('id', plan.id);
+    if (
+      await falla(
+        supabase
+          .from('planes_ahorro')
+          .update({
+            modelo: editModelo.trim() || null,
+            capacidad_gb: editCapacidad,
+            color: editColor.trim() || null,
+            monto_objetivo: nuevoMontoObjetivo,
+            detalles: editDetalles.trim() || null,
+          })
+          .eq('id', plan.id),
+        t,
+        'guardar cambios del plan de ahorro'
+      )
+    ) {
+      setGuardandoEdicion(false);
+      return;
+    }
     // El objetivo define cuándo el plan se considera completo (y se entrega
     // el equipo) — a diferencia del resto de los campos, un cambio acá
     // queda registrado para poder auditarlo después.
@@ -636,7 +652,7 @@ export default function DetallePlanAhorro() {
   const eliminarPlan = async () => {
     if (!plan || !puedeEliminar) return;
     if (!confirm(`${t('¿Eliminar este plan de ahorro de')} ${nombreCliente(plan)}? ${t('Se pierde el historial de pagos. No se puede deshacer.')}`)) return;
-    await supabase.from('planes_ahorro').delete().eq('id', plan.id);
+    if (await falla(supabase.from('planes_ahorro').delete().eq('id', plan.id), t, 'eliminar plan de ahorro')) return;
     await registrarAuditoria(supabase, {
       accion: `eliminó un plan de ahorro (${nombreCliente(plan)}${plan.modelo ? `, ${plan.modelo}` : ''})`,
       entidad: 'plan_ahorro',

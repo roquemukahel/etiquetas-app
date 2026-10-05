@@ -10,6 +10,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getActor } from './actor';
 import { registrarAuditoria } from './auditoria';
+import { obtenerTodasLasFilas } from './db';
 
 export type TipoEgreso = 'gasto_operativo' | 'retiro' | 'ajuste' | 'otro';
 
@@ -225,16 +226,23 @@ export async function obtenerEgresos(
   supabase: SupabaseClient,
   params: { desde?: string; hasta?: string } = {}
 ): Promise<Egreso[]> {
-  let query = supabase
-    .from('egresos')
-    .select('id, fecha, categoria_id, tipo, descripcion, importe, moneda, medio_pago, proveedor_id, notas, anulado, registrado_por_nombre, registrado_por_foto_url, created_at, sucursal_id, area_id')
-    .eq('anulado', false)
-    .order('fecha', { ascending: false })
-    .order('created_at', { ascending: false });
-  if (params.desde) query = query.gte('fecha', params.desde);
-  if (params.hasta) query = query.lte('fecha', params.hasta);
-  const { data } = await query;
-  return (data as Egreso[]) ?? [];
+  // Paginado: un período largo (año, "todo") con más de 1000 egresos se cortaba
+  // sin avisar y los totales de Egresos/Estadísticas quedaban subestimados.
+  return obtenerTodasLasFilas<Egreso>(
+    supabase,
+    'egresos',
+    'id, fecha, categoria_id, tipo, descripcion, importe, moneda, medio_pago, proveedor_id, notas, anulado, registrado_por_nombre, registrado_por_foto_url, created_at, sucursal_id, area_id',
+    [
+      { columna: 'fecha', ascending: false },
+      { columna: 'created_at', ascending: false },
+    ],
+    (q) => {
+      q = q.eq('anulado', false);
+      if (params.desde) q = q.gte('fecha', params.desde);
+      if (params.hasta) q = q.lte('fecha', params.hasta);
+      return q;
+    }
+  );
 }
 
 export async function crearEgreso(

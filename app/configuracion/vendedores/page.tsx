@@ -10,6 +10,7 @@ import Avatar from '../../Avatar';
 import PermisosEditor, { PermisosForm } from '../../PermisosEditor';
 import { obtenerSucursales, type Sucursal } from '../../lib/sucursales';
 import { useT } from '../../lib/idioma';
+import { falla } from '../../lib/escritura';
 
 type Vendedor = {
   id: string;
@@ -127,7 +128,7 @@ export default function Vendedores() {
       return;
     }
 
-    await supabase.from('vendedores').delete().eq('id', id);
+    if (await falla(supabase.from('vendedores').delete().eq('id', id), t, 'eliminar vendedor')) return;
     await registrarAuditoria(supabase, {
       accion: `eliminó un vendedor (${vendedor?.nombre || 'sin nombre'})`,
       entidad: 'vendedor',
@@ -167,7 +168,7 @@ export default function Vendedores() {
     reader.onload = async () => {
       const dataUrl = reader.result as string;
       setVendedores((vs) => vs.map((x) => (x.id === v.id ? { ...x, foto_url: dataUrl } : x)));
-      await supabase.from('vendedores').update({ foto_url: dataUrl }).eq('id', v.id);
+      if (await falla(supabase.from('vendedores').update({ foto_url: dataUrl }).eq('id', v.id), t, 'guardar foto')) cargar();
     };
     reader.readAsDataURL(file);
   };
@@ -182,9 +183,14 @@ export default function Vendedores() {
     // se guarda ni se compara en texto plano. Solo se toca si de verdad lo
     // tocaron (pinTocado); si no, el que ya tenía queda como estaba.
     if (pinTocado) {
-      await supabase.rpc('establecer_pin_vendedor', { p_vendedor_id: v.id, p_pin: pinEdit.trim() || null });
+      if (await falla(supabase.rpc('establecer_pin_vendedor', { p_vendedor_id: v.id, p_pin: pinEdit.trim() || null }), t, 'guardar PIN')) {
+        setGuardandoPerfil(false);
+        return;
+      }
     }
-    await supabase
+    if (
+      await falla(
+        supabase
       .from('vendedores')
       .update({
         telefono: telefonoEdit.trim() || null,
@@ -200,7 +206,14 @@ export default function Vendedores() {
         puede_gestionar_financiacion: permisosEdit.puedeGestionarFinanciacion,
         ...(sucursales.length > 0 ? { sucursal_id: sucursalIdEdit || null } : {}),
       })
-      .eq('id', v.id);
+      .eq('id', v.id),
+        t,
+        'guardar perfil del vendedor'
+      )
+    ) {
+      setGuardandoPerfil(false);
+      return;
+    }
     setGuardandoPerfil(false);
     setEditando(null);
     cargar();

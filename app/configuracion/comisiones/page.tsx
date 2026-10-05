@@ -8,6 +8,7 @@ import { tienePermiso } from '../../lib/permisos';
 import { registrarAuditoria } from '../../lib/auditoria';
 import CampoFecha from '../../CampoFecha';
 import { useT } from '../../lib/idioma';
+import { aFechaISO } from '../../lib/financiacion/motor';
 
 // Configuración rápida: enciende el módulo y crea/actualiza un plan general con
 // dos reglas (minorista %, mayorista %). Usa el MISMO motor de reglas que el
@@ -43,7 +44,7 @@ export default function ConfiguracionComisiones() {
       const neg = (perfil as any)?.negocios;
       setNegocioId((perfil as any)?.negocio_id ?? null);
       setActivas(!!neg?.comisiones_activas);
-      setDesde(neg?.comisiones_desde ?? new Date().toISOString().slice(0, 10));
+      setDesde(neg?.comisiones_desde ?? aFechaISO(new Date()));
       // "?? true": si el negocio todavía no corrió tipo_venta_opcional_supabase.sql,
       // la columna no existe y viene undefined — se mantiene el comportamiento de
       // siempre (selector visible) en vez de ocultarlo sin que nadie lo haya pedido.
@@ -86,12 +87,16 @@ export default function ConfiguracionComisiones() {
         if (ePlan || !plan) throw new Error(ePlan?.message || t('No se pudo crear el plan'));
         pid = plan.id;
       } else {
-        await supabase.from('comision_planes').update({ es_default: true, updated_at: new Date().toISOString() }).eq('id', pid);
+        const { error: ePlanUpd } = await supabase.from('comision_planes').update({ es_default: true, updated_at: new Date().toISOString() }).eq('id', pid);
+        if (ePlanUpd) throw new Error(ePlanUpd.message);
       }
 
       // 2. Reglas minorista/mayorista: se reemplazan (borrar + insertar) para que
       //    queden exactamente las dos del asistente rápido.
-      await supabase.from('comision_reglas').delete().eq('plan_id', pid).in('alcance', ['minorista', 'mayorista']);
+      // Si el borrado fallara y el insert de abajo igual funcionara, quedarían
+      // reglas repetidas y se calcularía comisión de más: se corta acá.
+      const { error: eBorrar } = await supabase.from('comision_reglas').delete().eq('plan_id', pid).in('alcance', ['minorista', 'mayorista']);
+      if (eBorrar) throw new Error(eBorrar.message);
       const { error: eReglas } = await supabase.from('comision_reglas').insert([
         { plan_id: pid, tipo_calculo: 'porcentaje_venta', valor: nMin, alcance: 'minorista' },
         { plan_id: pid, tipo_calculo: 'porcentaje_venta', valor: nMay, alcance: 'mayorista' },
@@ -101,7 +106,8 @@ export default function ConfiguracionComisiones() {
       // Subir la versión del plan: las comisiones YA generadas conservan la
       // versión anterior (histórico intacto); las nuevas usan la nueva.
       const { data: pl } = await supabase.from('comision_planes').select('version').eq('id', pid).single();
-      await supabase.from('comision_planes').update({ version: ((pl?.version as number) || 1) + 1 }).eq('id', pid);
+      const { error: eVersion } = await supabase.from('comision_planes').update({ version: ((pl?.version as number) || 1) + 1 }).eq('id', pid);
+      if (eVersion) throw new Error(eVersion.message);
 
       // 3. Config del negocio.
       const { error: eNeg } = await supabase

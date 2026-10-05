@@ -16,6 +16,7 @@ import { ICONOS } from '../Iconos';
 import { Boton, BotonIcono } from '../Boton';
 import { useT } from '../lib/idioma';
 import { useSucursalActual } from '../lib/sucursal';
+import { falla } from '../lib/escritura';
 
 type Canje = {
   id: string;
@@ -113,7 +114,7 @@ export default function PlanCanje() {
       })
       .select('id, numero_orden')
       .single();
-    await supabase.from('canjes').update({ oculto_en_canje: true }).eq('id', c.id);
+    await falla(supabase.from('canjes').update({ oculto_en_canje: true }).eq('id', c.id), t, 'ocultar el canje derivado');
     await registrarAuditoria(supabase, {
       accion: `derivó a Servicio Técnico un dispositivo de Plan Canje (${nueva?.numero_orden || ''}, ${c.modelo || 'sin modelo'}${c.imei ? `, IMEI ${c.imei}` : ''})`,
       entidad: 'reparacion',
@@ -188,7 +189,10 @@ export default function PlanCanje() {
     if (!puedeEliminar) return;
     if (!confirm(t('¿Eliminar este dispositivo de Plan Canje? Esta acción no se puede deshacer.'))) return;
     setProcesando(c.id);
-    await supabase.from('canjes').delete().eq('id', c.id);
+    if (await falla(supabase.from('canjes').delete().eq('id', c.id), t, 'eliminar canje')) {
+      setProcesando(null);
+      return;
+    }
     await registrarAuditoria(supabase, {
       accion: `eliminó de Plan Canje un dispositivo (${c.modelo || 'sin modelo'}${c.imei ? `, IMEI ${c.imei}` : ''})`,
       entidad: 'canje',
@@ -206,7 +210,10 @@ export default function PlanCanje() {
 
   const guardarUbicacion = async (c: Canje) => {
     setProcesando(c.id);
-    await supabase.from('canjes').update({ ubicacion_fisica: ubicacionInput.trim() || null }).eq('id', c.id);
+    if (await falla(supabase.from('canjes').update({ ubicacion_fisica: ubicacionInput.trim() || null }).eq('id', c.id), t, 'guardar ubicación')) {
+      setProcesando(null);
+      return;
+    }
     setEditandoUbicacionId(null);
     setProcesando(null);
     cargar();

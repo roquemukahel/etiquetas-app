@@ -9,6 +9,7 @@ import { useIdioma, setIdioma, useT, IDIOMAS_DISPONIBLES, type Idioma } from './
 import { sincronizarCookieSucursal, getSucursalManual } from './lib/sucursal';
 import Avatar from './Avatar';
 import BotonSalir from './BotonSalir';
+import { falla } from './lib/escritura';
 
 const RUTAS_SIN_SELECTOR = [
   '/login',
@@ -262,7 +263,7 @@ export default function SelectorDeActor() {
     reader.onload = async () => {
       const dataUrl = reader.result as string;
       const tabla = actor.tipo === 'vendedor' ? 'vendedores' : 'tecnicos';
-      await supabase.from(tabla).update({ foto_url: dataUrl }).eq('id', actor.id);
+      if (await falla(supabase.from(tabla).update({ foto_url: dataUrl }).eq('id', actor.id), t, 'guardar foto de perfil')) return;
       const actualizado = { ...actor, fotoUrl: dataUrl };
       guardarActor(actualizado);
       setActorState(actualizado);
@@ -274,10 +275,19 @@ export default function SelectorDeActor() {
     if (!actor) return;
     setGuardandoPerfil(true);
     const tabla = actor.tipo === 'vendedor' ? 'vendedores' : 'tecnicos';
-    await supabase
-      .from(tabla)
-      .update({ telefono: telefonoPerfil.trim() || null, edad: edadPerfil ? Number(edadPerfil) : null })
-      .eq('id', actor.id);
+    if (
+      await falla(
+        supabase
+          .from(tabla)
+          .update({ telefono: telefonoPerfil.trim() || null, edad: edadPerfil ? Number(edadPerfil) : null })
+          .eq('id', actor.id),
+        t,
+        'guardar mi perfil'
+      )
+    ) {
+      setGuardandoPerfil(false);
+      return;
+    }
     setGuardandoPerfil(false);
     setEditandoPerfil(false);
   };

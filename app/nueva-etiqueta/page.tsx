@@ -201,7 +201,7 @@ export default function NuevaEtiqueta() {
       }
       setGuardandoStock(true);
       const modeloNormalizado = datos.modelo ? normalizarNombreModelo(datos.modelo.trim()) : datos.modelo;
-      await supabase.from('dispositivos').insert({
+      const { error: altaError } = await supabase.from('dispositivos').insert({
         modelo: modeloNormalizado,
         capacidad_gb: datos.capacidad_gb,
         imei: imeiLimpio,
@@ -216,6 +216,11 @@ export default function NuevaEtiqueta() {
         agregado_por_foto_url: actor?.fotoUrl ?? null,
         ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
       });
+      if (altaError) {
+        setError(t('No pudimos agregar al stock:') + ' ' + altaError.message);
+        setGuardandoStock(false);
+        return;
+      }
       await asegurarModelo(supabase, modeloNormalizado);
       setGuardandoStock(false);
     }

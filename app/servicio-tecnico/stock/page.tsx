@@ -19,6 +19,7 @@ import { ICONOS } from '../../Iconos';
 import { useT } from '../../lib/idioma';
 import { comprimirImagen, reducirImagenDesdeUrl } from '../../lib/comprimirImagen';
 import { CALIDADES_PREDETERMINADAS, combinarOpciones, obtenerOpcionesRepuestos } from '../../lib/repuestosOpciones';
+import { falla } from '../../lib/escritura';
 
 function IconoChico({ nombre, className = '' }: { nombre: string; className?: string }) {
   return (
@@ -561,7 +562,7 @@ export default function StockRepuestos() {
     setMenuAbierto(null);
     if (!puedeEliminar) return;
     if (!confirm(`${t('¿Eliminar')} "${r.nombre}" ${t('del catálogo de repuestos? No se puede deshacer.')}`)) return;
-    await supabase.from('repuestos').delete().eq('id', r.id);
+    if (await falla(supabase.from('repuestos').delete().eq('id', r.id), t, 'eliminar repuesto')) return;
     await registrarAuditoria(supabase, {
       accion: `eliminó el repuesto "${r.nombre}" del catálogo`,
       entidad: 'repuesto',

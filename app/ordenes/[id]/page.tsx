@@ -32,6 +32,8 @@ import {
   type LineaCobro,
 } from '../../lib/formaPago';
 import { cuotasEfectivasDeOrden, etiquetaCuotas, interesDe, interesGuardadoDeOrden, planesActivos, valorCuota } from '../../lib/cuotas';
+import { registrarFallo, falla } from '../../lib/escritura';
+import { obtenerTodasLasFilas } from '../../lib/db';
 
 const ESTADOS = ['pendiente', 'pagado', 'entregado'];
 const STORAGE_OPTIONS = [64, 128, 256, 512];
@@ -505,15 +507,16 @@ export default function DetalleOrden() {
   const abrirDispositivoEdit = async () => {
     setAgregandoDispositivoEdit(true);
     setModoDispositivoEdit('stock');
-    const { data, error: fetchError } = await supabase
-      .from('dispositivos')
-      .select('id, modelo, capacidad_gb, color, imei, precio, salud_bateria')
-      .eq('en_stock', true);
-    if (fetchError) {
-      setError(t('No pudimos traer el stock:') + ' ' + fetchError.message);
-      return;
-    }
-    setDispositivosStockEdit((data as DispositivoStockEdit[]) ?? []);
+    // Paginado: con más de 1000 equipos en stock una sola consulta los cortaba
+    // sin avisar y los últimos no se podían agregar a la orden.
+    const data = await obtenerTodasLasFilas<DispositivoStockEdit>(
+      supabase,
+      'dispositivos',
+      'id, modelo, capacidad_gb, color, imei, precio, salud_bateria',
+      [],
+      (q) => q.eq('en_stock', true)
+    );
+    setDispositivosStockEdit(data);
   };
 
   const agregarDispositivoDelStockEdit = (d: DispositivoStockEdit) => {
@@ -1038,31 +1041,21 @@ export default function DetalleOrden() {
     setError(null);
 
     const dispositivoIds = orden.orden_items.map((i) => i.dispositivo_id).filter(Boolean) as string[];
+    // Cada paso de abajo se verifica: la orden se borra RECIÉN al final, y si un
+    // paso anterior fallara en silencio los equipos quedaban vendidos sin orden o
+    // los pagos activos sin orden (inflando la caja para siempre). Todos los pasos
+    // son repetibles: si algo falla se corta acá y se puede volver a intentar.
     if (dispositivoIds.length > 0) {
-      await supabase
+      const { error: stockErr } = await supabase
         .from('dispositivos')
         .update({ en_stock: true, en_stock_desde: new Date().toISOString(), alerta_stock_enviada: false })
         .in('id', dispositivoIds);
+      if (stockErr) {
+      setError(t('No pudimos cancelar la orden:') + ' ' + stockErr.message);
+      setGuardando(false);
+      return;
     }
-    // Devuelve al stock los accesorios (tipo 'producto') vendidos en esta
-    // orden — simétrico al descuento que se hace al crearla en Nueva Orden.
-    // Best-effort: si falla, no bloquea la cancelación (mismo criterio que
-    // el resto de esta función).
-    await Promise.all(
-      orden.orden_items
-        .filter((i) => i.producto_id)
-        .map((i) =>
-          Promise.resolve(
-            supabase.rpc('producto_mover_stock', {
-              p_producto_id: i.producto_id,
-              p_tipo: 'devolucion',
-              p_cantidad: i.cantidad,
-              p_motivo: 'Venta cancelada',
-              p_usuario: actor?.nombre ?? null,
-            })
-          ).catch(() => {})
-        )
-    );
+    }
     // Se borran antes de eliminar la orden: canjes.orden_id queda en null
     // automáticamente al borrar la orden (on delete set null), así que
     // después ya no se los podría encontrar por ese filtro.
@@ -1072,14 +1065,29 @@ export default function DetalleOrden() {
     // al agregarlo a Stock. Filtrar por estado acá borraba también canjes
     // que ya eran inventario vendible, perdiendo su trazabilidad (de dónde
     // salió, a quién se le recibió, en qué monto) sin necesidad.
-    await supabase.from('canjes').delete().eq('orden_id', id).eq('agregado_a_stock', false);
+    const { error: canjesErr } = await supabase.from('canjes').delete().eq('orden_id', id).eq('agregado_a_stock', false);
+    if (canjesErr) {
+      setError(t('No pudimos cancelar la orden:') + ' ' + canjesErr.message);
+      setGuardando(false);
+      return;
+    }
     // Lo mismo con la cuenta corriente: si esta venta había generado deuda
     // (cargo) o registrado pagos, hay que anularlos ANTES de borrar la orden
     // (después orden_id queda en null y no se los encuentra). Se anulan (no
     // se borran) para no perder el historial; al estar anulados dejan de
     // contar en el saldo del cliente y en la caja.
-    await supabase.from('cta_cte_movimientos').update({ anulado: true }).eq('orden_id', id).eq('anulado', false);
-    await supabase.from('pagos').update({ anulado: true }).eq('orden_id', id).eq('anulado', false);
+    const { error: ctaErr } = await supabase.from('cta_cte_movimientos').update({ anulado: true }).eq('orden_id', id).eq('anulado', false);
+    if (ctaErr) {
+      setError(t('No pudimos cancelar la orden:') + ' ' + ctaErr.message);
+      setGuardando(false);
+      return;
+    }
+    const { error: pagosErr } = await supabase.from('pagos').update({ anulado: true }).eq('orden_id', id).eq('anulado', false);
+    if (pagosErr) {
+      setError(t('No pudimos cancelar la orden:') + ' ' + pagosErr.message);
+      setGuardando(false);
+      return;
+    }
     // Comisiones: revertir las de esta venta ANTES de borrar la orden (después
     // orden_id queda en null). Si el módulo no está activo o no había
     // comisiones, la función no hace nada. No rompe la cancelación si falla,
@@ -1111,7 +1119,12 @@ export default function DetalleOrden() {
     // Se hace ANTES de borrar la orden: si el FK fuera "set null", después no
     // se la podría encontrar por orden_origen_id. reparaciones_eventos se va
     // en cascada. No rompe la eliminación de la orden si esto falla.
-    await supabase.from('reparaciones').delete().eq('orden_origen_id', id);
+    const { error: repDelErr } = await supabase.from('reparaciones').delete().eq('orden_origen_id', id);
+    if (repDelErr) {
+      setError(t('No pudimos cancelar la orden:') + ' ' + repDelErr.message);
+      setGuardando(false);
+      return;
+    }
     if (yaDerivado) {
       const clienteRep = orden.clientes ? `${orden.clientes.nombre} ${orden.clientes.apellido || ''}`.trim() : 'sin cliente';
       const cuenta = reparacionesDerivadasIds.length;
@@ -1129,6 +1142,30 @@ export default function DetalleOrden() {
       setGuardando(false);
       return;
     }
+    // Devuelve al stock los accesorios (tipo 'producto') vendidos en esta
+    // orden — simétrico al descuento que se hace al crearla en Nueva Orden.
+    // Se hace DESPUÉS de borrar la orden (no antes): esta operación NO se puede
+    // repetir sin duplicar el stock, así que solo corre cuando ya no hay vuelta
+    // atrás. Si falla no bloquea (la orden ya no existe), queda en la consola.
+    await Promise.all(
+      orden.orden_items
+        .filter((i) => i.producto_id)
+        .map((i) =>
+          Promise.resolve(
+            supabase.rpc('producto_mover_stock', {
+              p_producto_id: i.producto_id,
+              p_tipo: 'devolucion',
+              p_cantidad: i.cantidad,
+              p_motivo: 'Venta cancelada',
+              p_usuario: actor?.nombre ?? null,
+            })
+          )
+            .then((r) => {
+              if (r.error) registrarFallo(r.error, 'devolver stock de accesorio al cancelar orden');
+            })
+            .catch((e) => registrarFallo(e, 'devolver stock de accesorio al cancelar orden'))
+        )
+    );
     const nombreCliente = orden.clientes ? `${orden.clientes.nombre} ${orden.clientes.apellido || ''}`.trim() : 'sin cliente';
     const avisoComision = comisionError ? ` (no se pudo revertir la comisión: ${comisionError})` : '';
     await registrarAuditoria(supabase, {
@@ -1745,7 +1782,9 @@ export default function DetalleOrden() {
               onChange={async (e) => {
                 const val = e.target.checked;
                 setOrden((o) => (o ? { ...o, incluir_aclaraciones_tecnico: val } : o));
-                await supabase.from('ordenes').update({ incluir_aclaraciones_tecnico: val }).eq('id', orden.id);
+                if (await falla(supabase.from('ordenes').update({ incluir_aclaraciones_tecnico: val }).eq('id', orden.id), t, 'guardar la opción de aclaraciones')) {
+                  setOrden((o) => (o ? { ...o, incluir_aclaraciones_tecnico: !val } : o));
+                }
               }}
               className="h-4 w-4 accent-ink"
             />

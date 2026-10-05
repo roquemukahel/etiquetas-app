@@ -16,6 +16,8 @@ import { useT } from '../../lib/idioma';
 import { useSucursalActual } from '../../lib/sucursal';
 import { obtenerSucursales, type Sucursal } from '../../lib/sucursales';
 import { obtenerAreasEgresos, type AreaEgreso } from '../../lib/egresos';
+import { falla } from '../../lib/escritura';
+import { obtenerTodasLasFilas } from '../../lib/db';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 
@@ -136,16 +138,23 @@ export default function DetalleProveedor() {
   const cargar = async () => {
     const [{ data: prov }, { data: comprasData }, { data: dispData }, { data: movData, error: movError }] = await Promise.all([
       supabase.from('proveedores').select('id, nombre, telefono, detalles').eq('id', id).maybeSingle(),
-      supabase
-        .from('compras_proveedor')
-        .select('id, modelo, capacidad_gb, color, cantidad, precio_unitario, detalles, created_at, sucursal_id, area_id')
-        .eq('proveedor_id', id)
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('dispositivos')
-        .select('id, modelo, capacidad_gb, color, costo, created_at, sucursal_id')
-        .eq('proveedor_id', id)
-        .order('created_at', { ascending: false }),
+      // Paginados: el total comprado/saldo del proveedor se calcula con TODAS estas
+      // filas — un proveedor con más de 1000 equipos las cortaba y el saldo
+      // quedaba mal sin ningún aviso.
+      obtenerTodasLasFilas<CompraManual>(
+        supabase,
+        'compras_proveedor',
+        'id, modelo, capacidad_gb, color, cantidad, precio_unitario, detalles, created_at, sucursal_id, area_id',
+        [{ columna: 'created_at', ascending: false }],
+        (q) => q.eq('proveedor_id', id)
+      ).then((data) => ({ data })),
+      obtenerTodasLasFilas<DispositivoComprado>(
+        supabase,
+        'dispositivos',
+        'id, modelo, capacidad_gb, color, costo, created_at, sucursal_id',
+        [{ columna: 'created_at', ascending: false }],
+        (q) => q.eq('proveedor_id', id)
+      ).then((data) => ({ data })),
       supabase
         .from('proveedor_movimientos')
         .select('id, tipo, concepto, monto, medio, observacion, fecha, sucursal_id, area_id')
@@ -267,7 +276,7 @@ export default function DetalleProveedor() {
 
   const anularMovimiento = async (movId: string) => {
     if (!confirm(t('¿Anular este movimiento? Deja de contar para el saldo.'))) return;
-    await supabase.from('proveedor_movimientos').update({ anulado: true }).eq('id', movId);
+    if (await falla(supabase.from('proveedor_movimientos').update({ anulado: true }).eq('id', movId), t, 'anular movimiento de proveedor')) return;
     cargar();
   };
 
@@ -285,10 +294,19 @@ export default function DetalleProveedor() {
       return;
     }
     setGuardandoPerfil(true);
-    await supabase
-      .from('proveedores')
-      .update({ nombre: nombreEdit.trim(), telefono: telefonoEdit.trim() || null, detalles: detallesEdit.trim() || null })
-      .eq('id', proveedor.id);
+    if (
+      await falla(
+        supabase
+          .from('proveedores')
+          .update({ nombre: nombreEdit.trim(), telefono: telefonoEdit.trim() || null, detalles: detallesEdit.trim() || null })
+          .eq('id', proveedor.id),
+        t,
+        'guardar proveedor'
+      )
+    ) {
+      setGuardandoPerfil(false);
+      return;
+    }
     setGuardandoPerfil(false);
     setEditandoPerfil(false);
     cargar();
@@ -302,7 +320,7 @@ export default function DetalleProveedor() {
       )
     )
       return;
-    await supabase.from('proveedores').delete().eq('id', proveedor.id);
+    if (await falla(supabase.from('proveedores').delete().eq('id', proveedor.id), t, 'eliminar proveedor')) return;
     await registrarAuditoria(supabase, {
       accion: `eliminó un proveedor (${proveedor.nombre})`,
       entidad: 'proveedor',
@@ -381,7 +399,7 @@ export default function DetalleProveedor() {
     if (!puedeEliminar) return;
     if (!confirm(t('¿Eliminar esta compra?'))) return;
     const compra = compras.find((c) => c.id === compraId);
-    await supabase.from('compras_proveedor').delete().eq('id', compraId);
+    if (await falla(supabase.from('compras_proveedor').delete().eq('id', compraId), t, 'eliminar compra a proveedor')) return;
     await registrarAuditoria(supabase, {
       accion: `eliminó una compra a proveedor${compra?.modelo ? ` (${compra.modelo})` : ''}`,
       entidad: 'compra_proveedor',

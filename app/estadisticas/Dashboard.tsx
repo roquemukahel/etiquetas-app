@@ -465,7 +465,7 @@ export default function Estadisticas() {
         // El detalle completo (incluidos los retiros) se sigue viendo entero
         // en /egresos, esto solo lo excluye del cálculo de resultado acá.
         obtenerTodasLasFilas<EgresoR>(supabase, 'egresos', 'importe, fecha, sucursal_id, area_id', [], (q) =>
-          q.eq('anulado', false).neq('tipo', 'retiro').gte('fecha', desde.toISOString().slice(0, 10))
+          q.eq('anulado', false).neq('tipo', 'retiro').gte('fecha', aFechaInput(desde))
         ),
         obtenerTodasLasFilas<DispositivoCompra>(supabase, 'dispositivos', 'proveedor_id, costo, created_at, sucursal_id', [], (q) =>
           q.not('proveedor_id', 'is', null).gte('created_at', desde.toISOString())

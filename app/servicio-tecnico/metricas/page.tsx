@@ -84,7 +84,7 @@ export default function MetricasServicioTecnico() {
           'id, modelo, estado, tecnico_id, fecha_ingreso_servicio, fecha_reparado, fecha_entrega, fecha_estimada, estado_actualizado_at, importe_total, presupuesto_estado, presupuesto_respondido_at, tipo_ingreso, trabajos_realizados, sucursal_id'
         ),
         obtenerTodasLasFilas<RepuestoUsoMetrica>(supabase, 'reparaciones_repuestos', 'reparacion_id, nombre_repuesto, cantidad, costo_unitario'),
-        supabase.from('repuestos').select('id, nombre, cantidad_stock, cantidad_reservada, stock_minimo, sucursal_id'),
+        obtenerTodasLasFilas<RepuestoMetrica>(supabase, 'repuestos', 'id, nombre, cantidad_stock, cantidad_reservada, stock_minimo, sucursal_id').then((data) => ({ data })),
         supabase.from('tecnicos').select('id, nombre').order('nombre'),
       ]);
       setReparaciones(reps);

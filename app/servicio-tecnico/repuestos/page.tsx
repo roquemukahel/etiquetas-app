@@ -10,6 +10,7 @@ import { registrarAuditoria } from '../../lib/auditoria';
 import ServicioTecnicoTabs from '../../ServicioTecnicoTabs';
 import { ICONOS } from '../../Iconos';
 import { useT } from '../../lib/idioma';
+import { obtenerTodasLasFilas } from '../../lib/db';
 
 type Proveedor = { id: string; nombre: string; telefono: string | null };
 type Repuesto = { id: string; nombre: string };
@@ -45,8 +46,8 @@ export default function Repuestos() {
   const cargar = async () => {
     const [{ data: prov }, { data: rep }, { data: pre }] = await Promise.all([
       supabase.from('proveedores_repuestos').select('id, nombre, telefono').order('nombre'),
-      supabase.from('repuestos').select('id, nombre').order('nombre'),
-      supabase.from('repuestos_precios').select('id, repuesto_id, proveedor_id, precio, disponible, actualizado_at'),
+      obtenerTodasLasFilas<Repuesto>(supabase, 'repuestos', 'id, nombre', [{ columna: 'nombre' }]).then((data) => ({ data })),
+      obtenerTodasLasFilas<Precio>(supabase, 'repuestos_precios', 'id, repuesto_id, proveedor_id, precio, disponible, actualizado_at').then((data) => ({ data })),
     ]);
     setProveedores((prov as Proveedor[]) ?? []);
     setRepuestos((rep as Repuesto[]) ?? []);

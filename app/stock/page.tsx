@@ -10,7 +10,7 @@ import { registrarAuditoria } from '../lib/auditoria';
 import { getActor, useActor } from '../lib/actor';
 import { tienePermiso } from '../lib/permisos';
 import { leerArchivoDatos, valorDe, descargarCSV, descargarDatos, insertarEnTandas } from '../lib/csv';
-import { obtenerTodasLasFilas } from '../lib/db';
+import { obtenerTodasLasFilas, porLotes } from '../lib/db';
 import { obtenerDispositivosSenados } from '../lib/planAhorro';
 import { asegurarModelo, normalizarNombreModelo } from '../lib/modelos';
 import { compararModelosPorSalida } from '../lib/catalogosMarcas';
@@ -24,6 +24,7 @@ import { useT } from '../lib/idioma';
 import MiniaturaDispositivo from '../MiniaturaDispositivo';
 import { QoviState } from '../QoviState';
 import { ICONOS } from '../Iconos';
+import { falla } from '../lib/escritura';
 
 function IconoChico({ nombre, className = '' }: { nombre: string; className?: string }) {
   return (
@@ -325,7 +326,7 @@ export default function Stock() {
       return;
 
     setEliminandoCarpeta(modelo);
-    const { error } = await supabase.from('dispositivos').delete().in('id', items.map((d) => d.id));
+    const { error } = await porLotes(items.map((d) => d.id), (lote) => supabase.from('dispositivos').delete().in('id', lote));
     if (!error) {
       await registrarAuditoria(supabase, {
         accion: `eliminó toda la carpeta "${modelo}" de Stock (${items.length} dispositivo${items.length === 1 ? '' : 's'})`,
@@ -664,7 +665,7 @@ export default function Stock() {
     setEliminandoSeleccion(true);
     const aEliminar = dispositivos.filter((d) => seleccionados.has(d.id));
 
-    const { error } = await supabase.from('dispositivos').delete().in('id', ids);
+    const { error } = await porLotes(ids, (lote) => supabase.from('dispositivos').delete().in('id', lote));
     if (!error) {
       // Un solo insert con N filas (no N awaits en fila): con selecciones
       // grandes, auditar uno por uno bloqueaba la UI mucho más que el
@@ -705,10 +706,8 @@ export default function Stock() {
     const ids = Array.from(seleccionados);
     if (ids.length === 0) return;
     setProcesandoSeleccion(true);
-    const { error } = await supabase
-      .from('dispositivos')
-      .update({ en_stock: enStock, ...(enStock ? { en_stock_desde: new Date().toISOString(), alerta_stock_enviada: false } : {}) })
-      .in('id', ids);
+    const cambiosStock = { en_stock: enStock, ...(enStock ? { en_stock_desde: new Date().toISOString(), alerta_stock_enviada: false } : {}) };
+    const { error } = await porLotes(ids, (lote) => supabase.from('dispositivos').update(cambiosStock).in('id', lote));
     if (!error) {
       await registrarAuditoria(supabase, {
         accion: `marcó ${ids.length} dispositivo${ids.length === 1 ? '' : 's'} como ${enStock ? 'en stock' : 'fuera de stock'} (selección múltiple)`,
@@ -728,7 +727,7 @@ export default function Stock() {
     const ids = Array.from(seleccionados);
     if (!destino || ids.length === 0) return;
     setProcesandoSeleccion(true);
-    const { error } = await supabase.from('dispositivos').update({ modelo: destino }).in('id', ids);
+    const { error } = await porLotes(ids, (lote) => supabase.from('dispositivos').update({ modelo: destino }).in('id', lote));
     if (!error) {
       await asegurarModelo(supabase, destino);
       await registrarAuditoria(supabase, {
@@ -1296,7 +1295,7 @@ export default function Stock() {
     if (!puedeEliminar) return;
     if (!confirm(t('¿Eliminar este producto?'))) return;
     const producto = productos.find((p) => p.id === id);
-    await supabase.from('productos').delete().eq('id', id);
+    if (await falla(supabase.from('productos').delete().eq('id', id), t, 'eliminar producto')) return;
     await registrarAuditoria(supabase, {
       accion: `eliminó un accesorio del Stock (${producto?.nombre || 'sin nombre'})`,
       entidad: 'producto',
@@ -1349,17 +1348,20 @@ export default function Stock() {
           setErrorProducto(`${t('No pudimos actualizar la cantidad:')} ` + movError.message);
           return;
         }
-        await supabase.from('productos').update({ cantidad: nueva }).eq('id', p.id);
+        if (await falla(supabase.from('productos').update({ cantidad: nueva }).eq('id', p.id), t, 'actualizar cantidad')) return;
       }
     }
     if (cambianOtros) {
-      await supabase.from('productos').update({ costo: costoNuevo, precio: precioNuevo }).eq('id', p.id);
+      if (await falla(supabase.from('productos').update({ costo: costoNuevo, precio: precioNuevo }).eq('id', p.id), t, 'actualizar costo y precio')) {
+        cargarProductos();
+        return;
+      }
       // El precio/costo "Final" que muestra la pestaña Productos sale del
       // catálogo maestro, no de esta fila puntual — sin este paso, editar el
       // precio acá (lo normal del día a día) dejaba ese catálogo desactualizado
       // para siempre desde la primera vez que se creó el producto.
       if (p.producto_maestro_id) {
-        await supabase.from('productos_maestro').update({ costo: costoNuevo, precio: precioNuevo }).eq('id', p.producto_maestro_id);
+        await falla(supabase.from('productos_maestro').update({ costo: costoNuevo, precio: precioNuevo }).eq('id', p.producto_maestro_id), t, 'actualizar el catálogo de productos');
       }
     }
     await registrarAuditoria(supabase, {
@@ -1380,7 +1382,7 @@ export default function Stock() {
     reader.onload = async () => {
       const dataUrl = reader.result as string;
       setProductos((ps) => ps.map((x) => (x.id === p.id ? { ...x, imagen_url: dataUrl } : x)));
-      await supabase.from('productos').update({ imagen_url: dataUrl }).eq('id', p.id);
+      if (await falla(supabase.from('productos').update({ imagen_url: dataUrl }).eq('id', p.id), t, 'guardar imagen')) cargarProductos();
     };
     reader.readAsDataURL(file);
   };

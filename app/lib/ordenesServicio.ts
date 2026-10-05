@@ -144,13 +144,14 @@ export async function generarOrdenDeReparacion(
     // asumir que no existe: insertar acá duplicaría la línea de la boleta.
     if (itemBuscarError) return { ordenId: null, total, error: 'No pudimos actualizar el ítem de la orden: ' + itemBuscarError.message };
 
-    if (itemExistente) {
-      await supabase.from('orden_items').update({ descripcion, precio_unitario: total, costo: costoRepuestos }).eq('id', itemExistente.id);
-    } else {
-      await supabase
-        .from('orden_items')
-        .insert({ orden_id: ordenId, descripcion, cantidad: 1, precio_unitario: total, costo: costoRepuestos, tipo: 'trabajo' });
-    }
+    // El ítem es lo que se imprime en la boleta y lo que suma la caja: si no se
+    // pudo guardar hay que cortar acá, no seguir como si la orden estuviera bien.
+    const { error: itemGuardarError } = itemExistente
+      ? await supabase.from('orden_items').update({ descripcion, precio_unitario: total, costo: costoRepuestos }).eq('id', itemExistente.id)
+      : await supabase
+          .from('orden_items')
+          .insert({ orden_id: ordenId, descripcion, cantidad: 1, precio_unitario: total, costo: costoRepuestos, tipo: 'trabajo' });
+    if (itemGuardarError) return { ordenId: null, total, error: 'No pudimos guardar el ítem de la orden: ' + itemGuardarError.message };
   } else {
     // Reparaciones sin cliente al recibirse (equipo propio) o cargadas antes de
     // que se armara la orden en el ingreso: se crea acá.
@@ -170,7 +171,7 @@ export async function generarOrdenDeReparacion(
     if (ordenError || !orden) return { ordenId: null, total, error: 'No pudimos generar la orden: ' + (ordenError?.message || '') };
 
     ordenId = orden.id;
-    await supabase.from('orden_items').insert({
+    const { error: itemNuevoError } = await supabase.from('orden_items').insert({
       orden_id: orden.id,
       descripcion,
       cantidad: 1,
@@ -178,6 +179,11 @@ export async function generarOrdenDeReparacion(
       costo: costoRepuestos,
       tipo: 'trabajo',
     });
+    if (itemNuevoError) {
+      // Una orden sin su ítem quedaría en $0 para siempre: se deshace.
+      await supabase.from('ordenes').delete().eq('id', orden.id);
+      return { ordenId: null, total, error: 'No pudimos guardar el ítem de la orden: ' + itemNuevoError.message };
+    }
   }
 
   const cambiosReparacion: Record<string, unknown> = {

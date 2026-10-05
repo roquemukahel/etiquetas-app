@@ -45,6 +45,7 @@ import { QoviState } from '../QoviState';
 import { useT } from '../lib/idioma';
 import { useSucursalActual } from '../lib/sucursal';
 import { obtenerSucursales, type Sucursal } from '../lib/sucursales';
+import { falla } from '../lib/escritura';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 
@@ -293,7 +294,7 @@ export default function ServicioTecnico() {
       setClientes(await obtenerTodasLasFilas<Cliente>(supabase, 'clientes', 'id, nombre, apellido, telefono', [{ columna: 'nombre' }]));
     })();
     (async () => {
-      const { data } = await supabase.from('repuestos').select('id, nombre, cantidad_stock, cantidad_reservada, stock_minimo');
+      const data = await obtenerTodasLasFilas<any>(supabase, 'repuestos', 'id, nombre, cantidad_stock, cantidad_reservada, stock_minimo');
       setRepuestosParaAlertas((data as RepuestoParaAlerta[]) ?? []);
     })();
     (async () => {
@@ -816,7 +817,10 @@ export default function ServicioTecnico() {
     const r = reparaciones.find((x) => x.id === id);
     const cambios: { tecnico_id: string | null; en_poder_tecnico?: boolean } = { tecnico_id: tecnicoId || null };
     if (tecnicoId) cambios.en_poder_tecnico = true;
-    await supabase.from('reparaciones').update(cambios).eq('id', id);
+    if (await falla(supabase.from('reparaciones').update(cambios).eq('id', id), t, 'asignar técnico')) {
+      setGuardando(null);
+      return;
+    }
     const nombreNuevo = tecnicos.find((tec) => tec.id === tecnicoId)?.nombre;
     await registrarAuditoria(supabase, {
       accion: tecnicoId
@@ -835,7 +839,10 @@ export default function ServicioTecnico() {
       return;
     }
     setGuardando(r.id);
-    await supabase.from('reparaciones').update({ en_poder_tecnico: enPoder }).eq('id', r.id);
+    if (await falla(supabase.from('reparaciones').update({ en_poder_tecnico: enPoder }).eq('id', r.id), t, 'marcar equipo en poder del técnico')) {
+      setGuardando(null);
+      return;
+    }
     await registrarAuditoria(supabase, {
       accion: `registró que ${nombreTecnico(r.tecnico_id) || 'el técnico'} ${enPoder ? 'todavía tiene' : 'ya entregó'} la reparación ${r.numero_orden || ''} (${r.modelo || 'sin modelo'})`,
       entidad: 'reparacion',
@@ -890,7 +897,9 @@ export default function ServicioTecnico() {
     setGuardando(r.id);
     setAvisoAgregarStockPara(null);
     const modeloNormalizado = r.modelo ? normalizarNombreModelo(r.modelo) : r.modelo;
-    await supabase.from('dispositivos').insert({
+    if (
+      await falla(
+        supabase.from('dispositivos').insert({
       modelo: modeloNormalizado,
       capacidad_gb: r.capacidad_gb,
       color: r.color,
@@ -903,17 +912,34 @@ export default function ServicioTecnico() {
       // eligiendo ahora quien aprieta el botón — quien agrega al Stock
       // puede estar viendo "Todas las sucursales" en ese momento.
       ...(r.sucursal_id ? { sucursal_id: r.sucursal_id } : {}),
-    });
+        }),
+        t,
+        'agregar equipo al stock'
+      )
+    ) {
+      setGuardando(null);
+      return;
+    }
     await asegurarModelo(supabase, modeloNormalizado);
-    await supabase
-      .from('reparaciones')
-      .update({
-        estado: 'entregado',
-        estado_actualizado_at: new Date().toISOString(),
-        agregado_a_stock: true,
-        fecha_reparado: r.fecha_reparado ?? new Date().toISOString(),
-      })
-      .eq('id', r.id);
+    if (
+      await falla(
+        supabase
+          .from('reparaciones')
+          .update({
+            estado: 'entregado',
+            estado_actualizado_at: new Date().toISOString(),
+            agregado_a_stock: true,
+            fecha_reparado: r.fecha_reparado ?? new Date().toISOString(),
+          })
+          .eq('id', r.id),
+        t,
+        'marcar reparación como agregada al stock'
+      )
+    ) {
+      setGuardando(null);
+      cargar();
+      return;
+    }
     await registrarAuditoria(supabase, {
       accion: `agregó al Stock un equipo propio reparado en Servicio Técnico (${r.numero_orden || ''}, ${r.modelo || 'sin modelo'}${r.imei ? `, IMEI ${r.imei}` : ''})`,
       entidad: 'reparacion',
@@ -927,15 +953,24 @@ export default function ServicioTecnico() {
     if (guardando || !puedeGestionar) return;
     if (!confirm(t('¿Marcar este equipo como entregado al cliente?'))) return;
     setGuardando(r.id);
-    await supabase
-      .from('reparaciones')
-      .update({
-        estado: 'entregado',
-        fecha_entrega: new Date().toISOString(),
-        estado_actualizado_at: new Date().toISOString(),
-        fecha_reparado: r.fecha_reparado ?? new Date().toISOString(),
-      })
-      .eq('id', r.id);
+    if (
+      await falla(
+        supabase
+          .from('reparaciones')
+          .update({
+            estado: 'entregado',
+            fecha_entrega: new Date().toISOString(),
+            estado_actualizado_at: new Date().toISOString(),
+            fecha_reparado: r.fecha_reparado ?? new Date().toISOString(),
+          })
+          .eq('id', r.id),
+        t,
+        'marcar como entregado'
+      )
+    ) {
+      setGuardando(null);
+      return;
+    }
     await registrarAuditoria(supabase, {
       accion: `marcó como entregado al cliente un equipo reparado en Servicio Técnico (${r.numero_orden || ''}, ${r.modelo || 'sin modelo'}${r.imei ? `, IMEI ${r.imei}` : ''})`,
       entidad: 'reparacion',
@@ -977,7 +1012,10 @@ export default function ServicioTecnico() {
       setGuardando(null);
       return;
     }
-    await supabase.from('reparaciones').delete().eq('id', r.id);
+    if (await falla(supabase.from('reparaciones').delete().eq('id', r.id), t, 'eliminar reparación')) {
+      setGuardando(null);
+      return;
+    }
     await registrarAuditoria(supabase, {
       accion: `eliminó definitivamente una reparación (${r.numero_orden || ''}, ${r.modelo || 'sin modelo'}${r.imei ? `, IMEI ${r.imei}` : ''})`,
       entidad: 'reparacion',

@@ -46,6 +46,8 @@ import CampoFecha from '../../CampoFecha';
 import { useT, useIdioma } from '../../lib/idioma';
 import { traducirAccion } from '../../lib/i18n/traducirAccion';
 import { useSucursalActual } from '../../lib/sucursal';
+import { falla } from '../../lib/escritura';
+import { obtenerTodasLasFilas } from '../../lib/db';
 
 // Mismo patrón que TarjetaReparacion/EstadoBadge para reescalar los SVG de
 // 24px a un tamaño chico inline junto a texto.
@@ -363,7 +365,7 @@ export default function FichaReparacion() {
       setTrabajos((data as Trabajo[]) ?? []);
     })();
     (async () => {
-      const { data } = await supabase.from('repuestos').select('id, nombre, cantidad_stock, costo_unitario, precio_venta, sucursal_id, calidad').order('nombre');
+      const data = await obtenerTodasLasFilas<any>(supabase, 'repuestos', 'id, nombre, cantidad_stock, costo_unitario, precio_venta, sucursal_id, calidad', [{ columna: 'nombre' }]);
       setRepuestosStock((data as RepuestoStock[]) ?? []);
     })();
     (async () => {
@@ -708,13 +710,22 @@ export default function FichaReparacion() {
     if (!r || !notaTexto.trim() || guardando) return;
     setGuardando(true);
     const actor = getActor();
-    await supabase.from('reparaciones_eventos').insert({
-      reparacion_id: r.id,
-      tipo: 'nota_interna',
-      texto: notaTexto.trim(),
-      actor_nombre: actor?.nombre ?? null,
-      actor_tipo: actor?.tipo ?? null,
-    });
+    if (
+      await falla(
+        supabase.from('reparaciones_eventos').insert({
+          reparacion_id: r.id,
+          tipo: 'nota_interna',
+          texto: notaTexto.trim(),
+          actor_nombre: actor?.nombre ?? null,
+          actor_tipo: actor?.tipo ?? null,
+        }),
+        t,
+        'guardar nota interna'
+      )
+    ) {
+      setGuardando(false);
+      return;
+    }
     setNotaTexto('');
     setGuardando(false);
     cargar();
@@ -830,7 +841,7 @@ export default function FichaReparacion() {
     setGuardandoRepuesto(false);
     cargar();
     (async () => {
-      const { data } = await supabase.from('repuestos').select('id, nombre, cantidad_stock, costo_unitario, precio_venta, sucursal_id, calidad').order('nombre');
+      const data = await obtenerTodasLasFilas<any>(supabase, 'repuestos', 'id, nombre, cantidad_stock, costo_unitario, precio_venta, sucursal_id, calidad', [{ columna: 'nombre' }]);
       setRepuestosStock((data as RepuestoStock[]) ?? []);
     })();
   };
@@ -854,7 +865,7 @@ export default function FichaReparacion() {
     });
     cargar();
     (async () => {
-      const { data } = await supabase.from('repuestos').select('id, nombre, cantidad_stock, costo_unitario, precio_venta, sucursal_id, calidad').order('nombre');
+      const data = await obtenerTodasLasFilas<any>(supabase, 'repuestos', 'id, nombre, cantidad_stock, costo_unitario, precio_venta, sucursal_id, calidad', [{ columna: 'nombre' }]);
       setRepuestosStock((data as RepuestoStock[]) ?? []);
     })();
   };
@@ -899,16 +910,25 @@ export default function FichaReparacion() {
     if (!confirm(aprobar ? t('¿Registrar que el cliente aprobó este presupuesto?') : t('¿Registrar que el cliente rechazó este presupuesto?'))) return;
     setGuardando(true);
     const total = (r.presupuesto_mano_obra || 0) + (r.presupuesto_repuestos || 0);
-    await supabase
-      .from('reparaciones')
-      .update({
-        presupuesto_estado: aprobar ? 'aprobado' : 'rechazado',
-        presupuesto_medio: 'manual',
-        presupuesto_respondido_at: new Date().toISOString(),
-        presupuesto_importe_aceptado: total,
-        presupuesto_texto_aceptado: r.diagnostico,
-      })
-      .eq('id', r.id);
+    if (
+      await falla(
+        supabase
+          .from('reparaciones')
+          .update({
+            presupuesto_estado: aprobar ? 'aprobado' : 'rechazado',
+            presupuesto_medio: 'manual',
+            presupuesto_respondido_at: new Date().toISOString(),
+            presupuesto_importe_aceptado: total,
+            presupuesto_texto_aceptado: r.diagnostico,
+          })
+          .eq('id', r.id),
+        t,
+        'registrar respuesta del presupuesto'
+      )
+    ) {
+      setGuardando(false);
+      return;
+    }
     await registrarAuditoria(supabase, {
       accion: `registró que el cliente ${aprobar ? 'aprobó' : 'rechazó'} el presupuesto de la reparación ${r.numero_orden || ''} (registrado manualmente)`,
       entidad: 'reparacion',
@@ -1026,7 +1046,9 @@ export default function FichaReparacion() {
     setGuardando(true);
     setAvisoAgregarStock(false);
     const modeloNormalizado = r.modelo ? normalizarNombreModelo(r.modelo) : r.modelo;
-    await supabase.from('dispositivos').insert({
+    if (
+      await falla(
+        supabase.from('dispositivos').insert({
       modelo: modeloNormalizado,
       capacidad_gb: r.capacidad_gb,
       color: r.color,
@@ -1038,17 +1060,34 @@ export default function FichaReparacion() {
       // Hereda la sucursal de esta misma reparación, no la que esté
       // eligiendo ahora quien aprieta el botón.
       ...(r.sucursal_id ? { sucursal_id: r.sucursal_id } : {}),
-    });
+        }),
+        t,
+        'agregar equipo al stock'
+      )
+    ) {
+      setGuardando(false);
+      return;
+    }
     await asegurarModelo(supabase, modeloNormalizado);
-    await supabase
-      .from('reparaciones')
-      .update({
-        estado: 'entregado',
-        estado_actualizado_at: new Date().toISOString(),
-        agregado_a_stock: true,
-        fecha_reparado: r.fecha_reparado ?? new Date().toISOString(),
-      })
-      .eq('id', r.id);
+    if (
+      await falla(
+        supabase
+          .from('reparaciones')
+          .update({
+            estado: 'entregado',
+            estado_actualizado_at: new Date().toISOString(),
+            agregado_a_stock: true,
+            fecha_reparado: r.fecha_reparado ?? new Date().toISOString(),
+          })
+          .eq('id', r.id),
+        t,
+        'marcar reparación como agregada al stock'
+      )
+    ) {
+      setGuardando(false);
+      cargar();
+      return;
+    }
     await registrarAuditoria(supabase, {
       accion: `agregó al Stock un equipo propio reparado en Servicio Técnico (${r.numero_orden || ''}, ${r.modelo || 'sin modelo'}${r.imei ? `, IMEI ${r.imei}` : ''})`,
       entidad: 'reparacion',
@@ -1062,20 +1101,29 @@ export default function FichaReparacion() {
     if (!r || !puedeGestionar) return;
     if (!confirm(t('¿Marcar este equipo como entregado al cliente?'))) return;
     setGuardando(true);
-    await supabase
-      .from('reparaciones')
-      .update({
-        estado: 'entregado',
-        fecha_entrega: new Date().toISOString(),
-        estado_actualizado_at: new Date().toISOString(),
-        fecha_reparado: r.fecha_reparado ?? new Date().toISOString(),
-      })
-      .eq('id', r.id);
+    if (
+      await falla(
+        supabase
+          .from('reparaciones')
+          .update({
+            estado: 'entregado',
+            fecha_entrega: new Date().toISOString(),
+            estado_actualizado_at: new Date().toISOString(),
+            fecha_reparado: r.fecha_reparado ?? new Date().toISOString(),
+          })
+          .eq('id', r.id),
+        t,
+        'marcar como entregado'
+      )
+    ) {
+      setGuardando(false);
+      return;
+    }
     // Se entregó sin pasar por "Generar orden de cobro" (ej. reparación
     // gratis) — la orden vinculada queda en $0, pero se marca entregada
     // para que no quede colgada como "pendiente" para siempre.
     if (r.orden_cobro_id) {
-      await supabase.from('ordenes').update({ estado: 'entregado' }).eq('id', r.orden_cobro_id);
+      await falla(supabase.from('ordenes').update({ estado: 'entregado' }).eq('id', r.orden_cobro_id), t, 'marcar la orden de cobro como entregada');
     }
     await registrarAuditoria(supabase, {
       accion: `marcó como entregado al cliente un equipo reparado en Servicio Técnico (${r.numero_orden || ''}, ${r.modelo || 'sin modelo'}${r.imei ? `, IMEI ${r.imei}` : ''})`,
@@ -1153,7 +1201,16 @@ export default function FichaReparacion() {
   const guardarClasificacionIngreso = async (tipo: string, relacionadaId: string | null) => {
     if (!r || !puedeGestionar) return;
     setGuardandoClasificacion(true);
-    await supabase.from('reparaciones').update({ tipo_ingreso: tipo, reparacion_relacionada_id: relacionadaId }).eq('id', r.id);
+    if (
+      await falla(
+        supabase.from('reparaciones').update({ tipo_ingreso: tipo, reparacion_relacionada_id: relacionadaId }).eq('id', r.id),
+        t,
+        'guardar clasificación de ingreso'
+      )
+    ) {
+      setGuardandoClasificacion(false);
+      return;
+    }
     const relacionada = reparacionesRelacionadas.find((rr) => rr.id === relacionadaId);
     await registrarAuditoria(supabase, {
       accion: `clasificó la reparación ${r.numero_orden || ''} como "${TIPOS_INGRESO.find((ti) => ti.id === tipo)?.label ?? tipo}"${

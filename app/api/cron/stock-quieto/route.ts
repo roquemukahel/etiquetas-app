@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import * as Sentry from '@sentry/nextjs';
+import { obtenerTodasLasFilas, porLotes } from '../../../lib/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,15 +25,17 @@ export async function GET(req: NextRequest) {
     const hace30dias = new Date();
     hace30dias.setDate(hace30dias.getDate() - 30);
 
-    const { data: dispositivos, error } = await supabase
-      .from('dispositivos')
-      .select('id, modelo, imei, negocio_id, en_stock_desde')
-      .eq('en_stock', true)
-      .eq('alerta_stock_enviada', false)
-      .lte('en_stock_desde', hace30dias.toISOString());
+    // Paginado: es una consulta entre TODOS los negocios; con más de 1000
+    // equipos parados en total, los que quedaban afuera nunca recibían su aviso.
+    const dispositivos = await obtenerTodasLasFilas<{ id: string; modelo: string | null; imei: string | null; negocio_id: string; en_stock_desde: string }>(
+      supabase,
+      'dispositivos',
+      'id, modelo, imei, negocio_id, en_stock_desde',
+      [],
+      (q) => q.eq('en_stock', true).eq('alerta_stock_enviada', false).lte('en_stock_desde', hace30dias.toISOString())
+    );
 
-    if (error) throw error;
-    if (!dispositivos || dispositivos.length === 0) {
+    if (dispositivos.length === 0) {
       return NextResponse.json({ ok: true, negociosAvisados: 0 });
     }
 
@@ -80,7 +83,9 @@ export async function GET(req: NextRequest) {
       // Marcamos como avisados aunque no tengamos mail (para no reintentar
       // sin parar); si el dueño agrega el mail más adelante, el próximo
       // dispositivo que cruce los 30 días sí le va a llegar.
-      await supabase.from('dispositivos').update({ alerta_stock_enviada: true }).in('id', idsDispositivos);
+      const { error: marcaError } = await porLotes(idsDispositivos, (lote) => supabase.from('dispositivos').update({ alerta_stock_enviada: true }).in('id', lote));
+      // Si no se marca, el mismo equipo volvería a avisarse todos los días.
+      if (marcaError) console.error('stock-quieto: no se pudo marcar el aviso como enviado', marcaError);
     }
 
     return NextResponse.json({ ok: true, negociosAvisados });

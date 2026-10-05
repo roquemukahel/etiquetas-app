@@ -2,7 +2,6 @@ import Link from 'next/link';
 import { crearClienteServidor } from '../lib/supabase/server';
 import { obtenerTodasLasFilas } from '../lib/db';
 import { ESTADOS_COBRADOS, montoVenta } from '../estadisticas/datos';
-import { aFechaISO } from '../lib/financiacion/motor';
 import { imagenParaDescripcion } from '../lib/carpetas';
 import { imagenColorDeModelo } from '../lib/coloresModelo';
 import { COLOR_ICONO, ICONOS } from '../Iconos';
@@ -16,6 +15,7 @@ import QoviLateral from '../QoviLateral';
 import QoviBurbujaWhatsApp from '../QoviBurbujaWhatsApp';
 import { traducir, type Idioma } from '../lib/idiomaServidor';
 import { traducirAccion } from '../lib/i18n/traducirAccion';
+import { inicioDelDiaNegocio, inicioDelMesNegocio, fechaISONegocio, ZONA_HORARIA_NEGOCIO } from '../lib/fechas';
 
 // Todo lo que en Home() (app/page.tsx) tardaba en resolver — el bloque
 // grande de ~19 consultas en paralelo — vive acá, en su PROPIO componente
@@ -45,11 +45,10 @@ export default async function PanelInicio({
     sucursalId ? q.eq('sucursal_id', sucursalId) : q;
   const supabase = crearClienteServidor();
 
-  const inicioMes = new Date();
-  inicioMes.setDate(1);
-  inicioMes.setHours(0, 0, 0, 0);
-  const inicioMesPasado = new Date(inicioMes);
-  inicioMesPasado.setMonth(inicioMesPasado.getMonth() - 1);
+  // Inicio se arma en el servidor (UTC en Vercel): "hoy" y "este mes" se miden
+  // con el huso del negocio, no con el del servidor (ver app/lib/fechas.ts).
+  const inicioMes = inicioDelMesNegocio();
+  const inicioMesPasado = inicioDelMesNegocio(new Date(), 1);
 
   const hace30dias = new Date();
   hace30dias.setDate(hace30dias.getDate() - 30);
@@ -99,21 +98,25 @@ export default async function PanelInicio({
       // en su lugar: menos datos viajando, menos trabajo de join en la base,
       // y las 3 corren en paralelo igual (mismo Promise.all), así que no
       // suma ninguna espera extra.
-      porSucursal(
-        supabase
-          .from('ordenes')
-          .select('total, anticipo, monto_canje, estado, created_at')
-          .gte('created_at', inicioMesPasado.toISOString())
-      ),
+      // Paginado (obtenerTodasLasFilas): un negocio con más de ~500 ventas por mes
+      // superaba las 1000 filas de una consulta común y los totales de Inicio
+      // quedaban subestimados, sin ningún aviso.
+      obtenerTodasLasFilas<{ total: number | null; anticipo: number | null; monto_canje: number | null; estado: string; created_at: string }>(
+        supabase,
+        'ordenes',
+        'total, anticipo, monto_canje, estado, created_at',
+        [],
+        (q) => porSucursal(q.gte('created_at', inicioMesPasado.toISOString()))
+      ).then((data) => ({ data })),
       // Ranking de más vendidos: solo hace falta el mes ACTUAL (no los 2
       // meses), y ni vendedor ni cliente entran en ese cálculo.
-      porSucursal(
-        supabase
-          .from('ordenes')
-          .select('orden_items ( descripcion, cantidad, tipo, dispositivos ( modelo, color ) )')
-          .in('estado', ESTADOS_COBRADOS)
-          .gte('created_at', inicioMes.toISOString())
-      ),
+      obtenerTodasLasFilas<any>(
+        supabase,
+        'ordenes',
+        'orden_items ( descripcion, cantidad, tipo, dispositivos ( modelo, color ) )',
+        [],
+        (q) => porSucursal(q.in('estado', ESTADOS_COBRADOS).gte('created_at', inicioMes.toISOString()))
+      ).then((data) => ({ data })),
       // Actividad reciente: las últimas 8 ventas COBRADAS de verdad (antes
       // se tomaban 8 cualquiera del rango de 2 meses, sin ordenar por
       // fecha, y recién después se filtraban/ordenaban en JS — con el
@@ -161,8 +164,8 @@ export default async function PanelInicio({
           // siguiente unas horas antes de medianoche local en cualquier huso
           // horario detrás de UTC. aFechaISO usa los componentes locales.
           .not('garantia_vencimiento', 'is', null)
-          .gte('garantia_vencimiento', aFechaISO(new Date()))
-          .lte('garantia_vencimiento', aFechaISO(en7dias))
+          .gte('garantia_vencimiento', fechaISONegocio())
+          .lte('garantia_vencimiento', fechaISONegocio(en7dias))
       ),
       porSucursal(
         supabase
@@ -450,17 +453,14 @@ export default async function PanelInicio({
   const serieVentas: number[] = [];
   const serieTicket: number[] = [];
   for (let i = 6; i >= 0; i--) {
-    const dia = new Date();
-    dia.setDate(dia.getDate() - i);
-    dia.setHours(0, 0, 0, 0);
-    const diaFin = new Date(dia);
-    diaFin.setDate(diaFin.getDate() + 1);
+    const dia = inicioDelDiaNegocio(new Date(), i);
+    const diaFin = inicioDelDiaNegocio(new Date(), i - 1);
     const ordenesDia = cobradas.filter((o) => {
       const d = new Date(o.created_at);
       return d >= dia && d < diaFin;
     });
     const valor = ordenesDia.reduce((acc, o) => acc + montoVenta(o), 0);
-    dias.push({ label: dia.toLocaleDateString('es-AR', { weekday: 'short' }).slice(0, 1).toUpperCase(), valor });
+    dias.push({ label: dia.toLocaleDateString('es-AR', { weekday: 'short', timeZone: ZONA_HORARIA_NEGOCIO }).slice(0, 1).toUpperCase(), valor });
     serieVentas.push(ordenesDia.length);
     serieTicket.push(ordenesDia.length > 0 ? valor / ordenesDia.length : 0);
   }

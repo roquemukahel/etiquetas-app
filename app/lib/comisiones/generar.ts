@@ -19,11 +19,16 @@ export async function generarComisionesDeOrden(supabase: any, ordenId: string): 
   if (eOrden || !orden) return { generadas: 0, error: eOrden?.message || 'Venta no encontrada' };
 
   // 2. Config del negocio
-  const { data: negocio } = await supabase
+  // Cada lectura de acá abajo se chequea: si una falla, NO se puede seguir como si
+  // "no hubiera plan / no hubiera reglas" — eso dejaba la venta sin comisión (o con
+  // la del plan equivocado) sin ningún aviso. Devolver el error deja que quien llama
+  // lo registre y se pueda regenerar después (la generación es idempotente).
+  const { data: negocio, error: eNegocio } = await supabase
     .from('negocios')
     .select('comisiones_activas, comisiones_desde, comisiones_generar_en, comision_plan_default_id, moneda')
     .eq('id', orden.negocio_id)
     .single();
+  if (eNegocio) return { generadas: 0, error: 'No se pudo leer la configuración de comisiones: ' + eNegocio.message };
   if (!negocio?.comisiones_activas) return { generadas: 0, error: null, motivo: 'Comisiones desactivadas' };
 
   // 3. Momento de generación. En Qovento una orden creada YA es una venta real
@@ -44,23 +49,26 @@ export async function generarComisionesDeOrden(supabase: any, ordenId: string): 
 
   // 6. Plan del vendedor (asignación activa) o el plan predeterminado del negocio
   let planId: string | null = negocio.comision_plan_default_id ?? null;
-  const { data: asignacion } = await supabase
+  const { data: asignacion, error: eAsignacion } = await supabase
     .from('comision_plan_vendedores')
     .select('plan_id')
     .eq('vendedor_id', orden.vendedor_id)
     .eq('activo', true)
     .maybeSingle();
+  if (eAsignacion) return { generadas: 0, error: 'No se pudo leer el plan del vendedor: ' + eAsignacion.message };
   if (asignacion?.plan_id) planId = asignacion.plan_id;
   if (!planId) return { generadas: 0, error: null, motivo: 'El vendedor no tiene plan de comisión' };
 
-  const { data: plan } = await supabase.from('comision_planes').select('id, version, activo').eq('id', planId).single();
+  const { data: plan, error: ePlan } = await supabase.from('comision_planes').select('id, version, activo').eq('id', planId).single();
+  if (ePlan) return { generadas: 0, error: 'No se pudo leer el plan de comisión: ' + ePlan.message };
   if (!plan?.activo) return { generadas: 0, error: null, motivo: 'El plan de comisión está inactivo' };
 
-  const { data: reglasData } = await supabase
+  const { data: reglasData, error: eReglas } = await supabase
     .from('comision_reglas')
     .select('id, tipo_calculo, valor, alcance, tipo_item, producto_id, prioridad')
     .eq('plan_id', planId)
     .eq('activo', true);
+  if (eReglas) return { generadas: 0, error: 'No se pudieron leer las reglas de comisión: ' + eReglas.message };
   const reglas: Regla[] = (reglasData ?? []) as Regla[];
   if (reglas.length === 0) return { generadas: 0, error: null, motivo: 'El plan no tiene reglas' };
 
@@ -120,11 +128,12 @@ export async function generarComisionesDeOrden(supabase: any, ordenId: string): 
   // 9. Idempotencia a nivel app (sin depender del ON CONFLICT con índice
   //    parcial, que Postgres no acepta como target): miramos qué comisiones ya
   //    existen para esta orden y solo insertamos las que faltan.
-  const { data: existentes } = await supabase
+  const { data: existentes, error: eExistentes } = await supabase
     .from('comision_movimientos')
     .select('idempotency_key')
     .eq('orden_id', orden.id)
     .eq('tipo_movimiento', 'comision');
+  if (eExistentes) return { generadas: 0, error: 'No se pudieron leer las comisiones ya generadas: ' + eExistentes.message };
   const yaExisten = new Set((existentes ?? []).map((e: { idempotency_key: string | null }) => e.idempotency_key));
   const nuevas = filas.filter((f) => !yaExisten.has(f.idempotency_key));
   if (nuevas.length === 0) return { generadas: 0, error: null, motivo: 'La comisión de esta venta ya estaba generada' };

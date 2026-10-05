@@ -21,6 +21,7 @@ import { useT, useIdioma } from '../../lib/idioma';
 import { localeDe } from '../../lib/i18n/traducir';
 import { useSucursalActual } from '../../lib/sucursal';
 import { obtenerSucursales, type Sucursal } from '../../lib/sucursales';
+import { falla } from '../../lib/escritura';
 
 type Cliente = {
   id: string;
@@ -443,7 +444,7 @@ export default function DetalleCliente() {
     // Si el movimiento venía de un pago, también anulamos ese pago para que
     // no siga contando en la caja de Estadísticas.
     if (m.pago_id) {
-      await supabase.from('pagos').update({ anulado: true }).eq('id', m.pago_id);
+      await falla(supabase.from('pagos').update({ anulado: true }).eq('id', m.pago_id), t, 'anular el pago en la caja (el movimiento sí quedó anulado)');
       // Si ese pago se había aplicado a una o más cuotas de financiación
       // (aplicarPagoAFinanciacion), esa aplicación quedaba sin revertir: la
       // cuota seguía figurando "pagada" aunque el pago que la saldó ya no

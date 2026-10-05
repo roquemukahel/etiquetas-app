@@ -11,6 +11,8 @@ import ServicioTecnicoTabs from '../../ServicioTecnicoTabs';
 import Modal from '../../Modal';
 import { ICONOS } from '../../Iconos';
 import { useT } from '../../lib/idioma';
+import { falla } from '../../lib/escritura';
+import { obtenerTodasLasFilas } from '../../lib/db';
 
 function IconoChico({ nombre, className = '' }: { nombre: string; className?: string }) {
   return (
@@ -132,7 +134,7 @@ export default function Servicios() {
   useEffect(() => {
     cargar();
     (async () => {
-      const { data } = await supabase.from('repuestos').select('id, nombre').order('nombre');
+      const data = await obtenerTodasLasFilas<any>(supabase, 'repuestos', 'id, nombre', [{ columna: 'nombre' }]);
       setRepuestos((data as RepuestoOpcion[]) ?? []);
     })();
   }, []);
@@ -278,7 +280,7 @@ export default function Servicios() {
   const archivar = async (trab: Trabajo, activo: boolean) => {
     if (!puedeGestionar) return;
     setMenuAbierto(null);
-    await supabase.from('trabajos').update({ activo }).eq('id', trab.id);
+    if (await falla(supabase.from('trabajos').update({ activo }).eq('id', trab.id), t, 'cambiar el servicio')) return;
     await registrarAuditoria(supabase, {
       accion: `${activo ? 'reactivó' : 'archivó'} el servicio "${trab.nombre}" del catálogo`,
       entidad: 'trabajo',
@@ -296,7 +298,7 @@ export default function Servicios() {
       )
     )
       return;
-    await supabase.from('trabajos').delete().eq('id', trab.id);
+    if (await falla(supabase.from('trabajos').delete().eq('id', trab.id), t, 'eliminar servicio')) return;
     await registrarAuditoria(supabase, {
       accion: `eliminó definitivamente el servicio "${trab.nombre}" del catálogo`,
       entidad: 'trabajo',

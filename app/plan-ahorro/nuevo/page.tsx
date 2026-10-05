@@ -72,7 +72,9 @@ export default function NuevoPlanAhorro() {
     })();
     (async () => {
       const [{ data: disp }, senados] = await Promise.all([
-        supabase.from('dispositivos').select('id, modelo, capacidad_gb, color, imei, precio').eq('en_stock', true).order('modelo'),
+        obtenerTodasLasFilas<DispositivoStock>(supabase, 'dispositivos', 'id, modelo, capacidad_gb, color, imei, precio', [{ columna: 'modelo' }], (q) =>
+          q.eq('en_stock', true)
+        ).then((data) => ({ data })),
         // Un equipo ya señado por otro plan activo no debería poder volver a
         // señarse — si no, dos clientes podrían terminar reservando el mismo.
         obtenerDispositivosSenados(supabase),

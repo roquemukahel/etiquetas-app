@@ -9,6 +9,7 @@ import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import { obtenerTodasLasFilas } from '../../lib/db';
 import { useT } from '../../lib/idioma';
+import { falla } from '../../lib/escritura';
 
 type Carpeta = { nombre: string; total: number; enStock: number; enModelos: boolean };
 
@@ -91,7 +92,11 @@ export default function CarpetasStock() {
     // 2) Asegurar que la carpeta destino exista en la lista de carpetas.
     await asegurarModelo(supabase, destinoLimpio);
     // 3) Borrar la carpeta vieja de la lista (los equipos ya no la usan).
-    await supabase.from('modelos_stock').delete().eq('nombre', desde);
+    if (await falla(supabase.from('modelos_stock').delete().eq('nombre', desde), t, 'borrar la carpeta unificada')) {
+      setProcesando(null);
+      cargar();
+      return;
+    }
 
     await registrarAuditoria(supabase, {
       accion: `unificó la carpeta de stock "${desde}" dentro de "${destinoLimpio}"`,

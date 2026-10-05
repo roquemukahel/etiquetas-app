@@ -16,6 +16,8 @@ import { useSucursalActual } from '../../../lib/sucursal';
 import Modal from '../../../Modal';
 import { ICONOS } from '../../../Iconos';
 import { useT } from '../../../lib/idioma';
+import { falla } from '../../../lib/escritura';
+import { obtenerTodasLasFilas } from '../../../lib/db';
 
 type Proveedor = { id: string; nombre: string; telefono: string | null };
 type Repuesto = { id: string; nombre: string; sucursal_id: string | null };
@@ -84,10 +86,12 @@ export default function ProveedorRepuestos() {
   const cargar = async () => {
     const [{ data: prov }, { data: rep }, { data: pre }] = await Promise.all([
       supabase.from('proveedores_repuestos').select('id, nombre, telefono').eq('id', id).single(),
-      supabase.from('repuestos').select('id, nombre, sucursal_id').order('nombre'),
-      supabase
-        .from('repuestos_precios')
-        .select('id, repuesto_id, proveedor_id, precio, actualizado_at, disponible, tiempo_entrega_dias, garantia_dias, observaciones'),
+      obtenerTodasLasFilas<Repuesto>(supabase, 'repuestos', 'id, nombre, sucursal_id', [{ columna: 'nombre' }]).then((data) => ({ data })),
+      obtenerTodasLasFilas<Precio>(
+        supabase,
+        'repuestos_precios',
+        'id, repuesto_id, proveedor_id, precio, actualizado_at, disponible, tiempo_entrega_dias, garantia_dias, observaciones'
+      ).then((data) => ({ data })),
     ]);
     setProveedor((prov as Proveedor) ?? null);
     setRepuestos((rep as Repuesto[]) ?? []);
@@ -113,7 +117,7 @@ export default function ProveedorRepuestos() {
   const eliminarProveedor = async () => {
     if (!proveedor || !puedeEliminar) return;
     if (!confirm(`${t('¿Eliminar a')} "${proveedor.nombre}"? ${t('También se van a borrar los precios que tenga cargados.')}`)) return;
-    await supabase.from('proveedores_repuestos').delete().eq('id', proveedor.id);
+    if (await falla(supabase.from('proveedores_repuestos').delete().eq('id', proveedor.id), t, 'eliminar proveedor de repuestos')) return;
     await registrarAuditoria(supabase, {
       accion: `eliminó un proveedor de repuestos (${proveedor.nombre})`,
       entidad: 'repuesto_proveedor',
@@ -258,7 +262,7 @@ export default function ProveedorRepuestos() {
     if (!puedeGestionar) return;
     if (!confirm(t('¿Eliminar este repuesto de la lista de este proveedor?'))) return;
     const precio = precios.find((p) => p.id === precioId);
-    await supabase.from('repuestos_precios').delete().eq('id', precioId);
+    if (await falla(supabase.from('repuestos_precios').delete().eq('id', precioId), t, 'eliminar precio de repuesto')) return;
     await registrarAuditoria(supabase, {
       accion: `eliminó un precio de repuesto de un proveedor (${precio ? nombreRepuestoDe(precio.repuesto_id) : 'sin nombre'})`,
       entidad: 'repuesto_precio',

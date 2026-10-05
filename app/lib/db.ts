@@ -1,4 +1,10 @@
 import { SupabaseClient } from '@supabase/supabase-js';
+import { registrarFallo } from './escritura';
+
+// Lo escucha AvisoDatosIncompletos (layout): cuando una página no se pudo
+// traer ni con reintentos, la pantalla muestra un aviso en vez de presentar
+// como completos números que no lo son.
+export const EVENTO_DATOS_INCOMPLETOS = 'qovento:datos-incompletos';
 
 // Supabase/PostgREST limita cada respuesta a un máximo de filas (1000 por
 // defecto), sin avisar que hay más — simplemente corta ahí. Para tablas que
@@ -56,8 +62,39 @@ async function pedirPaginaConReintento(
   // esta función se usa desde docenas de pantallas que no esperan que
   // pueda fallar, y preferimos "faltan algunas filas" (raro, ya con los
   // reintentos de arriba) a que una pantalla entera se quede colgada.
-  console.error(`obtenerTodasLasFilas: no se pudo traer una página después de ${REINTENTOS_POR_PAGINA + 1} intentos.`, ultimoError);
+  registrarFallo(ultimoError, `obtenerTodasLasFilas: no se pudo traer una página después de ${REINTENTOS_POR_PAGINA + 1} intentos`);
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(EVENTO_DATOS_INCOMPLETOS));
   return { data: [], count: null };
+}
+
+// Tamaño máximo de una lista en un filtro .in(...): cada id va en la URL del
+// pedido, y con cientos de ids la URL supera el largo que aceptan los
+// servidores (la consulta falla entera). Por eso toda lista que pueda crecer
+// (selección múltiple, ids de una tabla) se procesa en lotes de este tamaño.
+export const TAMANO_LOTE_IN = 100;
+
+export function enLotes<T>(lista: T[], tamano = TAMANO_LOTE_IN): T[][] {
+  const lotes: T[][] = [];
+  for (let i = 0; i < lista.length; i += tamano) lotes.push(lista.slice(i, i + tamano));
+  return lotes;
+}
+
+// Ejecuta una escritura (delete/update ... .in('id', lote)) por lotes, de a
+// unos pocos en paralelo. Devuelve el primer error que aparezca (los lotes
+// anteriores ya se aplicaron: cada lote es una sentencia aparte).
+export async function porLotes(
+  ids: string[],
+  ejecutar: (lote: string[]) => PromiseLike<{ error: { message: string; code?: string } | null }>,
+  tamano = TAMANO_LOTE_IN,
+  enParalelo = 4
+): Promise<{ error: { message: string; code?: string } | null }> {
+  const lotes = enLotes(ids, tamano);
+  for (let i = 0; i < lotes.length; i += enParalelo) {
+    const resultados = await Promise.all(lotes.slice(i, i + enParalelo).map((l) => ejecutar(l)));
+    const conError = resultados.find((r) => r.error);
+    if (conError) return { error: conError.error };
+  }
+  return { error: null };
 }
 
 export async function obtenerTodasLasFilas<T>(

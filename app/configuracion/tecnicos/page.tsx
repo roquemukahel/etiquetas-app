@@ -10,6 +10,7 @@ import Avatar from '../../Avatar';
 import PermisosEditor, { PermisosForm } from '../../PermisosEditor';
 import { obtenerSucursales, type Sucursal } from '../../lib/sucursales';
 import { useT } from '../../lib/idioma';
+import { falla } from '../../lib/escritura';
 
 type Tecnico = {
   id: string;
@@ -124,7 +125,7 @@ export default function Tecnicos() {
       return;
     }
 
-    await supabase.from('tecnicos').delete().eq('id', id);
+    if (await falla(supabase.from('tecnicos').delete().eq('id', id), t, 'eliminar técnico')) return;
     await registrarAuditoria(supabase, {
       accion: `eliminó un técnico (${tecnico?.nombre || 'sin nombre'})`,
       entidad: 'tecnico',
@@ -164,7 +165,7 @@ export default function Tecnicos() {
     reader.onload = async () => {
       const dataUrl = reader.result as string;
       setTecnicos((ts) => ts.map((x) => (x.id === tec.id ? { ...x, foto_url: dataUrl } : x)));
-      await supabase.from('tecnicos').update({ foto_url: dataUrl }).eq('id', tec.id);
+      if (await falla(supabase.from('tecnicos').update({ foto_url: dataUrl }).eq('id', tec.id), t, 'guardar foto')) cargar();
     };
     reader.readAsDataURL(file);
   };
@@ -179,9 +180,14 @@ export default function Tecnicos() {
     // se guarda ni se compara en texto plano. Solo se toca si de verdad lo
     // tocaron (pinTocado); si no, el que ya tenía queda como estaba.
     if (pinTocado) {
-      await supabase.rpc('establecer_pin_tecnico', { p_tecnico_id: tec.id, p_pin: pinEdit.trim() || null });
+      if (await falla(supabase.rpc('establecer_pin_tecnico', { p_tecnico_id: tec.id, p_pin: pinEdit.trim() || null }), t, 'guardar PIN')) {
+        setGuardandoPerfil(false);
+        return;
+      }
     }
-    await supabase
+    if (
+      await falla(
+        supabase
       .from('tecnicos')
       .update({
         telefono: telefonoEdit.trim() || null,
@@ -197,7 +203,14 @@ export default function Tecnicos() {
         puede_gestionar_financiacion: permisosEdit.puedeGestionarFinanciacion,
         ...(sucursales.length > 0 ? { sucursal_id: sucursalIdEdit || null } : {}),
       })
-      .eq('id', tec.id);
+      .eq('id', tec.id),
+        t,
+        'guardar perfil del técnico'
+      )
+    ) {
+      setGuardandoPerfil(false);
+      return;
+    }
     setGuardandoPerfil(false);
     setEditando(null);
     cargar();

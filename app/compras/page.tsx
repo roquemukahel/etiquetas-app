@@ -9,6 +9,7 @@ import { getActor, useActor } from '../lib/actor';
 import { tienePermiso } from '../lib/permisos';
 import MiniaturaDispositivo from '../MiniaturaDispositivo';
 import { useT } from '../lib/idioma';
+import { porLotes, obtenerTodasLasFilas } from '../lib/db';
 
 type Compra = {
   id: string;
@@ -52,17 +53,21 @@ export default function Compras() {
   const [cargandoHistorial, setCargandoHistorial] = useState(false);
 
   const cargar = async (traerTodoElHistorial = false) => {
-    let query = supabase
-      .from('compras')
-      .select('id, modelo, capacidad_gb, imei, precio, estado, created_at, clientes ( nombre, apellido )')
-      .order('created_at', { ascending: false });
+    let filtro: ((q: any) => any) | undefined;
     if (!traerTodoElHistorial) {
       const desde = new Date();
       desde.setDate(desde.getDate() - DIAS_VENTANA_RECIENTE);
-      query = query.or(`estado.eq.pendiente,created_at.gte.${desde.toISOString()}`);
+      filtro = (q) => q.or(`estado.eq.pendiente,created_at.gte.${desde.toISOString()}`);
     }
-    const { data } = await query;
-    setCompras((data as any) ?? []);
+    // Paginado: "ver todo el historial" con más de 1000 compras las cortaba sin avisar.
+    const data = await obtenerTodasLasFilas<any>(
+      supabase,
+      'compras',
+      'id, modelo, capacidad_gb, imei, precio, estado, created_at, clientes ( nombre, apellido )',
+      [{ columna: 'created_at', ascending: false }],
+      filtro
+    );
+    setCompras(data);
     if (traerTodoElHistorial) setHistorialCompleto(true);
     setLoading(false);
   };
@@ -107,7 +112,7 @@ export default function Compras() {
     setEliminandoSeleccion(true);
     const aEliminar = compras.filter((c) => seleccionados.has(c.id));
 
-    const { error } = await supabase.from('compras').delete().in('id', ids);
+    const { error } = await porLotes(ids, (lote) => supabase.from('compras').delete().in('id', lote));
     if (!error) {
       // Un solo insert con N filas (no N awaits en fila) — mismo fix que
       // en Stock, misma auditoría de performance (2026-08-26).
