@@ -215,8 +215,8 @@ export default function StockRepuestos() {
     // vacío se confirma con un conteo liviano antes de afirmarlo.
     let fallo = false;
     if (data.length === 0) {
-      const { count, error: errConteo } = await supabase.from('repuestos').select('id', { count: 'exact', head: true });
-      fallo = !!errConteo || (count ?? 0) > 0;
+      const { data: alguna, error: errConteo } = await supabase.from('repuestos').select('id').limit(1);
+      fallo = !!errConteo || (alguna?.length ?? 0) > 0;
     }
     setErrorCarga(fallo);
     setLoading(false);
