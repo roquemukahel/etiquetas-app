@@ -22,6 +22,7 @@ const SECCIONES: Seccion[] = [
   { href: '/configuracion/comisiones', titulo: 'Comisiones', desc: 'Comisión de los vendedores por venta (minorista/mayorista)', permiso: 'gestionar_comisiones' },
   { href: '/configuracion/carpetas', titulo: 'Carpetas del stock', desc: 'Unificar carpetas repetidas y borrar las vacías', permiso: 'agregar_stock' },
   { href: '/configuracion/categorias-stock', titulo: 'Categorías de stock', desc: 'Celulares, accesorios y las que crees para tu negocio', permiso: 'agregar_stock' },
+  { href: '/configuracion/repuestos-opciones', titulo: 'Calidades y categorías de repuestos', desc: 'Los nombres que usás con tus proveedores en los repuestos de Servicio Técnico', permiso: 'agregar_stock' },
   { href: '/configuracion/stock-publico', titulo: 'Stock público', desc: 'Enlace para que cualquiera vea tu stock disponible', permiso: 'agregar_stock' },
   { href: '/configuracion/egresos-categorias', titulo: 'Categorías de egresos', desc: 'Alquiler, sueldos, impuestos y las que crees', permiso: 'gestionar_egresos' },
   { href: '/configuracion/egresos-areas', titulo: 'Áreas de egresos', desc: 'Local, taller, o el lugar físico que quieras distinguir dentro de una sucursal', permiso: 'gestionar_egresos' },

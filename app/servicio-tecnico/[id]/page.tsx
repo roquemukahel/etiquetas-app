@@ -203,6 +203,7 @@ type RepuestoStock = {
   costo_unitario: number | null;
   precio_venta: number | null;
   sucursal_id: string | null;
+  calidad: string | null;
 };
 type RepuestoUsado = {
   id: string;
@@ -362,7 +363,7 @@ export default function FichaReparacion() {
       setTrabajos((data as Trabajo[]) ?? []);
     })();
     (async () => {
-      const { data } = await supabase.from('repuestos').select('id, nombre, cantidad_stock, costo_unitario, precio_venta, sucursal_id').order('nombre');
+      const { data } = await supabase.from('repuestos').select('id, nombre, cantidad_stock, costo_unitario, precio_venta, sucursal_id, calidad').order('nombre');
       setRepuestosStock((data as RepuestoStock[]) ?? []);
     })();
     (async () => {
@@ -752,15 +753,28 @@ export default function FichaReparacion() {
   // Un repuesto con sucursal_id null es stock viejo (cargado antes de la
   // función multisucursal, o desde el catálogo de precios de un proveedor) —
   // se muestra en cualquier sucursal, igual que en Stock de repuestos, para
-  // no esconder stock real. Pero uno YA asignado a otra sucursal no debería
-  // aparecer acá: antes se podía consumir repuestos de otro local sin darse
-  // cuenta, porque este selector no filtraba por sucursal en absoluto.
-  const repuestosFiltrados = repuestosStock.filter(
-    (rp) =>
-      rp.cantidad_stock > 0 &&
-      rp.nombre.toLowerCase().includes(buscarRepuesto.trim().toLowerCase()) &&
-      (rp.sucursal_id == null || rp.sucursal_id === sucursalActual.id)
-  );
+  // no esconder stock real. Uno YA asignado a otra sucursal no debería
+  // aparecer: se consume stock del local de ESTA reparación.
+  // Se filtra por la sucursal de la ORDEN, no por la que está elegida en el
+  // menú de arriba: con "Todas las sucursales" ese menú no tiene sucursal y
+  // el buscador solo mostraba los repuestos sin sucursal, así que un repuesto
+  // con stock en la sucursal de la orden figuraba "sin resultados". Una orden
+  // sin sucursal (negocio de un solo local, o anterior a multisucursal) no filtra.
+  const sucursalDeLaOrden = r?.sucursal_id ?? null;
+  // Búsqueda por palabras (no por frase exacta) sobre nombre + calidad:
+  // "modulo g60s premium" encuentra "Modulo Motorola g60s" de calidad Premium.
+  const palabrasBusqueda = buscarRepuesto.trim().toLowerCase().split(/s+/).filter(Boolean);
+  const coincideBusqueda = (rp: RepuestoStock) => {
+    const texto = `${rp.nombre} ${rp.calidad ?? ''}`.toLowerCase();
+    return palabrasBusqueda.every((p) => texto.includes(p));
+  };
+  const enSucursalDeLaOrden = (rp: RepuestoStock) => !sucursalDeLaOrden || rp.sucursal_id == null || rp.sucursal_id === sucursalDeLaOrden;
+  const repuestosFiltrados = repuestosStock.filter((rp) => rp.cantidad_stock > 0 && coincideBusqueda(rp) && enSucursalDeLaOrden(rp));
+  // Para explicar un "sin resultados": hay repuestos con ese nombre pero sin
+  // stock o de otra sucursal.
+  const coincidenciasSinStockODeOtraSucursal = buscarRepuesto
+    ? repuestosStock.filter((rp) => coincideBusqueda(rp) && !(rp.cantidad_stock > 0 && enSucursalDeLaOrden(rp))).length
+    : 0;
 
   // Consumir un repuesto pasa por la función repuesto_consumir (RPC) en vez
   // de leer/escribir cantidad_stock desde acá: esa función bloquea la fila
@@ -816,7 +830,7 @@ export default function FichaReparacion() {
     setGuardandoRepuesto(false);
     cargar();
     (async () => {
-      const { data } = await supabase.from('repuestos').select('id, nombre, cantidad_stock, costo_unitario, precio_venta, sucursal_id').order('nombre');
+      const { data } = await supabase.from('repuestos').select('id, nombre, cantidad_stock, costo_unitario, precio_venta, sucursal_id, calidad').order('nombre');
       setRepuestosStock((data as RepuestoStock[]) ?? []);
     })();
   };
@@ -840,7 +854,7 @@ export default function FichaReparacion() {
     });
     cargar();
     (async () => {
-      const { data } = await supabase.from('repuestos').select('id, nombre, cantidad_stock, costo_unitario, precio_venta, sucursal_id').order('nombre');
+      const { data } = await supabase.from('repuestos').select('id, nombre, cantidad_stock, costo_unitario, precio_venta, sucursal_id, calidad').order('nombre');
       setRepuestosStock((data as RepuestoStock[]) ?? []);
     })();
   };
@@ -1934,7 +1948,10 @@ export default function FichaReparacion() {
                   <div className="flex flex-col gap-2">
                     {repuestoElegido ? (
                       <div className="rounded-lg border border-accent/40 dark:border-dark-accent/40 bg-accent-soft dark:bg-dark-accent-soft px-3 py-2 flex items-center justify-between gap-2">
-                        <span className="text-sm truncate">{repuestoElegido.nombre}</span>
+                        <span className="text-sm truncate">
+                          {repuestoElegido.nombre}
+                          {repuestoElegido.calidad ? ` · ${t(repuestoElegido.calidad)}` : ''}
+                        </span>
                         <button onClick={() => setRepuestoElegido(null)} className="text-xs text-accent dark:text-dark-accent underline shrink-0">
                           {t('Cambiar')}
                         </button>
@@ -1952,6 +1969,8 @@ export default function FichaReparacion() {
                             {repuestosFiltrados.length === 0 && (
                               <p className="text-xs text-muted dark:text-dark-text-secondary px-1">
                                 {t('Sin resultados con stock disponible.')}{' '}
+                                {coincidenciasSinStockODeOtraSucursal > 0 &&
+                                  `${coincidenciasSinStockODeOtraSucursal} ${t('con ese nombre no tienen stock o son de otra sucursal.')} `}
                                 <Link href="/servicio-tecnico/stock" className="underline">
                                   {t('Cargar en Stock de repuestos')}
                                 </Link>
@@ -1963,7 +1982,10 @@ export default function FichaReparacion() {
                                 onClick={() => setRepuestoElegido(rp)}
                                 className="rounded-lg border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-3 py-2 text-left text-xs flex items-center justify-between gap-2"
                               >
-                                <span>{rp.nombre}</span>
+                                <span>
+                                  {rp.nombre}
+                                  {rp.calidad && <span className="text-muted dark:text-dark-text-secondary"> · {t(rp.calidad)}</span>}
+                                </span>
                                 <span className="text-muted dark:text-dark-text-secondary shrink-0">
                                   {t('Stock:')} {rp.cantidad_stock}
                                   {rp.precio_venta != null && ` · $${rp.precio_venta.toLocaleString('es-AR')}`}
