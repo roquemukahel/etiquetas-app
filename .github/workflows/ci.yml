@@ -15,9 +15,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
-      - run: npm ci
+      # npm install (no ci): el package-lock se generó en Windows y npm ci es estricto con
+      # las dependencias opcionales de otras plataformas; npm install respeta el lock igual.
+      - run: npm install --no-audit --no-fund
       - name: Chequeo de tipos
         run: npx tsc --noEmit
       - name: Pruebas
