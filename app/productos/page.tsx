@@ -16,6 +16,7 @@ import { useSucursalActual } from '../lib/sucursal';
 import { useT } from '../lib/idioma';
 import { marcaDeModelo } from '../lib/catalogosMarcas';
 import Modal from '../Modal';
+import HistorialProducto from './HistorialProducto';
 
 type ProductoFila = {
   id: string;
@@ -52,6 +53,10 @@ type FilaGrid = {
   // cada unidad del grupo, para poder encontrar un equipo puntual por su
   // número de serie sin tener que ir a Stock.
   imeis: string[];
+  // Filas de `productos` (una por sucursal) que componen esta fila, y su maestro:
+  // con eso se arma el historial. Vacío para celulares (no tienen catálogo).
+  productoIds: string[];
+  maestroId: string | null;
 };
 
 export default function Productos() {
@@ -87,6 +92,7 @@ export default function Productos() {
   const [formCantidades, setFormCantidades] = useState<Record<string, string>>({});
   const [guardandoEdicion, setGuardandoEdicion] = useState(false);
   const [errorEdicion, setErrorEdicion] = useState<string | null>(null);
+  const [historialDe, setHistorialDe] = useState<FilaGrid | null>(null);
   const [exportando, setExportando] = useState(false);
   const [importando, setImportando] = useState(false);
   const [progresoImport, setProgresoImport] = useState<{ hechas: number; total: number } | null>(null);
@@ -218,18 +224,53 @@ export default function Productos() {
         errorCantidad = `${t('No pudimos ajustar la cantidad en')} ${fallidos.length} ${fallidos.length === 1 ? t('sucursal') : t('sucursales')}: ${fallidos[0].error!.message}`;
       }
       cantidadesExitosas = cantidadesCambiadas.filter((_, i) => !resultados[i].error);
-      if (cantidadesExitosas.length > 0) {
-        await registrarAuditoria(supabase, {
-          accion: `ajustó la cantidad de "${formNombre.trim()}" en ${cantidadesExitosas.length} ${cantidadesExitosas.length === 1 ? 'sucursal' : 'sucursales'}`,
-          entidad: 'producto',
-        });
-      }
+      // Una auditoría por cada fila (sucursal) ajustada, ligada a ESA fila de
+      // producto y con la cantidad de antes y de después — así aparece en el
+      // historial del producto. Antes era un solo renglón sin id ni valores.
+      await Promise.all(
+        cantidadesExitosas.map(({ id, cantidad, actual }) => {
+          const fila = productos.find((p) => p.id === id);
+          const sucursal = sucursales.length > 1 ? sucursales.find((s) => s.id === fila?.sucursal_id)?.nombre : null;
+          return registrarAuditoria(supabase, {
+            accion: `ajustó la cantidad de "${formNombre.trim()}"${sucursal ? ` (${sucursal})` : ''} de ${actual} a ${cantidad}`,
+            entidad: 'producto',
+            entidadId: id,
+            valorAnterior: { cantidad: actual },
+            valorNuevo: { cantidad },
+          });
+        })
+      );
     }
 
+    // Qué campos cambiaron (antes → después): sin esto la auditoría solo decía
+    // "editó el producto", sin poder saber qué precio o costo tenía antes.
+    const nombreDeCategoria = (id: string | null) => (id ? nombreCategoria.get(id) ?? null : null);
     await registrarAuditoria(supabase, {
       accion: `editó el producto "${formNombre.trim()}" del catálogo`,
       entidad: 'producto_maestro',
       entidadId: editando.id,
+      valorAnterior: {
+        nombre: editando.nombre,
+        marca: editando.marca,
+        categoria: nombreDeCategoria(editando.categoria_id),
+        costo: editando.costo,
+        precio: editando.precio,
+        sku: editando.sku,
+        codigo_barras: editando.codigo_barras,
+        garantia_dias: editando.garantia_dias,
+        stock_minimo: editando.stock_minimo,
+      },
+      valorNuevo: {
+        nombre: formNombre.trim(),
+        marca: formMarca.trim() || null,
+        categoria: nombreDeCategoria(formCategoriaId || null),
+        costo: nuevoCosto,
+        precio: nuevoPrecio,
+        sku: formSku.trim() || null,
+        codigo_barras: formCodigoBarras.trim() || null,
+        garantia_dias: formGarantiaDias ? Number(formGarantiaDias) : null,
+        stock_minimo: formStockMinimo ? Number(formStockMinimo) : null,
+      },
     });
     setMaestros((prev) =>
       prev.map((m) =>
@@ -274,7 +315,7 @@ export default function Productos() {
   const filas: FilaGrid[] = useMemo(() => {
     const mapaMaestros = new Map(maestros.map((m) => [m.id, m]));
     const normalizar = (s: string | null) => (s ?? '').trim().toLowerCase();
-    type Grupo = { maestro: ProductoMaestro | null; nombre: string; marca: string | null; categoriaId: string | null; precio: number | null; stockTotal: number; stockSucursal: number };
+    type Grupo = { maestro: ProductoMaestro | null; nombre: string; marca: string | null; categoriaId: string | null; precio: number | null; stockTotal: number; stockSucursal: number; productoIds: string[] };
     const porClave = new Map<string, Grupo>();
 
     for (const p of productos) {
@@ -297,7 +338,9 @@ export default function Productos() {
           precio: maestro?.precio ?? p.precio,
           stockTotal: 0,
           stockSucursal: 0,
+          productoIds: [],
         } as Grupo);
+      actual.productoIds.push(p.id);
       actual.stockTotal += p.cantidad;
       if (sucursalActual.id && p.sucursal_id === sucursalActual.id) actual.stockSucursal += p.cantidad;
       porClave.set(clave, actual);
@@ -338,6 +381,8 @@ export default function Productos() {
         stockSucursal: info.stockSucursal,
         final: info.precio,
         imeis: [],
+        productoIds: info.productoIds,
+        maestroId: info.maestro?.id ?? null,
       });
     }
     for (const [clave, info] of porClaveDisp) {
@@ -352,6 +397,8 @@ export default function Productos() {
         stockSucursal: info.stockSucursal,
         final: info.precios.size === 1 ? [...info.precios][0] : null,
         imeis: info.imeis,
+        productoIds: [],
+        maestroId: null,
       });
     }
     resultado.sort((a, b) => a.nombre.localeCompare(b.nombre));
@@ -454,7 +501,7 @@ export default function Productos() {
       // Mapa (no array) para que si el mismo nombre+marca aparece dos veces
       // en el archivo, la segunda aparición pise a la primera en vez de
       // mandar dos updates para la misma fila.
-      const actualizacionesPorClave = new Map<string, { id: string; cantidad: number; precio: number | null; costo: number | null }>();
+      const actualizacionesPorClave = new Map<string, { id: string; cantidad: number; cantidadAntes: number; precio: number | null; costo: number | null }>();
       // Si el mismo nombre+marca aparece dos veces en el archivo Y es un
       // producto NUEVO (todavía no insertado), la segunda aparición pisa los
       // valores de la fila ya encolada en vez de sumar otra fila nueva.
@@ -498,6 +545,7 @@ export default function Productos() {
           actualizacionesPorClave.set(clave, {
             id: existente.id,
             cantidad,
+            cantidadAntes: existente.cantidad,
             precio: precio ?? existente.precio,
             costo: costo ?? existente.costo,
           });
@@ -552,7 +600,24 @@ export default function Productos() {
       for (let i = 0; i < actualizacionesFilas.length && !errorActualizacion; i += TANDA_ACTUALIZACION) {
         const tanda = actualizacionesFilas.slice(i, i + TANDA_ACTUALIZACION);
         const resultados = await Promise.all(
-          tanda.map((f) => supabase.from('productos').update({ cantidad: f.cantidad, precio: f.precio, costo: f.costo }).eq('id', f.id))
+          tanda.map(async (f) => {
+            // La cantidad cambia por el RPC que deja rastro en el historial del
+            // producto (quién, cuándo, de cuánto a cuánto) en vez de escribirse
+            // directo: una importación que pisaba la cantidad sin dejar nada
+            // registrado era justo el tipo de cambio que después nadie sabe explicar.
+            const diferencia = f.cantidad - f.cantidadAntes;
+            if (diferencia !== 0) {
+              const { error: movError } = await supabase.rpc('producto_mover_stock', {
+                p_producto_id: f.id,
+                p_tipo: 'ajuste',
+                p_cantidad: diferencia,
+                p_motivo: 'Importación desde archivo',
+                p_usuario: actor?.nombre ?? null,
+              });
+              if (movError) return { error: movError };
+            }
+            return supabase.from('productos').update({ precio: f.precio, costo: f.costo }).eq('id', f.id);
+          })
         );
         for (const r of resultados) {
           if (r.error && !errorActualizacion) errorActualizacion = r.error.message;
@@ -708,6 +773,7 @@ export default function Productos() {
                   </th>
                 )}
                 <th className="px-3 py-2 font-medium text-right">{t('Final')}</th>
+                {puedeAgregarStock && <th className="px-3 py-2 font-medium text-right">{t('Historial')}</th>}
                 {puedeAgregarStock && <th className="px-3 py-2 font-medium text-right">{t('Editar')}</th>}
               </tr>
             </thead>
@@ -722,6 +788,22 @@ export default function Productos() {
                     <td className="px-3 py-2 text-right tabular-nums">{sucursalActual.id ? f.stockSucursal : f.stockTotal}</td>
                   )}
                   <td className="px-3 py-2 text-right tabular-nums">{f.final != null ? `$${f.final.toLocaleString()}` : '—'}</td>
+                  {puedeAgregarStock && (
+                    <td className="px-3 py-2 text-right">
+                      {f.productoIds.length > 0 ? (
+                        <button
+                          onClick={() => setHistorialDe(f)}
+                          aria-label={`${t('Historial')} ${f.nombre}`}
+                          title={t('Ver últimos movimientos y modificaciones')}
+                          className="text-accent dark:text-dark-accent hover:opacity-70"
+                        >
+                          🕘
+                        </button>
+                      ) : (
+                        <span className="text-muted dark:text-dark-text-secondary">—</span>
+                      )}
+                    </td>
+                  )}
                   {puedeAgregarStock && (
                     <td className="px-3 py-2 text-right">
                       {f.maestro ? (
@@ -744,6 +826,22 @@ export default function Productos() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {historialDe && (
+        <HistorialProducto
+          nombre={historialDe.nombre}
+          productoIds={historialDe.productoIds}
+          maestroId={historialDe.maestroId}
+          stockActual={historialDe.stockTotal}
+          sucursalPorProducto={
+            sucursales.length > 1
+              ? new Map(productos.filter((p) => historialDe.productoIds.includes(p.id)).map((p) => [p.id, sucursales.find((x) => x.id === p.sucursal_id)?.nombre ?? t('Sin sucursal')]))
+              : new Map()
+          }
+          puedeVerModificaciones={tienePermiso(actor, 'auditoria')}
+          onClose={() => setHistorialDe(null)}
+        />
       )}
 
       {editando && (

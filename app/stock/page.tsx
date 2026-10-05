@@ -1231,7 +1231,7 @@ export default function Stock() {
         insertError = precioError;
       }
     } else {
-      const { error } = await supabase.from('productos').insert({
+      const { data: creado, error } = await supabase.from('productos').insert({
           nombre: nombreLimpio,
           precio: precioProducto ? Number(precioProducto) : null,
           costo: costoProducto ? Number(costoProducto) : null,
@@ -1251,8 +1251,22 @@ export default function Stock() {
                 notas: notasProducto.trim() || null,
               }
             : {}),
-        });
+        }).select('id').single();
       insertError = error;
+      // Las unidades con las que nace el producto quedan registradas como el
+      // primer movimiento de su historial (de dónde salió el stock inicial).
+      // Si esto falla no se corta el alta: el producto ya se creó bien.
+      if (!error && creado && !esSerializado && cantidadNueva > 0) {
+        const actorAlta = getActor();
+        await supabase.from('producto_movimientos').insert({
+          producto_id: creado.id,
+          tipo: 'entrada',
+          cantidad: cantidadNueva,
+          cantidad_resultante: cantidadNueva,
+          motivo: 'Alta del producto',
+          usuario: actorAlta?.nombre ?? null,
+        });
+      }
     }
     if (insertError) {
       setErrorProducto(`${t('No pudimos guardar:')} ` + insertError.message);
