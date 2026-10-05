@@ -125,7 +125,10 @@ export default function HistorialProducto({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [puedeVerModificaciones]);
 
-  const vistas: MovimientoVista[] = useMemo(() => procesarMovimientos(movimientos), [movimientos]);
+  const vistas: MovimientoVista[] = useMemo(
+    () => procesarMovimientos(movimientos, { desdeElPrincipio: !hayMasMovimientos }),
+    [movimientos, hayMasMovimientos]
+  );
   const claseTab = (activa: boolean) =>
     `flex-1 rounded-lg px-3 py-2 text-sm font-medium ${activa ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'}`;
 

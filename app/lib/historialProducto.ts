@@ -38,7 +38,13 @@ const RESTAN = ['salida', 'venta'];
 // coinciden, algo cambió la cantidad sin pasar por el registro (edición directa,
 // importación, base modificada a mano) y justo eso es lo que explica una
 // diferencia de unidades. Devuelve el resultado del más nuevo al más viejo.
-export function procesarMovimientos(movimientos: MovimientoCrudo[]): MovimientoVista[] {
+export function procesarMovimientos(
+  movimientos: MovimientoCrudo[],
+  // true cuando la lista llega hasta el PRIMER movimiento que tuvo el producto
+  // (no hay más antiguos): ahí el stock de antes era 0, así que un primer
+  // ajuste que deja justo esa cantidad solo puede haber sumado.
+  opciones: { desdeElPrincipio?: boolean } = {}
+): MovimientoVista[] {
   const porProducto = new Map<string, MovimientoCrudo[]>();
   for (const m of movimientos) {
     const lista = porProducto.get(m.producto_id) ?? [];
@@ -61,6 +67,8 @@ export function procesarMovimientos(movimientos: MovimientoCrudo[]): MovimientoV
         const gapResta = m.cantidad_resultante + m.cantidad - anterior.cantidad_resultante;
         if (Math.abs(gapSuma) < Math.abs(gapResta)) cambio = m.cantidad;
         else if (Math.abs(gapResta) < Math.abs(gapSuma)) cambio = -m.cantidad;
+      } else if (opciones.desdeElPrincipio && m.cantidad_resultante === m.cantidad) {
+        cambio = m.cantidad;
       }
       const stockAntes = cambio != null ? m.cantidad_resultante - cambio : null;
       const sinRegistro = anterior && stockAntes != null ? stockAntes - anterior.cantidad_resultante : null;

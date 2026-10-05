@@ -54,6 +54,12 @@ describe('procesarMovimientos', () => {
     expect(r[0]).toMatchObject({ cambio: null, stockAntes: null, sinRegistro: null });
   });
 
+  it('si la lista llega hasta el principio, un primer ajuste que deja esa cantidad sumó desde 0', () => {
+    n = 0;
+    const r = procesarMovimientos([mov({ tipo: 'ajuste', cantidad: 26, cantidad_resultante: 26 })], { desdeElPrincipio: true });
+    expect(r[0]).toMatchObject({ cambio: 26, stockAntes: 0 });
+  });
+
   it('no mezcla los movimientos de productos distintos (sucursales)', () => {
     n = 0;
     const r = procesarMovimientos([
