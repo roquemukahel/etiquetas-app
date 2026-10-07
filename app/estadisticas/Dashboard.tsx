@@ -52,6 +52,7 @@ import { useT, useIdioma, type Idioma } from '../lib/idioma';
 import { useSucursalActual } from '../lib/sucursal';
 import { obtenerSucursales, type Sucursal } from '../lib/sucursales';
 import { obtenerAreasEgresos, type AreaEgreso } from '../lib/egresos';
+import RubrosInversion from './RubrosInversion';
 
 type VistaRanking = 'barras' | 'torta';
 // Rankings separados por métrica, no un puntaje opaco de "producto/categoría
@@ -76,7 +77,7 @@ function filasADatos(filas: FilaRankingProducto[], metrica: MetricaProducto): Da
     .sort((a, b) => b.valor - a.valor)
     .slice(0, 10);
 }
-type Tab = 'resumen' | 'ventas' | 'caja' | 'cobrar' | 'stock' | 'servicio' | 'clientes' | 'equipo' | 'proveedores';
+type Tab = 'resumen' | 'ventas' | 'caja' | 'cobrar' | 'stock' | 'servicio' | 'clientes' | 'equipo' | 'proveedores' | 'rubros';
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'resumen', label: 'Resumen' },
@@ -88,6 +89,7 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'clientes', label: 'Clientes' },
   { key: 'equipo', label: 'Equipo' },
   { key: 'proveedores', label: 'Compras y proveedores' },
+  { key: 'rubros', label: 'Inversión por rubro' },
 ];
 
 const PERIODOS: { key: Periodo; label: string }[] = [
@@ -1057,9 +1059,14 @@ export default function Estadisticas() {
   // misma palabra, así que se resuelve a mano para no pisar esa traducción
   // compartida.
   const ETIQUETA_TAB_EQUIPO: Record<Idioma, string> = { es: 'Equipo', pt: 'Equipe', en: 'Team' };
+  // "Inversión por rubro" muestra costos de compra y márgenes: solo con permiso.
   const TABS_T = useMemo(
-    () => TABS.map((tb) => ({ ...tb, label: tb.key === 'equipo' ? ETIQUETA_TAB_EQUIPO[idioma] : t(tb.label) })),
-    [t, idioma]
+    () =>
+      TABS.filter((tb) => tb.key !== 'rubros' || puedeVerCostos).map((tb) => ({
+        ...tb,
+        label: tb.key === 'equipo' ? ETIQUETA_TAB_EQUIPO[idioma] : t(tb.label),
+      })),
+    [t, idioma, puedeVerCostos]
   );
   const METRICAS_PRODUCTO_BASE_T = useMemo(() => METRICAS_PRODUCTO_BASE.map((o) => ({ ...o, label: t(o.label) })), [t]);
   const METRICAS_PRODUCTO_COSTO_T = useMemo(() => METRICAS_PRODUCTO_COSTO.map((o) => ({ ...o, label: t(o.label) })), [t]);
@@ -1518,6 +1525,22 @@ export default function Estadisticas() {
             )}
           </>
         );
+
+      case 'rubros':
+        return puedeVerCostos ? (
+          <RubrosInversion
+            supabase={supabase}
+            rango={{ inicio: rango.inicio, fin: rango.fin }}
+            sucursalId={sucursalId}
+            sucursales={sucursales}
+            categorias={categoriasStock}
+            proveedores={proveedores}
+            itemsVendidos={itemsVendidosPeriodo}
+            taller={bloqueVentasPorArea(ordenes, itemsPorOrden, rango.inicio, rango.fin, true)}
+            moneda={moneda}
+            ocultarMontos={ocultarMontos}
+          />
+        ) : null;
 
       case 'proveedores':
         return (

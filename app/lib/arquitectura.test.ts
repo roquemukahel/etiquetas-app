@@ -164,7 +164,9 @@ function selectSinLimite(): Hallazgo[] {
             const conConteo = select.args.length > 1;
             const acotado = nombres.some((x) => ['limit', 'range', 'single', 'maybeSingle'].includes(x));
             const porPadre = c.metodos.some((m) => m.nombre === 'eq' && /['"`](id|[a-z_]+_id)['"`]/.test(m.args[0]?.getText() ?? ''));
-            if (!conConteo && !acotado && !porPadre) r.push({ archivo, linea: linea(sf, n), detalle: `${c.tabla}` });
+            // .in('id', lote): una lista ya acotada por porLotes/enLotes (≤100 ids) no puede pasar de 1000 filas.
+            const porLote = c.metodos.some((m) => m.nombre === 'in' && /^(lote|tanda|ids?Lote|loteIds)$/.test(m.args[1]?.getText() ?? ''));
+            if (!conConteo && !acotado && !porPadre && !porLote) r.push({ archivo, linea: linea(sf, n), detalle: `${c.tabla}` });
           }
         }
       }

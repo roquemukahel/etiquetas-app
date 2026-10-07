@@ -10,6 +10,10 @@ import EtiquetaSeccion from '../../../EtiquetaSeccion';
 import { useT, useIdioma } from '../../../lib/idioma';
 import { localeDe } from '../../../lib/i18n/traducir';
 import { formatearFechaHora } from '../../../lib/fechas';
+import { enLotes } from '../../../lib/db';
+import { useActor } from '../../../lib/actor';
+import { tienePermiso } from '../../../lib/permisos';
+import { formatearMonto } from '../../../lib/numeros';
 
 type Remito = {
   id: string;
@@ -26,6 +30,8 @@ type Item = {
   marca_snapshot: string | null;
   tipo_item: string;
   cantidad: number;
+  producto_origen_id: string | null;
+  dispositivo_origen_id: string | null;
 };
 
 type Negocio = {
@@ -56,6 +62,12 @@ export default function ComprobanteRemitoInterno() {
   const t = useT();
   const idioma = useIdioma();
   const locale = localeDe(idioma);
+  const actor = useActor();
+  // El valor a costo es información sensible: solo con permiso para ver costos.
+  const puedeVerCostos = tienePermiso(actor, 'ver_costos');
+  // Costo unitario ACTUAL de cada ítem (el remito no guarda una copia del costo
+  // del momento): clave "p:<id>" para productos y "d:<id>" para equipos.
+  const [costos, setCostos] = useState<Map<string, number | null>>(new Map());
 
   const [remito, setRemito] = useState<Remito | null>(null);
   const [items, setItems] = useState<Item[]>([]);
@@ -76,9 +88,27 @@ export default function ComprobanteRemitoInterno() {
 
       const { data: itemsData } = await supabase
         .from('remito_internos_items')
-        .select('nombre_snapshot, marca_snapshot, tipo_item, cantidad')
+        .select('nombre_snapshot, marca_snapshot, tipo_item, cantidad, producto_origen_id, dispositivo_origen_id')
         .eq('remito_id', id);
-      setItems((itemsData as Item[]) ?? []);
+      const itemsRemito = (itemsData as Item[]) ?? [];
+      setItems(itemsRemito);
+      // Costo de lo transferido (en lotes: las listas viajan en la URL).
+      const idsProductos = itemsRemito.map((i) => i.producto_origen_id).filter(Boolean) as string[];
+      const idsEquipos = itemsRemito.map((i) => i.dispositivo_origen_id).filter(Boolean) as string[];
+      const mapaCostos = new Map<string, number | null>();
+      await Promise.all([
+        ...enLotes(idsProductos).map(async (lote) => {
+          const { data, error: errorCostos } = await supabase.from('productos').select('id, costo').in('id', lote);
+          if (errorCostos) return;
+          for (const p of (data as { id: string; costo: number | null }[]) ?? []) mapaCostos.set('p:' + p.id, p.costo);
+        }),
+        ...enLotes(idsEquipos).map(async (lote) => {
+          const { data, error: errorCostos } = await supabase.from('dispositivos').select('id, costo').in('id', lote);
+          if (errorCostos) return;
+          for (const d of (data as { id: string; costo: number | null }[]) ?? []) mapaCostos.set('d:' + d.id, d.costo);
+        }),
+      ]);
+      setCostos(mapaCostos);
 
       const { data: sucursalesData } = await supabase.from('sucursales').select('id, nombre');
       setNombresSucursal(new Map(((sucursalesData as { id: string; nombre: string }[]) ?? []).map((s) => [s.id, s.nombre])));
@@ -118,6 +148,13 @@ export default function ComprobanteRemitoInterno() {
       </main>
     );
   }
+
+  const costoUnitarioDe = (i: Item): number | null => {
+    const clave = i.producto_origen_id ? 'p:' + i.producto_origen_id : i.dispositivo_origen_id ? 'd:' + i.dispositivo_origen_id : null;
+    return clave ? costos.get(clave) ?? null : null;
+  };
+  const valorACosto = items.reduce((acc, i) => acc + (costoUnitarioDe(i) ?? 0) * i.cantidad, 0);
+  const itemsSinCosto = items.filter((i) => costoUnitarioDe(i) == null).length;
 
   const nombreOrigen = nombresSucursal.get(remito.sucursal_origen_id) ?? '—';
   const nombreDestino = nombresSucursal.get(remito.sucursal_destino_id) ?? '—';
@@ -202,7 +239,8 @@ export default function ComprobanteRemitoInterno() {
           <thead>
             <tr className="bg-ink text-white text-left text-xs font-semibold uppercase tracking-wide">
               <th className="py-1.5 px-3 rounded-l-lg">{t('Producto')}</th>
-              <th className="py-1.5 px-3 text-right rounded-r-lg border-l border-white/20">{t('Cant.')}</th>
+              <th className={`py-1.5 px-3 text-right border-l border-white/20 ${puedeVerCostos ? '' : 'rounded-r-lg'}`}>{t('Cant.')}</th>
+              {puedeVerCostos && <th className="py-1.5 px-3 text-right rounded-r-lg border-l border-white/20">{t('Valor a costo')}</th>}
             </tr>
           </thead>
           <tbody>
@@ -213,10 +251,28 @@ export default function ComprobanteRemitoInterno() {
                   {i.marca_snapshot ? ` · ${i.marca_snapshot}` : ''}
                 </td>
                 <td className="py-2.5 print:py-1 px-3 text-right font-medium border-l border-border">{i.cantidad}</td>
+                {puedeVerCostos && (
+                  <td className="py-2.5 print:py-1 px-3 text-right border-l border-border tabular-nums">
+                    {costoUnitarioDe(i) != null ? `$${formatearMonto((costoUnitarioDe(i) ?? 0) * i.cantidad)}` : '—'}
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
         </table>
+        {puedeVerCostos && (
+          <div className="flex flex-col items-end gap-0.5">
+            <p className="text-sm">
+              <span className="text-muted">{t('Valor a costo de la mercadería transferida')}:</span>{' '}
+              <span className="font-semibold tabular-nums">${formatearMonto(valorACosto)}</span>
+            </p>
+            {itemsSinCosto > 0 && (
+              <p className="text-[11px] text-muted">
+                {itemsSinCosto} {itemsSinCosto === 1 ? t('ítem sin costo cargado (no suma)') : t('ítems sin costo cargado (no suman)')}
+              </p>
+            )}
+          </div>
+        )}
 
         {remito.observaciones && (
           <div className="rounded-xl bg-canvas p-4 print:p-2">

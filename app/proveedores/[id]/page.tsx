@@ -17,6 +17,9 @@ import { useSucursalActual } from '../../lib/sucursal';
 import { obtenerSucursales, type Sucursal } from '../../lib/sucursales';
 import { obtenerAreasEgresos, type AreaEgreso } from '../../lib/egresos';
 import { falla } from '../../lib/escritura';
+import CompraContado from './CompraContado';
+import { obtenerCategorias, type Categoria } from '../../lib/categorias';
+import { soportaRubrosCompra } from '../../lib/rubrosCompra';
 import { obtenerTodasLasFilas } from '../../lib/db';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
@@ -33,6 +36,10 @@ type CompraManual = {
   created_at: string;
   sucursal_id: string | null;
   area_id: string | null;
+  // Solo vienen si el negocio corrió compra_contado_rubros_supabase.sql.
+  categoria_id?: string | null;
+  compra_grupo_id?: string | null;
+  tiene_factura?: boolean | null;
 };
 type DispositivoComprado = {
   id: string;
@@ -73,6 +80,8 @@ type FilaCompra = {
   idManual: string | null;
   sucursalId: string | null;
   areaId: string | null;
+  categoriaId: string | null;
+  tieneFactura: boolean;
 };
 
 export default function DetalleProveedor() {
@@ -98,10 +107,18 @@ export default function DetalleProveedor() {
   // su celular una factura que llegó a otro local).
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
   const [areas, setAreas] = useState<AreaEgreso[]>([]);
+  // Rubros (categorías del Stock) para clasificar las compras; vacíos y sin
+  // soporte hasta que el negocio corra compra_contado_rubros_supabase.sql.
+  const [categorias, setCategorias] = useState<Categoria[]>([]);
+  const [soportaRubros, setSoportaRubros] = useState(false);
+  const [contadoAbierto, setContadoAbierto] = useState(false);
+  const [categoriaCompra, setCategoriaCompra] = useState('');
+  const [facturaVista, setFacturaVista] = useState<string | null>(null);
   useEffect(() => {
     (async () => {
       setSucursales(await obtenerSucursales(supabase, false));
       setAreas(await obtenerAreasEgresos(supabase, false));
+      setCategorias(await obtenerCategorias(supabase, false));
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -136,6 +153,8 @@ export default function DetalleProveedor() {
   const [guardandoCompra, setGuardandoCompra] = useState(false);
 
   const cargar = async () => {
+    const conRubros = await soportaRubrosCompra(supabase);
+    setSoportaRubros(conRubros);
     const [{ data: prov }, { data: comprasData }, { data: dispData }, { data: movData, error: movError }] = await Promise.all([
       supabase.from('proveedores').select('id, nombre, telefono, detalles').eq('id', id).maybeSingle(),
       // Paginados: el total comprado/saldo del proveedor se calcula con TODAS estas
@@ -144,7 +163,8 @@ export default function DetalleProveedor() {
       obtenerTodasLasFilas<CompraManual>(
         supabase,
         'compras_proveedor',
-        'id, modelo, capacidad_gb, color, cantidad, precio_unitario, detalles, created_at, sucursal_id, area_id',
+        'id, modelo, capacidad_gb, color, cantidad, precio_unitario, detalles, created_at, sucursal_id, area_id' +
+          (conRubros ? ', categoria_id, compra_grupo_id, tiene_factura' : ''),
         [{ columna: 'created_at', ascending: false }],
         (q) => q.eq('proveedor_id', id)
       ).then((data) => ({ data })),
@@ -200,6 +220,8 @@ export default function DetalleProveedor() {
       idManual: c.id,
       sucursalId: c.sucursal_id,
       areaId: c.area_id,
+      categoriaId: c.categoria_id ?? null,
+      tieneFactura: !!c.tiene_factura,
     }));
     const deStock: FilaCompra[] = dispositivos.map((d) => ({
       key: `s-${d.id}`,
@@ -214,6 +236,8 @@ export default function DetalleProveedor() {
       idManual: null,
       sucursalId: d.sucursal_id,
       areaId: null,
+      categoriaId: null,
+      tieneFactura: false,
     }));
     return [...deManual, ...deStock].sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
   }, [compras, dispositivos]);
@@ -339,6 +363,7 @@ export default function DetalleProveedor() {
     setDetallesCompra('');
     setSucursalCompra(sucursalActual.id ?? '');
     setAreaCompra('');
+    setCategoriaCompra('');
   };
 
   const abrirNuevaCompra = () => {
@@ -357,6 +382,7 @@ export default function DetalleProveedor() {
     setDetallesCompra(c.detalles ?? '');
     setSucursalCompra(c.sucursal_id ?? '');
     setAreaCompra(c.area_id ?? '');
+    setCategoriaCompra(c.categoria_id ?? '');
     setCompraEditandoId(c.id);
     setAgregandoCompra(true);
     setError(null);
@@ -370,9 +396,15 @@ export default function DetalleProveedor() {
 
   const guardarCompra = async () => {
     if (!proveedor || !modelo.trim()) return;
+    // El rubro es obligatorio en cada compra (para los reportes de inversión por rubro).
+    if (soportaRubros && !categoriaCompra) {
+      setError(t('Elegí el rubro de la compra.'));
+      return;
+    }
     setGuardandoCompra(true);
     setError(null);
     const datos = {
+      ...(soportaRubros ? { categoria_id: categoriaCompra } : {}),
       modelo: normalizarNombreModelo(modelo.trim()),
       capacidad_gb: capacidad,
       color: color.trim() || null,
@@ -506,11 +538,13 @@ export default function DetalleProveedor() {
 
       <div className="rounded-2xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-4 flex flex-col gap-3">
         <div>
-          <p className="text-[11px] uppercase tracking-wide text-muted dark:text-dark-text-secondary">{t('Le debés a este proveedor')}</p>
+          <p className="text-[11px] uppercase tracking-wide text-muted dark:text-dark-text-secondary">
+            {saldo < 0 ? t('Saldo a favor con este proveedor') : saldo === 0 ? t('Saldo con este proveedor') : t('Le debés a este proveedor')}
+          </p>
           <p className={`text-2xl font-display font-semibold ${saldo > 0 ? 'text-bad' : saldo < 0 ? 'text-good' : ''}`}>
             ${formatearMonto(Math.abs(saldo))}
           </p>
-          {saldo < 0 && <p className="text-[11px] text-good">{t('Tenés saldo a favor con él')}</p>}
+          {saldo < 0 && <p className="text-[11px] text-good">{t('El proveedor te debe esta plata (pagaste de más o falta cargar una compra)')}</p>}
           {saldo === 0 && <p className="text-[11px] text-muted dark:text-dark-text-secondary">{t('Estás al día')}</p>}
         </div>
         <div className="flex gap-2">
@@ -662,6 +696,24 @@ export default function DetalleProveedor() {
         </div>
       </div>
 
+      {contadoAbierto && soportaRubros && (
+        <CompraContado
+          supabase={supabase}
+          proveedorId={proveedor.id}
+          sucursales={sucursales}
+          areas={areas}
+          categorias={categorias}
+          sucursalInicial={sucursalActual.id ?? ''}
+          actorNombre={actor?.nombre ?? null}
+          actorFoto={actor?.fotoUrl ?? null}
+          onCerrar={() => setContadoAbierto(false)}
+          onGuardado={() => {
+            setContadoAbierto(false);
+            cargar();
+          }}
+        />
+      )}
+
       {agregandoCompra ? (
         <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-3 flex flex-col gap-2">
           <p className="text-xs font-medium text-muted dark:text-dark-text-secondary">
@@ -687,6 +739,20 @@ export default function DetalleProveedor() {
             ))}
           </div>
           <SelectorColorAuto label={t('Color')} modelo={modelo} value={color} onChange={setColor} />
+          {soportaRubros && (
+            <select
+              value={categoriaCompra}
+              onChange={(e) => setCategoriaCompra(e.target.value)}
+              className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+            >
+              <option value="">{t('Elegí el rubro')} *</option>
+              {categorias.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nombre}
+                </option>
+              ))}
+            </select>
+          )}
           <div className="flex gap-2">
             <div className="flex-1">
               <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Cantidad')}</label>
@@ -763,12 +829,29 @@ export default function DetalleProveedor() {
           </div>
         </div>
       ) : (
-        <button
-          onClick={abrirNuevaCompra}
-          className="w-full rounded-2xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium"
-        >
-          + {t('Cargar compra')}
-        </button>
+        <div className="flex gap-2">
+          {soportaRubros && (
+            <button
+              onClick={() => setContadoAbierto((v) => !v)}
+              className="flex-1 rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-3 text-center text-sm font-medium text-white"
+            >
+              🛒 {t('Compra de contado')}
+            </button>
+          )}
+          <button
+            onClick={abrirNuevaCompra}
+            className="flex-1 rounded-2xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium"
+          >
+            + {t('Cargar compra')}
+          </button>
+        </div>
+      )}
+
+      {facturaVista && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={() => setFacturaVista(null)}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={facturaVista} alt={t('Factura')} className="max-h-full max-w-full rounded-lg bg-white" />
+        </div>
       )}
 
       <div className="flex flex-col gap-2">
@@ -801,12 +884,26 @@ export default function DetalleProveedor() {
                 {f.origen === 'stock' ? t('cargado al Stock') : t('compra cargada a mano')}
                 {f.sucursalId && sucursales.length > 1 ? ` · 🏬 ${sucursales.find((s) => s.id === f.sucursalId)?.nombre ?? ''}` : ''}
                 {f.areaId && areas.length > 0 ? ` · ${areas.find((a) => a.id === f.areaId)?.nombre ?? ''}` : ''}
+                {f.categoriaId ? ` · ${categorias.find((c) => c.id === f.categoriaId)?.nombre ?? t('Rubro')}` : ''}
               </p>
               {f.detalles && <p className="text-xs text-muted dark:text-dark-text-secondary">{f.detalles}</p>}
             </div>
             <div className="flex items-center gap-2 shrink-0">
               {f.precioUnitario != null && (
                 <p className="text-sm font-medium">${formatearMonto(f.precioUnitario * f.cantidad)}</p>
+              )}
+              {f.tieneFactura && f.idManual && (
+                <button
+                  onClick={async () => {
+                    const { data, error: errorFactura } = await supabase.from('compras_proveedor').select('factura_url').eq('id', f.idManual!).maybeSingle();
+                    const url = errorFactura ? null : (data as { factura_url: string | null } | null)?.factura_url;
+                    if (url) setFacturaVista(url);
+                    else setError(t('No pudimos abrir la foto de la factura.'));
+                  }}
+                  className="text-xs text-accent dark:text-dark-accent underline"
+                >
+                  📎 {t('Factura')}
+                </button>
               )}
               {f.origen === 'manual' && f.idManual && (
                 <button
