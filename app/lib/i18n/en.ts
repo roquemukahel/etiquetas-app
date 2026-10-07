@@ -3047,7 +3047,7 @@ export const EN: Record<string, string> = {
   'Cuánto se invirtió en cada rubro en el período. Se puede filtrar por proveedor y, arriba, por sucursal.': 'How much was invested in each category in the period. You can filter by supplier and, above, by branch.',
   'Todos los proveedores': 'All suppliers',
   'Cuando cargues compras a proveedores (con su rubro), vas a ver acá cuánto invertiste en cada uno.': 'When you enter supplier purchases (with their category), you\'ll see here how much you invested in each.',
-  'Las compras todavía no se clasifican por rubro: se verán como "Sin rubro" hasta activar la función en la base de datos.': 'Purchases are not classified by category yet: they will show as "Uncategorized" until the feature is activated in the database.',
+  'Las compras todavía no se clasifican por rubro: se verán como "Sin categoría" hasta activar la función en la base de datos.': 'Purchases are not classified by category yet: they will show as "Uncategorized" until the feature is activated in the database.',
   'Inventario valuado a costo': 'Inventory valued at cost',
   'Stock actual por rubro (y por sucursal), valuado al costo cargado.': 'Current stock by category (and by branch), valued at the recorded cost.',
   'Rubro': 'Category',

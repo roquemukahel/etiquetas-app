@@ -233,7 +233,7 @@ export default function RubrosInversion({ supabase, rango, sucursalId, sucursale
         )}
         {!conRubros && (
           <p className="text-[11px] text-muted dark:text-dark-text-secondary mt-2">
-            {t('Las compras todavía no se clasifican por rubro: se verán como "Sin rubro" hasta activar la función en la base de datos.')}
+            {t('Las compras todavía no se clasifican por rubro: se verán como "Sin categoría" hasta activar la función en la base de datos.')}
           </p>
         )}
       </SeccionCard>

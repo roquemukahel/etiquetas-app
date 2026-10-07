@@ -3048,7 +3048,7 @@ export const PT: Record<string, string> = {
   'Cuánto se invirtió en cada rubro en el período. Se puede filtrar por proveedor y, arriba, por sucursal.': 'Quanto foi investido em cada categoria no período. Dá para filtrar por fornecedor e, acima, por filial.',
   'Todos los proveedores': 'Todos os fornecedores',
   'Cuando cargues compras a proveedores (con su rubro), vas a ver acá cuánto invertiste en cada uno.': 'Quando você lançar compras de fornecedores (com a categoria), verá aqui quanto investiu em cada uma.',
-  'Las compras todavía no se clasifican por rubro: se verán como "Sin rubro" hasta activar la función en la base de datos.': 'As compras ainda não são classificadas por categoria: aparecerão como "Sem categoria" até ativar a função no banco de dados.',
+  'Las compras todavía no se clasifican por rubro: se verán como "Sin categoría" hasta activar la función en la base de datos.': 'As compras ainda não são classificadas por categoria: aparecerão como "Sem categoria" até ativar a função no banco de dados.',
   'Inventario valuado a costo': 'Inventário avaliado a custo',
   'Stock actual por rubro (y por sucursal), valuado al costo cargado.': 'Estoque atual por categoria (e por filial), avaliado pelo custo informado.',
   'Rubro': 'Categoria',
