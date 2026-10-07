@@ -635,6 +635,19 @@ const GALAXY_S23_ULTRA: ModeloColores = {
   ],
 };
 
+// Samsung Galaxy Note 9 — colores oficiales: Midnight Black, Ocean Blue,
+// Lavender Purple, Metallic Copper. De las fotos cargadas se descartó 1 que no
+// era un Note 9 (un celular plateado de otra línea) y 1 negro repetido.
+const GALAXY_NOTE_9: ModeloColores = {
+  carpeta: 'galaxy-note-9',
+  colores: [
+    { nombre: 'Negro', archivo: 'negro', hex: '#18181a' },
+    { nombre: 'Azul', archivo: 'azul', hex: '#27408b' },
+    { nombre: 'Lavanda', archivo: 'lavanda', hex: '#b9a2cf' },
+    { nombre: 'Cobre metálico', archivo: 'cobre', hex: '#c98a63' },
+  ],
+};
+
 // Samsung Galaxy A72 — colores oficiales: Awesome Black, Awesome Violet,
 // Awesome White, Awesome Blue.
 const GALAXY_A72: ModeloColores = {
@@ -1070,6 +1083,7 @@ const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   galaxys23: GALAXY_S23,
   'galaxys23+': GALAXY_S23,
   galaxys23ultra: GALAXY_S23_ULTRA,
+  galaxynote9: GALAXY_NOTE_9,
   galaxya72: GALAXY_A72,
   galaxya33: GALAXY_A33,
   galaxynote20: GALAXY_NOTE_20,
