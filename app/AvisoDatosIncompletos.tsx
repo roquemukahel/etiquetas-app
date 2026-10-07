@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { useT } from './lib/idioma';
 import { EVENTO_DATOS_INCOMPLETOS } from './lib/db';
 
@@ -11,9 +12,21 @@ import { EVENTO_DATOS_INCOMPLETOS } from './lib/db';
 export default function AvisoDatosIncompletos() {
   const t = useT();
   const [visible, setVisible] = useState(false);
+  const [detalle, setDetalle] = useState('');
+  const pathname = usePathname();
+
+  // El aviso habla de "esta pantalla": al navegar a otra se limpia, así no queda
+  // colgado un cartel de una pantalla que ya no se está mirando.
+  useEffect(() => {
+    setVisible(false);
+  }, [pathname]);
 
   useEffect(() => {
-    const mostrar = () => setVisible(true);
+    const mostrar = (e: Event) => {
+      const d = (e as CustomEvent<{ tabla?: string; mensaje?: string }>).detail;
+      setDetalle([d?.tabla, d?.mensaje].filter(Boolean).join(': '));
+      setVisible(true);
+    };
     window.addEventListener(EVENTO_DATOS_INCOMPLETOS, mostrar);
     return () => window.removeEventListener(EVENTO_DATOS_INCOMPLETOS, mostrar);
   }, []);
@@ -26,6 +39,7 @@ export default function AvisoDatosIncompletos() {
     >
       <span className="flex-1">
         ⚠ {t('No se pudieron cargar todos los datos de esta pantalla: los números pueden estar incompletos.')}
+        {detalle && <span className="mt-1 block text-[11px] text-muted dark:text-dark-text-secondary">{detalle.slice(0, 140)}</span>}
       </span>
       <button
         type="button"

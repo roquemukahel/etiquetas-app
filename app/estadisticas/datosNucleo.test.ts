@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   bloqueVentas,
+  cobranzasDeCartera,
+  idsOrdenesDeCobranza,
   montoVenta,
   rangoDe,
   serieEvolucion,
@@ -153,5 +155,42 @@ describe('serieEvolucion', () => {
     const serie = serieEvolucion([orden({ id: 'a', created_at: septiembre, total: 33 })], new Map(), [], [], rango, 'ventas');
     expect(serie[0].anterior).toBe(33);
     expect(serie[0].actual).toBe(0);
+  });
+});
+
+describe('cobranzas de cartera (cobrar una cuota no es una venta)', () => {
+  const dentro = new Date(2026, 9, 10, 12).toISOString();
+  const fuera = new Date(2026, 8, 10, 12).toISOString();
+  const desde = new Date(2026, 9, 1, 0, 0, 0, 0);
+  const hasta = new Date(2026, 9, 31, 23, 59, 59, 999);
+
+  it('idsOrdenesDeCobranza: solo las órdenes cuyos ítems son TODOS de financiamiento', () => {
+    const ids = idsOrdenesDeCobranza([
+      { orden_id: 'cobro', tipo: 'financiamiento' },
+      { orden_id: 'venta', tipo: 'dispositivo' },
+      { orden_id: 'mixta', tipo: 'dispositivo' },
+      { orden_id: 'mixta', tipo: 'financiamiento' },
+      { orden_id: 'taller', tipo: 'trabajo' },
+    ]);
+    expect([...ids]).toEqual(['cobro']);
+  });
+
+  it('cobranzasDeCartera suma solo pagos de órdenes de cobranza dentro del rango y los reparte por quién cobró', () => {
+    const ids = new Set(['c1', 'c2']);
+    const pagos: PagoR[] = [
+      { medio: 'efectivo', monto: 100, fecha: dentro, orden_id: 'c1', registrado_por_nombre: 'Ana' },
+      { medio: 'efectivo', monto: 50, fecha: dentro, orden_id: 'c2', registrado_por_nombre: 'Ana' },
+      { medio: 'efectivo', monto: 30, fecha: dentro, orden_id: 'c2', registrado_por_nombre: 'Beto' },
+      { medio: 'efectivo', monto: 20, fecha: dentro, orden_id: 'c1', registrado_por_nombre: null },
+      { medio: 'efectivo', monto: 999, fecha: fuera, orden_id: 'c1', registrado_por_nombre: 'Ana' },
+      { medio: 'efectivo', monto: 500, fecha: dentro, orden_id: 'venta', registrado_por_nombre: 'Ana' },
+    ];
+    const r = cobranzasDeCartera(pagos, ids, desde, hasta);
+    expect(r.total).toBe(200);
+    expect(r.porEmpleado).toEqual([
+      { nombre: 'Ana', monto: 150 },
+      { nombre: 'Beto', monto: 30 },
+      { nombre: null, monto: 20 },
+    ]);
   });
 });

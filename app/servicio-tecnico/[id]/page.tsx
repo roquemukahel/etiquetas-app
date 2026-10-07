@@ -1123,7 +1123,15 @@ export default function FichaReparacion() {
     // gratis) — la orden vinculada queda en $0, pero se marca entregada
     // para que no quede colgada como "pendiente" para siempre.
     if (r.orden_cobro_id) {
-      await falla(supabase.from('ordenes').update({ estado: 'entregado' }).eq('id', r.orden_cobro_id), t, 'marcar la orden de cobro como entregada');
+      // Si la orden tiene importe y todavía nadie la cobró (sin vendedor), NO se
+      // marca entregada acá: quedaría como venta "Sin asignar" sin haberse cobrado.
+      // Se cobra desde Órdenes, donde el vendedor es obligatorio.
+      const { data: ordenCobro, error: ordenCobroError } = await supabase.from('ordenes').select('vendedor_id, total').eq('id', r.orden_cobro_id).maybeSingle();
+      // Si no se pudo verificar, tampoco se marca (mejor dejarla pendiente que entregada sin cobrar).
+      const sinCobrar = !!ordenCobroError || (!!ordenCobro && (ordenCobro.total || 0) > 0 && !ordenCobro.vendedor_id);
+      if (!sinCobrar) {
+        await falla(supabase.from('ordenes').update({ estado: 'entregado' }).eq('id', r.orden_cobro_id), t, 'marcar la orden de cobro como entregada');
+      }
     }
     await registrarAuditoria(supabase, {
       accion: `marcó como entregado al cliente un equipo reparado en Servicio Técnico (${r.numero_orden || ''}, ${r.modelo || 'sin modelo'}${r.imei ? `, IMEI ${r.imei}` : ''})`,

@@ -23,6 +23,8 @@ import {
   serieEvolucion,
   MetricaSerie,
   ESTADOS_COBRADOS,
+  idsOrdenesDeCobranza,
+  cobranzasDeCartera,
   resumenFinanciacionDe,
   resumenComisionesDe,
   egresosPeriodoDe,
@@ -279,12 +281,15 @@ export default function Estadisticas() {
   // stock/compras/altas). Clientes, proveedores, comisiones y cuentas por
   // pagar quedan compartidos, sin filtrar (esas tablas todavía no tienen
   // columna de sucursal).
+  // Órdenes de "Cobro de financiamiento": son cobranza de ventas ya contadas, no
+  // ventas nuevas (ver idsOrdenesDeCobranza en datos.ts).
+  const idsOrdenesCobranza = useMemo(() => idsOrdenesDeCobranza(ordenItems), [ordenItems]);
   const ordenes = useMemo(
     () =>
       (sucursalId ? ordenesRaw.filter((o) => o.sucursal_id === sucursalId) : ordenesRaw).filter(
-        (o) => !idsOrdenesAjusteContable.has(o.id)
+        (o) => !idsOrdenesAjusteContable.has(o.id) && !idsOrdenesCobranza.has(o.id)
       ),
-    [ordenesRaw, sucursalId, idsOrdenesAjusteContable]
+    [ordenesRaw, sucursalId, idsOrdenesAjusteContable, idsOrdenesCobranza]
   );
   const pagos = useMemo(() => (sucursalId ? pagosRaw.filter((p) => p.sucursal_id === sucursalId) : pagosRaw), [pagosRaw, sucursalId]);
   const credito = useMemo(() => (sucursalId ? creditoRaw.filter((c) => c.sucursal_id === sucursalId) : creditoRaw), [creditoRaw, sucursalId]);
@@ -427,7 +432,7 @@ export default function Estadisticas() {
         obtenerTodasLasFilas<CompraManual>(supabase, 'compras_proveedor', 'proveedor_id, cantidad, precio_unitario, created_at', [], (q) =>
           q.gte('created_at', desde.toISOString())
         ),
-        obtenerTodasLasFilas<PagoR>(supabase, 'pagos', 'medio, monto, fecha, sucursal_id', [], (q) =>
+        obtenerTodasLasFilas<PagoR>(supabase, 'pagos', 'medio, monto, fecha, sucursal_id, orden_id, registrado_por_nombre', [], (q) =>
           q.eq('anulado', false).gte('fecha', desde.toISOString())
         ),
         obtenerTodasLasFilas<CreditoR>(supabase, 'cta_cte_movimientos', 'concepto, tipo, monto, fecha, sucursal_id', [], (q) =>
@@ -646,6 +651,25 @@ export default function Estadisticas() {
     () => serieEvolucion(ordenes, itemsPorOrden, pagos, credito, rango, 'ingresado'),
     [ordenes, itemsPorOrden, pagos, credito, rango]
   );
+
+  // Cobranzas de cartera (cuotas y saldos de cuenta corriente cobrados): entran a
+  // "Dinero ingresado" pero NO son ventas del período.
+  const cobranzaActual = useMemo(
+    () => cobranzasDeCartera(pagos, idsOrdenesCobranza, rango.inicio, rango.fin),
+    [pagos, idsOrdenesCobranza, rango]
+  );
+  const cobranzaPrev = useMemo(
+    () => cobranzasDeCartera(pagos, idsOrdenesCobranza, rango.inicioPrev, rango.finPrev),
+    [pagos, idsOrdenesCobranza, rango]
+  );
+  // Quién registró cada cobro (nombre → foto, cruzando con vendedores y técnicos).
+  const rankingCobrosEmpleado: Dato[] = useMemo(() => {
+    const fotoPorNombre = new Map<string, string | null>();
+    for (const p of [...vendedores, ...tecnicos]) fotoPorNombre.set(p.nombre, p.foto_url ?? null);
+    return cobranzaActual.porEmpleado
+      .filter((e) => e.monto > 0)
+      .map((e) => ({ nombre: e.nombre ?? 'Sin identificar', fotoUrl: e.nombre ? fotoPorNombre.get(e.nombre) ?? null : null, valor: e.monto }));
+  }, [cobranzaActual, vendedores, tecnicos]);
 
   const ticket = actualB.operaciones > 0 ? actualB.ventas / actualB.operaciones : 0;
   const ticketPrev = prevB.operaciones > 0 ? prevB.ventas / prevB.operaciones : 0;
@@ -1264,6 +1288,7 @@ export default function Estadisticas() {
           <>
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
               <StatCard etiqueta={t('Dinero ingresado')} valor={m(actualB.ingresado)} tooltip={t('La plata que realmente entró a la caja en el período (incluye cobros de ventas anteriores fiadas).')} variacion={varSi(actualB.ingresado, prevB.ingresado)} moneda={moneda} tono="text-good" sensible oculto={ocultarMontos} />
+              <StatCard etiqueta={t('Cobranzas de cartera')} valor={m(cobranzaActual.total)} tooltip={t('Cuotas y saldos de cuenta corriente cobrados en el período. Es plata que entró (ya está en Dinero ingresado) pero NO son ventas nuevas: esas ventas se contaron el día que se hicieron.')} variacion={varSi(cobranzaActual.total, cobranzaPrev.total)} moneda={moneda} tono="text-good" sensible oculto={ocultarMontos} />
               <StatCard etiqueta={t('Medios de pago')} valor={cajaPorMedio.length.toLocaleString('es-AR')} tooltip={t('Cantidad de formas de pago distintas usadas en el período.')} />
               <StatCard etiqueta={t('Vendido a crédito')} valor={m(actualB.credito)} tooltip={t('Lo que se sumó a cuentas corrientes en el período (todavía no entró a la caja).')} moneda={moneda} tono={actualB.credito > 0 ? 'text-warn' : undefined} sensible oculto={ocultarMontos} />
             </div>
@@ -1277,6 +1302,13 @@ export default function Estadisticas() {
                 <RankingBarras datos={cajaPorMedio} moneda={moneda} oculto={ocultarMontos} />
               ) : (
                 <RankingTorta datos={cajaPorMedio} moneda={moneda} oculto={ocultarMontos} />
+              )}
+            </SeccionCard>
+            <SeccionCard titulo={t('Cobros por empleado')} subtitulo={t('Quién registró cada cuota o saldo cobrado en el período.')}>
+              {rankingCobrosEmpleado.length === 0 ? (
+                <EmptyState titulo={t('Sin cobranzas en el período')} texto={t('Cuando se cobre una cuota o un saldo de cuenta corriente, vas a ver acá quién lo cobró.')} />
+              ) : (
+                <RankingBarras datos={rankingCobrosEmpleado} moneda={moneda} oculto={ocultarMontos} />
               )}
             </SeccionCard>
             <SeccionCard titulo={t('Evolución por medio de pago')} subtitulo={`${t('Últimos')} ${HORIZONTE_MEDIOS_PAGO} ${t('meses, sin importar el período elegido arriba.')}`}>
@@ -1725,6 +1757,16 @@ export default function Estadisticas() {
               tooltip={t('La plata que realmente entró a la caja en el período (puede incluir cobros de ventas anteriores fiadas).')}
               variacion={comparar ? variacion(actualB.ingresado, prevB.ingresado) : undefined}
               moneda={moneda}
+              sensible
+              oculto={ocultarMontos}
+            />
+            <StatCard
+              etiqueta={t('Cobranzas de cartera')}
+              valor={m(cobranzaActual.total)}
+              tooltip={t('Cuotas y saldos de cuenta corriente cobrados en el período. Es plata que entró (ya está en Dinero ingresado) pero NO son ventas nuevas: esas ventas se contaron el día que se hicieron.')}
+              variacion={comparar ? variacion(cobranzaActual.total, cobranzaPrev.total) : undefined}
+              moneda={moneda}
+              tono="text-good"
               sensible
               oculto={ocultarMontos}
             />

@@ -3021,4 +3021,13 @@ export const EN: Record<string, string> = {
   'Precio repuestos (cargalo en "Repuestos ($)" del presupuesto)': 'Parts price (enter it in "Parts ($)" of the quote)',
   'SEÑADO': 'RESERVED',
   'Buscar por nombre, marca, código o serie…': 'Search by name, brand, code or serial…',
+  // Auditoría de consistencia 2026-10: textos que nunca se habían traducido.
+  'Cobranzas de cartera': 'Portfolio collections',
+  'Cuotas y saldos de cuenta corriente cobrados en el período. Es plata que entró (ya está en Dinero ingresado) pero NO son ventas nuevas: esas ventas se contaron el día que se hicieron.': 'Installments and running-balance debts collected in the period. It is money that came in (already included in Money received) but it is NOT new sales: those sales were counted the day they were made.',
+  'Cobros por empleado': 'Collections by employee',
+  'Quién registró cada cuota o saldo cobrado en el período.': 'Who recorded each installment or balance collected in the period.',
+  'Sin cobranzas en el período': 'No collections in the period',
+  'Cuando se cobre una cuota o un saldo de cuenta corriente, vas a ver acá quién lo cobró.': 'When an installment or running balance is collected, you\'ll see here who collected it.',
+  'Elegí el vendedor: una venta cobrada no puede quedar sin vendedor.': 'Choose the salesperson: a paid sale cannot be left without one.',
+  'Esta orden no tiene vendedor. Tocá Editar, elegí el vendedor y guardá; después podés cambiarle el estado.': 'This order has no salesperson. Tap Edit, choose the salesperson and save; then you can change its status.',
 };

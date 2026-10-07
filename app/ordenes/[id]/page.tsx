@@ -663,6 +663,13 @@ export default function DetalleOrden() {
     if ((orden.impuesto_porcentaje || 0) !== impuestoNuevo) cambios.impuesto_porcentaje = { antes: orden.impuesto_porcentaje, despues: impuestoNuevo };
     if ((orden.total || 0) !== totalEdit) cambios.total = { antes: orden.total, despues: totalEdit };
     const vendedorNuevo = vendedorEdit || null;
+    // Una venta ya cobrada/entregada no puede quedar sin vendedor: aparecería
+    // como "Sin asignar" en el ranking de Estadísticas.
+    if (!vendedorNuevo && vendedores.length > 0 && !esOrdenDeCobranza && ['pagado', 'entregado'].includes(orden.estado)) {
+      setError(t('Elegí el vendedor: una venta cobrada no puede quedar sin vendedor.'));
+      setGuardando(false);
+      return;
+    }
     if ((orden.vendedor_id || null) !== vendedorNuevo) {
       const nombreAntes = orden.vendedores?.nombre || 'Sin asignar';
       const nombreDespues = vendedores.find((v) => v.id === vendedorNuevo)?.nombre || 'Sin asignar';
@@ -928,8 +935,17 @@ export default function DetalleOrden() {
     cargar();
   };
 
+  // Las órdenes de "Cobro de financiamiento" no son ventas: no llevan vendedor.
+  const esOrdenDeCobranza = !!orden && orden.orden_items.length > 0 && orden.orden_items.every((i) => i.tipo === 'financiamiento');
+
   const cambiarEstado = async (nuevoEstado: string) => {
     if (!orden) return;
+    // Marcar "entregado" una venta sin vendedor la dejaba como "Sin asignar" en
+    // Estadísticas (y sin comisión para nadie).
+    if (['pagado', 'entregado'].includes(nuevoEstado) && !orden.vendedor_id && vendedores.length > 0 && !esOrdenDeCobranza && (orden.total || 0) > 0) {
+      setError(t('Esta orden no tiene vendedor. Tocá Editar, elegí el vendedor y guardá; después podés cambiarle el estado.'));
+      return;
+    }
     setGuardando(true);
     setError(null);
     const { error: updateError } = await supabase

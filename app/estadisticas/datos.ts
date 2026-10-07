@@ -41,10 +41,62 @@ export type ItemR = {
   precio_unitario: number | null;
   costo: number | null;
 };
-export type PagoR = { medio: string; monto: number; fecha: string; sucursal_id?: string | null };
+export type PagoR = {
+  medio: string;
+  monto: number;
+  fecha: string;
+  sucursal_id?: string | null;
+  orden_id?: string | null;
+  registrado_por_nombre?: string | null;
+};
 export type CreditoR = { concepto: string; tipo: string; monto: number; fecha: string; sucursal_id?: string | null };
 
 export const ESTADOS_COBRADOS = ['pagado', 'entregado'];
+
+// Una orden de "Cobro de financiamiento / cuenta corriente" (la que se genera
+// al cobrar una cuota o un saldo) arma su boleta con ítems tipo 'financiamiento'
+// y nada más. NO es una venta: la venta ya se contó el día que se hizo (a cuenta
+// corriente), así que contarla de nuevo duplicaba Ventas netas, Operaciones,
+// Ticket promedio, el ranking de vendedores y Mejores compradores. La plata sí
+// entró, y se ve en "Dinero ingresado" y en "Cobranzas de cartera".
+// "every" a propósito: una orden que mezclara una venta real con un ítem de
+// financiamiento sigue contando como venta (perder una venta de vista es peor).
+export function idsOrdenesDeCobranza(items: { orden_id: string; tipo?: string | null }[]): Set<string> {
+  const porOrden = new Map<string, { total: number; financiamiento: number }>();
+  for (const it of items) {
+    const e = porOrden.get(it.orden_id) ?? { total: 0, financiamiento: 0 };
+    e.total += 1;
+    if (it.tipo === 'financiamiento') e.financiamiento += 1;
+    porOrden.set(it.orden_id, e);
+  }
+  const ids = new Set<string>();
+  for (const [id, e] of porOrden) if (e.total > 0 && e.total === e.financiamiento) ids.add(id);
+  return ids;
+}
+
+// Cobranzas de cartera del período: pagos aplicados a órdenes de cobranza, por
+// la fecha real del pago. Devuelve el total y lo que cobró cada empleado.
+export function cobranzasDeCartera(
+  pagos: PagoR[],
+  idsCobranza: Set<string>,
+  desde: Date,
+  hasta: Date
+): { total: number; porEmpleado: { nombre: string | null; monto: number }[] } {
+  const mapa = new Map<string, number>();
+  let total = 0;
+  for (const p of pagos) {
+    if (!p.orden_id || !idsCobranza.has(p.orden_id)) continue;
+    if (!entre(p.fecha, desde, hasta)) continue;
+    const monto = p.monto || 0;
+    total += monto;
+    const clave = p.registrado_por_nombre?.trim() || '';
+    mapa.set(clave, (mapa.get(clave) ?? 0) + monto);
+  }
+  const porEmpleado = Array.from(mapa.entries())
+    .map(([nombre, monto]) => ({ nombre: nombre || null, monto }))
+    .sort((a, b) => b.monto - a.monto);
+  return { total, porEmpleado };
+}
 
 // Valor real de la venta (ver comentario original en la página): el "total"
 // ya viene con anticipo y canje descontados, pero la venta valió eso igual.

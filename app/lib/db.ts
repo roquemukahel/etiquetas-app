@@ -33,6 +33,29 @@ export const EVENTO_DATOS_INCOMPLETOS = 'qovento:datos-incompletos';
 // páginas en vuelo al mismo tiempo (en vez de todas de una), para no
 // saturar la cantidad de conexiones simultáneas que dispara el problema.
 const CONCURRENCIA_MAXIMA = 6;
+
+// Tope de pedidos de páginas en vuelo A LA VEZ en todo el navegador. Estadísticas
+// dispara ~20 obtenerTodasLasFilas en paralelo y cada una pide hasta
+// CONCURRENCIA_MAXIMA páginas: en un negocio grande eso son más de 100 pedidos
+// juntos, la base los rechaza/da timeout y las páginas que fallan dejaban
+// números incompletos (el aviso "No se pudieron cargar todos los datos").
+// Con un tope global los pedidos hacen cola en vez de pelearse. Solo en el
+// navegador: en el servidor el módulo se comparte entre usuarios distintos.
+const MAX_PEDIDOS_SIMULTANEOS = 8;
+let pedidosEnVuelo = 0;
+const colaDePedidos: (() => void)[] = [];
+async function conCupo<T>(tarea: () => PromiseLike<T>): Promise<T> {
+  if (typeof window === 'undefined') return tarea();
+  if (pedidosEnVuelo >= MAX_PEDIDOS_SIMULTANEOS) await new Promise<void>((r) => colaDePedidos.push(r));
+  else pedidosEnVuelo++;
+  try {
+    return await tarea();
+  } finally {
+    const siguiente = colaDePedidos.shift();
+    if (siguiente) siguiente(); // el cupo pasa directo al siguiente en la cola
+    else pedidosEnVuelo--;
+  }
+}
 const REINTENTOS_POR_PAGINA = 2;
 
 // "conConteo" se pasa explícito porque la primera página TAMBIÉN necesita
@@ -45,11 +68,12 @@ async function pedirPaginaConReintento(
   construirQuery: (desde: number, hasta: number, conConteo: boolean) => any,
   desde: number,
   hasta: number,
-  conConteo = false
+  conConteo = false,
+  tabla = ''
 ): Promise<{ data: any[]; count: number | null }> {
   let ultimoError: unknown = null;
   for (let intento = 0; intento <= REINTENTOS_POR_PAGINA; intento++) {
-    const { data, error, count } = await construirQuery(desde, hasta, conConteo);
+    const { data, error, count } = await conCupo<{ data: any; error: any; count?: number | null }>(() => construirQuery(desde, hasta, conConteo));
     if (!error && data) return { data, count: count ?? null };
     ultimoError = error;
     // Backoff chico entre reintentos — no tiene sentido reintentar
@@ -62,8 +86,11 @@ async function pedirPaginaConReintento(
   // esta función se usa desde docenas de pantallas que no esperan que
   // pueda fallar, y preferimos "faltan algunas filas" (raro, ya con los
   // reintentos de arriba) a que una pantalla entera se quede colgada.
-  registrarFallo(ultimoError, `obtenerTodasLasFilas: no se pudo traer una página después de ${REINTENTOS_POR_PAGINA + 1} intentos`);
-  if (typeof window !== 'undefined') window.dispatchEvent(new Event(EVENTO_DATOS_INCOMPLETOS));
+  registrarFallo(ultimoError, `obtenerTodasLasFilas(${tabla}): no se pudo traer una página después de ${REINTENTOS_POR_PAGINA + 1} intentos`);
+  if (typeof window !== 'undefined') {
+    const mensaje = (ultimoError as { message?: string } | null)?.message ?? '';
+    window.dispatchEvent(new CustomEvent(EVENTO_DATOS_INCOMPLETOS, { detail: { tabla, mensaje } }));
+  }
   return { data: [], count: null };
 }
 
@@ -117,7 +144,7 @@ export async function obtenerTodasLasFilas<T>(
     return query.order('id', { ascending: true });
   };
 
-  const primera = await pedirPaginaConReintento(construirQuery, 0, TAMANO_PAGINA - 1, true);
+  const primera = await pedirPaginaConReintento(construirQuery, 0, TAMANO_PAGINA - 1, true, tabla);
 
   let todas: T[] = primera.data as T[];
   const total = primera.count ?? todas.length;
@@ -132,7 +159,7 @@ export async function obtenerTodasLasFilas<T>(
     // mismo tiempo es justo lo que dispara el fallo silencioso de arriba.
     for (let i = 0; i < rangos.length; i += CONCURRENCIA_MAXIMA) {
       const tanda = rangos.slice(i, i + CONCURRENCIA_MAXIMA);
-      const resultados = await Promise.all(tanda.map(([desde, hasta]) => pedirPaginaConReintento(construirQuery, desde, hasta)));
+      const resultados = await Promise.all(tanda.map(([desde, hasta]) => pedirPaginaConReintento(construirQuery, desde, hasta, false, tabla)));
       for (const r of resultados) todas = todas.concat(r.data as T[]);
     }
   }

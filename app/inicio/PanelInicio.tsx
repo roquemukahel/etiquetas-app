@@ -85,6 +85,7 @@ export default async function PanelInicio({
     // se corta en 1000 filas sin avisar. Con miles de equipos en stock, la
     // alerta de "por reponer" se quedaría corta sin este paginado.
     modelosEnStock,
+    itemsCobranza,
   ] = await Promise.all([
     Promise.all([
       porSucursal(supabase.from('dispositivos').select('id', { count: 'exact', head: true }).eq('en_stock', true)),
@@ -101,10 +102,10 @@ export default async function PanelInicio({
       // Paginado (obtenerTodasLasFilas): un negocio con más de ~500 ventas por mes
       // superaba las 1000 filas de una consulta común y los totales de Inicio
       // quedaban subestimados, sin ningún aviso.
-      obtenerTodasLasFilas<{ total: number | null; anticipo: number | null; monto_canje: number | null; estado: string; created_at: string }>(
+      obtenerTodasLasFilas<{ id: string; total: number | null; anticipo: number | null; monto_canje: number | null; estado: string; created_at: string }>(
         supabase,
         'ordenes',
-        'total, anticipo, monto_canje, estado, created_at',
+        'id, total, anticipo, monto_canje, estado, created_at',
         [],
         (q) => porSucursal(q.gte('created_at', inicioMesPasado.toISOString()))
       ).then((data) => ({ data })),
@@ -205,13 +206,19 @@ export default async function PanelInicio({
       supabase.from('tecnicos').select('nombre, foto_url'),
     ]),
     obtenerTodasLasFilas<{ modelo: string | null }>(supabase, 'dispositivos', 'modelo', [], (q) => porSucursal(q.eq('en_stock', true))),
+    // Ítems de "Cobro de financiamiento": esas órdenes son cobranza de ventas ya
+    // contadas, no ventas del mes (ver idsOrdenesDeCobranza en estadisticas/datos.ts).
+    obtenerTodasLasFilas<{ orden_id: string; tipo: string | null }>(supabase, 'orden_items', 'orden_id, tipo', [], (q) =>
+      q.eq('tipo', 'financiamiento').gte('created_at', inicioMesPasado.toISOString())
+    ),
   ]);
+  const idsCobranza = new Set((itemsCobranza ?? []).map((i) => i.orden_id));
 
   const enStock = countStock ?? 0;
   const pendientes = countPendientes ?? 0;
   const totalClientes = countClientes ?? 0;
 
-  const cobradas = (ordenesResumen ?? []).filter((o) => ESTADOS_COBRADOS.includes(o.estado));
+  const cobradas = (ordenesResumen ?? []).filter((o) => ESTADOS_COBRADOS.includes(o.estado) && !idsCobranza.has(o.id));
   // montoVenta (total + anticipo + monto_canje) es el mismo criterio que
   // usa Estadísticas para "Ventas netas" — el "total" solo, sin sumar
   // anticipo/canje, subestima cualquier venta que los tuviera. Antes

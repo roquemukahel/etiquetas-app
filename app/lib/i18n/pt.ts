@@ -3022,4 +3022,13 @@ export const PT: Record<string, string> = {
   'Precio repuestos (cargalo en "Repuestos ($)" del presupuesto)': 'Preço das peças (informe em "Peças ($)" do orçamento)',
   'SEÑADO': 'RESERVADO',
   'Buscar por nombre, marca, código o serie…': 'Buscar por nome, marca, código ou série…',
+  // Auditoría de consistencia 2026-10: textos que nunca se habían traducido.
+  'Cobranzas de cartera': 'Cobranças da carteira',
+  'Cuotas y saldos de cuenta corriente cobrados en el período. Es plata que entró (ya está en Dinero ingresado) pero NO son ventas nuevas: esas ventas se contaron el día que se hicieron.': 'Parcelas e saldos de conta corrente cobrados no período. É dinheiro que entrou (já está em Dinheiro recebido), mas NÃO são vendas novas: essas vendas foram contadas no dia em que foram feitas.',
+  'Cobros por empleado': 'Cobranças por funcionário',
+  'Quién registró cada cuota o saldo cobrado en el período.': 'Quem registrou cada parcela ou saldo cobrado no período.',
+  'Sin cobranzas en el período': 'Sem cobranças no período',
+  'Cuando se cobre una cuota o un saldo de cuenta corriente, vas a ver acá quién lo cobró.': 'Quando uma parcela ou saldo de conta corrente for cobrado, você verá aqui quem cobrou.',
+  'Elegí el vendedor: una venta cobrada no puede quedar sin vendedor.': 'Escolha o vendedor: uma venda cobrada não pode ficar sem vendedor.',
+  'Esta orden no tiene vendedor. Tocá Editar, elegí el vendedor y guardá; después podés cambiarle el estado.': 'Este pedido não tem vendedor. Toque em Editar, escolha o vendedor e salve; depois você pode mudar o status.',
 };
