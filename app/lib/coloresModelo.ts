@@ -635,6 +635,20 @@ const GALAXY_S23_ULTRA: ModeloColores = {
   ],
 };
 
+// Redmi 13C — colores oficiales (versión 4G): Midnight Black, Navy Blue,
+// Clover Green, Glacier White. De las fotos cargadas se descartaron 1 duplicado
+// exacto y las repetidas de negro/azul de la versión 5G; el Blanco sale de la
+// versión 5G (no había foto del blanco en la 4G).
+const REDMI_13C: ModeloColores = {
+  carpeta: 'redmi-13c',
+  colores: [
+    { nombre: 'Negro', archivo: 'negro', hex: '#1d1e22' },
+    { nombre: 'Azul', archivo: 'azul', hex: '#1f5f73' },
+    { nombre: 'Verde trébol', archivo: 'verde', hex: '#bcd8b0' },
+    { nombre: 'Blanco', archivo: 'blanco', hex: '#e6edf6' },
+  ],
+};
+
 // Redmi 14C — colores oficiales: Midnight Black, Sage Green, Dreamy Purple,
 // Starry Blue (se descartó 1 foto duplicada/casi-duplicada del mismo azul,
 // quedándonos con la mejor toma).
@@ -973,6 +987,7 @@ const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   galaxys23: GALAXY_S23,
   'galaxys23+': GALAXY_S23,
   galaxys23ultra: GALAXY_S23_ULTRA,
+  redmi13c: REDMI_13C,
   redmi14c: REDMI_14C,
   redmi15c: REDMI_15C,
   galaxya14: GALAXY_A14,
