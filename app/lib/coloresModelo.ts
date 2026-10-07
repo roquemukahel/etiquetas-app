@@ -635,6 +635,41 @@ const GALAXY_S23_ULTRA: ModeloColores = {
   ],
 };
 
+// Samsung Galaxy Note 20 — colores oficiales: Mystic Bronze, Mystic Gray,
+// Mystic Green.
+const GALAXY_NOTE_20: ModeloColores = {
+  carpeta: 'galaxy-note-20',
+  colores: [
+    { nombre: 'Bronce místico', archivo: 'bronce', hex: '#c58f78' },
+    { nombre: 'Gris místico', archivo: 'gris', hex: '#6b6b6e' },
+    { nombre: 'Verde místico', archivo: 'verde', hex: '#9fc4a8' },
+  ],
+};
+
+// Samsung Galaxy Note 20 Ultra — colores oficiales: Mystic Black, Mystic White,
+// Mystic Bronze.
+const GALAXY_NOTE_20_ULTRA: ModeloColores = {
+  carpeta: 'galaxy-note-20-ultra',
+  colores: [
+    { nombre: 'Negro místico', archivo: 'negro', hex: '#1b1b1d' },
+    { nombre: 'Blanco místico', archivo: 'blanco', hex: '#f1f1f1' },
+    { nombre: 'Bronce místico', archivo: 'bronce', hex: '#c58f78' },
+  ],
+};
+
+// Samsung Galaxy S21 Ultra — colores oficiales: Phantom Black, Phantom Silver,
+// Phantom Titanium, Phantom Navy, Phantom Brown.
+const GALAXY_S21_ULTRA: ModeloColores = {
+  carpeta: 'galaxy-s21-ultra',
+  colores: [
+    { nombre: 'Negro', archivo: 'negro', hex: '#1a1a1c' },
+    { nombre: 'Plata', archivo: 'plata', hex: '#cdd3dc' },
+    { nombre: 'Titanio', archivo: 'titanio', hex: '#77787b' },
+    { nombre: 'Azul marino', archivo: 'azul', hex: '#3a4658' },
+    { nombre: 'Marrón', archivo: 'marron', hex: '#6d5446' },
+  ],
+};
+
 // Samsung Galaxy Note 10 y Note 10+ — colores oficiales: Aura Black, Aura White,
 // Aura Glow (los dos modelos) + Aura Pink (solo Note 10) / Aura Blue (solo Note
 // 10+). Comparten carpeta de fotos. OJO: las fotos de Negro, Blanco y Aura Glow
@@ -1011,6 +1046,9 @@ const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   galaxys23: GALAXY_S23,
   'galaxys23+': GALAXY_S23,
   galaxys23ultra: GALAXY_S23_ULTRA,
+  galaxynote20: GALAXY_NOTE_20,
+  galaxynote20ultra: GALAXY_NOTE_20_ULTRA,
+  galaxys21ultra: GALAXY_S21_ULTRA,
   galaxynote10: GALAXY_NOTE_10,
   'galaxynote10+': GALAXY_NOTE_10_PLUS,
   redmi13c: REDMI_13C,
