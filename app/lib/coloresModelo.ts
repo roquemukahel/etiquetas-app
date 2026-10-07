@@ -635,6 +635,30 @@ const GALAXY_S23_ULTRA: ModeloColores = {
   ],
 };
 
+// Samsung Galaxy Note 10 y Note 10+ — colores oficiales: Aura Black, Aura White,
+// Aura Glow (los dos modelos) + Aura Pink (solo Note 10) / Aura Blue (solo Note
+// 10+). Comparten carpeta de fotos. OJO: las fotos de Negro, Blanco y Aura Glow
+// son del Note 10+ (no había de la versión chica); el Rosa sí es del Note 10.
+const NOTE_10_FOTOS = 'galaxy-note-10';
+const GALAXY_NOTE_10: ModeloColores = {
+  carpeta: NOTE_10_FOTOS,
+  colores: [
+    { nombre: 'Negro', archivo: 'negro', hex: '#1a1a1c' },
+    { nombre: 'Blanco', archivo: 'blanco', hex: '#efefef' },
+    { nombre: 'Aura Glow', archivo: 'glow', hex: '#c9d0e8' },
+    { nombre: 'Rosa', archivo: 'rosa', hex: '#e58a8a' },
+  ],
+};
+const GALAXY_NOTE_10_PLUS: ModeloColores = {
+  carpeta: NOTE_10_FOTOS,
+  colores: [
+    { nombre: 'Negro', archivo: 'negro', hex: '#1a1a1c' },
+    { nombre: 'Blanco', archivo: 'blanco', hex: '#efefef' },
+    { nombre: 'Aura Glow', archivo: 'glow', hex: '#c9d0e8' },
+    { nombre: 'Azul', archivo: 'azul', hex: '#2438a8' },
+  ],
+};
+
 // Redmi 13C — colores oficiales (versión 4G): Midnight Black, Navy Blue,
 // Clover Green, Glacier White. De las fotos cargadas se descartaron 1 duplicado
 // exacto y las repetidas de negro/azul de la versión 5G; el Blanco sale de la
@@ -987,6 +1011,8 @@ const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   galaxys23: GALAXY_S23,
   'galaxys23+': GALAXY_S23,
   galaxys23ultra: GALAXY_S23_ULTRA,
+  galaxynote10: GALAXY_NOTE_10,
+  'galaxynote10+': GALAXY_NOTE_10_PLUS,
   redmi13c: REDMI_13C,
   redmi14c: REDMI_14C,
   redmi15c: REDMI_15C,
