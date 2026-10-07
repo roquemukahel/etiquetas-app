@@ -635,6 +635,30 @@ const GALAXY_S23_ULTRA: ModeloColores = {
   ],
 };
 
+// Samsung Galaxy A72 — colores oficiales: Awesome Black, Awesome Violet,
+// Awesome White, Awesome Blue.
+const GALAXY_A72: ModeloColores = {
+  carpeta: 'galaxy-a72',
+  colores: [
+    { nombre: 'Negro', archivo: 'negro', hex: '#1c1c1e' },
+    { nombre: 'Violeta', archivo: 'violeta', hex: '#c9b8dc' },
+    { nombre: 'Blanco', archivo: 'blanco', hex: '#f1f1f1' },
+    { nombre: 'Azul', archivo: 'azul', hex: '#6fa8d6' },
+  ],
+};
+
+// Samsung Galaxy A33 5G — colores oficiales: Awesome Blue, Awesome Black,
+// Awesome White, Awesome Peach.
+const GALAXY_A33: ModeloColores = {
+  carpeta: 'galaxy-a33',
+  colores: [
+    { nombre: 'Azul', archivo: 'azul', hex: '#b5d6f2' },
+    { nombre: 'Negro', archivo: 'negro', hex: '#1c1c1e' },
+    { nombre: 'Blanco', archivo: 'blanco', hex: '#f1f1f1' },
+    { nombre: 'Durazno', archivo: 'durazno', hex: '#f3c5a8' },
+  ],
+};
+
 // Samsung Galaxy Note 20 — colores oficiales: Mystic Bronze, Mystic Gray,
 // Mystic Green.
 const GALAXY_NOTE_20: ModeloColores = {
@@ -1046,6 +1070,8 @@ const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   galaxys23: GALAXY_S23,
   'galaxys23+': GALAXY_S23,
   galaxys23ultra: GALAXY_S23_ULTRA,
+  galaxya72: GALAXY_A72,
+  galaxya33: GALAXY_A33,
   galaxynote20: GALAXY_NOTE_20,
   galaxynote20ultra: GALAXY_NOTE_20_ULTRA,
   galaxys21ultra: GALAXY_S21_ULTRA,
