@@ -17,6 +17,9 @@ import { simboloMoneda } from '../../lib/monedas';
 import { sanitizarDecimal, formatearMonto } from '../../lib/numeros';
 import SelectorColorAuto from '../../SelectorColorAuto';
 import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
+import SelectorFinanciacion from '../../SelectorFinanciacion';
+import { guiaDeFormulario } from '../../lib/financiacionGuia';
+import { soportaMigracion } from '../../lib/migraciones';
 import { useT } from '../../lib/idioma';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
@@ -100,6 +103,14 @@ export default function NuevoDispositivo() {
   const [color, setColor] = useState('');
   const [precio, setPrecio] = useState('');
   const [costo, setCosto] = useState('');
+  // Precio de lista y guía de cuotas: solo si el negocio corrió financiacion_guia_cartera_supabase.sql.
+  const [conGuia, setConGuia] = useState(false);
+  const [precioLista, setPrecioLista] = useState('');
+  const [guia, setGuia] = useState('');
+  useEffect(() => {
+    soportaMigracion(supabase, 'guiaFinanciacion').then(setConGuia);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [proveedor, setProveedor] = useState('');
   const [detalles, setDetalles] = useState('');
   const [estado, setEstado] = useState('usado');
@@ -146,6 +157,7 @@ export default function NuevoDispositivo() {
       proveedor_id: proveedorId,
       detalles: detalles.trim() || null,
       estado,
+      ...(conGuia ? { precio_lista: precioLista ? Number(precioLista) : null, financiacion_max_cuotas: guiaDeFormulario(guia) } : {}),
       ...(categoriaId ? { categoria_id: categoriaId } : {}),
       ...(sucursalElegida ? { sucursal_id: sucursalElegida } : {}),
       en_stock: true,
@@ -278,6 +290,12 @@ export default function NuevoDispositivo() {
             </div>
           );
         })()}
+        {conGuia && (
+          <>
+            <Campo label={t('Precio de lista (financiación)')} valor={precioLista} onChange={setPrecioLista} numerico />
+            <SelectorFinanciacion label={t('Financiación')} value={guia} onChange={setGuia} heredado={null} />
+          </>
+        )}
         <Campo label={t('Costo (lo que le pagaste al proveedor, opcional)')} valor={costo} onChange={setCosto} numerico />
         <Campo label={t('Proveedor (opcional)')} valor={proveedor} onChange={setProveedor} listaId="proveedores-stock" />
         <datalist id="proveedores-stock">

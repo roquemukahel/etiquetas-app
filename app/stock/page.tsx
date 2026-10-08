@@ -183,6 +183,14 @@ export default function Stock() {
   const [nombreProducto, setNombreProducto] = useState('');
   const [precioProducto, setPrecioProducto] = useState('');
   const [costoProducto, setCostoProducto] = useState('');
+  // Precio de lista y guía de cuotas al dar de alta: solo si corrió financiacion_guia_cartera_supabase.sql.
+  const [conGuiaAlta, setConGuiaAlta] = useState(false);
+  const [listaProducto, setListaProducto] = useState('');
+  const [guiaProducto, setGuiaProducto] = useState('');
+  useEffect(() => {
+    soportaMigracion(supabase, 'guiaFinanciacionMaestro').then(setConGuiaAlta);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // Categorías de stock (app/lib/categorias.ts): si el negocio no corrió
   // todavía la migración correspondiente, esta consulta simplemente vuelve
   // vacía (la tabla no existe) y el selector no se muestra — agregar un
@@ -1270,6 +1278,7 @@ export default function Stock() {
     const cantidadNueva = esSerializado ? 1 : Math.max(0, Math.floor(Number(cantidadInicialProducto) || 0));
 
     let insertError: { message: string } | null = null;
+    let idProductoGuardado: string | null = existente?.id ?? null;
     if (existente) {
       // La cantidad se suma con el mismo RPC atómico que usa el resto de la
       // app (producto_mover_stock, con "select ... for update") en vez de
@@ -1323,6 +1332,7 @@ export default function Stock() {
             : {}),
         }).select('id').single();
       insertError = error;
+      idProductoGuardado = creado?.id ?? null;
       // Las unidades con las que nace el producto quedan registradas como el
       // primer movimiento de su historial (de dónde salió el stock inicial).
       // Si esto falla no se corta el alta: el producto ya se creó bien.
@@ -1343,10 +1353,26 @@ export default function Stock() {
       setGuardandoProducto(false);
       return;
     }
+    // Precio de lista y guía: solo se tocan si se completaron, para no pisar lo ya definido del producto.
+    if (conGuiaAlta && (listaProducto || guiaProducto !== '')) {
+      const cambios: { precio_lista?: number; financiacion_max_cuotas?: number | null } = {};
+      if (listaProducto) cambios.precio_lista = Number(listaProducto);
+      if (guiaProducto !== '') cambios.financiacion_max_cuotas = guiaDeFormulario(guiaProducto);
+      const falloGuia =
+        (productoMaestroId && (await falla(supabase.from('productos_maestro').update(cambios).eq('id', productoMaestroId), t, 'guardar precio de lista y financiación'))) ||
+        (idProductoGuardado && (await falla(supabase.from('productos').update(cambios).eq('id', idProductoGuardado), t, 'guardar precio de lista y financiación')));
+      if (falloGuia) {
+        setGuardandoProducto(false);
+        cargarProductos();
+        return;
+      }
+    }
     if (!maestroExistente) setProductosMaestroDisponibles(await obtenerProductosMaestro(supabase, false).catch(() => productosMaestroDisponibles));
     setNombreProducto('');
     setPrecioProducto('');
     setCostoProducto('');
+    setListaProducto('');
+    setGuiaProducto('');
     setMarcaProducto('');
     setNumeroSerieProducto('');
     setCantidadInicialProducto('1');
@@ -2319,6 +2345,18 @@ export default function Stock() {
                   className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
                 />
               </div>
+              {conGuiaAlta && (
+                <>
+                  <input
+                    value={listaProducto}
+                    onChange={(e) => setListaProducto(sanitizarDecimal(e.target.value))}
+                    placeholder={t('Precio de lista (financiación)')}
+                    inputMode="decimal"
+                    className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+                  />
+                  <SelectorFinanciacion label={t('Financiación')} value={guiaProducto} onChange={setGuiaProducto} heredado={null} />
+                </>
+              )}
               {categoriasStock.length > 0 && (
                 <>
                   <select
