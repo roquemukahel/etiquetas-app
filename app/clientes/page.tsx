@@ -13,6 +13,8 @@ import { simboloMoneda } from '../lib/monedas';
 import { ICONOS } from '../Iconos';
 import { QoviState } from '../QoviState';
 import { useT } from '../lib/idioma';
+import FiltroLocalidad from '../FiltroLocalidad';
+import { opcionesLocalidad, coincideLocalidad } from '../lib/localidades';
 
 type Cliente = {
   id: string;
@@ -55,6 +57,9 @@ export default function Clientes() {
   // lista larga, a quién le falta cobrar o quién tiene saldo a favor, sin
   // tener que abrir cliente por cliente.
   const [filtroCta, setFiltroCta] = useState<FiltroCuentaCorriente>('todos');
+  // Filtro por localidad/zona, para armar recorridos de cobranza.
+  const [filtroLocalidad, setFiltroLocalidad] = useState('');
+  const localidadesDisponibles = useMemo(() => opcionesLocalidad(clientes.map((c) => c.localidad)), [clientes]);
 
   // Columnas explícitas (no "*"): con miles de clientes, traer columnas que
   // esta pantalla no usa (sobre todo la foto en base64 de quién lo cargó)
@@ -263,11 +268,12 @@ export default function Clientes() {
           .some((campo) => campo!.toLowerCase().includes(q))
       );
     }
+    if (filtroLocalidad) base = base.filter((c) => coincideLocalidad(c.localidad, filtroLocalidad));
     if (filtroCta === 'todos') return base;
     if (filtroCta === 'con_cta') return base.filter((c) => !!c.cta_cte_habilitada);
     return base.filter((c) => categoriaCta(c) === filtroCta);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clientes, busqueda, filtroCta, saldos]);
+  }, [clientes, busqueda, filtroCta, filtroLocalidad, saldos]);
 
   // Con miles de clientes, pintar TODAS las tarjetas de una es lo que hace
   // sentir lenta la pantalla (no la consulta en sí) — de a poco entonces,
@@ -278,7 +284,7 @@ export default function Clientes() {
   const [visibles, setVisibles] = useState(PASO_VISIBLES);
   useEffect(() => {
     setVisibles(PASO_VISIBLES);
-  }, [busqueda, filtroCta]);
+  }, [busqueda, filtroCta, filtroLocalidad]);
   const paraRenderizar = useMemo(() => filtrados.slice(0, visibles), [filtrados, visibles]);
 
   return (
@@ -296,6 +302,8 @@ export default function Clientes() {
         placeholder={t('Buscar por nombre, apodo, email, teléfono, DNI, localidad...')}
         className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
       />
+
+      <FiltroLocalidad opciones={localidadesDisponibles} value={filtroLocalidad} onChange={setFiltroLocalidad} />
 
       {conteosCta.con_cta > 0 && (
         <div className="flex flex-wrap gap-1.5">

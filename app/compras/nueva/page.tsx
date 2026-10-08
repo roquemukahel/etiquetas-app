@@ -11,6 +11,8 @@ import { limpiarImei } from '../../lib/imei';
 import SelectorColorAuto from '../../SelectorColorAuto';
 import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
 import { useT } from '../../lib/idioma';
+import { useSucursalActual } from '../../lib/sucursal';
+import { origenDeCliente } from '../../lib/clientesDuplicados';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 
@@ -25,6 +27,7 @@ export default function NuevaCompra() {
   const router = useRouter();
   const supabase = crearClienteNavegador();
   const t = useT();
+  const sucursalActual = useSucursalActual();
 
   const [step, setStep] = useState<'cliente' | 'dispositivo'>('cliente');
 
@@ -89,9 +92,11 @@ export default function NuevaCompra() {
     try {
       let clienteId = clienteElegido?.id;
       if (modoCliente === 'nuevo') {
+        const origenCliente = await origenDeCliente(supabase, sucursalActual.id);
         const { data, error: cErr } = await supabase
           .from('clientes')
           .insert({
+            ...origenCliente,
             nombre: nuevoNombre.trim(),
             apellido: nuevoApellido.trim() || null,
             telefono: nuevoTelefono.trim() || null,

@@ -46,6 +46,7 @@ import { useT } from '../lib/idioma';
 import { useSucursalActual } from '../lib/sucursal';
 import { obtenerSucursales, type Sucursal } from '../lib/sucursales';
 import { falla } from '../lib/escritura';
+import { origenDeCliente } from '../lib/clientesDuplicados';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 
@@ -602,9 +603,10 @@ export default function ServicioTecnico() {
     const nombreParaMensaje = clienteCoincidente ? nombreCompleto(clienteCoincidente) : clienteInput.trim();
 
     if (!clienteId && clienteInput.trim()) {
+      const origenCliente = await origenDeCliente(supabase, sucursalActual.id);
       const { data: nuevoCliente } = await supabase
         .from('clientes')
-        .insert({ nombre: clienteInput.trim(), telefono: clienteTelefono.trim() || null })
+        .insert({ ...origenCliente, nombre: clienteInput.trim(), telefono: clienteTelefono.trim() || null })
         .select('id')
         .single();
       clienteId = nuevoCliente?.id ?? null;

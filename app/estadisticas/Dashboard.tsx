@@ -53,6 +53,7 @@ import { useSucursalActual } from '../lib/sucursal';
 import { obtenerSucursales, type Sucursal } from '../lib/sucursales';
 import { obtenerAreasEgresos, type AreaEgreso } from '../lib/egresos';
 import RubrosInversion from './RubrosInversion';
+import CarteraFinanciacion from './CarteraFinanciacion';
 
 type VistaRanking = 'barras' | 'torta';
 // Rankings separados por métrica, no un puntaje opaco de "producto/categoría
@@ -77,7 +78,7 @@ function filasADatos(filas: FilaRankingProducto[], metrica: MetricaProducto): Da
     .sort((a, b) => b.valor - a.valor)
     .slice(0, 10);
 }
-type Tab = 'resumen' | 'ventas' | 'caja' | 'cobrar' | 'stock' | 'servicio' | 'clientes' | 'equipo' | 'proveedores' | 'rubros';
+type Tab = 'resumen' | 'ventas' | 'caja' | 'cobrar' | 'stock' | 'servicio' | 'clientes' | 'equipo' | 'proveedores' | 'rubros' | 'cartera';
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'resumen', label: 'Resumen' },
@@ -90,6 +91,7 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'equipo', label: 'Equipo' },
   { key: 'proveedores', label: 'Compras y proveedores' },
   { key: 'rubros', label: 'Inversión por rubro' },
+  { key: 'cartera', label: 'Cartera de financiación' },
 ];
 
 const PERIODOS: { key: Periodo; label: string }[] = [
@@ -1062,7 +1064,7 @@ export default function Estadisticas() {
   // "Inversión por rubro" muestra costos de compra y márgenes: solo con permiso.
   const TABS_T = useMemo(
     () =>
-      TABS.filter((tb) => tb.key !== 'rubros' || puedeVerCostos).map((tb) => ({
+      TABS.filter((tb) => (tb.key !== 'rubros' && tb.key !== 'cartera') || puedeVerCostos).map((tb) => ({
         ...tb,
         label: tb.key === 'equipo' ? ETIQUETA_TAB_EQUIPO[idioma] : t(tb.label),
       })),
@@ -1525,6 +1527,20 @@ export default function Estadisticas() {
             )}
           </>
         );
+
+      case 'cartera':
+        return puedeVerCostos ? (
+          <CarteraFinanciacion
+            supabase={supabase}
+            rango={{ inicio: rango.inicio, fin: rango.fin }}
+            sucursalId={sucursalId}
+            categorias={categoriasStock}
+            ordenes={ordenes}
+            itemsPorOrden={itemsPorOrden as Map<string, ItemR[]>}
+            moneda={moneda}
+            ocultarMontos={ocultarMontos}
+          />
+        ) : null;
 
       case 'rubros':
         return puedeVerCostos ? (

@@ -15,8 +15,10 @@ import { armarLinkWhatsApp, mensajeRecordatorioCobranza } from '../lib/whatsapp'
 import { codigoLlamada } from '../lib/paises';
 import { formatearMonto } from '../lib/numeros';
 import { useT } from '../lib/idioma';
+import FiltroLocalidad from '../FiltroLocalidad';
+import { opcionesLocalidad, coincideLocalidad } from '../lib/localidades';
 
-type Cliente = { id: string; nombre: string; apellido: string | null; suspendido: boolean | null; telefono: string | null };
+type Cliente = { id: string; nombre: string; apellido: string | null; suspendido: boolean | null; telefono: string | null; localidad: string | null };
 type Saldo = { cliente_id: string; saldo: number; vencido: number };
 
 type Fila = {
@@ -26,6 +28,7 @@ type Fila = {
   saldo: number;
   vencido: number;
   suspendido: boolean;
+  localidad: string | null;
 };
 
 type CuotaFila = {
@@ -48,15 +51,15 @@ export default function CuentasPorCobrar() {
   // Misma llave que Estadísticas: es información sensible de plata.
   const puedeVer = tienePermiso(actor, 'ver_estadisticas');
 
-  const [filas, setFilas] = useState<Fila[]>([]);
+  const [filasRaw, setFilas] = useState<Fila[]>([]);
   const [monedaCodigo, setMonedaCodigo] = useState('ARS');
   const [codigoPais, setCodigoPais] = useState('54');
   const [loading, setLoading] = useState(true);
   const [orden, setOrden] = useState<'saldo' | 'vencido' | 'nombre' | 'vencimiento'>('vencimiento');
 
   // ---------- Proyección de cobranzas (financiación en cuotas) ----------
-  const [cuotas, setCuotas] = useState<CuotaFila[]>([]);
-  const [pagosAplicados, setPagosAplicados] = useState<PagoAplicadoProyeccion[]>([]);
+  const [cuotasRaw, setCuotas] = useState<CuotaFila[]>([]);
+  const [pagosRaw, setPagosAplicados] = useState<PagoAplicadoProyeccion[]>([]);
   const [nombresClientes, setNombresClientes] = useState<Map<string, string>>(new Map());
   const [monedaProyeccion, setMonedaProyeccion] = useState<string | null>(null);
   const [horizonte, setHorizonte] = useState<6 | 12>(6);
@@ -64,6 +67,19 @@ export default function CuentasPorCobrar() {
   const [alertasAbiertas, setAlertasAbiertas] = useState(false);
 
   const moneda = useMemo(() => simboloMoneda(monedaCodigo), [monedaCodigo]);
+
+  // Filtro por localidad/zona (recorridos de cobranza): recorta la planilla de
+  // deudores, la mora, las alertas y la proyección a los clientes de esa zona.
+  const [filtroLocalidad, setFiltroLocalidad] = useState('');
+  const [localidadPorCliente, setLocalidadPorCliente] = useState<Map<string, string | null>>(new Map());
+  const localidadesDisponibles = useMemo(() => opcionesLocalidad(Array.from(localidadPorCliente.values())), [localidadPorCliente]);
+  const clienteEnZona = (id: string) => coincideLocalidad(localidadPorCliente.get(id), filtroLocalidad);
+  const filas = useMemo(() => (filtroLocalidad ? filasRaw.filter((f) => clienteEnZona(f.id)) : filasRaw), [filasRaw, filtroLocalidad, localidadPorCliente]);
+  const cuotas = useMemo(() => (filtroLocalidad ? cuotasRaw.filter((c) => clienteEnZona(c.cliente_id)) : cuotasRaw), [cuotasRaw, filtroLocalidad, localidadPorCliente]);
+  const pagosAplicados = useMemo(
+    () => (filtroLocalidad ? pagosRaw.filter((p) => clienteEnZona(p.cliente_id)) : pagosRaw),
+    [pagosRaw, filtroLocalidad, localidadPorCliente]
+  );
 
   useEffect(() => {
     if (!puedeVer) {
@@ -77,7 +93,7 @@ export default function CuentasPorCobrar() {
       // "Cliente eliminado" sin estarlo de verdad.
       const [{ data: saldosData }, clientesData, { data: userData }, cuotasData, pagosData] = await Promise.all([
         supabase.rpc('saldos_cuenta_corriente'),
-        obtenerTodasLasFilas<Cliente>(supabase, 'clientes', 'id, nombre, apellido, suspendido, telefono'),
+        obtenerTodasLasFilas<Cliente>(supabase, 'clientes', 'id, nombre, apellido, suspendido, telefono, localidad'),
         supabase.auth.getUser(),
         obtenerTodasLasFilas<any>(
           supabase,
@@ -106,12 +122,14 @@ export default function CuentasPorCobrar() {
             saldo,
             vencido: Number(s.vencido) || 0,
             suspendido: !!c?.suspendido,
+            localidad: c?.localidad ?? null,
           };
         })
         .filter((f) => f.saldo > 0.009);
       setFilas(armadas);
 
       setNombresClientes(new Map(clientesData.map((c) => [c.id, `${c.nombre} ${c.apellido || ''}`.trim()])));
+      setLocalidadPorCliente(new Map(clientesData.map((c) => [c.id, c.localidad])));
       setCuotas(
         ((cuotasData as any[]) ?? []).map((c) => ({
           id: c.id,
@@ -275,6 +293,13 @@ export default function CuentasPorCobrar() {
         <span className="text-lg font-medium">{t('Cuentas por cobrar')}</span>
       </header>
 
+      <div className="flex flex-wrap items-center gap-2">
+        <FiltroLocalidad opciones={localidadesDisponibles} value={filtroLocalidad} onChange={setFiltroLocalidad} />
+        <Link href="/creditos-fuera-de-guia" className="ml-auto rounded-full border border-border dark:border-dark-border px-3 py-1.5 text-xs font-medium">
+          🚩 {t('Créditos fuera de la guía')}
+        </Link>
+      </div>
+
       {alertas.length > 0 && (
         <div className="rounded-xl border border-warn/30 bg-warn/10 flex flex-col overflow-hidden">
           <button onClick={() => setAlertasAbiertas((v) => !v)} className="flex items-center justify-between px-4 py-3 text-sm font-medium">
@@ -437,7 +462,10 @@ export default function CuentasPorCobrar() {
                   className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex items-center justify-between gap-3"
                 >
                   <Link href={`/clientes/${f.id}`} className="min-w-0 flex-1">
-                    <p className="text-sm font-medium truncate">{f.nombre}</p>
+                    <p className="text-sm font-medium truncate">
+                      {f.nombre}
+                      {f.localidad ? <span className="text-xs font-normal text-muted dark:text-dark-text-secondary"> · 📍 {f.localidad}</span> : null}
+                    </p>
                     <span className={`inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full mt-0.5 ${info.fondo}`}>
                       {info.label}
                       {f.vencido > 0 ? ` · ${t('vencido')} ${fmt(f.vencido)}` : ''}

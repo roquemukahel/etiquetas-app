@@ -22,6 +22,10 @@ import {
 } from '../../lib/cuentaCorriente';
 import { planesActivos, interesDe, valorCuota, etiquetaCuotas } from '../../lib/cuotas';
 import { crearPlanFinanciacion } from '../../lib/financiacion/servicio';
+import { buscarClientesDuplicados, textoDuplicados, origenDeCliente } from '../../lib/clientesDuplicados';
+import EtiquetaFinanciacion from '../../EtiquetaFinanciacion';
+import { soportaMigracion } from '../../lib/migraciones';
+import { resolverMaxCuotas, maximoDeCarrito, excedeGuia, mensajeAvisoGuia, aplicarModoPrecio, precioSegunModo, type MaxCuotas } from '../../lib/financiacionGuia';
 import { generarCronograma, sumarMesConClamp, aFechaISO } from '../../lib/financiacion/motor';
 import { decimalesMoneda } from '../../lib/monedas';
 import { generarComisionesAccion } from '../../comisiones/acciones';
@@ -40,6 +44,7 @@ import MiniaturaDispositivo from '../../MiniaturaDispositivo';
 import CheckTri from '../../CheckTri';
 import TextoCondicionGenerado from '../../TextoCondicionGenerado';
 import { useSucursalActual } from '../../lib/sucursal';
+import { falla, registrarFallo } from '../../lib/escritura';
 
 type Dispositivo = {
   id: string;
@@ -50,6 +55,10 @@ type Dispositivo = {
   costo: number | null;
   imei: string | null;
   salud_bateria: number | null;
+  // Solo vienen si el negocio corrió financiacion_guia_cartera_supabase.sql.
+  precio_lista?: number | null;
+  financiacion_max_cuotas?: number | null;
+  categoria_id?: string | null;
 };
 
 type Cliente = {
@@ -74,6 +83,9 @@ type Producto = {
   sku?: string | null;
   codigo_barras?: string | null;
   sucursal_id?: string | null;
+  precio_lista?: number | null;
+  financiacion_max_cuotas?: number | null;
+  categoria_id?: string | null;
 };
 type Trabajo = { id: string; nombre: string; precio: number | null; imagen_url: string | null };
 
@@ -99,6 +111,13 @@ type ItemCarrito = {
   productoId?: string | null; // producto de catálogo (para comisiones por producto)
   costo?: number | null; // snapshot del costo al vender (para comisión sobre ganancia)
   tipo: 'dispositivo' | 'producto' | 'trabajo';
+  // Dos precios: el exclusivo (contado, transferencia, débito) y el de lista (financiación).
+  // precioUnitario arranca en el que corresponde según cómo se paga y se cambia solo al
+  // activar/desactivar la financiación (salvo que el vendedor lo haya tocado a mano).
+  precioExclusivo?: number | null;
+  precioLista?: number | null;
+  // Hasta cuántas cuotas se puede financiar este ítem (null = sin guía; 0 = sin financiación).
+  maxCuotas?: MaxCuotas;
 };
 
 // Un equipo candidato a derivarse a Servicio Técnico al confirmar la boleta.
@@ -466,6 +485,13 @@ export default function NuevaOrden() {
   // sentido si una parte de la venta queda en cuenta corriente: en vez de un
   // solo cargo grande, genera un cargo por cuota, cada uno con su vencimiento.
   const [financiarActivo, setFinanciarActivo] = useState(false);
+  // Guía de financiación por producto/categoría: si se ponen más cuotas que las permitidas
+  // se avisa y se pide un motivo para seguir (no bloquea la venta).
+  const [guiaCategorias, setGuiaCategorias] = useState<Map<string, number | null>>(new Map());
+  const [motivoFueraGuia, setMotivoFueraGuia] = useState('');
+  // Cuotas vencidas del cliente elegido (de todas las sucursales), para tenerlas a la vista
+  // antes de darle un crédito nuevo.
+  const [vencidasCliente, setVencidasCliente] = useState<{ cuotas: number; monto: number } | null>(null);
   const [financiarCuotas, setFinanciarCuotas] = useState('3');
   const [financiarPrimeraFecha, setFinanciarPrimeraFecha] = useState('');
   // Recargo propio de ESTA financiación (a diferencia de "Impuesto %", que es
@@ -566,14 +592,19 @@ export default function NuevaOrden() {
       // en stock, los que quedaban afuera de esa primera página eran
       // directamente invisibles acá (no se podían vender). obtenerTodasLasFilas
       // pagina hasta traer todo.
+      const conGuia = await soportaMigracion(supabase, 'guiaFinanciacionDispositivos');
       const data = await obtenerTodasLasFilas<Dispositivo>(
         supabase,
         'dispositivos',
-        'id, modelo, capacidad_gb, color, precio, costo, imei, salud_bateria',
+        'id, modelo, capacidad_gb, color, precio, costo, imei, salud_bateria' + (conGuia ? ', precio_lista, financiacion_max_cuotas, categoria_id' : ''),
         [],
         (q) => q.eq('en_stock', true)
       );
       setDispositivosStock(data);
+      if (conGuia) {
+        const { data: cats, error: errorCats } = await supabase.from('stock_categorias').select('id, financiacion_max_cuotas').limit(1000);
+        if (!errorCats) setGuiaCategorias(new Map(((cats as { id: string; financiacion_max_cuotas: number | null }[]) ?? []).map((c) => [c.id, c.financiacion_max_cuotas])));
+      }
     })();
     (async () => {
       setDispositivosSenados(await obtenerDispositivosSenados(supabase));
@@ -583,10 +614,11 @@ export default function NuevaOrden() {
       // select() sin paginar se corta en 1000 filas sin avisar. Con un
       // catálogo de accesorios grande, los productos que quedaban afuera
       // de esa primera página no aparecían para vender.
+      const conGuia = await soportaMigracion(supabase, 'guiaFinanciacion');
       const data = await obtenerTodasLasFilas<Producto>(
         supabase,
         'productos',
-        'id, nombre, precio, costo, imagen_url, marca, sku, codigo_barras, sucursal_id'
+        'id, nombre, precio, costo, imagen_url, marca, sku, codigo_barras, sucursal_id' + (conGuia ? ', precio_lista, financiacion_max_cuotas, categoria_id' : '')
       );
       setProductos(data);
     })();
@@ -824,16 +856,23 @@ export default function NuevaOrden() {
     setStep('carrito');
   };
 
+  // Guía de financiación de un equipo/producto: el propio, y si no tiene, el de su categoría.
+  const guiaDe = (propio: number | null | undefined, categoriaId: string | null | undefined): MaxCuotas =>
+    resolverMaxCuotas(propio, categoriaId ? guiaCategorias.get(categoriaId) : null);
+
   const agregarDispositivoDelStock = (d: Dispositivo) => {
     setCarrito((c) => [
       ...c,
       {
         tempId: idTemporal(),
+        precioExclusivo: d.precio ?? 0,
+        precioLista: d.precio_lista ?? null,
+        maxCuotas: guiaDe(d.financiacion_max_cuotas, d.categoria_id),
         descripcion: `${d.modelo || 'Dispositivo'}${d.capacidad_gb ? ` ${d.capacidad_gb}GB` : ''}${
           d.color ? ` ${d.color}` : ''
         }${d.imei ? ` · IMEI ${d.imei}` : ''}${d.salud_bateria != null ? ` · Batería ${d.salud_bateria}%` : ''}`,
         cantidad: 1,
-        precioUnitario: d.precio ?? 0,
+        precioUnitario: precioSegunModo(d.precio ?? 0, d.precio_lista, financiarActivo),
         dispositivoId: d.id,
         costo: d.costo ?? null,
         tipo: 'dispositivo',
@@ -884,7 +923,18 @@ export default function NuevaOrden() {
   const agregarProductoDelCatalogo = (p: Producto) => {
     setCarrito((c) => [
       ...c,
-      { tempId: idTemporal(), descripcion: p.nombre, cantidad: 1, precioUnitario: p.precio ?? 0, productoId: p.id, costo: p.costo ?? null, tipo: 'producto' },
+      {
+        tempId: idTemporal(),
+        descripcion: p.nombre,
+        cantidad: 1,
+        precioUnitario: precioSegunModo(p.precio ?? 0, p.precio_lista, financiarActivo),
+        precioExclusivo: p.precio ?? 0,
+        precioLista: p.precio_lista ?? null,
+        maxCuotas: guiaDe(p.financiacion_max_cuotas, p.categoria_id),
+        productoId: p.id,
+        costo: p.costo ?? null,
+        tipo: 'producto',
+      },
     ]);
     setPanelAbierto(null);
   };
@@ -1052,6 +1102,42 @@ export default function NuevaOrden() {
   // se podía confirmar igual y la boleta salía con un ítem en $0.
   const hayItemSinPrecio = carrito.some((i) => i.precioUnitario <= 0);
 
+  // Al activar/desactivar la financiación los ítems pasan solos al precio de lista / exclusivo.
+  useEffect(() => {
+    setCarrito((c) => aplicarModoPrecio(c, financiarActivo));
+  }, [financiarActivo]);
+
+  // Límite de cuotas del crédito: el del producto con el límite más bajo.
+  const maxCuotasCarrito = useMemo(() => maximoDeCarrito(carrito.map((i) => i.maxCuotas)), [carrito]);
+  const variosConGuia = carrito.filter((i) => i.maxCuotas != null).length > 1;
+  const fueraDeGuia = financiarActivo && excedeGuia(financiarCuotasNum, maxCuotasCarrito);
+  const faltaMotivoFueraGuia = fueraDeGuia && motivoFueraGuia.trim().length === 0;
+
+  useEffect(() => {
+    if (!clienteElegido?.id) {
+      setVencidasCliente(null);
+      return;
+    }
+    let vigente = true;
+    (async () => {
+      const { data, error } = await supabase
+        .from('financiacion_cuotas')
+        .select('importe_original, importe_pagado, financiacion_planes!inner(cliente_id)')
+        .eq('financiacion_planes.cliente_id', clienteElegido.id)
+        .eq('estado', 'pendiente')
+        .lt('fecha_vencimiento', aFechaISO(new Date()))
+        .limit(2000);
+      if (!vigente) return;
+      if (error) return setVencidasCliente(null);
+      const filas = (data as { importe_original: number; importe_pagado: number }[]) ?? [];
+      setVencidasCliente({ cuotas: filas.length, monto: filas.reduce((a, f) => a + Math.max(0, f.importe_original - f.importe_pagado), 0) });
+    })();
+    return () => {
+      vigente = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clienteElegido?.id]);
+
   const puedeConfirmar =
     carrito.length > 0 &&
     !hayItemSinPrecio &&
@@ -1060,7 +1146,8 @@ export default function NuevaOrden() {
     asignacionOk &&
     !excedeLimite &&
     (montoCuentaCorriente <= 0 || ctaCteDisponible) &&
-    (montoCuentaCorriente <= 0 || !financiarActivo || (financiarCronogramaValido && !!previewFinanciacion));
+    (montoCuentaCorriente <= 0 || !financiarActivo || (financiarCronogramaValido && !!previewFinanciacion)) &&
+    !faltaMotivoFueraGuia;
 
   // Etiqueta legible del cobro para guardar en la orden (forma_pago) y
   // mostrar en listados/boleta, sin perder el detalle real que vive en la
@@ -1301,9 +1388,20 @@ export default function NuevaOrden() {
       let clienteId = clienteElegido?.id;
       if (modoCliente === 'nuevo') {
         const actorCliente = getActor();
+        // Aviso (no bloquea) si ya hay un cliente con ese DNI o teléfono. Si se
+        // cancela, el catch de abajo devuelve los equipos reservados al stock.
+        const duplicados = await buscarClientesDuplicados(supabase, { dni: nuevoDni, telefono: nuevoTelefono });
+        if (duplicados.length > 0 && !confirm(`${t('Ya hay un cliente con el mismo DNI o teléfono:')}
+${textoDuplicados(duplicados)}
+
+${t('¿Cargarlo igual?')}`)) {
+          throw new Error(t('Cancelado: ya existe un cliente con ese DNI o teléfono. Elegilo de la lista de clientes.'));
+        }
+        const origenCliente = await origenDeCliente(supabase, sucursalActual.id);
         const { data, error: cErr } = await supabase
           .from('clientes')
           .insert({
+            ...origenCliente,
             nombre: nuevoNombre.trim(),
             apellido: nuevoApellido.trim() || null,
             telefono: nuevoTelefono.trim() || null,
@@ -1469,10 +1567,41 @@ export default function NuevaOrden() {
             entregaInicial: 0,
             cantidadCuotas: financiarCuotasNum,
             primeraFecha: financiarPrimeraFecha,
-            observaciones: 'Financiación generada al confirmar la orden.',
+            observaciones: fueraDeGuia
+              ? `Financiación generada al confirmar la orden. FUERA DE LA GUÍA (máx. ${maxCuotasCarrito}): ${motivoFueraGuia.trim()}`
+              : 'Financiación generada al confirmar la orden.',
             sucursalId: sucursalActual.id,
           });
           if ('error' in resultadoPlan) throw new Error(t('No pudimos crear el plan de financiación:') + ' ' + t(resultadoPlan.error));
+          // La sucursal que da el primer crédito queda como "sucursal de origen" del cliente
+          // si todavía no tenía una (se completa sola; la cartera de clientes sigue siendo única).
+          if (sucursalActual.id && (await soportaMigracion(supabase, 'clienteSucursalOrigen'))) {
+            const { error: origenErr } = await supabase.from('clientes').update({ sucursal_origen_id: sucursalActual.id }).eq('id', clienteId).is('sucursal_origen_id', null);
+            if (origenErr) registrarFallo(origenErr, 'completar la sucursal de origen del cliente');
+          }
+          // Crédito fuera de la guía: queda el registro (fecha, vendedor, producto, cuotas y
+          // motivo) en el listado de "Créditos fuera de la guía". La venta ya está hecha: si
+          // este registro fallara, el motivo igual quedó en las observaciones del plan.
+          if (fueraDeGuia && (await soportaMigracion(supabase, 'creditosFueraGuia'))) {
+            const actorGuia = getActor();
+            await falla(
+              supabase.from('creditos_fuera_guia').insert({
+                orden_id: orden.id,
+                plan_id: resultadoPlan.planId,
+                cliente_id: clienteId,
+                vendedor_id: vendedorId || null,
+                vendedor_nombre: vendedores.find((v) => v.id === vendedorId)?.nombre ?? null,
+                productos: carrito.map((i) => i.descripcion).join(' · ').slice(0, 500),
+                cuotas: financiarCuotasNum,
+                maximo: maxCuotasCarrito ?? 0,
+                motivo: motivoFueraGuia.trim(),
+                registrado_por_nombre: actorGuia?.nombre ?? null,
+                ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
+              }),
+              t,
+              'registrar el crédito fuera de la guía'
+            );
+          }
         } else {
           const { error: movErr } = await supabase.from('cta_cte_movimientos').insert({
             cliente_id: clienteId,
@@ -1777,9 +1906,13 @@ export default function NuevaOrden() {
                         )}
                       </span>
                       </span>
-                      {d.precio != null && (
-                        <span className="font-medium shrink-0">{moneda}{d.precio.toLocaleString('es-AR')}</span>
-                      )}
+                      <span className="text-right shrink-0">
+                        {d.precio != null && <span className="block font-medium">{moneda}{d.precio.toLocaleString('es-AR')}</span>}
+                        {d.precio_lista != null && (
+                          <span className="block text-[11px] text-muted dark:text-dark-text-secondary">{t('Lista')} {moneda}{d.precio_lista.toLocaleString('es-AR')}</span>
+                        )}
+                        <EtiquetaFinanciacion max={guiaDe(d.financiacion_max_cuotas, d.categoria_id)} />
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -1898,6 +2031,10 @@ export default function NuevaOrden() {
                     </span>
                     <span className="text-xs font-medium leading-tight line-clamp-2">{p.nombre}</span>
                     {p.precio != null && <span className="text-xs font-semibold">{moneda}{p.precio.toLocaleString('es-AR')}</span>}
+                    {p.precio_lista != null && (
+                      <span className="text-[10px] text-muted dark:text-dark-text-secondary">{t('Lista')} {moneda}{p.precio_lista.toLocaleString('es-AR')}</span>
+                    )}
+                    <EtiquetaFinanciacion max={guiaDe(p.financiacion_max_cuotas, p.categoria_id)} />
                   </button>
                 ))}
                 </div>
@@ -2455,9 +2592,15 @@ export default function NuevaOrden() {
             </div>
             {saldoCliente > 0 && (
               <div className="flex justify-between">
-                <span className="text-muted dark:text-dark-text-secondary">{t('Saldo anterior')}</span>
+                <span className="text-muted dark:text-dark-text-secondary">{t('Deuda anterior del cliente (todas las sucursales)')}</span>
                 <span>{moneda}{formatearMonto(saldoCliente)}</span>
               </div>
+            )}
+            {vencidasCliente && vencidasCliente.cuotas > 0 && (
+              <p className="text-bad font-medium">
+                ⚠ {t('Tiene')} {vencidasCliente.cuotas} {vencidasCliente.cuotas === 1 ? t('cuota vencida') : t('cuotas vencidas')} ({moneda}
+                {formatearMonto(vencidasCliente.monto)})
+              </p>
             )}
             {clienteElegido?.limite_credito != null && (
               <div className="flex justify-between">
@@ -2499,9 +2642,36 @@ export default function NuevaOrden() {
             )}
             {financiarActivo && (
               <>
+                {maxCuotasCarrito != null && (
+                  <div
+                    className={`rounded-lg px-2.5 py-2 text-xs flex flex-col gap-1.5 ${
+                      fueraDeGuia ? 'border border-warn/50 bg-warn/10' : 'bg-accent-soft dark:bg-dark-accent-soft'
+                    }`}
+                  >
+                    <p className={fueraDeGuia ? 'font-medium' : ''}>
+                      {fueraDeGuia ? '⚠ ' : '💳 '}
+                      {mensajeAvisoGuia(maxCuotasCarrito, variosConGuia, t)}
+                    </p>
+                    {fueraDeGuia && (
+                      <>
+                        <p className="text-[11px] text-muted dark:text-dark-text-secondary">
+                          {t('Podés seguir, pero escribí el motivo: queda registrado en "Créditos fuera de la guía".')}
+                        </p>
+                        <input
+                          value={motivoFueraGuia}
+                          onChange={(e) => setMotivoFueraGuia(e.target.value)}
+                          placeholder={t('Motivo para financiar fuera de la guía (obligatorio)')}
+                          className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                        />
+                      </>
+                    )}
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-[10px] text-muted dark:text-dark-text-secondary block mb-1">{t('Cantidad de cuotas')}</label>
+                    <label className="text-[10px] text-muted dark:text-dark-text-secondary block mb-1">
+                      {t('Cantidad de cuotas')} <EtiquetaFinanciacion max={maxCuotasCarrito} className="ml-1" />
+                    </label>
                     <input
                       value={financiarCuotas}
                       inputMode="numeric"

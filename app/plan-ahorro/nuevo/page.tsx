@@ -9,6 +9,8 @@ import { sanitizarDecimal } from '../../lib/numeros';
 import { obtenerDispositivosSenados } from '../../lib/planAhorro';
 import SelectorColorAuto from '../../SelectorColorAuto';
 import { useT } from '../../lib/idioma';
+import { useSucursalActual } from '../../lib/sucursal';
+import { origenDeCliente } from '../../lib/clientesDuplicados';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 
@@ -32,6 +34,7 @@ export default function NuevoPlanAhorro() {
   const router = useRouter();
   const supabase = crearClienteNavegador();
   const t = useT();
+  const sucursalActual = useSucursalActual();
 
   const [step, setStep] = useState<'cliente' | 'plan'>('cliente');
 
@@ -148,9 +151,11 @@ export default function NuevoPlanAhorro() {
 
       let clienteId = clienteElegido?.id;
       if (modoCliente === 'nuevo') {
+        const origenCliente = await origenDeCliente(supabase, sucursalActual.id);
         const { data, error: cErr } = await supabase
           .from('clientes')
           .insert({
+            ...origenCliente,
             nombre: nuevoNombre.trim(),
             apellido: nuevoApellido.trim() || null,
             telefono: nuevoTelefono.trim() || null,

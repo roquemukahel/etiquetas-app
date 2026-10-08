@@ -25,6 +25,9 @@ import { Boton } from './Boton';
 import Modal from './Modal';
 import CampoFecha from './CampoFecha';
 import { useT } from './lib/idioma';
+import EtiquetaFinanciacion from './EtiquetaFinanciacion';
+import { guiasDeOrdenes } from './lib/financiacionGuiaDatos';
+import { excedeGuia, type MaxCuotas } from './lib/financiacionGuia';
 import { useSucursalActual } from './lib/sucursal';
 
 const ETIQUETA_ESTADO: Record<EstadoVisualCuota, string> = {
@@ -72,6 +75,8 @@ export default function FinanciacionCliente({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [planAbierto, setPlanAbierto] = useState<string | null>(null);
+  // Guía de financiación de lo que se vendió en cada plan (la del producto con el límite más bajo).
+  const [guiaPorOrden, setGuiaPorOrden] = useState<Map<string, MaxCuotas>>(new Map());
 
   const [modalNuevo, setModalNuevo] = useState(false);
   const [modalAjuste, setModalAjuste] = useState<PlanFinanciacion | null>(null);
@@ -94,6 +99,7 @@ export default function FinanciacionCliente({
     }
     const listaPlanes = (planesData as PlanFinanciacion[]) ?? [];
     setPlanes(listaPlanes);
+    guiasDeOrdenes(supabase, listaPlanes.map((p) => p.orden_id).filter((x): x is string => !!x)).then(setGuiaPorOrden);
 
     if (listaPlanes.length > 0) {
       const { data: cuotasData, error: cuotasErr } = await supabase
@@ -184,6 +190,14 @@ export default function FinanciacionCliente({
                       {p.cantidad_cuotas} {p.cantidad_cuotas === 1 ? t('cuota') : t('cuotas')} · {simboloMoneda(p.moneda)}
                       {formatearMonto(p.importe_financiado)}
                     </p>
+                    {p.orden_id && guiaPorOrden.get(p.orden_id) != null && (
+                      <p className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                        <EtiquetaFinanciacion max={guiaPorOrden.get(p.orden_id)} />
+                        {excedeGuia(p.cantidad_cuotas, guiaPorOrden.get(p.orden_id) ?? null) && (
+                          <span className="text-[11px] font-medium text-warn">⚠ {t('Fuera de la guía')}</span>
+                        )}
+                      </p>
+                    )}
                     <p className="text-xs text-muted dark:text-dark-text-secondary">
                       {t('Creado el')} {new Date(p.created_at).toLocaleDateString('es-AR')} · {t(ETIQUETA_ESTADO_PLAN[p.estado])} · {progresoPlan}% {t('pagado')}
                     </p>

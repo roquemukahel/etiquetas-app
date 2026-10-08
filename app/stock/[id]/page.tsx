@@ -14,6 +14,8 @@ import { sanitizarDecimal } from '../../lib/numeros';
 import { limpiarImei } from '../../lib/imei';
 import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
 import { useT } from '../../lib/idioma';
+import SelectorFinanciacion from '../../SelectorFinanciacion';
+import { guiaDeFormulario, guiaAFormulario } from '../../lib/financiacionGuia';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 
@@ -35,6 +37,9 @@ type Dispositivo = {
   agregado_por_nombre: string | null;
   mostrar_en_stock_publico: boolean;
   sucursal_id?: string | null;
+  // Solo vienen si el negocio corrió financiacion_guia_cartera_supabase.sql.
+  precio_lista?: number | null;
+  financiacion_max_cuotas?: number | null;
 };
 
 export default function DetalleDispositivo() {
@@ -84,6 +89,9 @@ export default function DetalleDispositivo() {
     })();
   }, [id]);
 
+  // La guía de financiación y el precio de lista solo se ofrecen si las columnas existen.
+  const conGuia = !!d && 'financiacion_max_cuotas' in d;
+
   const campo = (k: keyof Dispositivo, valor: any) => setD((prev) => (prev ? { ...prev, [k]: valor } : prev));
 
   // Objetos chicos y planos (mismos campos siempre, en el mismo orden,
@@ -127,6 +135,7 @@ export default function DetalleDispositivo() {
         salud_bateria: d.salud_bateria,
         color: d.color?.trim() || null,
         precio: d.precio,
+        ...(conGuia ? { precio_lista: d.precio_lista ?? null, financiacion_max_cuotas: d.financiacion_max_cuotas ?? null } : {}),
         costo: d.costo,
         proveedor: d.proveedor?.trim() || null,
         proveedor_id: proveedorId,
@@ -363,6 +372,22 @@ export default function DetalleDispositivo() {
                   numerico
                 />
               </div>
+              {conGuia && (
+                <>
+                  <Campo
+                    label={t('Precio de lista (financiación)')}
+                    valor={d.precio_lista?.toString() ?? ''}
+                    onChange={(v) => campo('precio_lista', v ? Number(v) : null)}
+                    numerico
+                  />
+                  <SelectorFinanciacion
+                    label={t('Financiación')}
+                    value={guiaAFormulario(d.financiacion_max_cuotas)}
+                    onChange={(v) => campo('financiacion_max_cuotas', guiaDeFormulario(v))}
+                    heredado={null}
+                  />
+                </>
+              )}
               <Campo label={t('Proveedor (opcional)')} valor={d.proveedor ?? ''} onChange={(v) => campo('proveedor', v)} listaId="proveedores-stock-id" />
               <datalist id="proveedores-stock-id">
                 {proveedores.map((p) => (

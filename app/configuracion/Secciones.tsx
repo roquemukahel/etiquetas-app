@@ -20,6 +20,7 @@ const SECCIONES: Seccion[] = [
   { href: '/configuracion/cajas', titulo: 'Cajas', desc: 'Nombres de las cajas de Venta diaria y Financiamiento por sucursal', permiso: 'gestionar_egresos' },
   { href: '/configuracion/financiacion', titulo: 'Financiación en cuotas', desc: 'Interés de cada plan (3, 6 y 12 cuotas)', permiso: 'gestionar_usuarios' },
   { href: '/configuracion/comisiones', titulo: 'Comisiones', desc: 'Comisión de los vendedores por venta (minorista/mayorista)', permiso: 'gestionar_comisiones' },
+  { href: '/configuracion/localidades', titulo: 'Localidades / zonas', desc: 'La lista de zonas de tus clientes, para filtrar y armar recorridos de cobranza', permiso: 'gestionar_usuarios' },
   { href: '/configuracion/carpetas', titulo: 'Carpetas del stock', desc: 'Unificar carpetas repetidas y borrar las vacías', permiso: 'agregar_stock' },
   { href: '/configuracion/categorias-stock', titulo: 'Categorías de stock', desc: 'Celulares, accesorios y las que crees para tu negocio', permiso: 'agregar_stock' },
   { href: '/configuracion/repuestos-opciones', titulo: 'Calidades y categorías de repuestos', desc: 'Los nombres que usás con tus proveedores en los repuestos de Servicio Técnico', permiso: 'agregar_stock' },

@@ -25,6 +25,10 @@ import MiniaturaDispositivo from '../MiniaturaDispositivo';
 import { QoviState } from '../QoviState';
 import { ICONOS } from '../Iconos';
 import { falla } from '../lib/escritura';
+import EtiquetaFinanciacion from '../EtiquetaFinanciacion';
+import SelectorFinanciacion from '../SelectorFinanciacion';
+import { soportaMigracion } from '../lib/migraciones';
+import { resolverMaxCuotas, guiaDeFormulario, guiaAFormulario, type MaxCuotas } from '../lib/financiacionGuia';
 
 function IconoChico({ nombre, className = '' }: { nombre: string; className?: string }) {
   return (
@@ -649,6 +653,7 @@ export default function Stock() {
     setSeleccionados(new Set());
     setMoviendoCarpeta(false);
     setCarpetaDestino('');
+    setFinanciandoBloque(false);
   };
 
   const eliminarSeleccionados = async () => {
@@ -699,6 +704,72 @@ export default function Stock() {
   // (no corren a la vez, alcanza con un solo flag para deshabilitar botones).
   const [procesandoSeleccion, setProcesandoSeleccion] = useState(false);
   const [moviendoCarpeta, setMoviendoCarpeta] = useState(false);
+
+  // Guía de financiación y precio de lista (financiacion_guia_cartera_supabase.sql). Se carga
+  // aparte, con columnas livianas, para no tocar los listados principales de esta pantalla.
+  const [conGuia, setConGuia] = useState(false);
+  const [guiaPorId, setGuiaPorId] = useState<Map<string, { max: MaxCuotas; propio: number | null; lista: number | null }>>(new Map());
+  const [valorLista, setValorLista] = useState('');
+  const [valorGuia, setValorGuia] = useState('');
+  const [financiandoBloque, setFinanciandoBloque] = useState(false);
+  const [guiaBloque, setGuiaBloque] = useState('6');
+  const [aplicandoGuiaBloque, setAplicandoGuiaBloque] = useState(false);
+
+  const cargarGuias = async () => {
+    const soporta = await soportaMigracion(supabase, 'guiaFinanciacionDispositivos');
+    setConGuia(soporta);
+    if (!soporta) return;
+    const [disp, prod, cats] = await Promise.all([
+      obtenerTodasLasFilas<{ id: string; categoria_id: string | null; financiacion_max_cuotas: number | null; precio_lista: number | null }>(
+        supabase,
+        'dispositivos',
+        'id, categoria_id, financiacion_max_cuotas, precio_lista',
+        [],
+        (q) => q.eq('en_stock', true)
+      ),
+      obtenerTodasLasFilas<{ id: string; categoria_id: string | null; financiacion_max_cuotas: number | null; precio_lista: number | null }>(
+        supabase,
+        'productos',
+        'id, categoria_id, financiacion_max_cuotas, precio_lista'
+      ),
+      supabase.from('stock_categorias').select('id, financiacion_max_cuotas').limit(1000),
+    ]);
+    const guiaCat = new Map(((cats.data as { id: string; financiacion_max_cuotas: number | null }[]) ?? []).map((c) => [c.id, c.financiacion_max_cuotas]));
+    const mapa = new Map<string, { max: MaxCuotas; propio: number | null; lista: number | null }>();
+    for (const f of [...disp, ...prod]) {
+      mapa.set(f.id, {
+        max: resolverMaxCuotas(f.financiacion_max_cuotas, f.categoria_id ? guiaCat.get(f.categoria_id) : null),
+        propio: f.financiacion_max_cuotas,
+        lista: f.precio_lista,
+      });
+    }
+    setGuiaPorId(mapa);
+  };
+  useEffect(() => {
+    cargarGuias();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const aplicarGuiaBloque = async () => {
+    const ids = Array.from(seleccionados);
+    if (ids.length === 0) return;
+    const guia = guiaDeFormulario(guiaBloque);
+    setAplicandoGuiaBloque(true);
+    const { error } = await porLotes(ids, (lote) => supabase.from('dispositivos').update({ financiacion_max_cuotas: guia }).in('id', lote));
+    if (error) {
+      alert(`${t('No se pudo guardar el cambio. No se modificó nada.')}\n${error.message}`);
+      setAplicandoGuiaBloque(false);
+      return;
+    }
+    await registrarAuditoria(supabase, {
+      accion: `cambió la guía de financiación de ${ids.length} equipos (${guia == null ? 'según la categoría' : guia === 0 ? 'sin financiación' : `hasta ${guia} cuotas`})`,
+      entidad: 'dispositivo',
+      valorNuevo: { financiacion_max_cuotas: guia },
+    });
+    await cargarGuias();
+    setFinanciandoBloque(false);
+    setAplicandoGuiaBloque(false);
+  };
   const [carpetaDestino, setCarpetaDestino] = useState('');
 
   const marcarStockSeleccionados = async (enStock: boolean) => {
@@ -1312,6 +1383,8 @@ export default function Stock() {
       setValorCantidad(String(p.cantidad));
       setValorCosto(p.costo != null ? String(p.costo) : '');
       setValorPrecio(p.precio != null ? String(p.precio) : '');
+      setValorLista(guiaPorId.get(p.id)?.lista != null ? String(guiaPorId.get(p.id)!.lista) : '');
+      setValorGuia(guiaAFormulario(guiaPorId.get(p.id)?.propio));
     }
   };
 
@@ -1321,7 +1394,10 @@ export default function Stock() {
     const precioNuevo = valorPrecio ? Number(valorPrecio) : null;
     const cambioCantidad = nueva - p.cantidad;
     const cambianOtros = costoNuevo !== (p.costo ?? null) || precioNuevo !== (p.precio ?? null);
-    if (cambioCantidad === 0 && !cambianOtros) {
+    const listaNueva = valorLista ? Number(valorLista) : null;
+    const guiaNueva = guiaDeFormulario(valorGuia);
+    const cambiaGuia = conGuia && (listaNueva !== (guiaPorId.get(p.id)?.lista ?? null) || guiaNueva !== (guiaPorId.get(p.id)?.propio ?? null));
+    if (cambioCantidad === 0 && !cambianOtros && !cambiaGuia) {
       setEditandoCantidad(null);
       return;
     }
@@ -1363,6 +1439,17 @@ export default function Stock() {
       if (p.producto_maestro_id) {
         await falla(supabase.from('productos_maestro').update({ costo: costoNuevo, precio: precioNuevo }).eq('id', p.producto_maestro_id), t, 'actualizar el catálogo de productos');
       }
+    }
+    if (cambiaGuia) {
+      const campos = { precio_lista: listaNueva, financiacion_max_cuotas: guiaNueva };
+      if (
+        (await falla(supabase.from('productos').update(campos).eq('id', p.id), t, 'guardar precio de lista y financiación')) ||
+        (p.producto_maestro_id && (await falla(supabase.from('productos_maestro').update(campos).eq('id', p.producto_maestro_id), t, 'guardar precio de lista y financiación')))
+      ) {
+        cargarProductos();
+        return;
+      }
+      await cargarGuias();
     }
     await registrarAuditoria(supabase, {
       accion: `editó el accesorio "${p.nombre}"`,
@@ -1776,6 +1863,15 @@ export default function Stock() {
                     >
                       {t('Marcar fuera de stock')}
                     </button>
+                    {conGuia && (
+                      <button
+                        onClick={() => setFinanciandoBloque((v) => !v)}
+                        disabled={seleccionados.size === 0}
+                        className="rounded-lg bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-xs font-medium px-3 py-1.5 disabled:opacity-40"
+                      >
+                        💳 {t('Financiación')}
+                      </button>
+                    )}
                     <button
                       onClick={() => setMoviendoCarpeta((v) => !v)}
                       disabled={seleccionados.size === 0}
@@ -1793,6 +1889,21 @@ export default function Stock() {
                   {t('Exportar seleccionados')}
                 </button>
               </div>
+
+              {financiandoBloque && conGuia && (
+                <div className="flex items-end gap-2">
+                  <div className="flex-1">
+                    <SelectorFinanciacion value={guiaBloque} onChange={setGuiaBloque} />
+                  </div>
+                  <button
+                    onClick={aplicarGuiaBloque}
+                    disabled={aplicandoGuiaBloque || seleccionados.size === 0}
+                    className="rounded-lg bg-accent dark:bg-dark-accent text-white text-xs font-medium px-3 py-2 disabled:opacity-40"
+                  >
+                    {aplicandoGuiaBloque ? t('Aplicando...') : t('Aplicar')}
+                  </button>
+                </div>
+              )}
 
               {moviendoCarpeta && (
                 <div className="flex items-center gap-2">
@@ -2071,6 +2182,12 @@ export default function Stock() {
                                 <span className="text-muted dark:text-dark-text-secondary font-normal">{t('Sin precio')}</span>
                               )}
                             </p>
+                            {conGuia && guiaPorId.get(d.id)?.lista != null && (
+                              <p className="text-[11px] text-muted dark:text-dark-text-secondary">
+                                {t('Lista')} ${guiaPorId.get(d.id)!.lista!.toLocaleString('es-AR')}
+                              </p>
+                            )}
+                            {conGuia && <EtiquetaFinanciacion max={guiaPorId.get(d.id)?.max} className="mt-0.5" />}
                             {vista === 'vendidos' && (
                               <p className="text-xs text-muted dark:text-dark-text-secondary">{t('vendido')}</p>
                             )}
@@ -2454,6 +2571,7 @@ export default function Stock() {
                 </label>
 
                 <p className="text-sm font-medium leading-tight">{p.nombre}</p>
+                {conGuia && <EtiquetaFinanciacion max={guiaPorId.get(p.id)?.max} />}
                 {(p.marca || p.numero_serie) && (
                   <p className="text-[10px] text-muted dark:text-dark-text-secondary leading-tight -mt-1">
                     {[p.marca, p.numero_serie].filter(Boolean).join(' · ')}
@@ -2461,6 +2579,11 @@ export default function Stock() {
                 )}
                 <div className="leading-tight min-h-[2.2em]">
                   {p.precio != null && <p className="text-sm font-medium">${p.precio.toLocaleString('es-AR')}</p>}
+                  {conGuia && guiaPorId.get(p.id)?.lista != null && (
+                    <p className="text-[11px] text-muted dark:text-dark-text-secondary">
+                      {t('Lista')} ${guiaPorId.get(p.id)!.lista!.toLocaleString('es-AR')}
+                    </p>
+                  )}
                   {p.costo != null && (
                     <p className="text-[11px] text-muted dark:text-dark-text-secondary">{t('costo')} ${p.costo.toLocaleString('es-AR')}</p>
                   )}
@@ -2500,6 +2623,20 @@ export default function Stock() {
                         />
                       </label>
                     </div>
+                    {conGuia && (
+                      <div className="w-full flex flex-col gap-1.5">
+                        <label className="flex items-center gap-1 text-xs text-muted dark:text-dark-text-secondary">
+                          {t('Precio de lista')}
+                          <input
+                            value={valorLista}
+                            onChange={(e) => setValorLista(sanitizarDecimal(e.target.value))}
+                            inputMode="decimal"
+                            className="w-20 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-2 py-1 text-sm"
+                          />
+                        </label>
+                        <SelectorFinanciacion value={valorGuia} onChange={setValorGuia} heredado={null} />
+                      </div>
+                    )}
                     <button onClick={() => guardarCantidad(p)} className="text-xs text-accent dark:text-dark-accent underline">
                       {t('Guardar')}
                     </button>

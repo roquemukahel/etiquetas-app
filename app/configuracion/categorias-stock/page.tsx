@@ -22,6 +22,10 @@ import {
 import { Boton, BotonIcono } from '../../Boton';
 import { ICONOS } from '../../Iconos';
 import { useT } from '../../lib/idioma';
+import SelectorFinanciacion from '../../SelectorFinanciacion';
+import { soportaMigracion } from '../../lib/migraciones';
+import { guiaAFormulario, guiaDeFormulario } from '../../lib/financiacionGuia';
+import { falla } from '../../lib/escritura';
 
 export default function CategoriasStock() {
   const supabase = crearClienteNavegador();
@@ -43,13 +47,40 @@ export default function CategoriasStock() {
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [nombreEdit, setNombreEdit] = useState('');
   const [procesando, setProcesando] = useState<string | null>(null);
+  // Guía de financiación por categoría (financiacion_guia_cartera_supabase.sql): el valor por
+  // defecto de todos los productos de la categoría que no tengan uno propio.
+  const [conGuia, setConGuia] = useState(false);
+  const [guias, setGuias] = useState<Map<string, number | null>>(new Map());
 
   const cargar = async () => {
     setLoading(true);
     const [activasData, archivadasData] = await Promise.all([obtenerCategorias(supabase, false), obtenerCategorias(supabase, true)]);
     setCategorias(activasData);
     setArchivadas(archivadasData.filter((c) => c.archivada));
+    const soporta = await soportaMigracion(supabase, 'guiaFinanciacionCategorias');
+    setConGuia(soporta);
+    if (soporta) {
+      const { data, error: errorGuias } = await supabase.from('stock_categorias').select('id, financiacion_max_cuotas').limit(1000);
+      if (!errorGuias) setGuias(new Map(((data as { id: string; financiacion_max_cuotas: number | null }[]) ?? []).map((c) => [c.id, c.financiacion_max_cuotas])));
+    }
     setLoading(false);
+  };
+
+  const cambiarGuia = async (c: Categoria, valor: string) => {
+    const guia = guiaDeFormulario(valor);
+    const anterior = guias.get(c.id) ?? null;
+    setGuias((prev) => new Map(prev).set(c.id, guia)); // se ve al instante; si falla se revierte
+    if (await falla(supabase.from('stock_categorias').update({ financiacion_max_cuotas: guia }).eq('id', c.id), t, 'guardar la financiación de la categoría')) {
+      setGuias((prev) => new Map(prev).set(c.id, anterior));
+      return;
+    }
+    await registrarAuditoria(supabase, {
+      accion: `cambió la guía de financiación de la categoría "${c.nombre}" (${guia == null ? 'sin guía' : guia === 0 ? 'sin financiación' : `hasta ${guia} cuotas`})`,
+      entidad: 'stock_categoria',
+      entidadId: c.id,
+      valorAnterior: { financiacion_max_cuotas: anterior },
+      valorNuevo: { financiacion_max_cuotas: guia },
+    });
   };
 
   useEffect(() => {
@@ -223,6 +254,16 @@ export default function CategoriasStock() {
                   {c.perfil_default === 'dispositivo' ? t('Perfil dispositivo') : t('Perfil genérico')} · {c.modalidad_default === 'serializado' ? t('Individual') : t('Por cantidad')}
                   {!c.activa ? ` · ${t('Inactiva')}` : ''}
                 </p>
+                {conGuia && (
+                  <div className="mt-2 max-w-sm">
+                    <SelectorFinanciacion
+                      label={t('Financiación por defecto de la categoría')}
+                      value={guiaAFormulario(guias.get(c.id))}
+                      onChange={(v) => cambiarGuia(c, v)}
+                      etiquetaHereda={t('Sin guía definida')}
+                    />
+                  </div>
+                )}
               </div>
               <div className="flex items-center gap-1 shrink-0">
                 {editandoId === c.id ? (

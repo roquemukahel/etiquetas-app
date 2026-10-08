@@ -22,6 +22,8 @@ import { localeDe } from '../../lib/i18n/traducir';
 import { useSucursalActual } from '../../lib/sucursal';
 import { obtenerSucursales, type Sucursal } from '../../lib/sucursales';
 import { falla } from '../../lib/escritura';
+import SelectorLocalidad from '../../SelectorLocalidad';
+import { buscarClientesDuplicados, textoDuplicados } from '../../lib/clientesDuplicados';
 
 type Cliente = {
   id: string;
@@ -39,6 +41,8 @@ type Cliente = {
   suspendido: boolean | null;
   cta_cte_observaciones: string | null;
   portal_token: string | null;
+  // Solo viene si el negocio corrió financiacion_guia_cartera_supabase.sql.
+  sucursal_origen_id?: string | null;
 };
 
 type Orden = {
@@ -497,6 +501,15 @@ export default function DetalleCliente() {
     if (!c) return;
     setGuardando(true);
     setError(null);
+    // Aviso (no bloquea) si el DNI o teléfono ya lo tiene OTRO cliente.
+    const duplicados = await buscarClientesDuplicados(supabase, { dni: c.dni, telefono: c.telefono }, String(id));
+    if (duplicados.length > 0 && !confirm(`${t('Ya hay otro cliente con el mismo DNI o teléfono:')}
+${textoDuplicados(duplicados)}
+
+${t('¿Guardar igual?')}`)) {
+      setGuardando(false);
+      return;
+    }
     const { error: updateError } = await supabase
       .from('clientes')
       .update({
@@ -879,7 +892,12 @@ export default function DetalleCliente() {
             <Campo label={t('Apellido')} valor={c.apellido ?? ''} onChange={(v) => campo('apellido', v)} />
             <Campo label={t('Apodo (opcional)')} valor={c.apodo ?? ''} onChange={(v) => campo('apodo', v)} />
             <Campo label={t('Domicilio')} valor={c.domicilio ?? ''} onChange={(v) => campo('domicilio', v)} />
-            <Campo label={t('Localidad (opcional)')} valor={c.localidad ?? ''} onChange={(v) => campo('localidad', v)} />
+            <SelectorLocalidad label={t('Localidad / zona')} value={c.localidad ?? ''} onChange={(v) => campo('localidad', v)} />
+            {c.sucursal_origen_id && sucursales.length > 1 && (
+              <p className="text-xs text-muted dark:text-dark-text-secondary">
+                {t('Sucursal de origen')}: 🏬 {sucursales.find((s) => s.id === c.sucursal_origen_id)?.nombre ?? '—'}
+              </p>
+            )}
             <Campo label="Email" valor={c.email ?? ''} onChange={(v) => campo('email', v)} />
             <Campo label={t('Teléfono')} valor={c.telefono ?? ''} onChange={(v) => campo('telefono', v)} />
             <Campo label="DNI" valor={c.dni ?? ''} onChange={(v) => campo('dni', v)} />

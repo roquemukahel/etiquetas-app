@@ -22,6 +22,8 @@ import { ICONOS } from '../Iconos';
 import { QoviState } from '../QoviState';
 import Modal from '../Modal';
 import { useT, useIdioma } from '../lib/idioma';
+import FiltroLocalidad from '../FiltroLocalidad';
+import { opcionesLocalidad, coincideLocalidad } from '../lib/localidades';
 import { localeDe } from '../lib/i18n/traducir';
 import { useSucursalActual } from '../lib/sucursal';
 import { obtenerSucursales, type Sucursal } from '../lib/sucursales';
@@ -248,6 +250,9 @@ export default function Ordenes() {
   const [cuotasFinanciamiento, setCuotasFinanciamiento] = useState<CuotaFinanciamiento[]>([]);
   const [saldosCtaCte, setSaldosCtaCte] = useState<SaldoCtaCte[]>([]);
   const [nombresClientesFinanciamiento, setNombresClientesFinanciamiento] = useState<Map<string, string>>(new Map());
+  // Localidad/zona de cada cliente de la cartera, para filtrar y armar recorridos de cobranza.
+  const [localidadesClientesFin, setLocalidadesClientesFin] = useState<Map<string, string | null>>(new Map());
+  const [filtroLocalidadCartera, setFiltroLocalidadCartera] = useState('');
   // Moneda de respaldo para un cliente con fiado simple (sin ningún plan de
   // cuotas propio que indique en qué moneda es su saldo) — la del negocio.
   const [monedaNegocio, setMonedaNegocio] = useState('ARS');
@@ -436,7 +441,7 @@ export default function Ordenes() {
       const lotes: string[][] = [];
       for (let i = 0; i < idsClientes.length; i += 100) lotes.push(idsClientes.slice(i, i + 100));
       const [clientesLotes, movsLotes] = await Promise.all([
-        Promise.all(lotes.map((ids) => supabase.from('clientes').select('id, nombre, apellido').in('id', ids))),
+        Promise.all(lotes.map((ids) => supabase.from('clientes').select('id, nombre, apellido, localidad').in('id', ids))),
         Promise.all(
           lotes.map((ids) =>
             obtenerTodasLasFilas<{ cliente_id: string; tipo: string; concepto: string; monto: number; vencimiento: string | null; fecha: string; sucursal_id: string | null }>(
@@ -449,9 +454,10 @@ export default function Ordenes() {
           )
         ),
       ]);
-      const clientesData = clientesLotes.flatMap((r) => ((r.data ?? []) as { id: string; nombre: string; apellido: string | null }[]));
+      const clientesData = clientesLotes.flatMap((r) => ((r.data ?? []) as { id: string; nombre: string; apellido: string | null; localidad: string | null }[]));
       const movsData = movsLotes.flat();
       setNombresClientesFinanciamiento(new Map(clientesData.map((c) => [c.id, `${c.nombre} ${c.apellido || ''}`.trim()])));
+      setLocalidadesClientesFin(new Map(clientesData.map((c) => [c.id, c.localidad])));
 
       // Fecha LOCAL (no toISOString, que es UTC): pasadas las 21 h en
       // Argentina ya da el día siguiente y marcaba cargos como vencidos un día antes.
@@ -698,6 +704,7 @@ export default function Ordenes() {
         return {
           clienteId: s.clienteId,
           clienteNombre: nombresClientesFinanciamiento.get(s.clienteId) ?? t('Cliente'),
+          localidad: localidadesClientesFin.get(s.clienteId) ?? null,
           moneda: info?.moneda ?? monedaNegocio,
           saldo: s.saldo,
           proximoVencimiento: info?.proximoVencimiento ?? null,
@@ -712,7 +719,13 @@ export default function Ordenes() {
         };
       })
       .sort((a, b) => (a.proximoVencimiento ?? '9999-99-99').localeCompare(b.proximoVencimiento ?? '9999-99-99'));
-  }, [planesFinanciamiento, cuotasFinanciamiento, saldosCtaCte, nombresClientesFinanciamiento, monedaNegocio, carteraExtra, t]);
+  }, [planesFinanciamiento, cuotasFinanciamiento, saldosCtaCte, nombresClientesFinanciamiento, localidadesClientesFin, monedaNegocio, carteraExtra, t]);
+
+  const localidadesCartera = useMemo(() => opcionesLocalidad(resumenFinanciamiento.map((r) => r.localidad)), [resumenFinanciamiento]);
+  const resumenFinanciamientoVisible = useMemo(
+    () => (filtroLocalidadCartera ? resumenFinanciamiento.filter((r) => coincideLocalidad(r.localidad, filtroLocalidadCartera)) : resumenFinanciamiento),
+    [resumenFinanciamiento, filtroLocalidadCartera]
+  );
 
   // Cajeros que realmente aparecen en lo cargado — no tiene sentido ofrecer
   // en el filtro a alguien que nunca cobró nada en la ventana visible.
@@ -1254,6 +1267,9 @@ export default function Ordenes() {
                 {v === 'movimientos' ? t('Movimientos') : t('Cartera')}
               </button>
             ))}
+            <Link href="/creditos-fuera-de-guia" className="ml-auto rounded-full border border-border dark:border-dark-border px-3 py-1.5 text-xs font-medium">
+              🚩 {t('Créditos fuera de la guía')}
+            </Link>
           </div>
 
           {vistaFinanciamiento === 'movimientos' && (
@@ -1425,19 +1441,25 @@ export default function Ordenes() {
           {cargandoFinanciamiento && (
             <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{t('Cargando...')}</p>
           )}
-          {!cargandoFinanciamiento && resumenFinanciamiento.length === 0 && (
+          <div className="mb-2">
+            <FiltroLocalidad opciones={localidadesCartera} value={filtroLocalidadCartera} onChange={setFiltroLocalidadCartera} />
+          </div>
+          {!cargandoFinanciamiento && resumenFinanciamientoVisible.length === 0 && (
             <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">
               {t('No hay clientes que deban plata en cuenta corriente.')}
             </p>
           )}
           <div className="flex flex-col gap-2">
-            {resumenFinanciamiento.map((r) => (
+            {resumenFinanciamientoVisible.map((r) => (
               <div
                 key={r.clienteId}
                 className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex items-center justify-between gap-3"
               >
                 <div className="min-w-0">
-                  <p className="text-sm font-medium truncate">{r.clienteNombre}</p>
+                  <p className="text-sm font-medium truncate">
+                    {r.clienteNombre}
+                    {r.localidad ? <span className="text-xs font-normal text-muted dark:text-dark-text-secondary"> · 📍 {r.localidad}</span> : null}
+                  </p>
                   <p className="text-xs text-muted dark:text-dark-text-secondary truncate">
                     {t('Saldo')}: {simboloMoneda(r.moneda)}
                     {formatearMonto(r.saldo)}

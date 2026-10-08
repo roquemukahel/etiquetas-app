@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { crearClienteNavegador } from '../lib/supabase/client';
 import { useActor } from '../lib/actor';
 import { tienePermiso } from '../lib/permisos';
-import { obtenerTodasLasFilas } from '../lib/db';
+import { obtenerTodasLasFilas, porLotes } from '../lib/db';
 import { obtenerCategorias, type Categoria } from '../lib/categorias';
 import { obtenerSucursales, type Sucursal } from '../lib/sucursales';
 import { obtenerProductosMaestro, actualizarProductoMaestro, crearProductoMaestro, type ProductoMaestro } from '../lib/productosMaestro';
@@ -17,6 +17,11 @@ import { useT } from '../lib/idioma';
 import { marcaDeModelo } from '../lib/catalogosMarcas';
 import Modal from '../Modal';
 import HistorialProducto from './HistorialProducto';
+import EtiquetaFinanciacion from '../EtiquetaFinanciacion';
+import SelectorFinanciacion from '../SelectorFinanciacion';
+import { soportaMigracion } from '../lib/migraciones';
+import { resolverMaxCuotas, guiaDeFormulario, guiaAFormulario, type MaxCuotas } from '../lib/financiacionGuia';
+import { falla } from '../lib/escritura';
 
 type ProductoFila = {
   id: string;
@@ -37,6 +42,9 @@ type DispositivoFila = {
   precio: number | null;
   sucursal_id: string | null;
   imei: string | null;
+  // Solo vienen si el negocio corrió financiacion_guia_cartera_supabase.sql.
+  financiacion_max_cuotas?: number | null;
+  precio_lista?: number | null;
 };
 
 type FilaGrid = {
@@ -57,6 +65,11 @@ type FilaGrid = {
   // con eso se arma el historial. Vacío para celulares (no tienen catálogo).
   productoIds: string[];
   maestroId: string | null;
+  // Guía de financiación ya resuelta (producto → categoría) y precio de lista.
+  guia: MaxCuotas;
+  precioLista: number | null;
+  // Equipos (celulares) del grupo, para editar su guía en bloque.
+  dispositivoIds: string[];
 };
 
 export default function Productos() {
@@ -93,6 +106,18 @@ export default function Productos() {
   const [guardandoEdicion, setGuardandoEdicion] = useState(false);
   const [errorEdicion, setErrorEdicion] = useState<string | null>(null);
   const [historialDe, setHistorialDe] = useState<FilaGrid | null>(null);
+
+  // Guía de financiación y precio de lista (financiacion_guia_cartera_supabase.sql).
+  const [conGuia, setConGuia] = useState(false);
+  const [extraMaestros, setExtraMaestros] = useState<Map<string, { max: number | null; lista: number | null }>>(new Map());
+  const [guiaCategorias, setGuiaCategorias] = useState<Map<string, number | null>>(new Map());
+  const [formPrecioLista, setFormPrecioLista] = useState('');
+  const [formGuia, setFormGuia] = useState('');
+  // Edición masiva de la guía.
+  const [modoMasivo, setModoMasivo] = useState(false);
+  const [seleccion, setSeleccion] = useState<Set<string>>(new Set());
+  const [guiaMasiva, setGuiaMasiva] = useState('6');
+  const [aplicandoMasivo, setAplicandoMasivo] = useState(false);
   const [exportando, setExportando] = useState(false);
   const [importando, setImportando] = useState(false);
   const [progresoImport, setProgresoImport] = useState<{ hechas: number; total: number } | null>(null);
@@ -101,6 +126,8 @@ export default function Productos() {
 
   useEffect(() => {
     (async () => {
+      const soporta = await soportaMigracion(supabase, 'guiaFinanciacionMaestro');
+      setConGuia(soporta);
       const [filas, dispositivosData, maestrosData, categoriasData] = await Promise.all([
         obtenerTodasLasFilas<ProductoFila>(
           supabase,
@@ -112,7 +139,7 @@ export default function Productos() {
         // perspectiva de esta vista, aunque vivan en una tabla distinta a
         // los accesorios. Solo los que siguen en stock — vendidos no cuentan
         // como stock disponible en ninguna sucursal.
-        obtenerTodasLasFilas<DispositivoFila>(supabase, 'dispositivos', 'id, modelo, categoria_id, precio, sucursal_id, imei', [], (q) =>
+        obtenerTodasLasFilas<DispositivoFila>(supabase, 'dispositivos', 'id, modelo, categoria_id, precio, sucursal_id, imei' + (soporta ? ', financiacion_max_cuotas, precio_lista' : ''), [], (q) =>
           q.eq('en_stock', true)
         ),
         obtenerProductosMaestro(supabase, false),
@@ -122,6 +149,20 @@ export default function Productos() {
       setDispositivos(dispositivosData);
       setMaestros(maestrosData);
       setCategorias(categoriasData);
+      if (soporta) {
+        const [mx, cx] = await Promise.all([
+          obtenerTodasLasFilas<{ id: string; financiacion_max_cuotas: number | null; precio_lista: number | null }>(
+            supabase,
+            'productos_maestro',
+            'id, financiacion_max_cuotas, precio_lista'
+          ),
+          supabase.from('stock_categorias').select('id, financiacion_max_cuotas').limit(1000),
+        ]);
+        setExtraMaestros(new Map(mx.map((m) => [m.id, { max: m.financiacion_max_cuotas, lista: m.precio_lista }])));
+        setGuiaCategorias(
+          new Map(((cx.data as { id: string; financiacion_max_cuotas: number | null }[]) ?? []).map((c) => [c.id, c.financiacion_max_cuotas]))
+        );
+      }
       try {
         setSucursales(await obtenerSucursales(supabase, false));
       } catch {
@@ -143,6 +184,9 @@ export default function Productos() {
     setFormCodigoBarras(maestro.codigo_barras ?? '');
     setFormGarantiaDias(maestro.garantia_dias != null ? String(maestro.garantia_dias) : '');
     setFormStockMinimo(maestro.stock_minimo != null ? String(maestro.stock_minimo) : '');
+    const extra = extraMaestros.get(maestro.id);
+    setFormPrecioLista(extra?.lista != null ? String(extra.lista) : '');
+    setFormGuia(guiaAFormulario(extra?.max));
     setFormCantidades(
       Object.fromEntries(productos.filter((p) => p.producto_maestro_id === maestro.id).map((p) => [p.id, String(p.cantidad)]))
     );
@@ -189,6 +233,21 @@ export default function Productos() {
       setErrorEdicion(t('No pudimos guardar el precio/costo:') + ' ' + precioError.message);
       setGuardandoEdicion(false);
       return;
+    }
+
+    // Guía de financiación y precio de lista (si el negocio activó la función):
+    // se guardan en el maestro y en cada fila de `productos` (la que lee Nueva Orden).
+    if (conGuia) {
+      const lista = formPrecioLista ? Number(formPrecioLista) : null;
+      const guia = guiaDeFormulario(formGuia);
+      if (
+        (await falla(supabase.from('productos_maestro').update({ precio_lista: lista, financiacion_max_cuotas: guia }).eq('id', editando.id), t, 'guardar precio de lista y financiación')) ||
+        (await falla(supabase.from('productos').update({ precio_lista: lista, financiacion_max_cuotas: guia }).eq('producto_maestro_id', editando.id), t, 'guardar precio de lista y financiación'))
+      ) {
+        setGuardandoEdicion(false);
+        return;
+      }
+      setExtraMaestros((prev) => new Map(prev).set(editando.id, { max: guia, lista }));
     }
 
     // Cantidad: por fila de `productos` (una por sucursal), no por maestro —
@@ -306,6 +365,44 @@ export default function Productos() {
     if (errorCantidad) alert('⚠️ ' + errorCantidad);
   };
 
+  // Guía de financiación en bloque: a los accesorios elegidos (catálogo + sus filas por
+  // sucursal) y a los equipos de los modelos elegidos.
+  const aplicarGuiaMasiva = async () => {
+    const guia = guiaDeFormulario(guiaMasiva);
+    const elegidas = filas.filter((f) => seleccion.has(f.clave));
+    if (elegidas.length === 0) return;
+    setAplicandoMasivo(true);
+    const idsMaestro = elegidas.map((f) => f.maestroId).filter((x): x is string => !!x);
+    const idsEquipos = elegidas.flatMap((f) => f.dispositivoIds);
+    const idsProductosSueltos = elegidas.filter((f) => !f.maestroId && f.productoIds.length > 0).flatMap((f) => f.productoIds);
+    const resultados = await Promise.all([
+      idsMaestro.length > 0 ? porLotes(idsMaestro, (lote) => supabase.from('productos_maestro').update({ financiacion_max_cuotas: guia }).in('id', lote)) : { error: null },
+      idsMaestro.length > 0 ? porLotes(idsMaestro, (lote) => supabase.from('productos').update({ financiacion_max_cuotas: guia }).in('producto_maestro_id', lote)) : { error: null },
+      idsProductosSueltos.length > 0 ? porLotes(idsProductosSueltos, (lote) => supabase.from('productos').update({ financiacion_max_cuotas: guia }).in('id', lote)) : { error: null },
+      idsEquipos.length > 0 ? porLotes(idsEquipos, (lote) => supabase.from('dispositivos').update({ financiacion_max_cuotas: guia }).in('id', lote)) : { error: null },
+    ]);
+    const fallo = resultados.find((r) => r.error);
+    if (fallo?.error) {
+      alert(`${t('No se pudo guardar el cambio. No se modificó nada.')}\n${fallo.error.message}`);
+      setAplicandoMasivo(false);
+      return;
+    }
+    await registrarAuditoria(supabase, {
+      accion: `cambió la guía de financiación de ${elegidas.length} productos (${guia == null ? 'según la categoría' : guia === 0 ? 'sin financiación' : `hasta ${guia} cuotas`})`,
+      entidad: 'producto',
+      valorNuevo: { financiacion_max_cuotas: guia, productos: elegidas.slice(0, 30).map((f) => f.nombre) },
+    });
+    setExtraMaestros((prev) => {
+      const n = new Map(prev);
+      for (const id of idsMaestro) n.set(id, { max: guia, lista: prev.get(id)?.lista ?? null });
+      return n;
+    });
+    const setEquipos = new Set(idsEquipos);
+    setDispositivos((prev) => prev.map((d) => (setEquipos.has(d.id) ? { ...d, financiacion_max_cuotas: guia } : d)));
+    setSeleccion(new Set());
+    setAplicandoMasivo(false);
+  };
+
   const nombreCategoria = useMemo(() => {
     const mapa = new Map<string, string>();
     for (const c of categorias) mapa.set(c.id, c.nombre);
@@ -353,18 +450,21 @@ export default function Productos() {
     // "Final" solo muestra un número cuando TODAS las unidades del grupo
     // comparten exactamente el mismo precio — mostrar cualquier otro
     // inventaría un precio único donde no lo hay.
-    type GrupoDisp = { nombre: string; marca: string; categoriaId: string | null; stockTotal: number; stockSucursal: number; precios: Set<number>; imeis: string[] };
+    type GrupoDisp = { nombre: string; marca: string; categoriaId: string | null; stockTotal: number; stockSucursal: number; precios: Set<number>; imeis: string[]; guias: number[]; listas: Set<number>; ids: string[] };
     const porClaveDisp = new Map<string, GrupoDisp>();
     for (const d of dispositivos) {
       const modelo = d.modelo || 'Sin modelo';
       const clave = `disp:${normalizar(modelo)}`;
       const actual =
         porClaveDisp.get(clave) ??
-        ({ nombre: modelo, marca: marcaDeModelo(d.modelo), categoriaId: d.categoria_id, stockTotal: 0, stockSucursal: 0, precios: new Set<number>(), imeis: [] } as GrupoDisp);
+        ({ nombre: modelo, marca: marcaDeModelo(d.modelo), categoriaId: d.categoria_id, stockTotal: 0, stockSucursal: 0, precios: new Set<number>(), imeis: [], guias: [], listas: new Set<number>(), ids: [] } as GrupoDisp);
       actual.stockTotal += 1;
       if (sucursalActual.id && d.sucursal_id === sucursalActual.id) actual.stockSucursal += 1;
       if (d.precio != null) actual.precios.add(d.precio);
       if (d.imei) actual.imeis.push(d.imei);
+      if (d.financiacion_max_cuotas != null) actual.guias.push(d.financiacion_max_cuotas);
+      if (d.precio_lista != null) actual.listas.add(d.precio_lista);
+      actual.ids.push(d.id);
       porClaveDisp.set(clave, actual);
     }
 
@@ -383,6 +483,9 @@ export default function Productos() {
         imeis: [],
         productoIds: info.productoIds,
         maestroId: info.maestro?.id ?? null,
+        guia: resolverMaxCuotas(info.maestro ? extraMaestros.get(info.maestro.id)?.max : null, info.categoriaId ? guiaCategorias.get(info.categoriaId) : null),
+        precioLista: info.maestro ? extraMaestros.get(info.maestro.id)?.lista ?? null : null,
+        dispositivoIds: [],
       });
     }
     for (const [clave, info] of porClaveDisp) {
@@ -399,12 +502,16 @@ export default function Productos() {
         imeis: info.imeis,
         productoIds: [],
         maestroId: null,
+        // Con equipos que tienen guía propia distinta, manda la más baja (la más prudente).
+        guia: resolverMaxCuotas(info.guias.length > 0 ? Math.min(...info.guias) : null, info.categoriaId ? guiaCategorias.get(info.categoriaId) : null),
+        precioLista: info.listas.size === 1 ? [...info.listas][0] : null,
+        dispositivoIds: info.ids,
       });
     }
     resultado.sort((a, b) => a.nombre.localeCompare(b.nombre));
     return resultado;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [productos, dispositivos, maestros, nombreCategoria, sucursalActual.id]);
+  }, [productos, dispositivos, maestros, nombreCategoria, sucursalActual.id, extraMaestros, guiaCategorias]);
 
   const filasFiltradas = useMemo(() => {
     // Por PALABRAS, no por una sola frase exacta — bug real reportado por
@@ -733,6 +840,17 @@ export default function Productos() {
             />
           </label>
         )}
+        {conGuia && puedeAgregarStock && (
+          <button
+            onClick={() => {
+              setModoMasivo((v) => !v);
+              setSeleccion(new Set());
+            }}
+            className="shrink-0 rounded-lg border border-border dark:border-dark-border px-3 py-2 text-sm font-medium"
+          >
+            💳 {modoMasivo ? t('Terminar edición de financiación') : t('Editar financiación en bloque')}
+          </button>
+        )}
         <button
           onClick={() => exportarCatalogo('csv')}
           disabled={filas.length === 0 || exportando}
@@ -762,6 +880,7 @@ export default function Productos() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-surface dark:bg-dark-surface text-left text-xs uppercase text-muted dark:text-dark-text-secondary">
+                {modoMasivo && <th className="px-3 py-2 w-8" />}
                 <th className="px-3 py-2 font-medium">{t('Categoría')}</th>
                 <th className="px-3 py-2 font-medium">{t('Marca')}</th>
                 <th className="px-3 py-2 font-medium">{t('Producto')}</th>
@@ -780,14 +899,45 @@ export default function Productos() {
             <tbody>
               {filasFiltradas.map((f) => (
                 <tr key={f.clave} className="border-t border-border dark:border-dark-border">
+                  {modoMasivo && (
+                    <td className="px-3 py-2">
+                      <input
+                        type="checkbox"
+                        checked={seleccion.has(f.clave)}
+                        onChange={() =>
+                          setSeleccion((prev) => {
+                            const n = new Set(prev);
+                            if (n.has(f.clave)) n.delete(f.clave);
+                            else n.add(f.clave);
+                            return n;
+                          })
+                        }
+                        aria-label={`${t('Seleccionar')} ${f.nombre}`}
+                      />
+                    </td>
+                  )}
                   <td className="px-3 py-2 text-muted dark:text-dark-text-secondary">{f.categoria || '—'}</td>
                   <td className="px-3 py-2">{f.marca || '—'}</td>
-                  <td className="px-3 py-2 font-medium">{f.nombre}</td>
+                  <td className="px-3 py-2 font-medium">
+                    {f.nombre}
+                    {conGuia && f.guia != null && (
+                      <div className="mt-0.5">
+                        <EtiquetaFinanciacion max={f.guia} />
+                      </div>
+                    )}
+                  </td>
                   <td className="px-3 py-2 text-right tabular-nums">{f.stockTotal}</td>
                   {sucursales.length > 1 && (
                     <td className="px-3 py-2 text-right tabular-nums">{sucursalActual.id ? f.stockSucursal : f.stockTotal}</td>
                   )}
-                  <td className="px-3 py-2 text-right tabular-nums">{f.final != null ? `$${f.final.toLocaleString()}` : '—'}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    {f.final != null ? `$${f.final.toLocaleString()}` : '—'}
+                    {conGuia && f.precioLista != null && (
+                      <div className="text-[11px] text-muted dark:text-dark-text-secondary">
+                        {t('Lista')} ${f.precioLista.toLocaleString()}
+                      </div>
+                    )}
+                  </td>
                   {puedeAgregarStock && (
                     <td className="px-3 py-2 text-right">
                       {f.productoIds.length > 0 ? (
@@ -825,6 +975,21 @@ export default function Productos() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {modoMasivo && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-border dark:border-dark-border bg-white dark:bg-dark-surface px-4 py-3 shadow-lg flex flex-col gap-2 sm:flex-row sm:items-end">
+          <div className="flex-1">
+            <SelectorFinanciacion label={`${t('Financiación para los')} ${seleccion.size} ${t('productos elegidos')}`} value={guiaMasiva} onChange={setGuiaMasiva} conHerencia />
+          </div>
+          <button
+            disabled={seleccion.size === 0 || aplicandoMasivo}
+            onClick={aplicarGuiaMasiva}
+            className="rounded-lg bg-accent dark:bg-dark-accent text-white px-4 py-2 text-sm font-medium disabled:opacity-40"
+          >
+            {aplicandoMasivo ? t('Aplicando...') : t('Aplicar')}
+          </button>
         </div>
       )}
 
@@ -889,7 +1054,7 @@ export default function Productos() {
                 />
               </div>
               <div>
-                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Final')}</label>
+                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{conGuia ? t('Final (precio exclusivo)') : t('Final')}</label>
                 <input
                   value={formPrecio}
                   onChange={(e) => setFormPrecio(sanitizarDecimal(e.target.value))}
@@ -897,6 +1062,30 @@ export default function Productos() {
                   className="w-full bg-white dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                 />
               </div>
+              {conGuia && (
+                <>
+                  <div>
+                    <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Precio de lista (financiación)')}</label>
+                    <input
+                      value={formPrecioLista}
+                      onChange={(e) => setFormPrecioLista(sanitizarDecimal(e.target.value))}
+                      inputMode="decimal"
+                      className="w-full bg-white dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <SelectorFinanciacion
+                      label={t('Financiación')}
+                      value={formGuia}
+                      onChange={setFormGuia}
+                      heredado={formCategoriaId ? guiaCategorias.get(formCategoriaId) ?? null : null}
+                    />
+                    <p className="text-[11px] text-muted dark:text-dark-text-secondary mt-1">
+                      {t('El precio exclusivo es para contado, transferencia y débito. El de lista es el que usa Financiamiento. Si no cargás el de lista, se usa el exclusivo.')}
+                    </p>
+                  </div>
+                </>
+              )}
               <div>
                 <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">SKU</label>
                 <input

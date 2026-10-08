@@ -6,11 +6,16 @@ import { useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { getActor } from '../../lib/actor';
 import { useT } from '../../lib/idioma';
+import { useSucursalActual } from '../../lib/sucursal';
+import SelectorLocalidad from '../../SelectorLocalidad';
+import { buscarClientesDuplicados, textoDuplicados } from '../../lib/clientesDuplicados';
+import { soportaMigracion } from '../../lib/migraciones';
 
 export default function NuevoCliente() {
   const router = useRouter();
   const supabase = crearClienteNavegador();
   const t = useT();
+  const sucursalActual = useSucursalActual();
 
   const [nombre, setNombre] = useState('');
   const [apellido, setApellido] = useState('');
@@ -30,6 +35,17 @@ export default function NuevoCliente() {
     setGuardando(true);
     setError(null);
 
+    // Aviso (no bloquea) si ya hay un cliente con el mismo DNI o teléfono.
+    const duplicados = await buscarClientesDuplicados(supabase, { dni, telefono });
+    if (duplicados.length > 0 && !confirm(`${t('Ya hay un cliente con el mismo DNI o teléfono:')}
+${textoDuplicados(duplicados)}
+
+${t('¿Cargarlo igual?')}`)) {
+      setGuardando(false);
+      return;
+    }
+
+    const conOrigen = await soportaMigracion(supabase, 'clienteSucursalOrigen');
     const actor = getActor();
     const { error: insertError } = await supabase.from('clientes').insert({
       nombre: nombre.trim(),
@@ -40,6 +56,8 @@ export default function NuevoCliente() {
       email: email.trim() || null,
       telefono: telefono.trim() || null,
       dni: dni.trim() || null,
+      // Sucursal que lo dio de alta (se completa sola). La cartera sigue siendo única.
+      ...(sucursalActual.id && conOrigen ? { sucursal_origen_id: sucursalActual.id } : {}),
       agregado_por_nombre: actor?.nombre ?? null,
       agregado_por_foto_url: actor?.fotoUrl ?? null,
     });
@@ -70,7 +88,7 @@ export default function NuevoCliente() {
         <Campo label={t('Apellido')} valor={apellido} onChange={setApellido} />
         <Campo label={t('Apodo (opcional)')} valor={apodo} onChange={setApodo} />
         <Campo label={t('Domicilio')} valor={domicilio} onChange={setDomicilio} />
-        <Campo label={t('Localidad (opcional)')} valor={localidad} onChange={setLocalidad} />
+        <SelectorLocalidad label={t('Localidad / zona')} value={localidad} onChange={setLocalidad} />
         <Campo label={t('Email')} valor={email} onChange={setEmail} />
         <Campo label={t('Teléfono')} valor={telefono} onChange={setTelefono} />
         <Campo label={t('DNI')} valor={dni} onChange={setDni} />
