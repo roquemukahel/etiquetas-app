@@ -648,6 +648,40 @@ const GALAXY_NOTE_9: ModeloColores = {
   ],
 };
 
+// Samsung Galaxy Z Flip 5 — colores oficiales: Mint, Graphite, Cream, Lavender
+// (más Gray, Blue, Green y Yellow exclusivos de Samsung.com). Fotos cargadas:
+// Mint y Graphite. La de Graphite venía en baja resolución y se amplió.
+const GALAXY_Z_FLIP_5: ModeloColores = {
+  carpeta: 'galaxy-z-flip-5',
+  colores: [
+    { nombre: 'Menta', archivo: 'menta', hex: '#cfe3d6' },
+    { nombre: 'Grafito', archivo: 'grafito', hex: '#4a4a4f' },
+  ],
+};
+
+// Samsung Galaxy Z Flip 7 — colores oficiales: Blue Shadow, Jet Black, Coral
+// Red y Mint (este último exclusivo de Samsung.com). Fotos cargadas: Blue
+// Shadow y Jet Black.
+const GALAXY_Z_FLIP_7: ModeloColores = {
+  carpeta: 'galaxy-z-flip-7',
+  colores: [
+    { nombre: 'Azul sombra', archivo: 'azul-sombra', hex: '#2c3e8c' },
+    { nombre: 'Negro azabache', archivo: 'negro-azabache', hex: '#232326' },
+  ],
+};
+
+// Samsung Galaxy Z Flip 8 — colores oficiales: Graphite, Cream y Pink (más
+// Mint exclusivo de Samsung.com). Fotos cargadas: Cream y Graphite. De las 3
+// fotos de la carpeta se descartó 1 negra que no era un Flip 8 (otra
+// generación, sin el diseño de cámaras ni la pantalla del Flip 8).
+const GALAXY_Z_FLIP_8: ModeloColores = {
+  carpeta: 'galaxy-z-flip-8',
+  colores: [
+    { nombre: 'Crema', archivo: 'crema', hex: '#f1ece2' },
+    { nombre: 'Grafito', archivo: 'grafito', hex: '#4b4d57' },
+  ],
+};
+
 // Samsung Galaxy A72 — colores oficiales: Awesome Black, Awesome Violet,
 // Awesome White, Awesome Blue.
 const GALAXY_A72: ModeloColores = {
@@ -1084,6 +1118,9 @@ const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   'galaxys23+': GALAXY_S23,
   galaxys23ultra: GALAXY_S23_ULTRA,
   galaxynote9: GALAXY_NOTE_9,
+  galaxyzflip5: GALAXY_Z_FLIP_5,
+  galaxyzflip7: GALAXY_Z_FLIP_7,
+  galaxyzflip8: GALAXY_Z_FLIP_8,
   galaxya72: GALAXY_A72,
   galaxya33: GALAXY_A33,
   galaxynote20: GALAXY_NOTE_20,

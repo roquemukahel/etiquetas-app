@@ -129,6 +129,7 @@ export const CATALOGO_MODELOS: Record<string, string[]> = {
     'Galaxy S26',
     'Galaxy S26+',
     'Galaxy S26 Ultra',
+    'Galaxy Z Flip 8',
   ],
   xiaomi: [
     'Redmi 9',
