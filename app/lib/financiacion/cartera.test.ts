@@ -81,6 +81,12 @@ describe('regla de recupero: lo cobrado recupera primero el costo', () => {
     const sinCosto = calcularPlan(plan(), cuotas([0]), [pago(300, '2026-08-01T15:05:00.000Z')], info({ costo: 0 }));
     expect(sinCosto.estado).toBe('sin_costo');
     expect(sinCosto.costoConocido).toBe(false);
+    // lo cobrado no se convierte en "ganancia" ni en "capital recuperado": no se sabe el costo
+    expect(sinCosto.cobrado).toBe(300);
+    expect(sinCosto.gananciaCobrada).toBe(0);
+    expect(sinCosto.capitalRecuperado).toBe(0);
+    expect(sinCosto.gananciaPendiente).toBe(0);
+    expect(sinCosto.eventos.every((e) => e.ganancia === 0 && e.capital === 0)).toBe(true);
   });
 
   it('cuándo se recupera el costo y cuántos días tardó', () => {

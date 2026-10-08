@@ -78,21 +78,24 @@ export function calcularPlan(plan: PlanIn, cuotas: CuotaIn[], pagos: PagoIn[], i
     ...pagos.filter((p) => p.monto > EPS).map((p) => ({ fecha: p.fecha, monto: p.monto })),
   ].sort((a, b) => a.fecha.localeCompare(b.fecha));
 
+  // Sin costo cargado NO se sabe qué parte de lo cobrado es capital y cuál ganancia: no se inventa
+  // ganancia (sería todo lo cobrado). Esos créditos suman a "cobrado" pero no al recupero.
+  const sinCosto = costo <= EPS;
   let acumulado = 0;
   let fechaRecuperoCosto: string | null = null;
   const eventos: EventoCobro[] = crudos.map((e) => {
-    const capital = Math.max(0, Math.min(e.monto, costo - acumulado));
+    const capital = sinCosto ? 0 : Math.max(0, Math.min(e.monto, costo - acumulado));
     acumulado += e.monto;
-    if (fechaRecuperoCosto == null && costo > EPS && acumulado >= costo - EPS) fechaRecuperoCosto = e.fecha;
-    return { fecha: e.fecha, monto: e.monto, capital, ganancia: e.monto - capital };
+    if (fechaRecuperoCosto == null && !sinCosto && acumulado >= costo - EPS) fechaRecuperoCosto = e.fecha;
+    return { fecha: e.fecha, monto: e.monto, capital, ganancia: sinCosto ? 0 : e.monto - capital };
   });
 
   const cobrado = acumulado;
   const ingresoEsperado = cobradoInicial + totalFinanciado;
-  const costoConocido = costo > EPS && info.costoCompleto;
-  const capitalRecuperado = Math.min(cobrado, costo);
-  const gananciaCobrada = Math.max(0, cobrado - costo);
-  const gananciaPendiente = Math.max(0, ingresoEsperado - costo) - gananciaCobrada;
+  const costoConocido = !sinCosto && info.costoCompleto;
+  const capitalRecuperado = sinCosto ? 0 : Math.min(cobrado, costo);
+  const gananciaCobrada = sinCosto ? 0 : Math.max(0, cobrado - costo);
+  const gananciaPendiente = sinCosto ? 0 : Math.max(0, ingresoEsperado - costo) - gananciaCobrada;
 
   let estado: EstadoCredito;
   if (plan.estado === 'anulado' || plan.estado === 'reprogramado') estado = 'cancelado';
