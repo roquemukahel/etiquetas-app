@@ -3079,6 +3079,7 @@ export const EN: Record<string, string> = {
   'Valor a costo de la mercadería transferida': 'Value at cost of the transferred goods',
   'ítem sin costo cargado (no suma)': 'item without a recorded cost (not included)',
   'ítems sin costo cargado (no suman)': 'items without a recorded cost (not included)',
+  'Hay ítems valuados al costo actual: este remito es anterior al registro del costo del momento.': 'Some items are valued at current cost: this transfer predates the recording of the cost at that time.',
   'No pudimos leer la foto de la factura.': 'We couldn\'t read the invoice photo.',
   'Poné el monto total de la compra.': 'Enter the total amount of the purchase.',
   'Compra de contado': 'Cash purchase',

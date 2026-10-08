@@ -3080,6 +3080,7 @@ export const PT: Record<string, string> = {
   'Valor a costo de la mercadería transferida': 'Valor a custo da mercadoria transferida',
   'ítem sin costo cargado (no suma)': 'item sem custo informado (não soma)',
   'ítems sin costo cargado (no suman)': 'itens sem custo informado (não somam)',
+  'Hay ítems valuados al costo actual: este remito es anterior al registro del costo del momento.': 'Há itens avaliados pelo custo atual: esta transferência é anterior ao registro do custo da época.',
   'No pudimos leer la foto de la factura.': 'Não conseguimos ler a foto da fatura.',
   'Poné el monto total de la compra.': 'Informe o valor total da compra.',
   'Compra de contado': 'Compra à vista',
