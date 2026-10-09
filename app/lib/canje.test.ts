@@ -42,3 +42,10 @@ describe('canjes que pueden ser el equipo que se carga a mano', () => {
     expect(r).toEqual({ porImei: [], porModelo: [] });
   });
 });
+
+describe('modelos escritos a mano', () => {
+  it('"iPhone 6 s Plus" y "iphone 6s plus" son el mismo modelo', () => {
+    const r = canjesCoincidentes([canje({ modelo: 'iPhone 6 s Plus', imei: null })], '', 'iphone 6s plus');
+    expect(r.porModelo).toHaveLength(1);
+  });
+});

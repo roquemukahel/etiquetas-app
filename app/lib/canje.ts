@@ -39,7 +39,9 @@ export function canjesCoincidentes(
   modelo: string
 ): { porImei: CanjeParaStock[]; porModelo: CanjeParaStock[] } {
   const imeiTipeado = limpiarImei(imei) ?? '';
-  const modeloNorm = modelo.trim() ? normalizarNombreModelo(modelo.trim()).toLowerCase() : '';
+  // Los modelos de un canje se escriben a mano ("iPhone 6 s Plus"): se comparan sin espacios ni mayúsculas.
+  const comparable = (m: string) => normalizarNombreModelo(m.trim()).toLowerCase().replace(/\s+/g, '');
+  const modeloNorm = modelo.trim() ? comparable(modelo) : '';
   const porImei: CanjeParaStock[] = [];
   const porModelo: CanjeParaStock[] = [];
   for (const c of pendientes) {
@@ -49,7 +51,7 @@ export function canjesCoincidentes(
       continue;
     }
     if (!modeloNorm || !c.modelo) continue;
-    if (normalizarNombreModelo(c.modelo).toLowerCase() !== modeloNorm) continue;
+    if (comparable(c.modelo) !== modeloNorm) continue;
     if (imeiTipeado && imeiCanje) continue; // los dos tienen IMEI y no coinciden: otro equipo
     porModelo.push(c);
   }
