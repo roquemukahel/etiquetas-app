@@ -7,7 +7,7 @@ import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../lib/carpetas'
 import { imagenColorDeModelo } from '../lib/coloresModelo';
 import { hexColorDe } from '../lib/coloresIphone';
 import { registrarAuditoria } from '../lib/auditoria';
-import { getActor, useActor } from '../lib/actor';
+import { getActor, useActor, MENSAJE_ACTOR_REQUERIDO } from '../lib/actor';
 import { tienePermiso } from '../lib/permisos';
 import { leerArchivoDatos, valorDe, descargarCSV, descargarDatos, insertarEnTandas } from '../lib/csv';
 import { obtenerTodasLasFilas, porLotes } from '../lib/db';
@@ -28,6 +28,8 @@ import { falla } from '../lib/escritura';
 import EtiquetaFinanciacion from '../EtiquetaFinanciacion';
 import SelectorFinanciacion from '../SelectorFinanciacion';
 import { soportaMigracion } from '../lib/migraciones';
+import { agregarCanjeAlStock, canjesPendientes, type CanjeParaStock } from '../lib/canje';
+import { limpiarImei } from '../lib/imei';
 import { resolverMaxCuotas, guiaDeFormulario, guiaAFormulario, type MaxCuotas } from '../lib/financiacionGuia';
 
 function IconoChico({ nombre, className = '' }: { nombre: string; className?: string }) {
@@ -267,6 +269,33 @@ export default function Stock() {
     omitidosDuplicado: number;
   } | null>(null);
   const inputImportRef = useRef<HTMLInputElement>(null);
+  // Equipos del archivo cuyo IMEI coincide con un canje que sigue esperando en Plan Canje: importarlos
+  // los duplicaría en el Stock.
+  const [canjesEnImport, setCanjesEnImport] = useState<CanjeParaStock[]>([]);
+  const [resolviendoCanjes, setResolviendoCanjes] = useState(false);
+  useEffect(() => {
+    if (!planImport) {
+      setCanjesEnImport([]);
+      return;
+    }
+    const imeis = new Set(planImport.filas.map((f) => limpiarImei(f.imei as string | null)).filter(Boolean) as string[]);
+    if (imeis.size === 0) {
+      setCanjesEnImport([]);
+      return;
+    }
+    let vivo = true;
+    canjesPendientes(supabase)
+      .then((pendientes) => {
+        if (vivo) setCanjesEnImport(pendientes.filter((c) => imeis.has(limpiarImei(c.imei) ?? '')));
+      })
+      .catch(() => {
+        // Sin Plan Canje legible, la importación sigue sin el aviso.
+      });
+    return () => {
+      vivo = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [planImport]);
   const [categoriaImportId, setCategoriaImportId] = useState('');
 
   const [menuAbierto, setMenuAbierto] = useState<'agregar' | 'mas' | null>(null);
@@ -596,6 +625,11 @@ export default function Stock() {
 
   const confirmarImportacion = async () => {
     if (!planImport || !puedeAgregarStock) return;
+    if (
+      canjesEnImport.length > 0 &&
+      !confirm(`${canjesEnImport.length} ${t('de los equipos del archivo están en Plan Canje. Si los importás quedan duplicados en el Stock. ¿Importar igual?')}`)
+    )
+      return;
     setImportando(true);
     setProgresoImport(null);
 
@@ -639,6 +673,41 @@ export default function Stock() {
     setPlanImport(null);
     setImportando(false);
     setProgresoImport(null);
+    cargarDispositivos();
+  };
+
+  // Saca del plan de importación las filas cuyo IMEI está en la lista.
+  const sacarDelPlanImport = (imeis: Set<string>) => {
+    setPlanImport((prev) => (prev ? { ...prev, filas: prev.filas.filter((f) => !imeis.has(limpiarImei(f.imei as string | null) ?? '')) } : prev));
+  };
+
+  const omitirCanjesDelImport = () => {
+    sacarDelPlanImport(new Set(canjesEnImport.map((c) => limpiarImei(c.imei) ?? '')));
+  };
+
+  // Atajo: en vez de importarlos de cero, los pasa al Stock desde Plan Canje y los saca del archivo.
+  const pasarCanjesDelImportAlStock = async () => {
+    const actor = getActor();
+    if (!actor) {
+      setResultadoImport(t(MENSAJE_ACTOR_REQUERIDO));
+      return;
+    }
+    setResolviendoCanjes(true);
+    const hechos = new Set<string>();
+    let falloMensaje: string | null = null;
+    for (const c of canjesEnImport) {
+      const r = await agregarCanjeAlStock(supabase, c, { sucursalId: sucursalActual.id, actor });
+      if (r.ok || r.yaAgregado) hechos.add(limpiarImei(c.imei) ?? '');
+      if (!r.ok && !r.yaAgregado) falloMensaje = r.mensaje;
+    }
+    sacarDelPlanImport(hechos);
+    setCanjesEnImport((prev) => prev.filter((c) => !hechos.has(limpiarImei(c.imei) ?? '')));
+    setResultadoImport(
+      falloMensaje
+        ? `${t('No pudimos agregar al stock:')} ${falloMensaje}`
+        : `${hechos.size} ${t('equipos pasaron al Stock desde Plan Canje y se sacaron de la importación.')}`
+    );
+    setResolviendoCanjes(false);
     cargarDispositivos();
   };
 
@@ -1812,6 +1881,42 @@ export default function Stock() {
                   </li>
                 )}
               </ul>
+              {canjesEnImport.length > 0 && (
+                <div role="alert" className="flex flex-col gap-2 rounded-lg bg-warn/10 border border-warn/40 px-3 py-2.5">
+                  <p className="text-xs font-semibold text-ink dark:text-dark-text">
+                    ⚠ {canjesEnImport.length} {t('de los equipos del archivo se encuentran en Plan Canje')}
+                  </p>
+                  <ul className="text-xs text-muted dark:text-dark-text-secondary flex flex-col gap-0.5">
+                    {canjesEnImport.slice(0, 8).map((c) => (
+                      <li key={c.id}>
+                        {c.modelo || t('Sin modelo')} · IMEI {c.imei}
+                      </li>
+                    ))}
+                    {canjesEnImport.length > 8 && <li>+ {canjesEnImport.length - 8} {t('más en Plan Canje')}</li>}
+                  </ul>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={pasarCanjesDelImportAlStock}
+                      disabled={resolviendoCanjes || importando}
+                      className="rounded-full bg-accent dark:bg-dark-accent px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+                    >
+                      {resolviendoCanjes ? t('Agregando...') : t('Agregar desde Plan Canje')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={omitirCanjesDelImport}
+                      disabled={resolviendoCanjes || importando}
+                      className="rounded-full border border-border dark:border-dark-border px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+                    >
+                      {t('No importar estos')}
+                    </button>
+                    <Link href="/canje" className="self-center text-xs text-accent dark:text-dark-accent underline">
+                      {t('Ver Plan Canje')}
+                    </Link>
+                  </div>
+                </div>
+              )}
               {categoriasStock.filter((c) => c.perfil_default === 'dispositivo').length > 1 && (
                 <div>
                   <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">

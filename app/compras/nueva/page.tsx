@@ -13,6 +13,8 @@ import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
 import { useT } from '../../lib/idioma';
 import { useSucursalActual } from '../../lib/sucursal';
 import { origenDeCliente } from '../../lib/clientesDuplicados';
+import AvisoCanje from '../../AvisoCanje';
+import { useCoincidenciasCanje } from '../../lib/useCoincidenciasCanje';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 
@@ -83,6 +85,8 @@ export default function NuevaCompra() {
   };
 
   const puedeConfirmar = modelo.trim().length > 0;
+  // Si el equipo que se compra ya está esperando en Plan Canje, se avisa (no se pasa al Stock desde acá).
+  const coincidenciasCanje = useCoincidenciasCanje(supabase, imei, modelo);
 
   const handleConfirmar = async () => {
     if (!puedeConfirmar) return;
@@ -257,6 +261,14 @@ export default function NuevaCompra() {
         <SelectorEstadoDispositivo value={condicion} onChange={setCondicion} />
 
         <Campo label={t('IMEI')} valor={imei} onChange={setImei} placeholder={t('IMEI')} />
+        <AvisoCanje
+          supabase={supabase}
+          porImei={coincidenciasCanje.porImei}
+          porModelo={coincidenciasCanje.porModelo}
+          sucursalId={sucursalActual.id}
+          onAgregado={() => {}}
+          soloAviso
+        />
 
         <div>
           <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Detalles (opcional)')}</label>

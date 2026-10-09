@@ -14,6 +14,8 @@ import SelectorColorAuto from '../../SelectorColorAuto';
 import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
 import { useT } from '../../lib/idioma';
 import { useSucursalActual } from '../../lib/sucursal';
+import AvisoCanje from '../../AvisoCanje';
+import { useCoincidenciasCanje } from '../../lib/useCoincidenciasCanje';
 import { falla } from '../../lib/escritura';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
@@ -58,6 +60,9 @@ export default function DetalleCompra() {
   const [editPrecio, setEditPrecio] = useState('');
   const [guardandoEdicion, setGuardandoEdicion] = useState(false);
 
+  // Si este equipo ya está esperando en Plan Canje, se avisa antes de pasarlo al Stock (duplicado).
+  const coincidenciasCanje = useCoincidenciasCanje(supabase, compra?.imei ?? '', compra?.modelo ?? '');
+
   const nombreCliente = (c: Compra) => (c.clientes ? `${c.clientes.nombre} ${c.clientes.apellido || ''}`.trim() : t('sin cliente'));
 
   useEffect(() => {
@@ -79,6 +84,7 @@ export default function DetalleCompra() {
       return;
     }
     if (!confirm(t('¿Agregar este dispositivo al Stock para venderlo?'))) return;
+    if (coincidenciasCanje.porImei.length > 0 && !confirm(t('Este dispositivo está en Plan Canje. Si lo cargás acá queda duplicado en el Stock. ¿Cargarlo igual?'))) return;
     if (compra.imei) {
       const { data: existente } = await supabase.from('dispositivos').select('id').eq('imei', compra.imei).maybeSingle();
       if (existente && !confirm(`${t('Ya hay un dispositivo en Stock con el IMEI')} ${compra.imei}. ${t('¿Agregarlo igual?')}`)) return;
@@ -445,6 +451,19 @@ export default function DetalleCompra() {
           </p>
         )}
       </div>
+
+      {compra.estado === 'pendiente' && (
+        <AvisoCanje
+          supabase={supabase}
+          porImei={coincidenciasCanje.porImei}
+          porModelo={coincidenciasCanje.porModelo}
+          sucursalId={sucursalActual.id}
+          onAgregado={() => {
+            router.push('/stock');
+            router.refresh();
+          }}
+        />
+      )}
 
       {compra.estado === 'pendiente' ? (
         <div className="flex flex-col gap-2">

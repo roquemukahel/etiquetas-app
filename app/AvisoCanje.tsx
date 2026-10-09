@@ -3,10 +3,10 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { agregarCanjeAlStock, type CanjeParaStock } from '../../lib/canje';
-import { getActor, MENSAJE_ACTOR_REQUERIDO } from '../../lib/actor';
-import { formatearMonto } from '../../lib/numeros';
-import { useT } from '../../lib/idioma';
+import { agregarCanjeAlStock, type CanjeParaStock } from './lib/canje';
+import { getActor, MENSAJE_ACTOR_REQUERIDO } from './lib/actor';
+import { formatearMonto } from './lib/numeros';
+import { useT } from './lib/idioma';
 
 function detalleDe(c: CanjeParaStock) {
   return [c.modelo, c.capacidad_gb ? `${c.capacidad_gb} GB` : null, c.color].filter(Boolean).join(' · ');
@@ -21,12 +21,16 @@ export default function AvisoCanje({
   porModelo,
   sucursalId,
   onAgregado,
+  soloAviso = false,
 }: {
   supabase: SupabaseClient;
   porImei: CanjeParaStock[];
   porModelo: CanjeParaStock[];
   sucursalId: string | null;
   onAgregado: () => void;
+  // En pantallas donde el equipo todavía no se está pasando al Stock (ej. cargar una compra) solo se
+  // avisa y se manda a Plan Canje, sin el botón de agregar.
+  soloAviso?: boolean;
 }) {
   const t = useT();
   const [procesando, setProcesando] = useState<string | null>(null);
@@ -66,6 +70,7 @@ export default function AvisoCanje({
           {c.monto ? ` · ${t('Canje')} $${formatearMonto(c.monto)}` : ''}
         </p>
       </div>
+      {!soloAviso && (
       <button
         type="button"
         onClick={() => agregar(c)}
@@ -74,6 +79,7 @@ export default function AvisoCanje({
       >
         {procesando === c.id ? t('Agregando...') : t('Agregar desde Plan Canje')}
       </button>
+      )}
     </div>
   );
 
