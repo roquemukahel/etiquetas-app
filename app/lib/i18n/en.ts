@@ -3245,8 +3245,11 @@ export const EN: Record<string, string> = {
   'más en Plan Canje': 'more in Trade-in Plan',
   'Ver Plan Canje': 'View Trade-in Plan',
   'Este dispositivo está en Plan Canje. Si lo cargás acá queda duplicado en el Stock. ¿Cargarlo igual?': 'This device is in Trade-in Plan. If you add it here it will be duplicated in Stock. Add it anyway?',
-  'de los equipos del archivo están en Plan Canje. Si los importás quedan duplicados en el Stock. ¿Importar igual?': 'of the devices in the file are in Trade-in Plan. If you import them they will be duplicated in Stock. Import anyway?',
-  'de los equipos del archivo se encuentran en Plan Canje': 'of the devices in the file are in Trade-in Plan',
+  'equipos del archivo están en Plan Canje. Si los importás quedan duplicados en el Stock. ¿Importar igual?': 'devices in the file are in Trade-in Plan. If you import them they will be duplicated in Stock. Import anyway?',
+  'equipo del archivo está en Plan Canje. Si lo importás queda duplicado en el Stock. ¿Importar igual?': 'device in the file is in Trade-in Plan. If you import it, it will be duplicated in Stock. Import anyway?',
+  'equipos del archivo se encuentran en Plan Canje': 'devices in the file are in Trade-in Plan',
+  'equipo del archivo se encuentra en Plan Canje': 'device in the file is in Trade-in Plan',
   'No importar estos': 'Don\'t import these',
   'equipos pasaron al Stock desde Plan Canje y se sacaron de la importación.': 'devices were moved to Stock from Trade-in Plan and removed from the import.',
+  'equipo pasó al Stock desde Plan Canje y se sacó de la importación.': 'device was moved to Stock from Trade-in Plan and removed from the import.',
 };

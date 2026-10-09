@@ -627,7 +627,13 @@ export default function Stock() {
     if (!planImport || !puedeAgregarStock) return;
     if (
       canjesEnImport.length > 0 &&
-      !confirm(`${canjesEnImport.length} ${t('de los equipos del archivo están en Plan Canje. Si los importás quedan duplicados en el Stock. ¿Importar igual?')}`)
+      !confirm(
+        `${canjesEnImport.length} ${
+          canjesEnImport.length === 1
+            ? t('equipo del archivo está en Plan Canje. Si lo importás queda duplicado en el Stock. ¿Importar igual?')
+            : t('equipos del archivo están en Plan Canje. Si los importás quedan duplicados en el Stock. ¿Importar igual?')
+        }`
+      )
     )
       return;
     setImportando(true);
@@ -705,7 +711,11 @@ export default function Stock() {
     setResultadoImport(
       falloMensaje
         ? `${t('No pudimos agregar al stock:')} ${falloMensaje}`
-        : `${hechos.size} ${t('equipos pasaron al Stock desde Plan Canje y se sacaron de la importación.')}`
+        : `${hechos.size} ${
+            hechos.size === 1
+              ? t('equipo pasó al Stock desde Plan Canje y se sacó de la importación.')
+              : t('equipos pasaron al Stock desde Plan Canje y se sacaron de la importación.')
+          }`
     );
     setResolviendoCanjes(false);
     cargarDispositivos();
@@ -1884,7 +1894,8 @@ export default function Stock() {
               {canjesEnImport.length > 0 && (
                 <div role="alert" className="flex flex-col gap-2 rounded-lg bg-warn/10 border border-warn/40 px-3 py-2.5">
                   <p className="text-xs font-semibold text-ink dark:text-dark-text">
-                    ⚠ {canjesEnImport.length} {t('de los equipos del archivo se encuentran en Plan Canje')}
+                    ⚠ {canjesEnImport.length}{' '}
+                    {canjesEnImport.length === 1 ? t('equipo del archivo se encuentra en Plan Canje') : t('equipos del archivo se encuentran en Plan Canje')}
                   </p>
                   <ul className="text-xs text-muted dark:text-dark-text-secondary flex flex-col gap-0.5">
                     {canjesEnImport.slice(0, 8).map((c) => (

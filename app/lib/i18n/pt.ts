@@ -3246,8 +3246,11 @@ export const PT: Record<string, string> = {
   'más en Plan Canje': 'mais no Plano de Troca',
   'Ver Plan Canje': 'Ver Plano de Troca',
   'Este dispositivo está en Plan Canje. Si lo cargás acá queda duplicado en el Stock. ¿Cargarlo igual?': 'Este dispositivo está no Plano de Troca. Se você cadastrá-lo aqui, ele ficará duplicado no Estoque. Cadastrar mesmo assim?',
-  'de los equipos del archivo están en Plan Canje. Si los importás quedan duplicados en el Stock. ¿Importar igual?': 'dos aparelhos do arquivo estão no Plano de Troca. Se você importá-los, ficarão duplicados no Estoque. Importar mesmo assim?',
-  'de los equipos del archivo se encuentran en Plan Canje': 'dos aparelhos do arquivo estão no Plano de Troca',
+  'equipos del archivo están en Plan Canje. Si los importás quedan duplicados en el Stock. ¿Importar igual?': 'aparelhos do arquivo estão no Plano de Troca. Se você importá-los, ficarão duplicados no Estoque. Importar mesmo assim?',
+  'equipo del archivo está en Plan Canje. Si lo importás queda duplicado en el Stock. ¿Importar igual?': 'aparelho do arquivo está no Plano de Troca. Se você importá-lo, ficará duplicado no Estoque. Importar mesmo assim?',
+  'equipos del archivo se encuentran en Plan Canje': 'aparelhos do arquivo estão no Plano de Troca',
+  'equipo del archivo se encuentra en Plan Canje': 'aparelho do arquivo está no Plano de Troca',
   'No importar estos': 'Não importar estes',
   'equipos pasaron al Stock desde Plan Canje y se sacaron de la importación.': 'aparelhos foram para o Estoque pelo Plano de Troca e saíram da importação.',
+  'equipo pasó al Stock desde Plan Canje y se sacó de la importación.': 'aparelho foi para o Estoque pelo Plano de Troca e saiu da importação.',
 };
