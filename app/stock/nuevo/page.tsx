@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
@@ -18,6 +18,8 @@ import { sanitizarDecimal, formatearMonto } from '../../lib/numeros';
 import SelectorColorAuto from '../../SelectorColorAuto';
 import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
 import SelectorFinanciacion from '../../SelectorFinanciacion';
+import AvisoCanje from './AvisoCanje';
+import { canjesPendientes, canjesCoincidentes, type CanjeParaStock } from '../../lib/canje';
 import { guiaDeFormulario } from '../../lib/financiacionGuia';
 import { soportaMigracion } from '../../lib/migraciones';
 import { useT } from '../../lib/idioma';
@@ -111,6 +113,17 @@ export default function NuevoDispositivo() {
     soportaMigracion(supabase, 'guiaFinanciacion').then(setConGuia);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // Canjes que todavía esperan en Plan Canje: si el equipo que se carga a mano es uno de ellos,
+  // se avisa para que se agregue desde ahí en vez de duplicarlo.
+  const [pendientesCanje, setPendientesCanje] = useState<CanjeParaStock[]>([]);
+  useEffect(() => {
+    canjesPendientes(supabase)
+      .then(setPendientesCanje)
+      .catch(() => {
+        // Si no se pudo leer Plan Canje, el formulario sigue funcionando sin el aviso.
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [proveedor, setProveedor] = useState('');
   const [detalles, setDetalles] = useState('');
   const [estado, setEstado] = useState('usado');
@@ -127,6 +140,7 @@ export default function NuevoDispositivo() {
   }, []);
 
   const puedeGuardar = modelo.trim().length > 0 && puedeAgregarStock;
+  const coincidenciasCanje = useMemo(() => canjesCoincidentes(pendientesCanje, imei, modelo), [pendientesCanje, imei, modelo]);
 
   const handleGuardar = async () => {
     if (!puedeGuardar) return;
@@ -140,6 +154,7 @@ export default function NuevoDispositivo() {
       const { data: existente } = await supabase.from('dispositivos').select('id').eq('imei', imeiLimpio).maybeSingle();
       if (existente && !confirm(`${t('Ya hay un dispositivo en Stock con el IMEI')} ${imeiLimpio}. ${t('¿Agregarlo igual?')}`)) return;
     }
+    if (coincidenciasCanje.porImei.length > 0 && !confirm(t('Este dispositivo está en Plan Canje. Si lo cargás acá queda duplicado en el Stock. ¿Cargarlo igual?'))) return;
     setGuardando(true);
     setError(null);
 
@@ -269,6 +284,16 @@ export default function NuevoDispositivo() {
         </div>
 
         <Campo label="IMEI" valor={imei} onChange={setImei} mono />
+        <AvisoCanje
+          supabase={supabase}
+          porImei={coincidenciasCanje.porImei}
+          porModelo={coincidenciasCanje.porModelo}
+          sucursalId={sucursalElegida || null}
+          onAgregado={() => {
+            router.push('/stock');
+            router.refresh();
+          }}
+        />
         <Campo label={t('Salud de batería (%)')} valor={bateria} onChange={setBateria} numerico />
         <SelectorColorAuto label={t('Color')} modelo={modelo} value={color} onChange={setColor} />
         <Campo label={t('Precio')} valor={precio} onChange={setPrecio} numerico />

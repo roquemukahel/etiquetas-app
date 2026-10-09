@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../lib/supabase/client';
 import { obtenerTodasLasFilas } from '../lib/db';
-import { asegurarModelo, normalizarNombreModelo } from '../lib/modelos';
+import { agregarCanjeAlStock } from '../lib/canje';
 import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../lib/carpetas';
 import { registrarAuditoria } from '../lib/auditoria';
 import { getActor, useActor, MENSAJE_ACTOR_REQUERIDO } from '../lib/actor';
@@ -137,50 +137,20 @@ export default function PlanCanje() {
     if (!confirm(t('¿Agregar este dispositivo al Stock para venderlo?'))) return;
     setProcesando(c.id);
 
-    // Igual que en Compras: se reserva el canje ANTES de crear el
-    // dispositivo, y solo si seguía con agregado_a_stock=false en ese
-    // momento (condición evaluada en la base). Evita duplicar el
-    // dispositivo si el mismo canje se procesa desde dos pestañas.
-    const { data: actualizado, error: estadoErr } = await supabase
-      .from('canjes')
-      .update({ agregado_a_stock: true })
-      .eq('id', c.id)
-      .eq('agregado_a_stock', false)
-      .select('id');
-    if (estadoErr) {
-      alert(`${t('No pudimos agregar al stock:')} ` + estadoErr.message);
+    // La reserva del canje y la creación del dispositivo viven en lib/canje.ts (las comparte
+    // el aviso de Stock > Cargar dispositivo).
+    const resultado = await agregarCanjeAlStock(supabase, c, { sucursalId: sucursalActual.id, actor: getActor() });
+    if (!resultado.ok) {
+      if (resultado.yaAgregado) {
+        alert(t('Este canje ya había sido agregado al stock (quizás desde otra pestaña).'));
+        setProcesando(null);
+        cargar();
+        return;
+      }
+      alert(`${t('No pudimos agregar al stock:')} ` + resultado.mensaje);
       setProcesando(null);
       return;
     }
-    if (!actualizado || actualizado.length === 0) {
-      alert(t('Este canje ya había sido agregado al stock (quizás desde otra pestaña).'));
-      setProcesando(null);
-      cargar();
-      return;
-    }
-
-    const actor = getActor();
-    const modeloNormalizado = c.modelo ? normalizarNombreModelo(c.modelo) : c.modelo;
-    const { error: insertError } = await supabase.from('dispositivos').insert({
-      modelo: modeloNormalizado,
-      capacidad_gb: c.capacidad_gb,
-      color: c.color,
-      imei: c.imei,
-      salud_bateria: c.salud_bateria,
-      estado: c.condicion || 'usado',
-      detalles: c.detalles,
-      en_stock: true,
-      agregado_por_nombre: actor?.nombre ?? null,
-      agregado_por_foto_url: actor?.fotoUrl ?? null,
-      ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
-    });
-    if (insertError) {
-      await supabase.from('canjes').update({ agregado_a_stock: false }).eq('id', c.id);
-      alert(`${t('No pudimos agregar al stock:')} ` + insertError.message);
-      setProcesando(null);
-      return;
-    }
-    await asegurarModelo(supabase, modeloNormalizado);
     setProcesando(null);
     cargar();
   };

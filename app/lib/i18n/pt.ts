@@ -3237,4 +3237,13 @@ export const PT: Record<string, string> = {
   'Próximos 30 días': 'Próximos 30 dias',
   'De 31 a 60 días': 'De 31 a 60 dias',
   'De 61 a 90 días': 'De 61 a 90 dias',
+  'Este dispositivo se encuentra en Plan Canje': 'Este dispositivo está no Plano de Troca',
+  'Agregalo desde ahí para no cargarlo de cero y duplicarlo en el Stock.': 'Adicione-o por lá para não cadastrá-lo do zero e duplicá-lo no Estoque.',
+  'Agregar desde Plan Canje': 'Adicionar pelo Plano de Troca',
+  'Hay dispositivos de este modelo esperando en Plan Canje. ¿Es alguno de estos?': 'Há dispositivos deste modelo aguardando no Plano de Troca. É algum destes?',
+  'Sin IMEI': 'Sem IMEI',
+  'Canje': 'Troca',
+  'más en Plan Canje': 'mais no Plano de Troca',
+  'Ver Plan Canje': 'Ver Plano de Troca',
+  'Este dispositivo está en Plan Canje. Si lo cargás acá queda duplicado en el Stock. ¿Cargarlo igual?': 'Este dispositivo está no Plano de Troca. Se você cadastrá-lo aqui, ele ficará duplicado no Estoque. Cadastrar mesmo assim?',
 };

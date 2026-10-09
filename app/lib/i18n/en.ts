@@ -3236,4 +3236,13 @@ export const EN: Record<string, string> = {
   'Próximos 30 días': 'Next 30 days',
   'De 31 a 60 días': '31 to 60 days',
   'De 61 a 90 días': '61 to 90 days',
+  'Este dispositivo se encuentra en Plan Canje': 'This device is in Trade-in Plan',
+  'Agregalo desde ahí para no cargarlo de cero y duplicarlo en el Stock.': 'Add it from there so you don\'t enter it from scratch and duplicate it in Stock.',
+  'Agregar desde Plan Canje': 'Add from Trade-in Plan',
+  'Hay dispositivos de este modelo esperando en Plan Canje. ¿Es alguno de estos?': 'There are devices of this model waiting in Trade-in Plan. Is it one of these?',
+  'Sin IMEI': 'No IMEI',
+  'Canje': 'Trade-in',
+  'más en Plan Canje': 'more in Trade-in Plan',
+  'Ver Plan Canje': 'View Trade-in Plan',
+  'Este dispositivo está en Plan Canje. Si lo cargás acá queda duplicado en el Stock. ¿Cargarlo igual?': 'This device is in Trade-in Plan. If you add it here it will be duplicated in Stock. Add it anyway?',
 };
