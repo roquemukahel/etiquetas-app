@@ -3253,4 +3253,5 @@ export const PT: Record<string, string> = {
   'No importar estos': 'Não importar estes',
   'equipos pasaron al Stock desde Plan Canje y se sacaron de la importación.': 'aparelhos foram para o Estoque pelo Plano de Troca e saíram da importação.',
   'equipo pasó al Stock desde Plan Canje y se sacó de la importación.': 'aparelho foi para o Estoque pelo Plano de Troca e saiu da importação.',
+  'Ver más': 'Ver mais',
 };

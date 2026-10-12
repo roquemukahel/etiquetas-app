@@ -3252,4 +3252,5 @@ export const EN: Record<string, string> = {
   'No importar estos': 'Don\'t import these',
   'equipos pasaron al Stock desde Plan Canje y se sacaron de la importación.': 'devices were moved to Stock from Trade-in Plan and removed from the import.',
   'equipo pasó al Stock desde Plan Canje y se sacó de la importación.': 'device was moved to Stock from Trade-in Plan and removed from the import.',
+  'Ver más': 'See more',
 };

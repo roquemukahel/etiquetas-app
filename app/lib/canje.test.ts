@@ -49,3 +49,19 @@ describe('modelos escritos a mano', () => {
     expect(r.porModelo).toHaveLength(1);
   });
 });
+
+describe('IMEI a medio escribir', () => {
+  const c = canje({ imei: '355060123456789' });
+  it('mientras lo tipeado sea el comienzo del IMEI del canje, el aviso sigue', () => {
+    for (const parcial of ['35', '3550', '35506', '355060123456789']) {
+      expect(canjesCoincidentes([c], parcial, '').porImei).toHaveLength(1);
+    }
+  });
+  it('desaparece cuando un dígito deja de coincidir', () => {
+    expect(canjesCoincidentes([c], '355960', '').porImei).toHaveLength(0);
+    expect(canjesCoincidentes([c], '355960', 'iPhone 13').porModelo).toHaveLength(0); // IMEI distinto: otro equipo
+  });
+  it('con un solo dígito todavía no avisa (coincidiría con casi todo)', () => {
+    expect(canjesCoincidentes([c], '3', '').porImei).toHaveLength(0);
+  });
+});

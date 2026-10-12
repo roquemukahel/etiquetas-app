@@ -20,6 +20,7 @@ import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
 import SelectorFinanciacion from '../../SelectorFinanciacion';
 import AvisoCanje from '../../AvisoCanje';
 import { useCoincidenciasCanje } from '../../lib/useCoincidenciasCanje';
+import { hayCanjeConEseImei } from '../../lib/canje';
 import { guiaDeFormulario } from '../../lib/financiacionGuia';
 import { soportaMigracion } from '../../lib/migraciones';
 import { useT } from '../../lib/idioma';
@@ -145,7 +146,7 @@ export default function NuevoDispositivo() {
       const { data: existente } = await supabase.from('dispositivos').select('id').eq('imei', imeiLimpio).maybeSingle();
       if (existente && !confirm(`${t('Ya hay un dispositivo en Stock con el IMEI')} ${imeiLimpio}. ${t('¿Agregarlo igual?')}`)) return;
     }
-    if (coincidenciasCanje.porImei.length > 0 && !confirm(t('Este dispositivo está en Plan Canje. Si lo cargás acá queda duplicado en el Stock. ¿Cargarlo igual?'))) return;
+    if (hayCanjeConEseImei(coincidenciasCanje.porImei, imei) && !confirm(t('Este dispositivo está en Plan Canje. Si lo cargás acá queda duplicado en el Stock. ¿Cargarlo igual?'))) return;
     setGuardando(true);
     setError(null);
 

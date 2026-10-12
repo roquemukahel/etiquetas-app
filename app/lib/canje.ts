@@ -30,7 +30,7 @@ export async function canjesPendientes(supabase: SupabaseClient): Promise<CanjeP
 }
 
 // De los canjes pendientes, los que pueden ser el equipo que se está cargando a mano:
-//  - 'imei': mismo IMEI (es la identidad del equipo, es casi seguro que es el mismo).
+//  - 'imei': el IMEI tipeado (completo o a medio escribir) es el comienzo del IMEI de un canje.
 //  - 'modelo': mismo modelo y no se puede descartar por IMEI (no se tipeó IMEI todavía, o el
 //    canje no tiene). Si el IMEI tipeado es distinto al del canje, son equipos distintos.
 export function canjesCoincidentes(
@@ -46,7 +46,9 @@ export function canjesCoincidentes(
   const porModelo: CanjeParaStock[] = [];
   for (const c of pendientes) {
     const imeiCanje = limpiarImei(c.imei ?? '') ?? '';
-    if (imeiTipeado.length >= 5 && imeiCanje && imeiCanje === imeiTipeado) {
+    // Mientras se va tipeando, alcanza con que lo escrito sea el comienzo del IMEI del canje: el aviso
+    // aparece desde el segundo dígito y se va recién cuando algún dígito deja de coincidir.
+    if (imeiTipeado.length >= 2 && imeiCanje.startsWith(imeiTipeado)) {
       porImei.push(c);
       continue;
     }
@@ -56,6 +58,13 @@ export function canjesCoincidentes(
     porModelo.push(c);
   }
   return { porImei, porModelo };
+}
+
+// ¿Alguno de los canjes tiene EXACTAMENTE el IMEI tipeado? (el aviso salta con el IMEI a medio escribir,
+// pero la confirmación al guardar solo corresponde cuando el IMEI ya está completo y es el mismo).
+export function hayCanjeConEseImei(canjes: CanjeParaStock[], imei: string): boolean {
+  const tipeado = limpiarImei(imei);
+  return !!tipeado && canjes.some((c) => limpiarImei(c.imei) === tipeado);
 }
 
 // Pasa un canje de Plan Canje al Stock. Primero reserva el canje (solo si seguía sin agregar,

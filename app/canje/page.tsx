@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../lib/supabase/client';
 import { obtenerTodasLasFilas } from '../lib/db';
 import { agregarCanjeAlStock } from '../lib/canje';
-import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../lib/carpetas';
+import { obtenerImagenesDeCarpetas, imagenPorNombreExacto } from '../lib/carpetas';
 import { registrarAuditoria } from '../lib/auditoria';
 import { getActor, useActor, MENSAJE_ACTOR_REQUERIDO } from '../lib/actor';
 import { tienePermiso } from '../lib/permisos';
@@ -16,7 +16,7 @@ import { ICONOS } from '../Iconos';
 import { Boton, BotonIcono } from '../Boton';
 import { useT } from '../lib/idioma';
 import { useSucursalActual } from '../lib/sucursal';
-import { falla } from '../lib/escritura';
+import { falla, registrarFallo } from '../lib/escritura';
 
 type Canje = {
   id: string;
@@ -32,8 +32,18 @@ type Canje = {
   oculto_en_canje: boolean;
   condicion: string | null;
   ubicacion_fisica: string | null;
-  vendedores: { nombre: string; foto_url: string | null } | null;
+  vendedor_id: string | null;
 };
+
+type VendedorCanje = { id: string; nombre: string; foto_url: string | null };
+
+// Columnas que se muestran. Antes se traía todo ('*') más la foto del vendedor repetida en CADA fila
+// (la foto viaja como data URL y pesa), y de todo el historial: la pantalla se ponía lenta a medida
+// que crecían los canjes. Ahora: solo estas columnas, la foto de cada vendedor una sola vez, y cada
+// solapa se carga cuando se abre.
+const COLUMNAS_CANJE =
+  'id, modelo, capacidad_gb, color, imei, salud_bateria, detalles, monto, estado, agregado_a_stock, oculto_en_canje, condicion, ubicacion_fisica, vendedor_id';
+const TAMANO_PAGINA_HISTORIAL = 50;
 
 type ReparacionDerivada = {
   id: string;
@@ -65,26 +75,101 @@ export default function PlanCanje() {
   const [editandoUbicacionId, setEditandoUbicacionId] = useState<string | null>(null);
   const [ubicacionInput, setUbicacionInput] = useState('');
 
-  const cargar = async () => {
-    const [c, r] = await Promise.all([
-      obtenerTodasLasFilas<Canje>(supabase, 'canjes', '*, vendedores ( nombre, foto_url )', [{ columna: 'created_at', ascending: false }]),
-      obtenerTodasLasFilas<ReparacionDerivada>(
+  const [vendedores, setVendedores] = useState<Map<string, VendedorCanje>>(new Map());
+  const [hayMasHistorial, setHayMasHistorial] = useState(false);
+  const [cargandoMas, setCargandoMas] = useState(false);
+  // Solapas ya cargadas: Derivados e Historial recién se piden la primera vez que se abren.
+  const solapasCargadas = useRef<Set<Vista>>(new Set());
+
+  // Trae las miniaturas solo de los modelos que se están mostrando (no las de las 200 carpetas).
+  const cargarImagenes = async (modelos: (string | null)[]) => {
+    const faltan = modelos.filter((m): m is string => !!m && !imagenesCarpetas.has(m));
+    if (faltan.length === 0) return;
+    const nuevas = await obtenerImagenesDeCarpetas(supabase, faltan);
+    if (nuevas.size > 0) setImagenesCarpetas((prev) => new Map([...prev, ...nuevas]));
+  };
+
+  const cargarVista = async (v: Vista) => {
+    if (v === 'en_canje') {
+      const c = await obtenerTodasLasFilas<Canje>(supabase, 'canjes', COLUMNAS_CANJE, [{ columna: 'created_at', ascending: false }], (q) =>
+        q.eq('estado', 'en_canje').eq('agregado_a_stock', false).or('oculto_en_canje.is.null,oculto_en_canje.eq.false')
+      );
+      setCanjes((prev) => [...c, ...prev.filter((x) => x.agregado_a_stock)]);
+      cargarImagenes(c.map((x) => x.modelo));
+    } else if (v === 'historial') {
+      const { data, error } = await supabase
+        .from('canjes')
+        .select(COLUMNAS_CANJE)
+        .eq('agregado_a_stock', true)
+        .order('created_at', { ascending: false })
+        .range(0, TAMANO_PAGINA_HISTORIAL - 1);
+      if (error) {
+        registrarFallo(error, 'cargar el historial de Plan Canje');
+        return;
+      }
+      const h = (data as unknown as Canje[]) ?? [];
+      setCanjes((prev) => [...prev.filter((x) => !x.agregado_a_stock), ...h]);
+      setHayMasHistorial(h.length === TAMANO_PAGINA_HISTORIAL);
+      cargarImagenes(h.map((x) => x.modelo));
+    } else {
+      const r = await obtenerTodasLasFilas<ReparacionDerivada>(
         supabase,
         'reparaciones',
         'id, numero_orden, modelo, capacidad_gb, color, imei, estado, fecha_ingreso_servicio',
         [{ columna: 'fecha_ingreso_servicio', ascending: false }],
         (q) => q.not('canje_origen_id', 'is', null)
-      ),
-    ]);
-    setCanjes(c);
-    setDerivados(r);
+      );
+      setDerivados(r);
+      cargarImagenes(r.map((x) => x.modelo));
+    }
+    solapasCargadas.current.add(v);
+  };
+
+  const verMasHistorial = async () => {
+    setCargandoMas(true);
+    const desde = canjes.filter((c) => c.agregado_a_stock).length;
+    const { data, error } = await supabase
+      .from('canjes')
+      .select(COLUMNAS_CANJE)
+      .eq('agregado_a_stock', true)
+      .order('created_at', { ascending: false })
+      .range(desde, desde + TAMANO_PAGINA_HISTORIAL - 1);
+    setCargandoMas(false);
+    if (error) {
+      registrarFallo(error, 'cargar más del historial de Plan Canje');
+      return;
+    }
+    const h = (data as unknown as Canje[]) ?? [];
+    setCanjes((prev) => [...prev, ...h]);
+    setHayMasHistorial(h.length === TAMANO_PAGINA_HISTORIAL);
+    cargarImagenes(h.map((x) => x.modelo));
+  };
+
+  // Después de una acción (agregar al stock, derivar, eliminar) se recarga lo que se está viendo y las
+  // otras solapas quedan para recargarse cuando se abran (un canje agregado pasa al Historial, etc.).
+  const cargar = async () => {
+    solapasCargadas.current.clear();
+    await cargarVista(vista);
     setLoading(false);
   };
 
   useEffect(() => {
-    cargar();
-    (async () => setImagenesCarpetas(await obtenerImagenesCarpetas(supabase)))();
+    (async () => {
+      const { data, error } = await supabase.from('vendedores').select('id, nombre, foto_url');
+      if (error) {
+        registrarFallo(error, 'cargar los vendedores de Plan Canje');
+        return;
+      }
+      setVendedores(new Map(((data as VendedorCanje[]) ?? []).map((v) => [v.id, v])));
+    })();
   }, []);
+
+  useEffect(() => {
+    if (solapasCargadas.current.has(vista)) return;
+    setLoading(true);
+    cargarVista(vista).finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vista]);
 
   const filtrados = useMemo(() => {
     if (vista === 'historial') return canjes.filter((c) => c.agregado_a_stock);
@@ -301,9 +386,10 @@ export default function PlanCanje() {
                 </div>
                 <div className="text-xs text-muted dark:text-dark-text-secondary flex flex-col gap-0.5">
                   {c.detalles && <p>{t('Detalles:')} {c.detalles}</p>}
-                  {c.vendedores?.nombre && (
+                  {c.vendedor_id && vendedores.get(c.vendedor_id)?.nombre && (
                     <p className="flex items-center gap-1.5">
-                      {t('Recibido por:')} <Avatar src={c.vendedores.foto_url} nombre={c.vendedores.nombre} size={34} /> {c.vendedores.nombre}
+                      {t('Recibido por:')} <Avatar src={vendedores.get(c.vendedor_id)?.foto_url ?? null} nombre={vendedores.get(c.vendedor_id)?.nombre ?? ''} size={34} />{' '}
+                      {vendedores.get(c.vendedor_id)?.nombre}
                     </p>
                   )}
                 </div>
@@ -379,6 +465,15 @@ export default function PlanCanje() {
               </div>
             ))}
           </div>
+          {vista === 'historial' && hayMasHistorial && (
+            <button
+              onClick={verMasHistorial}
+              disabled={cargandoMas}
+              className="self-center rounded-full border border-border dark:border-dark-border px-4 py-2 text-xs font-medium disabled:opacity-50"
+            >
+              {cargandoMas ? t('Cargando...') : t('Ver más')}
+            </button>
+          )}
         </>
       )}
     </main>

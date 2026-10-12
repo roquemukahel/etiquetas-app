@@ -16,6 +16,7 @@ import { useT } from '../../lib/idioma';
 import { useSucursalActual } from '../../lib/sucursal';
 import AvisoCanje from '../../AvisoCanje';
 import { useCoincidenciasCanje } from '../../lib/useCoincidenciasCanje';
+import { hayCanjeConEseImei } from '../../lib/canje';
 import { falla } from '../../lib/escritura';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
@@ -84,7 +85,7 @@ export default function DetalleCompra() {
       return;
     }
     if (!confirm(t('¿Agregar este dispositivo al Stock para venderlo?'))) return;
-    if (coincidenciasCanje.porImei.length > 0 && !confirm(t('Este dispositivo está en Plan Canje. Si lo cargás acá queda duplicado en el Stock. ¿Cargarlo igual?'))) return;
+    if (hayCanjeConEseImei(coincidenciasCanje.porImei, compra.imei ?? '') && !confirm(t('Este dispositivo está en Plan Canje. Si lo cargás acá queda duplicado en el Stock. ¿Cargarlo igual?'))) return;
     if (compra.imei) {
       const { data: existente } = await supabase.from('dispositivos').select('id').eq('imei', compra.imei).maybeSingle();
       if (existente && !confirm(`${t('Ya hay un dispositivo en Stock con el IMEI')} ${compra.imei}. ${t('¿Agregarlo igual?')}`)) return;

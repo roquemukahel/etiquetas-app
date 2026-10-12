@@ -86,7 +86,7 @@ export default function NuevaCompra() {
   };
 
   const puedeConfirmar = modelo.trim().length > 0;
-  // Si el equipo que se compra ya está esperando en Plan Canje, se avisa (no se pasa al Stock desde acá).
+  // Si el equipo que se compra ya está esperando en Plan Canje, se avisa y se ofrece el atajo para pasarlo al Stock.
   const coincidenciasCanje = useCoincidenciasCanje(supabase, imei, modelo);
 
   const handleConfirmar = async () => {
@@ -267,8 +267,10 @@ export default function NuevaCompra() {
           porImei={coincidenciasCanje.porImei}
           porModelo={coincidenciasCanje.porModelo}
           sucursalId={sucursalActual.id}
-          onAgregado={() => {}}
-          soloAviso
+          onAgregado={() => {
+            router.push('/stock');
+            router.refresh();
+          }}
         />
 
         <div>

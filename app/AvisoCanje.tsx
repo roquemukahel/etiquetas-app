@@ -91,7 +91,12 @@ export default function AvisoCanje({
           <p className="text-xs text-ink dark:text-dark-text">
             {t('Agregalo desde ahí para no cargarlo de cero y duplicarlo en el Stock.')}
           </p>
-          {porImei.map(fila)}
+          {porImei.slice(0, 5).map(fila)}
+          {porImei.length > 5 && (
+            <p className="text-xs text-muted dark:text-dark-text-secondary">
+              + {porImei.length - 5} {t('más en Plan Canje')}
+            </p>
+          )}
         </>
       ) : (
         <>
