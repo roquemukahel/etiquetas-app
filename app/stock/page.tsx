@@ -1007,7 +1007,7 @@ export default function Stock() {
     cargarDispositivos();
     (async () => {
       const { data } = await supabase.from('modelos_stock').select('nombre').order('nombre');
-      setCarpetas((data ?? []).map((m) => m.nombre));
+      setCarpetas((data ?? []).map((m) => m.nombre).sort(compararModelosPorSalida));
     })();
     (async () => setImagenesCarpetas(await obtenerImagenesCarpetas(supabase)))();
     (async () => {

@@ -11,6 +11,7 @@ import SelectorColorAuto from '../../SelectorColorAuto';
 import { useT } from '../../lib/idioma';
 import { useSucursalActual } from '../../lib/sucursal';
 import { origenDeCliente } from '../../lib/clientesDuplicados';
+import { compararModelosPorSalida } from '../../lib/catalogosMarcas';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 
@@ -71,7 +72,7 @@ export default function NuevoPlanAhorro() {
     })();
     (async () => {
       const { data } = await supabase.from('modelos_stock').select('nombre').order('nombre');
-      setCarpetas((data ?? []).map((m) => m.nombre));
+      setCarpetas((data ?? []).map((m) => m.nombre).sort(compararModelosPorSalida));
     })();
     (async () => {
       const [{ data: disp }, senados] = await Promise.all([

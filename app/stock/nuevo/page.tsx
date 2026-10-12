@@ -23,6 +23,7 @@ import { useCoincidenciasCanje } from '../../lib/useCoincidenciasCanje';
 import { guiaDeFormulario } from '../../lib/financiacionGuia';
 import { soportaMigracion } from '../../lib/migraciones';
 import { useT } from '../../lib/idioma';
+import { compararModelosPorSalida } from '../../lib/catalogosMarcas';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 
@@ -64,7 +65,7 @@ export default function NuevoDispositivo() {
   useEffect(() => {
     (async () => {
       const { data } = await supabase.from('modelos_stock').select('nombre').order('nombre');
-      setCarpetas((data ?? []).map((m) => m.nombre));
+      setCarpetas((data ?? []).map((m) => m.nombre).sort(compararModelosPorSalida));
     })();
     (async () => {
       const { data } = await supabase.from('proveedores').select('nombre').order('nombre');

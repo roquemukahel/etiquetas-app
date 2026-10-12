@@ -15,6 +15,7 @@ import SelectorColorAuto from '../../SelectorColorAuto';
 import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
 import { sanitizarDecimal } from '../../lib/numeros';
 import { useT } from '../../lib/idioma';
+import { compararModelosPorSalida } from '../../lib/catalogosMarcas';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 
@@ -43,7 +44,7 @@ export default function StockPorFoto() {
   useEffect(() => {
     (async () => {
       const { data } = await supabase.from('modelos_stock').select('nombre').order('nombre');
-      setCarpetas((data ?? []).map((m) => m.nombre));
+      setCarpetas((data ?? []).map((m) => m.nombre).sort(compararModelosPorSalida));
     })();
     (async () => {
       const { data } = await supabase.from('proveedores').select('nombre').order('nombre');

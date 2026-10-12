@@ -16,6 +16,7 @@ import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
 import { useT } from '../../lib/idioma';
 import SelectorFinanciacion from '../../SelectorFinanciacion';
 import { guiaDeFormulario, guiaAFormulario } from '../../lib/financiacionGuia';
+import { compararModelosPorSalida } from '../../lib/catalogosMarcas';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 
@@ -81,7 +82,7 @@ export default function DetalleDispositivo() {
     })();
     (async () => {
       const { data } = await supabase.from('modelos_stock').select('nombre').order('nombre');
-      setCarpetas((data ?? []).map((m) => m.nombre));
+      setCarpetas((data ?? []).map((m) => m.nombre).sort(compararModelosPorSalida));
     })();
     (async () => {
       const { data } = await supabase.from('proveedores').select('nombre').order('nombre');

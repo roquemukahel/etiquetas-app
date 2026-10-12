@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../lib/supabase/client';
 import { asegurarModelo, normalizarNombreModelo } from '../lib/modelos';
-import { TODOS_LOS_MODELOS_CATALOGO } from '../lib/catalogosMarcas';
+import { TODOS_LOS_MODELOS_CATALOGO, compararModelosPorSalida } from '../lib/catalogosMarcas';
 import { limpiarImei } from '../lib/imei';
 import { armarLinkWhatsApp, mensajeSeguimientoServicio, mensajeListoServicio } from '../lib/whatsapp';
 import { codigoLlamada } from '../lib/paises';
@@ -288,7 +288,7 @@ export default function ServicioTecnico() {
       // duplicar los que ya están en las dos listas.
       const yaEnStock = new Set((data ?? []).map((m) => m.nombre.toLowerCase()));
       const delCatalogo = TODOS_LOS_MODELOS_CATALOGO.filter((m) => !yaEnStock.has(m.toLowerCase()));
-      setCarpetasStock([...(data ?? []).map((m) => m.nombre), ...delCatalogo]);
+      setCarpetasStock([...(data ?? []).map((m) => m.nombre), ...delCatalogo].sort(compararModelosPorSalida));
     })();
     (async () => setImagenesCarpetas(await obtenerImagenesCarpetas(supabase)))();
     (async () => {

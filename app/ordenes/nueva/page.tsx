@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { useT } from '../../lib/idioma';
 import { asegurarModelo, normalizarNombreModelo } from '../../lib/modelos';
-import { TODOS_LOS_MODELOS_CATALOGO } from '../../lib/catalogosMarcas';
+import { TODOS_LOS_MODELOS_CATALOGO, compararModelosPorSalida } from '../../lib/catalogosMarcas';
 import { obtenerTodasLasFilas } from '../../lib/db';
 import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../../lib/carpetas';
 import { obtenerDispositivosSenados } from '../../lib/planAhorro';
@@ -632,7 +632,7 @@ export default function NuevaOrden() {
     })();
     (async () => {
       const { data } = await supabase.from('modelos_stock').select('nombre').order('nombre');
-      setCarpetasStock((data ?? []).map((m) => m.nombre));
+      setCarpetasStock((data ?? []).map((m) => m.nombre).sort(compararModelosPorSalida));
     })();
     (async () => setImagenesCarpetas(await obtenerImagenesCarpetas(supabase)))();
   }, []);

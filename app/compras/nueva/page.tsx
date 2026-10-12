@@ -15,6 +15,7 @@ import { useSucursalActual } from '../../lib/sucursal';
 import { origenDeCliente } from '../../lib/clientesDuplicados';
 import AvisoCanje from '../../AvisoCanje';
 import { useCoincidenciasCanje } from '../../lib/useCoincidenciasCanje';
+import { compararModelosPorSalida } from '../../lib/catalogosMarcas';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 
@@ -62,7 +63,7 @@ export default function NuevaCompra() {
     })();
     (async () => {
       const { data } = await supabase.from('modelos_stock').select('nombre').order('nombre');
-      setCarpetas((data ?? []).map((m) => m.nombre));
+      setCarpetas((data ?? []).map((m) => m.nombre).sort(compararModelosPorSalida));
     })();
   }, []);
 
