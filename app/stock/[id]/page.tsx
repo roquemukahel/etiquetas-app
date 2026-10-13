@@ -59,6 +59,8 @@ export default function DetalleDispositivo() {
   // porque el pedido original pide reforzarlo también del lado del
   // servidor, algo que queda fuera del alcance de este rediseño visual.
   const puedeVerComercial = tienePermiso(actor, 'ver_estadisticas');
+  // El costo es información sensible: solo con el permiso "ver costos y márgenes".
+  const puedeVerCostos = tienePermiso(actor, 'ver_costos');
 
   const [d, setD] = useState<Dispositivo | null>(null);
   const [original, setOriginal] = useState<Dispositivo | null>(null);
@@ -369,12 +371,14 @@ export default function DetalleDispositivo() {
             <>
               <div className="grid grid-cols-2 gap-3">
                 <Campo label={t('Precio')} valor={d.precio?.toString() ?? ''} onChange={(v) => campo('precio', v ? Number(v) : null)} numerico />
-                <Campo
-                  label={t('Costo (opcional)')}
-                  valor={d.costo?.toString() ?? ''}
-                  onChange={(v) => campo('costo', v ? Number(v) : null)}
-                  numerico
-                />
+                {puedeVerCostos && (
+                  <Campo
+                    label={t('Costo (opcional)')}
+                    valor={d.costo?.toString() ?? ''}
+                    onChange={(v) => campo('costo', v ? Number(v) : null)}
+                    numerico
+                  />
+                )}
               </div>
               {conGuia && (
                 <>

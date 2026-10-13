@@ -3275,4 +3275,13 @@ export const EN: Record<string, string> = {
   'Recibió:': 'Received by:',
   'Técnicos de esta sucursal': 'Technicians of this branch',
   'Otras sucursales': 'Other branches',
+  'Acceso a información sensible (apagado por defecto)': 'Access to sensitive information (off by default)',
+  'Puede cargar egresos (gastos operativos): ve solo los que cargó, sin categorías de dueños ni Retiro/Ajuste': 'Can enter expenses (operating costs): sees only the ones they entered, without owner categories or Withdrawal/Adjustment',
+  'Puede registrar pagos a proveedores (sin ver saldos, compras ni precios de compra)': 'Can register supplier payments (without seeing balances, purchases or purchase prices)',
+  'Puede ver costos y márgenes (costo y ganancia en Productos, Stock, repuestos, órdenes y demás pantallas)': 'Can see costs and margins (cost and profit in Products, Stock, spare parts, orders and other screens)',
+  'Elegí el proveedor al que le vas a registrar un pago.': 'Choose the supplier you are going to register a payment for.',
+  'Registrar un pago a este proveedor': 'Register a payment to this supplier',
+  'Al guardar se genera el comprobante del pago para imprimir o mandar.': 'When you save, the payment receipt is generated to print or send.',
+  'No tenés permiso para ver los precios de los proveedores de repuestos.': 'You don\'t have permission to see the spare-parts suppliers\' prices.',
+  'No pudimos cargar el proveedor:': 'We couldn\'t load the supplier:',
 };

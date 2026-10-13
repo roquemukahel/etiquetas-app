@@ -78,6 +78,8 @@ export default function Productos() {
   const t = useT();
   const sucursalActual = useSucursalActual();
   const puedeAgregarStock = tienePermiso(actor, 'agregar_stock');
+  // Costo y ganancia: permiso propio, apagado por defecto.
+  const puedeVerCostos = tienePermiso(actor, 'ver_costos');
 
   const [productos, setProductos] = useState<ProductoFila[]>([]);
   const [dispositivos, setDispositivos] = useState<DispositivoFila[]>([]);
@@ -1044,6 +1046,7 @@ export default function Productos() {
                   ))}
                 </select>
               </div>
+              {puedeVerCostos && (
               <div>
                 <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Costo')}</label>
                 <input
@@ -1053,6 +1056,7 @@ export default function Productos() {
                   className="w-full bg-white dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                 />
               </div>
+              )}
               <div>
                 <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{conGuia ? t('Final (precio exclusivo)') : t('Final')}</label>
                 <input

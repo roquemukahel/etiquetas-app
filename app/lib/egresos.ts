@@ -268,7 +268,7 @@ export async function restaurarCategoriaEgreso(supabase: SupabaseClient, id: str
 // ---------- Egresos ----------
 export async function obtenerEgresos(
   supabase: SupabaseClient,
-  params: { desde?: string; hasta?: string; conPagadoDesde?: boolean } = {}
+  params: { desde?: string; hasta?: string; conPagadoDesde?: boolean; registradoPor?: string } = {}
 ): Promise<Egreso[]> {
   // Paginado: un período largo (año, "todo") con más de 1000 egresos se cortaba
   // sin avisar y los totales de Egresos/Estadísticas quedaban subestimados.
@@ -284,6 +284,8 @@ export async function obtenerEgresos(
       q = q.eq('anulado', false);
       if (params.desde) q = q.gte('fecha', params.desde);
       if (params.hasta) q = q.lte('fecha', params.hasta);
+      // Quien solo puede cargar egresos ve únicamente los que cargó.
+      if (params.registradoPor) q = q.eq('registrado_por_nombre', params.registradoPor);
       return q;
     }
   );

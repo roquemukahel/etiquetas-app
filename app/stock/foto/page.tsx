@@ -36,6 +36,8 @@ export default function StockPorFoto() {
   const actorActual = useActor();
   const t = useT();
   const puedeAgregarStock = tienePermiso(actorActual, 'agregar_stock');
+  // El costo es información sensible: solo con el permiso "ver costos y márgenes".
+  const puedeVerCostos = tienePermiso(actorActual, 'ver_costos');
   const sucursalActual = useSucursalActual();
 
   const [carpetas, setCarpetas] = useState<string[]>([]);
@@ -319,7 +321,7 @@ export default function StockPorFoto() {
         />
         <SelectorColorAuto label={t('Color')} modelo={modelo} value={color} onChange={setColor} />
         <Campo label={t('Precio (opcional)')} valor={precio} onChange={setPrecio} numerico />
-        <Campo label={t('Costo (lo que le pagaste al proveedor, opcional)')} valor={costo} onChange={setCosto} numerico />
+        {puedeVerCostos && <Campo label={t('Costo (lo que le pagaste al proveedor, opcional)')} valor={costo} onChange={setCosto} numerico />}
         <Campo label={t('Proveedor (opcional)')} valor={proveedor} onChange={setProveedor} listaId="proveedores-stock-foto" />
         <datalist id="proveedores-stock-foto">
           {proveedores.map((p) => (

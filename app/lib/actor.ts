@@ -24,6 +24,11 @@ export type Permisos = {
   puedeRecibirServicioTecnico: boolean;
   puedeGestionarServicioTecnico: boolean;
   puedeGestionarFinanciacion: boolean;
+  // Permisos sensibles (permisos_sensibles_supabase.sql). Opcionales: un actor guardado antes de que existieran no los
+  // trae, y para estos el faltante significa "NO" (a diferencia de los demás, que faltando se permiten).
+  puedeCargarEgresos?: boolean;
+  puedeRegistrarPagosProveedores?: boolean;
+  puedeVerCostos?: boolean;
 };
 
 export type Actor = {

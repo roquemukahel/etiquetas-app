@@ -3276,4 +3276,13 @@ export const PT: Record<string, string> = {
   'Recibió:': 'Recebido por:',
   'Técnicos de esta sucursal': 'Técnicos desta filial',
   'Otras sucursales': 'Outras filiais',
+  'Acceso a información sensible (apagado por defecto)': 'Acesso a informações sensíveis (desligado por padrão)',
+  'Puede cargar egresos (gastos operativos): ve solo los que cargó, sin categorías de dueños ni Retiro/Ajuste': 'Pode lançar despesas (gastos operacionais): vê só as que lançou, sem categorias de donos nem Retirada/Ajuste',
+  'Puede registrar pagos a proveedores (sin ver saldos, compras ni precios de compra)': 'Pode registrar pagamentos a fornecedores (sem ver saldos, compras nem preços de compra)',
+  'Puede ver costos y márgenes (costo y ganancia en Productos, Stock, repuestos, órdenes y demás pantallas)': 'Pode ver custos e margens (custo e lucro em Produtos, Estoque, peças, pedidos e demais telas)',
+  'Elegí el proveedor al que le vas a registrar un pago.': 'Escolha o fornecedor para o qual vai registrar um pagamento.',
+  'Registrar un pago a este proveedor': 'Registrar um pagamento a este fornecedor',
+  'Al guardar se genera el comprobante del pago para imprimir o mandar.': 'Ao salvar, o comprovante do pagamento é gerado para imprimir ou enviar.',
+  'No tenés permiso para ver los precios de los proveedores de repuestos.': 'Você não tem permissão para ver os preços dos fornecedores de peças.',
+  'No pudimos cargar el proveedor:': 'Não foi possível carregar o fornecedor:',
 };

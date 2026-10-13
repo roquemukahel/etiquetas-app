@@ -303,6 +303,18 @@ export default function ProveedorRepuestos() {
     setGuardandoStock(false);
   };
 
+  // Los precios que cobra cada proveedor de repuestos son costos de compra: solo con el permiso "ver costos y márgenes".
+  if (!tienePermiso(actor, 'ver_costos')) {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t('No tenés permiso para ver los precios de los proveedores de repuestos.')}</p>
+        <Link href="/servicio-tecnico" className="text-sm text-accent dark:text-dark-accent underline">
+          {t('Volver')}
+        </Link>
+      </main>
+    );
+  }
+
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center">

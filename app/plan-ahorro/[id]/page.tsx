@@ -79,6 +79,8 @@ export default function DetallePlanAhorro() {
   const t = useT();
   const sucursalActual = useSucursalActual();
   const puedeVer = tienePermiso(actor, 'ver_plan_ahorro');
+  // El costo del equipo es información sensible: solo con el permiso "ver costos y márgenes".
+  const puedeVerCostos = tienePermiso(actor, 'ver_costos');
   const puedeEliminar = tienePermiso(actor, 'eliminar');
   const puedeAgregarStock = tienePermiso(actor, 'agregar_stock');
 
@@ -987,13 +989,15 @@ export default function DetallePlanAhorro() {
                   placeholder={t('Precio')}
                   className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                 />
-                <input
-                  value={nuevoCosto}
-                  onChange={(e) => setNuevoCosto(sanitizarDecimal(e.target.value))}
-                  inputMode="decimal"
-                  placeholder={t('Costo (opcional)')}
-                  className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
-                />
+                {puedeVerCostos && (
+                  <input
+                    value={nuevoCosto}
+                    onChange={(e) => setNuevoCosto(sanitizarDecimal(e.target.value))}
+                    inputMode="decimal"
+                    placeholder={t('Costo (opcional)')}
+                    className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                  />
+                )}
                 <button
                   disabled={!nuevoModelo.trim() || guardandoNuevoEquipo || procesando}
                   onClick={guardarNuevoEquipoYCompletar}

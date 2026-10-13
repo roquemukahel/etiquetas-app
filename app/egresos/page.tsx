@@ -64,7 +64,11 @@ export default function Egresos() {
   const actor = useActor();
   const t = useT();
   const sucursalActual = useSucursalActual();
-  const puede = tienePermiso(actor, 'gestionar_egresos');
+  // Ver y gestionar todos los egresos (administrador / acceso completo), o solo cargar gastos y ver los propios
+  // ('cargar_egresos': pensado para una vendedora de confianza que no ve costos, márgenes ni estadísticas).
+  const puedeGestionar = tienePermiso(actor, 'gestionar_egresos');
+  const puede = puedeGestionar || tienePermiso(actor, 'cargar_egresos');
+  const soloLosMios = !puedeGestionar;
   // Las categorías marcadas "solo dueños" y los tipos Retiro de dinero / Ajuste los usan únicamente los
   // administradores (los dueños). Sin actor elegido todavía no se restringe, igual que tienePermiso().
   const esDueno = actor?.permisos ? (actor.permisos.esAdministrador ?? true) : true;
@@ -104,7 +108,7 @@ export default function Egresos() {
     setError(null);
     try {
       const [egresosData, categoriasData, areasData] = await Promise.all([
-        obtenerEgresos(supabase, { desde, hasta, conPagadoDesde: conDuenos }),
+        obtenerEgresos(supabase, { desde, hasta, conPagadoDesde: conDuenos, registradoPor: soloLosMios ? actor?.nombre ?? '__sin_actor__' : undefined }),
         obtenerCategoriasEgresos(supabase),
         obtenerAreasEgresos(supabase),
       ]);
@@ -136,7 +140,7 @@ export default function Egresos() {
       if (negocio?.monedas_habilitadas?.length) setMonedasDisponibles(negocio.monedas_habilitadas);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [puede, desde, hasta, conDuenos]);
+  }, [puede, desde, hasta, conDuenos, soloLosMios, actor?.nombre]);
 
   useEffect(() => {
     (async () => {
@@ -653,7 +657,7 @@ function ModalEgreso({
             </select>
           </div>
         </div>
-        {conDuenos && (
+        {conDuenos && esDueno && (
           <div>
             <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Pagado desde')}</label>
             <select value={pagadoDesde} onChange={(e) => setPagadoDesde(e.target.value as PagadoDesde)} className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm">

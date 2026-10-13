@@ -15,16 +15,23 @@ export type PermisosForm = {
   puedeRecibirServicioTecnico: boolean;
   puedeGestionarServicioTecnico: boolean;
   puedeGestionarFinanciacion: boolean;
+  // Permisos sensibles (permisos_sensibles_supabase.sql): apagados por defecto, valen aunque tenga acceso completo.
+  puedeCargarEgresos: boolean;
+  puedeRegistrarPagosProveedores: boolean;
+  puedeVerCostos: boolean;
 };
 
 export default function PermisosEditor({
   valor,
   onChange,
   tienePin,
+  mostrarSensibles = false,
 }: {
   valor: PermisosForm;
   onChange: (v: PermisosForm) => void;
   tienePin: boolean;
+  // Solo si el negocio ya corrió permisos_sensibles_supabase.sql.
+  mostrarSensibles?: boolean;
 }) {
   const t = useT();
   const set = (k: keyof PermisosForm, v: boolean) => onChange({ ...valor, [k]: v });
@@ -129,6 +136,24 @@ export default function PermisosEditor({
               </label>
             </div>
           )}
+        </div>
+      )}
+
+      {!valor.esAdministrador && mostrarSensibles && (
+        <div className="flex flex-col gap-1.5 pl-6 pt-1">
+          <p className="text-xs font-medium text-muted dark:text-dark-text-secondary">{t('Acceso a información sensible (apagado por defecto)')}</p>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={valor.puedeCargarEgresos} onChange={(e) => set('puedeCargarEgresos', e.target.checked)} className="h-4 w-4 accent-ink" />
+            <span className="text-sm">{t('Puede cargar egresos (gastos operativos): ve solo los que cargó, sin categorías de dueños ni Retiro/Ajuste')}</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={valor.puedeRegistrarPagosProveedores} onChange={(e) => set('puedeRegistrarPagosProveedores', e.target.checked)} className="h-4 w-4 accent-ink" />
+            <span className="text-sm">{t('Puede registrar pagos a proveedores (sin ver saldos, compras ni precios de compra)')}</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={valor.puedeVerCostos} onChange={(e) => set('puedeVerCostos', e.target.checked)} className="h-4 w-4 accent-ink" />
+            <span className="text-sm">{t('Puede ver costos y márgenes (costo y ganancia en Productos, Stock, repuestos, órdenes y demás pantallas)')}</span>
+          </label>
         </div>
       )}
 

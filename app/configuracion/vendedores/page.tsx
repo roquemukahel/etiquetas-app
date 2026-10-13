@@ -8,6 +8,7 @@ import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import Avatar from '../../Avatar';
 import PermisosEditor, { PermisosForm } from '../../PermisosEditor';
+import { soportaMigracion } from '../../lib/migraciones';
 import { obtenerSucursales, type Sucursal } from '../../lib/sucursales';
 import { useT } from '../../lib/idioma';
 import { falla } from '../../lib/escritura';
@@ -28,6 +29,10 @@ type Vendedor = {
   puede_recibir_servicio_tecnico: boolean;
   puede_gestionar_servicio_tecnico: boolean;
   puede_gestionar_financiacion: boolean;
+  // Solo existen si el negocio corrió permisos_sensibles_supabase.sql.
+  puede_cargar_egresos?: boolean;
+  puede_registrar_pagos_proveedores?: boolean;
+  puede_ver_costos?: boolean;
   sucursal_id?: string | null;
 };
 
@@ -41,6 +46,9 @@ const PERMISOS_DEFAULT: PermisosForm = {
   puedeRecibirServicioTecnico: true,
   puedeGestionarServicioTecnico: true,
   puedeGestionarFinanciacion: true,
+  puedeCargarEgresos: false,
+  puedeRegistrarPagosProveedores: false,
+  puedeVerCostos: false,
 };
 
 export default function Vendedores() {
@@ -50,6 +58,12 @@ export default function Vendedores() {
   const puedeGestionarUsuarios = tienePermiso(actor, 'gestionar_usuarios');
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [loading, setLoading] = useState(true);
+  // Permisos sensibles (cargar egresos, pagos a proveedores, ver costos): solo si se corrió permisos_sensibles_supabase.sql.
+  const [conSensibles, setConSensibles] = useState(false);
+  useEffect(() => {
+    soportaMigracion(supabase, 'permisosSensibles').then(setConSensibles);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [nombre, setNombre] = useState('');
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -156,6 +170,9 @@ export default function Vendedores() {
       puedeRecibirServicioTecnico: v.puede_recibir_servicio_tecnico,
       puedeGestionarServicioTecnico: v.puede_gestionar_servicio_tecnico,
       puedeGestionarFinanciacion: v.puede_gestionar_financiacion,
+      puedeCargarEgresos: v.puede_cargar_egresos ?? false,
+      puedeRegistrarPagosProveedores: v.puede_registrar_pagos_proveedores ?? false,
+      puedeVerCostos: v.puede_ver_costos ?? false,
     });
     setSucursalIdEdit(v.sucursal_id ?? '');
     setError(null);
@@ -204,6 +221,13 @@ export default function Vendedores() {
         puede_recibir_servicio_tecnico: permisosEdit.puedeRecibirServicioTecnico,
         puede_gestionar_servicio_tecnico: permisosEdit.puedeGestionarServicioTecnico,
         puede_gestionar_financiacion: permisosEdit.puedeGestionarFinanciacion,
+        ...(conSensibles
+          ? {
+              puede_cargar_egresos: permisosEdit.puedeCargarEgresos,
+              puede_registrar_pagos_proveedores: permisosEdit.puedeRegistrarPagosProveedores,
+              puede_ver_costos: permisosEdit.puedeVerCostos,
+            }
+          : {}),
         ...(sucursales.length > 0 ? { sucursal_id: sucursalIdEdit || null } : {}),
       })
       .eq('id', v.id),
@@ -342,7 +366,7 @@ export default function Vendedores() {
                   </div>
                 )}
 
-                <PermisosEditor valor={permisosEdit} onChange={setPermisosEdit} tienePin={pinTocado ? !!pinEdit.trim() : conPin.has(v.id)} />
+                <PermisosEditor mostrarSensibles={conSensibles} valor={permisosEdit} onChange={setPermisosEdit} tienePin={pinTocado ? !!pinEdit.trim() : conPin.has(v.id)} />
 
                 <button
                   disabled={guardandoPerfil}

@@ -90,7 +90,10 @@ export default function DetalleProveedor() {
   const supabase = crearClienteNavegador();
   const actor = useActor();
   const t = useT();
-  const puedeVer = tienePermiso(actor, 'ver_proveedores');
+  const puedeVerTodo = tienePermiso(actor, 'ver_proveedores');
+  // Solo registrar pagos: ve únicamente el formulario de pago (sin saldo, compras, precios ni movimientos).
+  const soloPagos = !puedeVerTodo && tienePermiso(actor, 'registrar_pagos_proveedores');
+  const puedeVer = puedeVerTodo || soloPagos;
   const puedeEliminar = tienePermiso(actor, 'eliminar');
   const sucursalActual = useSucursalActual();
 
@@ -153,6 +156,13 @@ export default function DetalleProveedor() {
   const [guardandoCompra, setGuardandoCompra] = useState(false);
 
   const cargar = async () => {
+    if (soloPagos) {
+      const { data: prov, error: errorProv } = await supabase.from('proveedores').select('id, nombre, telefono, detalles').eq('id', id).maybeSingle();
+      if (errorProv) setError(t('No pudimos cargar el proveedor:') + ' ' + errorProv.message);
+      setProveedor((prov as Proveedor) ?? null);
+      setLoading(false);
+      return;
+    }
     const conRubros = await soportaRubrosCompra(supabase);
     setSoportaRubros(conRubros);
     const [{ data: prov }, { data: comprasData }, { data: dispData }, { data: movData, error: movError }] = await Promise.all([
@@ -205,6 +215,15 @@ export default function DetalleProveedor() {
     cargar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, puedeVer]);
+
+  // En modo "solo pagos" el formulario de pago está siempre abierto.
+  useEffect(() => {
+    if (soloPagos) {
+      setAccionCta('pago');
+      setSucursalCta(sucursalActual.id ?? '');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [soloPagos]);
 
   const filas: FilaCompra[] = useMemo(() => {
     const deManual: FilaCompra[] = compras.map((c) => ({
@@ -467,6 +486,88 @@ export default function DetalleProveedor() {
         <Link href="/proveedores" className="text-sm text-accent dark:text-dark-accent underline">
           {t('Volver a Proveedores')}
         </Link>
+      </main>
+    );
+  }
+
+  if (soloPagos) {
+    return (
+      <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
+        <header className="flex items-center gap-3">
+          <Link href="/proveedores" className="text-2xl leading-none">
+            &larr;
+          </Link>
+          <span className="text-lg font-medium mr-auto">{proveedor.nombre}</span>
+        </header>
+        {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
+        <div className="rounded-2xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-4 flex flex-col gap-2">
+          <p className="text-sm font-medium">{t('Registrar un pago a este proveedor')}</p>
+          <input
+            value={montoCta}
+            onChange={(e) => setMontoCta(sanitizarDecimal(e.target.value))}
+            inputMode="decimal"
+            placeholder={t('Monto que le pagás')}
+            className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+          />
+          <select
+            value={medioCta}
+            onChange={(e) => setMedioCta(e.target.value)}
+            className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+          >
+            <option value="efectivo">{t('Efectivo')}</option>
+            <option value="transferencia">{t('Transferencia')}</option>
+            <option value="débito">{t('Débito')}</option>
+            <option value="crédito">{t('Crédito')}</option>
+            <option value="usdt">USDT</option>
+            <option value="cheque">{t('Cheque')}</option>
+          </select>
+          {(sucursales.length > 1 || areas.length > 0) && (
+            <div className="flex gap-2">
+              {sucursales.length > 1 && (
+                <select
+                  value={sucursalCta}
+                  onChange={(e) => setSucursalCta(e.target.value)}
+                  className="flex-1 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                >
+                  <option value="">🏬 {t('Sin sucursal')}</option>
+                  {sucursales.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      🏬 {s.nombre}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {areas.length > 0 && (
+                <select
+                  value={areaCta}
+                  onChange={(e) => setAreaCta(e.target.value)}
+                  className="flex-1 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                >
+                  <option value="">{t('Sin área')}</option>
+                  {areas.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.nombre}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          )}
+          <input
+            value={obsCta}
+            onChange={(e) => setObsCta(e.target.value)}
+            placeholder={t('Observación (opcional)')}
+            className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+          />
+          <button
+            disabled={guardandoCta}
+            onClick={registrarCta}
+            className="rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
+          >
+            {guardandoCta ? t('Guardando...') : t('Registrar pago')}
+          </button>
+          <p className="text-[11px] text-muted dark:text-dark-text-secondary">{t('Al guardar se genera el comprobante del pago para imprimir o mandar.')}</p>
+        </div>
       </main>
     );
   }

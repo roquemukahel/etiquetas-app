@@ -11,6 +11,8 @@ const CHEQUEOS = {
   guiaFinanciacionCategorias: (s: SupabaseClient) => s.from('stock_categorias').select('financiacion_max_cuotas').limit(1),
   guiaFinanciacionMaestro: (s: SupabaseClient) => s.from('productos_maestro').select('financiacion_max_cuotas, precio_lista').limit(1),
   creditosFueraGuia: (s: SupabaseClient) => s.from('creditos_fuera_guia').select('id').limit(1),
+  // permisos_sensibles_supabase.sql (cargar egresos, registrar pagos a proveedores, ver costos y márgenes)
+  permisosSensibles: (s: SupabaseClient) => s.from('vendedores').select('puede_cargar_egresos, puede_registrar_pagos_proveedores, puede_ver_costos').limit(1),
   // servicio_tecnico_recibido_por_supabase.sql
   recibidoPor: (s: SupabaseClient) => s.from('reparaciones').select('recibido_por_nombre').limit(1),
   // egresos_duenos_supabase.sql

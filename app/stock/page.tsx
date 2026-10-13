@@ -147,6 +147,8 @@ export default function Stock() {
   // El capital muestra costos y ganancias (info sensible del dueño): se
   // protege con el mismo permiso que las Estadísticas.
   const puedeVerCapital = tienePermiso(actor, 'ver_estadisticas');
+  // Costos y ganancia: permiso propio (apagado por defecto). Sin él no se ve el costo de nada en esta pantalla.
+  const puedeVerCostos = tienePermiso(actor, 'ver_costos');
   const [tab, setTab] = useState<'celulares' | 'accesorios'>('celulares');
 
   const [dispositivos, setDispositivos] = useState<Dispositivo[]>([]);
@@ -517,7 +519,7 @@ export default function Stock() {
       const todos = await obtenerTodasLasFilas<Dispositivo>(supabase, 'dispositivos', COLUMNAS_DISPOSITIVO, ORDEN_DISPOSITIVO);
       await descargarDatos(
         'stock-celulares-qovento',
-        ['modelo', 'capacidad_gb', 'color', 'imei', 'numero_serie', 'salud_bateria', 'precio', 'costo', 'proveedor', 'estado', 'en_stock', 'created_at'],
+        ['modelo', 'capacidad_gb', 'color', 'imei', 'numero_serie', 'salud_bateria', 'precio', ...(puedeVerCostos ? ['costo', 'proveedor'] : []), 'estado', 'en_stock', 'created_at'],
         todos,
         formato
       );
@@ -907,7 +909,7 @@ export default function Stock() {
     const elegidos = dispositivos.filter((d) => seleccionados.has(d.id));
     descargarCSV(
       'stock-seleccion-qovento.csv',
-      ['modelo', 'capacidad_gb', 'color', 'imei', 'numero_serie', 'salud_bateria', 'precio', 'costo', 'proveedor', 'estado', 'en_stock', 'created_at'],
+      ['modelo', 'capacidad_gb', 'color', 'imei', 'numero_serie', 'salud_bateria', 'precio', ...(puedeVerCostos ? ['costo', 'proveedor'] : []), 'estado', 'en_stock', 'created_at'],
       elegidos
     );
   };
@@ -1086,7 +1088,7 @@ export default function Stock() {
   // Un dispositivo en stock cuenta como "dato incompleto" si le falta algo
   // relevante para venderlo bien: precio, costo, color o capacidad. Se usa
   // en la vista rápida y en el indicador financiero de más arriba.
-  const dispositivoIncompleto = (d: Dispositivo) => d.precio == null || d.costo == null || !d.color || !d.capacidad_gb;
+  const dispositivoIncompleto = (d: Dispositivo) => d.precio == null || (puedeVerCostos && d.costo == null) || !d.color || !d.capacidad_gb;
 
   const cumpleFiltroRapido = (d: Dispositivo) => {
     switch (filtroRapido) {
@@ -1727,25 +1729,29 @@ export default function Stock() {
             {t('Capital en stock')}
           </p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
-            <IndicadorCapital
-              etiqueta={t('Invertido (a costo)')}
-              valor={capital.costo}
-              cobertura={capital.costoCobertura}
-              total={capital.totalItems}
-            />
+            {puedeVerCostos && (
+              <IndicadorCapital
+                etiqueta={t('Invertido (a costo)')}
+                valor={capital.costo}
+                cobertura={capital.costoCobertura}
+                total={capital.totalItems}
+              />
+            )}
             <IndicadorCapital
               etiqueta={t('Valor de venta')}
               valor={capital.venta}
               cobertura={capital.ventaCobertura}
               total={capital.totalItems}
             />
-            <IndicadorCapital
-              etiqueta={t('Ganancia potencial')}
-              valor={capital.ganancia}
-              cobertura={capital.gananciaCobertura}
-              total={capital.totalItems}
-              tono="text-good"
-            />
+            {puedeVerCostos && (
+              <IndicadorCapital
+                etiqueta={t('Ganancia potencial')}
+                valor={capital.ganancia}
+                cobertura={capital.gananciaCobertura}
+                total={capital.totalItems}
+                tono="text-good"
+              />
+            )}
             <button
               type="button"
               onClick={() => {
@@ -1842,7 +1848,7 @@ export default function Stock() {
             </div>
 
             <div className="flex items-center gap-2 text-xs overflow-x-auto">
-              {VISTAS_RAPIDAS.map((v) => (
+              {VISTAS_RAPIDAS.filter((v) => puedeVerCostos || v.id !== 'sin_costo').map((v) => (
                 <button
                   key={v.id}
                   onClick={() => setFiltroRapido(v.id)}
@@ -2449,6 +2455,7 @@ export default function Stock() {
                 ))}
               </datalist>
               <div className="flex gap-2">
+                {puedeVerCostos && (
                 <input
                   value={costoProducto}
                   onChange={(e) => setCostoProducto(sanitizarDecimal(e.target.value))}
@@ -2456,6 +2463,7 @@ export default function Stock() {
                   inputMode="decimal"
                   className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
                 />
+                )}
                 <input
                   value={precioProducto}
                   onChange={(e) => setPrecioProducto(sanitizarDecimal(e.target.value))}
@@ -2741,7 +2749,7 @@ export default function Stock() {
                       {t('Lista')} ${guiaPorId.get(p.id)!.lista!.toLocaleString('es-AR')}
                     </p>
                   )}
-                  {p.costo != null && (
+                  {puedeVerCostos && p.costo != null && (
                     <p className="text-[11px] text-muted dark:text-dark-text-secondary">{t('costo')} ${p.costo.toLocaleString('es-AR')}</p>
                   )}
                 </div>
@@ -2749,6 +2757,7 @@ export default function Stock() {
                 {editandoCantidad === p.id ? (
                   <div className="flex flex-col items-center gap-2 w-full pt-1 border-t border-border dark:border-dark-border mt-1">
                     <div className="flex flex-wrap items-center justify-center gap-1.5">
+                      {puedeVerCostos && (
                       <label className="flex items-center gap-1 text-xs text-muted dark:text-dark-text-secondary">
                         {t('Costo')}
                         <input
@@ -2759,6 +2768,7 @@ export default function Stock() {
                           className="w-16 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-2 py-1 text-sm"
                         />
                       </label>
+                      )}
                       <label className="flex items-center gap-1 text-xs text-muted dark:text-dark-text-secondary">
                         {t('Precio')}
                         <input

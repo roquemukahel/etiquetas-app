@@ -34,6 +34,8 @@ export default function NuevoDispositivo() {
   const actorActual = useActor();
   const t = useT();
   const puedeAgregarStock = tienePermiso(actorActual, 'agregar_stock');
+  // El costo es información sensible: solo con el permiso "ver costos y márgenes".
+  const puedeVerCostos = tienePermiso(actorActual, 'ver_costos');
   const sucursalActual = useSucursalActual();
 
   const [carpetas, setCarpetas] = useState<string[]>([]);
@@ -313,7 +315,7 @@ export default function NuevoDispositivo() {
             <SelectorFinanciacion label={t('Financiación')} value={guia} onChange={setGuia} heredado={null} />
           </>
         )}
-        <Campo label={t('Costo (lo que le pagaste al proveedor, opcional)')} valor={costo} onChange={setCosto} numerico />
+        {puedeVerCostos && <Campo label={t('Costo (lo que le pagaste al proveedor, opcional)')} valor={costo} onChange={setCosto} numerico />}
         <Campo label={t('Proveedor (opcional)')} valor={proveedor} onChange={setProveedor} listaId="proveedores-stock" />
         <datalist id="proveedores-stock">
           {proveedores.map((p) => (

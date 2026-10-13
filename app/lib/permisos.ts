@@ -47,7 +47,11 @@ export type Permiso =
   // propia. Ver y gestionar quedan juntos a propósito (a diferencia de
   // financiación, acá no hay un caso de uso de "vendedor autorizado que
   // registra egresos en el día a día" — es info sensible de caja).
-  | 'gestionar_egresos';
+  | 'gestionar_egresos'
+  // Cargar gastos (solo ve los que cargó él/ella) y registrar pagos a proveedores sin ver saldos ni compras:
+  // permisos propios, para una persona de confianza que NO es administradora ni tiene acceso completo.
+  | 'cargar_egresos'
+  | 'registrar_pagos_proveedores';
 
 // Sin actor elegido todavía, o un actor sin datos de permisos (guardado
 // antes de que existiera esto): no restringimos — mantiene el
@@ -66,6 +70,9 @@ export type Permiso =
 export function tienePermiso(actor: Actor | null, permiso: Permiso): boolean {
   if (!actor || !actor.permisos) return true;
   if (actor.permisos.esAdministrador ?? true) return true;
+  // Costos, ganancias y márgenes: permiso propio, apagado por defecto. NO lo da el acceso completo (el
+  // administrador siempre los ve); y un actor sin ese dato guardado cuenta como "no".
+  if (permiso === 'ver_costos') return actor.permisos.puedeVerCostos ?? false;
   // Auditoría y gestionar a otros usuarios quedan reservados al
   // administrador — "acceso completo" ya no alcanza para esto (antes de
   // este cambio no existía la distinción, así que un vendedor con acceso
@@ -92,6 +99,10 @@ export function tienePermiso(actor: Actor | null, permiso: Permiso): boolean {
       return true;
     case 'gestionar_financiacion':
       return actor.permisos.puedeGestionarFinanciacion ?? true;
+    case 'cargar_egresos':
+      return actor.permisos.puedeCargarEgresos ?? false;
+    case 'registrar_pagos_proveedores':
+      return actor.permisos.puedeRegistrarPagosProveedores ?? false;
     // 'gestionar_comisiones' y 'ajustar_financiacion' NO están acá a
     // propósito: gestionar_comisiones cae en default → solo administrador o
     // acceso completo; ajustar_financiacion ya se resolvió (a false) arriba,

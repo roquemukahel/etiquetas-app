@@ -53,12 +53,18 @@ type Persona = {
   puede_recibir_servicio_tecnico?: boolean;
   puede_gestionar_servicio_tecnico?: boolean;
   puede_gestionar_financiacion?: boolean;
+  // Permisos sensibles: en su propia consulta (permisos_sensibles_supabase.sql); si falta, valen NO.
+  puede_cargar_egresos?: boolean;
+  puede_registrar_pagos_proveedores?: boolean;
+  puede_ver_costos?: boolean;
   // Sucursal asignada (Configuración > Vendedores/Técnicos) — misma
   // consulta aparte que los permisos de arriba, por el mismo motivo: si
   // sucursales_supabase.sql todavía no se corrió, esta columna no existe
   // y esa consulta puede fallar sola sin romper nombre/foto/PIN.
   sucursal_id?: string | null;
 };
+
+const COLUMNAS_SENSIBLES = 'id, puede_cargar_egresos, puede_registrar_pagos_proveedores, puede_ver_costos';
 
 const COLUMNAS_PERMISOS =
   'id, es_administrador, acceso_completo, puede_vender, puede_eliminar, puede_agregar_stock, puede_ver_estadisticas, puede_recibir_servicio_tecnico, puede_gestionar_servicio_tecnico, puede_gestionar_financiacion';
@@ -156,7 +162,7 @@ export default function SelectorDeActor() {
     if (esRutaExcluida || !mostrarOverlay || cargando) return;
     setCargando(true);
     (async () => {
-      const [{ data: vend }, { data: tec }, { data: idsVend }, { data: idsTec }, permVendRes, permTecRes, sucVendRes, sucTecRes] = await Promise.all([
+      const [{ data: vend }, { data: tec }, { data: idsVend }, { data: idsTec }, permVendRes, permTecRes, sucVendRes, sucTecRes, sensVendRes, sensTecRes] = await Promise.all([
         supabase.from('vendedores').select('id, nombre, foto_url, telefono, edad').order('nombre'),
         supabase.from('tecnicos').select('id, nombre, foto_url, telefono, edad').order('nombre'),
         supabase.rpc('ids_vendedores_con_pin'),
@@ -170,6 +176,9 @@ export default function SelectorDeActor() {
         // que sí existe siempre.
         supabase.from('vendedores').select('id, sucursal_id'),
         supabase.from('tecnicos').select('id, sucursal_id'),
+        // Permisos sensibles, también aparte: si el SQL no se corrió, esta consulta falla sola.
+        supabase.from('vendedores').select(COLUMNAS_SENSIBLES),
+        supabase.from('tecnicos').select(COLUMNAS_SENSIBLES),
       ]);
       const conPinVend = new Set(((idsVend as { id: string }[]) ?? []).map((r) => r.id));
       const conPinTec = new Set(((idsTec as { id: string }[]) ?? []).map((r) => r.id));
@@ -181,8 +190,10 @@ export default function SelectorDeActor() {
       const permisosTec = new Map(((permTecRes.data as any[]) ?? []).map((p) => [p.id, p]));
       const sucursalVend = new Map(((sucVendRes.data as { id: string; sucursal_id: string | null }[]) ?? []).map((p) => [p.id, p.sucursal_id]));
       const sucursalTec = new Map(((sucTecRes.data as { id: string; sucursal_id: string | null }[]) ?? []).map((p) => [p.id, p.sucursal_id]));
-      setVendedores((vend ?? []).map((v) => ({ ...v, tienePin: conPinVend.has(v.id), ...permisosVend.get(v.id), sucursal_id: sucursalVend.get(v.id) ?? null })));
-      setTecnicos((tec ?? []).map((tc) => ({ ...tc, tienePin: conPinTec.has(tc.id), ...permisosTec.get(tc.id), sucursal_id: sucursalTec.get(tc.id) ?? null })));
+      const sensiblesVend = new Map(((sensVendRes.data as any[]) ?? []).map((p) => [p.id, p]));
+      const sensiblesTec = new Map(((sensTecRes.data as any[]) ?? []).map((p) => [p.id, p]));
+      setVendedores((vend ?? []).map((v) => ({ ...v, tienePin: conPinVend.has(v.id), ...permisosVend.get(v.id), ...sensiblesVend.get(v.id), sucursal_id: sucursalVend.get(v.id) ?? null })));
+      setTecnicos((tec ?? []).map((tc) => ({ ...tc, tienePin: conPinTec.has(tc.id), ...permisosTec.get(tc.id), ...sensiblesTec.get(tc.id), sucursal_id: sucursalTec.get(tc.id) ?? null })));
       setCargando(false);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -206,6 +217,10 @@ export default function SelectorDeActor() {
         puedeRecibirServicioTecnico: persona.puede_recibir_servicio_tecnico ?? true,
         puedeGestionarServicioTecnico: persona.puede_gestionar_servicio_tecnico ?? true,
         puedeGestionarFinanciacion: persona.puede_gestionar_financiacion ?? true,
+        // Estos tres, a diferencia de los de arriba, sin dato valen NO.
+        puedeCargarEgresos: persona.puede_cargar_egresos ?? false,
+        puedeRegistrarPagosProveedores: persona.puede_registrar_pagos_proveedores ?? false,
+        puedeVerCostos: persona.puede_ver_costos ?? false,
       },
       sucursalId: persona.sucursal_id ?? null,
     };
