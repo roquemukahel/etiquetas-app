@@ -3272,4 +3272,7 @@ export const EN: Record<string, string> = {
   'Caja del local': 'Branch cash register',
   'Billetera del dueño': 'Owner\'s wallet',
   'ya incluido en el Total, no salió de la caja': 'already included in the Total, it did not come out of the cash register',
+  'Recibió:': 'Received by:',
+  'Técnicos de esta sucursal': 'Technicians of this branch',
+  'Otras sucursales': 'Other branches',
 };

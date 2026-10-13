@@ -20,7 +20,7 @@ function IconoChico({ nombre }: { nombre: string }) {
   );
 }
 
-export type Tecnico = { id: string; nombre: string; foto_url: string | null };
+export type Tecnico = { id: string; nombre: string; foto_url: string | null; sucursal_id?: string | null };
 
 export type Reparacion = {
   id: string;

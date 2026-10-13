@@ -114,6 +114,8 @@ type Reparacion = {
   numero_orden: string | null;
   cliente_id: string | null;
   sucursal_id: string | null;
+  // Quién recibió el equipo (servicio_tecnico_recibido_por_supabase.sql).
+  recibido_por_nombre?: string | null;
   modelo: string | null;
   capacidad_gb: number | null;
   color: string | null;
@@ -1270,6 +1272,11 @@ export default function FichaReparacion() {
               {nombreCliente || t('Equipo propio del local')}
             </span>
             <span>· {t('Ingresó')} {hace(r.fecha_ingreso_servicio)}</span>
+            {r.recibido_por_nombre && (
+              <span>
+                · {t('Recibió:')} {r.recibido_por_nombre}
+              </span>
+            )}
             {demorado && <span className="text-bad font-medium">· {t('Demorada')}</span>}
           </p>
         </div>

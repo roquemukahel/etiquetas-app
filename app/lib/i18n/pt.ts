@@ -3273,4 +3273,7 @@ export const PT: Record<string, string> = {
   'Caja del local': 'Caixa da loja',
   'Billetera del dueño': 'Carteira do dono',
   'ya incluido en el Total, no salió de la caja': 'já incluído no Total, não saiu do caixa',
+  'Recibió:': 'Recebido por:',
+  'Técnicos de esta sucursal': 'Técnicos desta filial',
+  'Otras sucursales': 'Outras filiais',
 };

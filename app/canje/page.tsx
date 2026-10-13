@@ -17,6 +17,7 @@ import { Boton, BotonIcono } from '../Boton';
 import { useT } from '../lib/idioma';
 import { useSucursalActual } from '../lib/sucursal';
 import { falla, registrarFallo } from '../lib/escritura';
+import { camposRecibidoPor, registrarRecepcionEnHistorial } from '../lib/recibidoPor';
 
 type Canje = {
   id: string;
@@ -194,11 +195,13 @@ export default function PlanCanje() {
         falla_declarada: c.detalles,
         ubicacion_fisica: c.ubicacion_fisica,
         estado: 'recibido',
+        ...(await camposRecibidoPor(supabase)),
         canje_origen_id: c.id,
         ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
       })
       .select('id, numero_orden')
       .single();
+    await registrarRecepcionEnHistorial(supabase, nueva?.id ? [nueva.id] : []);
     await falla(supabase.from('canjes').update({ oculto_en_canje: true }).eq('id', c.id), t, 'ocultar el canje derivado');
     await registrarAuditoria(supabase, {
       accion: `derivó a Servicio Técnico un dispositivo de Plan Canje (${nueva?.numero_orden || ''}, ${c.modelo || 'sin modelo'}${c.imei ? `, IMEI ${c.imei}` : ''})`,

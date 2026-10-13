@@ -46,6 +46,7 @@ import { useT } from '../lib/idioma';
 import { useSucursalActual } from '../lib/sucursal';
 import { obtenerSucursales, type Sucursal } from '../lib/sucursales';
 import { falla } from '../lib/escritura';
+import { camposRecibidoPor, registrarRecepcionEnHistorial } from '../lib/recibidoPor';
 import { origenDeCliente } from '../lib/clientesDuplicados';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
@@ -275,6 +276,13 @@ export default function ServicioTecnico() {
   useEffect(() => {
     cargar();
     (async () => {
+      // Con la sucursal de cada técnico (para ofrecer primero los de la sucursal donde se carga la orden); si el
+      // negocio no tiene sucursales, esa columna no existe y se trae como siempre.
+      const conSucursal = await supabase.from('tecnicos').select('id, nombre, foto_url, sucursal_id').order('nombre');
+      if (!conSucursal.error) {
+        setTecnicos((conSucursal.data as Tecnico[]) ?? []);
+        return;
+      }
       const { data } = await supabase.from('tecnicos').select('id, nombre, foto_url').order('nombre');
       setTecnicos((data as Tecnico[]) ?? []);
     })();
@@ -318,6 +326,17 @@ export default function ServicioTecnico() {
     setClienteInput(valor);
     const encontrado = clientes.find((c) => nombreCompleto(c).toLowerCase() === valor.trim().toLowerCase());
     if (encontrado) setClienteTelefono(encontrado.telefono ?? '');
+  };
+
+  // Técnicos de la sucursal donde se carga la orden (la elegida arriba): son los que se ofrecen primero, y si
+  // hay uno solo —o quien recibe es un técnico de esa sucursal— queda asignado de entrada. Antes quedaba el
+  // de la pestaña Técnicos que se estuviera mirando (a veces de otra sucursal).
+  const tecnicosDeSucursal = sucursalActual.id ? tecnicos.filter((tec) => tec.sucursal_id === sucursalActual.id) : [];
+  const tecnicoPorDefecto = (): string => {
+    if (actor?.tipo === 'tecnico' && (!sucursalActual.id || tecnicosDeSucursal.some((tec) => tec.id === actor.id))) return actor.id;
+    if (tab === 'tecnicos' && tecnicoSeleccionado && (!sucursalActual.id || tecnicos.find((tec) => tec.id === tecnicoSeleccionado)?.sucursal_id === sucursalActual.id)) return tecnicoSeleccionado;
+    if (tecnicosDeSucursal.length === 1) return tecnicosDeSucursal[0].id;
+    return '';
   };
 
   const nombreTecnico = (tecnicoId: string | null) => tecnicos.find((tec) => tec.id === tecnicoId)?.nombre;
@@ -686,6 +705,7 @@ export default function ServicioTecnico() {
     }
 
     const actorRecepcion = getActor();
+    const recibidoPor = await camposRecibidoPor(supabase);
     const { data: creadas, error: repError } = await supabase
       .from('reparaciones')
       .insert(
@@ -709,6 +729,7 @@ export default function ServicioTecnico() {
             falla_declarada: eq.falla || null,
             ubicacion_fisica: eq.ubicacion || null,
             estado: 'recibido',
+            ...recibidoPor,
             cliente_id: clienteId,
             tecnico_id: asignadoTecnicoId || null,
             orden_cobro_id: ordenId,
@@ -732,6 +753,12 @@ export default function ServicioTecnico() {
       setGuardandoNuevo(false);
       return;
     }
+
+    // Queda en el historial de cada ficha quién recibió el equipo.
+    await registrarRecepcionEnHistorial(
+      supabase,
+      (creadas ?? []).map((c) => c.id)
+    );
 
     // Evidencia fotográfica al recepcionar (opcional, una o varias por
     // equipo) — mismo destino (reparaciones_evidencias) que la pestaña
@@ -1061,7 +1088,7 @@ export default function ServicioTecnico() {
         {puedeRecibir && (
           <button
             onClick={() => {
-              if (!panelNuevo && tab === 'tecnicos' && tecnicoSeleccionado) setAsignadoTecnicoId(tecnicoSeleccionado);
+              if (!panelNuevo) setAsignadoTecnicoId(tecnicoPorDefecto());
               setPanelNuevo((v) => !v);
             }}
             className="shrink-0 rounded-xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors px-4 py-2.5 text-sm font-medium text-white"
@@ -1288,11 +1315,32 @@ export default function ServicioTecnico() {
                 className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
               >
                 <option value="">{t('Sin asignar')}</option>
-                {tecnicos.map((tec) => (
-                  <option key={tec.id} value={tec.id}>
-                    {tec.nombre}
-                  </option>
-                ))}
+                {tecnicosDeSucursal.length > 0 ? (
+                  <>
+                    <optgroup label={t('Técnicos de esta sucursal')}>
+                      {tecnicosDeSucursal.map((tec) => (
+                        <option key={tec.id} value={tec.id}>
+                          {tec.nombre}
+                        </option>
+                      ))}
+                    </optgroup>
+                    <optgroup label={t('Otras sucursales')}>
+                      {tecnicos
+                        .filter((tec) => !tecnicosDeSucursal.some((x) => x.id === tec.id))
+                        .map((tec) => (
+                          <option key={tec.id} value={tec.id}>
+                            {tec.nombre}
+                          </option>
+                        ))}
+                    </optgroup>
+                  </>
+                ) : (
+                  tecnicos.map((tec) => (
+                    <option key={tec.id} value={tec.id}>
+                      {tec.nombre}
+                    </option>
+                  ))
+                )}
               </select>
 
               <p className="text-xs font-medium text-muted dark:text-dark-text-secondary mt-1">

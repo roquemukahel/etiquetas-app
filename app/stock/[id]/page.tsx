@@ -15,6 +15,7 @@ import { limpiarImei } from '../../lib/imei';
 import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
 import { useT } from '../../lib/idioma';
 import SelectorFinanciacion from '../../SelectorFinanciacion';
+import { camposRecibidoPor, registrarRecepcionEnHistorial } from '../../lib/recibidoPor';
 import { guiaDeFormulario, guiaAFormulario } from '../../lib/financiacionGuia';
 import { compararModelosPorSalida } from '../../lib/catalogosMarcas';
 
@@ -204,6 +205,7 @@ export default function DetalleDispositivo() {
         imei: d.imei,
         falla_declarada: derivarDetalles.trim() || null,
         estado: 'recibido',
+        ...(await camposRecibidoPor(supabase)),
         ...(d.sucursal_id ? { sucursal_id: d.sucursal_id } : {}),
       })
       .select('id, numero_orden')
@@ -220,6 +222,7 @@ export default function DetalleDispositivo() {
     if (updateError) {
       setError(`${t('Se creó la reparación pero no pudimos sacar el dispositivo de Stock:')} ` + updateError.message);
     }
+    await registrarRecepcionEnHistorial(supabase, [nueva.id]);
     await registrarAuditoria(supabase, {
       accion: `derivó de Stock a Servicio Técnico un dispositivo (${nueva.numero_orden || ''}, ${d.modelo || 'sin modelo'}${d.imei ? `, IMEI ${d.imei}` : ''})`,
       entidad: 'reparacion',

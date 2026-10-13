@@ -30,6 +30,7 @@ import SelectorFinanciacion from '../SelectorFinanciacion';
 import { soportaMigracion } from '../lib/migraciones';
 import { agregarCanjeAlStock, canjesPendientes, type CanjeParaStock } from '../lib/canje';
 import { limpiarImei } from '../lib/imei';
+import { camposRecibidoPor, registrarRecepcionEnHistorial } from '../lib/recibidoPor';
 import { resolverMaxCuotas, guiaDeFormulario, guiaAFormulario, type MaxCuotas } from '../lib/financiacionGuia';
 
 function IconoChico({ nombre, className = '' }: { nombre: string; className?: string }) {
@@ -959,6 +960,7 @@ export default function Stock() {
         color: d.color,
         imei: d.imei,
         estado: 'recibido',
+        ...(await camposRecibidoPor(supabase)),
         // Hereda la sucursal del propio dispositivo que se deriva, no la
         // que esté eligiendo ahora quien aprieta el botón.
         ...(d.sucursal_id ? { sucursal_id: d.sucursal_id } : {}),
@@ -977,6 +979,7 @@ export default function Stock() {
     if (updateError) {
       alert(`${t('Se creó la reparación pero no pudimos sacar el dispositivo de Stock:')} ` + updateError.message);
     }
+    await registrarRecepcionEnHistorial(supabase, [nueva.id]);
     await registrarAuditoria(supabase, {
       accion: `derivó de Stock a Servicio Técnico un dispositivo (${nueva.numero_orden || ''}, ${d.modelo || 'sin modelo'}${d.imei ? `, IMEI ${d.imei}` : ''})`,
       entidad: 'reparacion',

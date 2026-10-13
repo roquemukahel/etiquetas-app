@@ -27,6 +27,7 @@ import { opcionesLocalidad, coincideLocalidad } from '../lib/localidades';
 import { localeDe } from '../lib/i18n/traducir';
 import { useSucursalActual } from '../lib/sucursal';
 import { obtenerSucursales, type Sucursal } from '../lib/sucursales';
+import { soportaMigracion } from '../lib/migraciones';
 
 type Orden = {
   id: string;
@@ -182,6 +183,7 @@ type RepST = {
   estado: string;
   forma_pago: string | null;
   tecnicos: { nombre: string } | null;
+  recibido_por_nombre?: string | null;
 };
 const COLUMNAS_REP_ST =
   'orden_cobro_id, orden_origen_id, numero_orden, modelo, falla_declarada, diagnostico, resultado_final, estado, forma_pago, tecnicos ( nombre )';
@@ -964,6 +966,7 @@ export default function Ordenes() {
     if (ids.length === 0) return;
     ids.forEach((id) => repsSolicitadas.current.add(id));
     (async () => {
+      const conRecibidoPor = await soportaMigracion(supabase, 'recibidoPor');
       const lotes: string[][] = [];
       for (let i = 0; i < ids.length; i += 100) lotes.push(ids.slice(i, i + 100));
       const resultados = await Promise.all(
@@ -973,7 +976,7 @@ export default function Ordenes() {
           const lista = lote.join(',');
           const { data, error } = await supabase
             .from('reparaciones')
-            .select(COLUMNAS_REP_ST)
+            .select(COLUMNAS_REP_ST + (conRecibidoPor ? ', recibido_por_nombre' : ''))
             .or(`orden_cobro_id.in.(${lista}),orden_origen_id.in.(${lista})`);
           // Si falla, se vuelve a intentar la próxima vez que esas tarjetas se muestren.
           if (error) lote.forEach((id) => repsSolicitadas.current.delete(id));
@@ -1591,6 +1594,7 @@ export default function Ordenes() {
                         ? `${o.orden_items[0].descripcion}${o.orden_items.length > 1 ? ` +${o.orden_items.length - 1}` : ''}`
                         : t('Orden vacía');
                   const numerosST = reps.map((r) => r.numero_orden).filter(Boolean).join(', ');
+                  const recibioST = Array.from(new Set(reps.map((r) => r.recibido_por_nombre).filter((n): n is string => !!n))).join(', ');
                   const tecnicosST = Array.from(new Set(reps.map((r) => r.tecnicos?.nombre).filter((n): n is string => !!n))).join(', ');
                   const formaPagoOrden = o.forma_pago || reps.find((r) => r.forma_pago)?.forma_pago || null;
                   const estadoRep = reps[0] ? infoEstado(reps[0].estado) : null;
@@ -1622,6 +1626,7 @@ export default function Ordenes() {
                           {[
                             formatearFechaHora(fechaEfectiva(o), locale),
                             o.vendedores?.nombre ? `${t('Vend.:')} ${o.vendedores.nombre}` : servicio ? `${t('Vend.:')} ${t('Sin asignar')}` : null,
+                            recibioST ? `${t('Recibió:')} ${recibioST}` : null,
                             tecnicosST ? `${t('Téc.:')} ${tecnicosST}` : null,
                             formaPagoOrden ? formaPagoOrden.split(' + ').map((f) => t(f)).join(' + ') : t('Sin definir'),
                           ]

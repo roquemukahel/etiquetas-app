@@ -18,6 +18,7 @@ import AvisoCanje from '../../AvisoCanje';
 import { useCoincidenciasCanje } from '../../lib/useCoincidenciasCanje';
 import { hayCanjeConEseImei } from '../../lib/canje';
 import { falla } from '../../lib/escritura';
+import { camposRecibidoPor, registrarRecepcionEnHistorial } from '../../lib/recibidoPor';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
 
@@ -164,6 +165,7 @@ export default function DetalleCompra() {
         imei: compra.imei,
         falla_declarada: compra.detalles,
         estado: 'recibido',
+        ...(await camposRecibidoPor(supabase)),
         ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
       })
       .select('id, numero_orden')
@@ -173,6 +175,7 @@ export default function DetalleCompra() {
       setProcesando(false);
       return;
     }
+    await registrarRecepcionEnHistorial(supabase, nueva?.id ? [nueva.id] : []);
     await falla(supabase.from('compras').update({ estado: 'servicio_tecnico' }).eq('id', id), t, 'marcar la compra como derivada a Servicio Técnico');
     await registrarAuditoria(supabase, {
       accion: `derivó a Servicio Técnico un dispositivo comprado (${nueva?.numero_orden || ''}, ${compra.modelo || 'sin modelo'}${compra.imei ? `, IMEI ${compra.imei}` : ''}) de ${nombreCliente(compra)}`,

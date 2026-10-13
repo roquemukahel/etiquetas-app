@@ -34,6 +34,7 @@ import {
 import { cuotasEfectivasDeOrden, etiquetaCuotas, interesDe, interesGuardadoDeOrden, planesActivos, valorCuota } from '../../lib/cuotas';
 import { registrarFallo, falla } from '../../lib/escritura';
 import { obtenerTodasLasFilas } from '../../lib/db';
+import { camposRecibidoPor } from '../../lib/recibidoPor';
 
 const ESTADOS = ['pendiente', 'pagado', 'entregado'];
 const STORAGE_OPTIONS = [64, 128, 256, 512];
@@ -365,6 +366,7 @@ export default function DetalleOrden() {
         patron_desbloqueo: derivarTipoBloqueo === 'patron' ? derivarPatronDesbloqueo || null : null,
         falla_declarada: derivarDetalles.trim() || null,
         estado: 'recibido',
+        ...(await camposRecibidoPor(supabase)),
         enciende: ci.enciende ?? null,
         modulo_ok: ci.modulo_ok ?? null,
         senal_ok: ci.senal_ok ?? null,

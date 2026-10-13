@@ -7,6 +7,7 @@ import { crearClienteNavegador } from '../../lib/supabase/client';
 import { useT } from '../../lib/idioma';
 import { asegurarModelo, normalizarNombreModelo } from '../../lib/modelos';
 import { TODOS_LOS_MODELOS_CATALOGO, compararModelosPorSalida } from '../../lib/catalogosMarcas';
+import { camposRecibidoPor, registrarRecepcionEnHistorial } from '../../lib/recibidoPor';
 import { obtenerTodasLasFilas } from '../../lib/db';
 import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../../lib/carpetas';
 import { obtenerDispositivosSenados } from '../../lib/planAhorro';
@@ -1648,6 +1649,7 @@ ${t('¿Cargarlo igual?')}`)) {
             patron_desbloqueo: der.tipoBloqueo === 'patron' ? der.patronDesbloqueo || null : null,
             falla_declarada: der.motivo.trim() || null,
             estado: 'recibido',
+            ...(await camposRecibidoPor(supabase)),
             prioridad: der.prioritario ? 'urgente' : 'normal',
             enciende: ci.enciende ?? null,
             modulo_ok: ci.modulo_ok ?? null,
