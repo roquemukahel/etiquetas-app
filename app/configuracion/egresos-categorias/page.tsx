@@ -16,9 +16,12 @@ import {
   restaurarCategoriaEgreso,
   contarEnCategoriaEgreso,
   cambiarTipoGastoCategoria,
+  cambiarDuenosCategoria,
   ETIQUETA_TIPO_GASTO,
+  ETIQUETA_ROL_CATEGORIA,
   type CategoriaEgreso,
   type TipoGastoCategoria,
+  type RolCategoriaEgreso,
 } from '../../lib/egresos';
 import { Boton, BotonIcono } from '../../Boton';
 import { ICONOS } from '../../Iconos';
@@ -125,6 +128,25 @@ export default function CategoriasEgresos() {
     await cargar();
   };
 
+  // "Solo dueños" y función de la categoría (retiros de dueños, sueldo de dueños, traslado/arqueo).
+  const cambiarDuenos = async (c: CategoriaEgreso, cambios: { solo_duenos?: boolean; rol?: RolCategoriaEgreso | null }) => {
+    setProcesando(c.id);
+    setError(null);
+    const resultado = await cambiarDuenosCategoria(supabase, c.id, cambios);
+    setProcesando(null);
+    if ('error' in resultado) {
+      setError(t(resultado.error));
+      return;
+    }
+    await registrarAuditoria(supabase, {
+      accion: `cambió la categoría de egresos "${c.nombre}": ${cambios.solo_duenos !== undefined ? (cambios.solo_duenos ? 'solo dueños' : 'para todos') : ''}${cambios.rol !== undefined ? (cambios.rol ? `función ${ETIQUETA_ROL_CATEGORIA[cambios.rol]}` : 'sin función especial') : ''}`,
+      entidad: 'egreso_categoria',
+      entidadId: c.id,
+      valorAnterior: { solo_duenos: c.solo_duenos, rol: c.rol },
+    });
+    await cargar();
+  };
+
   const archivar = async (c: CategoriaEgreso) => {
     const conteo = await contarEnCategoriaEgreso(supabase, c.id);
     const detalle = conteo > 0 ? ` ${t('Tiene')} ${conteo} ${t('egreso(s) cargados — se conservan intactos, solo deja de ofrecerse para elegir en formularios nuevos.')}` : '';
@@ -225,6 +247,28 @@ export default function CategoriasEgresos() {
                   </button>
                 )}
                 {!c.activa && <p className="text-[11px] text-muted dark:text-dark-text-secondary">{t('Inactiva')}</p>}
+                {c.solo_duenos !== undefined && (
+                  <div className="flex flex-wrap items-center gap-2 mt-1">
+                    <label className="flex items-center gap-1 text-[11px] text-muted dark:text-dark-text-secondary cursor-pointer">
+                      <input type="checkbox" checked={!!c.solo_duenos} disabled={procesando === c.id} onChange={() => cambiarDuenos(c, { solo_duenos: !c.solo_duenos })} className="h-3.5 w-3.5 accent-ink" />
+                      {t('Solo dueños')}
+                    </label>
+                    <select
+                      value={c.rol ?? ''}
+                      disabled={procesando === c.id}
+                      onChange={(e) => cambiarDuenos(c, { rol: (e.target.value || null) as RolCategoriaEgreso | null })}
+                      aria-label={t('Función de la categoría')}
+                      className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-0.5 text-[11px]"
+                    >
+                      <option value="">{t('Sin función especial')}</option>
+                      {(Object.keys(ETIQUETA_ROL_CATEGORIA) as RolCategoriaEgreso[]).map((r) => (
+                        <option key={r} value={r}>
+                          {t(ETIQUETA_ROL_CATEGORIA[r])}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
               <select
                 value={c.tipo_gasto}

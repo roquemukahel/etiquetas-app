@@ -16,6 +16,8 @@ import {
   obtenerCategoriasEgresos,
   obtenerAreasEgresos,
   ETIQUETA_TIPO_EGRESO,
+  ETIQUETA_PAGADO_DESDE,
+  type PagadoDesde,
   type Egreso,
   type CategoriaEgreso,
   type AreaEgreso,
@@ -28,6 +30,7 @@ import CampoFecha from '../CampoFecha';
 import { useT } from '../lib/idioma';
 import { useSucursalActual } from '../lib/sucursal';
 import { obtenerSucursales, type Sucursal } from '../lib/sucursales';
+import { soportaMigracion } from '../lib/migraciones';
 
 type Proveedor = { id: string; nombre: string };
 
@@ -62,6 +65,14 @@ export default function Egresos() {
   const t = useT();
   const sucursalActual = useSucursalActual();
   const puede = tienePermiso(actor, 'gestionar_egresos');
+  // Las categorías marcadas "solo dueños" y los tipos Retiro de dinero / Ajuste los usan únicamente los
+  // administradores (los dueños). Sin actor elegido todavía no se restringe, igual que tienePermiso().
+  const esDueno = actor?.permisos ? (actor.permisos.esAdministrador ?? true) : true;
+  const [conDuenos, setConDuenos] = useState(false);
+  useEffect(() => {
+    soportaMigracion(supabase, 'egresosDuenos').then(setConDuenos);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [egresos, setEgresos] = useState<Egreso[]>([]);
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
@@ -93,7 +104,7 @@ export default function Egresos() {
     setError(null);
     try {
       const [egresosData, categoriasData, areasData] = await Promise.all([
-        obtenerEgresos(supabase, { desde, hasta }),
+        obtenerEgresos(supabase, { desde, hasta, conPagadoDesde: conDuenos }),
         obtenerCategoriasEgresos(supabase),
         obtenerAreasEgresos(supabase),
       ]);
@@ -125,7 +136,7 @@ export default function Egresos() {
       if (negocio?.monedas_habilitadas?.length) setMonedasDisponibles(negocio.monedas_habilitadas);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [puede, desde, hasta]);
+  }, [puede, desde, hasta, conDuenos]);
 
   useEffect(() => {
     (async () => {
@@ -137,6 +148,10 @@ export default function Egresos() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Un egreso de dueños (categoría "solo dueños" o tipo Retiro/Ajuste) solo lo tocan los dueños.
+  const esDeDuenos = (e: Egreso) => e.tipo === 'retiro' || e.tipo === 'ajuste' || !!categorias.find((c) => c.id === e.categoria_id)?.solo_duenos;
+  const puedeTocar = (e: Egreso) => esDueno || !esDeDuenos(e);
 
   const nombreCategoria = (id: string | null) => (id ? categorias.find((c) => c.id === id)?.nombre ?? t('Categoría eliminada') : t('Sin categoría'));
 
@@ -156,6 +171,17 @@ export default function Egresos() {
     const mapa = new Map<string, number>();
     for (const e of egresosFiltrados) {
       if (e.tipo === 'retiro') continue;
+      mapa.set(e.moneda, (mapa.get(e.moneda) ?? 0) + e.importe);
+    }
+    return Array.from(mapa.entries());
+  }, [egresosFiltrados]);
+
+  // Lo que se pagó de la billetera de un dueño no sale de la caja del local: se muestra aparte para que el
+  // total de gasto no se confunda con lo que realmente salió de la caja.
+  const deBilleteraPorMoneda = useMemo(() => {
+    const mapa = new Map<string, number>();
+    for (const e of egresosFiltrados) {
+      if (e.tipo === 'retiro' || e.pagado_desde !== 'billetera_dueno') continue;
       mapa.set(e.moneda, (mapa.get(e.moneda) ?? 0) + e.importe);
     }
     return Array.from(mapa.entries());
@@ -256,6 +282,22 @@ export default function Egresos() {
         )}
       </QCard>
 
+      {deBilleteraPorMoneda.length > 0 && (
+        <QCard padding="sm" className="flex flex-wrap gap-4">
+          {deBilleteraPorMoneda.map(([mon, total]) => (
+            <div key={mon}>
+              <p className="text-base font-display font-semibold leading-none text-muted dark:text-dark-text-secondary">
+                {simboloMoneda(mon)}
+                {formatearMonto(total)}
+              </p>
+              <p className="text-[11px] text-muted dark:text-dark-text-secondary mt-1">
+                👛 {t('Billetera del dueño')} {mon} · {t('ya incluido en el Total, no salió de la caja')}
+              </p>
+            </div>
+          ))}
+        </QCard>
+      )}
+
       {retirosPorMoneda.length > 0 && (
         <QCard padding="sm" className="flex flex-wrap gap-4">
           {retirosPorMoneda.map(([mon, total]) => (
@@ -290,6 +332,7 @@ export default function Egresos() {
                   {sucursales.length > 1 ? ` · 🏬 ${sucursales.find((s) => s.id === e.sucursal_id)?.nombre ?? t('Sin sucursal')}` : ''}
                   {areas.length > 0 && e.area_id ? ` · ${areas.find((a) => a.id === e.area_id)?.nombre ?? ''}` : ''}
                   {e.registrado_por_nombre ? ` · ${e.registrado_por_nombre}` : ''}
+                  {e.pagado_desde === 'billetera_dueno' ? ` · 👛 ${t(ETIQUETA_PAGADO_DESDE.billetera_dueno)}` : ''}
                 </p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
@@ -297,12 +340,16 @@ export default function Egresos() {
                   {simboloMoneda(e.moneda)}
                   {formatearMonto(e.importe)}
                 </span>
-                <button onClick={() => setModalEditar(e)} className="text-xs text-accent dark:text-dark-accent underline">
-                  {t('Editar')}
-                </button>
-                <button onClick={() => setModalAnular(e)} className="text-xs text-bad underline">
-                  {t('Anular')}
-                </button>
+                {puedeTocar(e) && (
+                  <>
+                    <button onClick={() => setModalEditar(e)} className="text-xs text-accent dark:text-dark-accent underline">
+                      {t('Editar')}
+                    </button>
+                    <button onClick={() => setModalAnular(e)} className="text-xs text-bad underline">
+                      {t('Anular')}
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           ))}
@@ -317,6 +364,8 @@ export default function Egresos() {
           areas={areas}
           monedaDefault={monedaCodigo}
           monedasDisponibles={monedasDisponibles}
+          esDueno={esDueno}
+          conDuenos={conDuenos}
           onClose={() => setModalNuevo(false)}
           onGuardado={async () => {
             setModalNuevo(false);
@@ -334,6 +383,8 @@ export default function Egresos() {
           areas={areas}
           monedaDefault={monedaCodigo}
           monedasDisponibles={monedasDisponibles}
+          esDueno={esDueno}
+          conDuenos={conDuenos}
           onClose={() => setModalEditar(null)}
           onGuardado={async () => {
             setModalEditar(null);
@@ -364,6 +415,8 @@ function ModalEgreso({
   areas,
   monedaDefault,
   monedasDisponibles,
+  esDueno,
+  conDuenos,
   onClose,
   onGuardado,
 }: {
@@ -374,6 +427,8 @@ function ModalEgreso({
   areas: AreaEgreso[];
   monedaDefault: string;
   monedasDisponibles: string[];
+  esDueno: boolean;
+  conDuenos: boolean;
   onClose: () => void;
   onGuardado: () => void;
 }) {
@@ -381,14 +436,19 @@ function ModalEgreso({
   const t = useT();
   const sucursalActual = useSucursalActual();
   const [fecha, setFecha] = useState(() => egresoAEditar?.fecha ?? aFechaLocal(new Date()));
-  const [categoriaId, setCategoriaId] = useState(egresoAEditar?.categoria_id ?? categorias[0]?.id ?? '');
+  // Categoría y sucursal son obligatorias: arrancan vacías para que se elijan a propósito.
+  const [categoriaId, setCategoriaId] = useState(egresoAEditar?.categoria_id ?? '');
   const [tipo, setTipo] = useState<TipoEgreso>(egresoAEditar?.tipo ?? 'gasto_operativo');
   const [descripcion, setDescripcion] = useState(egresoAEditar?.descripcion ?? '');
   const [importe, setImporte] = useState(egresoAEditar ? String(egresoAEditar.importe) : '');
   const [moneda, setMoneda] = useState(egresoAEditar?.moneda ?? monedaDefault);
   const [medioPago, setMedioPago] = useState(egresoAEditar?.medio_pago ?? '');
   const [proveedorId, setProveedorId] = useState(egresoAEditar?.proveedor_id ?? '');
-  const [sucursalId, setSucursalId] = useState(egresoAEditar?.sucursal_id ?? sucursalActual.id ?? '');
+  const [sucursalId, setSucursalId] = useState(egresoAEditar?.sucursal_id ?? sucursalActual.id ?? (sucursales.length === 1 ? sucursales[0].id : ''));
+  const [pagadoDesde, setPagadoDesde] = useState<PagadoDesde>(egresoAEditar?.pagado_desde ?? 'caja');
+  // Para quien no es dueño: sin las categorías "solo dueños" ni los tipos Retiro/Ajuste.
+  const categoriasVisibles = categorias.filter((c) => esDueno || !c.solo_duenos);
+  const tiposVisibles = (Object.entries(ETIQUETA_TIPO_EGRESO) as [TipoEgreso, string][]).filter(([valor]) => esDueno || (valor !== 'retiro' && valor !== 'ajuste'));
   const [areaId, setAreaId] = useState(egresoAEditar?.area_id ?? '');
   const [notas, setNotas] = useState(egresoAEditar?.notas ?? '');
   const [error, setError] = useState<string | null>(null);
@@ -446,6 +506,14 @@ function ModalEgreso({
       setError(t('El importe tiene que ser mayor a 0.'));
       return;
     }
+    if (!categoriaId) {
+      setError(t('Elegí una categoría.'));
+      return;
+    }
+    if (sucursales.length > 0 && !sucursalId) {
+      setError(t('Elegí una sucursal.'));
+      return;
+    }
     setGuardando(true);
     setError(null);
     const params = {
@@ -460,6 +528,7 @@ function ModalEgreso({
       notas,
       sucursalId: sucursalId || null,
       areaId: areaId || null,
+      ...(conDuenos ? { pagadoDesde } : {}),
     };
     const resultado = egresoAEditar ? await editarEgreso(supabase, egresoAEditar, params) : await crearEgreso(supabase, params);
     setGuardando(false);
@@ -504,7 +573,7 @@ function ModalEgreso({
               onChange={(e) => setTipo(e.target.value as TipoEgreso)}
               className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
             >
-              {(Object.entries(ETIQUETA_TIPO_EGRESO) as [TipoEgreso, string][]).map(([valor, label]) => (
+              {tiposVisibles.map(([valor, label]) => (
                 <option key={valor} value={valor}>
                   {t(label)}
                 </option>
@@ -537,8 +606,8 @@ function ModalEgreso({
             <div>
               <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Categoría')}</label>
               <select value={categoriaId} onChange={(e) => setCategoriaId(e.target.value)} className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm">
-                <option value="">{t('Sin categoría')}</option>
-                {categorias.map((c) => (
+                <option value="">{t('Elegí una categoría')}</option>
+                {categoriasVisibles.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.nombre}
                   </option>
@@ -551,8 +620,8 @@ function ModalEgreso({
           <div>
             <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Categoría')}</label>
             <select value={categoriaId} onChange={(e) => setCategoriaId(e.target.value)} className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm">
-              <option value="">{t('Sin categoría')}</option>
-              {categorias.map((c) => (
+              <option value="">{t('Elegí una categoría')}</option>
+              {categoriasVisibles.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.nombre}
                 </option>
@@ -584,13 +653,30 @@ function ModalEgreso({
             </select>
           </div>
         </div>
+        {conDuenos && (
+          <div>
+            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Pagado desde')}</label>
+            <select value={pagadoDesde} onChange={(e) => setPagadoDesde(e.target.value as PagadoDesde)} className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm">
+              {(Object.keys(ETIQUETA_PAGADO_DESDE) as PagadoDesde[]).map((v) => (
+                <option key={v} value={v}>
+                  {t(ETIQUETA_PAGADO_DESDE[v])}
+                </option>
+              ))}
+            </select>
+            {pagadoDesde === 'billetera_dueno' && (
+              <p className="text-[11px] text-muted dark:text-dark-text-secondary mt-1">
+                {t('Lo pagaste de tu bolsillo: no descuenta de la caja de la sucursal, pero sigue contando como gasto de la sucursal que elijas.')}
+              </p>
+            )}
+          </div>
+        )}
         {(sucursales.length > 1 || areas.length > 0) && (
           <div className="grid grid-cols-2 gap-3">
             {sucursales.length > 1 && (
               <div>
                 <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Sucursal')}</label>
                 <select value={sucursalId} onChange={(e) => setSucursalId(e.target.value)} className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm">
-                  <option value="">{t('Sin especificar')}</option>
+                  <option value="">{t('Elegí una sucursal')}</option>
                   {sucursales.map((s) => (
                     <option key={s.id} value={s.id}>
                       🏬 {s.nombre}

@@ -422,7 +422,26 @@ export function resumenComisionesDe(movimientos: ComisionMovR[], inicio: Date, f
 // `new Date(fechaISO)`, que para una fecha "pelada" cae en medianoche UTC, no
 // local — podía correr un egreso al mes de al lado cerca del límite del
 // período según el huso horario del que mira la pantalla.
-export type EgresoR = { importe: number; fecha: string; sucursal_id?: string | null; area_id?: string | null };
+export type EgresoR = {
+  importe: number;
+  fecha: string;
+  sucursal_id?: string | null;
+  area_id?: string | null;
+  categoria_id?: string | null;
+  registrado_por_nombre?: string | null;
+};
+
+// Retiros de los dueños: suma por persona (quien registró el egreso, que solo puede ser un dueño).
+export function retirosPorPersona(egresos: EgresoR[], inicio: Date, fin: Date): { nombre: string; total: number }[] {
+  const mapa = new Map<string, number>();
+  for (const e of egresos.filter((x) => entre(x.fecha + 'T00:00:00', inicio, fin))) {
+    const nombre = e.registrado_por_nombre?.trim() || 'Sin nombre';
+    mapa.set(nombre, (mapa.get(nombre) ?? 0) + e.importe);
+  }
+  return Array.from(mapa.entries())
+    .map(([nombre, total]) => ({ nombre, total }))
+    .sort((a, b) => b.total - a.total);
+}
 
 export function egresosPeriodoDe(egresos: EgresoR[], inicio: Date, fin: Date): number {
   return egresos.filter((e) => entre(e.fecha + 'T00:00:00', inicio, fin)).reduce((a, e) => a + e.importe, 0);

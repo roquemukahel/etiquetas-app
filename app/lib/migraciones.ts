@@ -11,6 +11,9 @@ const CHEQUEOS = {
   guiaFinanciacionCategorias: (s: SupabaseClient) => s.from('stock_categorias').select('financiacion_max_cuotas').limit(1),
   guiaFinanciacionMaestro: (s: SupabaseClient) => s.from('productos_maestro').select('financiacion_max_cuotas, precio_lista').limit(1),
   creditosFueraGuia: (s: SupabaseClient) => s.from('creditos_fuera_guia').select('id').limit(1),
+  // egresos_duenos_supabase.sql
+  egresosDuenos: (s: SupabaseClient) => s.from('egresos').select('pagado_desde').limit(1),
+  categoriasEgresosDuenos: (s: SupabaseClient) => s.from('egresos_categorias').select('solo_duenos, rol').limit(1),
 } as const;
 
 export type MigracionOpcional = keyof typeof CHEQUEOS;

@@ -28,6 +28,7 @@ import {
   resumenFinanciacionDe,
   resumenComisionesDe,
   egresosPeriodoDe,
+  retirosPorPersona,
   rankingProductosDe,
   rankingCategoriasDe,
   pagadoPorProveedorDe,
@@ -51,7 +52,7 @@ import CampoFecha from '../CampoFecha';
 import { useT, useIdioma, type Idioma } from '../lib/idioma';
 import { useSucursalActual } from '../lib/sucursal';
 import { obtenerSucursales, type Sucursal } from '../lib/sucursales';
-import { obtenerAreasEgresos, type AreaEgreso } from '../lib/egresos';
+import { obtenerAreasEgresos, obtenerCategoriasEgresos, type AreaEgreso } from '../lib/egresos';
 import RubrosInversion from './RubrosInversion';
 import CarteraFinanciacion from './CarteraFinanciacion';
 
@@ -233,6 +234,11 @@ export default function Estadisticas() {
   // migración. Mismo criterio de agregación (sin separar por moneda) que ya
   // usan ventas/ingresado/ganancia en este mismo dashboard.
   const [egresosRaw, setEgresosRaw] = useState<EgresoR[]>([]);
+  // Retiros y sueldo de los dueños (categorías con esa función, egresos_duenos_supabase.sql): no son gasto
+  // operativo — se restan aparte para llegar a "Lo que queda en el negocio".
+  const [retirosDuenosRaw, setRetirosDuenosRaw] = useState<EgresoR[]>([]);
+  const [sueldoDuenosRaw, setSueldoDuenosRaw] = useState<EgresoR[]>([]);
+  const [hayCategoriasDuenos, setHayCategoriasDuenos] = useState(false);
   const [moneda, setMoneda] = useState('$');
   const [loading, setLoading] = useState(true);
   const [actualizado, setActualizado] = useState<Date | null>(null);
@@ -473,7 +479,7 @@ export default function Estadisticas() {
         // dejando vuelto — sin que el negocio haya perdido plata de verdad.
         // El detalle completo (incluidos los retiros) se sigue viendo entero
         // en /egresos, esto solo lo excluye del cálculo de resultado acá.
-        obtenerTodasLasFilas<EgresoR>(supabase, 'egresos', 'importe, fecha, sucursal_id, area_id', [], (q) =>
+        obtenerTodasLasFilas<EgresoR>(supabase, 'egresos', 'importe, fecha, sucursal_id, area_id, categoria_id', [], (q) =>
           q.eq('anulado', false).neq('tipo', 'retiro').gte('fecha', aFechaInput(desde))
         ),
         obtenerTodasLasFilas<DispositivoCompra>(supabase, 'dispositivos', 'proveedor_id, costo, created_at, sucursal_id', [], (q) =>
@@ -518,7 +524,35 @@ export default function Estadisticas() {
       setPlanesFinanciacion((planesFinData as PlanFinR[]) ?? []);
       setPagosFinanciacion((pagosFinData as PagoFinR[]) ?? []);
       setComisionMovs((comisionData as ComisionMovR[]) ?? []);
-      setEgresosRaw((egresosData as EgresoR[]) ?? []);
+      // Categorías de dueños: sus egresos salen del gasto operativo y se muestran aparte.
+      let operativos = (egresosData as EgresoR[]) ?? [];
+      let retirosDuenos: EgresoR[] = [];
+      let sueldoDuenos: EgresoR[] = [];
+      let categoriasDuenos = false;
+      if (puedeVerEgresos) {
+        const catsDuenos = (await obtenerCategoriasEgresos(supabase)).filter((c) => c.rol === 'retiro_duenos' || c.rol === 'sueldo_duenos');
+        if (catsDuenos.length > 0) {
+          categoriasDuenos = true;
+          const lote = catsDuenos.map((c) => c.id);
+          const deDuenos = await obtenerTodasLasFilas<EgresoR>(
+            supabase,
+            'egresos',
+            'importe, fecha, sucursal_id, area_id, categoria_id, registrado_por_nombre',
+            [],
+            (q) => q.eq('anulado', false).in('categoria_id', lote).gte('fecha', aFechaInput(desde))
+          );
+          const idRetiro = catsDuenos.find((c) => c.rol === 'retiro_duenos')?.id;
+          const idSueldo = catsDuenos.find((c) => c.rol === 'sueldo_duenos')?.id;
+          retirosDuenos = deDuenos.filter((e) => e.categoria_id === idRetiro);
+          sueldoDuenos = deDuenos.filter((e) => e.categoria_id === idSueldo);
+          const idsDuenos = new Set(lote);
+          operativos = operativos.filter((e) => !(e.categoria_id && idsDuenos.has(e.categoria_id)));
+        }
+      }
+      setEgresosRaw(operativos);
+      setRetirosDuenosRaw(retirosDuenos);
+      setSueldoDuenosRaw(sueldoDuenos);
+      setHayCategoriasDuenos(categoriasDuenos);
 
       // Nombres SOLO de los clientes que aparecen en órdenes/servicio (no los
       // miles). Un pedido acotado por ids en vez de traer toda la tabla.
@@ -961,6 +995,18 @@ export default function Estadisticas() {
   const egresosPeriodo = useMemo(() => egresosPeriodoDe(egresos, inicio, rango.fin), [egresos, inicio, rango.fin]);
   const hayEgresos = egresos.length > 0;
   const resultadoOperativoEstimado = actualB.ganancia - egresosPeriodo;
+
+  // Retiros y sueldo de los dueños del período (y de la sucursal elegida). "Lo que queda en el negocio" =
+  // resultado operativo − sueldo de dueños − retiros de dueños.
+  const retirosDuenos = useMemo(() => retirosDuenosRaw.filter((e) => !sucursalId || e.sucursal_id === sucursalId), [retirosDuenosRaw, sucursalId]);
+  const sueldoDuenos = useMemo(() => sueldoDuenosRaw.filter((e) => !sucursalId || e.sucursal_id === sucursalId), [sueldoDuenosRaw, sucursalId]);
+  const retirosDuenosPeriodo = useMemo(() => egresosPeriodoDe(retirosDuenos, inicio, rango.fin), [retirosDuenos, inicio, rango.fin]);
+  const sueldoDuenosPeriodo = useMemo(() => egresosPeriodoDe(sueldoDuenos, inicio, rango.fin), [sueldoDuenos, inicio, rango.fin]);
+  const retirosPorDueno = useMemo(
+    () => retirosPorPersona(retirosDuenos, inicio, rango.fin),
+    [retirosDuenos, inicio, rango.fin]
+  );
+  const quedaEnElNegocio = resultadoOperativoEstimado - sueldoDuenosPeriodo - retirosDuenosPeriodo;
 
   // ---------- Rentabilidad por sucursal y área (pedido explícito de un
   // cliente: "cortado por área, no solo para todo el negocio combinado") ----------
@@ -1789,6 +1835,44 @@ export default function Estadisticas() {
                 sensible
                 oculto={ocultarMontos}
               />
+            )}
+            {puedeVerCostos && puedeVerEgresos && hayCategoriasDuenos && (
+              <>
+                <StatCard
+                  etiqueta={t('Retiros de dueños')}
+                  valor={m(retirosDuenosPeriodo)}
+                  tooltip={t('Lo que retiraron los dueños en el período (categoría con la función "Retiros de dueños"), separado por persona. No es gasto operativo: no entra en el resultado operativo.')}
+                  moneda={moneda}
+                  tono="text-bad"
+                  sensible
+                  oculto={ocultarMontos}
+                >
+                  {!ocultarMontos && retirosPorDueno.length > 0 && (
+                    <span className="flex flex-col text-[11px] text-muted dark:text-dark-text-secondary">
+                      {retirosPorDueno.map((r) => (
+                        <span key={r.nombre}>
+                          {r.nombre}: {m(r.total)}
+                        </span>
+                      ))}
+                    </span>
+                  )}
+                </StatCard>
+                <StatCard
+                  etiqueta={t('Lo que queda en el negocio')}
+                  valor={m(quedaEnElNegocio)}
+                  tooltip={t('Resultado operativo estimado menos el sueldo de los dueños y menos los retiros de los dueños.')}
+                  moneda={moneda}
+                  tono={quedaEnElNegocio >= 0 ? 'text-good' : 'text-bad'}
+                  sensible
+                  oculto={ocultarMontos}
+                >
+                  {!ocultarMontos && (
+                    <span className="text-[11px] text-muted dark:text-dark-text-secondary">
+                      {t('Resultado operativo')} {m(resultadoOperativoEstimado)} − {t('Sueldo dueños')} {m(sueldoDuenosPeriodo)} − {t('Retiros')} {m(retirosDuenosPeriodo)}
+                    </span>
+                  )}
+                </StatCard>
+              </>
             )}
             <StatCard
               etiqueta={t('Dinero ingresado')}

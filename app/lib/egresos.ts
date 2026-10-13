@@ -29,6 +29,16 @@ export const ETIQUETA_TIPO_GASTO: Record<TipoGastoCategoria, string> = {
   no_es_gasto: 'No es gasto',
 };
 
+// Función de una categoría (egresos_duenos_supabase.sql): permite que Estadísticas y la Caja sepan cuáles son
+// los retiros de los dueños, el sueldo de los dueños y los traslados/arqueos de caja, sin depender del nombre.
+export type RolCategoriaEgreso = 'retiro_duenos' | 'sueldo_duenos' | 'traslado_arqueo';
+
+export const ETIQUETA_ROL_CATEGORIA: Record<RolCategoriaEgreso, string> = {
+  retiro_duenos: 'Retiros de dueños',
+  sueldo_duenos: 'Sueldo de dueños',
+  traslado_arqueo: 'Traslado / arqueo de caja',
+};
+
 export type CategoriaEgreso = {
   id: string;
   nombre: string;
@@ -36,6 +46,16 @@ export type CategoriaEgreso = {
   activa: boolean;
   archivada: boolean;
   tipo_gasto: TipoGastoCategoria;
+  // Solo existen si el negocio corrió egresos_duenos_supabase.sql.
+  solo_duenos?: boolean;
+  rol?: RolCategoriaEgreso | null;
+};
+
+export type PagadoDesde = 'caja' | 'billetera_dueno';
+
+export const ETIQUETA_PAGADO_DESDE: Record<PagadoDesde, string> = {
+  caja: 'Caja del local',
+  billetera_dueno: 'Billetera del dueño',
 };
 
 export type AreaEgreso = {
@@ -62,6 +82,8 @@ export type Egreso = {
   created_at: string;
   sucursal_id?: string | null;
   area_id?: string | null;
+  // Solo existe si el negocio corrió egresos_duenos_supabase.sql; sin él, todo se pagó desde la caja.
+  pagado_desde?: PagadoDesde;
 };
 
 // ---------- Áreas (Local / Taller / lo que el negocio use) ----------
@@ -146,10 +168,16 @@ export async function restaurarAreaEgreso(supabase: SupabaseClient, id: string, 
 
 // ---------- Categorías ----------
 export async function obtenerCategoriasEgresos(supabase: SupabaseClient, incluirArchivadas = false): Promise<CategoriaEgreso[]> {
-  let query = supabase.from('egresos_categorias').select('id, nombre, orden, activa, archivada, tipo_gasto').order('orden', { ascending: true });
-  if (!incluirArchivadas) query = query.eq('archivada', false);
-  const { data } = await query;
-  return (data as CategoriaEgreso[]) ?? [];
+  const consulta = (columnas: string) => {
+    let query = supabase.from('egresos_categorias').select(columnas).order('orden', { ascending: true });
+    if (!incluirArchivadas) query = query.eq('archivada', false);
+    return query;
+  };
+  // Con las columnas de egresos_duenos_supabase.sql si existen; si no, como siempre.
+  const conDuenos = await consulta('id, nombre, orden, activa, archivada, tipo_gasto, solo_duenos, rol');
+  if (!conDuenos.error) return (conDuenos.data as unknown as CategoriaEgreso[]) ?? [];
+  const { data } = await consulta('id, nombre, orden, activa, archivada, tipo_gasto');
+  return (data as unknown as CategoriaEgreso[]) ?? [];
 }
 
 async function nombreCategoriaDuplicado(supabase: SupabaseClient, nombre: string, excluirId?: string): Promise<boolean> {
@@ -189,6 +217,22 @@ export async function activarCategoriaEgreso(supabase: SupabaseClient, id: strin
   return { ok: true };
 }
 
+// "Solo dueños" y función de la categoría. La función es única por negocio: si otra categoría ya la tenía, se
+// la quita (hay un índice único en la base).
+export async function cambiarDuenosCategoria(
+  supabase: SupabaseClient,
+  id: string,
+  cambios: { solo_duenos?: boolean; rol?: RolCategoriaEgreso | null }
+): Promise<{ ok: true } | { error: string }> {
+  if (cambios.rol) {
+    const { error: errorLiberar } = await supabase.from('egresos_categorias').update({ rol: null }).eq('rol', cambios.rol).eq('archivada', false).neq('id', id);
+    if (errorLiberar) return { error: errorLiberar.message };
+  }
+  const { error } = await supabase.from('egresos_categorias').update(cambios).eq('id', id);
+  if (error) return { error: error.message };
+  return { ok: true };
+}
+
 export async function cambiarTipoGastoCategoria(
   supabase: SupabaseClient,
   id: string,
@@ -224,14 +268,14 @@ export async function restaurarCategoriaEgreso(supabase: SupabaseClient, id: str
 // ---------- Egresos ----------
 export async function obtenerEgresos(
   supabase: SupabaseClient,
-  params: { desde?: string; hasta?: string } = {}
+  params: { desde?: string; hasta?: string; conPagadoDesde?: boolean } = {}
 ): Promise<Egreso[]> {
   // Paginado: un período largo (año, "todo") con más de 1000 egresos se cortaba
   // sin avisar y los totales de Egresos/Estadísticas quedaban subestimados.
   return obtenerTodasLasFilas<Egreso>(
     supabase,
     'egresos',
-    'id, fecha, categoria_id, tipo, descripcion, importe, moneda, medio_pago, proveedor_id, notas, anulado, registrado_por_nombre, registrado_por_foto_url, created_at, sucursal_id, area_id',
+    'id, fecha, categoria_id, tipo, descripcion, importe, moneda, medio_pago, proveedor_id, notas, anulado, registrado_por_nombre, registrado_por_foto_url, created_at, sucursal_id, area_id' + (params.conPagadoDesde ? ', pagado_desde' : ''),
     [
       { columna: 'fecha', ascending: false },
       { columna: 'created_at', ascending: false },
@@ -259,6 +303,7 @@ export async function crearEgreso(
     notas?: string;
     sucursalId?: string | null;
     areaId?: string | null;
+    pagadoDesde?: PagadoDesde;
   }
 ): Promise<{ id: string } | { error: string }> {
   const descripcion = params.descripcion.trim();
@@ -282,6 +327,7 @@ export async function crearEgreso(
       registrado_por_foto_url: actor?.fotoUrl ?? null,
       ...(params.sucursalId ? { sucursal_id: params.sucursalId } : {}),
       ...(params.areaId ? { area_id: params.areaId } : {}),
+      ...(params.pagadoDesde ? { pagado_desde: params.pagadoDesde } : {}),
     })
     .select('id')
     .single();
@@ -317,6 +363,7 @@ export async function editarEgreso(
     notas?: string;
     sucursalId?: string | null;
     areaId?: string | null;
+    pagadoDesde?: PagadoDesde;
   }
 ): Promise<{ ok: true } | { error: string }> {
   const descripcion = params.descripcion.trim();
@@ -337,6 +384,7 @@ export async function editarEgreso(
       notas: params.notas?.trim() || null,
       sucursal_id: params.sucursalId || null,
       area_id: params.areaId || null,
+      ...(params.pagadoDesde ? { pagado_desde: params.pagadoDesde } : {}),
       updated_at: new Date().toISOString(),
     })
     .eq('id', egreso.id);
