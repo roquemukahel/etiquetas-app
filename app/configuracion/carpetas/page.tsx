@@ -10,6 +10,7 @@ import { tienePermiso } from '../../lib/permisos';
 import { obtenerTodasLasFilas } from '../../lib/db';
 import { useT } from '../../lib/idioma';
 import { falla } from '../../lib/escritura';
+import { compararModelosPorSalida } from '../../lib/catalogosMarcas';
 
 type Carpeta = { nombre: string; total: number; enStock: number; enModelos: boolean };
 
@@ -49,7 +50,7 @@ export default function CarpetasStock() {
       enModelos: nombresModelos.has(nombre),
     }));
     // Primero las que tienen equipos, después alfabético.
-    lista.sort((a, b) => b.total - a.total || a.nombre.localeCompare(b.nombre));
+    lista.sort((a, b) => b.total - a.total || compararModelosPorSalida(a.nombre, b.nombre));
     setCarpetas(lista);
     setLoading(false);
   };

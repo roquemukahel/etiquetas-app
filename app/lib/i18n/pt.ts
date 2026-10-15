@@ -3285,4 +3285,6 @@ export const PT: Record<string, string> = {
   'Al guardar se genera el comprobante del pago para imprimir o mandar.': 'Ao salvar, o comprovante do pagamento é gerado para imprimir ou enviar.',
   'No tenés permiso para ver los precios de los proveedores de repuestos.': 'Você não tem permissão para ver os preços dos fornecedores de peças.',
   'No pudimos cargar el proveedor:': 'Não foi possível carregar o fornecedor:',
+  'Hay una versión nueva de Qovento. Actualizá para ver los últimos cambios.': 'Há uma nova versão do Qovento. Atualize para ver as últimas mudanças.',
+  'Actualizar': 'Atualizar',
 };

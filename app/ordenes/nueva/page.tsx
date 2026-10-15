@@ -656,7 +656,8 @@ export default function NuevaOrden() {
     return dispositivosStock
       .filter((d) => !idsEnCarrito.has(d.id))
       .filter((d) => !dispositivosSenados.has(d.id))
-      .filter((d) => !q || [d.modelo, d.imei].filter(Boolean).some((c) => c!.toLowerCase().includes(q)));
+      .filter((d) => !q || [d.modelo, d.imei].filter(Boolean).some((c) => c!.toLowerCase().includes(q)))
+      .sort((a, b) => compararModelosPorSalida(a.modelo ?? '', b.modelo ?? '') || (a.capacidad_gb ?? 0) - (b.capacidad_gb ?? 0));
   }, [dispositivosStock, buscarDispositivo, idsEnCarrito, dispositivosSenados]);
 
   // Mismo criterio que dispositivosFiltrados: buscador en vivo, sin

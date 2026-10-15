@@ -3284,4 +3284,6 @@ export const EN: Record<string, string> = {
   'Al guardar se genera el comprobante del pago para imprimir o mandar.': 'When you save, the payment receipt is generated to print or send.',
   'No tenés permiso para ver los precios de los proveedores de repuestos.': 'You don\'t have permission to see the spare-parts suppliers\' prices.',
   'No pudimos cargar el proveedor:': 'We couldn\'t load the supplier:',
+  'Hay una versión nueva de Qovento. Actualizá para ver los últimos cambios.': 'There is a new version of Qovento. Refresh to see the latest changes.',
+  'Actualizar': 'Refresh',
 };

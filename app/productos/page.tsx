@@ -14,7 +14,7 @@ import { descargarDatos, leerArchivoDatos, valorDe, insertarEnTandas } from '../
 import { sanitizarDecimal } from '../lib/numeros';
 import { useSucursalActual } from '../lib/sucursal';
 import { useT } from '../lib/idioma';
-import { marcaDeModelo } from '../lib/catalogosMarcas';
+import { marcaDeModelo, rangoDeModelo } from '../lib/catalogosMarcas';
 import Modal from '../Modal';
 import HistorialProducto from './HistorialProducto';
 import EtiquetaFinanciacion from '../EtiquetaFinanciacion';
@@ -510,7 +510,15 @@ export default function Productos() {
         dispositivoIds: info.ids,
       });
     }
-    resultado.sort((a, b) => a.nombre.localeCompare(b.nombre));
+    // Los celulares van en orden de salida (iPhone 16e antes que el 16, 17e antes que el 17...); lo demás, alfabético.
+    resultado.sort((a, b) => {
+      const ra = rangoDeModelo(a.nombre);
+      const rb = rangoDeModelo(b.nombre);
+      if (ra != null && rb != null) return ra - rb;
+      if (ra != null) return -1;
+      if (rb != null) return 1;
+      return a.nombre.localeCompare(b.nombre);
+    });
     return resultado;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productos, dispositivos, maestros, nombreCategoria, sucursalActual.id, extraMaestros, guiaCategorias]);
