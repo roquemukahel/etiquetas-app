@@ -29,6 +29,7 @@ import EtiquetaFinanciacion from '../EtiquetaFinanciacion';
 import SelectorFinanciacion from '../SelectorFinanciacion';
 import { soportaMigracion } from '../lib/migraciones';
 import { agregarCanjeAlStock, canjesPendientes, type CanjeParaStock } from '../lib/canje';
+import { contarFotosPorDispositivo } from '../lib/fotosDispositivo';
 import { limpiarImei } from '../lib/imei';
 import { camposRecibidoPor, registrarRecepcionEnHistorial } from '../lib/recibidoPor';
 import { resolverMaxCuotas, guiaDeFormulario, guiaAFormulario, type MaxCuotas } from '../lib/financiacionGuia';
@@ -150,6 +151,12 @@ export default function Stock() {
   // Costos y ganancia: permiso propio (apagado por defecto). Sin él no se ve el costo de nada en esta pantalla.
   const puedeVerCostos = tienePermiso(actor, 'ver_costos');
   const [tab, setTab] = useState<'celulares' | 'accesorios'>('celulares');
+  // Cuántas fotos reales tiene cada equipo (dispositivo_fotos_supabase.sql): se muestra como 📷 N en la lista.
+  const [fotosPorEquipo, setFotosPorEquipo] = useState<Map<string, number>>(new Map());
+  useEffect(() => {
+    contarFotosPorDispositivo(supabase).then(setFotosPorEquipo).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [dispositivos, setDispositivos] = useState<Dispositivo[]>([]);
   // Equipos con un plan de ahorro/seña ACTIVO apuntándolos — señar no toca
@@ -2293,6 +2300,11 @@ export default function Stock() {
                               <span className="text-xs text-muted dark:text-dark-text-secondary font-mono">
                                 {d.imei || t('sin IMEI')}
                               </span>
+                              {(fotosPorEquipo.get(d.id) ?? 0) > 0 && (
+                                <span className="text-[11px] text-muted dark:text-dark-text-secondary" title={t('Tiene fotos reales')}>
+                                  📷 {fotosPorEquipo.get(d.id)}
+                                </span>
+                              )}
                               {d.salud_bateria != null && (
                                 <span className={d.salud_bateria < 80 ? 'inline-flex items-center gap-1 text-[10px] font-semibold text-warn bg-warn/10 rounded-full px-2 py-0.5' : 'text-xs text-muted dark:text-dark-text-secondary'}>
                                   {d.salud_bateria < 80 ? (

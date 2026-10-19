@@ -19,6 +19,8 @@ import SelectorColorAuto from '../../SelectorColorAuto';
 import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
 import SelectorFinanciacion from '../../SelectorFinanciacion';
 import AvisoCanje from '../../AvisoCanje';
+import { SelectorFotosNuevas } from '../../FotosDispositivo';
+import { guardarFotos, type FotoPreparada } from '../../lib/fotosDispositivo';
 import { useCoincidenciasCanje } from '../../lib/useCoincidenciasCanje';
 import { hayCanjeConEseImei } from '../../lib/canje';
 import { guiaDeFormulario } from '../../lib/financiacionGuia';
@@ -118,6 +120,13 @@ export default function NuevoDispositivo() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const [proveedor, setProveedor] = useState('');
+  // Fotos reales del equipo (opcionales): se suben después de crearlo. Solo si corrió dispositivo_fotos_supabase.sql.
+  const [conFotos, setConFotos] = useState(false);
+  const [fotosNuevas, setFotosNuevas] = useState<FotoPreparada[]>([]);
+  useEffect(() => {
+    soportaMigracion(supabase, 'fotosDispositivo').then(setConFotos);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [detalles, setDetalles] = useState('');
   const [estado, setEstado] = useState('usado');
   const [error, setError] = useState<string | null>(null);
@@ -154,7 +163,7 @@ export default function NuevoDispositivo() {
 
     const modeloNormalizado = normalizarNombreModelo(modelo.trim());
     const proveedorId = await asegurarProveedor(supabase, proveedor);
-    const { error: insertError } = await supabase.from('dispositivos').insert({
+    const { data: creado, error: insertError } = await supabase.from('dispositivos').insert({
       modelo: modeloNormalizado,
       capacidad_gb: capacidad,
       imei: imeiLimpio,
@@ -172,7 +181,7 @@ export default function NuevoDispositivo() {
       en_stock: true,
       agregado_por_nombre: actor?.nombre ?? null,
       agregado_por_foto_url: actor?.fotoUrl ?? null,
-    });
+    }).select('id').single();
 
     if (insertError) {
       setError(`${t('No pudimos guardar el dispositivo:')} ` + insertError.message);
@@ -181,6 +190,12 @@ export default function NuevoDispositivo() {
     }
 
     await asegurarModelo(supabase, modeloNormalizado);
+
+    // El equipo ya está cargado: si las fotos no se pueden guardar no se deshace nada, se avisa.
+    if (conFotos && creado && fotosNuevas.length > 0) {
+      const { error: errorFotos } = await guardarFotos(supabase, (creado as { id: string }).id, fotosNuevas, 0);
+      if (errorFotos) alert(`${t('El equipo se cargó bien, pero no pudimos guardar las fotos:')} ${errorFotos}`);
+    }
 
     router.push('/stock');
     router.refresh();
@@ -335,6 +350,8 @@ export default function NuevoDispositivo() {
             className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
           />
         </div>
+
+        {conFotos && <SelectorFotosNuevas fotos={fotosNuevas} onChange={setFotosNuevas} />}
 
         <SelectorEstadoDispositivo value={estado} onChange={setEstado} />
       </div>

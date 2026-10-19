@@ -15,6 +15,7 @@ import { limpiarImei } from '../../lib/imei';
 import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
 import { useT } from '../../lib/idioma';
 import SelectorFinanciacion from '../../SelectorFinanciacion';
+import { FotosDispositivo } from '../../FotosDispositivo';
 import { camposRecibidoPor, registrarRecepcionEnHistorial } from '../../lib/recibidoPor';
 import { guiaDeFormulario, guiaAFormulario } from '../../lib/financiacionGuia';
 import { compararModelosPorSalida } from '../../lib/catalogosMarcas';
@@ -51,6 +52,7 @@ export default function DetalleDispositivo() {
   const actor = useActor();
   const t = useT();
   const puedeEliminar = tienePermiso(actor, 'eliminar');
+  const puedeAgregarStock = tienePermiso(actor, 'agregar_stock');
   const puedeRecibirServicioTecnico = tienePermiso(actor, 'recibir_servicio_tecnico');
   // Costo, proveedor y margen son datos sensibles del dueño — mismo permiso
   // que ya usa la pantalla de Stock para la tarjeta de capital. Esto es
@@ -364,6 +366,10 @@ export default function DetalleDispositivo() {
           <SelectorColorAuto label={t('Color')} modelo={d.modelo} value={d.color ?? ''} onChange={(v) => campo('color', v)} />
 
           <SelectorEstadoDispositivo value={d.estado ?? 'usado'} onChange={(v) => campo('estado', v)} />
+        </Seccion>
+
+        <Seccion titulo={t('Fotos reales')}>
+          <FotosDispositivo dispositivoId={d.id} modelo={d.modelo} puedeEditar={puedeAgregarStock} />
         </Seccion>
 
         <Seccion titulo={t('Información comercial')}>
