@@ -218,6 +218,11 @@ export default function Egresos() {
           &larr;
         </Link>
         <span className="text-lg font-medium">{t('Egresos')}</span>
+        {puedeGestionar && (
+          <Link href="/ingresos" className="ml-auto text-xs text-accent dark:text-dark-accent underline">
+            {t('Ver Ingresos')}
+          </Link>
+        )}
       </header>
 
       <p className="text-xs text-muted dark:text-dark-text-secondary">

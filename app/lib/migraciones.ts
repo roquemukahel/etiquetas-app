@@ -15,6 +15,8 @@ const CHEQUEOS = {
   permisosSensibles: (s: SupabaseClient) => s.from('vendedores').select('puede_cargar_egresos, puede_registrar_pagos_proveedores, puede_ver_costos').limit(1),
   // servicio_tecnico_recibido_por_supabase.sql
   recibidoPor: (s: SupabaseClient) => s.from('reparaciones').select('recibido_por_nombre').limit(1),
+  // ingresos_capital_supabase.sql
+  ingresosCapital: (s: SupabaseClient) => s.from('ingresos').select('id').limit(1),
   // egresos_duenos_supabase.sql
   egresosDuenos: (s: SupabaseClient) => s.from('egresos').select('pagado_desde').limit(1),
   categoriasEgresosDuenos: (s: SupabaseClient) => s.from('egresos_categorias').select('solo_duenos, rol').limit(1),

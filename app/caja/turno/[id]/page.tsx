@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import { crearClienteNavegador } from '../../../lib/supabase/client';
 import { useActor } from '../../../lib/actor';
 import { tienePermiso } from '../../../lib/permisos';
+import { obtenerIngresosDeCaja, ingresosEnEfectivo, type Ingreso } from '../../../lib/ingresos';
 import { obtenerMovimientosDeCaja, type Caja, type TurnoCaja, type MovimientoCaja } from '../../../lib/caja/servicio';
 import { totalesPorMedio, totalGeneral, efectivoEsperado, MEDIOS_CAJA, NOMBRE_CAJA } from '../../../lib/caja/motor';
 import { formatearMonto } from '../../../lib/numeros';
@@ -34,6 +35,7 @@ export default function DetalleTurnoCaja() {
   const [negocio, setNegocio] = useState<Negocio | null>(null);
   const [sucursalNombre, setSucursalNombre] = useState<string | null>(null);
   const [totales, setTotales] = useState(totalesPorMedio([]));
+  const [ingresos, setIngresos] = useState<Ingreso[]>([]);
   const [movimientos, setMovimientos] = useState<MovimientoCaja[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -77,6 +79,7 @@ export default function DetalleTurnoCaja() {
       const movs = await obtenerMovimientosDeCaja(supabase, c as Caja, tu.abierta_en, tu.cerrada_en ?? undefined, tu.moneda);
       setMovimientos(movs);
       setTotales(totalesPorMedio(movs));
+      setIngresos(await obtenerIngresosDeCaja(supabase, c as Caja, tu.abierta_en, tu.cerrada_en ?? undefined, tu.moneda));
       setLoading(false);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -111,7 +114,7 @@ export default function DetalleTurnoCaja() {
   // del cierre (no recalcularlo) — si algún pago se anuló o se cargó
   // después, recalcular hoy daría un número distinto al que de verdad se
   // reconcilió ese día, y el historial dejaría de ser un registro fiel.
-  const esperado = turno.estado === 'cerrada' && turno.efectivo_esperado != null ? turno.efectivo_esperado : efectivoEsperado(turno.efectivo_inicial, totales.efectivo);
+  const esperado = turno.estado === 'cerrada' && turno.efectivo_esperado != null ? turno.efectivo_esperado : efectivoEsperado(turno.efectivo_inicial, totales.efectivo + ingresosEnEfectivo(ingresos));
 
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4 max-w-md mx-auto w-full print:p-0">
@@ -179,6 +182,12 @@ export default function DetalleTurnoCaja() {
             <span className="text-muted dark:text-dark-text-secondary">{t('Efectivo inicial')}</span>
             <span className="tabular-nums">${formatearMonto(turno.efectivo_inicial)}</span>
           </div>
+          {ingresosEnEfectivo(ingresos) > 0 && (
+            <div className="flex justify-between">
+              <span className="text-muted dark:text-dark-text-secondary">{t('Ingresos de capital en efectivo')}</span>
+              <span className="tabular-nums">${formatearMonto(ingresosEnEfectivo(ingresos))}</span>
+            </div>
+          )}
           <div className="flex justify-between">
             <span className="text-muted dark:text-dark-text-secondary">{t('Efectivo esperado')}</span>
             <span className="tabular-nums">${formatearMonto(esperado)}</span>

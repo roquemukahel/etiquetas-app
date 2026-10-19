@@ -59,6 +59,7 @@ const NAV = [
   { href: '/compras', label: 'Compras', icono: 'compra' },
   { href: '/proveedores', label: 'Proveedores', icono: 'proveedores' },
   { href: '/egresos', label: 'Egresos', icono: 'documento' },
+  { href: '/ingresos', label: 'Ingresos', icono: 'documento' },
   { href: '/plan-ahorro', label: 'Plan de ahorro', icono: 'ahorro' },
   { href: '/estadisticas', label: 'Estadísticas', icono: 'estadisticas' },
   { href: '/configuracion/sucursales', label: 'Sucursales', icono: 'local' },

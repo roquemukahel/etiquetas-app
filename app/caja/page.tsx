@@ -21,6 +21,8 @@ import {
   type TurnoCaja,
   type MovimientoCaja,
 } from '../lib/caja/servicio';
+import { obtenerIngresosDeCaja, ingresosEnEfectivo, type Ingreso } from '../lib/ingresos';
+import ModalIngreso from '../ingresos/ModalIngreso';
 import { totalesPorMedio, totalGeneral, efectivoEsperado, diferenciaArqueo, MEDIOS_CAJA, NOMBRE_CAJA, type TipoCaja } from '../lib/caja/motor';
 import { sanitizarDecimal, formatearMonto } from '../lib/numeros';
 import { medioLabel } from '../lib/cuentaCorriente';
@@ -56,6 +58,9 @@ export default function CajaPage() {
   // vista). Se pide junto con los totales (mismo fetch, ver cargar() más
   // abajo) para no duplicar la consulta a `pagos`.
   const [movimientos, setMovimientos] = useState<MovimientoCaja[]>([]);
+  // Ingresos de capital que entraron a esta caja durante el turno (ingresos_capital_supabase.sql): el efectivo suma al esperado.
+  const [ingresos, setIngresos] = useState<Ingreso[]>([]);
+  const [modalIngreso, setModalIngreso] = useState(false);
   const [verMovimientos, setVerMovimientos] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -117,9 +122,11 @@ export default function CajaPage() {
           const movs = await obtenerMovimientosDeCaja(supabase, caja, t1.abierta_en, undefined, t1.moneda);
           setMovimientos(movs);
           setTotales(totalesPorMedio(movs));
+          setIngresos(await obtenerIngresosDeCaja(supabase, caja, t1.abierta_en, undefined, t1.moneda));
         } else {
           setMovimientos([]);
           setTotales(totalesPorMedio([]));
+          setIngresos([]);
         }
       }
     } catch (e) {
@@ -204,7 +211,8 @@ export default function CajaPage() {
     );
   }
 
-  const esperado = turno ? efectivoEsperado(turno.efectivo_inicial, totales.efectivo) : 0;
+  const ingresosEfectivo = ingresosEnEfectivo(ingresos);
+  const esperado = turno ? efectivoEsperado(turno.efectivo_inicial, totales.efectivo + ingresosEfectivo) : 0;
 
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4 max-w-2xl mx-auto w-full">
@@ -297,7 +305,14 @@ export default function CajaPage() {
               <span className="tabular-nums">${formatearMonto(totalGeneral(totales))}</span>
             </div>
             <p className="text-xs text-muted dark:text-dark-text-secondary">
-              {t('Efectivo inicial')} ${formatearMonto(turno.efectivo_inicial)} + {t('efectivo cobrado')} ${formatearMonto(totales.efectivo)} = {t('efectivo esperado')}{' '}
+              {t('Efectivo inicial')} ${formatearMonto(turno.efectivo_inicial)} + {t('efectivo cobrado')} ${formatearMonto(totales.efectivo)}
+              {ingresosEfectivo > 0 && (
+                <>
+                  {' '}
+                  + {t('ingresos de capital')} ${formatearMonto(ingresosEfectivo)}
+                </>
+              )}{' '}
+              = {t('efectivo esperado')}{' '}
               <span className="font-medium text-ink dark:text-dark-text">${formatearMonto(esperado)}</span>
             </p>
 
@@ -306,9 +321,23 @@ export default function CajaPage() {
             </button>
             {verMovimientos && (
               <div className="flex flex-col gap-2 border-t border-border dark:border-dark-border pt-2 max-h-64 overflow-y-auto">
-                {movimientos.length === 0 && (
+                {movimientos.length === 0 && ingresos.length === 0 && (
                   <p className="text-xs text-muted dark:text-dark-text-secondary text-center">{t('Todavía no hay movimientos en este turno.')}</p>
                 )}
+                {ingresos.map((i) => (
+                  <div key={i.id} className="flex items-center justify-between gap-2 text-xs">
+                    <div className="min-w-0">
+                      <p className="truncate">
+                        {t('Ingreso de capital')} · {i.descripcion} · {medioLabel(i.medio_pago, t)}
+                      </p>
+                      <p className="text-[11px] text-muted dark:text-dark-text-secondary">
+                        {new Date(i.created_at).toLocaleString(locale)}
+                        {i.registrado_por_nombre && ` · ${i.registrado_por_nombre}`}
+                      </p>
+                    </div>
+                    <span className="font-medium tabular-nums text-good shrink-0">+${formatearMonto(i.importe)}</span>
+                  </div>
+                ))}
                 {movimientos.map((m) => (
                   <div key={m.id} className="flex items-center justify-between gap-2 text-xs">
                     <div className="min-w-0">
@@ -335,6 +364,13 @@ export default function CajaPage() {
             )}
 
             <button
+              onClick={() => setModalIngreso(true)}
+              className="rounded-xl border border-border dark:border-dark-border py-2.5 text-sm font-medium mt-1"
+            >
+              + {t('Ingreso de capital')}
+            </button>
+
+            <button
               onClick={() => {
                 setEfectivoDeclarado(String(Math.round(esperado * 100) / 100));
                 // Vuelto por defecto = lo que se dejó la ÚLTIMA vez que se
@@ -352,6 +388,21 @@ export default function CajaPage() {
               🔒 {t('Cerrar caja')}
             </button>
           </div>
+
+          {modalIngreso && (
+            <ModalIngreso
+              sucursales={sucursales}
+              monedaDefault={turno.moneda}
+              monedasDisponibles={[turno.moneda]}
+              cajaInicial={tipo}
+              sucursalInicial={cajaActual?.sucursal_id ?? null}
+              onClose={() => setModalIngreso(false)}
+              onGuardado={async () => {
+                setModalIngreso(false);
+                await cargar();
+              }}
+            />
+          )}
 
           {modalCierre && (
             <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4">

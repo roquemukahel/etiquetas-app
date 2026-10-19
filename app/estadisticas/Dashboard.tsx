@@ -53,6 +53,7 @@ import { useT, useIdioma, type Idioma } from '../lib/idioma';
 import { useSucursalActual } from '../lib/sucursal';
 import { obtenerSucursales, type Sucursal } from '../lib/sucursales';
 import { obtenerAreasEgresos, obtenerCategoriasEgresos, type AreaEgreso } from '../lib/egresos';
+import { soportaMigracion } from '../lib/migraciones';
 import RubrosInversion from './RubrosInversion';
 import CarteraFinanciacion from './CarteraFinanciacion';
 
@@ -237,6 +238,8 @@ export default function Estadisticas() {
   // Retiros y sueldo de los dueños (categorías con esa función, egresos_duenos_supabase.sql): no son gasto
   // operativo — se restan aparte para llegar a "Lo que queda en el negocio".
   const [retirosDuenosRaw, setRetirosDuenosRaw] = useState<EgresoR[]>([]);
+  // Ingresos de capital (aportes, préstamos recibidos): plata que entra sin ser una venta (ingresos_capital_supabase.sql).
+  const [ingresosCapitalRaw, setIngresosCapitalRaw] = useState<EgresoR[]>([]);
   const [sueldoDuenosRaw, setSueldoDuenosRaw] = useState<EgresoR[]>([]);
   const [hayCategoriasDuenos, setHayCategoriasDuenos] = useState(false);
   const [moneda, setMoneda] = useState('$');
@@ -549,6 +552,11 @@ export default function Estadisticas() {
           operativos = operativos.filter((e) => !(e.categoria_id && idsDuenos.has(e.categoria_id)));
         }
       }
+      let ingresosCapital: EgresoR[] = [];
+      if (puedeVerEgresos && (await soportaMigracion(supabase, 'ingresosCapital'))) {
+        ingresosCapital = await obtenerTodasLasFilas<EgresoR>(supabase, 'ingresos', 'importe, fecha, sucursal_id', [], (q) => q.eq('anulado', false).gte('fecha', aFechaInput(desde)));
+      }
+      setIngresosCapitalRaw(ingresosCapital);
       setEgresosRaw(operativos);
       setRetirosDuenosRaw(retirosDuenos);
       setSueldoDuenosRaw(sueldoDuenos);
@@ -995,6 +1003,10 @@ export default function Estadisticas() {
   const egresosPeriodo = useMemo(() => egresosPeriodoDe(egresos, inicio, rango.fin), [egresos, inicio, rango.fin]);
   const hayEgresos = egresos.length > 0;
   const resultadoOperativoEstimado = actualB.ganancia - egresosPeriodo;
+
+  // Ingresos de capital del período (y de la sucursal elegida): no son ventas ni ganancia, se muestran aparte.
+  const ingresosCapital = useMemo(() => ingresosCapitalRaw.filter((e) => !sucursalId || e.sucursal_id === sucursalId), [ingresosCapitalRaw, sucursalId]);
+  const ingresosCapitalPeriodo = useMemo(() => egresosPeriodoDe(ingresosCapital, inicio, rango.fin), [ingresosCapital, inicio, rango.fin]);
 
   // Retiros y sueldo de los dueños del período (y de la sucursal elegida). "Lo que queda en el negocio" =
   // resultado operativo − sueldo de dueños − retiros de dueños.
@@ -1823,6 +1835,18 @@ export default function Estadisticas() {
                 sensible
                 oculto={ocultarMontos}
                 onClick={() => router.push('/egresos')}
+              />
+            )}
+            {puedeVerEgresos && ingresosCapitalPeriodo > 0 && (
+              <StatCard
+                etiqueta={t('Ingresos de capital')}
+                valor={m(ingresosCapitalPeriodo)}
+                tooltip={t('Aportes de capital y préstamos recibidos en el período. No son ventas ni ganancia: es plata que entró al negocio desde afuera.')}
+                moneda={moneda}
+                tono="text-good"
+                sensible
+                oculto={ocultarMontos}
+                onClick={() => router.push('/ingresos')}
               />
             )}
             {puedeVerCostos && puedeVerEgresos && hayEgresos && (
