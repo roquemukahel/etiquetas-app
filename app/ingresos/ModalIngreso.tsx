@@ -26,6 +26,7 @@ export default function ModalIngreso({
   monedasDisponibles,
   cajaInicial = 'venta_diaria',
   sucursalInicial,
+  sucursalFija = false,
   onClose,
   onGuardado,
 }: {
@@ -36,6 +37,9 @@ export default function ModalIngreso({
   cajaInicial?: CajaIngreso;
   // Si se abre desde Caja, el ingreso va a la sucursal de esa caja (null = caja general, sin sucursal).
   sucursalInicial?: string | null;
+  // Desde Caja la sucursal es la de ESA caja (aunque sea la caja general, sin sucursal): no se elige acá, porque
+  // el ingreso tiene que coincidir con la caja para sumar a su efectivo esperado.
+  sucursalFija?: boolean;
   onClose: () => void;
   onGuardado: () => void;
 }) {
@@ -67,7 +71,7 @@ export default function ModalIngreso({
       setError(t('El importe tiene que ser mayor a 0.'));
       return;
     }
-    if (sucursales.length > 1 && !sucursalId) {
+    if (!sucursalFija && sucursales.length > 1 && !sucursalId) {
       setError(t('Elegí una sucursal.'));
       return;
     }
@@ -165,7 +169,7 @@ export default function ModalIngreso({
             <p className="text-[11px] text-muted dark:text-dark-text-secondary mt-1">{t('Suma al efectivo esperado del turno de esa caja.')}</p>
           </div>
         )}
-        {sucursales.length > 1 && (
+        {!sucursalFija && sucursales.length > 1 && (
           <div>
             <label className={etiqueta}>{t('Sucursal')}</label>
             <select value={sucursalId} onChange={(e) => setSucursalId(e.target.value)} className={campo}>

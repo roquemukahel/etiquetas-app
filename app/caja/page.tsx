@@ -396,6 +396,7 @@ export default function CajaPage() {
               monedasDisponibles={[turno.moneda]}
               cajaInicial={tipo}
               sucursalInicial={cajaActual?.sucursal_id ?? null}
+              sucursalFija
               onClose={() => setModalIngreso(false)}
               onGuardado={async () => {
                 setModalIngreso(false);
