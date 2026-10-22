@@ -70,11 +70,11 @@ export function hayCanjeConEseImei(canjes: CanjeParaStock[], imei: string): bool
 // Pasa un canje de Plan Canje al Stock. Primero reserva el canje (solo si seguía sin agregar,
 // condición evaluada en la base) y recién después crea el dispositivo, así el mismo canje no
 // se duplica si se procesa desde dos pestañas. Si crear el dispositivo falla, devuelve el
-// canje a Plan Canje.
+// canje a Plan Canje. Con `standby` el equipo no entra al Stock vendible sino a Standby (con ese motivo).
 export async function agregarCanjeAlStock(
   supabase: SupabaseClient,
   c: CanjeParaStock,
-  opciones: { sucursalId: string | null; actor: { nombre?: string | null; fotoUrl?: string | null } | null }
+  opciones: { sucursalId: string | null; actor: { nombre?: string | null; fotoUrl?: string | null } | null; standby?: { motivo: string } }
 ): Promise<{ ok: true } | { ok: false; yaAgregado: boolean; mensaje: string }> {
   const { data: actualizado, error: estadoErr } = await supabase
     .from('canjes')
@@ -94,7 +94,15 @@ export async function agregarCanjeAlStock(
     salud_bateria: c.salud_bateria,
     estado: c.condicion || 'usado',
     detalles: c.detalles,
-    en_stock: true,
+    ...(opciones.standby
+      ? {
+          en_stock: false,
+          en_espera: true,
+          en_espera_desde: new Date().toISOString(),
+          espera_origen: 'canje',
+          espera_motivo: opciones.standby.motivo.trim() || null,
+        }
+      : { en_stock: true }),
     agregado_por_nombre: opciones.actor?.nombre ?? null,
     agregado_por_foto_url: opciones.actor?.fotoUrl ?? null,
     ...(opciones.sucursalId ? { sucursal_id: opciones.sucursalId } : {}),

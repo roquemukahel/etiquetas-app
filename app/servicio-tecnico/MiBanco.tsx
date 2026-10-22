@@ -60,6 +60,7 @@ export default function MiBanco({
   onArchivar,
   onEliminar,
   onAgregarAlStock,
+  onMandarAStandby,
   onEntregadoCliente,
   imagenesCarpetas,
   puedeAgregarStock,
@@ -79,6 +80,7 @@ export default function MiBanco({
   onArchivar: (r: Reparacion) => void;
   onEliminar: (r: Reparacion) => void;
   onAgregarAlStock: (r: Reparacion) => void;
+  onMandarAStandby?: (r: Reparacion) => void;
   onEntregadoCliente: (r: Reparacion) => void;
   imagenesCarpetas: Map<string, string>;
   puedeAgregarStock: boolean;
@@ -261,6 +263,7 @@ export default function MiBanco({
               onArchivar={onArchivar}
               onEliminar={onEliminar}
               onAgregarAlStock={onAgregarAlStock}
+              onMandarAStandby={onMandarAStandby}
               onEntregadoCliente={onEntregadoCliente}
               imagenesCarpetas={imagenesCarpetas}
               puedeAgregarStock={puedeAgregarStock}

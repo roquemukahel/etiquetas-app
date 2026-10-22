@@ -48,6 +48,8 @@ import { traducirAccion } from '../../lib/i18n/traducirAccion';
 import { useSucursalActual } from '../../lib/sucursal';
 import { falla } from '../../lib/escritura';
 import { obtenerTodasLasFilas } from '../../lib/db';
+import { soportaMigracion } from '../../lib/migraciones';
+import { mandarReparacionAStandby } from '../../lib/standby';
 
 // Mismo patrón que TarjetaReparacion/EstadoBadge para reescalar los SVG de
 // 24px a un tamaño chico inline junto a texto.
@@ -1096,6 +1098,32 @@ export default function FichaReparacion() {
       entidadId: r.id,
     });
     setGuardando(false);
+    cargar();
+  };
+
+  // Standby (standby_supabase.sql): equipo propio que no se va a arreglar por ahora.
+  const [conStandby, setConStandby] = useState(false);
+  useEffect(() => {
+    soportaMigracion(supabase, 'standby').then(setConStandby);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const mandarAStandbyFicha = async () => {
+    if (!r || !puedeAgregarStock) return;
+    const quien = getActor();
+    if (!quien) {
+      setError(t(MENSAJE_ACTOR_REQUERIDO));
+      return;
+    }
+    const motivo = prompt(`${t('¿Qué le pasa a')} ${r.modelo || t('este equipo')}? ${t('Queda en Standby y sale de Servicio Técnico.')}`, r.diagnostico ?? r.falla_declarada ?? '');
+    if (motivo === null) return;
+    setGuardando(true);
+    const resultado = await mandarReparacionAStandby(supabase, r, { motivo, actor: quien });
+    setGuardando(false);
+    if (resultado.error) {
+      setError(resultado.error);
+      return;
+    }
     cargar();
   };
 
@@ -2419,6 +2447,15 @@ export default function FichaReparacion() {
                     </p>
                   )
                 )
+              )}
+              {!r.cliente_id && !r.agregado_a_stock && conStandby && puedeAgregarStock && r.estado !== 'entregado' && (
+                <button
+                  disabled={guardando}
+                  onClick={mandarAStandbyFicha}
+                  className="rounded-xl border border-border dark:border-dark-border py-2.5 text-center text-xs font-medium disabled:opacity-40"
+                >
+                  {t('Mandar a Standby')}
+                </button>
               )}
               {!r.cliente_id && r.agregado_a_stock && (
                 <p className="flex items-center justify-center gap-1 text-xs text-good text-center">

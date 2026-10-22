@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { crearClienteNavegador } from '../lib/supabase/client';
 import { obtenerTodasLasFilas } from '../lib/db';
 import { agregarCanjeAlStock } from '../lib/canje';
+import { soportaMigracion } from '../lib/migraciones';
 import { obtenerImagenesDeCarpetas, imagenPorNombreExacto } from '../lib/carpetas';
 import { registrarAuditoria } from '../lib/auditoria';
 import { getActor, useActor, MENSAJE_ACTOR_REQUERIDO } from '../lib/actor';
@@ -207,6 +208,39 @@ export default function PlanCanje() {
       accion: `derivó a Servicio Técnico un dispositivo de Plan Canje (${nueva?.numero_orden || ''}, ${c.modelo || 'sin modelo'}${c.imei ? `, IMEI ${c.imei}` : ''})`,
       entidad: 'reparacion',
       entidadId: nueva?.id,
+    });
+    setProcesando(null);
+    cargar();
+  };
+
+  // Standby (standby_supabase.sql): el botón "Mandar a Standby" solo aparece si el negocio ya lo tiene activado.
+  const [conStandby, setConStandby] = useState(false);
+  useEffect(() => {
+    soportaMigracion(supabase, 'standby').then(setConStandby);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Un canje que entró con detalles y no se va a arreglar por ahora: pasa a Standby en vez de al Stock vendible.
+  const mandarAStandby = async (c: Canje) => {
+    if (procesando || !puedeAgregarStock) return;
+    if (!getActor()) {
+      alert(t(MENSAJE_ACTOR_REQUERIDO));
+      return;
+    }
+    const motivo = prompt(`${t('¿Qué le pasa a')} ${c.modelo || t('este equipo')}? ${t('Queda en Standby, fuera del Stock para vender.')}`, c.detalles ?? '');
+    if (motivo === null) return;
+    setProcesando(c.id);
+    const resultado = await agregarCanjeAlStock(supabase, c, { sucursalId: sucursalActual.id, actor: getActor(), standby: { motivo } });
+    if (!resultado.ok) {
+      alert(resultado.yaAgregado ? t('Este canje ya había sido agregado al stock (quizás desde otra pestaña).') : `${t('No pudimos mandarlo a Standby:')} ${resultado.mensaje}`);
+      setProcesando(null);
+      if (resultado.yaAgregado) cargar();
+      return;
+    }
+    await registrarAuditoria(supabase, {
+      accion: `mandó a Standby un canje (${c.modelo || 'sin modelo'}${c.imei ? `, IMEI ${c.imei}` : ''})`,
+      entidad: 'canje',
+      entidadId: c.id,
     });
     setProcesando(null);
     cargar();
@@ -430,7 +464,7 @@ export default function PlanCanje() {
                 )}
 
                 {vista === 'en_canje' && (
-                  <div className="flex items-center gap-2 mt-1">
+                  <div className="flex flex-wrap items-center gap-2 mt-1">
                     {puedeAgregarStock && (
                       <Boton
                         variante="primario"
@@ -440,6 +474,11 @@ export default function PlanCanje() {
                         className="flex-1"
                       >
                         {t('Agregar al Stock')}
+                      </Boton>
+                    )}
+                    {puedeAgregarStock && conStandby && (
+                      <Boton variante="secundario" tamano="sm" disabled={procesando === c.id} onClick={() => mandarAStandby(c)} className="flex-1">
+                        {t('Mandar a Standby')}
                       </Boton>
                     )}
                     {puedeRecibirServicioTecnico && (

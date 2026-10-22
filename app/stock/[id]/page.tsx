@@ -15,6 +15,7 @@ import { limpiarImei } from '../../lib/imei';
 import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
 import { useT } from '../../lib/idioma';
 import SelectorFinanciacion from '../../SelectorFinanciacion';
+import { mandarAStandby } from '../../lib/standby';
 import { FotosDispositivo } from '../../FotosDispositivo';
 import { camposRecibidoPor, registrarRecepcionEnHistorial } from '../../lib/recibidoPor';
 import { guiaDeFormulario, guiaAFormulario } from '../../lib/financiacionGuia';
@@ -40,6 +41,9 @@ type Dispositivo = {
   agregado_por_nombre: string | null;
   mostrar_en_stock_publico: boolean;
   sucursal_id?: string | null;
+  // Solo vienen si el negocio corrió standby_supabase.sql (select('*') las trae).
+  en_espera?: boolean | null;
+  espera_motivo?: string | null;
   // Solo vienen si el negocio corrió financiacion_guia_cartera_supabase.sql.
   precio_lista?: number | null;
   financiacion_max_cuotas?: number | null;
@@ -122,6 +126,21 @@ export default function DetalleDispositivo() {
     }
   };
 
+  // Lo saca del Stock vendible y lo deja en Standby (equipo con detalles o en espera).
+  const mandarAStandbyFicha = async () => {
+    if (!d || !puedeAgregarStock) return;
+    const motivo = prompt(`${t('¿Qué le pasa a')} ${d.modelo || t('este equipo')}? ${t('Queda en Standby, fuera del Stock para vender.')}`, d.detalles ?? '');
+    if (motivo === null) return;
+    setGuardando(true);
+    const resultado = await mandarAStandby(supabase, d, { origen: 'stock', motivo });
+    setGuardando(false);
+    if (resultado.error) {
+      setError(resultado.error);
+      return;
+    }
+    router.push('/standby');
+  };
+
   const handleGuardar = async () => {
     if (!d || !original) return;
     setGuardando(true);
@@ -160,6 +179,8 @@ export default function DetalleDispositivo() {
         // estaba abierta, guardar acá no debe revertir esa venta.
         ...(d.en_stock !== original.en_stock ? { en_stock: d.en_stock } : {}),
         ...(volvioAStock ? { en_stock_desde: new Date().toISOString(), alerta_stock_enviada: false } : {}),
+        // Si estaba en Standby y se lo vuelve a poner disponible, deja de estar en espera (no puede ser las dos cosas).
+        ...(volvioAStock && original.en_espera ? { en_espera: false } : {}),
       })
       .eq('id', id);
 
@@ -290,7 +311,7 @@ export default function DetalleDispositivo() {
               d.en_stock ? 'bg-good/15 text-good' : 'bg-black/5 dark:bg-white/10 text-muted dark:text-dark-text-secondary'
             }`}
           >
-            {d.en_stock ? t('Disponible') : t('Fuera de stock')}
+            {d.en_stock ? t('Disponible') : d.en_espera ? t('En Standby') : t('Fuera de stock')}
           </span>
           <button type="button" onClick={() => campo('en_stock', !d.en_stock)} className="text-xs text-accent dark:text-dark-accent underline whitespace-nowrap">
             {t('Cambiar estado')}
@@ -440,6 +461,17 @@ export default function DetalleDispositivo() {
             />
             <span className="text-sm">{t('Mostrar en el stock público (si está activado en Configuración)')}</span>
           </label>
+
+          {d.en_stock && d.en_espera !== undefined && puedeAgregarStock && (
+            <div className="pt-1 border-t border-border dark:border-dark-border">
+              <button
+                onClick={mandarAStandbyFicha}
+                className="mt-3 w-full rounded-xl border border-border dark:border-dark-border py-2.5 text-center text-sm font-medium"
+              >
+                {t('Mandar a Standby')}
+              </button>
+            </div>
+          )}
 
           {d.en_stock && puedeRecibirServicioTecnico && (
             <div className="pt-1 border-t border-border dark:border-dark-border">

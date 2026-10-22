@@ -9,6 +9,7 @@ import QMark from './QMark';
 import { useT } from './lib/idioma';
 import { useSucursalActual, setSucursalManual, getSucursalManual } from './lib/sucursal';
 import { obtenerSucursales, type Sucursal } from './lib/sucursales';
+import { soportaMigracion } from './lib/migraciones';
 
 // El sidebar solo existe en pantallas grandes (ver <aside className="hidden
 // lg:flex">) — en el celular la navegación sigue exactamente igual que
@@ -38,6 +39,7 @@ const RUTAS_FONDO_SUTIL = [
   '/ordenes',
   '/caja',
   '/stock',
+  '/standby',
   '/productos',
   '/comisiones',
   '/canje',
@@ -45,11 +47,12 @@ const RUTAS_FONDO_SUTIL = [
   '/cuentas-por-cobrar',
 ];
 
-const NAV = [
+const NAV: { href: string; label: string; icono: keyof typeof ICONOS; soloConStandby?: boolean }[] = [
   { href: '/', label: 'Inicio', icono: 'inicio' },
   { href: '/ordenes', label: 'Órdenes', icono: 'ordenes' },
   { href: '/caja', label: 'Caja', icono: 'caja' },
   { href: '/stock', label: 'Stock', icono: 'stock' },
+  { href: '/standby', label: 'Standby', icono: 'reloj', soloConStandby: true },
   { href: '/productos', label: 'Productos', icono: 'productos' },
   { href: '/clientes', label: 'Clientes', icono: 'clientes' },
   { href: '/cuentas-por-cobrar', label: 'Cuentas por cobrar', icono: 'cobrar' },
@@ -78,6 +81,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
   const [menuSucursalAbierto, setMenuSucursalAbierto] = useState(false);
   const { id: sucursalActualId, fija: sucursalFija } = useSucursalActual();
+  // Standby aparece en el menú solo si el negocio ya corrió standby_supabase.sql.
+  const [conStandby, setConStandby] = useState(false);
+  useEffect(() => {
+    if (sesion === 'si') soportaMigracion(supabase, 'standby').then(setConStandby);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sesion]);
 
   useEffect(() => {
     (async () => {
@@ -246,7 +255,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         )}
 
         <nav className="flex-1 overflow-y-auto px-3 py-4 flex flex-col gap-1">
-          {NAV.map((item) => {
+          {NAV.filter((item) => !item.soloConStandby || conStandby).map((item) => {
             const activo = esActivo(item.href);
             return (
               <Link

@@ -30,6 +30,7 @@ import SelectorFinanciacion from '../SelectorFinanciacion';
 import { soportaMigracion } from '../lib/migraciones';
 import { agregarCanjeAlStock, canjesPendientes, type CanjeParaStock } from '../lib/canje';
 import { contarFotosPorDispositivo } from '../lib/fotosDispositivo';
+import { mandarAStandby } from '../lib/standby';
 import { limpiarImei } from '../lib/imei';
 import { camposRecibidoPor, registrarRecepcionEnHistorial } from '../lib/recibidoPor';
 import { resolverMaxCuotas, guiaDeFormulario, guiaAFormulario, type MaxCuotas } from '../lib/financiacionGuia';
@@ -151,6 +152,12 @@ export default function Stock() {
   // Costos y ganancia: permiso propio (apagado por defecto). Sin él no se ve el costo de nada en esta pantalla.
   const puedeVerCostos = tienePermiso(actor, 'ver_costos');
   const [tab, setTab] = useState<'celulares' | 'accesorios'>('celulares');
+  // Standby (standby_supabase.sql): sin la migración, la pantalla se comporta como siempre.
+  const [conStandby, setConStandby] = useState(false);
+  useEffect(() => {
+    soportaMigracion(supabase, 'standby').then(setConStandby);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // Cuántas fotos reales tiene cada equipo (dispositivo_fotos_supabase.sql): se muestra como 📷 N en la lista.
   const [fotosPorEquipo, setFotosPorEquipo] = useState<Map<string, number>>(new Map());
   useEffect(() => {
@@ -436,17 +443,20 @@ export default function Stock() {
   // memoria o no.
   const cargarDispositivos = async (opts?: { incluirVendidos?: boolean }) => {
     const incluirVendidos = opts?.incluirVendidos ?? vendidosCargados;
+    // Los equipos en Standby tienen en_stock = false pero no están vendidos: se sacan de "Vendidos" y de los conteos.
+    const hayStandby = await soportaMigracion(supabase, 'standby');
+    const sinStandby = <T extends { or: (filtros: string) => T }>(q: T): T => (hayStandby ? q.or('en_espera.is.null,en_espera.eq.false') : q);
     const [enStock, vendidos, { count: countVendidos }, { count: countTotal }, senados] = await Promise.all([
       obtenerTodasLasFilas<Dispositivo>(supabase, 'dispositivos', COLUMNAS_DISPOSITIVO, ORDEN_DISPOSITIVO, (q) =>
         q.eq('en_stock', true)
       ),
       incluirVendidos
         ? obtenerTodasLasFilas<Dispositivo>(supabase, 'dispositivos', COLUMNAS_DISPOSITIVO, ORDEN_DISPOSITIVO, (q) =>
-            q.eq('en_stock', false)
+            sinStandby(q.eq('en_stock', false))
           )
         : Promise.resolve([]),
-      supabase.from('dispositivos').select('id', { count: 'exact', head: true }).eq('en_stock', false),
-      supabase.from('dispositivos').select('id', { count: 'exact', head: true }),
+      sinStandby(supabase.from('dispositivos').select('id', { count: 'exact', head: true }).eq('en_stock', false)),
+      sinStandby(supabase.from('dispositivos').select('id', { count: 'exact', head: true })),
       obtenerDispositivosSenados(supabase),
     ]);
     setDispositivos([...enStock, ...vendidos]);
@@ -949,6 +959,22 @@ export default function Stock() {
       cargarDispositivos();
     }
     setProcesandoAccion(null);
+  };
+
+  const mandarDispositivoAStandby = async (d: Dispositivo) => {
+    if (!puedeAgregarStock) return;
+    setAccionAbiertaId(null);
+    const motivo = prompt(`${t('¿Qué le pasa a')} ${d.modelo || t('este equipo')}? ${t('Queda en Standby, fuera del Stock para vender.')}`, d.detalles ?? '');
+    if (motivo === null) return;
+    setProcesandoAccion(d.id);
+    const r = await mandarAStandby(supabase, d, { origen: 'stock', motivo });
+    setProcesandoAccion(null);
+    if (r.error) {
+      alert(`${t('No se pudo guardar el cambio. No se modificó nada.')}
+${r.error}`);
+      return;
+    }
+    cargarDispositivos();
   };
 
   const derivarDispositivoAServicio = async (d: Dispositivo) => {
@@ -2397,6 +2423,14 @@ export default function Stock() {
                                     className="px-3.5 py-2.5 text-sm text-left hover:bg-canvas dark:hover:bg-dark-bg"
                                   >
                                     {d.en_stock ? t('Marcar fuera de stock') : t('Volver a stock')}
+                                  </button>
+                                )}
+                                {d.en_stock && conStandby && puedeAgregarStock && (
+                                  <button
+                                    onClick={() => mandarDispositivoAStandby(d)}
+                                    className="px-3.5 py-2.5 text-sm text-left hover:bg-canvas dark:hover:bg-dark-bg"
+                                  >
+                                    {t('Mandar a Standby')}
                                   </button>
                                 )}
                                 {d.en_stock && puedeRecibirServicioTecnico && (

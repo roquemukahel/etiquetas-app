@@ -96,6 +96,7 @@ export default function TarjetaReparacion({
   onArchivar,
   onEliminar,
   onAgregarAlStock,
+  onMandarAStandby,
   onEntregadoCliente,
   imagenesCarpetas,
   puedeAgregarStock,
@@ -113,6 +114,8 @@ export default function TarjetaReparacion({
   onArchivar: (r: Reparacion) => void;
   onEliminar: (r: Reparacion) => void;
   onAgregarAlStock: (r: Reparacion) => void;
+  // Solo si el negocio tiene Standby y la persona puede agregar al Stock.
+  onMandarAStandby?: (r: Reparacion) => void;
   onEntregadoCliente: (r: Reparacion) => void;
   imagenesCarpetas: Map<string, string>;
   puedeAgregarStock: boolean;
@@ -268,6 +271,12 @@ export default function TarjetaReparacion({
           <IconoChico nombre="check" />
           {r.cliente_id ? t('Entregado al cliente') : t('Ya está en Stock')}
         </span>
+      )}
+
+      {onMandarAStandby && !r.cliente_id && !r.agregado_a_stock && r.estado !== 'entregado' && (
+        <Boton variante="secundario" tamano="sm" anchoCompleto disabled={guardando === r.id} cargando={guardando === r.id} onClick={() => onMandarAStandby(r)}>
+          {t('Mandar a Standby')}
+        </Boton>
       )}
 
       <div className="flex gap-2">

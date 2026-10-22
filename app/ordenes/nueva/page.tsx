@@ -602,6 +602,10 @@ export default function NuevaOrden() {
         (q) => q.eq('en_stock', true)
       );
       setDispositivosStock(data);
+      // Desde Standby > Vender (?dispositivoId=...) el equipo ya viene cargado en el carrito.
+      const dispositivoPreseleccionado = new URLSearchParams(window.location.search).get('dispositivoId');
+      const elegido = dispositivoPreseleccionado ? data.find((x) => x.id === dispositivoPreseleccionado) : null;
+      if (elegido) agregarDispositivoDelStock(elegido);
       if (conGuia) {
         const { data: cats, error: errorCats } = await supabase.from('stock_categorias').select('id, financiacion_max_cuotas').limit(1000);
         if (!errorCats) setGuiaCategorias(new Map(((cats as { id: string; financiacion_max_cuotas: number | null }[]) ?? []).map((c) => [c.id, c.financiacion_max_cuotas])));

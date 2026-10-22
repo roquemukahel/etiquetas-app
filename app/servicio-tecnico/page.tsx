@@ -47,6 +47,8 @@ import { useSucursalActual } from '../lib/sucursal';
 import { obtenerSucursales, type Sucursal } from '../lib/sucursales';
 import { falla } from '../lib/escritura';
 import { camposRecibidoPor, registrarRecepcionEnHistorial } from '../lib/recibidoPor';
+import { soportaMigracion } from '../lib/migraciones';
+import { mandarReparacionAStandby } from '../lib/standby';
 import { origenDeCliente } from '../lib/clientesDuplicados';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
@@ -911,6 +913,30 @@ export default function ServicioTecnico() {
     cargar();
   };
 
+  // Standby (standby_supabase.sql): equipo propio que no se va a arreglar por ahora. Sale de Servicio Técnico y queda en Standby.
+  const [conStandby, setConStandby] = useState(false);
+  useEffect(() => {
+    soportaMigracion(supabase, 'standby').then(setConStandby);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const mandarAStandby = async (r: Reparacion) => {
+    if (guardando || !puedeAgregarStock) return;
+    const actor = getActor();
+    if (!actor) {
+      alert(t(MENSAJE_ACTOR_REQUERIDO));
+      return;
+    }
+    const motivo = prompt(`${t('¿Qué le pasa a')} ${r.modelo || t('este equipo')}? ${t('Queda en Standby y sale de Servicio Técnico.')}`, r.diagnostico ?? r.falla_declarada ?? '');
+    if (motivo === null) return;
+    setGuardando(r.id);
+    const resultado = await mandarReparacionAStandby(supabase, r, { motivo, actor });
+    setGuardando(null);
+    if (resultado.error) alert(`${t('No se pudo guardar el cambio. No se modificó nada.')}
+${resultado.error}`);
+    cargar();
+  };
+
   const agregarAlStock = async (r: Reparacion) => {
     if (guardando || !puedeAgregarStock) return;
     const actor = getActor();
@@ -1447,6 +1473,7 @@ export default function ServicioTecnico() {
             onArchivar={archivarCancelar}
             onEliminar={eliminarDefinitivo}
             onAgregarAlStock={agregarAlStock}
+ onMandarAStandby={conStandby && puedeAgregarStock ? mandarAStandby : undefined}
             onEntregadoCliente={marcarEntregadoCliente}
             imagenesCarpetas={imagenesCarpetas}
             puedeAgregarStock={puedeAgregarStock}
@@ -1513,6 +1540,7 @@ export default function ServicioTecnico() {
                 onArchivar={archivarCancelar}
                 onEliminar={eliminarDefinitivo}
                 onAgregarAlStock={agregarAlStock}
+ onMandarAStandby={conStandby && puedeAgregarStock ? mandarAStandby : undefined}
                 onEntregadoCliente={marcarEntregadoCliente}
                 imagenesCarpetas={imagenesCarpetas}
                 puedeAgregarStock={puedeAgregarStock}
@@ -1543,6 +1571,7 @@ export default function ServicioTecnico() {
                       onArchivar={archivarCancelar}
                       onEliminar={eliminarDefinitivo}
                       onAgregarAlStock={agregarAlStock}
+ onMandarAStandby={conStandby && puedeAgregarStock ? mandarAStandby : undefined}
                       onEntregadoCliente={marcarEntregadoCliente}
                       imagenesCarpetas={imagenesCarpetas}
                       puedeAgregarStock={puedeAgregarStock}
@@ -1906,6 +1935,7 @@ export default function ServicioTecnico() {
                   onArchivar={archivarCancelar}
                   onEliminar={eliminarDefinitivo}
                   onAgregarAlStock={agregarAlStock}
+ onMandarAStandby={conStandby && puedeAgregarStock ? mandarAStandby : undefined}
                   onEntregadoCliente={marcarEntregadoCliente}
                   imagenesCarpetas={imagenesCarpetas}
                   puedeAgregarStock={puedeAgregarStock}
