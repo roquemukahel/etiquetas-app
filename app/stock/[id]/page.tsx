@@ -135,7 +135,7 @@ export default function DetalleDispositivo() {
     const resultado = await mandarAStandby(supabase, d, { origen: 'stock', motivo });
     setGuardando(false);
     if (resultado.error) {
-      setError(resultado.error);
+      setError(t(resultado.error));
       return;
     }
     router.push('/standby');

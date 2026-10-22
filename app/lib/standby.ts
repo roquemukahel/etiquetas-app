@@ -50,10 +50,17 @@ function normalizarBusqueda(s: string): string {
 // El buscador del Standby: cada palabra tipeada tiene que aparecer en algún dato del equipo (modelo, capacidad,
 // color, IMEI, serie, motivo, detalles u origen). "13 negro 128" encuentra un iPhone 13 negro de 128 GB.
 export function buscarEnStandby(equipos: EquipoStandby[], texto: string): EquipoStandby[] {
-  const palabras = normalizarBusqueda(texto).split(' ').filter(Boolean);
-  if (palabras.length === 0) return equipos;
-  return equipos.filter((e) => {
-    const pajar = normalizarBusqueda(
+  return buscarEnIndice(indexarStandby(equipos), texto);
+}
+
+// El texto en el que se busca de cada equipo se arma UNA vez (no en cada tecla): con miles de equipos la
+// diferencia es que escribir en el buscador no se trabe.
+export type EquipoIndexado = { equipo: EquipoStandby; pajar: string };
+
+export function indexarStandby(equipos: EquipoStandby[]): EquipoIndexado[] {
+  return equipos.map((e) => ({
+    equipo: e,
+    pajar: normalizarBusqueda(
       [
         e.modelo,
         e.capacidad_gb != null ? `${e.capacidad_gb}gb ${e.capacidad_gb}` : null,
@@ -66,9 +73,14 @@ export function buscarEnStandby(equipos: EquipoStandby[], texto: string): Equipo
       ]
         .filter(Boolean)
         .join(' ')
-    );
-    return palabras.every((p) => pajar.includes(p));
-  });
+    ),
+  }));
+}
+
+export function buscarEnIndice(indice: EquipoIndexado[], texto: string): EquipoStandby[] {
+  const palabras = normalizarBusqueda(texto).split(' ').filter(Boolean);
+  if (palabras.length === 0) return indice.map((i) => i.equipo);
+  return indice.filter((i) => palabras.every((p) => i.pajar.includes(p))).map((i) => i.equipo);
 }
 
 // Orden de la lista: el que lleva más tiempo esperando primero (es el que más conviene resolver).
@@ -88,6 +100,10 @@ export function diasEnStandby(desde: string | null, ahora: Date = new Date()): n
 }
 
 type Resultado = { error: string | null };
+
+// Mensajes cuando otra persona (u otra pestaña) ya movió el equipo: quien llama los pasa por t() antes de mostrarlos.
+export const ERR_YA_NO_ESTA_EN_STANDBY = 'Este equipo ya no está en Standby (alguien lo movió). Actualizá la pantalla.';
+export const ERR_YA_NO_ESTA_EN_STOCK = 'Este equipo ya no está en el Stock (puede que se haya vendido o movido).';
 
 // Campo que une una orden de Servicio Técnico con el equipo del que salió (standby_vinculo_servicio_supabase.sql).
 // Sin esa migración no se agrega nada y todo funciona como antes.
@@ -145,7 +161,8 @@ export async function mandarAStandby(
   d: { id: string; modelo: string | null; imei: string | null },
   opciones: { origen: OrigenStandby; motivo: string }
 ): Promise<Resultado> {
-  const { error } = await supabase
+  // Solo si sigue en el Stock: con la lista desactualizada se podía "mandar a Standby" un equipo que otra persona ya vendió.
+  const { data, error } = await supabase
     .from('dispositivos')
     .update({
       en_stock: false,
@@ -154,8 +171,11 @@ export async function mandarAStandby(
       espera_origen: opciones.origen,
       espera_motivo: opciones.motivo.trim() || null,
     })
-    .eq('id', d.id);
+    .eq('id', d.id)
+    .eq('en_stock', true)
+    .select('id');
   if (error) return { error: error.message };
+  if (!data || data.length === 0) return { error: ERR_YA_NO_ESTA_EN_STOCK };
   await registrarAuditoria(supabase, {
     accion: `mandó ${descripcion(d)} a Standby${opciones.motivo.trim() ? ` (${opciones.motivo.trim()})` : ''}`,
     entidad: 'dispositivo',
@@ -166,7 +186,8 @@ export async function mandarAStandby(
 
 // Vuelve al Stock vendible (por ejemplo, porque se arregló). Empieza de nuevo la cuenta de días en Stock.
 export async function volverAlStock(supabase: SupabaseClient, d: { id: string; modelo: string | null; imei: string | null }): Promise<Resultado> {
-  const { error } = await supabase
+  // Solo si sigue en Standby: así dos personas (o dos pestañas) no lo pasan dos veces ni se pisan.
+  const { data, error } = await supabase
     .from('dispositivos')
     .update({
       en_stock: true,
@@ -174,8 +195,11 @@ export async function volverAlStock(supabase: SupabaseClient, d: { id: string; m
       en_stock_desde: new Date().toISOString(),
       alerta_stock_enviada: false,
     })
-    .eq('id', d.id);
+    .eq('id', d.id)
+    .eq('en_espera', true)
+    .select('id');
   if (error) return { error: error.message };
+  if (!data || data.length === 0) return { error: ERR_YA_NO_ESTA_EN_STANDBY };
   await registrarAuditoria(supabase, {
     accion: `devolvió ${descripcion(d)} de Standby al Stock`,
     entidad: 'dispositivo',
@@ -228,8 +252,17 @@ export async function crearEquipoEnStandby(
 }
 
 // Del Standby a Servicio Técnico: crea la orden de reparación (igual que "Derivar a Servicio Técnico" de Stock) y
-// el equipo deja de estar en espera. Si falla crear la reparación no se toca el equipo, para no dejarlo "perdido".
+// el equipo deja de estar en espera. Primero se "reserva" el equipo (solo si sigue en Standby, así dos personas no
+// crean dos órdenes del mismo equipo) y si después falla crear la orden, el equipo vuelve a Standby.
 export async function derivarStandbyAServicio(supabase: SupabaseClient, d: EquipoStandby): Promise<Resultado & { numeroOrden?: string | null }> {
+  const { data: reservado, error: errorReserva } = await supabase
+    .from('dispositivos')
+    .update({ en_espera: false, en_stock: false })
+    .eq('id', d.id)
+    .eq('en_espera', true)
+    .select('id');
+  if (errorReserva) return { error: errorReserva.message };
+  if (!reservado || reservado.length === 0) return { error: ERR_YA_NO_ESTA_EN_STANDBY };
   const { data: nueva, error: insertError } = await supabase
     .from('reparaciones')
     .insert({
@@ -245,15 +278,18 @@ export async function derivarStandbyAServicio(supabase: SupabaseClient, d: Equip
     })
     .select('id, numero_orden')
     .single();
-  if (insertError || !nueva) return { error: insertError?.message ?? 'error desconocido' };
-  const { error: updateError } = await supabase.from('dispositivos').update({ en_espera: false, en_stock: false }).eq('id', d.id);
+  if (insertError || !nueva) {
+    // No se pudo crear la orden: el equipo vuelve a Standby para no quedar "perdido".
+    const { error: errorVuelta } = await supabase.from('dispositivos').update({ en_espera: true }).eq('id', d.id);
+    const motivo = insertError?.message ?? 'error desconocido';
+    return { error: errorVuelta ? `${motivo} (y no pudimos devolverlo a Standby: ${errorVuelta.message})` : motivo };
+  }
   await registrarRecepcionEnHistorial(supabase, [nueva.id]);
   await registrarAuditoria(supabase, {
     accion: `derivó de Standby a Servicio Técnico un equipo (${nueva.numero_orden || ''}, ${descripcion(d)})`,
     entidad: 'reparacion',
     entidadId: nueva.id,
   });
-  if (updateError) return { error: `Se creó la reparación pero no pudimos sacar el equipo de Standby: ${updateError.message}` };
   return { error: null, numeroOrden: nueva.numero_orden };
 }
 
@@ -311,12 +347,15 @@ export async function mandarReparacionAStandby(
 }
 
 // Todos los equipos que están en Standby (vacío si el negocio todavía no corrió standby_supabase.sql).
-export async function equiposEnStandby(supabase: SupabaseClient): Promise<EquipoStandby[]> {
+// `columnas` permite pedir solo lo necesario (los formularios que avisan de coincidencias no necesitan todo).
+export async function equiposEnStandby<T = EquipoStandby>(supabase: SupabaseClient, columnas: string = COLUMNAS_STANDBY): Promise<T[]> {
   if (!(await soportaMigracion(supabase, 'standby'))) return [];
-  return obtenerTodasLasFilas<EquipoStandby>(supabase, 'dispositivos', COLUMNAS_STANDBY, [{ columna: 'created_at', ascending: false }], (q) =>
-    q.eq('en_espera', true)
-  );
+  return obtenerTodasLasFilas<T>(supabase, 'dispositivos', columnas, [{ columna: 'created_at', ascending: false }], (q) => q.eq('en_espera', true));
 }
+
+// Columnas mínimas para el aviso "este equipo ya está en Standby" y para elegir un equipo a señar.
+export const COLUMNAS_STANDBY_AVISO = 'id, modelo, capacidad_gb, color, imei, espera_motivo';
+export type EquipoStandbyAviso = Pick<EquipoStandby, 'id' | 'modelo' | 'capacidad_gb' | 'color' | 'imei' | 'espera_motivo'>;
 
 // Un equipo señado desde Standby sigue en Standby hasta que se entrega: al entregarlo tiene que pasar por el Stock
 // (es lo que usa la venta). Si no está en Standby (o no hay migración) no hace nada.

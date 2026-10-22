@@ -5,7 +5,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { getActor } from './actor';
 import { registrarAuditoria } from './auditoria';
 import { comprimirImagen, reducirImagenDesdeUrl } from './comprimirImagen';
-import { obtenerTodasLasFilas } from './db';
+import { enLotes, obtenerTodasLasFilas } from './db';
 import { soportaMigracion } from './migraciones';
 
 export const MAX_FOTOS_POR_EQUIPO = 8;
@@ -45,6 +45,21 @@ export async function contarFotosPorDispositivo(supabase: SupabaseClient): Promi
   if (!(await soportaMigracion(supabase, 'fotosDispositivo'))) return mapa;
   const filas = await obtenerTodasLasFilas<{ dispositivo_id: string }>(supabase, 'dispositivo_fotos', 'dispositivo_id');
   for (const f of filas) mapa.set(f.dispositivo_id, (mapa.get(f.dispositivo_id) ?? 0) + 1);
+  return mapa;
+}
+
+// Cuántas fotos tiene cada uno de ESTOS equipos (los de la pantalla), en vez de las de todo el negocio: Standby lo usa
+// solo para los que se ven. Por lotes de 100 ids (el largo de la URL tiene tope).
+export async function contarFotosDe(supabase: SupabaseClient, ids: string[]): Promise<Map<string, number>> {
+  const mapa = new Map<string, number>();
+  if (ids.length === 0 || !(await soportaMigracion(supabase, 'fotosDispositivo'))) return mapa;
+  const resultados = await Promise.all(
+    enLotes(ids).map(async (lote) => {
+      const { data, error } = await supabase.from('dispositivo_fotos').select('dispositivo_id').in('dispositivo_id', lote);
+      return error ? [] : ((data ?? []) as { dispositivo_id: string }[]);
+    })
+  );
+  for (const filas of resultados) for (const f of filas) mapa.set(f.dispositivo_id, (mapa.get(f.dispositivo_id) ?? 0) + 1);
   return mapa;
 }
 

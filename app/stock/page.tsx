@@ -974,7 +974,7 @@ export default function Stock() {
     setProcesandoAccion(null);
     if (r.error) {
       alert(`${t('No se pudo guardar el cambio. No se modificó nada.')}
-${r.error}`);
+${t(r.error)}`);
       return;
     }
     cargarDispositivos();

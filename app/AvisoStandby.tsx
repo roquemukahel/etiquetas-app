@@ -3,11 +3,11 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { volverAlStock, type EquipoStandby } from './lib/standby';
+import { volverAlStock, type EquipoStandbyAviso } from './lib/standby';
 import { getActor, MENSAJE_ACTOR_REQUERIDO } from './lib/actor';
 import { useT } from './lib/idioma';
 
-function detalleDe(e: EquipoStandby) {
+function detalleDe(e: EquipoStandbyAviso) {
   return [e.modelo, e.capacidad_gb ? `${e.capacidad_gb} GB` : null, e.color].filter(Boolean).join(' · ');
 }
 
@@ -22,8 +22,8 @@ export default function AvisoStandby({
   soloAviso = false,
 }: {
   supabase: SupabaseClient;
-  porImei: EquipoStandby[];
-  porModelo: EquipoStandby[];
+  porImei: EquipoStandbyAviso[];
+  porModelo: EquipoStandbyAviso[];
   onAgregado: () => void;
   // Para pantallas donde el equipo todavía no se está pasando al Stock: solo se avisa y se manda a Standby.
   soloAviso?: boolean;
@@ -34,7 +34,7 @@ export default function AvisoStandby({
 
   if (porImei.length === 0 && porModelo.length === 0) return null;
 
-  const pasarAlStock = async (e: EquipoStandby) => {
+  const pasarAlStock = async (e: EquipoStandbyAviso) => {
     if (procesando) return;
     if (!getActor()) {
       setError(t(MENSAJE_ACTOR_REQUERIDO));
@@ -46,13 +46,13 @@ export default function AvisoStandby({
     const resultado = await volverAlStock(supabase, e);
     setProcesando(null);
     if (resultado.error) {
-      setError(`${t('No pudimos pasarlo al Stock:')} ${resultado.error}`);
+      setError(`${t('No pudimos pasarlo al Stock:')} ${t(resultado.error)}`);
       return;
     }
     onAgregado();
   };
 
-  const fila = (e: EquipoStandby) => (
+  const fila = (e: EquipoStandbyAviso) => (
     <div key={e.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-white dark:bg-dark-surface border border-border dark:border-dark-border px-3 py-2">
       <div className="min-w-0 flex-1 text-xs">
         <p className="font-medium text-ink dark:text-dark-text truncate">{detalleDe(e) || t('Sin modelo')}</p>

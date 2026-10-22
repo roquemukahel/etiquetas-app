@@ -107,7 +107,10 @@ export default function SelectorDeActor() {
 
   const esRaiz = pathname === '/';
   const esRutaExcluida = RUTAS_SIN_SELECTOR.some((r) => pathname?.startsWith(r)) || (esRaiz && sesion === 'no');
-  const mostrarOverlay = (!actor && !postergado) || cambiando;
+  // OJO: `actor === undefined` significa "todavía no se leyó" (primer render), NO "no hay actor". Con `!actor` el cartel
+  // contaba como abierto en el primer render de CADA carga de página y disparaba 10 consultas (vendedores, técnicos,
+  // PIN, permisos...) aunque ya hubiera alguien trabajando y el cartel nunca se mostrara.
+  const mostrarOverlay = (actor === null && !postergado) || cambiando;
 
   useEffect(() => {
     setActorState(getActor());

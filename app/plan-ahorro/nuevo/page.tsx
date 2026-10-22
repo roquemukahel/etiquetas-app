@@ -8,7 +8,6 @@ import { obtenerTodasLasFilas } from '../../lib/db';
 import { sanitizarDecimal } from '../../lib/numeros';
 import { obtenerDispositivosSenados } from '../../lib/planAhorro';
 import { equiposEnStandby } from '../../lib/standby';
-import { soportaMigracion } from '../../lib/migraciones';
 import SelectorColorAuto from '../../SelectorColorAuto';
 import { useT } from '../../lib/idioma';
 import { useSucursalActual } from '../../lib/sucursal';
@@ -93,7 +92,8 @@ export default function NuevoPlanAhorro() {
     })();
     (async () => {
       try {
-        setDispositivosStandby(await equiposEnStandby(supabase));
+        // Solo las columnas que se muestran (no la ficha completa de cada equipo).
+        setDispositivosStandby(await equiposEnStandby<DispositivoStock>(supabase, 'id, modelo, capacidad_gb, color, imei, precio'));
       } catch {
         // Sin Standby legible, la seña sigue siendo solo de equipos del Stock.
       }

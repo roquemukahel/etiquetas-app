@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../lib/supabase/client';
@@ -10,18 +10,20 @@ import { soportaMigracion } from '../lib/migraciones';
 import { obtenerTodasLasFilas } from '../lib/db';
 import { simboloMoneda } from '../lib/monedas';
 import { formatearMonto } from '../lib/numeros';
-import { contarFotosPorDispositivo } from '../lib/fotosDispositivo';
+import { contarFotosDe } from '../lib/fotosDispositivo';
 import { obtenerDispositivosSenados } from '../lib/planAhorro';
 import { registrarAuditoria } from '../lib/auditoria';
 import {
   COLUMNAS_STANDBY,
   ETIQUETA_ORIGEN_STANDBY,
-  buscarEnStandby,
+  buscarEnIndice,
+  indexarStandby,
   crearEquipoEnStandby,
   derivarStandbyAServicio,
   diasEnStandby,
   ordenarStandby,
   volverAlStock,
+  ERR_YA_NO_ESTA_EN_STANDBY,
   type EquipoStandby,
 } from '../lib/standby';
 import { useSucursalActual } from '../lib/sucursal';
@@ -30,6 +32,9 @@ import { Boton } from '../Boton';
 import { QCard } from '../QCard';
 import Modal from '../Modal';
 import { useT } from '../lib/idioma';
+
+// Cuántos equipos se dibujan por vez: con cientos o miles en Standby la pantalla abre igual de rápido y se pide "Mostrar más".
+const POR_PAGINA = 40;
 
 const campo = 'w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm';
 const etiqueta = 'text-xs text-muted dark:text-dark-text-secondary block mb-1';
@@ -48,6 +53,8 @@ export default function Standby() {
   const [activo, setActivo] = useState<boolean | null>(null);
   const [equipos, setEquipos] = useState<EquipoStandby[]>([]);
   const [fotos, setFotos] = useState<Map<string, number>>(new Map());
+  // Ids de los que ya se pidió el conteo de fotos (así no se repite el pedido mientras llega la respuesta).
+  const fotosPedidas = useRef(new Set<string>());
   // Equipos señados (Plan de ahorro) que esperan acá hasta entregarse.
   const [senados, setSenados] = useState<Set<string>>(new Set());
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
@@ -56,6 +63,9 @@ export default function Standby() {
     setFiltroSucursal(sucursalActual.id ?? '');
   }, [sucursalActual.id]);
   const [busqueda, setBusqueda] = useState('');
+  // Mientras se escribe, la lista se actualiza con un pequeño retraso para que el teclado no se trabe.
+  const busquedaDiferida = useDeferredValue(busqueda);
+  const [limite, setLimite] = useState(POR_PAGINA);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [procesando, setProcesando] = useState<string | null>(null);
@@ -70,7 +80,6 @@ export default function Standby() {
           q.eq('en_espera', true)
         )
       );
-      contarFotosPorDispositivo(supabase).then(setFotos).catch(() => {});
       obtenerDispositivosSenados(supabase).then(setSenados).catch(() => {});
     } catch (e) {
       setError(t('No pudimos cargar los equipos en Standby:') + ' ' + (e instanceof Error ? e.message : t('error desconocido')));
@@ -96,36 +105,74 @@ export default function Standby() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const visibles = useMemo(() => {
-    const porSucursal = filtroSucursal ? equipos.filter((e) => e.sucursal_id === filtroSucursal) : equipos;
-    return ordenarStandby(buscarEnStandby(porSucursal, busqueda));
-  }, [equipos, filtroSucursal, busqueda]);
+  // El texto de búsqueda de cada equipo se arma una sola vez (al cargar), no en cada tecla.
+  const indice = useMemo(() => indexarStandby(equipos), [equipos]);
+  const enSucursal = useMemo(
+    () => (filtroSucursal ? indice.filter((i) => i.equipo.sucursal_id === filtroSucursal) : indice),
+    [indice, filtroSucursal]
+  );
+  const visibles = useMemo(() => ordenarStandby(buscarEnIndice(enSucursal, busquedaDiferida)), [enSucursal, busquedaDiferida]);
+  // Al cambiar la búsqueda o la sucursal se vuelve a la primera página.
+  useEffect(() => {
+    setLimite(POR_PAGINA);
+  }, [busquedaDiferida, filtroSucursal]);
+  const paginaActual = useMemo(() => visibles.slice(0, limite), [visibles, limite]);
 
-  const enSucursal = filtroSucursal ? equipos.filter((e) => e.sucursal_id === filtroSucursal) : equipos;
+  // Fotos reales: solo se cuentan las de los equipos que se están viendo (no las de todo el negocio).
+  useEffect(() => {
+    const faltan = paginaActual.map((e) => e.id).filter((id) => !fotosPedidas.current.has(id));
+    if (faltan.length === 0) return;
+    for (const id of faltan) fotosPedidas.current.add(id);
+    contarFotosDe(supabase, faltan)
+      .then((m) => {
+        // Los que no tienen fotos también quedan anotados (con 0) para no volver a preguntar por ellos.
+        setFotos((prev) => {
+          const nuevo = new Map(prev);
+          for (const id of faltan) nuevo.set(id, m.get(id) ?? 0);
+          return nuevo;
+        });
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paginaActual]);
 
-  const accion = async (e: EquipoStandby, tarea: () => Promise<string | null>) => {
+  // Hace la acción y, si salió bien, actualiza la lista acá mismo (sin volver a pedir todo a la base).
+  const accion = async (e: EquipoStandby, tarea: () => Promise<string | null>, alExito: (prev: EquipoStandby[]) => EquipoStandby[]) => {
     setProcesando(e.id);
     const mensaje = await tarea();
     setProcesando(null);
-    if (mensaje) alert(`${t('No se pudo guardar el cambio. No se modificó nada.')}\n${mensaje}`);
-    await cargar();
+    if (mensaje) {
+      alert(`${t('No se pudo guardar el cambio. No se modificó nada.')}
+${t(mensaje)}`);
+      // Si lo movió otra persona, la lista quedó vieja: se vuelve a pedir.
+      if (mensaje === ERR_YA_NO_ESTA_EN_STANDBY) await cargar();
+      return;
+    }
+    setEquipos(alExito);
   };
+  const sacar = (id: string) => (prev: EquipoStandby[]) => prev.filter((x) => x.id !== id);
 
   const alStock = (e: EquipoStandby) => {
     if (!puedeAgregarStock) return;
     if (!confirm(`${t('¿Volver')} ${e.modelo || t('este equipo')} ${t('al Stock como disponible para vender?')}`)) return;
-    accion(e, async () => (await volverAlStock(supabase, e)).error);
+    accion(e, async () => (await volverAlStock(supabase, e)).error, sacar(e.id));
   };
 
   // Para vender hay que pasarlo al Stock (es lo que usa Nueva Orden) y se abre la orden con el equipo ya cargado.
   const vender = async (e: EquipoStandby) => {
     if (!puedeVender || !puedeAgregarStock) return;
+    // Un equipo señado está reservado para un cliente: se entrega desde su plan de ahorro, no se vende a otra persona.
+    if (senados.has(e.id)) {
+      alert(t('Este equipo está señado por un plan de ahorro. Entregalo desde ese plan.'));
+      return;
+    }
     if (!confirm(`${t('Para vender')} ${e.modelo || t('este equipo')} ${t('se pasa al Stock y se abre una orden nueva con el equipo cargado. ¿Seguimos?')}`)) return;
     setProcesando(e.id);
     const { error: errorStock } = await volverAlStock(supabase, e);
     setProcesando(null);
     if (errorStock) {
-      alert(`${t('No se pudo guardar el cambio. No se modificó nada.')}\n${errorStock}`);
+      alert(`${t('No se pudo guardar el cambio. No se modificó nada.')}\n${t(errorStock)}`);
+      if (errorStock === ERR_YA_NO_ESTA_EN_STANDBY) await cargar();
       return;
     }
     router.push(`/ordenes/nueva?dispositivoId=${e.id}`);
@@ -134,11 +181,15 @@ export default function Standby() {
   const aServicio = (e: EquipoStandby) => {
     if (!puedeServicio) return;
     if (!confirm(`${t('¿Derivar')} ${e.modelo || t('este equipo')} ${t('a Servicio Técnico? Sale de Standby y aparece ahí para diagnosticarlo.')}`)) return;
-    accion(e, async () => (await derivarStandbyAServicio(supabase, e)).error);
+    accion(e, async () => (await derivarStandbyAServicio(supabase, e)).error, sacar(e.id));
   };
 
   const eliminar = (e: EquipoStandby) => {
     if (!tienePermiso(actor, 'eliminar')) return;
+    if (senados.has(e.id)) {
+      alert(t('Este equipo está señado por un plan de ahorro. Cancelá o eliminá ese plan antes de borrarlo.'));
+      return;
+    }
     if (!confirm(`${t('¿Eliminar')} ${e.modelo || t('este equipo')} ${t('del sistema? No se puede deshacer.')}`)) return;
     accion(e, async () => {
       const { error: errorBorrado } = await supabase.from('dispositivos').delete().eq('id', e.id);
@@ -149,7 +200,7 @@ export default function Standby() {
         entidadId: e.id,
       });
       return null;
-    });
+    }, sacar(e.id));
   };
 
   if (activo === false) {
@@ -232,7 +283,7 @@ export default function Standby() {
         </QCard>
       ) : (
         <div className="flex flex-col gap-2">
-          {visibles.map((e) => {
+          {paginaActual.map((e) => {
             const dias = diasEnStandby(e.en_espera_desde ?? e.created_at);
             const ocupado = procesando === e.id;
             return (
@@ -289,9 +340,11 @@ export default function Standby() {
                     </Boton>
                   )}
                   {puedeVender && puedeAgregarStock && (
-                    <Boton variante="primario" tamano="sm" disabled={ocupado} onClick={() => vender(e)}>
-                      {t('Vender')}
-                    </Boton>
+                    <span title={senados.has(e.id) ? t('Este equipo está señado por un plan de ahorro. Entregalo desde ese plan.') : undefined}>
+                      <Boton variante="primario" tamano="sm" disabled={ocupado || senados.has(e.id)} onClick={() => vender(e)}>
+                        {t('Vender')}
+                      </Boton>
+                    </span>
                   )}
                   {puedeServicio && (
                     <Boton variante="secundario" tamano="sm" disabled={ocupado} onClick={() => aServicio(e)}>
@@ -318,6 +371,11 @@ export default function Standby() {
               </div>
             );
           })}
+          {visibles.length > limite && (
+            <Boton variante="secundario" tamano="md" onClick={() => setLimite((l) => l + POR_PAGINA)} className="self-center">
+              {t('Mostrar más')} ({visibles.length - limite})
+            </Boton>
+          )}
         </div>
       )}
 
@@ -336,9 +394,10 @@ export default function Standby() {
         <ModalMotivo
           equipo={editandoMotivo}
           onClose={() => setEditandoMotivo(null)}
-          onGuardado={() => {
+          onGuardado={(motivo) => {
+            // Se actualiza la tarjeta acá mismo, sin volver a pedir toda la lista.
+            setEquipos((prev) => prev.map((x) => (x.id === editandoMotivo.id ? { ...x, espera_motivo: motivo } : x)));
             setEditandoMotivo(null);
-            cargar();
           }}
         />
       )}
@@ -444,7 +503,7 @@ function ModalNuevoEquipo({ sucursales, sucursalId, onClose, onGuardado }: { suc
   );
 }
 
-function ModalMotivo({ equipo, onClose, onGuardado }: { equipo: EquipoStandby; onClose: () => void; onGuardado: () => void }) {
+function ModalMotivo({ equipo, onClose, onGuardado }: { equipo: EquipoStandby; onClose: () => void; onGuardado: (motivo: string | null) => void }) {
   const supabase = crearClienteNavegador();
   const t = useT();
   const [motivo, setMotivo] = useState(equipo.espera_motivo ?? equipo.detalles ?? '');
@@ -465,7 +524,7 @@ function ModalMotivo({ equipo, onClose, onGuardado }: { equipo: EquipoStandby; o
       entidad: 'dispositivo',
       entidadId: equipo.id,
     });
-    onGuardado();
+    onGuardado(motivo.trim() || null);
   };
 
   return (

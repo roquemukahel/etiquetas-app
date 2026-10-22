@@ -1,28 +1,37 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { coincidenciasPorImeiOModelo } from './canje';
-import { equiposEnStandby, type EquipoStandby } from './standby';
+import { COLUMNAS_STANDBY_AVISO, equiposEnStandby, type EquipoStandbyAviso } from './standby';
 
-// Igual que useCoincidenciasCanje: carga una vez los equipos que están en Standby y devuelve cuáles pueden ser el
-// equipo que se está tipeando (por IMEI o, si no hay IMEI, por modelo). Si Standby no existe o no se puede leer,
-// devuelve vacío y el formulario sigue sin el aviso.
+// Igual que useCoincidenciasCanje: devuelve cuáles equipos de Standby pueden ser el que se está tipeando (por IMEI
+// o, si no hay IMEI, por modelo). Se pide la lista de Standby recién cuando se empieza a escribir un IMEI o hay un
+// modelo (no al abrir el formulario) y solo con las columnas que hacen falta, así el formulario abre igual de rápido
+// aunque haya muchos equipos en Standby. Si Standby no existe o no se puede leer, devuelve vacío y no hay aviso.
 export function useCoincidenciasStandby(supabase: SupabaseClient, imei: string, modelo: string) {
-  const [enStandby, setEnStandby] = useState<EquipoStandby[]>([]);
+  const [enStandby, setEnStandby] = useState<EquipoStandbyAviso[]>([]);
+  const [pedido, setPedido] = useState(false);
+  const hayQueBuscar = imei.trim().length >= 2 || modelo.trim().length > 0;
+  // Si la pantalla se cierra antes de que llegue la lista no se guarda nada; borrar y volver a escribir NO cancela el pedido.
+  const montado = useRef(true);
   useEffect(() => {
-    let vivo = true;
-    equiposEnStandby(supabase)
+    montado.current = true;
+    return () => {
+      montado.current = false;
+    };
+  }, []);
+  useEffect(() => {
+    if (!hayQueBuscar || pedido) return;
+    setPedido(true);
+    equiposEnStandby<EquipoStandbyAviso>(supabase, COLUMNAS_STANDBY_AVISO)
       .then((e) => {
-        if (vivo) setEnStandby(e);
+        if (montado.current) setEnStandby(e);
       })
       .catch(() => {
         // Sin Standby legible, no hay aviso.
       });
-    return () => {
-      vivo = false;
-    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [hayQueBuscar]);
   return useMemo(() => coincidenciasPorImeiOModelo(enStandby, imei, modelo), [enStandby, imei, modelo]);
 }

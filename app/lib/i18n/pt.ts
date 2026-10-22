@@ -3389,4 +3389,9 @@ export const PT: Record<string, string> = {
   'No hay equipos en Standby disponibles con esa búsqueda.': 'Não há aparelhos em Standby disponíveis para essa busca.',
   'No pudimos pasar el equipo de Standby al Stock:': 'Não foi possível passar o aparelho do Standby para o Estoque:',
   'Unidades por color': 'Unidades por cor',
+  'Este equipo está señado por un plan de ahorro. Entregalo desde ese plan.': 'Este aparelho está reservado por um plano de poupança. Entregue-o a partir desse plano.',
+  'Este equipo está señado por un plan de ahorro. Cancelá o eliminá ese plan antes de borrarlo.': 'Este aparelho está reservado por um plano de poupança. Cancele ou exclua esse plano antes de apagá-lo.',
+  'Mostrar más': 'Mostrar mais',
+  'Este equipo ya no está en Standby (alguien lo movió). Actualizá la pantalla.': 'Este aparelho não está mais em Standby (alguém o moveu). Atualize a tela.',
+  'Este equipo ya no está en el Stock (puede que se haya vendido o movido).': 'Este aparelho não está mais no Estoque (pode ter sido vendido ou movido).',
 };
