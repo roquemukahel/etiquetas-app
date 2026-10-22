@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buscarEnStandby, diasEnStandby, ordenarStandby, type EquipoStandby } from './standby';
+import { buscarEnIndice, buscarEnStandby, diasEnStandby, indexarStandby, ordenarStandby, type EquipoStandby } from './standby';
 import { coincidenciasPorImeiOModelo } from './canje';
 
 function equipo(p: Partial<EquipoStandby>): EquipoStandby {
@@ -76,5 +76,39 @@ describe('aviso al cargar un equipo que ya está en Standby', () => {
   it('sin IMEI tipeado avisa por modelo; con un IMEI distinto, no', () => {
     expect(coincidenciasPorImeiOModelo(enStandby, '', 'iPhone 13').porModelo.map((e) => e.id)).toEqual(['a', 'b']);
     expect(coincidenciasPorImeiOModelo(enStandby, '999988', 'iPhone 13').porModelo.map((e) => e.id)).toEqual(['b']);
+  });
+});
+
+describe('rendimiento con muchos equipos en Standby', () => {
+  const modelos = ['iPhone 11', 'iPhone 12', 'iPhone 13', 'iPhone 14 Pro', 'Galaxy A16', 'Moto G54'];
+  const colores = ['Negro', 'Azul', 'Rojo', 'Verde', 'Blanco'];
+  const muchos = Array.from({ length: 5000 }, (_, i) =>
+    equipo({
+      id: `e${i}`,
+      modelo: modelos[i % modelos.length],
+      capacidad_gb: [64, 128, 256][i % 3],
+      color: colores[i % colores.length],
+      imei: String(350000000000000 + i),
+      espera_motivo: i % 7 === 0 ? 'Pantalla rota' : 'Batería hinchada',
+      en_espera_desde: new Date(2026, 0, 1 + (i % 200)).toISOString(),
+    })
+  );
+
+  it('armar el índice, buscar y ordenar 5.000 equipos es instantáneo', () => {
+    const t0 = performance.now();
+    const indice = indexarStandby(muchos);
+    const t1 = performance.now();
+    const encontrados = ordenarStandby(buscarEnIndice(indice, 'iphone 13 negro pantalla'));
+    const t2 = performance.now();
+    expect(encontrados.length).toBeGreaterThan(0);
+    // Cotas muy holgadas (en una compu lenta de CI): el índice se arma una vez, cada búsqueda posterior es chica.
+    expect(t1 - t0).toBeLessThan(1500);
+    expect(t2 - t1).toBeLessThan(300);
+  });
+
+  it('la búsqueda por IMEI parcial entre 5.000 equipos devuelve solo los que coinciden', () => {
+    const indice = indexarStandby(muchos);
+    const r = buscarEnIndice(indice, '35000000000420');
+    expect(r.length).toBe(10); // ...4200 a ...4209
   });
 });

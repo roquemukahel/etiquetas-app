@@ -150,7 +150,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     (pathname?.includes('/etiqueta/') ?? false) ||
     (pathname === '/' && sesion === 'no');
 
-  if (ocultar || sesion !== 'si') return <>{children}</>;
+  // OJO: antes acá había un `return <>{children}</>` distinto del árbol de abajo. Al resolverse la sesión (~0,3 s) el árbol
+  // cambiaba y React volvía a MONTAR la pantalla entera, así que TODAS las pantallas pedían sus datos dos veces en cada
+  // carga. Ahora el contenido está siempre en la misma posición del mismo árbol (solo se agrega/quita el menú alrededor).
+  const conMenu = !(ocultar || sesion !== 'si');
 
   const esActivo = (href: string) => (href === '/' ? pathname === '/' : (pathname?.startsWith(href) ?? false));
   const mostrarAvisoPrueba = diasPrueba !== null && !pathname?.startsWith('/configuracion/suscripcion');
@@ -167,7 +170,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div>
-      {mostrarAvisoPrueba && (
+      {conMenu && mostrarAvisoPrueba && (
         <div className="no-print sticky top-[52px] z-30 w-full bg-accent-soft dark:bg-dark-accent-soft text-accent dark:text-dark-accent text-xs px-4 py-2 flex items-center justify-center gap-3 flex-wrap">
           <span>
             {t('Te quedan')} <strong>{diasPrueba}</strong> {diasPrueba === 1 ? t('día') : t('días')} {t('de prueba gratis.')}
@@ -187,6 +190,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
          top-0, fuera de este componente); si además se muestra el aviso de
          prueba (otro sticky, justo debajo), se suma su alto para que no se
          tapen entre sí. */}
+      {conMenu && (
       <aside
         className={`hidden lg:flex lg:flex-col lg:fixed lg:w-64 ${mostrarAvisoPrueba ? 'lg:top-[88px]' : 'lg:top-[52px]'} lg:bottom-0 lg:left-0 lg:z-20 lg:border-r lg:border-border dark:lg:border-dark-border lg:bg-white dark:lg:bg-dark-surface`}
       >
@@ -282,6 +286,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </p>
         </div>
       </aside>
+      )}
 
       {/* Versión celular del bloque de arriba: el aside completo es
          hidden lg:flex (ver comentario al principio del archivo — en
@@ -290,7 +295,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
          componente aparte) para heredar gratis las mismas exclusiones de
          ruta/sesión que ya resolvió el "if (ocultar || sesion !== 'si')"
          de arriba, en vez de duplicar esa lista en otro lado. */}
-      {sucursales.length > 0 && !sucursalFija && (
+      {conMenu && sucursales.length > 0 && !sucursalFija && (
         <div className="no-print lg:hidden fixed bottom-3 left-3 z-40">
           {menuSucursalAbierto && (
             <div className="absolute bottom-full left-0 mb-1.5 w-52 rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-elevated py-1">
@@ -327,7 +332,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      <div className="lg:pl-64">{children}</div>
+      <div className={conMenu ? 'lg:pl-64' : undefined}>{children}</div>
     </div>
   );
 }
