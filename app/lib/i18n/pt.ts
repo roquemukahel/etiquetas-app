@@ -3371,4 +3371,7 @@ export const PT: Record<string, string> = {
   'Agregar a Standby': 'Adicionar ao Standby',
   'En Standby': 'Em Standby',
   'Cargado a mano': 'Cadastrado à mão',
+  'equipo en Standby': 'aparelho em Standby',
+  'Ya está en Stock o en Standby': 'Já está no Estoque ou em Standby',
+  'Ya se agregó al Stock o a Standby': 'Já foi adicionado ao Estoque ou ao Standby',
 };

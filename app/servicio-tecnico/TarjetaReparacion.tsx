@@ -269,7 +269,7 @@ export default function TarjetaReparacion({
       {r.estado === 'entregado' && (r.cliente_id || r.agregado_a_stock) && (
         <span className="inline-flex items-center justify-center gap-1 rounded-lg bg-muted/10 h-9 text-xs font-medium text-muted dark:text-dark-text-secondary">
           <IconoChico nombre="check" />
-          {r.cliente_id ? t('Entregado al cliente') : t('Ya está en Stock')}
+          {r.cliente_id ? t('Entregado al cliente') : t('Ya está en Stock o en Standby')}
         </span>
       )}
 

@@ -3370,4 +3370,7 @@ export const EN: Record<string, string> = {
   'Agregar a Standby': 'Add to Standby',
   'En Standby': 'In Standby',
   'Cargado a mano': 'Added by hand',
+  'equipo en Standby': 'device in Standby',
+  'Ya está en Stock o en Standby': 'Already in Stock or Standby',
+  'Ya se agregó al Stock o a Standby': 'Already added to Stock or Standby',
 };

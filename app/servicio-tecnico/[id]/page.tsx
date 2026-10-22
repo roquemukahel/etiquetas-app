@@ -2459,7 +2459,7 @@ export default function FichaReparacion() {
               )}
               {!r.cliente_id && r.agregado_a_stock && (
                 <p className="flex items-center justify-center gap-1 text-xs text-good text-center">
-                  <IconoChico nombre="check" /> {t('Ya se agregó al Stock')}
+                  <IconoChico nombre="check" /> {t('Ya se agregó al Stock o a Standby')}
                 </p>
               )}
 

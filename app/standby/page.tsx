@@ -204,7 +204,7 @@ export default function Standby() {
           </select>
         )}
         <span className="text-xs text-muted dark:text-dark-text-secondary">
-          {busqueda.trim() ? `${visibles.length} ${t('de')} ${enSucursal.length}` : enSucursal.length} {t('equipos en Standby')}
+          {busqueda.trim() ? `${visibles.length} ${t('de')} ${enSucursal.length}` : enSucursal.length} {!busqueda.trim() && enSucursal.length === 1 ? t('equipo en Standby') : t('equipos en Standby')}
         </span>
         {puedeAgregarStock && (
           <Boton variante="primario" tamano="sm" onClick={() => setModalNuevo(true)} className="ml-auto">
@@ -314,6 +314,7 @@ export default function Standby() {
 
       {modalNuevo && (
         <ModalNuevoEquipo
+          sucursales={sucursales}
           sucursalId={sucursalActual.id ?? (filtroSucursal || null)}
           onClose={() => setModalNuevo(false)}
           onGuardado={() => {
@@ -336,7 +337,7 @@ export default function Standby() {
   );
 }
 
-function ModalNuevoEquipo({ sucursalId, onClose, onGuardado }: { sucursalId: string | null; onClose: () => void; onGuardado: () => void }) {
+function ModalNuevoEquipo({ sucursales, sucursalId, onClose, onGuardado }: { sucursales: Sucursal[]; sucursalId: string | null; onClose: () => void; onGuardado: () => void }) {
   const supabase = crearClienteNavegador();
   const t = useT();
   const [modelo, setModelo] = useState('');
@@ -344,12 +345,18 @@ function ModalNuevoEquipo({ sucursalId, onClose, onGuardado }: { sucursalId: str
   const [color, setColor] = useState('');
   const [imei, setImei] = useState('');
   const [motivo, setMotivo] = useState('');
+  // Con varias sucursales hay que elegir a cuál pertenece el equipo, si no queda fuera de los filtros por sucursal.
+  const [sucursalElegida, setSucursalElegida] = useState(sucursalId ?? (sucursales.length === 1 ? sucursales[0].id : ''));
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
 
   const guardar = async () => {
     if (!modelo.trim()) {
       setError(t('Poné el modelo del equipo.'));
+      return;
+    }
+    if (sucursales.length > 1 && !sucursalElegida) {
+      setError(t('Elegí una sucursal.'));
       return;
     }
     const quien = getActor();
@@ -365,7 +372,7 @@ function ModalNuevoEquipo({ sucursalId, onClose, onGuardado }: { sucursalId: str
       color,
       imei,
       motivo,
-      sucursalId,
+      sucursalId: sucursalElegida || null,
       actor: quien,
     });
     setGuardando(false);
@@ -398,6 +405,19 @@ function ModalNuevoEquipo({ sucursalId, onClose, onGuardado }: { sucursalId: str
           <label className={etiqueta}>IMEI</label>
           <input value={imei} onChange={(e) => setImei(e.target.value)} inputMode="numeric" className={campo} />
         </div>
+        {sucursales.length > 1 && (
+          <div>
+            <label className={etiqueta}>{t('Sucursal')}</label>
+            <select value={sucursalElegida} onChange={(e) => setSucursalElegida(e.target.value)} className={campo}>
+              <option value="">{t('Elegí una sucursal')}</option>
+              {sucursales.map((s) => (
+                <option key={s.id} value={s.id}>
+                  🏬 {s.nombre}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div>
           <label className={etiqueta}>{t('Qué le pasa')}</label>
           <textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={3} placeholder={t('Ej. Pantalla rota, no carga, esperando repuesto')} className={campo} />
