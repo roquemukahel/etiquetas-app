@@ -10,6 +10,7 @@ import {
   PRECIO_ARS_ANUAL,
 } from './lib/pagoManual';
 import { useT } from './lib/idioma';
+import { comprimirImagen } from './lib/comprimirImagen';
 
 type Comprobante = {
   id: string;
@@ -40,12 +41,18 @@ export default function PagoTransferenciaARS({
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleArchivo = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // La captura o foto se achica antes de mandarla: una foto de celular pesa varios MB y, sin achicar, el envío del
+  // comprobante podía fallar (el negocio lo intentaba y "no pasaba"). Se reduce a un tamaño que se lee bien.
+  const handleArchivo = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setImagen(reader.result as string);
-    reader.readAsDataURL(file);
+    setError(null);
+    try {
+      setImagen(await comprimirImagen(file, 1600, 0.8));
+    } catch {
+      setImagen(null);
+      setError(t('No pudimos leer esa imagen. Probá con otra captura o foto.'));
+    }
   };
 
   const enviar = async () => {

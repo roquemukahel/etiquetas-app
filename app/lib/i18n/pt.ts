@@ -3330,4 +3330,7 @@ export const PT: Record<string, string> = {
   'El equipo se cargó bien, pero no pudimos guardar las fotos:': 'O aparelho foi cadastrado, mas não foi possível salvar as fotos:',
   'Tiene fotos reales': 'Tem fotos reais',
   'Fotos reales': 'Fotos reais',
+  'No pudimos leer esa imagen. Probá con otra captura o foto.': 'Não foi possível ler essa imagem. Tente outra captura ou foto.',
+  'O pagá con Binance Pay (más simple, sin elegir red)': 'Ou pague com Binance Pay (mais simples, sem escolher rede)',
+  'ID de Binance Pay:': 'ID do Binance Pay:',
 };

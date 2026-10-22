@@ -4,6 +4,10 @@
 export const USDT_RED = 'BEP20 (BNB Smart Chain)';
 export const USDT_DIRECCION = '0xf33f7083b341e65217600e39f51cbe7c7e72b58a';
 
+// ID de Binance Pay para cobrar USDT sin comisión de red (se paga de una cuenta de Binance a otra, sin elegir red).
+// Mientras esté vacío NO se muestra esta opción. Se completa con el ID de Binance Pay del titular de la cuenta.
+export const BINANCE_PAY_ID = '';
+
 // Más barato que pagar con tarjeta (Lemon Squeezy cobra comisión) para
 // incentivar el pago por USDT.
 export const PRECIO_USDT_MENSUAL = 9.99;

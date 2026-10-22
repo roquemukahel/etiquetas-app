@@ -3,8 +3,9 @@
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { crearClienteNavegador } from './lib/supabase/client';
-import { USDT_RED, USDT_DIRECCION, PRECIO_USDT_MENSUAL, PRECIO_USDT_ANUAL } from './lib/pagoManual';
+import { USDT_RED, USDT_DIRECCION, BINANCE_PAY_ID, PRECIO_USDT_MENSUAL, PRECIO_USDT_ANUAL } from './lib/pagoManual';
 import { useT } from './lib/idioma';
+import { comprimirImagen } from './lib/comprimirImagen';
 
 type Comprobante = {
   id: string;
@@ -46,12 +47,18 @@ export default function PagoUSDT({
       .catch(() => setQr(null));
   }, [abierto, qr]);
 
-  const handleArchivo = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // La captura o foto se achica antes de mandarla: una foto de celular pesa varios MB y, sin achicar, el envío del
+  // comprobante podía fallar (el negocio lo intentaba y "no pasaba"). Se reduce a un tamaño que se lee bien.
+  const handleArchivo = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setImagen(reader.result as string);
-    reader.readAsDataURL(file);
+    setError(null);
+    try {
+      setImagen(await comprimirImagen(file, 1600, 0.8));
+    } catch {
+      setImagen(null);
+      setError(t('No pudimos leer esa imagen. Probá con otra captura o foto.'));
+    }
   };
 
   const enviar = async () => {
@@ -153,6 +160,17 @@ export default function PagoUSDT({
               </p>
             </div>
           </div>
+
+          {BINANCE_PAY_ID && (
+            <div className="rounded-xl bg-canvas dark:bg-dark-bg p-3 flex flex-col gap-1">
+              <p className="text-xs font-medium">{t('O pagá con Binance Pay (más simple, sin elegir red)')}</p>
+              <p className="text-xs text-muted dark:text-dark-text-secondary">{t('ID de Binance Pay:')}</p>
+              <p className="text-sm font-mono break-all">{BINANCE_PAY_ID}</p>
+              <p className="text-xs text-muted dark:text-dark-text-secondary">
+                {t('Monto a transferir:')} {plan === 'mensual' ? PRECIO_USDT_MENSUAL : PRECIO_USDT_ANUAL} USDT
+              </p>
+            </div>
+          )}
 
           <div>
             <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">
