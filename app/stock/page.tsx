@@ -30,6 +30,7 @@ import SelectorFinanciacion from '../SelectorFinanciacion';
 import { soportaMigracion } from '../lib/migraciones';
 import { agregarCanjeAlStock, canjesPendientes, type CanjeParaStock } from '../lib/canje';
 import { contarFotosPorDispositivo } from '../lib/fotosDispositivo';
+import { resumenPorColor } from '../lib/resumenColores';
 import { mandarAStandby, campoOrigenServicio, equiposEnStandby } from '../lib/standby';
 import { limpiarImei } from '../lib/imei';
 import { camposRecibidoPor, registrarRecepcionEnHistorial } from '../lib/recibidoPor';
@@ -2272,6 +2273,27 @@ ${r.error}`);
                     </div>
                   )}
                 </div>
+                {items.length >= 2 && (
+                  // Cuántas unidades hay de cada color de este modelo, a la vista aunque la carpeta esté cerrada.
+                  <div className="flex flex-wrap gap-1.5" aria-label={t('Unidades por color')}>
+                    {resumenPorColor(items).map((c) => {
+                      const hex = hexColorDe(c.color);
+                      return (
+                        <span
+                          key={c.color ?? 'sin-color'}
+                          className="inline-flex items-center gap-1.5 rounded-full border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-2.5 py-1 text-xs"
+                        >
+                          <span
+                            className={`h-2.5 w-2.5 rounded-full shrink-0 ${hex ? 'border border-black/15 dark:border-white/20' : 'bg-border dark:bg-dark-border'}`}
+                            style={hex ? { backgroundColor: hex } : undefined}
+                          />
+                          <span className="text-muted dark:text-dark-text-secondary">{c.color ?? t('Sin color')}</span>
+                          <span className="font-semibold tabular-nums">{c.cantidad}</span>
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
                 {items.length === 0 && (
                   <p className="text-xs text-muted dark:text-dark-text-secondary italic">{t('Carpeta vacía, todavía sin dispositivos.')}</p>
                 )}

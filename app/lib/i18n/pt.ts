@@ -3388,4 +3388,5 @@ export const PT: Record<string, string> = {
   'De Standby': 'Do Standby',
   'No hay equipos en Standby disponibles con esa búsqueda.': 'Não há aparelhos em Standby disponíveis para essa busca.',
   'No pudimos pasar el equipo de Standby al Stock:': 'Não foi possível passar o aparelho do Standby para o Estoque:',
+  'Unidades por color': 'Unidades por cor',
 };
