@@ -14,6 +14,8 @@ import { useT } from '../../lib/idioma';
 import { useSucursalActual } from '../../lib/sucursal';
 import { origenDeCliente } from '../../lib/clientesDuplicados';
 import AvisoCanje from '../../AvisoCanje';
+import AvisoStandby from '../../AvisoStandby';
+import { useCoincidenciasStandby } from '../../lib/useCoincidenciasStandby';
 import { useCoincidenciasCanje } from '../../lib/useCoincidenciasCanje';
 import { compararModelosPorSalida } from '../../lib/catalogosMarcas';
 
@@ -88,6 +90,7 @@ export default function NuevaCompra() {
   const puedeConfirmar = modelo.trim().length > 0;
   // Si el equipo que se compra ya está esperando en Plan Canje, se avisa y se ofrece el atajo para pasarlo al Stock.
   const coincidenciasCanje = useCoincidenciasCanje(supabase, imei, modelo);
+  const coincidenciasStandby = useCoincidenciasStandby(supabase, imei, modelo);
 
   const handleConfirmar = async () => {
     if (!puedeConfirmar) return;
@@ -267,6 +270,15 @@ export default function NuevaCompra() {
           porImei={coincidenciasCanje.porImei}
           porModelo={coincidenciasCanje.porModelo}
           sucursalId={sucursalActual.id}
+          onAgregado={() => {
+            router.push('/stock');
+            router.refresh();
+          }}
+        />
+        <AvisoStandby
+          supabase={supabase}
+          porImei={coincidenciasStandby.porImei}
+          porModelo={coincidenciasStandby.porModelo}
           onAgregado={() => {
             router.push('/stock');
             router.refresh();

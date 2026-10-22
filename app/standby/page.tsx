@@ -11,6 +11,7 @@ import { obtenerTodasLasFilas } from '../lib/db';
 import { simboloMoneda } from '../lib/monedas';
 import { formatearMonto } from '../lib/numeros';
 import { contarFotosPorDispositivo } from '../lib/fotosDispositivo';
+import { obtenerDispositivosSenados } from '../lib/planAhorro';
 import { registrarAuditoria } from '../lib/auditoria';
 import {
   COLUMNAS_STANDBY,
@@ -47,6 +48,8 @@ export default function Standby() {
   const [activo, setActivo] = useState<boolean | null>(null);
   const [equipos, setEquipos] = useState<EquipoStandby[]>([]);
   const [fotos, setFotos] = useState<Map<string, number>>(new Map());
+  // Equipos señados (Plan de ahorro) que esperan acá hasta entregarse.
+  const [senados, setSenados] = useState<Set<string>>(new Set());
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
   const [filtroSucursal, setFiltroSucursal] = useState(sucursalActual.id ?? '');
   useEffect(() => {
@@ -68,6 +71,7 @@ export default function Standby() {
         )
       );
       contarFotosPorDispositivo(supabase).then(setFotos).catch(() => {});
+      obtenerDispositivosSenados(supabase).then(setSenados).catch(() => {});
     } catch (e) {
       setError(t('No pudimos cargar los equipos en Standby:') + ' ' + (e instanceof Error ? e.message : t('error desconocido')));
     }
@@ -239,6 +243,11 @@ export default function Standby() {
                       {e.modelo || t('Sin modelo')}
                       {e.capacidad_gb ? ` ${e.capacidad_gb}GB` : ''}
                       {e.color ? ` · ${e.color}` : ''}
+                      {senados.has(e.id) && (
+                        <span className="ml-2 align-middle text-[10px] font-semibold text-accent dark:text-dark-accent bg-accent-soft dark:bg-dark-accent-soft rounded-full px-2 py-0.5">
+                          {t('SEÑADO')}
+                        </span>
+                      )}
                     </p>
                     <p className="text-[11px] text-muted dark:text-dark-text-secondary">
                       {e.imei || t('sin IMEI')}

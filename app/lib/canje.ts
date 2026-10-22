@@ -38,12 +38,21 @@ export function canjesCoincidentes(
   imei: string,
   modelo: string
 ): { porImei: CanjeParaStock[]; porModelo: CanjeParaStock[] } {
+  return coincidenciasPorImeiOModelo(pendientes, imei, modelo);
+}
+
+// Misma regla para cualquier lista de equipos (canjes, equipos en Standby...): ver el comentario de arriba.
+export function coincidenciasPorImeiOModelo<T extends { imei: string | null; modelo: string | null }>(
+  pendientes: T[],
+  imei: string,
+  modelo: string
+): { porImei: T[]; porModelo: T[] } {
   const imeiTipeado = limpiarImei(imei) ?? '';
   // Los modelos de un canje se escriben a mano ("iPhone 6 s Plus"): se comparan sin espacios ni mayúsculas.
   const comparable = (m: string) => normalizarNombreModelo(m.trim()).toLowerCase().replace(/\s+/g, '');
   const modeloNorm = modelo.trim() ? comparable(modelo) : '';
-  const porImei: CanjeParaStock[] = [];
-  const porModelo: CanjeParaStock[] = [];
+  const porImei: T[] = [];
+  const porModelo: T[] = [];
   for (const c of pendientes) {
     const imeiCanje = limpiarImei(c.imei ?? '') ?? '';
     // Mientras se va tipeando, alcanza con que lo escrito sea el comienzo del IMEI del canje: el aviso
@@ -62,7 +71,7 @@ export function canjesCoincidentes(
 
 // ¿Alguno de los canjes tiene EXACTAMENTE el IMEI tipeado? (el aviso salta con el IMEI a medio escribir,
 // pero la confirmación al guardar solo corresponde cuando el IMEI ya está completo y es el mismo).
-export function hayCanjeConEseImei(canjes: CanjeParaStock[], imei: string): boolean {
+export function hayCanjeConEseImei(canjes: { imei: string | null }[], imei: string): boolean {
   const tipeado = limpiarImei(imei);
   return !!tipeado && canjes.some((c) => limpiarImei(c.imei) === tipeado);
 }

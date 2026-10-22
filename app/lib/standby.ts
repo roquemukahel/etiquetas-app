@@ -7,6 +7,7 @@ import { normalizarNombreModelo, asegurarModelo } from './modelos';
 import { compararModelosPorSalida } from './catalogosMarcas';
 import { camposRecibidoPor, registrarRecepcionEnHistorial } from './recibidoPor';
 import { soportaMigracion } from './migraciones';
+import { obtenerTodasLasFilas } from './db';
 
 export type OrigenStandby = 'stock' | 'canje' | 'servicio_tecnico' | 'manual';
 
@@ -306,5 +307,34 @@ export async function mandarReparacionAStandby(
     entidadId: r.id,
   });
   if (errorReparacion) return { error: `El equipo quedó en Standby pero no pudimos cerrar la reparación: ${errorReparacion.message}` };
+  return { error: null };
+}
+
+// Todos los equipos que están en Standby (vacío si el negocio todavía no corrió standby_supabase.sql).
+export async function equiposEnStandby(supabase: SupabaseClient): Promise<EquipoStandby[]> {
+  if (!(await soportaMigracion(supabase, 'standby'))) return [];
+  return obtenerTodasLasFilas<EquipoStandby>(supabase, 'dispositivos', COLUMNAS_STANDBY, [{ columna: 'created_at', ascending: false }], (q) =>
+    q.eq('en_espera', true)
+  );
+}
+
+// Un equipo señado desde Standby sigue en Standby hasta que se entrega: al entregarlo tiene que pasar por el Stock
+// (es lo que usa la venta). Si no está en Standby (o no hay migración) no hace nada.
+export async function sacarDeStandbyParaEntregar(supabase: SupabaseClient, dispositivoId: string): Promise<Resultado> {
+  if (!(await soportaMigracion(supabase, 'standby'))) return { error: null };
+  const { data, error } = await supabase
+    .from('dispositivos')
+    .update({ en_stock: true, en_espera: false, en_stock_desde: new Date().toISOString(), alerta_stock_enviada: false })
+    .eq('id', dispositivoId)
+    .eq('en_espera', true)
+    .select('id, modelo, imei');
+  if (error) return { error: error.message };
+  if (data && data.length > 0) {
+    await registrarAuditoria(supabase, {
+      accion: `pasó ${descripcion(data[0] as { modelo: string | null; imei: string | null })} de Standby al Stock para entregar un equipo señado`,
+      entidad: 'dispositivo',
+      entidadId: dispositivoId,
+    });
+  }
   return { error: null };
 }

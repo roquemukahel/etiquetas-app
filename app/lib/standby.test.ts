@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buscarEnStandby, diasEnStandby, ordenarStandby, type EquipoStandby } from './standby';
+import { coincidenciasPorImeiOModelo } from './canje';
 
 function equipo(p: Partial<EquipoStandby>): EquipoStandby {
   return {
@@ -62,5 +63,18 @@ describe('orden y días en Standby', () => {
     expect(diasEnStandby('2026-10-20T00:00:00Z', ahora)).toBe(2);
     expect(diasEnStandby('2026-10-23T00:00:00Z', ahora)).toBe(0);
     expect(diasEnStandby(null, ahora)).toBe(0);
+  });
+});
+
+describe('aviso al cargar un equipo que ya está en Standby', () => {
+  const enStandby = [equipo({ id: 'a', modelo: 'iPhone 13', imei: '353512345678901' }), equipo({ id: 'b', modelo: 'iPhone 13', imei: null })];
+  it('aparece con el comienzo del IMEI y se va cuando algún dígito deja de coincidir', () => {
+    expect(coincidenciasPorImeiOModelo(enStandby, '3535', '').porImei.map((e) => e.id)).toEqual(['a']);
+    expect(coincidenciasPorImeiOModelo(enStandby, '353512', '').porImei.map((e) => e.id)).toEqual(['a']);
+    expect(coincidenciasPorImeiOModelo(enStandby, '35354', '').porImei).toEqual([]);
+  });
+  it('sin IMEI tipeado avisa por modelo; con un IMEI distinto, no', () => {
+    expect(coincidenciasPorImeiOModelo(enStandby, '', 'iPhone 13').porModelo.map((e) => e.id)).toEqual(['a', 'b']);
+    expect(coincidenciasPorImeiOModelo(enStandby, '999988', 'iPhone 13').porModelo.map((e) => e.id)).toEqual(['b']);
   });
 });

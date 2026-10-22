@@ -30,7 +30,7 @@ import SelectorFinanciacion from '../SelectorFinanciacion';
 import { soportaMigracion } from '../lib/migraciones';
 import { agregarCanjeAlStock, canjesPendientes, type CanjeParaStock } from '../lib/canje';
 import { contarFotosPorDispositivo } from '../lib/fotosDispositivo';
-import { mandarAStandby, campoOrigenServicio } from '../lib/standby';
+import { mandarAStandby, campoOrigenServicio, equiposEnStandby } from '../lib/standby';
 import { limpiarImei } from '../lib/imei';
 import { camposRecibidoPor, registrarRecepcionEnHistorial } from '../lib/recibidoPor';
 import { resolverMaxCuotas, guiaDeFormulario, guiaAFormulario, type MaxCuotas } from '../lib/financiacionGuia';
@@ -560,6 +560,8 @@ export default function Stock() {
     try {
       const filas = await leerArchivoDatos(archivo);
       const imeisExistentes = new Set(dispositivos.map((d) => d.imei).filter(Boolean));
+      // Los equipos que esperan en Standby no están en esta lista: sus IMEI también cuentan como ya cargados.
+      for (const e of await equiposEnStandby(supabase).catch(() => [])) if (e.imei) imeisExistentes.add(e.imei);
       let omitidosSinModelo = 0;
       let omitidosDuplicado = 0;
 

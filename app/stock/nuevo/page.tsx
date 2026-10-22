@@ -19,6 +19,8 @@ import SelectorColorAuto from '../../SelectorColorAuto';
 import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
 import SelectorFinanciacion from '../../SelectorFinanciacion';
 import AvisoCanje from '../../AvisoCanje';
+import AvisoStandby from '../../AvisoStandby';
+import { useCoincidenciasStandby } from '../../lib/useCoincidenciasStandby';
 import { SelectorFotosNuevas } from '../../FotosDispositivo';
 import { guardarFotos, type FotoPreparada } from '../../lib/fotosDispositivo';
 import { useCoincidenciasCanje } from '../../lib/useCoincidenciasCanje';
@@ -144,6 +146,8 @@ export default function NuevoDispositivo() {
   const puedeGuardar = modelo.trim().length > 0 && puedeAgregarStock;
   // Si el equipo que se carga a mano ya está en Plan Canje, se avisa para que se agregue desde ahí.
   const coincidenciasCanje = useCoincidenciasCanje(supabase, imei, modelo);
+  // Igual con Standby: si ya está esperando ahí, se avisa para pasarlo al Stock desde ahí.
+  const coincidenciasStandby = useCoincidenciasStandby(supabase, imei, modelo);
 
   const handleGuardar = async () => {
     if (!puedeGuardar) return;
@@ -153,11 +157,14 @@ export default function NuevoDispositivo() {
       return;
     }
     const imeiLimpio = limpiarImei(imei);
-    if (imeiLimpio) {
+    const enStandbyConEseImei = hayCanjeConEseImei(coincidenciasStandby.porImei, imei);
+    // Si está en Standby se pregunta eso (más abajo) en vez del aviso genérico de IMEI repetido.
+    if (imeiLimpio && !enStandbyConEseImei) {
       const { data: existente } = await supabase.from('dispositivos').select('id').eq('imei', imeiLimpio).maybeSingle();
       if (existente && !confirm(`${t('Ya hay un dispositivo en Stock con el IMEI')} ${imeiLimpio}. ${t('¿Agregarlo igual?')}`)) return;
     }
     if (hayCanjeConEseImei(coincidenciasCanje.porImei, imei) && !confirm(t('Este dispositivo está en Plan Canje. Si lo cargás acá queda duplicado en el Stock. ¿Cargarlo igual?'))) return;
+    if (enStandbyConEseImei && !confirm(t('Este dispositivo está en Standby. Si lo cargás acá queda duplicado en el Stock. ¿Cargarlo igual?'))) return;
     setGuardando(true);
     setError(null);
 
@@ -298,6 +305,15 @@ export default function NuevoDispositivo() {
           porImei={coincidenciasCanje.porImei}
           porModelo={coincidenciasCanje.porModelo}
           sucursalId={sucursalElegida || null}
+          onAgregado={() => {
+            router.push('/stock');
+            router.refresh();
+          }}
+        />
+        <AvisoStandby
+          supabase={supabase}
+          porImei={coincidenciasStandby.porImei}
+          porModelo={coincidenciasStandby.porModelo}
           onAgregado={() => {
             router.push('/stock');
             router.refresh();

@@ -13,6 +13,7 @@ import { asegurarModelo, normalizarNombreModelo } from '../../lib/modelos';
 import { limpiarImei } from '../../lib/imei';
 import { obtenerCategorias } from '../../lib/categorias';
 import { obtenerDispositivosSenados } from '../../lib/planAhorro';
+import { sacarDeStandbyParaEntregar } from '../../lib/standby';
 import SelectorColorAuto from '../../SelectorColorAuto';
 import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
 import { ICONOS } from '../../Iconos';
@@ -491,6 +492,17 @@ export default function DetallePlanAhorro() {
         .eq('id', plan.id);
       if (vincularError) {
         setError(t('No pudimos vincular el equipo:') + ' ' + vincularError.message);
+        setProcesando(false);
+        return;
+      }
+    }
+
+    // Si el equipo señado esperaba en Standby, pasa al Stock recién ahora, al entregarlo (la venta lo toma de ahí).
+    const equipoAEntregar = dispositivoIdElegido ?? plan.dispositivo_id;
+    if (equipoAEntregar) {
+      const desdeStandby = await sacarDeStandbyParaEntregar(supabase, equipoAEntregar);
+      if (desdeStandby.error) {
+        setError(t('No pudimos pasar el equipo de Standby al Stock:') + ' ' + desdeStandby.error);
         setProcesando(false);
         return;
       }

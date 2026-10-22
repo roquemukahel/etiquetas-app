@@ -15,6 +15,8 @@ import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
 import { useT } from '../../lib/idioma';
 import { useSucursalActual } from '../../lib/sucursal';
 import AvisoCanje from '../../AvisoCanje';
+import AvisoStandby from '../../AvisoStandby';
+import { useCoincidenciasStandby } from '../../lib/useCoincidenciasStandby';
 import { useCoincidenciasCanje } from '../../lib/useCoincidenciasCanje';
 import { hayCanjeConEseImei } from '../../lib/canje';
 import { falla } from '../../lib/escritura';
@@ -64,6 +66,7 @@ export default function DetalleCompra() {
 
   // Si este equipo ya está esperando en Plan Canje, se avisa antes de pasarlo al Stock (duplicado).
   const coincidenciasCanje = useCoincidenciasCanje(supabase, compra?.imei ?? '', compra?.modelo ?? '');
+  const coincidenciasStandby = useCoincidenciasStandby(supabase, compra?.imei ?? '', compra?.modelo ?? '');
 
   const nombreCliente = (c: Compra) => (c.clientes ? `${c.clientes.nombre} ${c.clientes.apellido || ''}`.trim() : t('sin cliente'));
 
@@ -87,7 +90,9 @@ export default function DetalleCompra() {
     }
     if (!confirm(t('¿Agregar este dispositivo al Stock para venderlo?'))) return;
     if (hayCanjeConEseImei(coincidenciasCanje.porImei, compra.imei ?? '') && !confirm(t('Este dispositivo está en Plan Canje. Si lo cargás acá queda duplicado en el Stock. ¿Cargarlo igual?'))) return;
-    if (compra.imei) {
+    const enStandbyConEseImei = hayCanjeConEseImei(coincidenciasStandby.porImei, compra.imei ?? '');
+    if (enStandbyConEseImei && !confirm(t('Este dispositivo está en Standby. Si lo cargás acá queda duplicado en el Stock. ¿Cargarlo igual?'))) return;
+    if (compra.imei && !enStandbyConEseImei) {
       const { data: existente } = await supabase.from('dispositivos').select('id').eq('imei', compra.imei).maybeSingle();
       if (existente && !confirm(`${t('Ya hay un dispositivo en Stock con el IMEI')} ${compra.imei}. ${t('¿Agregarlo igual?')}`)) return;
     }
@@ -462,6 +467,17 @@ export default function DetalleCompra() {
           porImei={coincidenciasCanje.porImei}
           porModelo={coincidenciasCanje.porModelo}
           sucursalId={sucursalActual.id}
+          onAgregado={() => {
+            router.push('/stock');
+            router.refresh();
+          }}
+        />
+      )}
+      {compra.estado === 'pendiente' && (
+        <AvisoStandby
+          supabase={supabase}
+          porImei={coincidenciasStandby.porImei}
+          porModelo={coincidenciasStandby.porModelo}
           onAgregado={() => {
             router.push('/stock');
             router.refresh();
