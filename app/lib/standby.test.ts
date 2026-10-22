@@ -1,5 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { buscarEnIndice, buscarEnStandby, diasEnStandby, indexarStandby, ordenarStandby, type EquipoStandby } from './standby';
+import {
+  buscarEnIndice,
+  buscarEnStandby,
+  derivarStandbyAServicio,
+  diasEnStandby,
+  ERR_YA_NO_ESTA_EN_STANDBY,
+  ERR_YA_NO_ESTA_EN_STOCK,
+  indexarStandby,
+  mandarAStandby,
+  ordenarStandby,
+  volverAlStock,
+  type EquipoStandby,
+} from './standby';
 import { coincidenciasPorImeiOModelo } from './canje';
 
 function equipo(p: Partial<EquipoStandby>): EquipoStandby {
@@ -110,5 +122,50 @@ describe('rendimiento con muchos equipos en Standby', () => {
     const indice = indexarStandby(muchos);
     const r = buscarEnIndice(indice, '35000000000420');
     expect(r.length).toBe(10); // ...4200 a ...4209
+  });
+});
+
+// Cliente de Supabase de mentira: cada consulta devuelve lo que se le indique y anota los filtros aplicados.
+function clienteFalso(respuestas: { data: unknown; error: { message: string } | null }[]) {
+  const llamadas: { tabla: string; filtros: [string, unknown][]; cambios?: unknown }[] = [];
+  let i = 0;
+  const from = (tabla: string) => {
+    const reg: { tabla: string; filtros: [string, unknown][]; cambios?: unknown } = { tabla, filtros: [] };
+    llamadas.push(reg);
+    const q: Record<string, unknown> = {};
+    const respuesta = () => Promise.resolve(respuestas[Math.min(i++, respuestas.length - 1)]);
+    q.update = (c: unknown) => ((reg.cambios = c), q);
+    q.insert = (c: unknown) => ((reg.cambios = c), q);
+    q.eq = (col: string, v: unknown) => (reg.filtros.push([col, v]), q);
+    q.select = () => q;
+    q.single = () => respuesta();
+    q.then = (ok: (r: unknown) => unknown, ko?: (e: unknown) => unknown) => respuesta().then(ok, ko);
+    return q;
+  };
+  return { supabase: { from, rpc: () => Promise.resolve({ data: null, error: null }) } as unknown as Parameters<typeof volverAlStock>[0], llamadas };
+}
+
+describe('guardas contra movimientos simultáneos', () => {
+  const eq = { id: 'x', modelo: 'iPhone 13', imei: '3535' };
+
+  it('volver al Stock solo si sigue en Standby: si otra persona ya lo movió, avisa y no registra nada', async () => {
+    const { supabase, llamadas } = clienteFalso([{ data: [], error: null }]);
+    const r = await volverAlStock(supabase, eq);
+    expect(r.error).toBe(ERR_YA_NO_ESTA_EN_STANDBY);
+    expect(llamadas[0].filtros).toContainEqual(['en_espera', true]);
+  });
+
+  it('mandar a Standby solo si sigue en el Stock: un equipo ya vendido no se puede mandar', async () => {
+    const { supabase, llamadas } = clienteFalso([{ data: [], error: null }]);
+    const r = await mandarAStandby(supabase, eq, { origen: 'stock', motivo: 'pantalla' });
+    expect(r.error).toBe(ERR_YA_NO_ESTA_EN_STOCK);
+    expect(llamadas[0].filtros).toContainEqual(['en_stock', true]);
+  });
+
+  it('derivar a Servicio Técnico: si el equipo ya no está en Standby no se crea ninguna orden', async () => {
+    const { supabase, llamadas } = clienteFalso([{ data: [], error: null }]);
+    const r = await derivarStandbyAServicio(supabase, equipo({ id: 'x', modelo: 'iPhone 13' }));
+    expect(r.error).toBe(ERR_YA_NO_ESTA_EN_STANDBY);
+    expect(llamadas.map((l) => l.tabla)).toEqual(['dispositivos']); // nunca llegó a tocar reparaciones
   });
 });

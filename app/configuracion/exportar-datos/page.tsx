@@ -10,6 +10,7 @@ import { registrarAuditoria } from '../../lib/auditoria';
 import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import { obtenerCategorias, type Categoria } from '../../lib/categorias';
+import { soportaMigracion } from '../../lib/migraciones';
 import { ICONOS } from '../../Iconos';
 import { useT } from '../../lib/idioma';
 
@@ -80,6 +81,8 @@ const CONFIG: Record<
   },
 };
 
+const COLUMNAS_STANDBY_EXPORT = ['en_espera', 'espera_motivo'];
+
 const COLUMNAS_SELECT: Record<Entidad, string> = {
   clientes: 'id, nombre, apellido, domicilio, email, telefono, dni',
   dispositivos:
@@ -100,6 +103,12 @@ export default function ExportarDatos() {
   const [eliminando, setEliminando] = useState(false);
   const [resultado, setResultado] = useState<string | null>(null);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
+  // Con Standby activado, el respaldo de Dispositivos también dice cuáles están en Standby (si no, parecerían vendidos).
+  const [conStandby, setConStandby] = useState(false);
+  useEffect(() => {
+    soportaMigracion(supabase, 'standby').then(setConStandby);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // Un filtro de categoría por entidad — así elegir una categoría para
   // Dispositivos no afecta lo que se vaya a exportar/eliminar de Productos.
   const [categoriaFiltro, setCategoriaFiltro] = useState<Record<Entidad, string>>({
@@ -128,13 +137,15 @@ export default function ExportarDatos() {
 
   const nombreCategoria = (id: string | null | undefined) => categorias.find((c) => c.id === id)?.nombre ?? '';
 
+  const columnasDe = (entidad: Entidad) => (entidad === 'dispositivos' && conStandby ? [...CONFIG[entidad].columnas, ...COLUMNAS_STANDBY_EXPORT] : CONFIG[entidad].columnas);
+
   const traerFilas = async (entidad: Entidad) => {
     const cfg = CONFIG[entidad];
     const catId = categoriaFiltro[entidad];
     const filas = await obtenerTodasLasFilas<{ id: string; categoria_id?: string | null } & Record<string, unknown>>(
       supabase,
       entidad,
-      COLUMNAS_SELECT[entidad],
+      COLUMNAS_SELECT[entidad] + (entidad === 'dispositivos' && conStandby ? ', ' + COLUMNAS_STANDBY_EXPORT.join(', ') : ''),
       cfg.orden,
       catId ? (q) => q.eq('categoria_id', catId) : undefined
     );
@@ -167,7 +178,7 @@ export default function ExportarDatos() {
     try {
       const cfg = CONFIG[entidad];
       const filas = await traerFilas(entidad);
-      await descargarDatos(cfg.archivo, cfg.columnas, filas, formato);
+      await descargarDatos(cfg.archivo, columnasDe(entidad), filas, formato);
     } catch (err: any) {
       // Sin este catch, un error acá dejaba el botón trabado en
       // "Exportando..." para siempre, sin bajar nada y sin ninguna pista de
@@ -217,7 +228,7 @@ export default function ExportarDatos() {
     // haya exportado antes por separado. Siempre CSV acá (no XLSX): es un
     // respaldo de auditoría, no algo pensado para reimportar a otro sistema.
     try {
-      await descargarDatos(cfg.archivo, cfg.columnas, filas, 'csv');
+      await descargarDatos(cfg.archivo, columnasDe(entidad), filas, 'csv');
     } catch (err: any) {
       // Si el respaldo falla, se corta ACÁ, antes de tocar nada — nunca se
       // borra sin haber podido bajar antes la copia de seguridad. Sin este
