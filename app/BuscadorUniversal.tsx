@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { crearClienteNavegador } from './lib/supabase/client';
 import { obtenerTodasLasFilas } from './lib/db';
 import { infoEstado } from './lib/reparaciones';
+import { soportaMigracion } from './lib/migraciones';
 import { useT } from './lib/idioma';
 
 type Cliente = { id: string; nombre: string; apellido: string | null; telefono: string | null; dni: string | null };
@@ -14,6 +15,7 @@ type Dispositivo = {
   imei: string | null;
   numero_serie: string | null;
   en_stock: boolean;
+  en_espera?: boolean | null;
   capacidad_gb: number | null;
   color: string | null;
 };
@@ -80,9 +82,11 @@ export default function BuscadorUniversal() {
   const cargarDatos = async () => {
     if (cargado) return;
     setCargado(true);
+    // en_espera solo existe si el negocio corrió standby_supabase.sql: sin eso, pedir la columna rompería la búsqueda.
+    const conStandby = await soportaMigracion(supabase, 'standby');
     const [cl, di, ca, re, co, or] = await Promise.all([
       obtenerTodasLasFilas<Cliente>(supabase, 'clientes', 'id, nombre, apellido, telefono, dni'),
-      obtenerTodasLasFilas<Dispositivo>(supabase, 'dispositivos', 'id, modelo, imei, numero_serie, en_stock, capacidad_gb, color'),
+      obtenerTodasLasFilas<Dispositivo>(supabase, 'dispositivos', 'id, modelo, imei, numero_serie, en_stock, capacidad_gb, color' + (conStandby ? ', en_espera' : '')),
       obtenerTodasLasFilas<Canje>(supabase, 'canjes', 'id, modelo, imei, detalles, estado, cliente_id, clientes ( nombre, apellido )'),
       obtenerTodasLasFilas<Reparacion>(
         supabase,
@@ -235,7 +239,7 @@ export default function BuscadorUniversal() {
                 key={d.id}
                 href={`/stock/${d.id}`}
                 titulo={`${d.modelo || t('Dispositivo')}${d.capacidad_gb ? ` · ${d.capacidad_gb}GB` : ''}`}
-                subtitulo={[d.imei ? `${t('IMEI')} ${d.imei}` : null, d.en_stock ? t('En stock') : t('Fuera de stock')].filter(Boolean).join(' · ')}
+                subtitulo={[d.imei ? `${t('IMEI')} ${d.imei}` : null, d.en_stock ? t('En stock') : d.en_espera ? t('En Standby') : t('Fuera de stock')].filter(Boolean).join(' · ')}
                 onClick={() => setAbierto(false)}
               />
             ))}
