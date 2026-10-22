@@ -17,6 +17,8 @@ const CHEQUEOS = {
   recibidoPor: (s: SupabaseClient) => s.from('reparaciones').select('recibido_por_nombre').limit(1),
   // standby_supabase.sql
   standby: (s: SupabaseClient) => s.from('dispositivos').select('en_espera, en_espera_desde, espera_origen, espera_motivo').limit(1),
+  // standby_vinculo_servicio_supabase.sql
+  standbyVinculo: (s: SupabaseClient) => s.from('reparaciones').select('dispositivo_origen_id').limit(1),
   // dispositivo_fotos_supabase.sql
   fotosDispositivo: (s: SupabaseClient) => s.from('dispositivo_fotos').select('id').limit(1),
   // ingresos_capital_supabase.sql

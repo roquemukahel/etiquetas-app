@@ -15,7 +15,7 @@ import { limpiarImei } from '../../lib/imei';
 import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
 import { useT } from '../../lib/idioma';
 import SelectorFinanciacion from '../../SelectorFinanciacion';
-import { mandarAStandby } from '../../lib/standby';
+import { mandarAStandby, campoOrigenServicio } from '../../lib/standby';
 import { FotosDispositivo } from '../../FotosDispositivo';
 import { camposRecibidoPor, registrarRecepcionEnHistorial } from '../../lib/recibidoPor';
 import { guiaDeFormulario, guiaAFormulario } from '../../lib/financiacionGuia';
@@ -231,6 +231,7 @@ export default function DetalleDispositivo() {
         falla_declarada: derivarDetalles.trim() || null,
         estado: 'recibido',
         ...(await camposRecibidoPor(supabase)),
+        ...(await campoOrigenServicio(supabase, d.id)),
         ...(d.sucursal_id ? { sucursal_id: d.sucursal_id } : {}),
       })
       .select('id, numero_orden')

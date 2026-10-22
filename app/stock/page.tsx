@@ -30,7 +30,7 @@ import SelectorFinanciacion from '../SelectorFinanciacion';
 import { soportaMigracion } from '../lib/migraciones';
 import { agregarCanjeAlStock, canjesPendientes, type CanjeParaStock } from '../lib/canje';
 import { contarFotosPorDispositivo } from '../lib/fotosDispositivo';
-import { mandarAStandby } from '../lib/standby';
+import { mandarAStandby, campoOrigenServicio } from '../lib/standby';
 import { limpiarImei } from '../lib/imei';
 import { camposRecibidoPor, registrarRecepcionEnHistorial } from '../lib/recibidoPor';
 import { resolverMaxCuotas, guiaDeFormulario, guiaAFormulario, type MaxCuotas } from '../lib/financiacionGuia';
@@ -996,6 +996,7 @@ ${r.error}`);
         imei: d.imei,
         estado: 'recibido',
         ...(await camposRecibidoPor(supabase)),
+        ...(await campoOrigenServicio(supabase, d.id)),
         // Hereda la sucursal del propio dispositivo que se deriva, no la
         // que esté eligiendo ahora quien aprieta el botón.
         ...(d.sucursal_id ? { sucursal_id: d.sucursal_id } : {}),

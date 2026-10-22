@@ -6,6 +6,7 @@ import { registrarAuditoria } from './auditoria';
 import { normalizarNombreModelo, asegurarModelo } from './modelos';
 import { compararModelosPorSalida } from './catalogosMarcas';
 import { camposRecibidoPor, registrarRecepcionEnHistorial } from './recibidoPor';
+import { soportaMigracion } from './migraciones';
 
 export type OrigenStandby = 'stock' | 'canje' | 'servicio_tecnico' | 'manual';
 
@@ -86,6 +87,52 @@ export function diasEnStandby(desde: string | null, ahora: Date = new Date()): n
 }
 
 type Resultado = { error: string | null };
+
+// Campo que une una orden de Servicio Técnico con el equipo del que salió (standby_vinculo_servicio_supabase.sql).
+// Sin esa migración no se agrega nada y todo funciona como antes.
+export async function campoOrigenServicio(supabase: SupabaseClient, dispositivoId: string): Promise<{ dispositivo_origen_id?: string }> {
+  return (await soportaMigracion(supabase, 'standbyVinculo')) ? { dispositivo_origen_id: dispositivoId } : {};
+}
+
+// Equipo del que salió una orden de Servicio Técnico (null si no hay vínculo o no corrió la migración).
+export async function dispositivoOrigenDe(supabase: SupabaseClient, reparacionId: string): Promise<string | null> {
+  if (!(await soportaMigracion(supabase, 'standbyVinculo'))) return null;
+  const { data, error } = await supabase.from('reparaciones').select('dispositivo_origen_id').eq('id', reparacionId).maybeSingle();
+  if (error) return null;
+  return (data as { dispositivo_origen_id: string | null } | null)?.dispositivo_origen_id ?? null;
+}
+
+// Cuando una reparación propia termina, si salió de un equipo que ya existe (y sigue sin estar ni en Stock ni en
+// Standby) se reutiliza ese mismo equipo en vez de crear uno duplicado. `usado: false` = no había a quién reutilizar.
+export async function reubicarEquipoDeServicio(
+  supabase: SupabaseClient,
+  reparacionId: string,
+  destino: 'stock' | { standby: string }
+): Promise<{ usado: boolean; error: string | null }> {
+  const origenId = await dispositivoOrigenDe(supabase, reparacionId);
+  if (!origenId) return { usado: false, error: null };
+  const ahora = new Date().toISOString();
+  const cambios =
+    destino === 'stock'
+      ? { en_stock: true, en_espera: false, en_stock_desde: ahora, alerta_stock_enviada: false }
+      : { en_stock: false, en_espera: true, en_espera_desde: ahora, espera_origen: 'servicio_tecnico', espera_motivo: destino.standby.trim() || null };
+  const { data, error } = await supabase
+    .from('dispositivos')
+    .update(cambios)
+    .eq('id', origenId)
+    .eq('en_stock', false)
+    .eq('en_espera', false)
+    .select('id, modelo, imei');
+  if (error) return { usado: false, error: error.message };
+  if (!data || data.length === 0) return { usado: false, error: null };
+  const e = data[0] as { id: string; modelo: string | null; imei: string | null };
+  await registrarAuditoria(supabase, {
+    accion: destino === 'stock' ? `devolvió ${descripcion(e)} de Servicio Técnico al Stock` : `mandó ${descripcion(e)} de Servicio Técnico a Standby`,
+    entidad: 'dispositivo',
+    entidadId: e.id,
+  });
+  return { usado: true, error: null };
+}
 
 function descripcion(e: { modelo: string | null; imei: string | null }): string {
   return `${e.modelo || 'un equipo'}${e.imei ? ` (IMEI ${e.imei})` : ''}`;
@@ -191,6 +238,7 @@ export async function derivarStandbyAServicio(supabase: SupabaseClient, d: Equip
       imei: d.imei,
       estado: 'recibido',
       ...(d.espera_motivo ? { falla_declarada: d.espera_motivo } : {}),
+      ...(await campoOrigenServicio(supabase, d.id)),
       ...(await camposRecibidoPor(supabase)),
       ...(d.sucursal_id ? { sucursal_id: d.sucursal_id } : {}),
     })
@@ -217,27 +265,32 @@ export async function mandarReparacionAStandby(
   opciones: { motivo: string; actor: { nombre?: string | null; fotoUrl?: string | null } | null }
 ): Promise<Resultado> {
   const modelo = r.modelo ? normalizarNombreModelo(r.modelo) : r.modelo;
-  const { data, error } = await supabase
-    .from('dispositivos')
-    .insert({
-      modelo,
-      capacidad_gb: r.capacidad_gb,
-      color: r.color,
-      imei: r.imei,
-      estado: 'usado',
-      en_stock: false,
-      en_espera: true,
-      en_espera_desde: new Date().toISOString(),
-      espera_origen: 'servicio_tecnico',
-      espera_motivo: opciones.motivo.trim() || null,
-      agregado_por_nombre: opciones.actor?.nombre ?? null,
-      agregado_por_foto_url: opciones.actor?.fotoUrl ?? null,
-      ...(r.sucursal_id ? { sucursal_id: r.sucursal_id } : {}),
-    })
-    .select('id')
-    .single();
-  if (error || !data) return { error: error?.message ?? 'error desconocido' };
-  await asegurarModelo(supabase, modelo);
+  // Si la reparación salió de un equipo que ya existe, vuelve a Standby ese mismo equipo (sin duplicarlo).
+  const reutilizado = await reubicarEquipoDeServicio(supabase, r.id, { standby: opciones.motivo });
+  if (reutilizado.error) return { error: reutilizado.error };
+  if (!reutilizado.usado) {
+    const { data, error } = await supabase
+      .from('dispositivos')
+      .insert({
+        modelo,
+        capacidad_gb: r.capacidad_gb,
+        color: r.color,
+        imei: r.imei,
+        estado: 'usado',
+        en_stock: false,
+        en_espera: true,
+        en_espera_desde: new Date().toISOString(),
+        espera_origen: 'servicio_tecnico',
+        espera_motivo: opciones.motivo.trim() || null,
+        agregado_por_nombre: opciones.actor?.nombre ?? null,
+        agregado_por_foto_url: opciones.actor?.fotoUrl ?? null,
+        ...(r.sucursal_id ? { sucursal_id: r.sucursal_id } : {}),
+      })
+      .select('id')
+      .single();
+    if (error || !data) return { error: error?.message ?? 'error desconocido' };
+    await asegurarModelo(supabase, modelo);
+  }
   const { error: errorReparacion } = await supabase
     .from('reparaciones')
     .update({

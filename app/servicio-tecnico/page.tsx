@@ -48,7 +48,7 @@ import { obtenerSucursales, type Sucursal } from '../lib/sucursales';
 import { falla } from '../lib/escritura';
 import { camposRecibidoPor, registrarRecepcionEnHistorial } from '../lib/recibidoPor';
 import { soportaMigracion } from '../lib/migraciones';
-import { mandarReparacionAStandby } from '../lib/standby';
+import { mandarReparacionAStandby, reubicarEquipoDeServicio, dispositivoOrigenDe } from '../lib/standby';
 import { origenDeCliente } from '../lib/clientesDuplicados';
 
 const STORAGE_OPTIONS = [64, 128, 256, 512];
@@ -945,15 +945,32 @@ ${resultado.error}`);
       return;
     }
     if (r.imei) {
-      const { data: existente } = await supabase.from('dispositivos').select('id').eq('imei', r.imei).maybeSingle();
+      // El equipo de origen (si lo hay) es el mismo que vuelve: no cuenta como duplicado.
+      const origenId = await dispositivoOrigenDe(supabase, r.id);
+      const { data: existente } = await supabase
+        .from('dispositivos')
+        .select('id')
+        .eq('imei', r.imei)
+        .neq('id', origenId ?? '00000000-0000-0000-0000-000000000000')
+        .limit(1)
+        .maybeSingle();
       if (existente && !confirm(`${t('Ya hay un dispositivo en Stock con el IMEI')} ${r.imei}. ${t('¿Agregarlo igual?')}`)) return;
     }
     if (!confirm(t('¿Pasar este equipo al Stock como dispositivo disponible para vender?'))) return;
     setGuardando(r.id);
     setAvisoAgregarStockPara(null);
     const modeloNormalizado = r.modelo ? normalizarNombreModelo(r.modelo) : r.modelo;
+    // Si la reparación salió de un equipo del Stock/Standby, vuelve ese mismo equipo (no se crea un duplicado).
+    const reutilizado = await reubicarEquipoDeServicio(supabase, r.id, 'stock');
+    if (reutilizado.error) {
+      alert(`${t('No se pudo guardar el cambio. No se modificó nada.')}
+${reutilizado.error}`);
+      setGuardando(null);
+      return;
+    }
     if (
-      await falla(
+      !reutilizado.usado &&
+      (await falla(
         supabase.from('dispositivos').insert({
       modelo: modeloNormalizado,
       capacidad_gb: r.capacidad_gb,
@@ -970,12 +987,12 @@ ${resultado.error}`);
         }),
         t,
         'agregar equipo al stock'
-      )
+      ))
     ) {
       setGuardando(null);
       return;
     }
-    await asegurarModelo(supabase, modeloNormalizado);
+    if (!reutilizado.usado) await asegurarModelo(supabase, modeloNormalizado);
     if (
       await falla(
         supabase
