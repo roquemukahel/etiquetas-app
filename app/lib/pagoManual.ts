@@ -10,7 +10,7 @@ export const BINANCE_PAY_ID = '';
 
 // Más barato que pagar con tarjeta (Lemon Squeezy cobra comisión) para
 // incentivar el pago por USDT.
-export const PRECIO_USDT_MENSUAL = 9.99;
+export const PRECIO_USDT_MENSUAL = 12;
 export const PRECIO_USDT_ANUAL = 100;
 
 // Pagos con tarjeta (Lemon Squeezy) deshabilitados temporalmente mientras la
@@ -26,5 +26,5 @@ export const PAGOS_CON_TARJETA_DISPONIBLES = false;
 export const TRANSFERENCIA_CVU = '0000177508300006433407';
 export const TRANSFERENCIA_ALIAS = 'TEATRO.HOYO.DESTINAR';
 export const TRANSFERENCIA_TITULAR = 'Matias Andres Borda';
-export const PRECIO_ARS_MENSUAL = 15500;
-export const PRECIO_ARS_ANUAL = 155000;
+export const PRECIO_ARS_MENSUAL = 17500;
+export const PRECIO_ARS_ANUAL = 175000;

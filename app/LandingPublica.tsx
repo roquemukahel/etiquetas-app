@@ -282,7 +282,7 @@ export default function LandingPublica() {
         <div className="grid sm:grid-cols-3 gap-5 items-stretch">
           <div className="rounded-3xl bg-white/[0.04] border border-white/10 p-7 flex flex-col gap-3 text-center">
             <p className="text-sm font-semibold text-sky-400 uppercase tracking-wide">Mensual</p>
-            <p className="font-display font-semibold text-3xl text-white">US$9.99<span className="text-sm font-normal text-slate-400">/mes</span></p>
+            <p className="font-display font-semibold text-3xl text-white">US$12<span className="text-sm font-normal text-slate-400">/mes</span></p>
             <p className="text-xs text-slate-400">Precio de lanzamiento, por tiempo limitado.</p>
             <Link
               href="/registro"
