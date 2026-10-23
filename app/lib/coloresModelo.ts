@@ -1047,6 +1047,54 @@ const RAZR_70_ULTRA: ModeloColores = {
 };
 
 // Clave de modelo normalizada: "iPhone 11", "iphone 11", "iPhone11" -> "iphone11".
+// Samsung Galaxy S23 FE — colores oficiales: Mint, Cream, Graphite, Purple + exclusivos online Indigo y Tangerine.
+// Faltan las fotos de Grafito, Índigo y Mandarina.
+const GALAXY_S23_FE: ModeloColores = {
+  carpeta: 'galaxy-s23-fe',
+  colores: [
+    { nombre: 'Menta', archivo: 'menta', hex: '#d7e6dd' },
+    { nombre: 'Crema', archivo: 'crema', hex: '#f3ede2' },
+    { nombre: 'Púrpura', archivo: 'purpura', hex: '#6a597a' },
+  ],
+};
+
+// Samsung Galaxy S24 Ultra — colores oficiales: Titanium Black, Gray, Violet, Yellow + exclusivos online Green, Blue y
+// Orange. Faltan las fotos de Negro, Amarillo, Verde, Azul y Naranja.
+const GALAXY_S24_ULTRA: ModeloColores = {
+  carpeta: 'galaxy-s24-ultra',
+  colores: [
+    { nombre: 'Titanio gris', archivo: 'gris', hex: '#989085' },
+    { nombre: 'Titanio violeta', archivo: 'violeta', hex: '#474258' },
+  ],
+};
+
+// Samsung Galaxy S25+ — mismos colores que el S25 (Navy, Mint, Icyblue, Silver Shadow). Azul marino es la foto real del
+// S25+; Plata y Azul hielo siguen siendo las del S25 hasta que haya fotos del S25+.
+const GALAXY_S25_PLUS: ModeloColores = {
+  carpeta: 'galaxy-s25-plus',
+  colores: [
+    { nombre: 'Plata', archivo: 'plata', hex: '#a8abae' },
+    { nombre: 'Azul marino', archivo: 'azulmarino', hex: '#393e47' },
+    { nombre: 'Azul hielo', archivo: 'azulhielo', hex: '#c9d6e8' },
+  ],
+};
+
+// Redmi 9A — colores oficiales: Midnight Black, Nature Green, Sea Blue.
+const REDMI_9A: ModeloColores = {
+  carpeta: 'redmi-9a',
+  colores: [
+    { nombre: 'Negro', archivo: 'negro', hex: '#2a292c' },
+    { nombre: 'Verde', archivo: 'verde', hex: '#0b7480' },
+    { nombre: 'Azul', archivo: 'azul', hex: '#2865a8' },
+  ],
+};
+
+// Redmi 17 (4G) — colores oficiales: Black, Deep Blue, Lotus Purple, Oak Green. Falta la foto de los otros tres.
+const REDMI_17: ModeloColores = {
+  carpeta: 'redmi-17',
+  colores: [{ nombre: 'Negro', archivo: 'negro', hex: '#2c2f33' }],
+};
+
 const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   iphone7: IPHONE_7,
   iphonex: IPHONE_X,
@@ -1110,7 +1158,7 @@ const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   'galaxys26+': GALAXY_S26,
   galaxys26ultra: GALAXY_S26,
   galaxys25: GALAXY_S25,
-  'galaxys25+': GALAXY_S25,
+  'galaxys25+': GALAXY_S25_PLUS,
   galaxys24: GALAXY_S24,
   'galaxys24+': GALAXY_S24,
   galaxys24fe: GALAXY_S24_FE,
@@ -1131,6 +1179,10 @@ const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   redmi13c: REDMI_13C,
   redmi14c: REDMI_14C,
   redmi15c: REDMI_15C,
+  redmi9a: REDMI_9A,
+  redmi17: REDMI_17,
+  galaxys23fe: GALAXY_S23_FE,
+  galaxys24ultra: GALAXY_S24_ULTRA,
   galaxya14: GALAXY_A14,
   motoe22: MOTO_E22,
   motog04s: MOTO_G04S,

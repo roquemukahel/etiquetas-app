@@ -145,6 +145,7 @@ export const CATALOGO_MODELOS: Record<string, string[]> = {
     'Redmi 13C',
     'Redmi 14C',
     'Redmi 15C',
+    'Redmi 17',
     'Redmi A1',
     'Redmi A2',
     'Redmi A3',
