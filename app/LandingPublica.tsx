@@ -297,8 +297,8 @@ export default function LandingPublica() {
               Recomendado
             </span>
             <p className="text-sm font-semibold text-sky-400 uppercase tracking-wide">Anual</p>
-            <p className="font-display font-semibold text-3xl text-white">US$100<span className="text-sm font-normal text-slate-400">/año</span></p>
-            <p className="text-xs text-slate-400">Casi 2 meses gratis frente al plan mensual.</p>
+            <p className="font-display font-semibold text-3xl text-white">US$120<span className="text-sm font-normal text-slate-400">/año</span></p>
+            <p className="text-xs text-slate-400">2 meses gratis frente al plan mensual.</p>
             <Link
               href="/registro"
               className="mt-auto w-full rounded-2xl bg-gradient-to-r from-[#2F6BFF] to-[#7C3AED] hover:brightness-110 transition text-white py-3.5 text-sm font-semibold"

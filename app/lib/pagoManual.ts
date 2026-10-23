@@ -11,7 +11,12 @@ export const BINANCE_PAY_ID = '';
 // Más barato que pagar con tarjeta (Lemon Squeezy cobra comisión) para
 // incentivar el pago por USDT.
 export const PRECIO_USDT_MENSUAL = 12;
-export const PRECIO_USDT_ANUAL = 100;
+export const PRECIO_USDT_ANUAL = 120;
+
+// Pago con tarjeta (Lemon Squeezy): estos valores son solo el TEXTO que se muestra; el cobro real lo define el producto/variante
+// configurado en Lemon Squeezy (hay que cambiarlo también ahí). Mantiene la diferencia de siempre contra USDT (+25%).
+export const PRECIO_TARJETA_MENSUAL = 15;
+export const PRECIO_TARJETA_ANUAL = 150;
 
 // Pagos con tarjeta (Lemon Squeezy) deshabilitados temporalmente mientras la
 // verificación de identidad de la cuenta de pagos sigue en trámite. Volver a

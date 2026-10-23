@@ -2262,8 +2262,8 @@ export const PT: Record<string, string> = {
   'Red:': 'Rede:',
   'Hash de la transacción (opcional)': 'Hash da transação (opcional)',
   'Pago con tarjeta — no disponible por el momento': 'Pagamento com cartão — indisponível no momento',
-  'Estamos terminando de habilitar esta opción (US$12.50/mes · US$125/año). Mientras tanto, podés suscribirte pagando con USDT (cripto) o por transferencia bancaria (Argentina) más abajo.':
-    'Estamos terminando de habilitar esta opção (US$12,50/mês · US$125/ano). Enquanto isso, você pode assinar pagando com USDT (cripto) ou por transferência bancária (Argentina) mais abaixo.',
+  'Estamos terminando de habilitar esta opción ({precios}). Mientras tanto, podés suscribirte pagando con USDT (cripto) o por transferencia bancaria (Argentina) más abajo.':
+    'Estamos terminando de habilitar esta opção ({precios}). Enquanto isso, você pode assinar pagando com USDT (cripto) ou por transferência bancária (Argentina) mais abaixo.',
   'Estimado equipo de': 'Prezada equipe de',
   'Antes que nada, ¡gracias por darle una oportunidad a Qovento! Esperamos que estos días de prueba te hayan servido y que el sistema ya se haya vuelto parte de tu rutina diaria. Para nosotros es un gusto que formes parte de esta comunidad, que crece gracias a locales como el tuyo.':
     'Antes de mais nada, obrigado por dar uma chance ao Qovento! Esperamos que estes dias de teste tenham sido úteis e que o sistema já tenha se tornado parte da sua rotina diária. Para nós é um prazer que você faça parte desta comunidade, que cresce graças a estabelecimentos como o seu.',
@@ -3404,4 +3404,5 @@ export const PT: Record<string, string> = {
   'La salud de batería tiene que ser un número entre 0 y 100.': 'A saúde da bateria deve ser um número entre 0 e 100.',
   '(no está incluido en este capital)': '(não está incluído neste capital)',
   'Equipos recibidos como pago (no suma al total)': 'Aparelhos recebidos como pagamento (não soma ao total)',
+  'año': 'ano',
 };
