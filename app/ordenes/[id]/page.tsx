@@ -1765,7 +1765,7 @@ export default function DetalleOrden() {
         )}
         <p>
           <span className="text-muted dark:text-dark-text-secondary">{t('Forma de pago:')}</span>{' '}
-          {orden.forma_pago ? orden.forma_pago.split(' + ').map((f) => t(f)).join(' + ') : t('Sin definir')}
+          {orden.forma_pago ? orden.forma_pago.split(' + ').map((f) => (medioLabel(f, t) === f ? t(f) : medioLabel(f, t))).join(' + ') : t('Sin definir')}
         </p>
         {reparacionesCobro.map((r) => (
           <p key={r.id} className="flex items-center gap-1.5 flex-wrap">

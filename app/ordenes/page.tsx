@@ -1346,7 +1346,7 @@ export default function Ordenes() {
                   className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-1.5 text-xs"
                 >
                   <option value="">{t('Todas las formas de pago')}</option>
-                  {MEDIOS_PAGO.map((m) => (
+                  {[...MEDIOS_PAGO, MEDIO_EQUIPO].map((m) => (
                     <option key={m.codigo} value={m.codigo}>
                       {medioLabel(m.codigo, t)}
                     </option>
