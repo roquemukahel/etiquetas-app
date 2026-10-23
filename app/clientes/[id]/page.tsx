@@ -11,7 +11,8 @@ import { simboloMoneda } from '../../lib/monedas';
 import { armarLinkWhatsApp } from '../../lib/whatsapp';
 import { codigoLlamada } from '../../lib/paises';
 import { MEDIOS_PAGO, MEDIO_EQUIPO, calcularSaldo, estadoCuenta, ESTADO_INFO, diasDeMora, medioLabel } from '../../lib/cuentaCorriente';
-import { registrarCobroFinanciamiento, registrarCobroConEquipo } from '../../lib/financiacion/servicio';
+import { registrarCobroFinanciamiento, registrarCobroConEquipo, corregirMontoPago } from '../../lib/financiacion/servicio';
+import { soportaMigracion } from '../../lib/migraciones';
 import { aFechaISO } from '../../lib/financiacion/motor';
 import { sanitizarDecimal, formatearMonto } from '../../lib/numeros';
 import { formatearFechaHora } from '../../lib/fechas';
@@ -107,6 +108,16 @@ export default function DetalleCliente() {
   const [pagoMonto, setPagoMonto] = useState('');
   const [pagoMedio, setPagoMedio] = useState<string>('efectivo');
   const [pagoObs, setPagoObs] = useState('');
+  // Corregir el monto de un pago ya registrado (cta_cte_corregir_pago_supabase.sql): solo aparece si el negocio ya la tiene.
+  const [puedeCorregirPagos, setPuedeCorregirPagos] = useState(false);
+  useEffect(() => {
+    soportaMigracion(supabase, 'corregirPagoCtaCte').then(setPuedeCorregirPagos);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const [corrigiendoPago, setCorrigiendoPago] = useState<Movimiento | null>(null);
+  const [montoCorregido, setMontoCorregido] = useState('');
+  const [errorCorreccion, setErrorCorreccion] = useState<string | null>(null);
+  const [guardandoCorreccion, setGuardandoCorreccion] = useState(false);
   // Equipo que deja como parte de pago (solo cuando el medio es "Equipo (plan canje)").
   const [equipoPago, setEquipoPago] = useState<EquipoPago>(EQUIPO_PAGO_VACIO);
   const [guardandoPago, setGuardandoPago] = useState(false);
@@ -255,6 +266,45 @@ export default function DetalleCliente() {
   );
 
   const campo = (k: keyof Cliente, valor: string) => setC((prev) => (prev ? { ...prev, [k]: valor } : prev));
+
+  const abrirCorregirPago = (m: Movimiento) => {
+    setCorrigiendoPago(m);
+    setMontoCorregido(String(m.monto));
+    setErrorCorreccion(null);
+  };
+
+  const guardarCorreccionPago = async () => {
+    if (!corrigiendoPago || !corrigiendoPago.pago_id) return;
+    const nuevo = Number(montoCorregido);
+    if (!nuevo || nuevo <= 0) {
+      setErrorCorreccion(t('Poné un monto mayor a cero.'));
+      return;
+    }
+    if (Math.abs(nuevo - corrigiendoPago.monto) < 0.005) {
+      setErrorCorreccion(t('Ese es el mismo monto que ya tiene el pago.'));
+      return;
+    }
+    setGuardandoCorreccion(true);
+    setErrorCorreccion(null);
+    const resultado = await corregirMontoPago(supabase, {
+      movimientoId: corrigiendoPago.id,
+      pagoId: corrigiendoPago.pago_id,
+      clienteId: String(id),
+      moneda: monedaCodigo,
+      montoActual: corrigiendoPago.monto,
+      nuevoMonto: nuevo,
+      saldoCuenta: saldo,
+    });
+    setGuardandoCorreccion(false);
+    if ('error' in resultado) {
+      setErrorCorreccion(resultado.error);
+      return;
+    }
+    setCorrigiendoPago(null);
+    await cargarMovimientos();
+    setRecargarFinanciacion((n) => n + 1);
+    if (resultado.aviso) alert('⚠️ ' + resultado.aviso);
+  };
 
   const abrirRegistrarPago = async () => {
     // Sin redondear: si el saldo tiene centavos (ej. $1.500,64) y se
@@ -900,6 +950,11 @@ ${t('¿Guardar igual?')}`)) {
                           <Link href={`/clientes/${id}/comprobante/${m.id}`} className="text-[10px] text-accent dark:text-dark-accent underline">
                             {t('Comprobante')}
                           </Link>
+                          {puedeCorregirPagos && m.concepto === 'pago' && m.pago_id && !m.anulado && tienePermiso(actor, 'gestionar_financiacion') && (
+                            <button onClick={() => abrirCorregirPago(m)} className="text-[10px] text-accent dark:text-dark-accent underline">
+                              {t('Editar monto')}
+                            </button>
+                          )}
                           {tienePermiso(actor, 'ajustar_financiacion') && (
                             <button onClick={() => anularMovimiento(m)} className="text-[10px] text-bad underline">
                               {t('Anular')}
@@ -1040,6 +1095,45 @@ ${t('¿Guardar igual?')}`)) {
                 className="flex-1 rounded-xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2.5 text-sm font-medium text-white disabled:opacity-40"
               >
                 {guardandoPago ? t('Guardando...') : t('Registrar')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal corregir el monto de un pago */}
+      {corrigiendoPago && (
+        <div className="fixed inset-0 z-50 bg-ink/60 backdrop-blur-sm flex items-center justify-center px-6" onClick={() => !guardandoCorreccion && setCorrigiendoPago(null)}>
+          <div className="w-full max-w-sm bg-white dark:bg-dark-surface rounded-2xl shadow-elevated p-5 flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
+            <p className="text-base font-semibold">{t('Corregir el monto del pago')}</p>
+            <p className="text-xs text-muted dark:text-dark-text-secondary">
+              {t('Monto actual')}: {fmt(corrigiendoPago.monto)}. {t('Se corrige todo junto: la cuenta del cliente, la caja y la boleta de este cobro.')}
+            </p>
+            {errorCorreccion && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{errorCorreccion}</p>}
+            <div>
+              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Monto correcto')}</label>
+              <input
+                value={montoCorregido}
+                onChange={(e) => setMontoCorregido(sanitizarDecimal(e.target.value))}
+                inputMode="decimal"
+                autoFocus
+                className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2.5 text-lg"
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                disabled={guardandoCorreccion}
+                onClick={() => setCorrigiendoPago(null)}
+                className="flex-1 rounded-xl border border-border dark:border-dark-border py-2.5 text-sm font-medium disabled:opacity-40"
+              >
+                {t('Cancelar')}
+              </button>
+              <button
+                disabled={guardandoCorreccion || !montoCorregido}
+                onClick={guardarCorreccionPago}
+                className="flex-1 rounded-xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2.5 text-sm font-medium text-white disabled:opacity-40"
+              >
+                {guardandoCorreccion ? t('Guardando...') : t('Guardar monto')}
               </button>
             </div>
           </div>

@@ -15,6 +15,11 @@ const CHEQUEOS = {
   permisosSensibles: (s: SupabaseClient) => s.from('vendedores').select('puede_cargar_egresos, puede_registrar_pagos_proveedores, puede_ver_costos').limit(1),
   // servicio_tecnico_recibido_por_supabase.sql
   recibidoPor: (s: SupabaseClient) => s.from('reparaciones').select('recibido_por_nombre').limit(1),
+  // cta_cte_corregir_pago_supabase.sql (es una función: se detecta llamándola con un id inexistente; si no existe, PostgREST dice que no la encuentra)
+  corregirPagoCtaCte: (s: SupabaseClient) =>
+    Promise.resolve(s.rpc('cta_cte_corregir_monto_pago', { p_movimiento_id: '00000000-0000-0000-0000-000000000000', p_nuevo_monto: 1, p_usuario: null })).then(({ error }) => ({
+      error: error && /PGRST202|Could not find the function/i.test(`${error.code ?? ''} ${error.message ?? ''}`) ? error : null,
+    })),
   // standby_supabase.sql
   standby: (s: SupabaseClient) => s.from('dispositivos').select('en_espera, en_espera_desde, espera_origen, espera_motivo').limit(1),
   // standby_vinculo_servicio_supabase.sql

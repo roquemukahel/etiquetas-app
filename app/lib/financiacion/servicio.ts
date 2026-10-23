@@ -11,6 +11,8 @@ import { decimalesMoneda } from '../monedas';
 import { limpiarImei } from '../imei';
 import { normalizarNombreModelo } from '../modelos';
 import { descripcionDelEquipo, type EquipoPago } from '../equipoPago';
+import { enLotes } from '../db';
+import { topeParaCorregirPago, type AplicacionAnterior, type CuotaParaCorregir } from './correccionPago';
 import {
   generarCronograma,
   aplicarPagoACuotas,
@@ -306,6 +308,100 @@ export async function registrarCobroConEquipo(
     return { ...resultado, avisoCuotas: [resultado.avisoCuotas, 'El pago y el equipo se registraron, pero el equipo no quedó vinculado a la boleta: ' + errorVinculo.message].filter(Boolean).join(' ') };
   }
   return resultado;
+}
+
+// ---------- Corregir el monto de un pago ya registrado ----------
+// Cambia el monto en TODOS lados a la vez (pago/Caja, saldo del cliente, boleta del cobro, equipo recibido): lo hace la función
+// cta_cte_corregir_monto_pago en una sola transacción. Si el pago estaba aplicado a cuotas de financiación, primero se revierte
+// esa aplicación y después se vuelve a aplicar con el monto nuevo (a la misma cuota si era una sola); si el cambio falla, se
+// restaura exactamente lo que había. Devuelve un aviso (no un error) si el monto quedó bien pero algo de las cuotas no se pudo rehacer.
+export async function corregirMontoPago(
+  supabase: SupabaseClient,
+  params: { movimientoId: string; pagoId: string; clienteId: string; moneda: string; montoActual: number; nuevoMonto: number; saldoCuenta: number }
+): Promise<{ ok: true; aviso?: string } | { error: string }> {
+  const actor = getActor();
+  const { data: apsData, error: apsError } = await supabase
+    .from('financiacion_pagos')
+    .select('cuota_id, monto_aplicado')
+    .eq('pago_id', params.pagoId)
+    .eq('tipo', 'pago');
+  if (apsError) return { error: 'No pudimos revisar a qué cuotas se aplicó el pago: ' + apsError.message };
+  const aplicaciones = ((apsData as AplicacionAnterior[]) ?? []).map((a) => ({ cuota_id: a.cuota_id, monto_aplicado: Number(a.monto_aplicado) }));
+
+  // Cuotas en juego: las pendientes del cliente (igual que al cobrar) + las que este pago tocó.
+  const { data: pendData, error: pendError } = await supabase
+    .from('financiacion_cuotas')
+    .select('id, importe_original, importe_pagado, financiacion_planes!inner(cliente_id, moneda, estado)')
+    .eq('financiacion_planes.cliente_id', params.clienteId)
+    .eq('financiacion_planes.moneda', params.moneda)
+    .eq('financiacion_planes.estado', 'activo')
+    .eq('estado', 'pendiente')
+    .limit(1000); // las cuotas pendientes de UN cliente
+  if (pendError) return { error: 'No pudimos revisar las cuotas del cliente: ' + pendError.message };
+  const cuotas = new Map<string, CuotaParaCorregir>();
+  for (const c of (pendData as any[]) ?? []) cuotas.set(c.id, { id: c.id, importe_original: Number(c.importe_original), importe_pagado: Number(c.importe_pagado) });
+  const saldoCuotasPendientes = Array.from(cuotas.values()).reduce((a, c) => a + Math.max(0, c.importe_original - c.importe_pagado), 0);
+  for (const lote of enLotes(aplicaciones.map((a) => a.cuota_id))) {
+    const { data, error } = await supabase.from('financiacion_cuotas').select('id, importe_original, importe_pagado').in('id', lote);
+    if (error) return { error: 'No pudimos revisar las cuotas del pago: ' + error.message };
+    for (const c of (data as any[]) ?? []) cuotas.set(c.id, { id: c.id, importe_original: Number(c.importe_original), importe_pagado: Number(c.importe_pagado) });
+  }
+
+  const tope = topeParaCorregirPago({
+    montoActual: params.montoActual,
+    aplicaciones,
+    cuotas: Array.from(cuotas.values()),
+    saldoCuenta: params.saldoCuenta,
+    saldoCuotasPendientes,
+  });
+  if (tope != null && params.nuevoMonto > tope + 0.01) {
+    return { error: 'El monto no puede ser mayor a ' + Math.round(tope * 100) / 100 + ': es lo máximo que ese pago puede cubrir de lo que se debe.' };
+  }
+
+  if (aplicaciones.length > 0) {
+    const { error: revertError } = await supabase.rpc('financiacion_revertir_pago', { p_pago_id: params.pagoId, p_usuario: actor?.nombre ?? null });
+    if (revertError) return { error: 'No pudimos desarmar el reparto a cuotas: ' + revertError.message };
+  }
+
+  const { error: corregirError } = await supabase.rpc('cta_cte_corregir_monto_pago', {
+    p_movimiento_id: params.movimientoId,
+    p_nuevo_monto: params.nuevoMonto,
+    p_usuario: actor?.nombre ?? null,
+  });
+  if (corregirError) {
+    if (aplicaciones.length > 0) {
+      // Se deja todo como estaba: se vuelve a aplicar exactamente lo que se había revertido.
+      const { error: restaurarError } = await supabase.rpc('financiacion_aplicar_pago', {
+        p_pago_id: params.pagoId,
+        p_asignaciones: aplicaciones.map((a) => ({ cuota_id: a.cuota_id, monto: a.monto_aplicado })),
+        p_usuario: actor?.nombre ?? null,
+      });
+      if (restaurarError) return { error: corregirError.message + ' (y no pudimos dejar las cuotas como estaban: revisalas en Financiación — ' + restaurarError.message + ')' };
+    }
+    return { error: corregirError.message };
+  }
+
+  let aviso: string | undefined;
+  if (aplicaciones.length > 0) {
+    const reaplicado = await aplicarPagoAFinanciacion(supabase, {
+      pagoId: params.pagoId,
+      clienteId: params.clienteId,
+      monto: params.nuevoMonto,
+      moneda: params.moneda,
+      cuotaIdElegida: aplicaciones.length === 1 ? aplicaciones[0].cuota_id : undefined,
+    });
+    if ('error' in reaplicado) aviso = 'El monto se corrigió, pero no pudimos volver a aplicarlo a las cuotas: ' + reaplicado.error;
+    else if (reaplicado.sobrante > 0.01) aviso = 'El monto se corrigió, pero ' + Math.round(reaplicado.sobrante * 100) / 100 + ' no entraron en ninguna cuota pendiente.';
+  }
+
+  await registrarAuditoria(supabase, {
+    accion: 'corrigió el monto de un pago recibido de ' + params.montoActual + ' a ' + params.nuevoMonto,
+    entidad: 'cliente',
+    entidadId: params.clienteId,
+    valorAnterior: { monto: params.montoActual },
+    valorNuevo: { monto: params.nuevoMonto, movimiento_id: params.movimientoId },
+  });
+  return { ok: true, aviso };
 }
 
 // ---------- Ajuste (reduce deuda futura, sin tocar cuotas pagadas) ----------

@@ -3404,4 +3404,11 @@ export const EN: Record<string, string> = {
   '(no está incluido en este capital)': '(not included in this capital)',
   'Equipos recibidos como pago (no suma al total)': 'Devices received as payment (not added to the total)',
   'año': 'year',
+  'Ese es el mismo monto que ya tiene el pago.': 'That is the same amount the payment already has.',
+  'Editar monto': 'Edit amount',
+  'Corregir el monto del pago': 'Correct the payment amount',
+  'Monto actual': 'Current amount',
+  'Se corrige todo junto: la cuenta del cliente, la caja y la boleta de este cobro.': 'Everything is corrected together: the customer account, the cash register and the receipt of this payment.',
+  'Monto correcto': 'Correct amount',
+  'Guardar monto': 'Save amount',
 };
