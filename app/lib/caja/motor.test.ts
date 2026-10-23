@@ -10,7 +10,7 @@ describe('totalesPorMedio', () => {
       { medio: 'debito', monto: 300, moneda: 'ARS' },
       { medio: 'credito', monto: 100, moneda: 'ARS' },
     ];
-    expect(totalesPorMedio(pagos)).toEqual({ efectivo: 1500, transferencia: 2000, debito: 300, credito: 100, otro: 0 });
+    expect(totalesPorMedio(pagos)).toEqual({ efectivo: 1500, transferencia: 2000, debito: 300, credito: 100, otro: 0, equipos: 0 });
   });
 
   it('un medio desconocido (cheque/usdt) cae en "otro", no se pierde', () => {
@@ -19,13 +19,24 @@ describe('totalesPorMedio', () => {
   });
 
   it('lista vacía da todo en cero', () => {
-    expect(totalesPorMedio([])).toEqual({ efectivo: 0, transferencia: 0, debito: 0, credito: 0, otro: 0 });
+    expect(totalesPorMedio([])).toEqual({ efectivo: 0, transferencia: 0, debito: 0, credito: 0, otro: 0, equipos: 0 });
+  });
+
+  it('un equipo recibido como pago de deuda (medio canje) va aparte y no suma a la plata del turno', () => {
+    const pagos: PagoParaCaja[] = [
+      { medio: 'efectivo', monto: 500, moneda: 'ARS' },
+      { medio: 'canje', monto: 80000, moneda: 'ARS' },
+    ];
+    const t = totalesPorMedio(pagos);
+    expect(t.equipos).toBe(80000);
+    expect(t.otro).toBe(0);
+    expect(totalGeneral(t)).toBe(500);
   });
 });
 
 describe('totalGeneral', () => {
   it('suma los 5 baldes', () => {
-    expect(totalGeneral({ efectivo: 100, transferencia: 200, debito: 50, credito: 25, otro: 10 })).toBe(385);
+    expect(totalGeneral({ efectivo: 100, transferencia: 200, debito: 50, credito: 25, otro: 10, equipos: 999 })).toBe(385);
   });
 });
 

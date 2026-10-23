@@ -53,6 +53,11 @@ export type CreditoR = { concepto: string; tipo: string; monto: number; fecha: s
 
 export const ESTADOS_COBRADOS = ['pagado', 'entregado'];
 
+// "Dinero ingresado" es plata (efectivo, transferencia, tarjeta...). Un equipo que el cliente deja como parte de pago de
+// una deuda queda en `pagos` con medio 'canje' (baja la deuda, cuenta en Cobranzas de cartera y en el reparto por medio),
+// pero NO es dinero que entró: igual que el canje de una venta en Nueva Orden, que ni siquiera pasa por `pagos`.
+export const esDineroIngresado = (p: { medio: string }) => p.medio !== 'canje';
+
 // Una orden de "Cobro de financiamiento / cuenta corriente" (la que se genera
 // al cobrar una cuota o un saldo) arma su boleta con ítems tipo 'financiamiento'
 // y nada más. NO es una venta: la venta ya se contó el día que se hizo (a cuenta
@@ -227,7 +232,7 @@ export function bloqueVentas(
     if (items.length === 0) unidades += 1; // fallback si no vinieron los ítems
   }
 
-  const ingresado = pagos.filter((p) => entre(p.fecha, desde, hasta)).reduce((a, p) => a + (p.monto || 0), 0);
+  const ingresado = pagos.filter((p) => esDineroIngresado(p) && entre(p.fecha, desde, hasta)).reduce((a, p) => a + (p.monto || 0), 0);
   const creditoOtorgado = credito
     .filter((m) => m.tipo === 'cargo' && m.concepto === 'venta' && entre(m.fecha, desde, hasta))
     .reduce((a, m) => a + (m.monto || 0), 0);
@@ -313,7 +318,7 @@ export function serieEvolucion(
 
   const sumaEnTramo = (desde: Date, hasta: Date): number => {
     if (metrica === 'ingresado') {
-      return pagos.filter((p) => entre(p.fecha, desde, hasta)).reduce((a, p) => a + (p.monto || 0), 0);
+      return pagos.filter((p) => esDineroIngresado(p) && entre(p.fecha, desde, hasta)).reduce((a, p) => a + (p.monto || 0), 0);
     }
     if (metrica === 'credito') {
       // Mismo criterio que bloqueVentas() para "credito otorgado": cargos

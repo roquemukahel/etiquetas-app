@@ -103,6 +103,9 @@ export async function agregarCanjeAlStock(
     salud_bateria: c.salud_bateria,
     estado: c.condicion || 'usado',
     detalles: c.detalles,
+    // Lo que se le reconoció al cliente por el equipo es lo que le costó al negocio: sin esto el equipo entraba sin costo y
+    // sus ventas futuras figuraban como ganancia completa (o quedaban "sin costo" fuera de los márgenes).
+    ...(c.monto && c.monto > 0 ? { costo: c.monto } : {}),
     ...(opciones.standby
       ? {
           en_stock: false,

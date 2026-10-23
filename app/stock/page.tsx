@@ -183,6 +183,8 @@ export default function Stock() {
   const [cargandoVendidos, setCargandoVendidos] = useState(false);
   const [totalVendidos, setTotalVendidos] = useState(0);
   const [totalDispositivos, setTotalDispositivos] = useState(0);
+  // Cuántos equipos esperan en Standby: no entran en el capital de arriba (no son stock para vender), se avisa para que no parezca que faltan.
+  const [totalStandby, setTotalStandby] = useState(0);
   const [carpetas, setCarpetas] = useState<string[]>([]);
   const [imagenesCarpetas, setImagenesCarpetas] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
@@ -448,7 +450,7 @@ export default function Stock() {
     // Los equipos en Standby tienen en_stock = false pero no están vendidos: se sacan de "Vendidos" y de los conteos.
     const hayStandby = await soportaMigracion(supabase, 'standby');
     const sinStandby = <T extends { or: (filtros: string) => T }>(q: T): T => (hayStandby ? q.or('en_espera.is.null,en_espera.eq.false') : q);
-    const [enStock, vendidos, { count: countVendidos }, { count: countTotal }, senados] = await Promise.all([
+    const [enStock, vendidos, { count: countVendidos }, { count: countTotal }, senados, { count: countStandby }] = await Promise.all([
       obtenerTodasLasFilas<Dispositivo>(supabase, 'dispositivos', COLUMNAS_DISPOSITIVO, ORDEN_DISPOSITIVO, (q) =>
         q.eq('en_stock', true)
       ),
@@ -460,7 +462,9 @@ export default function Stock() {
       sinStandby(supabase.from('dispositivos').select('id', { count: 'exact', head: true }).eq('en_stock', false)),
       sinStandby(supabase.from('dispositivos').select('id', { count: 'exact', head: true })),
       obtenerDispositivosSenados(supabase),
+      hayStandby ? supabase.from('dispositivos').select('id', { count: 'exact', head: true }).eq('en_espera', true) : Promise.resolve({ count: 0 }),
     ]);
+    setTotalStandby(countStandby ?? 0);
     setDispositivos([...enStock, ...vendidos]);
     setDispositivosSenados(senados);
     setVendidosCargados(incluirVendidos);
@@ -1816,6 +1820,15 @@ ${t(r.error)}`);
           <p className="text-[11px] text-muted dark:text-dark-text-secondary mt-2.5 text-center">
             {capital.unidadesCel} {capital.unidadesCel === 1 ? t('dispositivo en stock') : t('dispositivos en stock')} · {capital.unidadesAcc}{' '}
             {capital.unidadesAcc === 1 ? t('producto') : t('productos')}. {t('Cada indicador cuenta solo los ítems con ese dato cargado.')}
+            {totalStandby > 0 && (
+              <>
+                {' '}
+                <Link href="/standby" className="underline">
+                  {totalStandby} {totalStandby === 1 ? t('equipo en Standby') : t('equipos en Standby')}
+                </Link>{' '}
+                {t('(no está incluido en este capital)')}
+              </>
+            )}
           </p>
         </div>
       )}

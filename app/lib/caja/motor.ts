@@ -12,14 +12,20 @@ export type TipoCaja = 'venta_diaria' | 'financiamiento';
 
 export type PagoParaCaja = { medio: string; monto: number; moneda: string };
 
-export type TotalesPorMedio = Record<MedioCaja | 'otro', number>;
+// `equipos`: valor de los celulares recibidos como parte de pago de una deuda (medio 'canje'). Se muestra aparte y NO suma
+// al total de plata del turno: no es dinero que entró a la caja.
+export type TotalesPorMedio = Record<MedioCaja | 'otro' | 'equipos', number>;
 
 // Otros medios (cheque/usdt) no tienen su propia columna en el arqueo —
 // entran en "otro" para no perderlos de la suma general, pero no cuentan
 // para el efectivo esperado (solo "efectivo" cuenta como caja física).
 export function totalesPorMedio(pagos: PagoParaCaja[]): TotalesPorMedio {
-  const totales: TotalesPorMedio = { efectivo: 0, transferencia: 0, debito: 0, credito: 0, otro: 0 };
+  const totales: TotalesPorMedio = { efectivo: 0, transferencia: 0, debito: 0, credito: 0, otro: 0, equipos: 0 };
   for (const p of pagos) {
+    if (p.medio === 'canje') {
+      totales.equipos += p.monto || 0;
+      continue;
+    }
     const clave = (MEDIOS_CAJA as string[]).includes(p.medio) ? (p.medio as MedioCaja) : 'otro';
     totales[clave] += p.monto || 0;
   }

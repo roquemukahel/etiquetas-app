@@ -299,6 +299,12 @@ export default function CajaPage() {
                   <span className="font-medium tabular-nums">${formatearMonto(totales.otro)}</span>
                 </div>
               )}
+              {totales.equipos > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted dark:text-dark-text-secondary">📱 {t('Equipos recibidos como pago (no suma al total)')}</span>
+                  <span className="font-medium tabular-nums">${formatearMonto(totales.equipos)}</span>
+                </div>
+              )}
             </div>
             <div className="flex justify-between text-base font-semibold pt-2 border-t border-border dark:border-dark-border">
               <span>{t('Total')}</span>

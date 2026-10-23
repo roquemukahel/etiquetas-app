@@ -3401,4 +3401,6 @@ export const EN: Record<string, string> = {
   'Equipo (plan canje)': 'Device (trade-in)',
   'Poné el modelo del equipo que recibís como pago.': 'Enter the model of the device you receive as payment.',
   'La salud de batería tiene que ser un número entre 0 y 100.': 'Battery health must be a number between 0 and 100.',
+  '(no está incluido en este capital)': '(not included in this capital)',
+  'Equipos recibidos como pago (no suma al total)': 'Devices received as payment (not added to the total)',
 };

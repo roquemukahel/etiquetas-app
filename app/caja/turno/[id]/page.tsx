@@ -171,6 +171,12 @@ export default function DetalleTurnoCaja() {
               <span className="font-medium tabular-nums">${formatearMonto(totales.otro)}</span>
             </div>
           )}
+          {totales.equipos > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-muted dark:text-dark-text-secondary">📱 {t('Equipos recibidos como pago (no suma al total)')}</span>
+              <span className="font-medium tabular-nums">${formatearMonto(totales.equipos)}</span>
+            </div>
+          )}
           <div className="flex justify-between text-base font-semibold border-t border-border dark:border-dark-border pt-1.5 mt-1">
             <span>{t('Total')}</span>
             <span className="tabular-nums">${formatearMonto(totalGeneral(totales))}</span>

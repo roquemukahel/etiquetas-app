@@ -3402,4 +3402,6 @@ export const PT: Record<string, string> = {
   'Equipo (plan canje)': 'Aparelho (plano de troca)',
   'Poné el modelo del equipo que recibís como pago.': 'Informe o modelo do aparelho que você recebe como pagamento.',
   'La salud de batería tiene que ser un número entre 0 y 100.': 'A saúde da bateria deve ser um número entre 0 e 100.',
+  '(no está incluido en este capital)': '(não está incluído neste capital)',
+  'Equipos recibidos como pago (no suma al total)': 'Aparelhos recebidos como pagamento (não soma ao total)',
 };

@@ -244,8 +244,13 @@ export default function DetalleCliente() {
   // Mismo criterio que Estadísticas (ESTADOS_COBRADOS): una orden pendiente
   // o cancelada no es una compra "cumplida" — sumarla acá infla el total
   // histórico que se le muestra al vendedor sobre este cliente.
+  // Los cobros de deuda (ítem tipo 'financiamiento') NO son compras: la compra ya se contó cuando se hizo, y sumar también
+  // cada pago la duplicaba (ej. compró $100 a cuenta corriente y pagó $100 -> "compró $200").
   const totalComprado = useMemo(
-    () => ordenes.filter((o) => ESTADOS_COBRADOS.includes(o.estado)).reduce((acc, o) => acc + (o.total || 0), 0),
+    () =>
+      ordenes
+        .filter((o) => ESTADOS_COBRADOS.includes(o.estado) && !(o.orden_items.length > 0 && o.orden_items.every((i) => i.tipo === 'financiamiento')))
+        .reduce((acc, o) => acc + (o.total || 0), 0),
     [ordenes]
   );
 
@@ -462,6 +467,15 @@ export default function DetalleCliente() {
     // no siga contando en la caja de Estadísticas.
     if (m.pago_id) {
       await falla(supabase.from('pagos').update({ anulado: true }).eq('id', m.pago_id), t, 'anular el pago en la caja (el movimiento sí quedó anulado)');
+      // La orden que generó este cobro (solo las de "Cobro de financiamiento / cuenta corriente", nunca una venta) también
+      // se cancela: sin esto seguía figurando "pagada" en Órdenes aunque su pago ya estaba anulado.
+      if (m.orden_id) {
+        await falla(
+          supabase.from('ordenes').update({ estado: 'cancelado' }).eq('id', m.orden_id).eq('nota', 'Cobro de financiamiento / cuenta corriente.'),
+          t,
+          'cancelar la orden del cobro anulado (el pago sí quedó anulado)'
+        );
+      }
       // Si ese pago se había aplicado a una o más cuotas de financiación
       // (aplicarPagoAFinanciacion), esa aplicación quedaba sin revertir: la
       // cuota seguía figurando "pagada" aunque el pago que la saldó ya no

@@ -10,6 +10,9 @@ import {
   evolucionMediosPagoDe,
   esLineaDeTaller,
   bloqueVentasPorArea,
+  bloqueVentas,
+  serieEvolucion,
+  cobranzasDeCartera,
   type ItemProductoR,
   type ItemAreaR,
   type OrdenR,
@@ -404,5 +407,31 @@ describe('evolucionMediosPagoDe', () => {
     const julio = r.find((f) => f.mes === '2026-07')!;
     expect(julio.porMedio.efectivo).toBe(200);
     expect(julio.total).toBe(200);
+  });
+});
+
+describe('equipo recibido como pago de deuda en las estadísticas', () => {
+  const desde = new Date(2026, 7, 1);
+  const hasta = new Date(2026, 7, 31, 23, 59, 59);
+  const pagos = [
+    { medio: 'efectivo', monto: 1000, fecha: new Date(2026, 7, 10).toISOString(), orden_id: 'c1' },
+    { medio: 'canje', monto: 80000, fecha: new Date(2026, 7, 11).toISOString(), orden_id: 'c2' },
+  ];
+
+  it('"Dinero ingresado" no cuenta el valor del equipo (no es plata que entró)', () => {
+    expect(bloqueVentas([], new Map(), pagos, [], desde, hasta).ingresado).toBe(1000);
+  });
+
+  it('la serie de evolución de "ingresado" tampoco lo cuenta', () => {
+    const rango = rangoDe('mes', new Date(2026, 7, 19));
+    const serie = serieEvolucion([], new Map(), pagos, [], rango, 'ingresado');
+    expect(serie.reduce((a, p) => a + p.actual, 0)).toBe(1000);
+  });
+
+  it('en cambio sí baja la cartera: cuenta en las cobranzas y en el reparto por medio', () => {
+    const cobranza = new Set(['c1', 'c2']);
+    expect(cobranzasDeCartera(pagos, cobranza, desde, hasta).total).toBe(81000);
+    const evolucion = evolucionMediosPagoDe(pagos, 1, new Date(2026, 7, 19));
+    expect(evolucion[0].porMedio.canje).toBe(80000);
   });
 });
