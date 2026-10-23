@@ -21,8 +21,9 @@ import { useT } from '../../lib/idioma';
 import { useSucursalActual } from '../../lib/sucursal';
 import { falla } from '../../lib/escritura';
 import { obtenerTodasLasFilas } from '../../lib/db';
+import { OPCIONES_ALMACENAMIENTO, formatearGB } from '../../lib/almacenamiento';
 
-const STORAGE_OPTIONS = [64, 128, 256, 512];
+const STORAGE_OPTIONS = OPCIONES_ALMACENAMIENTO;
 
 function idTemporal() {
   return Math.random().toString(36).slice(2);
@@ -351,7 +352,7 @@ export default function DetallePlanAhorro() {
       }
       canjeIds = nuevosCanjes.map((c) => c.id);
       const descripcionCanje = canjesEfectivos
-        .map((c) => `${normalizarNombreModelo(c.modelo.trim())}${c.capacidad_gb ? ` ${c.capacidad_gb}GB` : ''}${c.color.trim() ? ` ${c.color.trim()}` : ''}`)
+        .map((c) => `${normalizarNombreModelo(c.modelo.trim())}${c.capacidad_gb ? ` ${formatearGB(c.capacidad_gb)}` : ''}${c.color.trim() ? ` ${c.color.trim()}` : ''}`)
         .join(' + ');
       observacionFinal = observacionFinal ? `${descripcionCanje} · ${observacionFinal}` : descripcionCanje;
     }
@@ -767,7 +768,7 @@ export default function DetallePlanAhorro() {
                     editCapacidad === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                   }`}
                 >
-                  {gb}GB
+                  {formatearGB(gb)}
                 </button>
               ))}
             </div>
@@ -821,7 +822,7 @@ export default function DetallePlanAhorro() {
           )}
           <p className="font-medium">
             {plan.modelo || t('Sin modelo')}
-            {plan.capacidad_gb ? ` · ${plan.capacidad_gb}GB` : ''}
+            {plan.capacidad_gb ? ` · ${formatearGB(plan.capacidad_gb)}` : ''}
             {plan.color ? ` · ${plan.color}` : ''}
           </p>
           {plan.clientes?.telefono && <p className="text-muted dark:text-dark-text-secondary">{plan.clientes.telefono}</p>}
@@ -935,7 +936,7 @@ export default function DetallePlanAhorro() {
                       <div className="min-w-0">
                         <p className="font-medium truncate">
                           {d.modelo || t('Sin modelo')}
-                          {d.capacidad_gb ? ` · ${d.capacidad_gb}GB` : ''}
+                          {d.capacidad_gb ? ` · ${formatearGB(d.capacidad_gb)}` : ''}
                           {d.color ? ` · ${d.color}` : ''}
                         </p>
                         {(d.imei || d.precio != null) && (
@@ -975,7 +976,7 @@ export default function DetallePlanAhorro() {
                         nuevoCapacidad === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                       }`}
                     >
-                      {gb}GB
+                      {formatearGB(gb)}
                     </button>
                   ))}
                 </div>
@@ -1053,7 +1054,7 @@ export default function DetallePlanAhorro() {
                         <p className="font-medium truncate">
                           {canjesCarrito.length > 1 ? `${idx + 1}. ` : ''}
                           {c.modelo}
-                          {c.capacidad_gb ? ` · ${c.capacidad_gb}GB` : ''}
+                          {c.capacidad_gb ? ` · ${formatearGB(c.capacidad_gb)}` : ''}
                           {c.color ? ` · ${c.color}` : ''}
                         </p>
                         <div className="flex items-center gap-2 shrink-0">
@@ -1090,7 +1091,7 @@ export default function DetallePlanAhorro() {
                         canjeCapacidad === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                       }`}
                     >
-                      {gb}GB
+                      {formatearGB(gb)}
                     </button>
                   ))}
                 </div>

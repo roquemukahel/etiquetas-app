@@ -7,9 +7,10 @@ import { agregarCanjeAlStock, type CanjeParaStock } from './lib/canje';
 import { getActor, MENSAJE_ACTOR_REQUERIDO } from './lib/actor';
 import { formatearMonto } from './lib/numeros';
 import { useT } from './lib/idioma';
+import { formatearGB } from './lib/almacenamiento';
 
 function detalleDe(c: CanjeParaStock) {
-  return [c.modelo, c.capacidad_gb ? `${c.capacidad_gb} GB` : null, c.color].filter(Boolean).join(' · ');
+  return [c.modelo, c.capacidad_gb ? `${formatearGB(c.capacidad_gb, true)}` : null, c.color].filter(Boolean).join(' · ');
 }
 
 // Aviso de "este equipo ya está en Plan Canje": al cargar un dispositivo a mano en Stock, si el

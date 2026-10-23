@@ -46,6 +46,7 @@ import CheckTri from '../../CheckTri';
 import TextoCondicionGenerado from '../../TextoCondicionGenerado';
 import { useSucursalActual } from '../../lib/sucursal';
 import { falla, registrarFallo } from '../../lib/escritura';
+import { OPCIONES_ALMACENAMIENTO, formatearGB } from '../../lib/almacenamiento';
 
 type Dispositivo = {
   id: string;
@@ -145,7 +146,7 @@ type Derivacion = {
   fotos: string[];
 };
 
-const STORAGE_OPTIONS = [64, 128, 256, 512];
+const STORAGE_OPTIONS = OPCIONES_ALMACENAMIENTO;
 
 function idTemporal() {
   return Math.random().toString(36).slice(2);
@@ -220,7 +221,7 @@ function DerivacionCard({
   onElegirFoto: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onQuitarFoto: (idx: number) => void;
 }) {
-  const resumen = `${der.modelo}${der.capacidad ? ` · ${der.capacidad}GB` : ''}${der.color ? ` · ${der.color}` : ''}${
+  const resumen = `${der.modelo}${der.capacidad ? ` · ${formatearGB(der.capacidad)}` : ''}${der.color ? ` · ${der.color}` : ''}${
     der.imei.trim() ? ` · IMEI ${der.imei.trim()}` : ''
   }`;
   return (
@@ -280,7 +281,7 @@ function DerivacionCard({
                       der.capacidad === gb ? 'bg-amber-400 text-amber-950' : 'border border-border dark:border-dark-border'
                     }`}
                   >
-                    {gb}GB
+                    {formatearGB(gb)}
                   </button>
                 ))}
               </div>
@@ -874,7 +875,7 @@ export default function NuevaOrden() {
         precioExclusivo: d.precio ?? 0,
         precioLista: d.precio_lista ?? null,
         maxCuotas: guiaDe(d.financiacion_max_cuotas, d.categoria_id),
-        descripcion: `${d.modelo || 'Dispositivo'}${d.capacidad_gb ? ` ${d.capacidad_gb}GB` : ''}${
+        descripcion: `${d.modelo || 'Dispositivo'}${d.capacidad_gb ? ` ${formatearGB(d.capacidad_gb)}` : ''}${
           d.color ? ` ${d.color}` : ''
         }${d.imei ? ` · IMEI ${d.imei}` : ''}${d.salud_bateria != null ? ` · Batería ${d.salud_bateria}%` : ''}`,
         cantidad: 1,
@@ -1904,7 +1905,7 @@ ${t('¿Cargarlo igual?')}`)) {
                       <MiniaturaDispositivo src={imagenPorNombreExacto(d.modelo, imagenesCarpetas)} size={32} />
                       <span className="min-w-0">
                         <span className="block truncate">
-                          {d.modelo} {d.capacidad_gb ? `· ${d.capacidad_gb}GB` : ''} {d.color ? `· ${d.color}` : ''}
+                          {d.modelo} {d.capacidad_gb ? `· ${formatearGB(d.capacidad_gb)}` : ''} {d.color ? `· ${d.color}` : ''}
                         </span>
                         {d.imei && (
                           <span className="block text-xs font-bold font-mono text-ink dark:text-dark-text truncate">
@@ -1947,7 +1948,7 @@ ${t('¿Cargarlo igual?')}`)) {
                         nuevaCapacidad === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                       }`}
                     >
-                      {gb}GB
+                      {formatearGB(gb)}
                     </button>
                   ))}
                 </div>
@@ -2856,7 +2857,7 @@ ${t('¿Cargarlo igual?')}`)) {
                   <p className="font-medium flex items-center gap-1.5 flex-wrap">
                     {canjesCarrito.length > 1 ? `${idx + 1}. ` : ''}
                     {c.modelo}
-                    {c.capacidad_gb ? ` · ${c.capacidad_gb}GB` : ''}
+                    {c.capacidad_gb ? ` · ${formatearGB(c.capacidad_gb)}` : ''}
                     {c.color ? ` · ${c.color}` : ''}
                     {c.condicion === 'sellado' && (
                       <span className="text-[10px] font-bold text-black bg-gradient-to-b from-amber-300 to-amber-500 border border-black/40 rounded-full px-2 py-0.5">
@@ -2903,7 +2904,7 @@ ${t('¿Cargarlo igual?')}`)) {
                     canjeCapacidad === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                   }`}
                 >
-                  {gb}GB
+                  {formatearGB(gb)}
                 </button>
               ))}
             </div>

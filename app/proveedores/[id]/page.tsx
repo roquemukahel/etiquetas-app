@@ -21,8 +21,9 @@ import CompraContado from './CompraContado';
 import { obtenerCategorias, type Categoria } from '../../lib/categorias';
 import { soportaRubrosCompra } from '../../lib/rubrosCompra';
 import { obtenerTodasLasFilas } from '../../lib/db';
+import { OPCIONES_ALMACENAMIENTO, formatearGB } from '../../lib/almacenamiento';
 
-const STORAGE_OPTIONS = [64, 128, 256, 512];
+const STORAGE_OPTIONS = OPCIONES_ALMACENAMIENTO;
 
 type Proveedor = { id: string; nombre: string; telefono: string | null; detalles: string | null };
 type CompraManual = {
@@ -835,7 +836,7 @@ export default function DetalleProveedor() {
                   capacidad === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                 }`}
               >
-                {gb}GB
+                {formatearGB(gb)}
               </button>
             ))}
           </div>
@@ -975,7 +976,7 @@ export default function DetalleProveedor() {
                 )}
                 <span className="truncate">
                   {f.modelo || t('Sin modelo')}
-                  {f.capacidad_gb ? ` · ${f.capacidad_gb}GB` : ''}
+                  {f.capacidad_gb ? ` · ${formatearGB(f.capacidad_gb)}` : ''}
                   {f.color ? ` · ${f.color}` : ''}
                   {f.cantidad > 1 ? ` · x${f.cantidad}` : ''}
                 </span>

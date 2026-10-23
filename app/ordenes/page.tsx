@@ -9,8 +9,10 @@ import { useActor } from '../lib/actor';
 import { tienePermiso } from '../lib/permisos';
 import { registrarAuditoria } from '../lib/auditoria';
 import { generarOrdenDeReparacion, ordenYaTieneCargoCuentaCorriente } from '../lib/ordenesServicio';
-import { registrarCobroFinanciamiento } from '../lib/financiacion/servicio';
-import { MEDIOS_PAGO, medioLabel, calcularSaldo, diasDeMora } from '../lib/cuentaCorriente';
+import { registrarCobroFinanciamiento, registrarCobroConEquipo } from '../lib/financiacion/servicio';
+import FormularioEquipoPago from '../FormularioEquipoPago';
+import { EQUIPO_PAGO_VACIO, problemaDelEquipo, type EquipoPago } from '../lib/equipoPago';
+import { MEDIOS_PAGO, MEDIO_EQUIPO, medioLabel, calcularSaldo, diasDeMora } from '../lib/cuentaCorriente';
 import type { CuentaCorrienteServicioTecnico } from '../lib/ordenesServicio';
 import { simboloMoneda } from '../lib/monedas';
 import { aFechaISO } from '../lib/financiacion/motor';
@@ -283,6 +285,8 @@ export default function Ordenes() {
   const [cobrando, setCobrando] = useState<ResumenFinanciamiento | null>(null);
   const [cobroMonto, setCobroMonto] = useState('');
   const [cobroMedio, setCobroMedio] = useState('efectivo');
+  // Equipo que deja como parte de pago (solo con el medio "Equipo (plan canje)").
+  const [cobroEquipo, setCobroEquipo] = useState<EquipoPago>(EQUIPO_PAGO_VACIO);
   const [cobroObs, setCobroObs] = useState('');
   // A qué se aplica el pago: 'cuenta_corriente' (fiado sin cuota puntual) o
   // el id de una cuota de financiación puntual — pedido real de un cliente
@@ -814,6 +818,7 @@ export default function Ordenes() {
     setCobrando(r);
     setCobroMonto(String(r.saldo));
     setCobroMedio('efectivo');
+    setCobroEquipo(EQUIPO_PAGO_VACIO);
     setCobroObs('');
     setErrorCobro(null);
     setCobroDestino('');
@@ -868,9 +873,15 @@ export default function Ordenes() {
         return;
       }
     }
+    const conEquipo = cobroMedio === MEDIO_EQUIPO.codigo;
+    const problemaEquipo = conEquipo ? problemaDelEquipo(cobroEquipo) : null;
+    if (problemaEquipo) {
+      setErrorCobro(t(problemaEquipo));
+      return;
+    }
     setGuardandoCobro(true);
     setErrorCobro(null);
-    const resultado = await registrarCobroFinanciamiento(supabase, {
+    const datosCobro = {
       clienteId: cobrando.clienteId,
       monto,
       medio: cobroMedio,
@@ -879,7 +890,9 @@ export default function Ordenes() {
       observacion: cobroObs,
       ordenOriginalId: cobrando.ordenOriginalId,
       ...(cobroDestino === 'cuenta_corriente' ? { omitirFinanciacion: true } : { cuotaIdElegida: cobroDestino }),
-    });
+    };
+    // Con un equipo como pago, el equipo queda en Plan Canje atado a la boleta de este cobro.
+    const resultado = conEquipo ? await registrarCobroConEquipo(supabase, { ...datosCobro, equipo: cobroEquipo }) : await registrarCobroFinanciamiento(supabase, datosCobro);
     if ('error' in resultado) {
       setErrorCobro(resultado.error);
       setGuardandoCobro(false);
@@ -1727,7 +1740,7 @@ export default function Ordenes() {
             </div>
           )}
 
-          <label className="text-xs font-medium text-muted dark:text-dark-text-secondary">{t('Monto a cobrar')}</label>
+          <label className="text-xs font-medium text-muted dark:text-dark-text-secondary">{cobroMedio === MEDIO_EQUIPO.codigo ? t('Valor que se le reconoce por el equipo') : t('Monto a cobrar')}</label>
           <input
             value={cobroMonto}
             onChange={(e) => setCobroMonto(sanitizarDecimal(e.target.value))}
@@ -1741,12 +1754,13 @@ export default function Ordenes() {
             onChange={(e) => setCobroMedio(e.target.value)}
             className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
           >
-            {MEDIOS_PAGO.map((m) => (
+            {[...MEDIOS_PAGO, MEDIO_EQUIPO].map((m) => (
               <option key={m.codigo} value={m.codigo}>
-                {m.icono} {t(medioLabel(m.codigo))}
+                {m.icono} {t(m.label)}
               </option>
             ))}
           </select>
+          {cobroMedio === MEDIO_EQUIPO.codigo && <FormularioEquipoPago value={cobroEquipo} onChange={setCobroEquipo} />}
           <input
             value={cobroObs}
             onChange={(e) => setCobroObs(e.target.value)}

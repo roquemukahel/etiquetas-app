@@ -18,8 +18,9 @@ import AvisoStandby from '../../AvisoStandby';
 import { useCoincidenciasStandby } from '../../lib/useCoincidenciasStandby';
 import { useCoincidenciasCanje } from '../../lib/useCoincidenciasCanje';
 import { compararModelosPorSalida } from '../../lib/catalogosMarcas';
+import { OPCIONES_ALMACENAMIENTO, formatearGB } from '../../lib/almacenamiento';
 
-const STORAGE_OPTIONS = [64, 128, 256, 512];
+const STORAGE_OPTIONS = OPCIONES_ALMACENAMIENTO;
 
 type Cliente = {
   id: string;
@@ -255,7 +256,7 @@ export default function NuevaCompra() {
                   capacidad === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
                 }`}
               >
-                {gb} GB
+                {formatearGB(gb, true)}
               </button>
             ))}
           </div>

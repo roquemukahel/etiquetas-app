@@ -2,6 +2,7 @@ import { generarTextoCondicionIngreso, type ChecklistIngreso } from './reparacio
 import { getActor } from './actor';
 import { vencimientoDesdeHoy } from './cuentaCorriente';
 import { crearPlanFinanciacion } from './financiacion/servicio';
+import { formatearGB } from './almacenamiento';
 
 // Datos mínimos de una reparación necesarios para armar/actualizar su orden de
 // cobro. Se aceptan además los campos del checklist de ingreso (para la nota de
@@ -110,7 +111,7 @@ export async function generarOrdenDeReparacion(
   // Modelo/capacidad/color/IMEI se cargaron al recibir el equipo — sin esto,
   // al generar la orden de cobro se pisaba la línea de la boleta (que sí los
   // tenía desde el ingreso) con una que solo decía "Servicio técnico — modelo".
-  const descripcion = `Servicio técnico — ${r.modelo || 'equipo'}${r.capacidad_gb ? ` ${r.capacidad_gb}GB` : ''}${
+  const descripcion = `Servicio técnico — ${r.modelo || 'equipo'}${r.capacidad_gb ? ` ${formatearGB(r.capacidad_gb)}` : ''}${
     r.color ? ` ${r.color}` : ''
   }${r.imei ? ` · IMEI ${r.imei}` : ''}${r.diagnostico ? `: ${r.diagnostico}` : ''}`;
   // Constancia de cómo llegó el equipo (para la boleta), sin frase de "no se

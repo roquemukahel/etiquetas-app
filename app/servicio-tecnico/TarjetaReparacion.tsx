@@ -9,6 +9,7 @@ import EstadoBadge from '../EstadoBadge';
 import { ICONOS } from '../Iconos';
 import { Boton, BotonLink } from '../Boton';
 import { useT } from '../lib/idioma';
+import { formatearGB } from '../lib/almacenamiento';
 
 // Ícono chico reutilizado inline en esta tarjeta (etiqueta, cliente/local,
 // ubicación) — mismo patrón de EstadoBadge para reescalar los SVG de 24px.
@@ -139,7 +140,7 @@ export default function TarjetaReparacion({
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium truncate">
             {r.numero_orden} · {r.modelo}
-            {r.capacidad_gb ? ` · ${r.capacidad_gb}GB` : ''}
+            {r.capacidad_gb ? ` · ${formatearGB(r.capacidad_gb)}` : ''}
             {r.color ? ` · ${r.color}` : ''}
           </p>
           <p className="text-xs text-muted dark:text-dark-text-secondary truncate">

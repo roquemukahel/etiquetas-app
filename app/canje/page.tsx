@@ -19,6 +19,7 @@ import { useT } from '../lib/idioma';
 import { useSucursalActual } from '../lib/sucursal';
 import { falla, registrarFallo } from '../lib/escritura';
 import { camposRecibidoPor, registrarRecepcionEnHistorial } from '../lib/recibidoPor';
+import { formatearGB } from '../lib/almacenamiento';
 
 type Canje = {
   id: string;
@@ -370,7 +371,7 @@ export default function PlanCanje() {
                     <div className="min-w-0">
                       <p className="text-sm font-medium truncate">
                         {r.numero_orden} · {r.modelo}
-                        {r.capacidad_gb ? ` · ${r.capacidad_gb}GB` : ''}
+                        {r.capacidad_gb ? ` · ${formatearGB(r.capacidad_gb)}` : ''}
                         {r.color ? ` · ${r.color}` : ''}
                       </p>
                       {r.imei && (
@@ -403,7 +404,7 @@ export default function PlanCanje() {
                     <div>
                       <p className="text-sm font-medium flex items-center gap-1.5 flex-wrap">
                         {c.modelo}
-                        {c.capacidad_gb ? ` · ${c.capacidad_gb}GB` : ''}
+                        {c.capacidad_gb ? ` · ${formatearGB(c.capacidad_gb)}` : ''}
                         {c.color ? ` · ${c.color}` : ''}
                         {c.condicion === 'sellado' && (
                           <span className="text-[10px] font-bold text-black bg-gradient-to-b from-amber-300 to-amber-500 border border-black/40 rounded-full px-2 py-0.5">

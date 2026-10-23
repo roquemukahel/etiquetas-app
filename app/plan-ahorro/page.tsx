@@ -7,6 +7,7 @@ import { useActor } from '../lib/actor';
 import { tienePermiso } from '../lib/permisos';
 import { useT } from '../lib/idioma';
 import { formatearMonto } from '../lib/numeros';
+import { formatearGB } from '../lib/almacenamiento';
 
 type Plan = {
   id: string;
@@ -153,7 +154,7 @@ export default function PlanAhorro() {
                   </p>
                   <p className="text-xs text-muted dark:text-dark-text-secondary truncate">
                     {p.modelo || t('Sin modelo')}
-                    {p.capacidad_gb ? ` · ${p.capacidad_gb}GB` : ''}
+                    {p.capacidad_gb ? ` · ${formatearGB(p.capacidad_gb)}` : ''}
                     {p.color ? ` · ${p.color}` : ''}
                   </p>
                 </div>

@@ -10,8 +10,8 @@ import { tienePermiso } from '../../lib/permisos';
 import { simboloMoneda } from '../../lib/monedas';
 import { armarLinkWhatsApp } from '../../lib/whatsapp';
 import { codigoLlamada } from '../../lib/paises';
-import { MEDIOS_PAGO, calcularSaldo, estadoCuenta, ESTADO_INFO, diasDeMora, medioLabel } from '../../lib/cuentaCorriente';
-import { registrarCobroFinanciamiento } from '../../lib/financiacion/servicio';
+import { MEDIOS_PAGO, MEDIO_EQUIPO, calcularSaldo, estadoCuenta, ESTADO_INFO, diasDeMora, medioLabel } from '../../lib/cuentaCorriente';
+import { registrarCobroFinanciamiento, registrarCobroConEquipo } from '../../lib/financiacion/servicio';
 import { aFechaISO } from '../../lib/financiacion/motor';
 import { sanitizarDecimal, formatearMonto } from '../../lib/numeros';
 import { formatearFechaHora } from '../../lib/fechas';
@@ -23,6 +23,8 @@ import { useSucursalActual } from '../../lib/sucursal';
 import { obtenerSucursales, type Sucursal } from '../../lib/sucursales';
 import { falla } from '../../lib/escritura';
 import SelectorLocalidad from '../../SelectorLocalidad';
+import FormularioEquipoPago from '../../FormularioEquipoPago';
+import { EQUIPO_PAGO_VACIO, problemaDelEquipo, type EquipoPago } from '../../lib/equipoPago';
 import { buscarClientesDuplicados, textoDuplicados } from '../../lib/clientesDuplicados';
 
 type Cliente = {
@@ -105,6 +107,8 @@ export default function DetalleCliente() {
   const [pagoMonto, setPagoMonto] = useState('');
   const [pagoMedio, setPagoMedio] = useState<string>('efectivo');
   const [pagoObs, setPagoObs] = useState('');
+  // Equipo que deja como parte de pago (solo cuando el medio es "Equipo (plan canje)").
+  const [equipoPago, setEquipoPago] = useState<EquipoPago>(EQUIPO_PAGO_VACIO);
   const [guardandoPago, setGuardandoPago] = useState(false);
   const [linkCopiado, setLinkCopiado] = useState(false);
   // A qué se aplica el pago: 'cuenta_corriente' (fiado sin cuota puntual) o
@@ -254,6 +258,7 @@ export default function DetalleCliente() {
     // saldo mostrado de más arriba, reportado por un cliente (2026-08-26).
     setPagoMonto(saldo > 0 ? String(Math.round(saldo * 100) / 100) : '');
     setPagoMedio('efectivo');
+    setEquipoPago(EQUIPO_PAGO_VACIO);
     setPagoObs('');
     setError(null);
     setPagoDestino('');
@@ -328,6 +333,12 @@ export default function DetalleCliente() {
       );
       return;
     }
+    const conEquipo = pagoMedio === MEDIO_EQUIPO.codigo;
+    const problemaEquipo = conEquipo ? problemaDelEquipo(equipoPago) : null;
+    if (problemaEquipo) {
+      setError(t(problemaEquipo));
+      return;
+    }
     setGuardandoPago(true);
     setError(null);
     // A qué se aplica lo elige quien cobra (ver pagoDestino) — antes el pago
@@ -337,7 +348,7 @@ export default function DetalleCliente() {
     // pagada. Genera además su propia boleta (ver registrarCobroFinanciamiento)
     // — antes esto solo quedaba asentado en la cuenta corriente, sin ningún
     // rastro visible desde Órdenes.
-    const resultado = await registrarCobroFinanciamiento(supabase, {
+    const datosCobro = {
       clienteId: String(id),
       monto,
       medio: pagoMedio,
@@ -345,7 +356,9 @@ export default function DetalleCliente() {
       sucursalId: sucursalActual.id,
       observacion: pagoObs,
       ...(pagoDestino === 'cuenta_corriente' ? { omitirFinanciacion: true } : { cuotaIdElegida: pagoDestino }),
-    });
+    };
+    // Con un equipo como pago, el equipo queda en Plan Canje atado a la boleta de este cobro.
+    const resultado = conEquipo ? await registrarCobroConEquipo(supabase, { ...datosCobro, equipo: equipoPago }) : await registrarCobroFinanciamiento(supabase, datosCobro);
     if ('error' in resultado) {
       setError(`${t('No pudimos registrar el pago:')} ` + resultado.error);
       setGuardandoPago(false);
@@ -458,6 +471,27 @@ export default function DetalleCliente() {
       try {
         await supabase.rpc('financiacion_revertir_pago', { p_pago_id: m.pago_id, p_usuario: actor?.nombre ?? null });
       } catch {}
+      // Si el pago era un equipo recibido como parte de pago, el equipo ya no tiene pago que lo respalde: si todavía espera en
+      // Plan Canje se quita de ahí; si ya se agregó al Stock se avisa (no se saca solo del Stock).
+      if (m.pagos?.medio === MEDIO_EQUIPO.codigo && m.orden_id) {
+        const { data: equipos, error: equiposError } = await supabase.from('canjes').select('id, modelo, imei, agregado_a_stock').eq('orden_id', m.orden_id);
+        if (equiposError) {
+          alert(`${t('El pago se anuló, pero no pudimos revisar el equipo recibido:')} ${equiposError.message}`);
+        } else {
+          const lista = (equipos ?? []) as { id: string; modelo: string | null; imei: string | null; agregado_a_stock: boolean }[];
+          for (const e of lista.filter((x) => !x.agregado_a_stock)) {
+            if (await falla(supabase.from('canjes').delete().eq('id', e.id), t, 'quitar de Plan Canje el equipo del pago anulado')) continue;
+            await registrarAuditoria(supabase, {
+              accion: `quitó de Plan Canje un equipo (${e.modelo || 'sin modelo'}${e.imei ? `, IMEI ${e.imei}` : ''}) porque se anuló el pago con el que se recibió`,
+              entidad: 'canje',
+              entidadId: e.id,
+            });
+          }
+          if (lista.some((x) => x.agregado_a_stock)) {
+            alert(t('El equipo que se había recibido como pago ya fue agregado al Stock: queda en el Stock, sacalo desde ahí si corresponde.'));
+          }
+        }
+      }
     }
     await cargarMovimientos();
     setRecargarFinanciacion((n) => n + 1);
@@ -925,7 +959,7 @@ ${t('¿Guardar igual?')}`)) {
       {/* Modal registrar pago */}
       {registrandoPago && (
         <div className="fixed inset-0 z-50 bg-ink/60 backdrop-blur-sm flex items-center justify-center px-6" onClick={() => setRegistrandoPago(false)}>
-          <div className="w-full max-w-sm bg-white dark:bg-dark-surface rounded-2xl shadow-elevated p-5 flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-sm max-h-[90vh] overflow-y-auto bg-white dark:bg-dark-surface rounded-2xl shadow-elevated p-5 flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
             <p className="text-base font-semibold">{t('Registrar pago de')} {c.nombre}</p>
             {saldo > 0 && <p className="text-xs text-muted dark:text-dark-text-secondary">{t('Debe')} {fmt(saldo)}.</p>}
 
@@ -967,19 +1001,20 @@ ${t('¿Guardar igual?')}`)) {
             )}
 
             <div>
-              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Monto')}</label>
+              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{pagoMedio === MEDIO_EQUIPO.codigo ? t('Valor que se le reconoce por el equipo') : t('Monto')}</label>
               <input value={pagoMonto} onChange={(e) => setPagoMonto(sanitizarDecimal(e.target.value))} inputMode="decimal" autoFocus placeholder="0" className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2.5 text-lg" />
             </div>
             <div>
               <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Medio de pago')}</label>
               <div className="flex flex-wrap gap-2">
-                {MEDIOS_PAGO.map((m) => (
+                {[...MEDIOS_PAGO, MEDIO_EQUIPO].map((m) => (
                   <button key={m.codigo} onClick={() => setPagoMedio(m.codigo)} className={`rounded-lg px-3 py-2 text-sm font-medium ${pagoMedio === m.codigo ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'}`}>
-                    {m.icono} {m.label}
+                    {m.icono} {t(m.label)}
                   </button>
                 ))}
               </div>
             </div>
+            {pagoMedio === MEDIO_EQUIPO.codigo && <FormularioEquipoPago value={equipoPago} onChange={setEquipoPago} />}
             <textarea value={pagoObs} onChange={(e) => setPagoObs(e.target.value)} rows={2} placeholder={t('Observación (opcional)')} className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm" />
             <div className="flex gap-2">
               <button onClick={() => setRegistrandoPago(false)} className="flex-1 rounded-xl border border-border dark:border-dark-border py-2.5 text-sm font-medium">

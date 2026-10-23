@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { useT } from '../../lib/idioma';
 import SelectorIdiomaFlotante from '../../SelectorIdiomaFlotante';
+import { formatearGB } from '../../lib/almacenamiento';
 
 type Evidencia = { id: string; foto_url: string | null; nota: string | null; created_at: string };
 
@@ -175,7 +176,7 @@ export default function Seguimiento() {
           {datos.numero_orden && <p className="text-xs text-muted dark:text-dark-text-secondary">{t('Orden')} {datos.numero_orden}</p>}
           <p className="font-medium">
             {datos.modelo}
-            {datos.capacidad_gb ? ` · ${datos.capacidad_gb}GB` : ''}
+            {datos.capacidad_gb ? ` · ${formatearGB(datos.capacidad_gb)}` : ''}
             {datos.color ? ` · ${datos.color}` : ''}
           </p>
           {datos.fecha_ingreso_servicio && (

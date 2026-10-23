@@ -32,6 +32,7 @@ import { Boton } from '../Boton';
 import { QCard } from '../QCard';
 import Modal from '../Modal';
 import { useT } from '../lib/idioma';
+import { formatearGB } from '../lib/almacenamiento';
 
 // Cuántos equipos se dibujan por vez: con cientos o miles en Standby la pantalla abre igual de rápido y se pide "Mostrar más".
 const POR_PAGINA = 40;
@@ -292,7 +293,7 @@ ${t(mensaje)}`);
                   <div className="min-w-0">
                     <p className="text-sm font-medium">
                       {e.modelo || t('Sin modelo')}
-                      {e.capacidad_gb ? ` ${e.capacidad_gb}GB` : ''}
+                      {e.capacidad_gb ? ` ${formatearGB(e.capacidad_gb)}` : ''}
                       {e.color ? ` · ${e.color}` : ''}
                       {senados.has(e.id) && (
                         <span className="ml-2 align-middle text-[10px] font-semibold text-accent dark:text-dark-accent bg-accent-soft dark:bg-dark-accent-soft rounded-full px-2 py-0.5">

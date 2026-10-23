@@ -35,6 +35,7 @@ import { mandarAStandby, campoOrigenServicio, equiposEnStandby } from '../lib/st
 import { limpiarImei } from '../lib/imei';
 import { camposRecibidoPor, registrarRecepcionEnHistorial } from '../lib/recibidoPor';
 import { resolverMaxCuotas, guiaDeFormulario, guiaAFormulario, type MaxCuotas } from '../lib/financiacionGuia';
+import { extraerCapacidadGB, formatearGB } from '../lib/almacenamiento';
 
 function IconoChico({ nombre, className = '' }: { nombre: string; className?: string }) {
   return (
@@ -58,8 +59,8 @@ function extraerBateria(texto: string): number | null {
   return m ? Number(m[1]) : null;
 }
 function extraerCapacidad(texto: string): number | null {
-  const m = texto.match(/(\d+)\s?gb/i);
-  return m ? Number(m[1]) : null;
+  // Entiende "256GB" y también "1TB" / "2 TB" (se guardan en GB: 1024 / 2048).
+  return extraerCapacidadGB(texto);
 }
 
 type Dispositivo = {
@@ -2345,7 +2346,7 @@ ${t(r.error)}`);
                           <div className="min-w-0">
                             <p className="text-sm font-medium flex items-center gap-1.5 flex-wrap">
                               <span>
-                                {d.capacidad_gb ? `${d.capacidad_gb} GB` : t('Capacidad s/d')}
+                                {d.capacidad_gb ? `${formatearGB(d.capacidad_gb, true)}` : t('Capacidad s/d')}
                                 {d.color ? ` · ${d.color}` : ` · ${t('Sin color')}`}
                               </span>
                               <span className="text-xs text-muted dark:text-dark-text-secondary font-mono">

@@ -10,6 +10,7 @@ import { tienePermiso } from '../lib/permisos';
 import MiniaturaDispositivo from '../MiniaturaDispositivo';
 import { useT } from '../lib/idioma';
 import { porLotes, obtenerTodasLasFilas } from '../lib/db';
+import { formatearGB } from '../lib/almacenamiento';
 
 type Compra = {
   id: string;
@@ -237,7 +238,7 @@ export default function Compras() {
                 <div>
                   <p className="text-sm font-medium">
                     {c.modelo}
-                    {c.capacidad_gb ? ` · ${c.capacidad_gb}GB` : ''}
+                    {c.capacidad_gb ? ` · ${formatearGB(c.capacidad_gb)}` : ''}
                   </p>
                   {c.imei && (
                     <p className="text-xs text-muted dark:text-dark-text-secondary">

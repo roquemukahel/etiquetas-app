@@ -29,8 +29,9 @@ import { guiaDeFormulario } from '../../lib/financiacionGuia';
 import { soportaMigracion } from '../../lib/migraciones';
 import { useT } from '../../lib/idioma';
 import { compararModelosPorSalida } from '../../lib/catalogosMarcas';
+import { OPCIONES_ALMACENAMIENTO, formatearGB } from '../../lib/almacenamiento';
 
-const STORAGE_OPTIONS = [64, 128, 256, 512];
+const STORAGE_OPTIONS = OPCIONES_ALMACENAMIENTO;
 
 export default function NuevoDispositivo() {
   const router = useRouter();
@@ -293,7 +294,7 @@ export default function NuevoDispositivo() {
                   capacidad === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
                 }`}
               >
-                {gb} GB
+                {formatearGB(gb, true)}
               </button>
             ))}
           </div>

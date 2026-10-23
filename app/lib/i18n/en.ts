@@ -3393,4 +3393,12 @@ export const EN: Record<string, string> = {
   'Mostrar más': 'Show more',
   'Este equipo ya no está en Standby (alguien lo movió). Actualizá la pantalla.': 'This device is no longer in Standby (someone moved it). Refresh the screen.',
   'Este equipo ya no está en el Stock (puede que se haya vendido o movido).': 'This device is no longer in Stock (it may have been sold or moved).',
+  'El pago se anuló, pero no pudimos revisar el equipo recibido:': 'The payment was voided, but we could not check the device received:',
+  'El equipo que se había recibido como pago ya fue agregado al Stock: queda en el Stock, sacalo desde ahí si corresponde.': 'The device received as payment was already added to Stock: it stays in Stock, remove it from there if needed.',
+  'Valor que se le reconoce por el equipo': 'Value credited for the device',
+  'Equipo que deja como parte de pago': 'Device left as part of the payment',
+  'Ej. módulo con detalle, carcasa con un rayón, no anda el Face ID...': 'E.g. screen with a flaw, scratched casing, Face ID not working...',
+  'Equipo (plan canje)': 'Device (trade-in)',
+  'Poné el modelo del equipo que recibís como pago.': 'Enter the model of the device you receive as payment.',
+  'La salud de batería tiene que ser un número entre 0 y 100.': 'Battery health must be a number between 0 and 100.',
 };

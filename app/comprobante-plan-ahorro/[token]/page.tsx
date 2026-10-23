@@ -11,6 +11,7 @@ import { formatearMonto } from '../../lib/numeros';
 import { formatearFechaHora } from '../../lib/fechas';
 import { medioLabel } from '../../lib/cuentaCorriente';
 import SelectorIdiomaFlotante from '../../SelectorIdiomaFlotante';
+import { formatearGB } from '../../lib/almacenamiento';
 
 type Comprobante = {
   id: string;
@@ -149,7 +150,7 @@ export default function ComprobantePlanAhorroPublico() {
           <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-1">{t('Plan de ahorro')}</p>
           <p className="font-medium">
             {c.plan.modelo || t('Equipo a definir')}
-            {c.plan.capacidad_gb ? ` · ${c.plan.capacidad_gb}GB` : ''}
+            {c.plan.capacidad_gb ? ` · ${formatearGB(c.plan.capacidad_gb)}` : ''}
             {c.plan.color ? ` · ${c.plan.color}` : ''}
           </p>
           {c.plan.imei && <p className="text-muted">{t('IMEI:')} {c.plan.imei}</p>}

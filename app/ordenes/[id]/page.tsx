@@ -35,9 +35,10 @@ import { cuotasEfectivasDeOrden, etiquetaCuotas, interesDe, interesGuardadoDeOrd
 import { registrarFallo, falla } from '../../lib/escritura';
 import { obtenerTodasLasFilas } from '../../lib/db';
 import { camposRecibidoPor } from '../../lib/recibidoPor';
+import { OPCIONES_ALMACENAMIENTO, formatearGB } from '../../lib/almacenamiento';
 
 const ESTADOS = ['pendiente', 'pagado', 'entregado'];
-const STORAGE_OPTIONS = [64, 128, 256, 512];
+const STORAGE_OPTIONS = OPCIONES_ALMACENAMIENTO;
 
 function idTemporal() {
   return Math.random().toString(36).slice(2);
@@ -526,7 +527,7 @@ export default function DetalleOrden() {
       ...items,
       {
         id: idTemporal(),
-        descripcion: `${d.modelo || 'Dispositivo'}${d.capacidad_gb ? ` ${d.capacidad_gb}GB` : ''}${
+        descripcion: `${d.modelo || 'Dispositivo'}${d.capacidad_gb ? ` ${formatearGB(d.capacidad_gb)}` : ''}${
           d.color ? ` ${d.color}` : ''
         }${d.imei ? ` · IMEI ${d.imei}` : ''}`,
         cantidad: '1',
@@ -1459,7 +1460,7 @@ export default function DetalleOrden() {
                       >
                         <span className="min-w-0">
                           <span className="block truncate">
-                            {d.modelo} {d.capacidad_gb ? `· ${d.capacidad_gb}GB` : ''} {d.color ? `· ${d.color}` : ''}
+                            {d.modelo} {d.capacidad_gb ? `· ${formatearGB(d.capacidad_gb)}` : ''} {d.color ? `· ${d.color}` : ''}
                           </span>
                           {d.imei && (
                             <span className="block text-xs font-bold font-mono text-ink dark:text-dark-text truncate">{d.imei}</span>
@@ -1492,7 +1493,7 @@ export default function DetalleOrden() {
                           nuevaCapacidadDispEdit === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                         }`}
                       >
-                        {gb}GB
+                        {formatearGB(gb)}
                       </button>
                     ))}
                   </div>
@@ -1535,7 +1536,7 @@ export default function DetalleOrden() {
                     <p className="text-sm font-medium truncate flex items-center gap-1.5">
                       {canjesEdit.length > 1 ? `${idx + 1}. ` : ''}
                       {c.modelo || t('Sin modelo')}
-                      {c.capacidad_gb ? ` · ${c.capacidad_gb}GB` : ''}
+                      {c.capacidad_gb ? ` · ${formatearGB(c.capacidad_gb)}` : ''}
                       {c.color ? ` · ${c.color}` : ''}
                       {c.condicion === 'sellado' && (
                         <span className="text-[10px] font-bold text-black bg-gradient-to-b from-amber-300 to-amber-500 border border-black/40 rounded-full px-2 py-0.5 shrink-0">
@@ -1581,7 +1582,7 @@ export default function DetalleOrden() {
                       canjeCapacidad === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                     }`}
                   >
-                    {gb}GB
+                    {formatearGB(gb)}
                   </button>
                 ))}
               </div>
@@ -1836,7 +1837,7 @@ export default function DetalleOrden() {
               <div className="flex items-center justify-between gap-2">
                 <span className="flex items-center gap-1.5 flex-wrap">
                   {c.modelo || t('Sin modelo')}
-                  {c.capacidad_gb ? ` · ${c.capacidad_gb}GB` : ''}
+                  {c.capacidad_gb ? ` · ${formatearGB(c.capacidad_gb)}` : ''}
                   {c.color ? ` · ${c.color}` : ''}
                   {c.imei ? ` · IMEI ${c.imei}` : ''}
                   {c.condicion === 'sellado' && (
@@ -1898,7 +1899,7 @@ export default function DetalleOrden() {
                   derivarCapacidad === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                 }`}
               >
-                {gb}GB
+                {formatearGB(gb)}
               </button>
             ))}
           </div>

@@ -7,6 +7,7 @@ import { obtenerTodasLasFilas } from './lib/db';
 import { infoEstado } from './lib/reparaciones';
 import { soportaMigracion } from './lib/migraciones';
 import { useT } from './lib/idioma';
+import { formatearGB } from './lib/almacenamiento';
 
 type Cliente = { id: string; nombre: string; apellido: string | null; telefono: string | null; dni: string | null };
 type Dispositivo = {
@@ -238,7 +239,7 @@ export default function BuscadorUniversal() {
               <Resultado
                 key={d.id}
                 href={`/stock/${d.id}`}
-                titulo={`${d.modelo || t('Dispositivo')}${d.capacidad_gb ? ` · ${d.capacidad_gb}GB` : ''}`}
+                titulo={`${d.modelo || t('Dispositivo')}${d.capacidad_gb ? ` · ${formatearGB(d.capacidad_gb)}` : ''}`}
                 subtitulo={[d.imei ? `${t('IMEI')} ${d.imei}` : null, d.en_stock ? t('En stock') : d.en_espera ? t('En Standby') : t('Fuera de stock')].filter(Boolean).join(' · ')}
                 onClick={() => setAbierto(false)}
               />

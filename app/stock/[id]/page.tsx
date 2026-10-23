@@ -20,8 +20,9 @@ import { FotosDispositivo } from '../../FotosDispositivo';
 import { camposRecibidoPor, registrarRecepcionEnHistorial } from '../../lib/recibidoPor';
 import { guiaDeFormulario, guiaAFormulario } from '../../lib/financiacionGuia';
 import { compararModelosPorSalida } from '../../lib/catalogosMarcas';
+import { OPCIONES_ALMACENAMIENTO, formatearGB } from '../../lib/almacenamiento';
 
-const STORAGE_OPTIONS = [64, 128, 256, 512];
+const STORAGE_OPTIONS = OPCIONES_ALMACENAMIENTO;
 
 type Dispositivo = {
   id: string;
@@ -362,7 +363,7 @@ export default function DetalleDispositivo() {
                     d.capacidad_gb === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
                   }`}
                 >
-                  {gb} GB
+                  {formatearGB(gb, true)}
                 </button>
               ))}
             </div>

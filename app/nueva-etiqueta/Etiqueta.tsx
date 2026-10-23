@@ -1,4 +1,5 @@
 import { forwardRef } from 'react';
+import { formatearGB } from '../lib/almacenamiento';
 
 export type FormatoEtiqueta = 'estandar' | 'termica';
 
@@ -94,7 +95,7 @@ const Etiqueta = forwardRef<HTMLDivElement, Props>(function Etiqueta(
             {modelo || 'Modelo'}
           </p>
           <p style={{ fontSize: '26px', fontWeight: 700, margin: '8px 0 0' }}>
-            {capacidadGb ? `${capacidadGb} GB` : ''}
+            {capacidadGb ? `${formatearGB(capacidadGb, true)}` : ''}
             {capacidadGb && bateria ? '   ·   ' : ''}
             {bateria ? `Batería ${bateria}%` : ''}
           </p>
@@ -160,7 +161,7 @@ const Etiqueta = forwardRef<HTMLDivElement, Props>(function Etiqueta(
         <p style={{ fontSize: '30px', fontWeight: 600, margin: 0, lineHeight: 1.15, wordBreak: 'break-word' }}>
           {modelo || 'Modelo'}
         </p>
-        <p style={{ fontSize: '18px', color: '#5F5E5A', margin: '4px 0 0' }}>{capacidadGb ? `${capacidadGb} GB` : ''}</p>
+        <p style={{ fontSize: '18px', color: '#5F5E5A', margin: '4px 0 0' }}>{capacidadGb ? `${formatearGB(capacidadGb, true)}` : ''}</p>
       </div>
 
       <div style={{ borderTop: '1px solid #E5E3DB', paddingTop: '10px' }}>

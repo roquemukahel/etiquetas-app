@@ -3394,4 +3394,12 @@ export const PT: Record<string, string> = {
   'Mostrar más': 'Mostrar mais',
   'Este equipo ya no está en Standby (alguien lo movió). Actualizá la pantalla.': 'Este aparelho não está mais em Standby (alguém o moveu). Atualize a tela.',
   'Este equipo ya no está en el Stock (puede que se haya vendido o movido).': 'Este aparelho não está mais no Estoque (pode ter sido vendido ou movido).',
+  'El pago se anuló, pero no pudimos revisar el equipo recibido:': 'O pagamento foi anulado, mas não foi possível verificar o aparelho recebido:',
+  'El equipo que se había recibido como pago ya fue agregado al Stock: queda en el Stock, sacalo desde ahí si corresponde.': 'O aparelho recebido como pagamento já foi adicionado ao Estoque: ele fica no Estoque, retire-o de lá se for o caso.',
+  'Valor que se le reconoce por el equipo': 'Valor reconhecido pelo aparelho',
+  'Equipo que deja como parte de pago': 'Aparelho deixado como parte do pagamento',
+  'Ej. módulo con detalle, carcasa con un rayón, no anda el Face ID...': 'Ex. tela com defeito, carcaça riscada, Face ID não funciona...',
+  'Equipo (plan canje)': 'Aparelho (plano de troca)',
+  'Poné el modelo del equipo que recibís como pago.': 'Informe o modelo do aparelho que você recebe como pagamento.',
+  'La salud de batería tiene que ser un número entre 0 y 100.': 'A saúde da bateria deve ser um número entre 0 e 100.',
 };

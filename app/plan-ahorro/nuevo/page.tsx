@@ -13,8 +13,9 @@ import { useT } from '../../lib/idioma';
 import { useSucursalActual } from '../../lib/sucursal';
 import { origenDeCliente } from '../../lib/clientesDuplicados';
 import { compararModelosPorSalida } from '../../lib/catalogosMarcas';
+import { OPCIONES_ALMACENAMIENTO, formatearGB } from '../../lib/almacenamiento';
 
-const STORAGE_OPTIONS = [64, 128, 256, 512];
+const STORAGE_OPTIONS = OPCIONES_ALMACENAMIENTO;
 
 type Cliente = {
   id: string;
@@ -366,7 +367,7 @@ export default function NuevoPlanAhorro() {
               <div className="rounded-xl border border-accent/40 dark:border-dark-accent/40 bg-accent-soft dark:bg-dark-accent-soft px-4 py-3 flex items-center justify-between gap-2">
                 <p className="text-sm font-medium">
                   {dispositivoElegido.modelo}
-                  {dispositivoElegido.capacidad_gb ? ` · ${dispositivoElegido.capacidad_gb}GB` : ''}
+                  {dispositivoElegido.capacidad_gb ? ` · ${formatearGB(dispositivoElegido.capacidad_gb)}` : ''}
                   {dispositivoElegido.color ? ` · ${dispositivoElegido.color}` : ''}
                   {dispositivoElegido.imei ? ` · IMEI ${dispositivoElegido.imei}` : ''}
                   {origenSena === 'standby' ? ` · ${t('En Standby')}` : ''}
@@ -398,7 +399,7 @@ export default function NuevoPlanAhorro() {
                       <span className="min-w-0">
                         <span className="block">
                           {d.modelo}
-                          {d.capacidad_gb ? ` · ${d.capacidad_gb}GB` : ''}
+                          {d.capacidad_gb ? ` · ${formatearGB(d.capacidad_gb)}` : ''}
                           {d.color ? ` · ${d.color}` : ''}
                         </span>
                         {/* Sin esto, dos unidades del mismo modelo/color eran
@@ -444,7 +445,7 @@ export default function NuevoPlanAhorro() {
                       capacidad === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
                     }`}
                   >
-                    {gb} GB
+                    {formatearGB(gb, true)}
                   </button>
                 ))}
               </div>

@@ -6,9 +6,10 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { volverAlStock, type EquipoStandbyAviso } from './lib/standby';
 import { getActor, MENSAJE_ACTOR_REQUERIDO } from './lib/actor';
 import { useT } from './lib/idioma';
+import { formatearGB } from './lib/almacenamiento';
 
 function detalleDe(e: EquipoStandbyAviso) {
-  return [e.modelo, e.capacidad_gb ? `${e.capacidad_gb} GB` : null, e.color].filter(Boolean).join(' · ');
+  return [e.modelo, e.capacidad_gb ? `${formatearGB(e.capacidad_gb, true)}` : null, e.color].filter(Boolean).join(' · ');
 }
 
 // Aviso de "este equipo ya está en Standby": mismo criterio que AvisoCanje. Al cargar un dispositivo a mano, si el

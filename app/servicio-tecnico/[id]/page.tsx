@@ -50,6 +50,7 @@ import { falla } from '../../lib/escritura';
 import { obtenerTodasLasFilas } from '../../lib/db';
 import { soportaMigracion } from '../../lib/migraciones';
 import { mandarReparacionAStandby, reubicarEquipoDeServicio, dispositivoOrigenDe } from '../../lib/standby';
+import { OPCIONES_ALMACENAMIENTO, formatearGB } from '../../lib/almacenamiento';
 
 // Mismo patrón que TarjetaReparacion/EstadoBadge para reescalar los SVG de
 // 24px a un tamaño chico inline junto a texto.
@@ -61,7 +62,7 @@ function IconoChico({ nombre, className = '' }: { nombre: string; className?: st
   );
 }
 
-const STORAGE_OPTIONS = [64, 128, 256, 512];
+const STORAGE_OPTIONS = OPCIONES_ALMACENAMIENTO;
 const ACCESORIOS_OPCIONES = ['Funda', 'Cargador', 'SIM', 'Bandeja SIM'];
 type Tab = 'resumen' | 'recepcion' | 'diagnostico' | 'presupuesto' | 'servicios' | 'control' | 'evidencias' | 'comunicacion' | 'historial';
 
@@ -1308,7 +1309,7 @@ export default function FichaReparacion() {
         <div className="min-w-0 mr-auto">
           <p className="text-lg font-medium leading-tight truncate">
             {r.numero_orden} · {r.modelo}
-            {r.capacidad_gb ? ` · ${r.capacidad_gb}GB` : ''}
+            {r.capacidad_gb ? ` · ${formatearGB(r.capacidad_gb)}` : ''}
           </p>
           <p className="text-xs text-muted dark:text-dark-text-secondary flex items-center gap-1.5 flex-wrap">
             <span className="flex items-center gap-1">
@@ -1479,7 +1480,7 @@ export default function FichaReparacion() {
                           f.capacidad_gb === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                         }`}
                       >
-                        {gb}GB
+                        {formatearGB(gb)}
                       </button>
                     ))}
                   </div>
@@ -1536,7 +1537,7 @@ export default function FichaReparacion() {
                       ? `${t(TIPOS_DISPOSITIVO.find((o) => o.id === r.tipo_dispositivo)?.label ?? '')} · `
                       : ''}
                     {r.modelo}
-                    {r.capacidad_gb ? ` · ${r.capacidad_gb}GB` : ''}
+                    {r.capacidad_gb ? ` · ${formatearGB(r.capacidad_gb)}` : ''}
                     {r.color ? ` · ${r.color}` : ''}
                   </p>
                   {r.imei && (

@@ -10,6 +10,7 @@ import { getActor, MENSAJE_ACTOR_REQUERIDO } from '../lib/actor';
 import SelectorColorAuto from '../SelectorColorAuto';
 import { useT } from '../lib/idioma';
 import { useSucursalActual } from '../lib/sucursal';
+import { OPCIONES_ALMACENAMIENTO, formatearGB } from '../lib/almacenamiento';
 
 type ExtractedData = {
   modelo: string | null;
@@ -19,7 +20,7 @@ type ExtractedData = {
   version_ios: string | null;
 };
 
-const STORAGE_OPTIONS = [64, 128, 256, 512];
+const STORAGE_OPTIONS = OPCIONES_ALMACENAMIENTO;
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -517,7 +518,7 @@ export default function NuevaEtiqueta() {
                 almacenamiento === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
               }`}
             >
-              {gb} GB
+              {formatearGB(gb, true)}
             </button>
           ))}
         </div>

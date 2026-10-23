@@ -11,6 +11,7 @@ import { useT, useIdioma } from '../../../lib/idioma';
 import { localeDe } from '../../../lib/i18n/traducir';
 import { formatearMonto } from '../../../lib/numeros';
 import { formatearFechaHora } from '../../../lib/fechas';
+import { formatearGB } from '../../../lib/almacenamiento';
 
 type Compra = {
   id: string;
@@ -195,7 +196,7 @@ export default function BoletaCompra() {
           <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-1">{t('Dispositivo adquirido')}</p>
           <p className="font-medium">
             {compra.modelo}
-            {compra.capacidad_gb ? ` · ${compra.capacidad_gb}GB` : ''}
+            {compra.capacidad_gb ? ` · ${formatearGB(compra.capacidad_gb)}` : ''}
             {compra.color ? ` · ${compra.color}` : ''}
             {compra.condicion === 'sellado' && (
               <span className="ml-1.5 inline-block text-[10px] font-bold text-black bg-gradient-to-b from-amber-300 to-amber-500 border border-black/40 rounded-full px-2 py-0.5 align-middle">

@@ -16,6 +16,10 @@ export const MEDIOS_PAGO: { codigo: MedioPago; label: string; icono: string }[] 
   { codigo: 'credito', label: 'Crédito', icono: '💳' },
 ];
 
+// Al cobrar una deuda, además de los medios de arriba el cliente puede dejar un EQUIPO como parte de pago: se guarda con
+// el medio 'canje' (el mismo que ya usa Plan de ahorro) y el equipo queda en Plan Canje. No es plata que entra al cajón.
+export const MEDIO_EQUIPO = { codigo: 'canje', label: 'Equipo (plan canje)', icono: '📱' };
+
 // Valor especial usado en la pantalla de cobro para representar "esto queda
 // como deuda en la cuenta corriente del cliente" (no genera un pago, genera
 // un cargo). No es un MedioPago real.
@@ -46,6 +50,7 @@ export function medioLabel(codigo: string, t: (texto: string) => string = (s) =>
 
 export function medioIcono(codigo: string): string {
   if (codigo === CUENTA_CORRIENTE) return '📒';
+  if (codigo === MEDIO_EQUIPO.codigo) return MEDIO_EQUIPO.icono;
   return MEDIOS_PAGO.find((m) => m.codigo === codigo)?.icono ?? '💰';
 }
 

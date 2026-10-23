@@ -21,8 +21,9 @@ import { useCoincidenciasCanje } from '../../lib/useCoincidenciasCanje';
 import { hayCanjeConEseImei } from '../../lib/canje';
 import { falla } from '../../lib/escritura';
 import { camposRecibidoPor, registrarRecepcionEnHistorial } from '../../lib/recibidoPor';
+import { OPCIONES_ALMACENAMIENTO, formatearGB } from '../../lib/almacenamiento';
 
-const STORAGE_OPTIONS = [64, 128, 256, 512];
+const STORAGE_OPTIONS = OPCIONES_ALMACENAMIENTO;
 
 type Compra = {
   id: string;
@@ -357,7 +358,7 @@ export default function DetalleCompra() {
                   editCapacidad === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
                 }`}
               >
-                {gb} GB
+                {formatearGB(gb, true)}
               </button>
             ))}
           </div>
@@ -434,7 +435,7 @@ export default function DetalleCompra() {
         <p>
           <span className="text-muted dark:text-dark-text-secondary">{t('Dispositivo:')} </span>
           {compra.modelo}
-          {compra.capacidad_gb ? ` · ${compra.capacidad_gb}GB` : ''}
+          {compra.capacidad_gb ? ` · ${formatearGB(compra.capacidad_gb)}` : ''}
           {compra.color ? ` · ${compra.color}` : ''}
           {compra.condicion === 'sellado' && (
             <span className="ml-1.5 inline-block text-[10px] font-bold text-black bg-gradient-to-b from-amber-300 to-amber-500 border border-black/40 rounded-full px-2 py-0.5 align-middle">

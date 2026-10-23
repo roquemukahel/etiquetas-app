@@ -13,6 +13,7 @@ import { useT, useIdioma } from '../../../../lib/idioma';
 import { localeDe } from '../../../../lib/i18n/traducir';
 import { formatearMonto } from '../../../../lib/numeros';
 import { formatearFechaHora } from '../../../../lib/fechas';
+import { formatearGB } from '../../../../lib/almacenamiento';
 
 type Movimiento = {
   id: string;
@@ -237,7 +238,7 @@ export default function ComprobantePlanAhorro() {
           <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-1">{t('Plan de ahorro')}</p>
           <p className="font-medium">
             {plan.modelo || t('Equipo a definir')}
-            {plan.capacidad_gb ? ` · ${plan.capacidad_gb}GB` : ''}
+            {plan.capacidad_gb ? ` · ${formatearGB(plan.capacidad_gb)}` : ''}
             {plan.color ? ` · ${plan.color}` : ''}
           </p>
           {plan.dispositivos?.imei && <p className="text-muted">{t('IMEI:')} {plan.dispositivos.imei}</p>}

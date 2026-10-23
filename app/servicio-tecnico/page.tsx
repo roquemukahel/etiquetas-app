@@ -50,8 +50,9 @@ import { camposRecibidoPor, registrarRecepcionEnHistorial } from '../lib/recibid
 import { soportaMigracion } from '../lib/migraciones';
 import { mandarReparacionAStandby, reubicarEquipoDeServicio, dispositivoOrigenDe } from '../lib/standby';
 import { origenDeCliente } from '../lib/clientesDuplicados';
+import { OPCIONES_ALMACENAMIENTO, formatearGB } from '../lib/almacenamiento';
 
-const STORAGE_OPTIONS = [64, 128, 256, 512];
+const STORAGE_OPTIONS = OPCIONES_ALMACENAMIENTO;
 
 function idTemporal() {
   return Math.random().toString(36).slice(2);
@@ -688,7 +689,7 @@ export default function ServicioTecnico() {
           // técnico — {modelo}". Se arma igual que la línea de un dispositivo
           // vendido (ver agregarDispositivoDelStock en Nueva Orden) para que
           // toda esa info quede visible en la boleta.
-          descripcion: `Servicio técnico — ${eq.modelo}${eq.capacidad_gb ? ` ${eq.capacidad_gb}GB` : ''}${
+          descripcion: `Servicio técnico — ${eq.modelo}${eq.capacidad_gb ? ` ${formatearGB(eq.capacidad_gb)}` : ''}${
             eq.color ? ` ${eq.color}` : ''
           }${eq.imei ? ` · IMEI ${eq.imei}` : ''}`,
           cantidad: 1,
@@ -1187,7 +1188,7 @@ ${reutilizado.error}`);
                     <div key={eq.tempId} className="flex items-center justify-between gap-2 text-xs">
                       <span className="text-ink dark:text-dark-text">
                         {idx + 1}. {eq.modelo}
-                        {eq.capacidad_gb ? ` · ${eq.capacidad_gb}GB` : ''}
+                        {eq.capacidad_gb ? ` · ${formatearGB(eq.capacidad_gb)}` : ''}
                         {eq.imei ? ` · IMEI ${eq.imei}` : ''}
                       </span>
                       <button onClick={() => quitarEquipoAgregado(eq.tempId)} className="text-bad underline shrink-0">
@@ -1222,7 +1223,7 @@ ${reutilizado.error}`);
                       nuevaCapacidad === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                     }`}
                   >
-                    {gb}GB
+                    {formatearGB(gb)}
                   </button>
                 ))}
               </div>
@@ -1620,7 +1621,7 @@ ${reutilizado.error}`);
                     <div key={r.id} className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex flex-col gap-1">
                       <p className="text-sm font-medium">
                         {r.numero_orden} · {r.modelo}
-                        {r.capacidad_gb ? ` · ${r.capacidad_gb}GB` : ''}
+                        {r.capacidad_gb ? ` · ${formatearGB(r.capacidad_gb)}` : ''}
                       </p>
                       {r.imei && (
                         <p className="text-xs text-muted dark:text-dark-text-secondary">

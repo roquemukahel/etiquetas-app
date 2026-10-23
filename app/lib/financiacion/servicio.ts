@@ -8,6 +8,9 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { getActor } from '../actor';
 import { registrarAuditoria } from '../auditoria';
 import { decimalesMoneda } from '../monedas';
+import { limpiarImei } from '../imei';
+import { normalizarNombreModelo } from '../modelos';
+import { descripcionDelEquipo, type EquipoPago } from '../equipoPago';
 import {
   generarCronograma,
   aplicarPagoACuotas,
@@ -243,6 +246,66 @@ export async function registrarCobroFinanciamiento(
     return { ordenId, avisoCuotas: 'El pago se registró, pero no pudimos aplicarlo a las cuotas: ' + resultadoCuotas.error };
   }
   return { ordenId };
+}
+
+// ---------- Cobro con un equipo como forma de pago ----------
+// El cliente que debe plata deja un celular como parte de pago: el valor que se le reconoce (= params.monto) baja su
+// deuda igual que cualquier otro medio (medio 'canje', queda en "Otro" en Caja porque no es plata en el cajón), y el
+// equipo entra a Plan Canje atado a la orden de este cobro — desde ahí se agrega al Stock (o a Standby / Servicio
+// Técnico) como cualquier otro canje, y sale impreso en la boleta.
+// El equipo se carga PRIMERO y el cobro después: si el cobro falla, el equipo recién cargado se descarta (nunca queda
+// un celular en Plan Canje sin pago que lo respalde); si el cobro sale bien pero no se puede vincular, el cobro y el
+// equipo igual quedaron registrados y se avisa.
+export async function registrarCobroConEquipo(
+  supabase: SupabaseClient,
+  params: Parameters<typeof registrarCobroFinanciamiento>[1] & { equipo: EquipoPago }
+): Promise<{ ordenId: string; avisoCuotas?: string } | { error: string }> {
+  const { equipo, ...cobro } = params;
+  const actor = getActor();
+  const modelo = normalizarNombreModelo(equipo.modelo.trim());
+  const { data: canje, error: canjeError } = await supabase
+    .from('canjes')
+    .insert({
+      cliente_id: cobro.clienteId,
+      modelo,
+      capacidad_gb: equipo.capacidad_gb,
+      color: equipo.color.trim() || null,
+      imei: limpiarImei(equipo.imei),
+      salud_bateria: equipo.bateria.trim() ? Number(equipo.bateria) : null,
+      detalles: equipo.detalles.trim() || null,
+      monto: cobro.monto,
+      condicion: equipo.condicion,
+      vendedor_id: actor?.tipo === 'vendedor' ? actor.id : null,
+    })
+    .select('id')
+    .single();
+  if (canjeError || !canje) return { error: 'No pudimos cargar el equipo: ' + (canjeError?.message ?? 'error desconocido') };
+  const canjeId = (canje as { id: string }).id;
+  const descripcion = descripcionDelEquipo(equipo);
+
+  const resultado = await registrarCobroFinanciamiento(supabase, {
+    ...cobro,
+    medio: 'canje',
+    observacion: ['Equipo recibido como pago: ' + descripcion, cobro.observacion?.trim()].filter(Boolean).join(' · '),
+  });
+  if ('error' in resultado) {
+    // Rollback del equipo recién cargado (todavía no está atado a nada ni lo vio nadie).
+    const { error: errorDescarte } = await supabase.from('canjes').delete().eq('id', canjeId);
+    if (errorDescarte) return { error: resultado.error + ' (y el equipo cargado quedó en Plan Canje sin pago: eliminalo desde ahí)' };
+    return resultado;
+  }
+
+  const { error: errorVinculo } = await supabase.from('canjes').update({ orden_id: resultado.ordenId }).eq('id', canjeId);
+  await registrarAuditoria(supabase, {
+    accion: 'recibió un equipo como pago de deuda (' + descripcion + (equipo.imei.trim() ? ', IMEI ' + equipo.imei.trim() : '') + ', valor ' + cobro.monto + ')',
+    entidad: 'canje',
+    entidadId: canjeId,
+    valorNuevo: { cliente_id: cobro.clienteId, monto: cobro.monto, orden_id: resultado.ordenId },
+  });
+  if (errorVinculo) {
+    return { ...resultado, avisoCuotas: [resultado.avisoCuotas, 'El pago y el equipo se registraron, pero el equipo no quedó vinculado a la boleta: ' + errorVinculo.message].filter(Boolean).join(' ') };
+  }
+  return resultado;
 }
 
 // ---------- Ajuste (reduce deuda futura, sin tocar cuotas pagadas) ----------
