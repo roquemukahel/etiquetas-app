@@ -144,8 +144,12 @@ export default function PagoTransferenciaARS({
           <div className="rounded-xl bg-canvas dark:bg-dark-bg p-3 flex flex-col gap-1">
             <p className="text-xs text-muted dark:text-dark-text-secondary">{t('Alias')}</p>
             <p className="text-sm font-mono break-all">{TRANSFERENCIA_ALIAS}</p>
-            <p className="text-xs text-muted dark:text-dark-text-secondary mt-2">CVU</p>
-            <p className="text-sm font-mono break-all">{TRANSFERENCIA_CVU}</p>
+            {TRANSFERENCIA_CVU && (
+              <>
+                <p className="text-xs text-muted dark:text-dark-text-secondary mt-2">CVU</p>
+                <p className="text-sm font-mono break-all">{TRANSFERENCIA_CVU}</p>
+              </>
+            )}
             <p className="text-xs text-muted dark:text-dark-text-secondary mt-2">{t('Titular')}</p>
             <p className="text-sm">{TRANSFERENCIA_TITULAR}</p>
             <p className="text-xs text-muted dark:text-dark-text-secondary mt-2">

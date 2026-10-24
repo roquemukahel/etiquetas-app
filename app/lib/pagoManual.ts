@@ -28,8 +28,10 @@ export const PAGOS_CON_TARJETA_DISPONIBLES = false;
 // tarjeta, para montos chicos al arrancar. Precio fijo en pesos, no atado
 // al dólar del día — si el tipo de cambio se mueve mucho, se actualiza a
 // mano acá (tomado con dólar ~$1550 al cargarlo).
-export const TRANSFERENCIA_CVU = '0000177508300006433407';
-export const TRANSFERENCIA_ALIAS = 'TEATRO.HOYO.DESTINAR';
-export const TRANSFERENCIA_TITULAR = 'Matias Andres Borda';
+// El CVU anterior era de otra persona (otro titular): no se reutiliza. Mientras esté vacío NO se muestra; se completa con el CVU de
+// la cuenta del alias nuevo si se quiere mostrar además del alias.
+export const TRANSFERENCIA_CVU = '';
+export const TRANSFERENCIA_ALIAS = 'Qovento';
+export const TRANSFERENCIA_TITULAR = 'Mukahel Ahmad Roque';
 export const PRECIO_ARS_MENSUAL = 17500;
 export const PRECIO_ARS_ANUAL = 175000;
