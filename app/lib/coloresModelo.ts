@@ -1124,10 +1124,14 @@ const REDMI_9A: ModeloColores = {
   ],
 };
 
-// Redmi 17 (4G) — colores oficiales: Black, Deep Blue, Lotus Purple, Oak Green. Falta la foto de los otros tres.
+// Redmi 17 (4G) — colores oficiales: Black, Deep Blue, Lotus Purple, Oak Green. Falta la foto de Lotus Purple.
 const REDMI_17: ModeloColores = {
   carpeta: 'redmi-17',
-  colores: [{ nombre: 'Negro', archivo: 'negro', hex: '#2c2f33' }],
+  colores: [
+    { nombre: 'Negro', archivo: 'negro', hex: '#2c2f33' },
+    { nombre: 'Azul profundo', archivo: 'azul', hex: '#2b3f8c' },
+    { nombre: 'Verde roble', archivo: 'verde', hex: '#33403a' },
+  ],
 };
 
 const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
