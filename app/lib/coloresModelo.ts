@@ -118,8 +118,7 @@ const IPHONE_13: ModeloColores = {
   ],
 };
 
-// iPhone 14 (render angulado sobre fondo claro). Falta Amarillo (Apple lo
-// agregó en 2023): cuando haya imagen se suma.
+// iPhone 14 (render angulado sobre fondo claro). Los 6 colores oficiales tienen foto.
 const IPHONE_14: ModeloColores = {
   carpeta: 'iphone-14',
   colores: [
