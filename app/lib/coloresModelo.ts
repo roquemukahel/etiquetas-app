@@ -1138,6 +1138,18 @@ const REDMI_17: ModeloColores = {
   ],
 };
 
+// Redmi Note 17 Pro Max — colores: Cloud Blush (acabado fotocromático), Green, Purple, Black (según la prensa del lanzamiento;
+// Xiaomi no publica la lista en una página oficial que haya podido ver).
+const REDMI_NOTE_17_PRO_MAX: ModeloColores = {
+  carpeta: 'redmi-note-17-pro-max',
+  colores: [
+    { nombre: 'Negro', archivo: 'negro', hex: '#2a2b2e' },
+    { nombre: 'Verde', archivo: 'verde', hex: '#a9cfa5' },
+    { nombre: 'Púrpura', archivo: 'purpura', hex: '#d2bfe6' },
+    { nombre: 'Rosa nube', archivo: 'rosanube', hex: '#f1e6e4' },
+  ],
+};
+
 const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   iphone7: IPHONE_7,
   iphonex: IPHONE_X,
@@ -1226,6 +1238,7 @@ const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   redmi15c: REDMI_15C,
   redmi9a: REDMI_9A,
   redmi17: REDMI_17,
+  redminote17promax: REDMI_NOTE_17_PRO_MAX,
   galaxys23fe: GALAXY_S23_FE,
   galaxys24ultra: GALAXY_S24_ULTRA,
   galaxya14: GALAXY_A14,

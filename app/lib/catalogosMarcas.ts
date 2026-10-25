@@ -167,6 +167,7 @@ export const CATALOGO_MODELOS: Record<string, string[]> = {
     'Redmi Note 13 Pro',
     'Redmi Note 14',
     'Redmi Note 14 Pro',
+    'Redmi Note 17 Pro Max',
     'Poco X3',
     'Poco X3 Pro',
     'Poco X4 Pro',
