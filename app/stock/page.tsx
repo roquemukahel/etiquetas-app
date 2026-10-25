@@ -2221,14 +2221,18 @@ ${t(r.error)}`);
                   >
                     {items.length > 0 && <span className="shrink-0">{expandido ? '▾' : '▸'}</span>}
                     <MiniaturaDispositivo src={imagenPorNombreExacto(modelo, imagenesCarpetas)} size={48} />
-                    <span className="truncate">
-                      {modelo} · {items.length}
-                    </span>
-                    {enStock > 0 && enStock < 3 && (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-bad bg-bad/10 rounded-full px-2 py-0.5 shrink-0">
-                        <IconoChico nombre="alerta" /> {t('Quedan')} {enStock} — {t('reponer')}
+                    {/* En el celular el nombre completo del modelo va primero y el aviso "Quedan N — reponer" debajo (antes compartían
+                        la misma línea y el nombre se cortaba: "iPhone 1…"); en pantallas grandes siguen en una línea. */}
+                    <span className="min-w-0 flex flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2.5">
+                      <span className="break-words sm:truncate sm:max-w-full">
+                        {modelo} · {items.length}
                       </span>
-                    )}
+                      {enStock > 0 && enStock < 3 && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-bad bg-bad/10 rounded-full px-2 py-0.5 shrink-0">
+                          <IconoChico nombre="alerta" /> {t('Quedan')} {enStock} — {t('reponer')}
+                        </span>
+                      )}
+                    </span>
                   </button>
                   {(puedeAgregarStock || puedeEliminar) && modelo !== 'Sin modelo' && (
                     <div className="relative shrink-0">
@@ -2393,7 +2397,7 @@ ${t(r.error)}`);
                               )}
                             </p>
                             {(d.detalles || d.agregado_por_nombre) && (
-                              <p className="text-xs text-muted dark:text-dark-text-secondary truncate">
+                              <p className="text-xs text-muted dark:text-dark-text-secondary break-words sm:truncate">
                                 {d.detalles && (
                                   <span className="inline-flex items-center gap-1 text-warn">
                                     <IconoChico nombre="documento" /> {d.detalles}
