@@ -585,8 +585,8 @@ const GALAXY_A54: ModeloColores = {
   ],
 };
 
-// Samsung Galaxy S26 (mismas fotos para S26, S26+ y S26 Ultra, a pedido del
-// usuario). Colores oficiales: Black, White, Cobalt Violet, Sky Blue +
+// Samsung Galaxy S26 (mismas fotos para S26 y S26+, a pedido del
+// usuario; el S26 Ultra tiene las suyas, con S Pen). Colores oficiales: Black, White, Cobalt Violet, Sky Blue +
 // online-exclusive Silver Shadow y Pink Gold.
 const GALAXY_S26: ModeloColores = {
   carpeta: 'galaxy-s26',
@@ -597,6 +597,17 @@ const GALAXY_S26: ModeloColores = {
     { nombre: 'Azul cielo', archivo: 'azulcielo', hex: '#c7dced' },
     { nombre: 'Plata', archivo: 'plata', hex: '#c6c8ca' },
     { nombre: 'Oro rosa', archivo: 'orosa', hex: '#f2ded0' },
+  ],
+};
+
+// Samsung Galaxy S26 Ultra — fotos propias (con S Pen). Colores oficiales: Black, White, Cobalt Violet, Sky Blue.
+const GALAXY_S26_ULTRA: ModeloColores = {
+  carpeta: 'galaxy-s26-ultra',
+  colores: [
+    { nombre: 'Negro', archivo: 'negro', hex: '#3a3a3c' },
+    { nombre: 'Blanco', archivo: 'blanco', hex: '#eef0ef' },
+    { nombre: 'Violeta cobalto', archivo: 'violeta', hex: '#5f5a86' },
+    { nombre: 'Azul cielo', archivo: 'azulcielo', hex: '#b9d6ea' },
   ],
 };
 
@@ -1181,7 +1192,7 @@ const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   galaxya54: GALAXY_A54,
   galaxys26: GALAXY_S26,
   'galaxys26+': GALAXY_S26,
-  galaxys26ultra: GALAXY_S26,
+  galaxys26ultra: GALAXY_S26_ULTRA,
   galaxys25: GALAXY_S25,
   'galaxys25+': GALAXY_S25_PLUS,
   galaxys25ultra: GALAXY_S25_ULTRA,
