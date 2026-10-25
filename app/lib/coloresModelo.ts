@@ -478,18 +478,19 @@ const GALAXY_A56: ModeloColores = {
   ],
 };
 
-// Samsung Galaxy A57 — colores oficiales: Awesome Navy, Icyblue, Gray, Lilac. Falta la foto de Azul hielo.
+// Samsung Galaxy A57 — colores oficiales: Awesome Navy, Icyblue, Gray, Lilac.
 const GALAXY_A57: ModeloColores = {
   carpeta: 'galaxy-a57',
   colores: [
     { nombre: 'Azul marino', archivo: 'azulmarino', hex: '#1f2a44' },
     { nombre: 'Gris', archivo: 'gris', hex: '#5a5558' },
+    { nombre: 'Azul hielo', archivo: 'azulhielo', hex: '#d7e3f2' },
     { nombre: 'Lila', archivo: 'lila', hex: '#c9b8e0' },
   ],
 };
 
 // Samsung Galaxy S25 Ultra — colores oficiales: Titanium Silverblue, Black, Whitesilver, Gray + exclusivos online
-// Jetblack, Jadegreen y Pinkgold. Faltan las fotos de Jetblack, Jadegreen y Pinkgold.
+// Jetblack, Jadegreen y Pinkgold.
 const GALAXY_S25_ULTRA: ModeloColores = {
   carpeta: 'galaxy-s25-ultra',
   colores: [
@@ -497,6 +498,9 @@ const GALAXY_S25_ULTRA: ModeloColores = {
     { nombre: 'Titanio negro', archivo: 'negro', hex: '#2b2b2e' },
     { nombre: 'Titanio blanco plata', archivo: 'blancoplata', hex: '#e6e7ea' },
     { nombre: 'Titanio gris', archivo: 'gris', hex: '#b4aea3' },
+    { nombre: 'Titanio negro azabache', archivo: 'jetblack', hex: '#1c1d20' },
+    { nombre: 'Titanio verde jade', archivo: 'jadegreen', hex: '#b9cdb3' },
+    { nombre: 'Titanio oro rosa', archivo: 'pinkgold', hex: '#ecd3c4' },
   ],
 };
 
@@ -1081,12 +1085,12 @@ const RAZR_70_ULTRA: ModeloColores = {
 
 // Clave de modelo normalizada: "iPhone 11", "iphone 11", "iPhone11" -> "iphone11".
 // Samsung Galaxy S23 FE — colores oficiales: Mint, Cream, Graphite, Purple + exclusivos online Indigo y Tangerine.
-// Falta la foto de Grafito.
 const GALAXY_S23_FE: ModeloColores = {
   carpeta: 'galaxy-s23-fe',
   colores: [
     { nombre: 'Menta', archivo: 'menta', hex: '#d7e6dd' },
     { nombre: 'Crema', archivo: 'crema', hex: '#f3ede2' },
+    { nombre: 'Grafito', archivo: 'grafito', hex: '#2f3033' },
     { nombre: 'Púrpura', archivo: 'purpura', hex: '#6a597a' },
     { nombre: 'Índigo', archivo: 'indigo', hex: '#7b94b0' },
     { nombre: 'Mandarina', archivo: 'mandarina', hex: '#c98040' },
