@@ -478,6 +478,28 @@ const GALAXY_A56: ModeloColores = {
   ],
 };
 
+// Samsung Galaxy A57 — colores oficiales: Awesome Navy, Icyblue, Gray, Lilac. Falta la foto de Azul hielo.
+const GALAXY_A57: ModeloColores = {
+  carpeta: 'galaxy-a57',
+  colores: [
+    { nombre: 'Azul marino', archivo: 'azulmarino', hex: '#1f2a44' },
+    { nombre: 'Gris', archivo: 'gris', hex: '#5a5558' },
+    { nombre: 'Lila', archivo: 'lila', hex: '#c9b8e0' },
+  ],
+};
+
+// Samsung Galaxy S25 Ultra — colores oficiales: Titanium Silverblue, Black, Whitesilver, Gray + exclusivos online
+// Jetblack, Jadegreen y Pinkgold. Faltan las fotos de Jetblack, Jadegreen y Pinkgold.
+const GALAXY_S25_ULTRA: ModeloColores = {
+  carpeta: 'galaxy-s25-ultra',
+  colores: [
+    { nombre: 'Titanio azul plata', archivo: 'azulplata', hex: '#b6c0d8' },
+    { nombre: 'Titanio negro', archivo: 'negro', hex: '#2b2b2e' },
+    { nombre: 'Titanio blanco plata', archivo: 'blancoplata', hex: '#e6e7ea' },
+    { nombre: 'Titanio gris', archivo: 'gris', hex: '#b4aea3' },
+  ],
+};
+
 // Samsung Galaxy A25 — colores oficiales: Blue Black, Light Blue, Yellow, Lime Green.
 const GALAXY_A25: ModeloColores = {
   carpeta: 'galaxy-a25',
@@ -1048,13 +1070,15 @@ const RAZR_70_ULTRA: ModeloColores = {
 
 // Clave de modelo normalizada: "iPhone 11", "iphone 11", "iPhone11" -> "iphone11".
 // Samsung Galaxy S23 FE — colores oficiales: Mint, Cream, Graphite, Purple + exclusivos online Indigo y Tangerine.
-// Faltan las fotos de Grafito, Índigo y Mandarina.
+// Falta la foto de Grafito.
 const GALAXY_S23_FE: ModeloColores = {
   carpeta: 'galaxy-s23-fe',
   colores: [
     { nombre: 'Menta', archivo: 'menta', hex: '#d7e6dd' },
     { nombre: 'Crema', archivo: 'crema', hex: '#f3ede2' },
     { nombre: 'Púrpura', archivo: 'purpura', hex: '#6a597a' },
+    { nombre: 'Índigo', archivo: 'indigo', hex: '#7b94b0' },
+    { nombre: 'Mandarina', archivo: 'mandarina', hex: '#c98040' },
   ],
 };
 
@@ -1146,6 +1170,7 @@ const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   galaxya16: GALAXY_A16,
   galaxya36: GALAXY_A36,
   galaxya56: GALAXY_A56,
+  galaxya57: GALAXY_A57,
   galaxya25: GALAXY_A25,
   galaxya35: GALAXY_A35,
   galaxya55: GALAXY_A55,
@@ -1159,6 +1184,7 @@ const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   galaxys26ultra: GALAXY_S26,
   galaxys25: GALAXY_S25,
   'galaxys25+': GALAXY_S25_PLUS,
+  galaxys25ultra: GALAXY_S25_ULTRA,
   galaxys24: GALAXY_S24,
   'galaxys24+': GALAXY_S24,
   galaxys24fe: GALAXY_S24_FE,

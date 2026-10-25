@@ -126,6 +126,7 @@ export const CATALOGO_MODELOS: Record<string, string[]> = {
     'Galaxy A26',
     'Galaxy A36',
     'Galaxy A56',
+    'Galaxy A57',
     'Galaxy S26',
     'Galaxy S26+',
     'Galaxy S26 Ultra',
