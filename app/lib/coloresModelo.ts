@@ -647,7 +647,7 @@ const GALAXY_S24_FE: ModeloColores = {
 };
 
 // Samsung Galaxy S22 — colores oficiales: Phantom Black, Phantom White, Green, Pink Gold + exclusivos online Violet, Sky Blue,
-// Graphite y Cream. Faltan las fotos de Blanco fantasma, Azul cielo, Grafito y Crema.
+// Graphite y Cream. Faltan las fotos de Grafito y Crema.
 const GALAXY_S22: ModeloColores = {
   carpeta: 'galaxy-s22',
   colores: [
@@ -655,6 +655,8 @@ const GALAXY_S22: ModeloColores = {
     { nombre: 'Verde', archivo: 'verde', hex: '#34524a' },
     { nombre: 'Oro rosa', archivo: 'orosa', hex: '#ecd9d0' },
     { nombre: 'Violeta', archivo: 'violeta', hex: '#cdbbe0' },
+    { nombre: 'Blanco', archivo: 'blanco', hex: '#f4f4f2' },
+    { nombre: 'Azul cielo', archivo: 'azulcielo', hex: '#aecbe8' },
   ],
 };
 
