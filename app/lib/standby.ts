@@ -93,6 +93,36 @@ export function ordenarStandby(equipos: EquipoStandby[]): EquipoStandby[] {
   });
 }
 
+// Criterios de orden de la lista de Standby: más antiguos primero (el de siempre), más recientes primero, o por modelo
+// (en el orden de salida del catálogo; a igual modelo, el que lleva más tiempo esperando primero).
+export type CriterioOrdenStandby = 'antiguos' | 'recientes' | 'modelo';
+
+export function ordenarStandbyPor(equipos: EquipoStandby[], criterio: CriterioOrdenStandby): EquipoStandby[] {
+  if (criterio === 'antiguos') return ordenarStandby(equipos);
+  if (criterio === 'recientes') return ordenarStandby(equipos).reverse();
+  return [...equipos].sort((a, b) => {
+    const porModelo = compararModelosPorSalida(a.modelo ?? '', b.modelo ?? '');
+    if (porModelo !== 0) return porModelo;
+    const da = a.en_espera_desde ?? a.created_at;
+    const db = b.en_espera_desde ?? b.created_at;
+    return da === db ? 0 : da < db ? -1 : 1;
+  });
+}
+
+// Desde cuántos días esperando un equipo se considera "antiguo" (se marca en la lista y se puede filtrar).
+export const DIAS_ANTIGUO_EN_STANDBY = 30;
+
+export function esAntiguoEnStandby(e: Pick<EquipoStandby, 'en_espera_desde' | 'created_at'>, ahora: Date = new Date()): boolean {
+  return diasEnStandby(e.en_espera_desde ?? e.created_at, ahora) >= DIAS_ANTIGUO_EN_STANDBY;
+}
+
+// Cuántos equipos hay de cada origen (para los filtros de la lista). Los que no tienen origen cargado van en 'sin_origen'.
+export function contarPorOrigen(equipos: Pick<EquipoStandby, 'espera_origen'>[]): Record<OrigenStandby | 'sin_origen', number> {
+  const cuenta: Record<OrigenStandby | 'sin_origen', number> = { stock: 0, canje: 0, servicio_tecnico: 0, manual: 0, sin_origen: 0 };
+  for (const e of equipos) cuenta[e.espera_origen ?? 'sin_origen'] += 1;
+  return cuenta;
+}
+
 export function diasEnStandby(desde: string | null, ahora: Date = new Date()): number {
   if (!desde) return 0;
   const ms = ahora.getTime() - new Date(desde).getTime();

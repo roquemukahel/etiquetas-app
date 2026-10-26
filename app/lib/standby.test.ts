@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   buscarEnIndice,
   buscarEnStandby,
+  contarPorOrigen,
+  esAntiguoEnStandby,
+  ordenarStandbyPor,
   derivarStandbyAServicio,
   diasEnStandby,
   ERR_YA_NO_ESTA_EN_STANDBY,
@@ -167,5 +170,45 @@ describe('guardas contra movimientos simultáneos', () => {
     const r = await derivarStandbyAServicio(supabase, equipo({ id: 'x', modelo: 'iPhone 13' }));
     expect(r.error).toBe(ERR_YA_NO_ESTA_EN_STANDBY);
     expect(llamadas.map((l) => l.tabla)).toEqual(['dispositivos']); // nunca llegó a tocar reparaciones
+  });
+});
+
+describe('orden, antigüedad y origen de la lista de Standby', () => {
+  const ordenado = [
+    equipo({ id: 'viejo', modelo: 'iPhone 13', en_espera_desde: '2026-08-01T00:00:00Z' }),
+    equipo({ id: 'medio', modelo: 'iPhone 11', en_espera_desde: '2026-09-15T00:00:00Z' }),
+    equipo({ id: 'nuevo', modelo: 'iPhone 15', en_espera_desde: '2026-10-20T00:00:00Z' }),
+  ];
+  it('antiguos: el que más tiempo lleva esperando primero', () => {
+    expect(ordenarStandbyPor(ordenado, 'antiguos').map((e) => e.id)).toEqual(['viejo', 'medio', 'nuevo']);
+  });
+  it('recientes: al revés', () => {
+    expect(ordenarStandbyPor(ordenado, 'recientes').map((e) => e.id)).toEqual(['nuevo', 'medio', 'viejo']);
+  });
+  it('modelo: en el orden de salida del catálogo, no alfabético', () => {
+    expect(ordenarStandbyPor(ordenado, 'modelo').map((e) => e.modelo)).toEqual(['iPhone 11', 'iPhone 13', 'iPhone 15']);
+  });
+  it('no modifica la lista original', () => {
+    const copia = ordenado.map((e) => e.id);
+    ordenarStandbyPor(ordenado, 'recientes');
+    expect(ordenado.map((e) => e.id)).toEqual(copia);
+  });
+  it('un equipo es antiguo a partir de los 30 días en Standby', () => {
+    const ahora = new Date('2026-10-30T00:00:00Z');
+    expect(esAntiguoEnStandby({ en_espera_desde: '2026-09-30T00:00:00Z', created_at: '2026-01-01T00:00:00Z' }, ahora)).toBe(true);
+    expect(esAntiguoEnStandby({ en_espera_desde: '2026-10-01T00:00:00Z', created_at: '2026-01-01T00:00:00Z' }, ahora)).toBe(false);
+  });
+  it('si no tiene fecha de espera, cuenta desde que se cargó', () => {
+    const ahora = new Date('2026-10-30T00:00:00Z');
+    expect(esAntiguoEnStandby({ en_espera_desde: null, created_at: '2026-01-01T00:00:00Z' }, ahora)).toBe(true);
+  });
+  it('cuenta los equipos por origen y agrupa los que no tienen', () => {
+    const cuenta = contarPorOrigen([
+      { espera_origen: 'stock' },
+      { espera_origen: 'stock' },
+      { espera_origen: 'canje' },
+      { espera_origen: null },
+    ]);
+    expect(cuenta).toEqual({ stock: 2, canje: 1, servicio_tecnico: 0, manual: 0, sin_origen: 1 });
   });
 });
