@@ -152,7 +152,10 @@ type IngresoServicio = { cliente_id: string | null; fecha_ingreso_servicio: stri
 type DispositivoCompra = { proveedor_id: string | null; costo: number | null; created_at: string; sucursal_id: string | null };
 type CompraManual = { proveedor_id: string; cantidad: number; precio_unitario: number | null; created_at: string };
 type StockR = { modelo: string | null; precio: number | null; costo: number | null; en_stock_desde: string | null; categoria_id: string | null; sucursal_id: string | null };
-type RegistroDispositivo = { agregado_por_nombre: string | null; agregado_por_foto_url: string | null; created_at: string; sucursal_id: string | null };
+// OJO: sin la foto de quien lo cargó. agregado_por_foto_url es la foto en base64 repetida en CADA equipo: traerla de todas las
+// altas de 20 meses eran 7+ pedidos de 9-12 segundos cada uno (y en negocios grandes llegaba al timeout de la base). La foto de
+// cada persona se resuelve aparte, una sola vez por nombre (ver fotosRegistro).
+type RegistroDispositivo = { agregado_por_nombre: string | null; created_at: string; sucursal_id: string | null };
 type CategoriaStockR = { id: string; nombre: string };
 type MovProveedorR = { proveedor_id: string; tipo: string; monto: number; fecha: string };
 
@@ -218,6 +221,8 @@ export default function Estadisticas() {
   const [stockRaw, setStockRaw] = useState<StockR[]>([]);
   // Altas de stock (quién cargó cada equipo), para el ranking por período.
   const [registrosDispositivosRaw, setRegistrosDispositivosRaw] = useState<RegistroDispositivo[]>([]);
+  // Foto de quien cargó equipos, por nombre (para el ranking de altas de stock), que se completa en segundo plano.
+  const [fotosRegistro, setFotosRegistro] = useState<Map<string, string>>(new Map());
   const [categoriasStock, setCategoriasStock] = useState<CategoriaStockR[]>([]);
   // Cuentas por pagar (proveedor_movimientos + saldos_proveedores) — si el
   // negocio no corrió esa migración, quedan vacíos y esas tarjetas puntuales
@@ -492,7 +497,7 @@ export default function Estadisticas() {
         obtenerTodasLasFilas<StockR>(supabase, 'dispositivos', 'modelo, precio, costo, en_stock_desde, categoria_id, sucursal_id', [], (q) => q.eq('en_stock', true)),
         // Todas las altas de stock (no solo lo que sigue en stock hoy), para
         // poder rankear quién cargó más equipos en el período.
-        obtenerTodasLasFilas<RegistroDispositivo>(supabase, 'dispositivos', 'agregado_por_nombre, agregado_por_foto_url, created_at, sucursal_id', [], (q) =>
+        obtenerTodasLasFilas<RegistroDispositivo>(supabase, 'dispositivos', 'agregado_por_nombre, created_at, sucursal_id', [], (q) =>
           q.gte('created_at', desde.toISOString())
         ),
       ]);
@@ -512,6 +517,25 @@ export default function Estadisticas() {
       setComprasManuales((comprasManual as CompraManual[]) ?? []);
       setStockRaw(stockData);
       setRegistrosDispositivosRaw(registrosData);
+      // Fotos de quienes cargaron equipos: las de vendedores/técnicos ya están cargadas; solo para el resto (dueños, etc.)
+      // se pide UNA foto por nombre, en segundo plano, sin frenar la pantalla.
+      {
+        const conFoto = new Set([...(vend ?? []), ...(tec ?? [])].filter((p) => p.foto_url).map((p) => p.nombre));
+        const faltantes = Array.from(new Set(registrosData.map((r) => r.agregado_por_nombre).filter((n): n is string => !!n && !conFoto.has(n)))).slice(0, 12);
+        Promise.all(
+          faltantes.map(async (nombre) => {
+            const { data, error } = await supabase
+              .from('dispositivos')
+              .select('agregado_por_foto_url')
+              .eq('agregado_por_nombre', nombre)
+              .not('agregado_por_foto_url', 'is', null)
+              .limit(1);
+            if (error) return null;
+            const foto = (data as { agregado_por_foto_url: string | null }[] | null)?.[0]?.agregado_por_foto_url;
+            return foto ? ([nombre, foto] as const) : null;
+          })
+        ).then((pares) => setFotosRegistro(new Map(pares.filter((p): p is readonly [string, string] => p !== null))));
+      }
       setPagosRaw((pagosData as PagoR[]) ?? []);
       setCreditoRaw((creditoData as CreditoR[]) ?? []);
       const saldos = (saldosData as { saldo: number; vencido: number }[]) ?? [];
@@ -950,18 +974,17 @@ export default function Estadisticas() {
 
   // Quién registró más equipos en el stock durante el período elegido.
   const rankingRegistroStock: Dato[] = useMemo(() => {
-    const mapa = new Map<string, { valor: number; fotoUrl: string | null }>();
+    const fotoPorNombre = new Map<string, string | null>();
+    for (const p of [...vendedores, ...tecnicos]) if (p.foto_url) fotoPorNombre.set(p.nombre, p.foto_url);
+    const mapa = new Map<string, number>();
     for (const d of registrosDispositivos.filter((d) => new Date(d.created_at) >= inicio && new Date(d.created_at) <= fin)) {
       const nombre = d.agregado_por_nombre || 'Sin registrar';
-      const e = mapa.get(nombre) ?? { valor: 0, fotoUrl: null };
-      e.valor += 1;
-      if (!e.fotoUrl && d.agregado_por_foto_url) e.fotoUrl = d.agregado_por_foto_url;
-      mapa.set(nombre, e);
+      mapa.set(nombre, (mapa.get(nombre) ?? 0) + 1);
     }
     return Array.from(mapa.entries())
-      .map(([nombre, e]) => ({ nombre, valor: e.valor, fotoUrl: e.fotoUrl }))
+      .map(([nombre, valor]) => ({ nombre, valor, fotoUrl: fotoPorNombre.get(nombre) ?? fotosRegistro.get(nombre) ?? null }))
       .sort((a, b) => b.valor - a.valor);
-  }, [registrosDispositivos, inicio, fin]);
+  }, [registrosDispositivos, inicio, fin, vendedores, tecnicos, fotosRegistro]);
 
   // Stock por categoría (reutiliza stock_categorias, mismas categorías que
   // Configuración → Categorías de stock — no se inventa una agrupación nueva).
