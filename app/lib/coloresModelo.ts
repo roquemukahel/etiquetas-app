@@ -489,7 +489,7 @@ const GALAXY_A57: ModeloColores = {
 };
 
 // Samsung Galaxy S25 Ultra — colores oficiales: Titanium Silverblue, Black, Whitesilver, Gray + exclusivos online
-// Jetblack, Jadegreen y Pinkgold.
+// Jetblack (se ve igual que el Titanium Black: una sola entrada), Jadegreen y Pinkgold.
 const GALAXY_S25_ULTRA: ModeloColores = {
   carpeta: 'galaxy-s25-ultra',
   colores: [
@@ -497,7 +497,6 @@ const GALAXY_S25_ULTRA: ModeloColores = {
     { nombre: 'Titanio negro', archivo: 'negro', hex: '#2b2b2e' },
     { nombre: 'Titanio blanco plata', archivo: 'blancoplata', hex: '#e6e7ea' },
     { nombre: 'Titanio gris', archivo: 'gris', hex: '#b4aea3' },
-    { nombre: 'Titanio negro azabache', archivo: 'jetblack', hex: '#1c1d20' },
     { nombre: 'Titanio verde jade', archivo: 'jadegreen', hex: '#b9cdb3' },
     { nombre: 'Titanio oro rosa', archivo: 'pinkgold', hex: '#ecd3c4' },
   ],
