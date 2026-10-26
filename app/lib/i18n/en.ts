@@ -3411,4 +3411,5 @@ export const EN: Record<string, string> = {
   'Se corrige todo junto: la cuenta del cliente, la caja y la boleta de este cobro.': 'Everything is corrected together: the customer account, the cash register and the receipt of this payment.',
   'Monto correcto': 'Correct amount',
   'Guardar monto': 'Save amount',
+  'Compartir stock': 'Share stock',
 };

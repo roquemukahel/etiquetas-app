@@ -1645,6 +1645,12 @@ ${t(r.error)}`);
 
         {tab === 'celulares' && (
           <div className="flex items-center gap-1.5 shrink-0">
+            <Link
+              href="/configuracion/stock-publico"
+              className="rounded-lg border border-border dark:border-dark-border hover:bg-canvas dark:hover:bg-dark-bg transition-colors px-3 py-2 text-xs font-medium leading-none"
+            >
+              {t('Compartir stock')}
+            </Link>
             {puedeAgregarStock && (
               <div className="relative">
                 <button
@@ -1745,14 +1751,6 @@ ${t(r.error)}`);
                     className="px-3.5 py-2.5 text-sm hover:bg-canvas dark:hover:bg-dark-bg"
                   >
                     {t('Administrar carpetas')}
-                  </Link>
-                  <div className="my-1 border-t border-border dark:border-dark-border" />
-                  <Link
-                    href="/configuracion/stock-publico"
-                    onClick={() => setMenuAbierto(null)}
-                    className="px-3.5 py-2.5 text-sm hover:bg-canvas dark:hover:bg-dark-bg"
-                  >
-                    {t('Compartir stock (enlace público)')}
                   </Link>
                 </div>
               )}

@@ -3412,4 +3412,5 @@ export const PT: Record<string, string> = {
   'Se corrige todo junto: la cuenta del cliente, la caja y la boleta de este cobro.': 'Tudo é corrigido junto: a conta do cliente, o caixa e o recibo deste pagamento.',
   'Monto correcto': 'Valor correto',
   'Guardar monto': 'Salvar valor',
+  'Compartir stock': 'Compartilhar estoque',
 };
