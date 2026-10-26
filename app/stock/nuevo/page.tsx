@@ -20,6 +20,8 @@ import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
 import SelectorFinanciacion from '../../SelectorFinanciacion';
 import AvisoCanje from '../../AvisoCanje';
 import AvisoStandby from '../../AvisoStandby';
+import AvisoServicioTecnico from '../../AvisoServicioTecnico';
+import { reparacionesAbiertasConImei, propias, textoDeOrdenes, equipoDeOrigen, reutilizarEquipoDeOrigen, cerrarReparacionesAlPasarAlStock } from '../../lib/servicioEnStock';
 import { useCoincidenciasStandby } from '../../lib/useCoincidenciasStandby';
 import { SelectorFotosNuevas } from '../../FotosDispositivo';
 import { guardarFotos, type FotoPreparada } from '../../lib/fotosDispositivo';
@@ -159,9 +161,28 @@ export default function NuevoDispositivo() {
     }
     const imeiLimpio = limpiarImei(imei);
     const enStandbyConEseImei = hayCanjeConEseImei(coincidenciasStandby.porImei, imei);
+    // Si el IMEI es el de una orden abierta en Servicio Técnico: de un equipo propio se pregunta si ya fue reparado
+    // (si sí, entra al Stock y la orden se cierra); de un cliente solo se avisa, esa orden nunca se cierra desde acá.
+    const enServicio = imeiLimpio ? await reparacionesAbiertasConImei(supabase, imeiLimpio) : [];
+    const ordenesPropias = propias(enServicio);
+    const ordenesDeClientes = enServicio.filter((o) => o.cliente_id);
+    if (ordenesPropias.length > 0) {
+      if (
+        !confirm(
+          `${t('Este dispositivo se encuentra en Servicio Técnico')} (${textoDeOrdenes(ordenesPropias)}). ${t('¿Ya fue reparado? ¿Agregarlo al Stock? Si aceptás, se agrega al Stock y esa orden se cierra en Servicio Técnico.')}`
+        )
+      )
+        return;
+    } else if (ordenesDeClientes.length > 0) {
+      if (!confirm(`${t('Este dispositivo se encuentra en Servicio Técnico')} (${textoDeOrdenes(ordenesDeClientes)}). ${t('Es el equipo de un cliente que está en reparación.')} ${t('¿Agregarlo igual?')}`)) return;
+    }
+    // El equipo de origen de esa orden es el mismo que vuelve: no cuenta como duplicado.
+    const origenId = ordenesPropias.length > 0 ? await equipoDeOrigen(supabase, ordenesPropias) : null;
     // Si está en Standby se pregunta eso (más abajo) en vez del aviso genérico de IMEI repetido.
     if (imeiLimpio && !enStandbyConEseImei) {
-      const { data: existente } = await supabase.from('dispositivos').select('id').eq('imei', imeiLimpio).maybeSingle();
+      let busquedaDuplicado = supabase.from('dispositivos').select('id').eq('imei', imeiLimpio).limit(1);
+      if (origenId) busquedaDuplicado = busquedaDuplicado.neq('id', origenId);
+      const { data: existente } = await busquedaDuplicado.maybeSingle();
       if (existente && !confirm(`${t('Ya hay un dispositivo en Stock con el IMEI')} ${imeiLimpio}. ${t('¿Agregarlo igual?')}`)) return;
     }
     if (hayCanjeConEseImei(coincidenciasCanje.porImei, imei) && !confirm(t('Este dispositivo está en Plan Canje. Si lo cargás acá queda duplicado en el Stock. ¿Cargarlo igual?'))) return;
@@ -171,7 +192,7 @@ export default function NuevoDispositivo() {
 
     const modeloNormalizado = normalizarNombreModelo(modelo.trim());
     const proveedorId = await asegurarProveedor(supabase, proveedor);
-    const { data: creado, error: insertError } = await supabase.from('dispositivos').insert({
+    const campos = {
       modelo: modeloNormalizado,
       capacidad_gb: capacidad,
       imei: imeiLimpio,
@@ -187,21 +208,51 @@ export default function NuevoDispositivo() {
       ...(categoriaId ? { categoria_id: categoriaId } : {}),
       ...(sucursalElegida ? { sucursal_id: sucursalElegida } : {}),
       en_stock: true,
-      agregado_por_nombre: actor?.nombre ?? null,
-      agregado_por_foto_url: actor?.fotoUrl ?? null,
-    }).select('id').single();
-
-    if (insertError) {
-      setError(`${t('No pudimos guardar el dispositivo:')} ` + insertError.message);
-      setGuardando(false);
-      return;
+    };
+    // Si la orden de Servicio Técnico salió de un equipo que ya existe, vuelve ese mismo equipo (no se crea un duplicado).
+    let creadoId: string | null = null;
+    if (ordenesPropias.length > 0) {
+      const reutilizado = await reutilizarEquipoDeOrigen(supabase, ordenesPropias);
+      if (reutilizado.error) {
+        setError(`${t('No pudimos guardar el dispositivo:')} ` + reutilizado.error);
+        setGuardando(false);
+        return;
+      }
+      if (reutilizado.usado && reutilizado.id) {
+        const { error: errorActualizar } = await supabase.from('dispositivos').update(campos).eq('id', reutilizado.id);
+        if (errorActualizar) {
+          setError(`${t('No pudimos guardar el dispositivo:')} ` + errorActualizar.message);
+          setGuardando(false);
+          return;
+        }
+        creadoId = reutilizado.id;
+      }
+    }
+    if (!creadoId) {
+      const { data: creado, error: insertError } = await supabase
+        .from('dispositivos')
+        .insert({ ...campos, agregado_por_nombre: actor?.nombre ?? null, agregado_por_foto_url: actor?.fotoUrl ?? null })
+        .select('id')
+        .single();
+      if (insertError) {
+        setError(`${t('No pudimos guardar el dispositivo:')} ` + insertError.message);
+        setGuardando(false);
+        return;
+      }
+      creadoId = (creado as { id: string } | null)?.id ?? null;
     }
 
     await asegurarModelo(supabase, modeloNormalizado);
 
+    // El equipo ya está en el Stock: la orden de Servicio Técnico se cierra (el historial queda guardado).
+    if (ordenesPropias.length > 0) {
+      const cierre = await cerrarReparacionesAlPasarAlStock(supabase, ordenesPropias);
+      if (cierre.error) alert(`${t('El equipo se agregó al Stock, pero no pudimos cerrar la orden de Servicio Técnico:')} ${cierre.error}`);
+    }
+
     // El equipo ya está cargado: si las fotos no se pueden guardar no se deshace nada, se avisa.
-    if (conFotos && creado && fotosNuevas.length > 0) {
-      const { error: errorFotos } = await guardarFotos(supabase, (creado as { id: string }).id, fotosNuevas, 0);
+    if (conFotos && creadoId && fotosNuevas.length > 0) {
+      const { error: errorFotos } = await guardarFotos(supabase, creadoId, fotosNuevas, 0);
       if (errorFotos) alert(`${t('El equipo se cargó bien, pero no pudimos guardar las fotos:')} ${errorFotos}`);
     }
 
@@ -311,6 +362,7 @@ export default function NuevoDispositivo() {
             router.refresh();
           }}
         />
+        <AvisoServicioTecnico supabase={supabase} imei={imei} />
         <AvisoStandby
           supabase={supabase}
           porImei={coincidenciasStandby.porImei}

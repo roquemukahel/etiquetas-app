@@ -20,6 +20,7 @@ import { useSucursalActual } from '../lib/sucursal';
 import { falla, registrarFallo } from '../lib/escritura';
 import { camposRecibidoPor, registrarRecepcionEnHistorial } from '../lib/recibidoPor';
 import { formatearGB } from '../lib/almacenamiento';
+import { formatearFechaYHoraCorta } from '../lib/fechas';
 
 type Canje = {
   id: string;
@@ -36,6 +37,7 @@ type Canje = {
   condicion: string | null;
   ubicacion_fisica: string | null;
   vendedor_id: string | null;
+  created_at: string | null;
 };
 
 type VendedorCanje = { id: string; nombre: string; foto_url: string | null };
@@ -45,7 +47,7 @@ type VendedorCanje = { id: string; nombre: string; foto_url: string | null };
 // que crecían los canjes. Ahora: solo estas columnas, la foto de cada vendedor una sola vez, y cada
 // solapa se carga cuando se abre.
 const COLUMNAS_CANJE =
-  'id, modelo, capacidad_gb, color, imei, salud_bateria, detalles, monto, estado, agregado_a_stock, oculto_en_canje, condicion, ubicacion_fisica, vendedor_id';
+  'id, modelo, capacidad_gb, color, imei, salud_bateria, detalles, monto, estado, agregado_a_stock, oculto_en_canje, condicion, ubicacion_fisica, vendedor_id, created_at';
 const TAMANO_PAGINA_HISTORIAL = 50;
 
 type ReparacionDerivada = {
@@ -423,6 +425,11 @@ export default function PlanCanje() {
                   {c.monto != null && <p className="text-sm font-medium">${c.monto.toLocaleString('es-AR')}</p>}
                 </div>
                 <div className="text-xs text-muted dark:text-dark-text-secondary flex flex-col gap-0.5">
+                  {c.created_at && (
+                    <p>
+                      {t('Recibido el:')} <span className="font-medium text-ink dark:text-dark-text">{formatearFechaYHoraCorta(c.created_at)}</span>
+                    </p>
+                  )}
                   {c.detalles && <p>{t('Detalles:')} {c.detalles}</p>}
                   {c.vendedor_id && vendedores.get(c.vendedor_id)?.nombre && (
                     <p className="flex items-center gap-1.5">

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fechaISONegocio, inicioDelDiaNegocio, inicioDelMesNegocio } from './fechas';
+import { fechaISONegocio, formatearFechaYHoraCorta, inicioDelDiaNegocio, inicioDelMesNegocio } from './fechas';
 
 // Argentina es UTC-3 todo el año (sin horario de verano).
 describe('huso horario del negocio (Argentina, UTC-3)', () => {
@@ -28,5 +28,19 @@ describe('huso horario del negocio (Argentina, UTC-3)', () => {
     // Nueva York: 15/01 es UTC-5; 15/07 es UTC-4
     expect(inicioDelDiaNegocio(new Date('2026-01-15T12:00:00Z'), 0, 'America/New_York').toISOString()).toBe('2026-01-15T05:00:00.000Z');
     expect(inicioDelDiaNegocio(new Date('2026-07-15T12:00:00Z'), 0, 'America/New_York').toISOString()).toBe('2026-07-15T04:00:00.000Z');
+  });
+});
+
+describe('fecha de recepción en listas', () => {
+  it('muestra día y hora en el huso del negocio, no en el del navegador', () => {
+    // 2026-10-25 17:32 UTC = 14:32 en Argentina
+    expect(formatearFechaYHoraCorta('2026-10-25T17:32:00Z')).toBe('25/10/2026 · 14:32');
+  });
+  it('un equipo recibido de madrugada UTC sigue siendo del día anterior en Argentina', () => {
+    expect(formatearFechaYHoraCorta('2026-10-26T01:15:00Z')).toBe('25/10/2026 · 22:15');
+  });
+  it('sin fecha o con fecha inválida no muestra nada', () => {
+    expect(formatearFechaYHoraCorta(null)).toBe('');
+    expect(formatearFechaYHoraCorta('no es una fecha')).toBe('');
   });
 });

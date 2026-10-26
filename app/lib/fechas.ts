@@ -20,6 +20,17 @@ export function formatearFechaHora(iso: string, locale: string = 'es-AR'): strin
   });
 }
 
+// Fecha y hora cortas (25/10/2026 · 14:32) en el huso del negocio, para listas donde importa cuándo entró algo
+// (Plan Canje: cuándo se recibió cada equipo). Devuelve '' si no hay fecha.
+export function formatearFechaYHoraCorta(iso: string | null | undefined, locale: string = 'es-AR'): string {
+  if (!iso) return '';
+  const fecha = new Date(iso);
+  if (Number.isNaN(fecha.getTime())) return '';
+  const dia = fecha.toLocaleDateString(locale, { timeZone: 'America/Argentina/Buenos_Aires', day: '2-digit', month: '2-digit', year: 'numeric' });
+  const hora = fecha.toLocaleTimeString(locale, { timeZone: 'America/Argentina/Buenos_Aires', hour: '2-digit', minute: '2-digit', hour12: false });
+  return `${dia} · ${hora}`;
+}
+
 // ---------------------------------------------------------------------------
 // "Hoy" / "este mes" según el huso del NEGOCIO, no el del proceso que corre el
 // código. En el navegador new Date() ya está en la hora del dueño, pero Inicio

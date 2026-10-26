@@ -11,6 +11,8 @@ import { limpiarImei } from '../../lib/imei';
 import { useDictado } from '../../lib/dictado';
 import { getActor, useActor, MENSAJE_ACTOR_REQUERIDO } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
+import AvisoServicioTecnico from '../../AvisoServicioTecnico';
+import { reparacionesAbiertasConImei, propias, textoDeOrdenes, equipoDeOrigen, reutilizarEquipoDeOrigen, cerrarReparacionesAlPasarAlStock } from '../../lib/servicioEnStock';
 import SelectorColorAuto from '../../SelectorColorAuto';
 import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
 import { sanitizarDecimal } from '../../lib/numeros';
@@ -152,8 +154,27 @@ export default function StockPorFoto() {
       return;
     }
     const imeiLimpio = limpiarImei(imei);
+    // Si el IMEI es el de una orden abierta en Servicio Técnico: de un equipo propio se pregunta si ya fue reparado
+    // (si sí, entra al Stock y la orden se cierra); de un cliente solo se avisa, esa orden nunca se cierra desde acá.
+    const enServicio = imeiLimpio ? await reparacionesAbiertasConImei(supabase, imeiLimpio) : [];
+    const ordenesPropias = propias(enServicio);
+    const ordenesDeClientes = enServicio.filter((o) => o.cliente_id);
+    if (ordenesPropias.length > 0) {
+      if (
+        !confirm(
+          `${t('Este dispositivo se encuentra en Servicio Técnico')} (${textoDeOrdenes(ordenesPropias)}). ${t('¿Ya fue reparado? ¿Agregarlo al Stock? Si aceptás, se agrega al Stock y esa orden se cierra en Servicio Técnico.')}`
+        )
+      )
+        return;
+    } else if (ordenesDeClientes.length > 0) {
+      if (!confirm(`${t('Este dispositivo se encuentra en Servicio Técnico')} (${textoDeOrdenes(ordenesDeClientes)}). ${t('Es el equipo de un cliente que está en reparación.')} ${t('¿Agregarlo igual?')}`)) return;
+    }
+    // El equipo de origen de esa orden es el mismo que vuelve: no cuenta como duplicado.
+    const origenId = ordenesPropias.length > 0 ? await equipoDeOrigen(supabase, ordenesPropias) : null;
     if (imeiLimpio) {
-      const { data: existente } = await supabase.from('dispositivos').select('id').eq('imei', imeiLimpio).maybeSingle();
+      let busquedaDuplicado = supabase.from('dispositivos').select('id').eq('imei', imeiLimpio).limit(1);
+      if (origenId) busquedaDuplicado = busquedaDuplicado.neq('id', origenId);
+      const { data: existente } = await busquedaDuplicado.maybeSingle();
       // Con carga por foto es fácil escanear el mismo equipo dos veces sin
       // querer (ej. sacarle otra foto pensando que era el siguiente) — se
       // avisa antes de duplicarlo en Stock, igual que en Servicio Técnico.
@@ -164,7 +185,7 @@ export default function StockPorFoto() {
 
     const modeloNormalizado = normalizarNombreModelo(modelo.trim());
     const proveedorId = await asegurarProveedor(supabase, proveedor);
-    const { error: insertError } = await supabase.from('dispositivos').insert({
+    const campos = {
       modelo: modeloNormalizado,
       capacidad_gb: capacidad,
       imei: limpiarImei(imei),
@@ -178,17 +199,44 @@ export default function StockPorFoto() {
       ...(categoriaId ? { categoria_id: categoriaId } : {}),
       ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
       en_stock: true,
-      agregado_por_nombre: actor?.nombre ?? null,
-      agregado_por_foto_url: actor?.fotoUrl ?? null,
-    });
-
-    if (insertError) {
-      setError(`${t('No pudimos guardar el dispositivo:')} ` + insertError.message);
-      setGuardando(false);
-      return;
+    };
+    // Si la orden de Servicio Técnico salió de un equipo que ya existe, vuelve ese mismo equipo (no se crea un duplicado).
+    let reutilizadoEnStock = false;
+    if (ordenesPropias.length > 0) {
+      const reutilizado = await reutilizarEquipoDeOrigen(supabase, ordenesPropias);
+      if (reutilizado.error) {
+        setError(`${t('No pudimos guardar el dispositivo:')} ` + reutilizado.error);
+        setGuardando(false);
+        return;
+      }
+      if (reutilizado.usado && reutilizado.id) {
+        const { error: errorActualizar } = await supabase.from('dispositivos').update(campos).eq('id', reutilizado.id);
+        if (errorActualizar) {
+          setError(`${t('No pudimos guardar el dispositivo:')} ` + errorActualizar.message);
+          setGuardando(false);
+          return;
+        }
+        reutilizadoEnStock = true;
+      }
+    }
+    if (!reutilizadoEnStock) {
+      const { error: insertError } = await supabase
+        .from('dispositivos')
+        .insert({ ...campos, agregado_por_nombre: actor?.nombre ?? null, agregado_por_foto_url: actor?.fotoUrl ?? null });
+      if (insertError) {
+        setError(`${t('No pudimos guardar el dispositivo:')} ` + insertError.message);
+        setGuardando(false);
+        return;
+      }
     }
 
     await asegurarModelo(supabase, modeloNormalizado);
+
+    // El equipo ya está en el Stock: la orden de Servicio Técnico se cierra (el historial queda guardado).
+    if (ordenesPropias.length > 0) {
+      const cierre = await cerrarReparacionesAlPasarAlStock(supabase, ordenesPropias);
+      if (cierre.error) alert(`${t('El equipo se agregó al Stock, pero no pudimos cerrar la orden de Servicio Técnico:')} ${cierre.error}`);
+    }
 
     // Antes redirigía a Stock después de cada carga — con varios equipos
     // seguidos (que es el caso de uso de "Cargar con foto") obligaba a
@@ -304,6 +352,7 @@ export default function StockPorFoto() {
         </div>
 
         <Campo label="IMEI" valor={imei} onChange={setImei} mono />
+        <AvisoServicioTecnico supabase={supabase} imei={imei} />
         <Campo
           label={t('Salud de batería (%)')}
           valor={bateria}

@@ -3412,4 +3412,11 @@ export const EN: Record<string, string> = {
   'Monto correcto': 'Correct amount',
   'Guardar monto': 'Save amount',
   'Compartir stock': 'Share stock',
+  'Este dispositivo se encuentra en Servicio Técnico': 'This device is in Technical Service',
+  '¿Ya fue reparado? ¿Agregarlo al Stock? Si aceptás, se agrega al Stock y esa orden se cierra en Servicio Técnico.': 'Has it already been repaired? Add it to Stock? If you accept, it is added to Stock and that order is closed in Technical Service.',
+  'Es el equipo de un cliente que está en reparación.': 'It is the device of a customer who is having it repaired.',
+  'El equipo se agregó al Stock, pero no pudimos cerrar la orden de Servicio Técnico:': 'The device was added to Stock, but we could not close the Technical Service order:',
+  'Al agregarlo al Stock te vamos a preguntar si ya fue reparado; si decís que sí, esa orden se cierra y deja de aparecer en Servicio Técnico.': 'When you add it to Stock we will ask whether it has already been repaired; if you say yes, that order is closed and no longer appears in Technical Service.',
+  'de un cliente': 'for a customer',
+  'Recibido el:': 'Received on:',
 };

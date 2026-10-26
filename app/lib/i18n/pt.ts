@@ -3413,4 +3413,11 @@ export const PT: Record<string, string> = {
   'Monto correcto': 'Valor correto',
   'Guardar monto': 'Salvar valor',
   'Compartir stock': 'Compartilhar estoque',
+  'Este dispositivo se encuentra en Servicio Técnico': 'Este dispositivo está em Serviço Técnico',
+  '¿Ya fue reparado? ¿Agregarlo al Stock? Si aceptás, se agrega al Stock y esa orden se cierra en Servicio Técnico.': 'Já foi consertado? Adicionar ao Estoque? Se aceitar, ele é adicionado ao Estoque e essa ordem é encerrada no Serviço Técnico.',
+  'Es el equipo de un cliente que está en reparación.': 'É o aparelho de um cliente que está em conserto.',
+  'El equipo se agregó al Stock, pero no pudimos cerrar la orden de Servicio Técnico:': 'O aparelho foi adicionado ao Estoque, mas não conseguimos encerrar a ordem do Serviço Técnico:',
+  'Al agregarlo al Stock te vamos a preguntar si ya fue reparado; si decís que sí, esa orden se cierra y deja de aparecer en Servicio Técnico.': 'Ao adicioná-lo ao Estoque vamos perguntar se já foi consertado; se disser que sim, essa ordem é encerrada e deixa de aparecer no Serviço Técnico.',
+  'de un cliente': 'de um cliente',
+  'Recibido el:': 'Recebido em:',
 };
