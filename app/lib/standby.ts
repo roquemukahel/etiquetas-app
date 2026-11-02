@@ -8,7 +8,7 @@ import { compararModelosPorSalida } from './catalogosMarcas';
 import { camposRecibidoPor, registrarRecepcionEnHistorial } from './recibidoPor';
 import { soportaMigracion } from './migraciones';
 import { obtenerTodasLasFilas } from './db';
-import { marcarCanjeDeOrigenAgregado } from './canje';
+import { costoDeCanjeDeOrigen, marcarCanjeDeOrigenAgregado } from './canje';
 
 export type OrigenStandby = 'stock' | 'canje' | 'servicio_tecnico' | 'manual';
 
@@ -334,6 +334,7 @@ export async function mandarReparacionAStandby(
 ): Promise<Resultado> {
   const modelo = r.modelo ? normalizarNombreModelo(r.modelo) : r.modelo;
   // Si la reparación salió de un equipo que ya existe, vuelve a Standby ese mismo equipo (sin duplicarlo).
+  const costoCanje = await costoDeCanjeDeOrigen(supabase, r.id);
   const reutilizado = await reubicarEquipoDeServicio(supabase, r.id, { standby: opciones.motivo });
   if (reutilizado.error) return { error: reutilizado.error };
   if (!reutilizado.usado) {
@@ -345,6 +346,7 @@ export async function mandarReparacionAStandby(
         color: r.color,
         imei: r.imei,
         estado: 'usado',
+        ...(costoCanje ? { costo: costoCanje } : {}),
         en_stock: false,
         en_espera: true,
         en_espera_desde: new Date().toISOString(),

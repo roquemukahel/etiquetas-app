@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { idsDeCanjesDerivados, marcarCanjeDeOrigenAgregado } from './canje';
+import { costoDeCanjeDeOrigen, idsDeCanjesDerivados, marcarCanjeDeOrigenAgregado } from './canje';
 
 // Un "supabase" mínimo que anota lo que se le pide y devuelve lo que se le indica.
 function falso(respuestas: { canjeOrigenId?: string | null; errorLectura?: boolean; derivados?: string[] }) {
@@ -59,5 +59,34 @@ describe('canje de origen de una reparación', () => {
     const { cliente } = falso({ derivados: ['canje-1', 'canje-2'] });
     const ids = await idsDeCanjesDerivados(cliente);
     expect([...ids].sort()).toEqual(['canje-1', 'canje-2']);
+  });
+});
+
+// Un "supabase" que responde distinto según la tabla: reparaciones -> canje de origen, canjes -> monto.
+function falsoConMonto(canjeOrigenId: string | null, monto: number | string | null) {
+  return {
+    from(tabla: string) {
+      const q: any = {
+        select: () => q,
+        eq: () => q,
+        maybeSingle: async () => ({
+          data: tabla === 'reparaciones' ? { canje_origen_id: canjeOrigenId } : { monto },
+          error: null,
+        }),
+      };
+      return q;
+    },
+  } as unknown as SupabaseClient;
+}
+
+describe('costo que se recupera del canje de origen', () => {
+  it('lo reconocido al cliente por el equipo pasa a ser su costo en el Stock', async () => {
+    expect(await costoDeCanjeDeOrigen(falsoConMonto('canje-1', 100), 'rep-1')).toBe(100);
+    expect(await costoDeCanjeDeOrigen(falsoConMonto('canje-1', '250.5'), 'rep-1')).toBe(250.5);
+  });
+  it('sin canje de origen, o con monto vacío o cero, no inventa un costo', async () => {
+    expect(await costoDeCanjeDeOrigen(falsoConMonto(null, 100), 'rep-1')).toBeNull();
+    expect(await costoDeCanjeDeOrigen(falsoConMonto('canje-1', null), 'rep-1')).toBeNull();
+    expect(await costoDeCanjeDeOrigen(falsoConMonto('canje-1', 0), 'rep-1')).toBeNull();
   });
 });

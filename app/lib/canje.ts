@@ -52,6 +52,26 @@ export async function idsDeCanjesDerivados(supabase: SupabaseClient): Promise<Se
   }
 }
 
+// Lo que se le reconoció al cliente por un equipo de Plan Canje es lo que le costó al negocio. Si el equipo pasa por Servicio Técnico
+// antes de entrar al Stock, ese costo se pierde (entraba "sin costo" y sus ventas figuraban como ganancia completa): esto lo recupera
+// desde el canje de origen de la reparación. Null si no vino de un canje o el canje no tenía monto.
+export async function costoDeCanjeDeOrigen(supabase: SupabaseClient, reparacionId: string): Promise<number | null> {
+  const { data, error } = await supabase.from('reparaciones').select('canje_origen_id').eq('id', reparacionId).maybeSingle();
+  if (error) {
+    registrarFallo(error, 'buscar el canje de origen para recuperar su costo');
+    return null;
+  }
+  const canjeId = (data as { canje_origen_id: string | null } | null)?.canje_origen_id;
+  if (!canjeId) return null;
+  const { data: canje, error: errorCanje } = await supabase.from('canjes').select('monto').eq('id', canjeId).maybeSingle();
+  if (errorCanje) {
+    registrarFallo(errorCanje, 'leer el monto del canje de origen');
+    return null;
+  }
+  const monto = Number((canje as { monto: number | string | null } | null)?.monto);
+  return Number.isFinite(monto) && monto > 0 ? monto : null;
+}
+
 // Cuando un equipo que vino de Plan Canje termina su paso por Servicio Técnico y entra al Stock (o a Standby), su canje de origen
 // queda marcado como "ya agregado": pasa al Historial de Plan Canje y deja de figurar como pendiente en cualquier lista. Antes
 // quedaba oculto para siempre sin constancia de que el equipo ya estaba en el Stock. Si no vino de un canje no hace nada.
