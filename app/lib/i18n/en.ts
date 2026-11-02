@@ -3455,4 +3455,7 @@ export const EN: Record<string, string> = {
   'Generar enlace nuevo': 'Generate new link',
   '¿Generar un enlace nuevo? El anterior deja de funcionar y la otra app tiene que usar el nuevo.': 'Generate a new link? The old one stops working and the other app has to use the new one.',
   'Para usar este enlace falta correr la migración SQL (stock_publico_json_supabase.sql).': 'To use this link the SQL migration must be run (stock_publico_json_supabase.sql).',
+  'Buscar por modelo, IMEI (o parte del IMEI), color, detalle...': 'Search by model, IMEI (or part of the IMEI), color, detail...',
+  'Buscar en Plan Canje': 'Search in Trade-in Plan',
+  'Buscando en todo el historial...': 'Searching the whole history...',
 };

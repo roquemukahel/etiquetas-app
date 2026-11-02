@@ -48,6 +48,7 @@ import { obtenerSucursales, type Sucursal } from '../lib/sucursales';
 import { falla } from '../lib/escritura';
 import { camposRecibidoPor, registrarRecepcionEnHistorial } from '../lib/recibidoPor';
 import { soportaMigracion } from '../lib/migraciones';
+import { marcarCanjeDeOrigenAgregado } from '../lib/canje';
 import { mandarReparacionAStandby, reubicarEquipoDeServicio, dispositivoOrigenDe } from '../lib/standby';
 import { origenDeCliente } from '../lib/clientesDuplicados';
 import { OPCIONES_ALMACENAMIENTO, formatearGB } from '../lib/almacenamiento';
@@ -1013,6 +1014,7 @@ ${reutilizado.error}`);
       cargar();
       return;
     }
+    await marcarCanjeDeOrigenAgregado(supabase, r.id);
     await registrarAuditoria(supabase, {
       accion: `agregó al Stock un equipo propio reparado en Servicio Técnico (${r.numero_orden || ''}, ${r.modelo || 'sin modelo'}${r.imei ? `, IMEI ${r.imei}` : ''})`,
       entidad: 'reparacion',

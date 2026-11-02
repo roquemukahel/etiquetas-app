@@ -8,6 +8,7 @@ import { compararModelosPorSalida } from './catalogosMarcas';
 import { camposRecibidoPor, registrarRecepcionEnHistorial } from './recibidoPor';
 import { soportaMigracion } from './migraciones';
 import { obtenerTodasLasFilas } from './db';
+import { marcarCanjeDeOrigenAgregado } from './canje';
 
 export type OrigenStandby = 'stock' | 'canje' | 'servicio_tecnico' | 'manual';
 
@@ -367,6 +368,7 @@ export async function mandarReparacionAStandby(
       fecha_reparado: r.fecha_reparado ?? new Date().toISOString(),
     })
     .eq('id', r.id);
+  if (!errorReparacion) await marcarCanjeDeOrigenAgregado(supabase, r.id);
   await registrarAuditoria(supabase, {
     accion: `mandó a Standby un equipo propio de Servicio Técnico (${r.numero_orden || ''}, ${descripcion({ modelo: r.modelo, imei: r.imei })})`,
     entidad: 'reparacion',

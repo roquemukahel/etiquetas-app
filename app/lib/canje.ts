@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { asegurarModelo, normalizarNombreModelo } from './modelos';
 import { limpiarImei } from './imei';
 import { obtenerTodasLasFilas } from './db';
+import { registrarFallo } from './escritura';
 
 export type CanjeParaStock = {
   id: string;
@@ -15,6 +16,10 @@ export type CanjeParaStock = {
   monto?: number | null;
 };
 
+// Desde cuántos dígitos el IMEI tipeado se busca también "en cualquier parte" del IMEI (los últimos cuatro, un tramo del medio...),
+// no solo desde el principio. Con menos dígitos coincidiría con casi todo.
+export const DIGITOS_MINIMOS_FRACCION_IMEI = 4;
+
 export const COLUMNAS_CANJE_PARA_STOCK = 'id, modelo, capacidad_gb, color, imei, salud_bateria, detalles, condicion, monto';
 
 // Canjes que todavía están esperando en Plan Canje (no agregados al Stock, no derivados a
@@ -26,7 +31,40 @@ export async function canjesPendientes(supabase: SupabaseClient): Promise<CanjeP
     COLUMNAS_CANJE_PARA_STOCK,
     [{ columna: 'created_at', ascending: false }],
     (q) => q.eq('estado', 'en_canje').eq('agregado_a_stock', false).or('oculto_en_canje.is.null,oculto_en_canje.eq.false')
-  );
+  ).then(async (lista) => {
+    // Un canje que ya se derivó a Servicio Técnico no está esperando en Plan Canje, aunque su marca de "oculto" no haya quedado.
+    const derivados = await idsDeCanjesDerivados(supabase);
+    return derivados.size === 0 ? lista : lista.filter((c) => !derivados.has(c.id));
+  });
+}
+
+// Ids de los canjes que ya se derivaron a Servicio Técnico (la orden de reparación apunta al canje de origen). Es la fuente
+// de verdad de "ya salió de Plan Canje": no depende de que la marca de "oculto" se haya guardado bien.
+export async function idsDeCanjesDerivados(supabase: SupabaseClient): Promise<Set<string>> {
+  try {
+    const filas = await obtenerTodasLasFilas<{ canje_origen_id: string | null }>(supabase, 'reparaciones', 'canje_origen_id', [], (q) =>
+      q.not('canje_origen_id', 'is', null)
+    );
+    return new Set(filas.map((f) => f.canje_origen_id).filter((id): id is string => !!id));
+  } catch (e) {
+    registrarFallo(e, 'leer los canjes derivados a Servicio Técnico');
+    return new Set();
+  }
+}
+
+// Cuando un equipo que vino de Plan Canje termina su paso por Servicio Técnico y entra al Stock (o a Standby), su canje de origen
+// queda marcado como "ya agregado": pasa al Historial de Plan Canje y deja de figurar como pendiente en cualquier lista. Antes
+// quedaba oculto para siempre sin constancia de que el equipo ya estaba en el Stock. Si no vino de un canje no hace nada.
+export async function marcarCanjeDeOrigenAgregado(supabase: SupabaseClient, reparacionId: string): Promise<void> {
+  const { data, error } = await supabase.from('reparaciones').select('canje_origen_id').eq('id', reparacionId).maybeSingle();
+  if (error) {
+    registrarFallo(error, 'buscar el canje de origen de la reparación');
+    return;
+  }
+  const canjeId = (data as { canje_origen_id: string | null } | null)?.canje_origen_id;
+  if (!canjeId) return;
+  const { error: errorMarca } = await supabase.from('canjes').update({ agregado_a_stock: true }).eq('id', canjeId).eq('agregado_a_stock', false);
+  if (errorMarca) registrarFallo(errorMarca, 'marcar como agregado el canje de origen');
 }
 
 // De los canjes pendientes, los que pueden ser el equipo que se está cargando a mano:
@@ -57,7 +95,12 @@ export function coincidenciasPorImeiOModelo<T extends { imei: string | null; mod
     const imeiCanje = limpiarImei(c.imei ?? '') ?? '';
     // Mientras se va tipeando, alcanza con que lo escrito sea el comienzo del IMEI del canje: el aviso
     // aparece desde el segundo dígito y se va recién cuando algún dígito deja de coincidir.
-    if (imeiTipeado.length >= 2 && imeiCanje.startsWith(imeiTipeado)) {
+    // También alcanza con que lo tipeado esté en cualquier parte del IMEI (por ejemplo los últimos 4 dígitos), para encontrar un
+    // equipo con lo poco que se lee de él.
+    if (
+      (imeiTipeado.length >= 2 && imeiCanje.startsWith(imeiTipeado)) ||
+      (imeiTipeado.length >= DIGITOS_MINIMOS_FRACCION_IMEI && imeiCanje.includes(imeiTipeado))
+    ) {
       porImei.push(c);
       continue;
     }

@@ -65,3 +65,25 @@ describe('IMEI a medio escribir', () => {
     expect(canjesCoincidentes([c], '3', '').porImei).toHaveLength(0);
   });
 });
+
+describe('IMEI por fracción (no solo el comienzo)', () => {
+  const c = canje({ imei: '355060123456789' });
+  it('encuentra el equipo por los últimos 4 dígitos', () => {
+    expect(canjesCoincidentes([c], '6789', '').porImei).toHaveLength(1);
+  });
+  it('encuentra el equipo por un tramo del medio', () => {
+    expect(canjesCoincidentes([c], '0123', '').porImei).toHaveLength(1);
+    expect(canjesCoincidentes([c], '60123456', '').porImei).toHaveLength(1);
+  });
+  it('con menos de 4 dígitos solo cuenta el comienzo (en el medio coincidiría con casi todo)', () => {
+    expect(canjesCoincidentes([c], '678', '').porImei).toHaveLength(0);
+    expect(canjesCoincidentes([c], '355', '').porImei).toHaveLength(1);
+  });
+  it('una fracción que no está en el IMEI no avisa, y con IMEI distinto no cuenta como mismo modelo', () => {
+    expect(canjesCoincidentes([c], '9999', '').porImei).toHaveLength(0);
+    expect(canjesCoincidentes([c], '9999', 'iPhone 13').porModelo).toHaveLength(0);
+  });
+  it('ignora espacios al tipear la fracción', () => {
+    expect(canjesCoincidentes([c], '67 89', '').porImei).toHaveLength(1);
+  });
+});

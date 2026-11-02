@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../lib/supabase/client';
 import { obtenerTodasLasFilas } from '../lib/db';
-import { agregarCanjeAlStock } from '../lib/canje';
+import { agregarCanjeAlStock, idsDeCanjesDerivados } from '../lib/canje';
+import { buscarPorTexto } from '../lib/buscar';
 import { soportaMigracion } from '../lib/migraciones';
 import { obtenerImagenesDeCarpetas, imagenPorNombreExacto } from '../lib/carpetas';
 import { registrarAuditoria } from '../lib/auditoria';
@@ -96,9 +97,14 @@ export default function PlanCanje() {
 
   const cargarVista = async (v: Vista) => {
     if (v === 'en_canje') {
-      const c = await obtenerTodasLasFilas<Canje>(supabase, 'canjes', COLUMNAS_CANJE, [{ columna: 'created_at', ascending: false }], (q) =>
-        q.eq('estado', 'en_canje').eq('agregado_a_stock', false).or('oculto_en_canje.is.null,oculto_en_canje.eq.false')
-      );
+      const [pendientes, derivadosIds] = await Promise.all([
+        obtenerTodasLasFilas<Canje>(supabase, 'canjes', COLUMNAS_CANJE, [{ columna: 'created_at', ascending: false }], (q) =>
+          q.eq('estado', 'en_canje').eq('agregado_a_stock', false).or('oculto_en_canje.is.null,oculto_en_canje.eq.false')
+        ),
+        // La orden de Servicio Técnico que apunta al canje es la prueba de que ya salió de acá (no depende de la marca "oculto").
+        idsDeCanjesDerivados(supabase),
+      ]);
+      const c = pendientes.filter((x) => !derivadosIds.has(x.id));
       setCanjes((prev) => [...c, ...prev.filter((x) => x.agregado_a_stock)]);
       cargarImagenes(c.map((x) => x.modelo));
     } else if (v === 'historial') {
@@ -176,10 +182,62 @@ export default function PlanCanje() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vista]);
 
-  const filtrados = useMemo(() => {
+  const baseFiltrados = useMemo(() => {
     if (vista === 'historial') return canjes.filter((c) => c.agregado_a_stock);
     return canjes.filter((c) => c.estado === 'en_canje' && !c.agregado_a_stock && !c.oculto_en_canje);
   }, [canjes, vista]);
+
+  // Buscador (igual que el de Stock y Standby): modelo, capacidad, color, IMEI (completo o un tramo, ej. los últimos 4 dígitos),
+  // detalles, ubicación, quién lo recibió y la fecha. Cada palabra tiene que aparecer en algún dato.
+  const [busqueda, setBusqueda] = useState('');
+  const busquedaDiferida = useDeferredValue(busqueda);
+  const hayBusqueda = busqueda.trim() !== '';
+  const filtrados = useMemo(
+    () =>
+      buscarPorTexto(baseFiltrados, busquedaDiferida, (c) => [
+        c.modelo,
+        c.capacidad_gb ? `${c.capacidad_gb}gb ${formatearGB(c.capacidad_gb)}` : null,
+        c.color,
+        c.imei,
+        c.detalles,
+        c.ubicacion_fisica,
+        c.condicion,
+        c.vendedor_id ? vendedores.get(c.vendedor_id)?.nombre : null,
+        c.monto,
+        formatearFechaYHoraCorta(c.created_at),
+      ]),
+    [baseFiltrados, busquedaDiferida, vendedores]
+  );
+  const derivadosFiltrados = useMemo(
+    () =>
+      buscarPorTexto(derivados, busquedaDiferida, (r) => [
+        r.numero_orden,
+        r.modelo,
+        r.capacidad_gb ? `${r.capacidad_gb}gb ${formatearGB(r.capacidad_gb)}` : null,
+        r.color,
+        r.imei,
+        infoEstado(r.estado).label,
+        formatearFechaYHoraCorta(r.fecha_ingreso_servicio),
+      ]),
+    [derivados, busquedaDiferida]
+  );
+
+  // El Historial se trae de a 50. Si se busca ahí, se completa el resto una sola vez para que la búsqueda encuentre
+  // también los equipos más viejos (no solo los 50 que ya estaban cargados).
+  const [completandoHistorial, setCompletandoHistorial] = useState(false);
+  useEffect(() => {
+    if (vista !== 'historial' || !hayBusqueda || !hayMasHistorial || completandoHistorial) return;
+    setCompletandoHistorial(true);
+    obtenerTodasLasFilas<Canje>(supabase, 'canjes', COLUMNAS_CANJE, [{ columna: 'created_at', ascending: false }], (q) => q.eq('agregado_a_stock', true))
+      .then((todos) => {
+        setCanjes((prev) => [...prev.filter((x) => !x.agregado_a_stock), ...todos]);
+        setHayMasHistorial(false);
+        cargarImagenes(todos.map((x) => x.modelo));
+      })
+      .catch((e) => registrarFallo(e, 'cargar todo el historial de Plan Canje para buscar'))
+      .finally(() => setCompletandoHistorial(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vista, hayBusqueda, hayMasHistorial]);
 
   // Ya no cambia el estado del canje: crea una reparación nueva en
   // Servicio Técnico (vinculada por canje_origen_id) y solo oculta el
@@ -350,6 +408,23 @@ export default function PlanCanje() {
         </button>
       </div>
 
+      <div className="flex flex-col gap-1">
+        <input
+          type="search"
+          value={busqueda}
+          onChange={(e) => setBusqueda(e.target.value)}
+          placeholder={t('Buscar por modelo, IMEI (o parte del IMEI), color, detalle...')}
+          aria-label={t('Buscar en Plan Canje')}
+          className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+        />
+        {hayBusqueda && !loading && (
+          <p className="text-xs text-muted dark:text-dark-text-secondary" aria-live="polite">
+            {vista === 'derivados' ? derivadosFiltrados.length : filtrados.length} {t('de')} {vista === 'derivados' ? derivados.length : baseFiltrados.length}
+            {completandoHistorial ? ` · ${t('Buscando en todo el historial...')}` : ''}
+          </p>
+        )}
+      </div>
+
       {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{t('Cargando...')}</p>}
 
       {vista === 'derivados' ? (
@@ -359,8 +434,11 @@ export default function PlanCanje() {
               {t('Todavía no derivaste ningún canje a Servicio Técnico.')}
             </p>
           )}
+          {!loading && derivados.length > 0 && derivadosFiltrados.length === 0 && (
+            <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{t('Ningún equipo coincide con la búsqueda.')}</p>
+          )}
           <div className="flex flex-col gap-2">
-            {derivados.map((r) => {
+            {derivadosFiltrados.map((r) => {
               const est = infoEstado(r.estado);
               return (
                 <Link
@@ -393,7 +471,11 @@ export default function PlanCanje() {
         <>
           {!loading && filtrados.length === 0 && (
             <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">
-              {vista === 'historial' ? t('Todavía no agregaste ningún canje al stock.') : t('No hay dispositivos para mostrar acá.')}
+              {hayBusqueda && baseFiltrados.length > 0
+                ? t('Ningún equipo coincide con la búsqueda.')
+                : vista === 'historial'
+                  ? t('Todavía no agregaste ningún canje al stock.')
+                  : t('No hay dispositivos para mostrar acá.')}
             </p>
           )}
 

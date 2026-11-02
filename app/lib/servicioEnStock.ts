@@ -3,6 +3,7 @@ import { registrarAuditoria } from './auditoria';
 import { registrarFallo } from './escritura';
 import { dispositivoOrigenDe, reubicarEquipoDeServicio } from './standby';
 import { FINALIZADOS } from './reparaciones';
+import { DIGITOS_MINIMOS_FRACCION_IMEI, marcarCanjeDeOrigenAgregado } from './canje';
 
 // Un equipo que se está cargando al Stock puede ser el mismo que sigue en Servicio Técnico (por ejemplo, un equipo
 // propio que ya se reparó y quedó cargado en la orden). Acá se busca por IMEI esa orden, y si se confirma que ya
@@ -22,21 +23,23 @@ export type ReparacionConImei = {
 const COLUMNAS_REPARACION_CON_IMEI = 'id, numero_orden, modelo, imei, estado, cliente_id, fecha_reparado';
 
 // Las órdenes abiertas (ni entregadas ni canceladas, ni ya pasadas al Stock) cuyo IMEI es el tipeado.
-// `exacto: false` sirve para el aviso mientras se tipea: alcanza con que lo escrito sea el comienzo del IMEI.
+// `exacto: false` sirve para el aviso mientras se tipea: alcanza con que lo escrito esté en cualquier parte del IMEI (los
+// últimos dígitos, un tramo del medio...), desde DIGITOS_MINIMOS_FRACCION_IMEI dígitos.
 export async function reparacionesAbiertasConImei(
   supabase: SupabaseClient,
   imei: string,
   { exacto = true }: { exacto?: boolean } = {}
 ): Promise<ReparacionConImei[]> {
-  const limpio = imei.replace(/\s+/g, '');
-  if (limpio.length < (exacto ? 6 : 8)) return [];
+  // En la búsqueda parcial solo cuentan las cifras: así lo tipeado no puede traer comodines de la búsqueda (% o _).
+  const limpio = exacto ? imei.replace(/\s+/g, '') : imei.replace(/\D/g, '');
+  if (limpio.length < (exacto ? 6 : DIGITOS_MINIMOS_FRACCION_IMEI)) return [];
   let consulta = supabase
     .from('reparaciones')
     .select(COLUMNAS_REPARACION_CON_IMEI)
     .not('estado', 'in', `(${FINALIZADOS.join(',')})`)
     .or('agregado_a_stock.is.null,agregado_a_stock.eq.false')
     .limit(5);
-  consulta = exacto ? consulta.eq('imei', limpio) : consulta.like('imei', `${limpio}%`);
+  consulta = exacto ? consulta.eq('imei', limpio) : consulta.like('imei', `%${limpio}%`);
   const { data, error } = await consulta;
   if (error) {
     registrarFallo(error, 'buscar el equipo en Servicio Técnico');
@@ -94,6 +97,7 @@ export async function cerrarReparacionesAlPasarAlStock(supabase: SupabaseClient,
       primerError = primerError ?? error.message;
       continue;
     }
+    await marcarCanjeDeOrigenAgregado(supabase, r.id);
     await registrarAuditoria(supabase, {
       accion: `agregó al Stock un equipo que estaba en Servicio Técnico y cerró su orden (${r.numero_orden || ''}, ${r.modelo || 'sin modelo'}${r.imei ? `, IMEI ${r.imei}` : ''})`,
       entidad: 'reparacion',

@@ -49,6 +49,7 @@ import { useSucursalActual } from '../../lib/sucursal';
 import { falla } from '../../lib/escritura';
 import { obtenerTodasLasFilas } from '../../lib/db';
 import { soportaMigracion } from '../../lib/migraciones';
+import { marcarCanjeDeOrigenAgregado } from '../../lib/canje';
 import { mandarReparacionAStandby, reubicarEquipoDeServicio, dispositivoOrigenDe } from '../../lib/standby';
 import { OPCIONES_ALMACENAMIENTO, formatearGB } from '../../lib/almacenamiento';
 
@@ -1109,6 +1110,7 @@ export default function FichaReparacion() {
       cargar();
       return;
     }
+    await marcarCanjeDeOrigenAgregado(supabase, r.id);
     await registrarAuditoria(supabase, {
       accion: `agregó al Stock un equipo propio reparado en Servicio Técnico (${r.numero_orden || ''}, ${r.modelo || 'sin modelo'}${r.imei ? `, IMEI ${r.imei}` : ''})`,
       entidad: 'reparacion',
