@@ -1,0 +1,68 @@
+import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+import * as Sentry from '@sentry/nextjs';
+import { obtenerTodasLasFilas } from '../../../lib/db';
+import {
+  armarStockPublicoJson,
+  CABECERAS_CORS,
+  COLUMNAS_STOCK_PUBLICO_JSON,
+  FORMATO_TOKEN,
+  type FilaStockPublico,
+} from '../../../lib/stockPublicoJson';
+
+// Stock público en JSON para que otra app lo lea en vivo: GET /stock-publico/<token>/json
+// (también por /stock-publico/<token>?formato=json, ver middleware.ts).
+//
+// Es el MISMO enlace y el mismo interruptor que la página pública: solo responde si el negocio tiene el stock público
+// activado (Configuración → Stock público) y solo muestra los equipos en stock que no se ocultaron del público.
+// Se lee con la clave de servicio, así que todo está acotado acá: se busca el negocio por su token, se filtra por
+// ese negocio y se piden únicamente las columnas públicas (sin costo, IMEI, serie, proveedor ni clientes).
+export const dynamic = 'force-dynamic';
+
+const respuesta = (cuerpo: unknown, status: number, extra: Record<string, string> = {}) =>
+  NextResponse.json(cuerpo, { status, headers: { ...CABECERAS_CORS, Vary: 'Accept', ...extra } });
+
+// La app que lee desde un navegador de otro dominio pregunta antes con OPTIONS (preflight).
+export function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: CABECERAS_CORS });
+}
+
+export async function GET(_req: Request, { params }: { params: { token: string } }) {
+  const { token } = params;
+  if (!FORMATO_TOKEN.test(token)) return respuesta({ error: 'Stock no encontrado' }, 404);
+
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const clave = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !clave) {
+    Sentry.captureMessage('Stock público JSON: falta configuración de Supabase en el servidor', 'error');
+    return respuesta({ error: 'Servicio no disponible' }, 500);
+  }
+
+  try {
+    const supabase = createClient(url, clave, { auth: { persistSession: false, autoRefreshToken: false } });
+    const { data: negocio, error } = await supabase
+      .from('negocios')
+      .select('id, nombre, moneda')
+      .eq('token_stock_publico', token)
+      .eq('stock_publico_activo', true)
+      .maybeSingle();
+    if (error) throw error;
+    if (!negocio) return respuesta({ error: 'Stock no encontrado' }, 404);
+
+    const filas = await obtenerTodasLasFilas<FilaStockPublico>(
+      supabase,
+      'dispositivos',
+      COLUMNAS_STOCK_PUBLICO_JSON,
+      [{ columna: 'created_at', ascending: true }],
+      (q) => q.eq('negocio_id', negocio.id).eq('en_stock', true).eq('mostrar_en_stock_publico', true)
+    );
+
+    // Un poco de caché en el CDN (15 s) para que una app que consulta seguido no le pegue a la base en cada pedido.
+    return respuesta(armarStockPublicoJson({ nombre: negocio.nombre, moneda: negocio.moneda }, filas), 200, {
+      'Cache-Control': 'public, max-age=0, s-maxage=15, stale-while-revalidate=30',
+    });
+  } catch (e) {
+    Sentry.captureException(e);
+    return respuesta({ error: 'No pudimos leer el stock' }, 500);
+  }
+}
