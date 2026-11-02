@@ -1,14 +1,11 @@
 {
   "escritura-descartada": {
     "app/api/notificar-comprobante/route.ts": 1,
-    "app/canje/page.tsx": 1,
-    "app/clientes/[id]/page.tsx": 1,
     "app/comisiones/planes/page.tsx": 1,
     "app/compras/[id]/page.tsx": 1,
     "app/compras/page.tsx": 1,
     "app/lib/auditoria.ts": 1,
     "app/lib/caja/servicio.ts": 1,
-    "app/lib/estadoReparacion.ts": 1,
     "app/lib/modelos.ts": 1,
     "app/lib/ordenesServicio.ts": 1,
     "app/ordenes/[id]/page.tsx": 2,
@@ -63,7 +60,7 @@
     "app/plan-ahorro/[id]/comprobante/[movId]/page.tsx": 1,
     "app/plan-ahorro/[id]/page.tsx": 1,
     "app/plan-ahorro/nuevo/page.tsx": 2,
-    "app/productos/remitos/[id]/page.tsx": 3,
+    "app/productos/remitos/[id]/page.tsx": 2,
     "app/productos/remitos/nuevo/page.tsx": 1,
     "app/proveedores/[id]/comprobante/[movId]/page.tsx": 1,
     "app/registro/page.tsx": 1,
@@ -80,13 +77,12 @@
     "app/stock-publico/[token]/page.tsx": 1,
     "app/stock/[id]/page.tsx": 3,
     "app/stock/carpetas/page.tsx": 1,
-    "app/stock/foto/page.tsx": 3,
-    "app/stock/nuevo/page.tsx": 4,
+    "app/stock/foto/page.tsx": 2,
+    "app/stock/nuevo/page.tsx": 3,
     "app/stock/page.tsx": 2,
     "app/suscripcion-vencida/page.tsx": 2
   },
   "in-sin-lote": {
-    "app/api/cron/stock-quieto/route.ts": 1,
     "app/configuracion/negocio/page.tsx": 4,
     "app/FinanciacionCliente.tsx": 1,
     "app/lib/comisiones/operaciones.ts": 1,
@@ -100,9 +96,8 @@
   },
   "select-sin-limite": {
     "app/clientes/[id]/page.tsx": 1,
-    "app/estadisticas/Dashboard.tsx": 3,
     "app/FinanciacionCliente.tsx": 1,
-    "app/inicio/PanelInicio.tsx": 3,
+    "app/inicio/PanelInicio.tsx": 1,
     "app/lib/caja/servicio.ts": 1,
     "app/lib/financiacion/servicio.ts": 1,
     "app/lib/planAhorro.ts": 1,
@@ -114,12 +109,10 @@
   "fecha-utc": {
     "app/admin/negocios/[id]/page.tsx": 1,
     "app/admin/negocios/page.tsx": 1,
-    "app/lib/csv.ts": 1,
-    "app/ordenes/page.tsx": 1
+    "app/lib/csv.ts": 1
   },
   "catch-vacio": {
     "app/BienvenidaQovi.tsx": 1,
-    "app/clientes/[id]/page.tsx": 1,
     "app/cuentas-por-cobrar/page.tsx": 2,
     "app/estadisticas/Dashboard.tsx": 2,
     "app/NovedadesModal.tsx": 2,

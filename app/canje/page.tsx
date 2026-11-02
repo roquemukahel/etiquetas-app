@@ -314,7 +314,7 @@ export default function PlanCanje() {
       return;
     }
     if (c.imei) {
-      const { data: existente } = await supabase.from('dispositivos').select('id').eq('imei', c.imei).maybeSingle();
+      const { data: existente } = await supabase.from('dispositivos').select('id').eq('imei', c.imei).limit(1).maybeSingle();
       if (existente && !confirm(`${t('Ya hay un dispositivo en Stock con el IMEI')} ${c.imei}. ${t('¿Agregarlo igual?')}`)) return;
     }
     if (!confirm(t('¿Agregar este dispositivo al Stock para venderlo?'))) return;

@@ -94,7 +94,7 @@ export default function DetalleCompra() {
     const enStandbyConEseImei = hayCanjeConEseImei(coincidenciasStandby.porImei, compra.imei ?? '');
     if (enStandbyConEseImei && !confirm(t('Este dispositivo está en Standby. Si lo cargás acá queda duplicado en el Stock. ¿Cargarlo igual?'))) return;
     if (compra.imei && !enStandbyConEseImei) {
-      const { data: existente } = await supabase.from('dispositivos').select('id').eq('imei', compra.imei).maybeSingle();
+      const { data: existente } = await supabase.from('dispositivos').select('id').eq('imei', compra.imei).limit(1).maybeSingle();
       if (existente && !confirm(`${t('Ya hay un dispositivo en Stock con el IMEI')} ${compra.imei}. ${t('¿Agregarlo igual?')}`)) return;
     }
     setProcesando(true);

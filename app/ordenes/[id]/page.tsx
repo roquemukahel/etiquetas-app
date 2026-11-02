@@ -546,7 +546,7 @@ export default function DetalleOrden() {
     if (!nuevoModeloDispEdit.trim()) return;
     const imeiLimpio = limpiarImei(nuevoImeiDispEdit);
     if (imeiLimpio) {
-      const { data: existente } = await supabase.from('dispositivos').select('id').eq('imei', imeiLimpio).maybeSingle();
+      const { data: existente } = await supabase.from('dispositivos').select('id').eq('imei', imeiLimpio).limit(1).maybeSingle();
       if (existente && !confirm(`${t('Ya hay un dispositivo en Stock con el IMEI')} ${imeiLimpio}. ${t('¿Agregarlo igual?')}`)) return;
     }
     setCargandoDispositivoEdit(true);

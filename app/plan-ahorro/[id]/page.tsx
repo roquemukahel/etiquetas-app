@@ -566,7 +566,7 @@ export default function DetallePlanAhorro() {
     if (imeiLimpio) {
       // Mismo aviso que /stock/nuevo y /stock/foto: fácil escanear o tipear
       // dos veces el mismo IMEI sin querer.
-      const { data: existente } = await supabase.from('dispositivos').select('id').eq('imei', imeiLimpio).maybeSingle();
+      const { data: existente } = await supabase.from('dispositivos').select('id').eq('imei', imeiLimpio).limit(1).maybeSingle();
       if (existente && !confirm(`${t('Ya hay un dispositivo en Stock con el IMEI')} ${imeiLimpio}. ${t('¿Agregarlo igual?')}`)) return;
     }
     // Se confirma ACÁ, antes de crear el equipo — completarPlan(id, true) se

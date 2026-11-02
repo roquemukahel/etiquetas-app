@@ -533,8 +533,14 @@ export default function DetalleCliente() {
       // financiacion_revertir_pago_supabase.sql todavía, esto no bloquea la
       // anulación del movimiento (que ya se aplicó arriba).
       try {
-        await supabase.rpc('financiacion_revertir_pago', { p_pago_id: m.pago_id, p_usuario: actor?.nombre ?? null });
-      } catch {}
+        const { error: errorRevertir } = await supabase.rpc('financiacion_revertir_pago', { p_pago_id: m.pago_id, p_usuario: actor?.nombre ?? null });
+        // Sin la función (SQL sin correr) no hay nada que revertir; cualquier otro error deja cuotas "pagadas" de un pago anulado.
+        if (errorRevertir && !/PGRST202|Could not find the function/i.test(`${errorRevertir.code ?? ''} ${errorRevertir.message ?? ''}`)) {
+          alert(`${t('El pago se anuló, pero no pudimos deshacer su reparto a las cuotas de financiación. Revisá las cuotas del cliente:')} ${errorRevertir.message}`);
+        }
+      } catch {
+        // Sin conexión con la base: ya se avisó arriba si el pago mismo no se pudo anular.
+      }
       // Si el pago era un equipo recibido como parte de pago, el equipo ya no tiene pago que lo respalde: si todavía espera en
       // Plan Canje se quita de ahí; si ya se agregó al Stock se avisa (no se saca solo del Stock).
       if (m.pagos?.medio === MEDIO_EQUIPO.codigo && m.orden_id) {

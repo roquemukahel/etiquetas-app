@@ -3459,4 +3459,5 @@ export const PT: Record<string, string> = {
   'Buscar por modelo, IMEI (o parte del IMEI), color, detalle...': 'Buscar por modelo, IMEI (ou parte do IMEI), cor, detalhe...',
   'Buscar en Plan Canje': 'Buscar no Plano de Troca',
   'Buscando en todo el historial...': 'Buscando em todo o histórico...',
+  'El pago se anuló, pero no pudimos deshacer su reparto a las cuotas de financiación. Revisá las cuotas del cliente:': 'O pagamento foi anulado, mas não conseguimos desfazer a aplicação às parcelas do financiamento. Revise as parcelas do cliente:',
 };

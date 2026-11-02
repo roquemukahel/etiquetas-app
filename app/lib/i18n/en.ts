@@ -3458,4 +3458,5 @@ export const EN: Record<string, string> = {
   'Buscar por modelo, IMEI (o parte del IMEI), color, detalle...': 'Search by model, IMEI (or part of the IMEI), color, detail...',
   'Buscar en Plan Canje': 'Search in Trade-in Plan',
   'Buscando en todo el historial...': 'Searching the whole history...',
+  'El pago se anuló, pero no pudimos deshacer su reparto a las cuotas de financiación. Revisá las cuotas del cliente:': 'The payment was cancelled, but we could not undo how it was applied to the financing installments. Check the customer installments:',
 };

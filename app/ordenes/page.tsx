@@ -17,7 +17,7 @@ import type { CuentaCorrienteServicioTecnico } from '../lib/ordenesServicio';
 import { simboloMoneda } from '../lib/monedas';
 import { aFechaISO } from '../lib/financiacion/motor';
 import { formatearMonto, sanitizarDecimal } from '../lib/numeros';
-import { formatearFechaHora } from '../lib/fechas';
+import { formatearFechaHora, fechaISONegocio } from '../lib/fechas';
 import { infoEstado } from '../lib/reparaciones';
 import { descargarXLSX } from '../lib/csv';
 import { ICONOS } from '../Iconos';
@@ -769,7 +769,7 @@ export default function Ordenes() {
         anulado: m.anulado ? t('Sí') : t('No'),
       }));
       await descargarXLSX(
-        `movimientos-financiamiento-${new Date().toISOString().slice(0, 10)}.xlsx`,
+        `movimientos-financiamiento-${fechaISONegocio()}.xlsx`,
         ['fecha_hora', 'cliente', 'tipo', 'cuota', 'monto', 'moneda', 'forma_pago', 'cobrado_por', 'sucursal', 'anulado'],
         filas
       );
