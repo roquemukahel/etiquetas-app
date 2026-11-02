@@ -21,8 +21,10 @@ import {
 // ese negocio y se piden únicamente las columnas públicas (sin costo, IMEI, serie, proveedor ni clientes).
 export const dynamic = 'force-dynamic';
 
-const respuesta = (cuerpo: unknown, status: number, extra: Record<string, string> = {}) =>
-  NextResponse.json(cuerpo, { status, headers: { ...CABECERAS_CORS, Vary: 'Accept', ...extra } });
+// Sin caché en ningún lado (CDN ni navegador): la app que lo lee siempre ve el stock de ese momento, y un enlace apagado o
+// regenerado deja de responder al instante en vez de seguir sirviéndose unos segundos.
+const respuesta = (cuerpo: unknown, status: number) =>
+  NextResponse.json(cuerpo, { status, headers: { ...CABECERAS_CORS, 'Cache-Control': 'no-store', Vary: 'Accept' } });
 
 // La app que lee desde un navegador de otro dominio pregunta antes con OPTIONS (preflight).
 export function OPTIONS() {
@@ -67,10 +69,7 @@ export async function GET(_req: Request, { params }: { params: { token: string }
       (q) => q.eq('negocio_id', negocio.id).eq('en_stock', true).eq('mostrar_en_stock_publico', true)
     );
 
-    // Un poco de caché en el CDN (15 s) para que una app que consulta seguido no le pegue a la base en cada pedido.
-    return respuesta(armarStockPublicoJson({ nombre: negocio.nombre, moneda: negocio.moneda }, filas), 200, {
-      'Cache-Control': 'public, max-age=0, s-maxage=15, stale-while-revalidate=30',
-    });
+    return respuesta(armarStockPublicoJson({ nombre: negocio.nombre, moneda: negocio.moneda }, filas), 200);
   } catch (e) {
     Sentry.captureException(e);
     return respuesta({ error: 'No pudimos leer el stock' }, 500);
