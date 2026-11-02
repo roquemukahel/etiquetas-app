@@ -28,7 +28,7 @@ const respuesta = (cuerpo: unknown, status: number) =>
 
 // La app que lee desde un navegador de otro dominio pregunta antes con OPTIONS (preflight).
 export function OPTIONS() {
-  return new NextResponse(null, { status: 204, headers: CABECERAS_CORS });
+  return new NextResponse(null, { status: 200, headers: { ...CABECERAS_CORS, 'Cache-Control': 'no-store' } });
 }
 
 export async function GET(_req: Request, { params }: { params: { token: string } }) {
