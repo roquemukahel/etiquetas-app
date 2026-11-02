@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 // — un cliente externo nunca tiene sesión, así que sin esto el middleware
 // lo mandaba derecho a /login. Con la barra no choca con '/cuenta-desactivada'
 // (ruta distinta, ya pública, para negocios suspendidos).
-const RUTAS_PUBLICAS = ['/login', '/registro', '/cuenta-desactivada', '/suscripcion-vencida', '/terminos', '/privacidad', '/seguimiento', '/boleta', '/comprobante-plan-ahorro', '/stock-publico', '/cuenta/'];
+const RUTAS_PUBLICAS = ['/login', '/registro', '/cuenta-desactivada', '/suscripcion-vencida', '/terminos', '/privacidad', '/seguimiento', '/boleta', '/comprobante-plan-ahorro', '/stock-publico', '/orden-publica', '/cuenta/'];
 
 // El deployment de PRODUCCIÓN de Vercel siempre queda accesible además por
 // su propio dominio genérico (*.vercel.app) — no se puede desactivar. Para
@@ -36,6 +36,12 @@ export async function middleware(request: NextRequest) {
   // Stock en JSON para otra app (/stock-publico/<token>/json): público y sin sesión, se resuelve acá antes de consultar la
   // sesión, igual que los webhooks. Es un enlace aparte del que se le manda a los clientes (la página no cambia).
   if (/^\/stock-publico\/[0-9a-f-]{36}\/json\/?$/i.test(request.nextUrl.pathname)) return NextResponse.next();
+
+  // Seguimiento de órdenes de Servicio Técnico para otra app (/orden-publica/<código>/json y /suscribir): públicos y sin sesión,
+  // igual que el stock en JSON. El aviso push (/api/push-orden) lo llama la base de datos con pg_net, tampoco trae sesión.
+  if (/^\/orden-publica\/[A-Za-z0-9]{8}\/(json|suscribir)\/?$/.test(request.nextUrl.pathname) || request.nextUrl.pathname === '/api/push-orden') {
+    return NextResponse.next();
+  }
 
   // Los webhooks (ej. Lemon Squeezy) y los cron jobs (ej. Vercel Cron) son
   // servidor-a-servidor: nunca traen sesión de usuario, y se autentican
@@ -93,7 +99,7 @@ export async function middleware(request: NextRequest) {
   // (a diferencia de /login, que no tiene sentido ver estando adentro).
   // /registro sí puede hacer falta verla estando logueado: es donde se
   // recupera una cuenta que quedó sin negocio creado (ver app/registro).
-  const RUTAS_SIEMPRE_ACCESIBLES = ['/registro', '/cuenta-desactivada', '/suscripcion-vencida', '/terminos', '/privacidad', '/seguimiento', '/boleta', '/comprobante-plan-ahorro', '/stock-publico', '/cuenta/'];
+  const RUTAS_SIEMPRE_ACCESIBLES = ['/registro', '/cuenta-desactivada', '/suscripcion-vencida', '/terminos', '/privacidad', '/seguimiento', '/boleta', '/comprobante-plan-ahorro', '/stock-publico', '/orden-publica', '/cuenta/'];
   const esPantallaDeBloqueo = RUTAS_SIEMPRE_ACCESIBLES.some((r) => request.nextUrl.pathname.startsWith(r));
 
   if (user && esPublica && !esPantallaDeBloqueo) {

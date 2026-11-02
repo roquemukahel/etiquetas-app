@@ -7,13 +7,28 @@ type Props = {
   identificador: string;
   detalle: string | null;
   formato?: FormatoEtiqueta;
+  // Código de seguimiento (8 caracteres) y su QR ya generado (imagen). Si falta alguno de los dos, la etiqueta sale como siempre.
+  codigo?: string | null;
+  qr?: string | null;
 };
 
+// QR + código al pie: el cliente lo escanea o lo escribe en la app para seguir su equipo.
+function Seguimiento({ codigo, qr, lado, letra, color }: { codigo: string; qr: string; lado: number; letra: number; color: string }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', flexShrink: 0 }}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={qr} alt="" style={{ width: `${lado}px`, height: `${lado}px`, display: 'block' }} />
+      <span style={{ fontSize: `${letra}px`, fontWeight: 700, fontFamily: 'monospace', letterSpacing: '0.08em', color }}>{codigo}</span>
+    </div>
+  );
+}
+
 const EtiquetaServicio = forwardRef<HTMLDivElement, Props>(function EtiquetaServicio(
-  { logo, modelo, identificador, detalle, formato = 'estandar' },
+  { logo, modelo, identificador, detalle, formato = 'estandar', codigo, qr },
   ref
 ) {
   const t = TAMANOS[formato];
+  const conSeguimiento = !!(codigo && qr);
 
   if (formato === 'termica') {
     // Blanco y negro puro, texto grande y centrado, para térmica 58 mm.
@@ -63,7 +78,17 @@ const EtiquetaServicio = forwardRef<HTMLDivElement, Props>(function EtiquetaServ
           </p>
         </div>
 
-        <div style={{ width: '100%', borderTop: '3px solid #000000', paddingTop: '10px' }}>
+        <div
+          style={{
+            width: '100%',
+            borderTop: '3px solid #000000',
+            paddingTop: '10px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '16px',
+          }}
+        >
           <p
             style={{
               fontSize: '20px',
@@ -71,13 +96,17 @@ const EtiquetaServicio = forwardRef<HTMLDivElement, Props>(function EtiquetaServ
               margin: 0,
               lineHeight: 1.25,
               display: '-webkit-box',
-              WebkitLineClamp: 2,
+              WebkitLineClamp: conSeguimiento ? 4 : 2,
               WebkitBoxOrient: 'vertical',
               overflow: 'hidden',
+              flex: 1,
+              minWidth: 0,
+              textAlign: conSeguimiento ? 'left' : 'center',
             }}
           >
             {detalle || 'Sin detalle registrado'}
           </p>
+          {conSeguimiento && <Seguimiento codigo={codigo!} qr={qr!} lado={112} letra={22} color="#000000" />}
         </div>
       </div>
     );
@@ -133,21 +162,24 @@ const EtiquetaServicio = forwardRef<HTMLDivElement, Props>(function EtiquetaServ
         <p style={{ fontSize: '16px', color: '#5F5E5A', margin: '4px 0 0', fontFamily: 'monospace' }}>{identificador}</p>
       </div>
 
-      <div style={{ borderTop: '1px solid #E5E3DB', paddingTop: '10px' }}>
-        <p style={{ fontSize: '11px', color: '#8A8780', margin: '0 0 2px', letterSpacing: '0.02em' }}>Detalle</p>
-        <p
-          style={{
-            fontSize: '15px',
-            margin: 0,
-            lineHeight: 1.3,
-            display: '-webkit-box',
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: 'vertical',
-            overflow: 'hidden',
-          }}
-        >
-          {detalle || 'Sin detalle registrado'}
-        </p>
+      <div style={{ borderTop: '1px solid #E5E3DB', paddingTop: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '14px' }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ fontSize: '11px', color: '#8A8780', margin: '0 0 2px', letterSpacing: '0.02em' }}>Detalle</p>
+          <p
+            style={{
+              fontSize: '15px',
+              margin: 0,
+              lineHeight: 1.3,
+              display: '-webkit-box',
+              WebkitLineClamp: conSeguimiento ? 3 : 2,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden',
+            }}
+          >
+            {detalle || 'Sin detalle registrado'}
+          </p>
+        </div>
+        {conSeguimiento && <Seguimiento codigo={codigo!} qr={qr!} lado={92} letra={15} color="#1C1B19" />}
       </div>
     </div>
   );

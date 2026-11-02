@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import QRCode from 'qrcode';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { crearClienteNavegador } from '../../../lib/supabase/client';
@@ -26,6 +27,8 @@ export default function EtiquetaServicioTecnico() {
   const [loading, setLoading] = useState(true);
   const [descargando, setDescargando] = useState(false);
   const [formato, setFormato] = useState<FormatoEtiqueta>('estandar');
+  const [codigo, setCodigo] = useState<string | null>(null);
+  const [qr, setQr] = useState<string | null>(null);
   const [imagenParaImprimir, setImagenParaImprimir] = useState<string | null>(null);
   const etiquetaRef = useRef<HTMLDivElement>(null);
 
@@ -34,6 +37,17 @@ export default function EtiquetaServicioTecnico() {
       const { data } = await supabase.from('reparaciones').select('id, numero_orden, modelo, imei, falla_declarada').eq('id', id).single();
       setEquipo(data as Equipo);
       setLoading(false);
+    })();
+    // El código de seguimiento se pide aparte: si todavía no se corrió el SQL (orden_publica_supabase.sql) la etiqueta sale igual, sin QR.
+    (async () => {
+      const { data, error } = await supabase.from('reparaciones').select('codigo_seguimiento').eq('id', id).maybeSingle();
+      const c = !error ? ((data as { codigo_seguimiento: string | null } | null)?.codigo_seguimiento ?? null) : null;
+      setCodigo(c);
+      if (!c) return;
+      // El QR lleva al enlace de seguimiento del cliente (termina en el código: la app también lo lee de ahí).
+      QRCode.toDataURL(`${window.location.origin}/orden-publica/${c}`, { margin: 0, width: 240, errorCorrectionLevel: 'M' })
+        .then(setQr)
+        .catch(() => setQr(null));
     })();
     (async () => {
       const {
@@ -202,14 +216,14 @@ export default function EtiquetaServicioTecnico() {
             height: `${TAMANOS[formato].hPx}px`,
           }}
         >
-          <EtiquetaServicio logo={logo} modelo={equipo.modelo} identificador={identificador} detalle={equipo.falla_declarada} formato={formato} />
+          <EtiquetaServicio logo={logo} modelo={equipo.modelo} identificador={identificador} detalle={equipo.falla_declarada} formato={formato} codigo={codigo} qr={qr} />
         </div>
       </div>
 
       {/* Copia a tamaño real fuera de pantalla: la que captura html2canvas
           (para PNG/PDF/Imprimir) — nunca se imprime directo. */}
       <div aria-hidden className="no-print" style={{ position: 'fixed', left: '-10000px', top: 0, pointerEvents: 'none' }}>
-        <EtiquetaServicio ref={etiquetaRef} logo={logo} modelo={equipo.modelo} identificador={identificador} detalle={equipo.falla_declarada} formato={formato} />
+        <EtiquetaServicio ref={etiquetaRef} logo={logo} modelo={equipo.modelo} identificador={identificador} detalle={equipo.falla_declarada} formato={formato} codigo={codigo} qr={qr} />
       </div>
 
       {/* Lo único que se imprime: la imagen ya rasterizada, a tamaño físico exacto. */}

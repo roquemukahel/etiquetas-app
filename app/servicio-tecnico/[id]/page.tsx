@@ -182,6 +182,8 @@ type Reparacion = {
   fecha_entrega: string | null;
   orden_cobro_id: string | null;
   token_seguimiento: string;
+  codigo_seguimiento: string | null;
+  nota_cliente: string | null;
   fecha_ingreso_servicio: string;
   fecha_reparado: string | null;
   agregado_a_stock: boolean;
@@ -273,6 +275,9 @@ export default function FichaReparacion() {
   const [avisoAgregarStock, setAvisoAgregarStock] = useState(false);
   const [tab, setTab] = useState<Tab>('resumen');
   const [linkCopiado, setLinkCopiado] = useState(false);
+  const [codigoCopiado, setCodigoCopiado] = useState(false);
+  const [notaCliente, setNotaCliente] = useState('');
+  const [guardandoNotaCliente, setGuardandoNotaCliente] = useState(false);
   const [controlCalidad, setControlCalidad] = useState<ControlCalidadItem[]>([]);
   const [reparacionesRelacionadas, setReparacionesRelacionadas] = useState<ReparacionRelacionada[]>([]);
   const [guardandoClasificacion, setGuardandoClasificacion] = useState(false);
@@ -359,6 +364,11 @@ export default function FichaReparacion() {
     }));
     setEventos([...deAuditoria, ...deEventos].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
   };
+
+  // La nota para el cliente se actualiza en pantalla solo cuando cambia lo guardado (no pisa lo que se está escribiendo).
+  useEffect(() => {
+    setNotaCliente(r?.nota_cliente ?? '');
+  }, [r?.nota_cliente]);
 
   useEffect(() => {
     cargar();
@@ -883,7 +893,7 @@ export default function FichaReparacion() {
     const nombre = nombreCliente || 'estimado/a';
     const modelo = r.modelo || 'equipo';
     let mensaje = '';
-    if (tipo === 'recibido') mensaje = mensajeSeguimientoServicio(nombre, modelo, url);
+    if (tipo === 'recibido') mensaje = mensajeSeguimientoServicio(nombre, modelo, url, r.codigo_seguimiento);
     if (tipo === 'presupuesto') {
       const monto = `$${formatearMonto((r.presupuesto_mano_obra || 0) + (r.presupuesto_repuestos || 0))}`;
       mensaje = mensajePresupuesto(nombre, modelo, monto, url);
@@ -1191,6 +1201,33 @@ export default function FichaReparacion() {
       entidadId: r.id,
     });
     setGuardando(false);
+    cargar();
+  };
+
+  const copiarCodigoSeguimiento = async () => {
+    if (!r?.codigo_seguimiento) return;
+    try {
+      await navigator.clipboard.writeText(r.codigo_seguimiento);
+      setCodigoCopiado(true);
+      setTimeout(() => setCodigoCopiado(false), 2000);
+    } catch {
+      setError(t('No pudimos copiar el código — copialo manualmente:') + ' ' + r.codigo_seguimiento);
+    }
+  };
+
+  // Texto opcional que ve el cliente en la app (ej. "Estamos colocando la pantalla nueva."). Vacío = sin nota.
+  const guardarNotaCliente = async () => {
+    if (!r || !puedeGestionar || guardandoNotaCliente) return;
+    setGuardandoNotaCliente(true);
+    const { error: errorNota } = await supabase
+      .from('reparaciones')
+      .update({ nota_cliente: notaCliente.trim() === '' ? null : notaCliente.trim() })
+      .eq('id', r.id);
+    setGuardandoNotaCliente(false);
+    if (errorNota) {
+      setError(t('No pudimos guardar la nota para el cliente:') + ' ' + errorNota.message);
+      return;
+    }
     cargar();
   };
 
@@ -2223,6 +2260,52 @@ export default function FichaReparacion() {
             (editando ? (
               <p className="text-xs text-muted dark:text-dark-text-secondary text-center py-6">{t('Guardá o cancelá la edición para usar esta sección.')}</p>
             ) : (
+              <>
+              {r.codigo_seguimiento && (
+                <Seccion titulo={t('Seguimiento para el cliente')}>
+                  <p className="text-xs text-muted dark:text-dark-text-secondary -mt-1 mb-2">
+                    {t('Con este código el cliente sigue su equipo desde la app (y por el QR de la etiqueta).')}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2 mb-3">
+                    <span className="font-mono text-xl font-semibold tracking-widest">{r.codigo_seguimiento}</span>
+                    <button
+                      onClick={copiarCodigoSeguimiento}
+                      className="rounded-lg border border-border dark:border-dark-border px-3 py-1.5 text-xs font-medium"
+                    >
+                      {codigoCopiado ? t('¡Copiado!') : t('Copiar código')}
+                    </button>
+                    {r.cliente_id && r.clientes?.telefono && (
+                      <button
+                        disabled={guardando}
+                        onClick={() => enviarWhatsApp('recibido')}
+                        className="rounded-lg border border-good/30 text-good px-3 py-1.5 text-xs font-medium disabled:opacity-40"
+                      >
+                        {t('Enviar seguimiento por WhatsApp')}
+                      </button>
+                    )}
+                  </div>
+                  <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Nota para el cliente (opcional)')}</label>
+                  <textarea
+                    value={notaCliente}
+                    onChange={(e) => setNotaCliente(e.target.value)}
+                    disabled={!puedeGestionar}
+                    maxLength={300}
+                    placeholder={t('Ej: Estamos colocando la pantalla nueva.')}
+                    rows={2}
+                    className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                  />
+                  <div className="flex items-center gap-2 mt-2">
+                    <button
+                      disabled={!puedeGestionar || guardandoNotaCliente || notaCliente.trim() === (r.nota_cliente ?? '').trim()}
+                      onClick={guardarNotaCliente}
+                      className="rounded-lg bg-accent dark:bg-dark-accent text-white px-4 py-2 text-xs font-medium disabled:opacity-40"
+                    >
+                      {guardandoNotaCliente ? t('Guardando...') : t('Guardar nota')}
+                    </button>
+                    <span className="text-[11px] text-muted dark:text-dark-text-secondary">{t('La ve el cliente: no pongas datos internos.')}</span>
+                  </div>
+                </Seccion>
+              )}
               <Seccion titulo={t('Comunicación')}>
                 {r.cliente_id && r.clientes?.telefono ? (
                   <>
@@ -2269,6 +2352,7 @@ export default function FichaReparacion() {
                   )}
                 </div>
               </Seccion>
+              </>
             ))}
 
           {tab === 'historial' &&
