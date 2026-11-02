@@ -6,15 +6,17 @@ import {
   armarStockPublicoJson,
   CABECERAS_CORS,
   COLUMNAS_STOCK_PUBLICO_JSON,
+  faltaMigracionJson,
   FORMATO_TOKEN,
   type FilaStockPublico,
 } from '../../../lib/stockPublicoJson';
 
-// Stock público en JSON para que otra app lo lea en vivo: GET /stock-publico/<token>/json
-// (también por /stock-publico/<token>?formato=json, ver middleware.ts).
+// Stock en JSON para que otra app lo lea en vivo: GET /stock-publico/<token_stock_json>/json
 //
-// Es el MISMO enlace y el mismo interruptor que la página pública: solo responde si el negocio tiene el stock público
-// activado (Configuración → Stock público) y solo muestra los equipos en stock que no se ocultaron del público.
+// NO es el enlace que se les manda a los clientes: tiene su propio token e interruptor (Configuración → Stock público →
+// "Enlace para otra app"), porque además de modelo, capacidad, color y cantidad trae batería y precio. Solo responde si ese
+// enlace está encendido, y solo muestra los equipos en stock que no se ocultaron del público.
+// Mientras el negocio no corra stock_publico_json_supabase.sql se sigue aceptando el enlace público de siempre.
 // Se lee con la clave de servicio, así que todo está acotado acá: se busca el negocio por su token, se filtra por
 // ese negocio y se piden únicamente las columnas públicas (sin costo, IMEI, serie, proveedor ni clientes).
 export const dynamic = 'force-dynamic';
@@ -40,12 +42,20 @@ export async function GET(_req: Request, { params }: { params: { token: string }
 
   try {
     const supabase = createClient(url, clave, { auth: { persistSession: false, autoRefreshToken: false } });
-    const { data: negocio, error } = await supabase
+    let { data: negocio, error } = await supabase
       .from('negocios')
       .select('id, nombre, moneda')
-      .eq('token_stock_publico', token)
-      .eq('stock_publico_activo', true)
+      .eq('token_stock_json', token)
+      .eq('stock_json_activo', true)
       .maybeSingle();
+    if (faltaMigracionJson(error)) {
+      ({ data: negocio, error } = await supabase
+        .from('negocios')
+        .select('id, nombre, moneda')
+        .eq('token_stock_publico', token)
+        .eq('stock_publico_activo', true)
+        .maybeSingle());
+    }
     if (error) throw error;
     if (!negocio) return respuesta({ error: 'Stock no encontrado' }, 404);
 

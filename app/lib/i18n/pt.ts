@@ -3451,4 +3451,9 @@ export const PT: Record<string, string> = {
   'Quitar filtros': 'Limpar filtros',
   'Elegí un equipo de la lista': 'Escolha um aparelho da lista',
   'Acá vas a ver sus datos, fotos y lo que podés hacer con él.': 'Aqui você vê os dados, as fotos e o que pode fazer com ele.',
+  'Enlace para otra app (datos en JSON)': 'Link para outro app (dados em JSON)',
+  'Un enlace aparte para que otra aplicación lea tu stock en vivo. Trae modelo, capacidad, color, estado, batería, cantidad y precio; no trae costos, IMEI ni datos de clientes. No se lo des a tus clientes: ese es el enlace de arriba.': 'Um link separado para que outro aplicativo leia seu estoque ao vivo. Traz modelo, capacidade, cor, estado, bateria, quantidade e preço; não traz custos, IMEI nem dados de clientes. Não o entregue aos seus clientes: esse é o link acima.',
+  'Generar enlace nuevo': 'Gerar novo link',
+  '¿Generar un enlace nuevo? El anterior deja de funcionar y la otra app tiene que usar el nuevo.': 'Gerar um novo link? O anterior deixa de funcionar e o outro aplicativo precisa usar o novo.',
+  'Para usar este enlace falta correr la migración SQL (stock_publico_json_supabase.sql).': 'Para usar este link falta rodar a migração SQL (stock_publico_json_supabase.sql).',
 };

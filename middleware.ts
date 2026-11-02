@@ -33,20 +33,8 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(destino, 308);
   }
 
-  // Stock público: la dirección /stock-publico/<token> también entrega los datos en JSON (para que otra app los lea) cuando se
-  // pide con ?formato=json o con el encabezado Accept: application/json (un navegador pide text/html y sigue viendo la página).
-  // Es público y sin sesión: se resuelve acá, antes de consultar la sesión, igual que los webhooks.
-  const rutaStock = /^\/stock-publico\/([0-9a-f-]{36})\/?$/i.exec(request.nextUrl.pathname);
-  if (rutaStock) {
-    const accept = request.headers.get('accept') || '';
-    const pideJson = request.nextUrl.searchParams.get('formato') === 'json' || (accept.includes('application/json') && !accept.includes('text/html'));
-    if (pideJson) {
-      const destino = request.nextUrl.clone();
-      destino.pathname = `/stock-publico/${rutaStock[1]}/json`;
-      destino.search = '';
-      return NextResponse.rewrite(destino);
-    }
-  }
+  // Stock en JSON para otra app (/stock-publico/<token>/json): público y sin sesión, se resuelve acá antes de consultar la
+  // sesión, igual que los webhooks. Es un enlace aparte del que se le manda a los clientes (la página no cambia).
   if (/^\/stock-publico\/[0-9a-f-]{36}\/json\/?$/i.test(request.nextUrl.pathname)) return NextResponse.next();
 
   // Los webhooks (ej. Lemon Squeezy) y los cron jobs (ej. Vercel Cron) son

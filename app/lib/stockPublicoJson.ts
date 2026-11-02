@@ -88,3 +88,10 @@ export function armarStockPublicoJson(negocio: { nombre: string; moneda: string 
 
 // Una dirección de stock público: /stock-publico/<token>, con el token en formato UUID.
 export const FORMATO_TOKEN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// "La columna no existe" (42703): el negocio todavía no corrió stock_publico_json_supabase.sql. Mientras tanto el JSON sigue
+// leyéndose con el enlace público de siempre, para no cortarle el servicio a quien ya lo está usando.
+export function faltaMigracionJson(error: { code?: string; message?: string } | null | undefined): boolean {
+  if (!error) return false;
+  return error.code === '42703' || /token_stock_json|stock_json_activo/.test(error.message ?? '');
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { agruparStockPublico, armarStockPublicoJson, COLUMNAS_STOCK_PUBLICO_JSON, FORMATO_TOKEN, type FilaStockPublico } from './stockPublicoJson';
+import { agruparStockPublico, armarStockPublicoJson, COLUMNAS_STOCK_PUBLICO_JSON, faltaMigracionJson, FORMATO_TOKEN, type FilaStockPublico } from './stockPublicoJson';
 
 const fila = (p: Partial<FilaStockPublico>): FilaStockPublico => ({
   modelo: 'iPhone 13',
@@ -61,5 +61,16 @@ describe('stock público en JSON', () => {
     expect(FORMATO_TOKEN.test('09901b10-4526-413c-a335-43aa982b4f03')).toBe(true);
     expect(FORMATO_TOKEN.test("'; drop table negocios; --")).toBe(false);
     expect(FORMATO_TOKEN.test('abc')).toBe(false);
+  });
+});
+
+describe('migración del enlace JSON propio', () => {
+  it('reconoce el error de columna inexistente (SQL todavía sin correr)', () => {
+    expect(faltaMigracionJson({ code: '42703', message: 'column negocios.token_stock_json does not exist' })).toBe(true);
+    expect(faltaMigracionJson({ message: 'column stock_json_activo does not exist' })).toBe(true);
+  });
+  it('cualquier otro error o ninguno no activa el modo de compatibilidad', () => {
+    expect(faltaMigracionJson({ code: '57014', message: 'statement timeout' })).toBe(false);
+    expect(faltaMigracionJson(null)).toBe(false);
   });
 });
