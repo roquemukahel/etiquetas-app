@@ -97,11 +97,12 @@ export function trabajoPublico(f: Pick<FilaOrdenPublica, 'trabajos_realizados' |
   return aTextoONull(f.trabajo_recomendado) ?? aTextoONull(f.falla_declarada);
 }
 
-// Presupuesto = mano de obra + repuestos; si todavía no se presupuestó, el importe final si ya lo hay.
+// Presupuesto = mano de obra + repuestos; si todavía no se presupuestó (o quedó en $0), el importe final si ya lo hay; si no, null.
 export function presupuestoPublico(f: Pick<FilaOrdenPublica, 'presupuesto_mano_obra' | 'presupuesto_repuestos' | 'importe_total'>): number | null {
   const manoDeObra = aNumero(f.presupuesto_mano_obra);
   const repuestos = aNumero(f.presupuesto_repuestos);
-  if (manoDeObra != null || repuestos != null) return (manoDeObra ?? 0) + (repuestos ?? 0);
+  const suma = (manoDeObra ?? 0) + (repuestos ?? 0);
+  if (suma > 0) return suma;
   const total = aNumero(f.importe_total);
   return total != null && total > 0 ? total : null;
 }

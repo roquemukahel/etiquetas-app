@@ -78,6 +78,9 @@ describe('trabajo y presupuesto', () => {
     expect(presupuestoPublico({ presupuesto_mano_obra: null, presupuesto_repuestos: 25, importe_total: null })).toBe(25);
     expect(presupuestoPublico({ presupuesto_mano_obra: null, presupuesto_repuestos: null, importe_total: 90 })).toBe(90);
     expect(presupuestoPublico({ presupuesto_mano_obra: null, presupuesto_repuestos: null, importe_total: 0 })).toBeNull();
+    // Un presupuesto que quedó en $0 es "todavía sin presupuesto", no un presupuesto gratis.
+    expect(presupuestoPublico({ presupuesto_mano_obra: 0, presupuesto_repuestos: 0, importe_total: null })).toBeNull();
+    expect(presupuestoPublico({ presupuesto_mano_obra: 0, presupuesto_repuestos: null, importe_total: 90 })).toBe(90);
     expect(presupuestoPublico({ presupuesto_mano_obra: null, presupuesto_repuestos: null, importe_total: null })).toBeNull();
   });
 });
