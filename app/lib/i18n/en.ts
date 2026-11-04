@@ -3470,4 +3470,6 @@ export const EN: Record<string, string> = {
   'Ej: Estamos colocando la pantalla nueva.': 'E.g. We are fitting the new screen.',
   'Guardar nota': 'Save note',
   'La ve el cliente: no pongas datos internos.': 'The customer sees it: do not add internal details.',
+  'Opcional. Si lo dejás vacío, buscamos el porcentaje en los detalles.': 'Optional. If you leave it empty, we look for the percentage in the details.',
+  '¿Presenta algún detalle? Ej. pantalla con manchas, rayones en la tapa...': 'Any issues? E.g. screen with stains, scratches on the back...',
 };

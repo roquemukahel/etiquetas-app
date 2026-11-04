@@ -8,6 +8,7 @@ import { asegurarModelo, normalizarNombreModelo } from '../../lib/modelos';
 import { obtenerTodasLasFilas } from '../../lib/db';
 import { sanitizarDecimal } from '../../lib/numeros';
 import { limpiarImei } from '../../lib/imei';
+import { extraerBateriaDeDetalles, parsearBateria, soloPorcentajeBateria } from '../../lib/bateria';
 import SelectorColorAuto from '../../SelectorColorAuto';
 import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
 import { useT } from '../../lib/idioma';
@@ -54,6 +55,7 @@ export default function NuevaCompra() {
   const [color, setColor] = useState('');
   const [condicion, setCondicion] = useState('usado');
   const [imei, setImei] = useState('');
+  const [bateria, setBateria] = useState('');
   const [detalles, setDetalles] = useState('');
   const [precio, setPrecio] = useState('');
 
@@ -120,6 +122,8 @@ export default function NuevaCompra() {
       }
 
       const modeloNormalizado = normalizarNombreModelo(modelo.trim());
+      // El porcentaje del campo manda; si se dejó vacío y está escrito en los detalles ("batería al 70%"), se rescata de ahí.
+      const bateriaFinal = parsearBateria(bateria) ?? extraerBateriaDeDetalles(detalles);
       const { data: compra, error: compraErr } = await supabase
         .from('compras')
         .insert({
@@ -129,6 +133,8 @@ export default function NuevaCompra() {
           color: color.trim() || null,
           condicion,
           imei: limpiarImei(imei),
+          // Solo se manda si hay dato: así una compra sin batería se guarda igual aunque falte correr compras_bateria_supabase.sql.
+          ...(bateriaFinal != null ? { salud_bateria: bateriaFinal } : {}),
           detalles: detalles.trim() || null,
           precio: precio ? Number(precio) : null,
         })
@@ -287,11 +293,23 @@ export default function NuevaCompra() {
         />
 
         <div>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Salud de batería (%)')}</label>
+          <input
+            value={bateria}
+            onChange={(e) => setBateria(soloPorcentajeBateria(e.target.value))}
+            inputMode="numeric"
+            placeholder="87"
+            className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+          />
+          <p className="text-xs text-muted dark:text-dark-text-secondary mt-1">{t('Opcional. Si lo dejás vacío, buscamos el porcentaje en los detalles.')}</p>
+        </div>
+
+        <div>
           <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Detalles (opcional)')}</label>
           <textarea
             value={detalles}
             onChange={(e) => setDetalles(e.target.value)}
-            placeholder={t('¿Presenta algún detalle? Ej. pantalla con manchas, batería al 70%...')}
+            placeholder={t('¿Presenta algún detalle? Ej. pantalla con manchas, rayones en la tapa...')}
             rows={3}
             className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
           />

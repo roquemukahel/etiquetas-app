@@ -9,6 +9,7 @@ import { registrarAuditoria } from '../../lib/auditoria';
 import { getActor, useActor, MENSAJE_ACTOR_REQUERIDO } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import { sanitizarDecimal } from '../../lib/numeros';
+import { extraerBateriaDeDetalles, parsearBateria, soloPorcentajeBateria } from '../../lib/bateria';
 import { limpiarImei } from '../../lib/imei';
 import SelectorColorAuto from '../../SelectorColorAuto';
 import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
@@ -33,6 +34,8 @@ type Compra = {
   color: string | null;
   condicion: string | null;
   imei: string | null;
+  // Opcional en el tipo: la columna existe recién después de correr compras_bateria_supabase.sql.
+  salud_bateria?: number | null;
   detalles: string | null;
   precio: number | null;
   estado: string;
@@ -62,6 +65,7 @@ export default function DetalleCompra() {
   const [editCondicion, setEditCondicion] = useState('usado');
   const [editImei, setEditImei] = useState('');
   const [editDetalles, setEditDetalles] = useState('');
+  const [editBateria, setEditBateria] = useState('');
   const [editPrecio, setEditPrecio] = useState('');
   const [guardandoEdicion, setGuardandoEdicion] = useState(false);
 
@@ -124,12 +128,15 @@ export default function DetalleCompra() {
 
     const actor = getActor();
     const modeloNormalizado = compra.modelo ? normalizarNombreModelo(compra.modelo) : compra.modelo;
+    // La batería de la compra pasa al equipo; en compras viejas (escrita en los detalles) se rescata de ahí.
+    const bateriaDeLaCompra = compra.salud_bateria ?? extraerBateriaDeDetalles(compra.detalles);
     const { error: insertError } = await supabase.from('dispositivos').insert({
       modelo: modeloNormalizado,
       capacidad_gb: compra.capacidad_gb,
       color: compra.color,
       imei: compra.imei,
       estado: compra.condicion || 'usado',
+      ...(bateriaDeLaCompra != null ? { salud_bateria: bateriaDeLaCompra } : {}),
       detalles: compra.detalles,
       en_stock: true,
       agregado_por_nombre: actor?.nombre ?? null,
@@ -221,6 +228,7 @@ export default function DetalleCompra() {
     setEditColor(compra.color || '');
     setEditCondicion(compra.condicion || 'usado');
     setEditImei(compra.imei || '');
+    setEditBateria(compra.salud_bateria != null ? String(compra.salud_bateria) : '');
     setEditDetalles(compra.detalles || '');
     setEditPrecio(compra.precio != null ? String(compra.precio) : '');
     setError(null);
@@ -247,6 +255,7 @@ export default function DetalleCompra() {
     const nuevoModelo = editModelo.trim() ? normalizarNombreModelo(editModelo.trim()) : null;
     const nuevoColor = editColor.trim() || null;
     const nuevoImei = limpiarImei(editImei);
+    const nuevaBateria = parsearBateria(editBateria);
     const nuevosDetalles = editDetalles.trim() || null;
     const nuevoPrecio = editPrecio ? Number(editPrecio) : null;
 
@@ -256,6 +265,7 @@ export default function DetalleCompra() {
     if ((compra.color || null) !== nuevoColor) cambios.color = { antes: compra.color, despues: nuevoColor };
     if ((compra.condicion || 'usado') !== editCondicion) cambios.condicion = { antes: compra.condicion, despues: editCondicion };
     if (compra.imei !== nuevoImei) cambios.imei = { antes: compra.imei, despues: nuevoImei };
+    if ((compra.salud_bateria ?? null) !== nuevaBateria) cambios.salud_bateria = { antes: compra.salud_bateria ?? null, despues: nuevaBateria };
     if (compra.detalles !== nuevosDetalles) cambios.detalles = { antes: compra.detalles, despues: nuevosDetalles };
     if (compra.precio !== nuevoPrecio) cambios.precio = { antes: compra.precio, despues: nuevoPrecio };
 
@@ -273,6 +283,8 @@ export default function DetalleCompra() {
         color: nuevoColor,
         condicion: editCondicion,
         imei: nuevoImei,
+        // Solo si cambió: editar otra cosa no depende de que la columna ya exista.
+        ...(cambios.salud_bateria ? { salud_bateria: nuevaBateria } : {}),
         detalles: nuevosDetalles,
         precio: nuevoPrecio,
       })
@@ -300,6 +312,7 @@ export default function DetalleCompra() {
       color: nuevoColor,
       condicion: editCondicion,
       imei: nuevoImei,
+      salud_bateria: nuevaBateria,
       detalles: nuevosDetalles,
       precio: nuevoPrecio,
     });
@@ -377,6 +390,17 @@ export default function DetalleCompra() {
         </div>
 
         <div>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Salud de batería (%)')}</label>
+          <input
+            value={editBateria}
+            onChange={(e) => setEditBateria(soloPorcentajeBateria(e.target.value))}
+            inputMode="numeric"
+            placeholder="87"
+            className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+          />
+        </div>
+
+        <div>
           <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Detalles')}</label>
           <textarea
             value={editDetalles}
@@ -447,6 +471,12 @@ export default function DetalleCompra() {
           <p>
             <span className="text-muted dark:text-dark-text-secondary">{t('IMEI:')} </span>
             <span className="font-bold font-mono">{compra.imei}</span>
+          </p>
+        )}
+        {compra.salud_bateria != null && (
+          <p>
+            <span className="text-muted dark:text-dark-text-secondary">{t('Batería:')} </span>
+            {compra.salud_bateria}%
           </p>
         )}
         {compra.detalles && (

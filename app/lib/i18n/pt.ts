@@ -3471,4 +3471,6 @@ export const PT: Record<string, string> = {
   'Ej: Estamos colocando la pantalla nueva.': 'Ex: Estamos colocando a tela nova.',
   'Guardar nota': 'Salvar nota',
   'La ve el cliente: no pongas datos internos.': 'O cliente vê: não coloque dados internos.',
+  'Opcional. Si lo dejás vacío, buscamos el porcentaje en los detalles.': 'Opcional. Se deixar vazio, procuramos a porcentagem nos detalhes.',
+  '¿Presenta algún detalle? Ej. pantalla con manchas, rayones en la tapa...': 'Algum detalhe? Ex. tela com manchas, riscos na tampa...',
 };

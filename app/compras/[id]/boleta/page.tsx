@@ -20,6 +20,7 @@ type Compra = {
   color: string | null;
   condicion: string | null;
   imei: string | null;
+  salud_bateria?: number | null;
   detalles: string | null;
   precio: number | null;
   created_at: string;
@@ -207,6 +208,11 @@ export default function BoletaCompra() {
           {compra.imei && (
             <p className="text-muted">
               {t('IMEI:')} <span className="font-bold text-ink">{compra.imei}</span>
+            </p>
+          )}
+          {compra.salud_bateria != null && (
+            <p className="text-muted">
+              {t('Batería:')} <span className="font-bold text-ink">{compra.salud_bateria}%</span>
             </p>
           )}
           {compra.detalles && <p className="text-muted">{t('Detalles:')} {compra.detalles}</p>}
