@@ -30,6 +30,8 @@ const RUTAS_SIN_SELECTOR = [
 ];
 
 const KEY_POSTERGADO = 'qovento:actor-postergado';
+// Que el cartel explique "pasó un rato sin usar el sistema" también si la página se recarga antes de volver a elegir.
+const KEY_BLOQUEADO_INACTIVIDAD = 'qovento:bloqueado-por-inactividad';
 
 type Persona = {
   id: string;
@@ -118,6 +120,7 @@ export default function SelectorDeActor() {
   useEffect(() => {
     setActorState(getActor());
     setPostergado(window.sessionStorage.getItem(KEY_POSTERGADO) === '1');
+    setBloqueadoPorInactividad(window.sessionStorage.getItem(KEY_BLOQUEADO_INACTIVIDAD) === '1');
   }, []);
 
   // El actor queda guardado en este navegador, no en la cuenta — si en algún
@@ -154,6 +157,7 @@ export default function SelectorDeActor() {
       setEligiendoTipo(null);
       setPersonaPin(null);
       setPinIngresado('');
+      window.sessionStorage.setItem(KEY_BLOQUEADO_INACTIVIDAD, '1');
       setBloqueadoPorInactividad(true);
     };
     const revisar = (): boolean => {
@@ -291,6 +295,7 @@ export default function SelectorDeActor() {
     guardarActor(nuevo);
     // Recién elegido: empieza a contar el tiempo de inactividad desde ahora (si no, la última actividad vieja lo volvería a bloquear).
     marcarActividad();
+    window.sessionStorage.removeItem(KEY_BLOQUEADO_INACTIVIDAD);
     setBloqueadoPorInactividad(false);
     setActorState(nuevo);
     setEligiendoTipo(null);
