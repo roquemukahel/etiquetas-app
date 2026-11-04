@@ -10,7 +10,8 @@ import { ESLOGAN } from '../../../lib/eslogan';
 import { armarLinkWhatsApp } from '../../../lib/whatsapp';
 import { codigoLlamada } from '../../../lib/paises';
 import EtiquetaSeccion from '../../../EtiquetaSeccion';
-import { medioLabel, calcularSaldo } from '../../../lib/cuentaCorriente';
+import { medioLabel, resumenDeCobro, type ResumenDeCobro } from '../../../lib/cuentaCorriente';
+import ResumenSaldoCobro from '../../../ResumenSaldoCobro';
 import { obtenerTodasLasFilas } from '../../../lib/db';
 import { useT, useIdioma } from '../../../lib/idioma';
 import { localeDe } from '../../../lib/i18n/traducir';
@@ -163,7 +164,8 @@ export default function Boleta() {
   const [cobroFinanciamiento, setCobroFinanciamiento] = useState<{
     cuotaNumero: number | null;
     cuotaSaldoRestante: number | null;
-    saldoCuentaCorriente: number | null;
+    // Lo que debía antes de este pago, lo que pagó y lo que le queda (null si no se encontró el pago en la cuenta).
+    resumen: ResumenDeCobro | null;
   } | null>(null);
 
   useEffect(() => {
@@ -303,8 +305,12 @@ export default function Boleta() {
               .eq('anulado', false)
               .order('fecha', { ascending: false })
               .limit(1),
-            obtenerTodasLasFilas<{ tipo: string; monto: number }>(supabase, 'cta_cte_movimientos', 'tipo, monto', [], (q) =>
-              q.eq('cliente_id', o.cliente_id).eq('anulado', false)
+            obtenerTodasLasFilas<{ tipo: string; monto: number; fecha: string; orden_id: string | null }>(
+              supabase,
+              'cta_cte_movimientos',
+              'tipo, monto, fecha, orden_id',
+              [],
+              (q) => q.eq('cliente_id', o.cliente_id).eq('anulado', false)
             ),
           ]);
           const cuotaId = (movsCobro as { cuota_id: string | null }[] | null)?.[0]?.cuota_id ?? null;
@@ -321,10 +327,14 @@ export default function Boleta() {
               cuotaSaldoRestante = Math.max(0, cuota.importe_original - cuota.importe_pagado);
             }
           }
+          // El saldo es el de ESE día (hasta este cobro), no el de hoy: reimprimir una boleta vieja no cambia sus números.
+          const abonosDeEstaOrden = movsCliente.filter((m) => m.orden_id === id && m.tipo === 'abono');
+          const pagado = abonosDeEstaOrden.reduce((suma, m) => suma + (m.monto || 0), 0);
+          const momentoDelCobro = Math.max(...abonosDeEstaOrden.map((m) => Date.parse(m.fecha)));
           setCobroFinanciamiento({
             cuotaNumero,
             cuotaSaldoRestante,
-            saldoCuentaCorriente: calcularSaldo(movsCliente),
+            resumen: abonosDeEstaOrden.length > 0 && Number.isFinite(momentoDelCobro) ? resumenDeCobro(movsCliente, new Date(momentoDelCobro).toISOString(), pagado) : null,
           });
         })(),
       ]);
@@ -610,23 +620,6 @@ export default function Boleta() {
           </tbody>
         </table>
 
-        {cobroFinanciamiento && (
-          <div className="rounded-lg bg-canvas px-3 py-2 text-sm flex flex-col gap-0.5">
-            {cobroFinanciamiento.cuotaNumero != null && (
-              <div className="flex justify-between">
-                <span className="text-muted">
-                  {t('Cuota')} {cobroFinanciamiento.cuotaNumero} — {t('saldo restante')}
-                </span>
-                <span className="font-medium">{fmt(cobroFinanciamiento.cuotaSaldoRestante ?? 0)}</span>
-              </div>
-            )}
-            <div className="flex justify-between">
-              <span className="text-muted">{t('Saldo de cuenta corriente')}</span>
-              <span className="font-medium">{fmt(cobroFinanciamiento.saldoCuentaCorriente ?? 0)}</span>
-            </div>
-          </div>
-        )}
-
         <div className="self-end w-full max-w-[280px] flex flex-col gap-2 text-sm">
           {orden.anticipo != null && orden.anticipo > 0 && (
             <div className="flex justify-between text-muted">
@@ -659,6 +652,16 @@ export default function Boleta() {
               {fmt(Math.abs(totalNum))}
             </span>
           </div>
+          {cobroFinanciamiento?.resumen && (
+            <ResumenSaldoCobro
+              deudaAnterior={cobroFinanciamiento.resumen.deudaAnterior}
+              pagado={cobroFinanciamiento.resumen.pagado}
+              saldoRestante={cobroFinanciamiento.resumen.saldoRestante}
+              etiquetaPago={t('Este pago')}
+              cuota={cobroFinanciamiento.cuotaNumero != null ? { numero: cobroFinanciamiento.cuotaNumero, saldoRestante: cobroFinanciamiento.cuotaSaldoRestante ?? 0 } : null}
+              fmt={fmt}
+            />
+          )}
           {orden.cuotas != null && orden.cuotas > 1 && (
             <div className="flex justify-between text-muted">
               <span>{t('Financiado en')} {orden.cuotas} {t('cuotas')}</span>

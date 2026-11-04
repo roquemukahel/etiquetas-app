@@ -61,6 +61,22 @@ export function calcularSaldo(movimientos: MovimientoBase[]): number {
   return movimientos.reduce((acc, m) => acc + (m.tipo === 'cargo' ? (m.monto || 0) : -(m.monto || 0)), 0);
 }
 
+// --- Comprobante de un cobro: cuánto debía, cuánto pagó y qué saldo quedó ---
+export type MovimientoConFecha = MovimientoBase & { fecha: string };
+export type ResumenDeCobro = { deudaAnterior: number; pagado: number; saldoRestante: number };
+
+const aCentavos = (n: number) => Math.round(n * 100) / 100;
+
+// "hasta" es el momento del cobro: se cuentan los movimientos hasta ahí (incluido el propio cobro), así el comprobante de un
+// pago viejo sigue mostrando el saldo de ESE día aunque después haya habido movimientos nuevos. La deuda anterior es lo que
+// quedaba antes de ese pago (saldo restante + lo pagado).
+export function resumenDeCobro(movimientos: MovimientoConFecha[], hasta: string, pagado: number): ResumenDeCobro {
+  const limite = Date.parse(hasta);
+  const hastaElCobro = Number.isFinite(limite) ? movimientos.filter((m) => Date.parse(m.fecha) <= limite) : movimientos;
+  const saldoRestante = aCentavos(calcularSaldo(hastaElCobro));
+  return { deudaAnterior: aCentavos(saldoRestante + pagado), pagado: aCentavos(pagado), saldoRestante };
+}
+
 // --- Estado de la cuenta ---
 export type EstadoCuenta = 'al_dia' | 'con_saldo' | 'en_mora' | 'suspendido';
 

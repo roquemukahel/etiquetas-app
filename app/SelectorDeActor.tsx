@@ -10,6 +10,7 @@ import { sincronizarCookieSucursal, getSucursalManual } from './lib/sucursal';
 import Avatar from './Avatar';
 import BotonSalir from './BotonSalir';
 import { falla } from './lib/escritura';
+import { estaInactivo, leerMinutosDeBloqueo, leerUltimaActividad, marcarActividad } from './lib/inactividad';
 
 const RUTAS_SIN_SELECTOR = [
   '/login',
@@ -79,6 +80,8 @@ export default function SelectorDeActor() {
   const [actor, setActorState] = useState<Actor | null | undefined>(undefined);
   const [postergado, setPostergado] = useState(false);
   const [cambiando, setCambiando] = useState(false);
+  // true cuando el cartel apareció porque pasó mucho tiempo sin usar el sistema (para explicarlo en el cartel).
+  const [bloqueadoPorInactividad, setBloqueadoPorInactividad] = useState(false);
   const [eligiendoTipo, setEligiendoTipo] = useState<'vendedor' | 'tecnico' | null>(null);
   const [vendedores, setVendedores] = useState<Persona[]>([]);
   const [tecnicos, setTecnicos] = useState<Persona[]>([]);
@@ -135,6 +138,64 @@ export default function SelectorDeActor() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [actor?.id]);
+
+  // Bloqueo por inactividad (ver app/lib/inactividad.ts): si en este equipo nadie toca el sistema durante el tiempo elegido en
+  // Configuración, se borra quién estaba trabajando y vuelve el cartel "¿Con quién tengo el gusto?" (con PIN si la persona
+  // lo tiene). Evita que alguien siga cargando cosas a nombre de la persona anterior.
+  useEffect(() => {
+    if (!actor || esRutaExcluida) return;
+
+    const bloquear = () => {
+      clearActor();
+      setActorState(null);
+      window.sessionStorage.removeItem(KEY_POSTERGADO);
+      setPostergado(false);
+      setCambiando(false);
+      setEligiendoTipo(null);
+      setPersonaPin(null);
+      setPinIngresado('');
+      setBloqueadoPorInactividad(true);
+    };
+    const revisar = (): boolean => {
+      if (!estaInactivo(leerUltimaActividad(), Date.now(), leerMinutosDeBloqueo())) return false;
+      bloquear();
+      return true;
+    };
+
+    // Al cargar la página: si el navegador quedó abierto (o se reabrió) mucho después de la última vez que alguien lo usó,
+    // se pide de nuevo. Sin dato todavía (primera vez en este equipo) se empieza a contar desde ahora.
+    if (leerUltimaActividad() == null) marcarActividad();
+    else if (revisar()) return;
+
+    let ultimoEvento = 0;
+    let ultimoMarcado = 0;
+    const alActividad = () => {
+      const ahora = Date.now();
+      if (ahora - ultimoEvento < 1000) return;
+      ultimoEvento = ahora;
+      // Se revisa ANTES de anotar la actividad: si alguien se sienta frente a una PC que quedó sola y mueve el mouse, ese
+      // movimiento no cuenta como "seguía trabajando" (si no, el bloqueo nunca llegaría a saltar).
+      if (revisar()) return;
+      if (ahora - ultimoMarcado > 5000) {
+        ultimoMarcado = ahora;
+        marcarActividad(ahora);
+      }
+    };
+    const eventos = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'wheel'] as const;
+    // capture: el scroll de un contenedor interno no sube hasta window si no se escucha en la fase de captura.
+    eventos.forEach((e) => window.addEventListener(e, alActividad, { passive: true, capture: true }));
+    const intervalo = window.setInterval(revisar, 30_000);
+    const alVolver = () => {
+      if (document.visibilityState === 'visible') revisar();
+    };
+    document.addEventListener('visibilitychange', alVolver);
+    return () => {
+      eventos.forEach((e) => window.removeEventListener(e, alActividad, { capture: true }));
+      window.clearInterval(intervalo);
+      document.removeEventListener('visibilitychange', alVolver);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [actor?.id, esRutaExcluida]);
 
   useEffect(() => {
     if (!menuIdiomaAbierto) return;
@@ -228,6 +289,9 @@ export default function SelectorDeActor() {
       sucursalId: persona.sucursal_id ?? null,
     };
     guardarActor(nuevo);
+    // Recién elegido: empieza a contar el tiempo de inactividad desde ahora (si no, la última actividad vieja lo volvería a bloquear).
+    marcarActividad();
+    setBloqueadoPorInactividad(false);
     setActorState(nuevo);
     setEligiendoTipo(null);
     setCambiando(false);
@@ -460,6 +524,12 @@ export default function SelectorDeActor() {
                   <p className="text-lg font-display font-semibold">{t('¡Bienvenido/a! 👋')}</p>
                   <p className="text-sm text-muted dark:text-dark-text-secondary mt-1">{t('¿Con quién tengo el gusto?')}</p>
                 </div>
+
+                {bloqueadoPorInactividad && (
+                  <p className="text-xs text-center text-warn bg-warn/10 rounded-lg px-3 py-2">
+                    {t('Pasó un rato sin usar el sistema. Por seguridad, volvé a elegir quién sos para seguir.')}
+                  </p>
+                )}
 
                 {cargando ? (
                   <p className="text-sm text-muted dark:text-dark-text-secondary text-center">{t('Cargando...')}</p>
