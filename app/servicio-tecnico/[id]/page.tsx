@@ -50,6 +50,7 @@ import { falla } from '../../lib/escritura';
 import { obtenerTodasLasFilas } from '../../lib/db';
 import { soportaMigracion } from '../../lib/migraciones';
 import { costoDeCanjeDeOrigen, marcarCanjeDeOrigenAgregado } from '../../lib/canje';
+import { bateriaDeReparacion } from '../../lib/bateriaServicio';
 import { mandarReparacionAStandby, reubicarEquipoDeServicio, dispositivoOrigenDe } from '../../lib/standby';
 import { OPCIONES_ALMACENAMIENTO, formatearGB } from '../../lib/almacenamiento';
 
@@ -184,6 +185,7 @@ type Reparacion = {
   token_seguimiento: string;
   codigo_seguimiento: string | null;
   nota_cliente: string | null;
+  salud_bateria?: number | null;
   fecha_ingreso_servicio: string;
   fecha_reparado: string | null;
   agregado_a_stock: boolean;
@@ -1073,6 +1075,7 @@ export default function FichaReparacion() {
     // Si la reparación salió de un equipo del Stock/Standby, vuelve ese mismo equipo (no se crea un duplicado).
     // Si el equipo vino de Plan Canje, entra al Stock con lo que se le reconoció al cliente como costo.
     const costoCanje = await costoDeCanjeDeOrigen(supabase, r.id);
+    const bateria = await bateriaDeReparacion(supabase, r.id);
     const reutilizado = await reubicarEquipoDeServicio(supabase, r.id, 'stock');
     if (reutilizado.error) {
       setError(reutilizado.error);
@@ -1089,6 +1092,7 @@ export default function FichaReparacion() {
       imei: r.imei,
       estado: 'usado',
       ...(costoCanje ? { costo: costoCanje } : {}),
+      ...(bateria != null ? { salud_bateria: bateria } : {}),
       en_stock: true,
       agregado_por_nombre: actor?.nombre ?? null,
       agregado_por_foto_url: actor?.fotoUrl ?? null,
@@ -1586,6 +1590,12 @@ export default function FichaReparacion() {
                     <p>
                       <span className="text-muted dark:text-dark-text-secondary">{t('IMEI:')} </span>
                       <span className="font-mono font-bold">{r.imei}</span>
+                    </p>
+                  )}
+                  {r.salud_bateria != null && (
+                    <p>
+                      <span className="text-muted dark:text-dark-text-secondary">{t('Batería:')} </span>
+                      {r.salud_bateria}%
                     </p>
                   )}
                   <MostrarBloqueo

@@ -20,6 +20,7 @@ import AvisoStandby from '../../AvisoStandby';
 import { useCoincidenciasStandby } from '../../lib/useCoincidenciasStandby';
 import { useCoincidenciasCanje } from '../../lib/useCoincidenciasCanje';
 import { hayCanjeConEseImei } from '../../lib/canje';
+import { campoBateriaServicio } from '../../lib/bateriaServicio';
 import { falla } from '../../lib/escritura';
 import { camposRecibidoPor, registrarRecepcionEnHistorial } from '../../lib/recibidoPor';
 import { OPCIONES_ALMACENAMIENTO, formatearGB } from '../../lib/almacenamiento';
@@ -177,6 +178,8 @@ export default function DetalleCompra() {
         capacidad_gb: compra.capacidad_gb,
         imei: compra.imei,
         falla_declarada: compra.detalles,
+        // La batería de la compra viaja con el equipo por Servicio Técnico (y vuelve al Stock con él).
+        ...(await campoBateriaServicio(supabase, compra.salud_bateria ?? extraerBateriaDeDetalles(compra.detalles))),
         estado: 'recibido',
         ...(await camposRecibidoPor(supabase)),
         ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),

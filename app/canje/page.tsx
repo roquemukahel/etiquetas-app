@@ -7,6 +7,7 @@ import { obtenerTodasLasFilas } from '../lib/db';
 import { agregarCanjeAlStock, idsDeCanjesDerivados } from '../lib/canje';
 import { buscarPorTexto } from '../lib/buscar';
 import { soportaMigracion } from '../lib/migraciones';
+import { campoBateriaServicio } from '../lib/bateriaServicio';
 import { obtenerImagenesDeCarpetas, imagenPorNombreExacto } from '../lib/carpetas';
 import { registrarAuditoria } from '../lib/auditoria';
 import { getActor, useActor, MENSAJE_ACTOR_REQUERIDO } from '../lib/actor';
@@ -255,6 +256,7 @@ export default function PlanCanje() {
         color: c.color,
         imei: c.imei,
         falla_declarada: c.detalles,
+        ...(await campoBateriaServicio(supabase, c.salud_bateria)),
         ubicacion_fisica: c.ubicacion_fisica,
         estado: 'recibido',
         ...(await camposRecibidoPor(supabase)),

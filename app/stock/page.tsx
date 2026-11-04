@@ -28,6 +28,7 @@ import { falla } from '../lib/escritura';
 import EtiquetaFinanciacion from '../EtiquetaFinanciacion';
 import SelectorFinanciacion from '../SelectorFinanciacion';
 import { soportaMigracion } from '../lib/migraciones';
+import { campoBateriaServicio } from '../lib/bateriaServicio';
 import { agregarCanjeAlStock, canjesPendientes, type CanjeParaStock } from '../lib/canje';
 import { contarFotosPorDispositivo } from '../lib/fotosDispositivo';
 import { resumenPorColor } from '../lib/resumenColores';
@@ -1003,6 +1004,7 @@ ${t(r.error)}`);
         color: d.color,
         imei: d.imei,
         estado: 'recibido',
+        ...(await campoBateriaServicio(supabase, d.salud_bateria)),
         ...(await camposRecibidoPor(supabase)),
         ...(await campoOrigenServicio(supabase, d.id)),
         // Hereda la sucursal del propio dispositivo que se deriva, no la

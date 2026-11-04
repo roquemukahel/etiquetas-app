@@ -9,6 +9,7 @@ import { camposRecibidoPor, registrarRecepcionEnHistorial } from './recibidoPor'
 import { soportaMigracion } from './migraciones';
 import { obtenerTodasLasFilas } from './db';
 import { costoDeCanjeDeOrigen, marcarCanjeDeOrigenAgregado } from './canje';
+import { bateriaDeReparacion, campoBateriaServicio } from './bateriaServicio';
 
 export type OrigenStandby = 'stock' | 'canje' | 'servicio_tecnico' | 'manual';
 
@@ -302,6 +303,7 @@ export async function derivarStandbyAServicio(supabase: SupabaseClient, d: Equip
       color: d.color,
       imei: d.imei,
       estado: 'recibido',
+      ...(await campoBateriaServicio(supabase, d.salud_bateria)),
       ...(d.espera_motivo ? { falla_declarada: d.espera_motivo } : {}),
       ...(await campoOrigenServicio(supabase, d.id)),
       ...(await camposRecibidoPor(supabase)),
@@ -335,6 +337,7 @@ export async function mandarReparacionAStandby(
   const modelo = r.modelo ? normalizarNombreModelo(r.modelo) : r.modelo;
   // Si la reparación salió de un equipo que ya existe, vuelve a Standby ese mismo equipo (sin duplicarlo).
   const costoCanje = await costoDeCanjeDeOrigen(supabase, r.id);
+  const bateria = await bateriaDeReparacion(supabase, r.id);
   const reutilizado = await reubicarEquipoDeServicio(supabase, r.id, { standby: opciones.motivo });
   if (reutilizado.error) return { error: reutilizado.error };
   if (!reutilizado.usado) {
@@ -347,6 +350,7 @@ export async function mandarReparacionAStandby(
         imei: r.imei,
         estado: 'usado',
         ...(costoCanje ? { costo: costoCanje } : {}),
+        ...(bateria != null ? { salud_bateria: bateria } : {}),
         en_stock: false,
         en_espera: true,
         en_espera_desde: new Date().toISOString(),

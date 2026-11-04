@@ -16,6 +16,7 @@ import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
 import { useT } from '../../lib/idioma';
 import SelectorFinanciacion from '../../SelectorFinanciacion';
 import { mandarAStandby, campoOrigenServicio } from '../../lib/standby';
+import { campoBateriaServicio } from '../../lib/bateriaServicio';
 import { FotosDispositivo } from '../../FotosDispositivo';
 import { camposRecibidoPor, registrarRecepcionEnHistorial } from '../../lib/recibidoPor';
 import { guiaDeFormulario, guiaAFormulario } from '../../lib/financiacionGuia';
@@ -231,6 +232,7 @@ export default function DetalleDispositivo() {
         imei: d.imei,
         falla_declarada: derivarDetalles.trim() || null,
         estado: 'recibido',
+        ...(await campoBateriaServicio(supabase, d.salud_bateria)),
         ...(await camposRecibidoPor(supabase)),
         ...(await campoOrigenServicio(supabase, d.id)),
         ...(d.sucursal_id ? { sucursal_id: d.sucursal_id } : {}),

@@ -20,6 +20,8 @@ const CHEQUEOS = {
     Promise.resolve(s.rpc('cta_cte_corregir_monto_pago', { p_movimiento_id: '00000000-0000-0000-0000-000000000000', p_nuevo_monto: 1, p_usuario: null })).then(({ error }) => ({
       error: error && /PGRST202|Could not find the function/i.test(`${error.code ?? ''} ${error.message ?? ''}`) ? error : null,
     })),
+  // reparaciones_bateria_supabase.sql (la batería del equipo acompaña a la orden de Servicio Técnico)
+  bateriaServicio: (s: SupabaseClient) => s.from('reparaciones').select('salud_bateria').limit(1),
   // standby_supabase.sql
   standby: (s: SupabaseClient) => s.from('dispositivos').select('en_espera, en_espera_desde, espera_origen, espera_motivo').limit(1),
   // standby_vinculo_servicio_supabase.sql

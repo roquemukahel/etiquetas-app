@@ -49,6 +49,7 @@ import { falla } from '../lib/escritura';
 import { camposRecibidoPor, registrarRecepcionEnHistorial } from '../lib/recibidoPor';
 import { soportaMigracion } from '../lib/migraciones';
 import { costoDeCanjeDeOrigen, marcarCanjeDeOrigenAgregado } from '../lib/canje';
+import { bateriaDeReparacion } from '../lib/bateriaServicio';
 import { mandarReparacionAStandby, reubicarEquipoDeServicio, dispositivoOrigenDe } from '../lib/standby';
 import { origenDeCliente } from '../lib/clientesDuplicados';
 import { OPCIONES_ALMACENAMIENTO, formatearGB } from '../lib/almacenamiento';
@@ -965,6 +966,7 @@ ${resultado.error}`);
     // Si la reparación salió de un equipo del Stock/Standby, vuelve ese mismo equipo (no se crea un duplicado).
     // Si el equipo vino de Plan Canje, entra al Stock con lo que se le reconoció al cliente como costo.
     const costoCanje = await costoDeCanjeDeOrigen(supabase, r.id);
+    const bateria = await bateriaDeReparacion(supabase, r.id);
     const reutilizado = await reubicarEquipoDeServicio(supabase, r.id, 'stock');
     if (reutilizado.error) {
       alert(`${t('No se pudo guardar el cambio. No se modificó nada.')}
@@ -982,6 +984,7 @@ ${reutilizado.error}`);
       imei: r.imei,
       estado: 'usado',
       ...(costoCanje ? { costo: costoCanje } : {}),
+      ...(bateria != null ? { salud_bateria: bateria } : {}),
       en_stock: true,
       agregado_por_nombre: actor?.nombre ?? null,
       agregado_por_foto_url: actor?.fotoUrl ?? null,
