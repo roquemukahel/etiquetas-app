@@ -10,6 +10,8 @@ type Props = {
   // Código de seguimiento (8 caracteres) y su QR ya generado (imagen). Si falta alguno de los dos, la etiqueta sale como siempre.
   codigo?: string | null;
   qr?: string | null;
+  // Nombre de quien dejó el equipo: la etiqueta se pega al equipo y el técnico tiene que saber de quién es.
+  cliente?: string | null;
 };
 
 // QR + código al pie: el cliente lo escanea o lo escribe en la app para seguir su equipo.
@@ -24,7 +26,7 @@ function Seguimiento({ codigo, qr, lado, letra, color }: { codigo: string; qr: s
 }
 
 const EtiquetaServicio = forwardRef<HTMLDivElement, Props>(function EtiquetaServicio(
-  { logo, modelo, identificador, detalle, formato = 'estandar', codigo, qr },
+  { logo, modelo, identificador, detalle, formato = 'estandar', codigo, qr, cliente },
   ref
 ) {
   const t = TAMANOS[formato];
@@ -76,6 +78,9 @@ const EtiquetaServicio = forwardRef<HTMLDivElement, Props>(function EtiquetaServ
           >
             {identificador}
           </p>
+          {cliente && (
+            <p style={{ fontSize: '24px', fontWeight: 700, margin: '8px 0 0', lineHeight: 1.15, wordBreak: 'break-word' }}>{cliente}</p>
+          )}
         </div>
 
         <div
@@ -160,6 +165,9 @@ const EtiquetaServicio = forwardRef<HTMLDivElement, Props>(function EtiquetaServ
           {modelo || 'Modelo'}
         </p>
         <p style={{ fontSize: '16px', color: '#5F5E5A', margin: '4px 0 0', fontFamily: 'monospace' }}>{identificador}</p>
+        {cliente && (
+          <p style={{ fontSize: '17px', fontWeight: 700, margin: '3px 0 0', lineHeight: 1.15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cliente}</p>
+        )}
       </div>
 
       <div style={{ borderTop: '1px solid #E5E3DB', paddingTop: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '14px' }}>

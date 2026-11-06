@@ -15,6 +15,7 @@ type Equipo = {
   modelo: string | null;
   imei: string | null;
   falla_declarada: string | null;
+  clientes: { nombre: string; apellido: string | null } | null;
 };
 
 export default function EtiquetaServicioTecnico() {
@@ -34,8 +35,8 @@ export default function EtiquetaServicioTecnico() {
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase.from('reparaciones').select('id, numero_orden, modelo, imei, falla_declarada').eq('id', id).single();
-      setEquipo(data as Equipo);
+      const { data } = await supabase.from('reparaciones').select('id, numero_orden, modelo, imei, falla_declarada, clientes ( nombre, apellido )').eq('id', id).single();
+      setEquipo(data as unknown as Equipo);
       setLoading(false);
     })();
     // El código de seguimiento se pide aparte: si todavía no se corrió el SQL (orden_publica_supabase.sql) la etiqueta sale igual, sin QR.
@@ -166,6 +167,7 @@ export default function EtiquetaServicioTecnico() {
     );
   }
 
+  const nombreCliente = equipo.clientes ? `${equipo.clientes.nombre} ${equipo.clientes.apellido ?? ''}`.trim() || null : null;
   const identificador = equipo.imei ? `IMEI: ${equipo.imei}` : equipo.numero_orden || `Ticket #${equipo.id.slice(0, 8).toUpperCase()}`;
 
   return (
@@ -216,14 +218,14 @@ export default function EtiquetaServicioTecnico() {
             height: `${TAMANOS[formato].hPx}px`,
           }}
         >
-          <EtiquetaServicio logo={logo} modelo={equipo.modelo} identificador={identificador} detalle={equipo.falla_declarada} formato={formato} codigo={codigo} qr={qr} />
+          <EtiquetaServicio logo={logo} modelo={equipo.modelo} identificador={identificador} detalle={equipo.falla_declarada} formato={formato} codigo={codigo} qr={qr} cliente={nombreCliente} />
         </div>
       </div>
 
       {/* Copia a tamaño real fuera de pantalla: la que captura html2canvas
           (para PNG/PDF/Imprimir) — nunca se imprime directo. */}
       <div aria-hidden className="no-print" style={{ position: 'fixed', left: '-10000px', top: 0, pointerEvents: 'none' }}>
-        <EtiquetaServicio ref={etiquetaRef} logo={logo} modelo={equipo.modelo} identificador={identificador} detalle={equipo.falla_declarada} formato={formato} codigo={codigo} qr={qr} />
+        <EtiquetaServicio ref={etiquetaRef} logo={logo} modelo={equipo.modelo} identificador={identificador} detalle={equipo.falla_declarada} formato={formato} codigo={codigo} qr={qr} cliente={nombreCliente} />
       </div>
 
       {/* Lo único que se imprime: la imagen ya rasterizada, a tamaño físico exacto. */}

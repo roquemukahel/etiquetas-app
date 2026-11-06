@@ -34,6 +34,10 @@ export type TurnoCaja = {
   diferencia: number | null;
   observacion: string | null;
   estado: 'abierta' | 'cerrada';
+  // Cierre revisado (caja_revisada_supabase.sql). Ausentes mientras el negocio no corrió ese SQL.
+  revisada?: boolean;
+  revisada_por?: string | null;
+  revisada_en?: string | null;
 };
 
 // Idempotente — se puede llamar cada vez que se entra a la pantalla sin
@@ -77,6 +81,23 @@ export async function obtenerHistorialTurnos(supabase: SupabaseClient, cajaId: s
     .limit(limite);
   if (error) throw new Error(error.message);
   return (data as TurnoCaja[]) ?? [];
+}
+
+// Tilda o destilda un cierre como "revisado" y deja anotado quién y cuándo. Solo cierres ya cerrados (un turno abierto no se revisa).
+export async function marcarTurnoRevisado(
+  supabase: SupabaseClient,
+  turnoId: string,
+  revisada: boolean,
+  quien: string | null
+): Promise<{ error: string | null; cambios: Pick<TurnoCaja, 'revisada' | 'revisada_por' | 'revisada_en'> }> {
+  const cambios = revisada
+    ? { revisada: true, revisada_por: quien, revisada_en: new Date().toISOString() }
+    : { revisada: false, revisada_por: null, revisada_en: null };
+  const { data, error } = await supabase.from('caja_turnos').update(cambios).eq('id', turnoId).eq('estado', 'cerrada').select('id');
+  if (error) return { error: error.message, cambios };
+  // Sin filas actualizadas: el cierre se reabrió (o ya no existe) mientras se miraba la pantalla.
+  if (!data || data.length === 0) return { error: 'Este cierre ya no está cerrado. Recargá la pantalla.', cambios };
+  return { error: null, cambios };
 }
 
 // Movimientos de una caja dentro de un rango de fechas — línea por línea

@@ -23,6 +23,7 @@ import {
 } from '../lib/caja/servicio';
 import { obtenerIngresosDeCaja, ingresosEnEfectivo, type Ingreso } from '../lib/ingresos';
 import ModalIngreso from '../ingresos/ModalIngreso';
+import CasillaRevisada from './CasillaRevisada';
 import { totalesPorMedio, totalGeneral, efectivoEsperado, diferenciaArqueo, MEDIOS_CAJA, NOMBRE_CAJA, type TipoCaja } from '../lib/caja/motor';
 import { sanitizarDecimal, formatearMonto } from '../lib/numeros';
 import { medioLabel } from '../lib/cuentaCorriente';
@@ -36,6 +37,8 @@ export default function CajaPage() {
   const idioma = useIdioma();
   const locale = localeDe(idioma);
   const puede = tienePermiso(actor, 'vender');
+  // Tildar un cierre como revisado es un control: lo hace quien administra la caja (mismo nivel que los egresos), no cualquier cajero.
+  const puedeRevisar = tienePermiso(actor, 'gestionar_egresos');
   const sucursalActualGlobal = useSucursalActual();
 
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
@@ -189,6 +192,11 @@ export default function CajaPage() {
       return;
     }
     await registrarAuditoria(supabase, { accion: `reabrió el turno N° ${tu.numero} de ${cajaActual?.nombre ?? ''}`, entidad: 'caja_turno', entidadId: tu.id });
+    // Un cierre reabierto vuelve a cambiar (se le pueden sumar ventas): la revisión anterior ya no vale y se borra.
+    if (tu.revisada === true) {
+      const { error: errorRevision } = await supabase.from('caja_turnos').update({ revisada: false, revisada_por: null, revisada_en: null }).eq('id', tu.id);
+      if (errorRevision) setError(`${t('Se reabrió, pero no pudimos quitar la marca de revisada:')} ${errorRevision.message}`);
+    }
     if (sucesor && sucesor.estado === 'abierta') {
       await registrarAuditoria(supabase, {
         accion: `eliminó el turno N° ${sucesor.numero} de ${cajaActual?.nombre ?? ''} (se había auto-abierto solo con una venta después del cierre del N° ${tu.numero}; sus pagos pasan a sumarse dentro del N° ${tu.numero} al reabrirlo)`,
@@ -476,7 +484,8 @@ export default function CajaPage() {
 
       <div className="flex flex-col gap-2 mt-2">
         <button onClick={() => setVerHistorial((v) => !v)} className="text-xs text-accent dark:text-dark-accent underline self-start">
-          {verHistorial ? t('Ocultar historial de cierres') : t('Ver historial de cierres')} ({historial.length})
+          {verHistorial ? t('Ocultar historial de cierres') : t('Ver historial de cierres')} ({historial.length}
+          {historial.some((h) => h.revisada === false) && ` · ${historial.filter((h) => h.revisada === false).length} ${t('sin revisar')}`})
         </button>
         {verHistorial &&
           historial.map((h) => (
@@ -501,6 +510,14 @@ export default function CajaPage() {
                       ` · ${t('retiro')} $${formatearMonto(h.efectivo_declarado - h.efectivo_vuelto)}`}
                   </p>
                 )}
+                <CasillaRevisada
+                  supabase={supabase}
+                  turno={h}
+                  cajaNombre={cajaActual?.nombre ?? ''}
+                  puedeRevisar={puedeRevisar}
+                  quien={actor?.nombre ?? null}
+                  onCambio={(u) => setHistorial((prev) => prev.map((x) => (x.id === u.id ? u : x)))}
+                />
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <Link href={`/caja/turno/${h.id}`} className="text-xs text-accent dark:text-dark-accent underline whitespace-nowrap">

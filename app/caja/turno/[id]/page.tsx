@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import { crearClienteNavegador } from '../../../lib/supabase/client';
 import { useActor } from '../../../lib/actor';
 import { tienePermiso } from '../../../lib/permisos';
+import CasillaRevisada from '../../CasillaRevisada';
 import { obtenerIngresosDeCaja, ingresosEnEfectivo, type Ingreso } from '../../../lib/ingresos';
 import { obtenerMovimientosDeCaja, type Caja, type TurnoCaja, type MovimientoCaja } from '../../../lib/caja/servicio';
 import { totalesPorMedio, totalGeneral, efectivoEsperado, MEDIOS_CAJA, NOMBRE_CAJA } from '../../../lib/caja/motor';
@@ -156,6 +157,16 @@ export default function DetalleTurnoCaja() {
               {turno.cerrada_por && ` (${turno.cerrada_por})`}
             </p>
           )}
+          <div className="mt-2">
+            <CasillaRevisada
+              supabase={supabase}
+              turno={turno}
+              cajaNombre={caja.nombre}
+              puedeRevisar={tienePermiso(actor, 'gestionar_egresos')}
+              quien={actor?.nombre ?? null}
+              onCambio={setTurno}
+            />
+          </div>
         </div>
 
         <div className="border-t border-border dark:border-dark-border pt-3 flex flex-col gap-1.5">

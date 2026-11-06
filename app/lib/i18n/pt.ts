@@ -3489,4 +3489,10 @@ export const PT: Record<string, string> = {
   'Nunca': 'Nunca',
   'Se guarda en este equipo.': 'Salvo neste computador.',
   'Solo un administrador puede cambiar esto.': 'Somente um administrador pode alterar isto.',
+  'No pudimos guardar el cambio:': 'Não conseguimos salvar a alteração:',
+  'Revisada': 'Revisada',
+  'Sin revisar': 'Sem revisar',
+  'sin revisar': 'sem revisar',
+  'Revisada por': 'Revisada por',
+  'Se reabrió, pero no pudimos quitar la marca de revisada:': 'Foi reaberto, mas não conseguimos remover a marca de revisada:',
 };
