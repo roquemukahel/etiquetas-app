@@ -1097,7 +1097,9 @@ export default function Estadisticas() {
         : [{ nombre: null, esSinAsignar: false, match: () => true }];
     const egresosPorArea = (idArea: string | null, egs: EgresoR[]) => egresosPeriodoDe(egs.filter((e) => e.area_id === idArea), rango.inicio, rango.fin);
     return grupos.map((g) => {
-      const ordenesDeGrupo = ordenesRaw.filter((o) => g.match(o.sucursal_id ?? null) && !idsOrdenesAjusteContable.has(o.id));
+      // Sin las órdenes de cobranza (cobro de una cuota o de cuenta corriente): no son ventas, la venta ya se contó el día que se hizo.
+      // Antes entraban como "Ventas Local" y la fila mostraba más de lo vendido.
+      const ordenesDeGrupo = ordenesRaw.filter((o) => g.match(o.sucursal_id ?? null) && !idsOrdenesAjusteContable.has(o.id) && !idsOrdenesCobranza.has(o.id));
       const egresosDeGrupo = egresosRaw.filter((e) => g.match(e.sucursal_id ?? null));
       const local = bloqueVentasPorArea(ordenesDeGrupo, itemsPorOrden, rango.inicio, rango.fin, false);
       const taller = bloqueVentasPorArea(ordenesDeGrupo, itemsPorOrden, rango.inicio, rango.fin, true);
@@ -1114,7 +1116,7 @@ export default function Estadisticas() {
     // La fila residual "Sin sucursal" solo se muestra si de verdad tiene algo
     // — para un negocio con todo bien etiquetado, no tiene sentido sumar una
     // fila en cero.
-  }, [sucursales, ordenesRaw, egresosRaw, itemsPorOrden, rango, areaLocalId, areaTallerId, idsOrdenesAjusteContable]);
+  }, [sucursales, ordenesRaw, egresosRaw, itemsPorOrden, rango, areaLocalId, areaTallerId, idsOrdenesAjusteContable, idsOrdenesCobranza]);
   // Ojo: esta tabla siempre muestra TODAS las sucursales (a propósito, ver
   // comentario de filasRentabilidad más arriba), así que si hay algo para
   // mostrar no puede salir de actualB/hayEgresos (que sí respetan el filtro
@@ -2016,6 +2018,18 @@ export default function Estadisticas() {
                           </tr>
                         );
                       })}
+                      {filasRentabilidad.length > 1 && (
+                        <tr className="border-t-2 border-border dark:border-dark-border font-semibold">
+                          <td className="py-2 pr-3 whitespace-nowrap">{t('Total')}</td>
+                          <td className="py-2 px-3 text-right tabular-nums">{m(filasRentabilidad.reduce((a, f) => a + f.local.ventas, 0))}</td>
+                          <td className="py-2 px-3 text-right tabular-nums">{m(filasRentabilidad.reduce((a, f) => a + (f.local.ganancia - f.egresosLocal), 0))}</td>
+                          <td className="py-2 px-3 text-right tabular-nums">{m(filasRentabilidad.reduce((a, f) => a + f.taller.ventas, 0))}</td>
+                          <td className="py-2 px-3 text-right tabular-nums">{m(filasRentabilidad.reduce((a, f) => a + (f.taller.ganancia - f.egresosTaller), 0))}</td>
+                          <td className="py-2 pl-3 text-right tabular-nums">
+                            {m(filasRentabilidad.reduce((a, f) => a + (f.local.ganancia - f.egresosLocal) + (f.taller.ganancia - f.egresosTaller) - f.egresosSinAsignar, 0))}
+                          </td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>

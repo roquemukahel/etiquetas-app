@@ -40,7 +40,16 @@ export type ItemR = {
   cantidad: number;
   precio_unitario: number | null;
   costo: number | null;
+  tipo?: string | null;
 };
+
+// Costo de una línea para calcular ganancia. Una línea de taller (mano de obra) sin costo cargado cuesta cero: sin esto toda la mano de obra
+// de las órdenes que no pasaron por Servicio Técnico quedaba afuera de la ganancia y el "Resultado taller" aparecía siempre en cero.
+// Las demás líneas sin costo siguen sin entrar a la ganancia (no se inventa un costo que nadie cargó).
+export function costoDeLinea(it: { costo: number | null; tipo?: string | null }): number | null {
+  if (it.costo != null) return it.costo;
+  return it.tipo === 'trabajo' ? 0 : null;
+}
 export type PagoR = {
   medio: string;
   monto: number;
@@ -224,8 +233,9 @@ export function bloqueVentas(
     const items = itemsPorOrden.get(o.id) ?? [];
     for (const it of items) {
       unidades += it.cantidad || 0;
-      if (it.costo != null && it.precio_unitario != null) {
-        ganancia += (it.precio_unitario - it.costo) * (it.cantidad || 0);
+      const costo = costoDeLinea(it);
+      if (costo != null && it.precio_unitario != null) {
+        ganancia += (it.precio_unitario - costo) * (it.cantidad || 0);
         ventasConCosto += it.precio_unitario * (it.cantidad || 0);
       }
     }
@@ -263,7 +273,10 @@ export type MetricaSerie = 'ventas' | 'ingresado' | 'ganancia' | 'credito';
 function valorOrdenPara(o: OrdenR, items: ItemR[], metrica: MetricaSerie): number {
   if (metrica === 'ventas') return montoVenta(o);
   if (metrica === 'ganancia') {
-    return items.reduce((a, it) => a + (it.costo != null && it.precio_unitario != null ? (it.precio_unitario - it.costo) * (it.cantidad || 0) : 0), 0);
+    return items.reduce((a, it) => {
+      const costo = costoDeLinea(it);
+      return a + (costo != null && it.precio_unitario != null ? (it.precio_unitario - costo) * (it.cantidad || 0) : 0);
+    }, 0);
   }
   return 0; // 'ingresado'/'credito' se calculan aparte (vienen de pagos/cta_cte, no de órdenes)
 }
@@ -486,8 +499,9 @@ export function bloqueVentasPorArea(
     const items = (itemsPorOrden.get(o.id) ?? []).filter((it) => esLineaDeTaller(it.tipo) === esTaller);
     for (const it of items) {
       ventas += (it.precio_unitario || 0) * (it.cantidad || 0);
-      if (it.costo != null && it.precio_unitario != null) {
-        ganancia += (it.precio_unitario - it.costo) * (it.cantidad || 0);
+      const costo = costoDeLinea(it);
+      if (costo != null && it.precio_unitario != null) {
+        ganancia += (it.precio_unitario - costo) * (it.cantidad || 0);
         ventasConCosto += it.precio_unitario * (it.cantidad || 0);
       }
     }
