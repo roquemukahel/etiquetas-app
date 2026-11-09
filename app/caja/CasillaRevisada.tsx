@@ -6,6 +6,7 @@ import { marcarTurnoRevisado, type TurnoCaja } from '../lib/caja/servicio';
 import { registrarAuditoria } from '../lib/auditoria';
 import { useIdioma, useT } from '../lib/idioma';
 import { localeDe } from '../lib/i18n/traducir';
+import { formatearFechaHora } from '../lib/fechas';
 
 // Casilla "Revisada" de un cierre de caja: quien controla el cierre (que el efectivo, las transferencias y la diferencia
 // estén bien) lo tilda, y queda anotado quién y cuándo. Solo la pueden tildar o destildar quienes tienen permiso de revisar;
@@ -67,7 +68,7 @@ export default function CasillaRevisada({
       {revisada && (turno.revisada_por || turno.revisada_en) && (
         <p className="text-[11px] text-muted dark:text-dark-text-secondary">
           {t('Revisada por')} {turno.revisada_por ?? '—'}
-          {turno.revisada_en && ` · ${new Date(turno.revisada_en).toLocaleString(locale)}`}
+          {turno.revisada_en && ` · ${formatearFechaHora(turno.revisada_en, locale)}`}
         </p>
       )}
       {error && <p className="no-print text-[11px] text-bad">{error}</p>}
