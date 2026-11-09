@@ -17,9 +17,10 @@ import { formatearMonto } from '../lib/numeros';
 import { useT } from '../lib/idioma';
 import FiltroLocalidad from '../FiltroLocalidad';
 import { opcionesLocalidad, coincideLocalidad } from '../lib/localidades';
+import { leerMoraSql, type FilaMoraSql } from '../lib/mora';
 
 type Cliente = { id: string; nombre: string; apellido: string | null; suspendido: boolean | null; telefono: string | null; localidad: string | null };
-type Saldo = { cliente_id: string; saldo: number; vencido: number };
+type Saldo = FilaMoraSql & { cliente_id: string; saldo: number; vencido: number };
 
 type Fila = {
   id: string;
@@ -29,6 +30,8 @@ type Fila = {
   vencido: number;
   suspendido: boolean;
   localidad: string | null;
+  // Próximo vencimiento real según la base (pagos imputados a la deuda más vieja). undefined = la base todavía tiene el cálculo viejo.
+  proximoSql?: { fecha: string; monto: number } | null;
 };
 
 type CuotaFila = {
@@ -115,12 +118,14 @@ export default function CuentasPorCobrar() {
         .map((s) => {
           const c = clientes.get(s.cliente_id);
           const saldo = Number(s.saldo) || 0;
+          const mora = leerMoraSql(s);
           return {
             id: s.cliente_id,
             nombre: c ? `${c.nombre} ${c.apellido || ''}`.trim() : t('Cliente eliminado'),
             telefono: c?.telefono ?? null,
             saldo,
-            vencido: Number(s.vencido) || 0,
+            vencido: mora ? mora.vencido : Number(s.vencido) || 0,
+            proximoSql: mora ? (mora.proximoVencimiento ? { fecha: mora.proximoVencimiento, monto: mora.proximoMonto ?? 0 } : null) : undefined,
             suspendido: !!c?.suspendido,
             localidad: c?.localidad ?? null,
           };
@@ -241,7 +246,21 @@ export default function CuentasPorCobrar() {
   // tiene ese desglose, así que esos clientes quedan sin fecha (se ordenan
   // al final al elegir "Próximo vencimiento").
   const proximoVencPorCliente = useMemo(() => {
-    const mapa = new Map<string, { fecha: string; monto: number; numero: number; total: number }>();
+    // Con el cálculo nuevo de la base (mora_fifo_supabase.sql) el próximo vencimiento sale de la cuenta corriente, con los pagos
+    // ya imputados a lo más viejo: así la tarjeta no muestra una cuota vieja que en la cuenta ya está cubierta. Si ese vencimiento
+    // coincide con una cuota del plan, se muestra también su número.
+    if (filas.some((f) => f.proximoSql !== undefined)) {
+      const cuotaPorFecha = new Map<string, CuotaFila>();
+      for (const c of cuotas) if (c.estado === 'pendiente') cuotaPorFecha.set(`${c.cliente_id}|${c.fecha_vencimiento}`, c);
+      const desdeSql = new Map<string, { fecha: string; monto: number; numero?: number; total?: number }>();
+      for (const f of filas) {
+        if (!f.proximoSql) continue;
+        const cuota = cuotaPorFecha.get(`${f.id}|${f.proximoSql.fecha}`);
+        desdeSql.set(f.id, { fecha: f.proximoSql.fecha, monto: f.proximoSql.monto, numero: cuota?.numero, total: cuota?.cantidad_cuotas });
+      }
+      return desdeSql;
+    }
+    const mapa = new Map<string, { fecha: string; monto: number; numero?: number; total?: number }>();
     for (const c of cuotas) {
       if (c.estado !== 'pendiente') continue;
       const actual = mapa.get(c.cliente_id);
@@ -250,7 +269,7 @@ export default function CuentasPorCobrar() {
       }
     }
     return mapa;
-  }, [cuotas]);
+  }, [cuotas, filas]);
 
   const ordenadas = useMemo(() => {
     const copia = [...filas];
@@ -472,7 +491,8 @@ export default function CuentasPorCobrar() {
                     </span>
                     {prox && (
                       <p className="text-[11px] text-muted dark:text-dark-text-secondary mt-0.5">
-                        {t('Vence el')} {fechaProx} · {t('Cuota')} {prox.numero}/{prox.total} · {fmt(prox.monto)}
+                        {t('Vence el')} {fechaProx} · {prox.numero != null ? `${t('Cuota')} ${prox.numero}/${prox.total} · ` : ''}
+                        {fmt(prox.monto)}
                       </p>
                     )}
                   </Link>

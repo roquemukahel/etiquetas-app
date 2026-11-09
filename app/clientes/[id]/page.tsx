@@ -11,6 +11,7 @@ import { simboloMoneda } from '../../lib/monedas';
 import { armarLinkWhatsApp } from '../../lib/whatsapp';
 import { codigoLlamada } from '../../lib/paises';
 import { MEDIOS_PAGO, MEDIO_EQUIPO, calcularSaldo, estadoCuenta, ESTADO_INFO, diasDeMora, medioLabel } from '../../lib/cuentaCorriente';
+import { leerMoraSql, type MoraCliente } from '../../lib/mora';
 import { registrarCobroFinanciamiento, registrarCobroConEquipo, corregirMontoPago } from '../../lib/financiacion/servicio';
 import { soportaMigracion } from '../../lib/migraciones';
 import { aFechaISO } from '../../lib/financiacion/motor';
@@ -90,6 +91,8 @@ export default function DetalleCliente() {
   // Si falla la consulta, el saldo NO debe mostrarse como si fuera $0 real
   // (confundiría "no debe nada" con "no pudimos confirmarlo").
   const [movimientosError, setMovimientosError] = useState(false);
+  // Mora según la base (pagos imputados a la deuda más vieja primero). null = la base todavía tiene el cálculo viejo.
+  const [moraSql, setMoraSql] = useState<MoraCliente | null>(null);
   const [monedaCodigo, setMonedaCodigo] = useState('ARS');
   const [negocioNombre, setNegocioNombre] = useState('');
   const [codigoPais, setCodigoPais] = useState('54');
@@ -157,6 +160,13 @@ export default function DetalleCliente() {
       .order('fecha', { ascending: true });
     setMovimientosError(!!error);
     setMovimientos(error ? [] : ((data as any) ?? []));
+    // El mismo cálculo que usa Cuentas por cobrar, para que la ficha y la tarjeta digan lo mismo.
+    const { data: filaMora, error: errorMora } = await supabase.rpc('saldos_cuenta_corriente', { p_cliente_id: id });
+    setMoraSql(
+      errorMora
+        ? null
+        : leerMoraSql(((filaMora as any[]) ?? [])[0] ?? { saldo: 0, vencido: 0, vencimiento_impago: null, proximo_vencimiento: null, proximo_monto: null })
+    );
   };
 
   useEffect(() => {
@@ -218,8 +228,11 @@ export default function DetalleCliente() {
     [movimientos, hoyISO]
   );
   const sumaVencida = cargosVencidos.reduce((acc, m) => acc + (m.monto || 0), 0);
-  const vencido = Math.min(Math.max(saldo, 0), sumaVencida);
-  const vencMasAntiguo = useMemo(() => cargosVencidos.map((m) => m.vencimiento!).sort().at(0), [cargosVencidos]);
+  const vencMasAntiguoLocal = useMemo(() => cargosVencidos.map((m) => m.vencimiento!).sort().at(0), [cargosVencidos]);
+  // Con el cálculo nuevo de la base: vencido = lo que realmente falta pagar de lo vencido, y los días de atraso salen del vencimiento
+  // más viejo que todavía tiene saldo impago. Sin él (SQL sin correr) queda el cálculo de siempre.
+  const vencido = moraSql ? moraSql.vencido : Math.min(Math.max(saldo, 0), sumaVencida);
+  const vencMasAntiguo = moraSql ? moraSql.vencimientoImpago : vencMasAntiguoLocal;
   const diasMora = vencido > 0 ? diasDeMora(vencMasAntiguo) : null;
   const estado = estadoCuenta(saldo, vencido, !!c?.suspendido);
   const infoEstado = ESTADO_INFO[estado];

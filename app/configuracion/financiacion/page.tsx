@@ -22,6 +22,9 @@ export default function Financiacion() {
   const [guardando, setGuardando] = useState(false);
   const [ok, setOk] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // "Resto mínimo para considerar mora" (negocios.mora_tolerancia, mora_fifo_supabase.sql). soportada=false si el SQL no se corrió.
+  const [moraSoportada, setMoraSoportada] = useState(false);
+  const [moraTolerancia, setMoraTolerancia] = useState('');
 
   useEffect(() => {
     (async () => {
@@ -39,6 +42,14 @@ export default function Financiacion() {
         .single();
       const negId = (perfil as any)?.negocio_id ?? null;
       setNegocioId(negId);
+      if (negId) {
+        const { data: tol, error: errorTol } = await supabase.from('negocios').select('mora_tolerancia').eq('id', negId).maybeSingle();
+        if (!errorTol) {
+          setMoraSoportada(true);
+          const valor = Number((tol as { mora_tolerancia: number | string | null } | null)?.mora_tolerancia);
+          setMoraTolerancia(Number.isFinite(valor) && valor > 0 ? String(valor) : '');
+        }
+      }
       const guardado = (perfil as any)?.negocios?.interes_cuotas as Record<string, number> | null;
       if (guardado) {
         const m: Record<string, string> = {};
@@ -65,11 +76,24 @@ export default function Financiacion() {
       .from('negocios')
       .update({ interes_cuotas: Object.keys(obj).length ? obj : null })
       .eq('id', negocioId);
-    setGuardando(false);
     if (upErr) {
+      setGuardando(false);
       setError(t('No pudimos guardar:') + ' ' + upErr.message);
       return;
     }
+    if (moraSoportada) {
+      const tolerancia = Number(moraTolerancia);
+      const { error: errorMora } = await supabase
+        .from('negocios')
+        .update({ mora_tolerancia: Number.isFinite(tolerancia) && tolerancia > 0 ? tolerancia : 0 })
+        .eq('id', negocioId);
+      if (errorMora) {
+        setGuardando(false);
+        setError(t('No pudimos guardar:') + ' ' + errorMora.message);
+        return;
+      }
+    }
+    setGuardando(false);
     setOk(true);
     setTimeout(() => setOk(false), 2500);
   };
@@ -133,6 +157,22 @@ export default function Financiacion() {
             {t('Ejemplo: un equipo de')} <strong>100.000</strong> {t('con 3 cuotas al')} <strong>10%</strong> →{' '}
             <strong>110.000</strong> {t('en total, o sea 3 de')} <strong>36.667</strong> {t('cada una.')}
           </div>
+
+          {moraSoportada && (
+            <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex flex-col gap-1.5">
+              <label className="text-sm font-medium">{t('Resto mínimo para considerar mora')}</label>
+              <input
+                value={moraTolerancia}
+                onChange={(e) => setMoraTolerancia(e.target.value.replace(',', '.').replace(/[^\d.]/g, ''))}
+                inputMode="decimal"
+                placeholder="0"
+                className="w-40 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+              />
+              <p className="text-xs text-muted dark:text-dark-text-secondary">
+                {t('Si lo que un cliente tiene vencido es igual o menor a este monto (restos de centavos), no figura en mora ni se le cuentan días de atraso.')}
+              </p>
+            </div>
+          )}
 
           <button
             disabled={guardando}
