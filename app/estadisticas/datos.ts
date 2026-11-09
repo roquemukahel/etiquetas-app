@@ -58,7 +58,7 @@ export type PagoR = {
   orden_id?: string | null;
   registrado_por_nombre?: string | null;
 };
-export type CreditoR = { concepto: string; tipo: string; monto: number; fecha: string; sucursal_id?: string | null };
+export type CreditoR = { concepto: string; tipo: string; monto: number; fecha: string; sucursal_id?: string | null; orden_id?: string | null };
 
 export const ESTADOS_COBRADOS = ['pagado', 'entregado'];
 
@@ -199,7 +199,7 @@ export function rangoDe(periodo: Periodo, ahora: Date, fechaReferencia: Date = a
   return { periodo, inicio, fin, inicioPrev, finPrev, bucket };
 }
 
-function entre(fechaISO: string, desde: Date, hasta: Date): boolean {
+export function entre(fechaISO: string, desde: Date, hasta: Date): boolean {
   const t = new Date(fechaISO).getTime();
   return t >= desde.getTime() && t <= hasta.getTime();
 }
@@ -362,9 +362,14 @@ export function serieEvolucion(
 // cuotas/pagos) — NO reimplementa el motor de cronogramas/proyección de
 // app/lib/financiacion/motor.ts, son sumas directas sobre lo que ese módulo
 // ya persiste. Función pura: recibe filas + fechas, no toca Supabase.
-export type PlanFinR = { importe_financiado: number; estado: string; created_at: string };
+export type PlanFinR = { importe_financiado: number; estado: string; created_at: string; orden_id?: string | null };
 export type CuotaFinR = { importe_original: number; importe_pagado: number; estado: string; fecha_vencimiento: string };
-export type PagoFinR = { monto_aplicado: number; created_at: string };
+export type PagoFinR = {
+  monto_aplicado: number;
+  created_at: string;
+  // La venta de origen del plan al que pertenece la cuota pagada (para saber qué venta se está cobrando).
+  financiacion_cuotas?: { financiacion_planes?: { orden_id: string | null } | null } | null;
+};
 export type ResumenFinanciacion = {
   totalFinanciadoActivo: number;
   nuevosCreditosPeriodo: number;

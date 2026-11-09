@@ -44,6 +44,7 @@ import {
   FilaRankingProducto,
   ItemAreaR,
 } from './datos';
+import { desgloseDeVentas, gananciaCobradaEnPeriodo } from './ventasPorForma';
 import { StatCard, SeccionCard, EmptyState, SegmentedChips, AnalyticsTabs, formatMoneda } from './ui';
 import { LineAreaChart } from './charts';
 import { QCard } from '../QCard';
@@ -457,7 +458,7 @@ export default function Estadisticas() {
         obtenerTodasLasFilas<PagoR>(supabase, 'pagos', 'medio, monto, fecha, sucursal_id, orden_id, registrado_por_nombre', [], (q) =>
           q.eq('anulado', false).gte('fecha', desde.toISOString())
         ),
-        obtenerTodasLasFilas<CreditoR>(supabase, 'cta_cte_movimientos', 'concepto, tipo, monto, fecha, sucursal_id', [], (q) =>
+        obtenerTodasLasFilas<CreditoR>(supabase, 'cta_cte_movimientos', 'concepto, tipo, monto, fecha, sucursal_id, orden_id', [], (q) =>
           q.eq('anulado', false).gte('fecha', desde.toISOString())
         ),
         obtenerTodasLasFilas<MovProveedorR>(supabase, 'proveedor_movimientos', 'proveedor_id, tipo, monto, fecha', [], (q) =>
@@ -473,8 +474,8 @@ export default function Estadisticas() {
         obtenerTodasLasFilas<CuotaFinR>(supabase, 'financiacion_cuotas', 'importe_original, importe_pagado, estado, fecha_vencimiento', [], (q) =>
           q.neq('estado', 'anulada')
         ),
-        obtenerTodasLasFilas<PlanFinR>(supabase, 'financiacion_planes', 'importe_financiado, estado, created_at'),
-        obtenerTodasLasFilas<PagoFinR>(supabase, 'financiacion_pagos', 'monto_aplicado, tipo, created_at', [], (q) =>
+        obtenerTodasLasFilas<PlanFinR>(supabase, 'financiacion_planes', 'importe_financiado, estado, created_at, orden_id'),
+        obtenerTodasLasFilas<PagoFinR>(supabase, 'financiacion_pagos', 'monto_aplicado, tipo, created_at, financiacion_cuotas ( financiacion_planes ( orden_id ) )', [], (q) =>
           q.eq('tipo', 'pago').gte('created_at', desde.toISOString())
         ),
         obtenerTodasLasFilas<ComisionMovR>(supabase, 'comision_movimientos', 'comision, estado, fecha_hecho, created_at', [], (q) =>
@@ -716,6 +717,24 @@ export default function Estadisticas() {
   const prevB = useMemo(
     () => bloqueVentas(ordenes, itemsPorOrden, pagos, credito, rango.inicioPrev, rango.finPrev),
     [ordenes, itemsPorOrden, pagos, credito, rango]
+  );
+  // Ventas y ganancia según cómo se cobran (contado / tarjeta / financiado en cuotas / cuenta corriente) y ganancia realmente cobrada
+  // en el período — ver ventasPorForma.ts.
+  const desgloseActual = useMemo(
+    () => desgloseDeVentas(ordenes, itemsPorOrden, planesFinanciacion, credito, pagos, rango.inicio, rango.fin),
+    [ordenes, itemsPorOrden, planesFinanciacion, credito, pagos, rango]
+  );
+  const gananciaCobrada = useMemo(
+    () =>
+      gananciaCobradaEnPeriodo(
+        ordenes,
+        itemsPorOrden,
+        pagos,
+        pagosFinanciacion.map((p) => ({ orden_id: p.financiacion_cuotas?.financiacion_planes?.orden_id ?? null, monto_aplicado: p.monto_aplicado, created_at: p.created_at })),
+        rango.inicio,
+        rango.fin
+      ),
+    [ordenes, itemsPorOrden, pagos, pagosFinanciacion, rango]
   );
 
   const serie = useMemo(
@@ -1290,9 +1309,23 @@ export default function Estadisticas() {
                   )}
                 </StatCard>
               )}
-              <StatCard etiqueta={t('Vendido al contado')} valor={m(contado)} tooltip={t('Ventas del período que NO se financiaron en cuenta corriente.')} moneda={moneda} tono="text-good" sensible oculto={ocultarMontos} />
-              <StatCard etiqueta={t('Vendido a crédito')} valor={m(actualB.credito)} tooltip={t('Ventas que quedaron fiadas (cuenta corriente) en el período.')} moneda={moneda} tono={actualB.credito > 0 ? 'text-warn' : undefined} sensible oculto={ocultarMontos}>
-                {!ocultarMontos && actualB.ventas > 0 && <span className="text-[11px] text-muted dark:text-dark-text-secondary">{Math.round(pctFiado * 100)}% {t('de las ventas')}</span>}
+              {puedeVerCostos && (
+                <>
+                  <StatCard etiqueta={t('Ganancia al contado')} valor={m(desgloseActual.ganancia.contado)} tooltip={t('Ganancia bruta de las ventas cobradas en el momento (efectivo, transferencia o tarjeta).')} moneda={moneda} tono="text-good" sensible oculto={ocultarMontos} />
+                  <StatCard etiqueta={t('Ganancia de ventas financiadas')} valor={m(desgloseActual.ganancia.financiado)} tooltip={t('Ganancia generada por las ventas financiadas en cuotas del período. Todavía no se cobró: entra a medida que se pagan las cuotas.')} moneda={moneda} tono={desgloseActual.ganancia.financiado > 0 ? 'text-warn' : undefined} sensible oculto={ocultarMontos} />
+                  {desgloseActual.ganancia.cuentaCorriente > 0.009 && (
+                    <StatCard etiqueta={t('Ganancia de ventas fiadas')} valor={m(desgloseActual.ganancia.cuentaCorriente)} tooltip={t('Ganancia generada por las ventas a cuenta corriente del período. Todavía no se cobró.')} moneda={moneda} tono="text-warn" sensible oculto={ocultarMontos} />
+                  )}
+                  <StatCard etiqueta={t('Ganancia cobrada en el período')} valor={m(gananciaCobrada)} tooltip={t('La parte de la ganancia que corresponde a la plata que de verdad entró en el período, de ventas de cualquier fecha (cada cuota cobrada aporta su parte). No incluye lo cobrado de ventas fiadas sin cuotas.')} moneda={moneda} tono="text-good" sensible oculto={ocultarMontos} />
+                </>
+              )}
+              <StatCard etiqueta={t('Vendido al contado')} valor={m(desgloseActual.ventas.contado)} tooltip={t('Ventas del período cobradas en el momento en efectivo, transferencia u otros medios. No incluye tarjeta, cuotas ni cuenta corriente.')} moneda={moneda} tono="text-good" sensible oculto={ocultarMontos} />
+              <StatCard etiqueta={t('Vendido con tarjeta')} valor={m(desgloseActual.ventas.tarjeta)} tooltip={t('Ventas del período pagadas con tarjeta de débito o crédito.')} moneda={moneda} sensible oculto={ocultarMontos} />
+              <StatCard etiqueta={t('Vendido financiado en cuotas')} valor={m(desgloseActual.ventas.financiado)} tooltip={t('Ventas del período financiadas con cronograma propio de cuotas. Es plata que entra de a poco, a medida que se cobran las cuotas.')} moneda={moneda} tono={desgloseActual.ventas.financiado > 0 ? 'text-warn' : undefined} sensible oculto={ocultarMontos}>
+                {!ocultarMontos && actualB.ventas > 0 && <span className="text-[11px] text-muted dark:text-dark-text-secondary">{Math.round((desgloseActual.ventas.financiado / actualB.ventas) * 100)}% {t('de las ventas')}</span>}
+              </StatCard>
+              <StatCard etiqueta={t('Vendido a cuenta corriente')} valor={m(desgloseActual.ventas.cuentaCorriente)} tooltip={t('Ventas que quedaron fiadas en cuenta corriente, sin cuotas propias.')} moneda={moneda} tono={desgloseActual.ventas.cuentaCorriente > 0 ? 'text-warn' : undefined} sensible oculto={ocultarMontos}>
+                {!ocultarMontos && actualB.ventas > 0 && <span className="text-[11px] text-muted dark:text-dark-text-secondary">{Math.round((desgloseActual.ventas.cuentaCorriente / actualB.ventas) * 100)}% {t('de las ventas')}</span>}
               </StatCard>
               <StatCard
                 etiqueta={t('Ventas a consumidor final')}
