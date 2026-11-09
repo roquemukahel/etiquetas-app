@@ -224,7 +224,21 @@ export async function registrarCobroFinanciamiento(
   // Pago explícitamente de cuenta corriente: no se intenta repartir entre
   // cuotas de financiación, aunque el cliente tenga alguna pendiente.
   if (params.omitirFinanciacion) {
-    await auditoria;
+    // Un solo saldo por cliente (cuotas_conciliar_supabase.sql): el pago va a la cuenta corriente y, además, la parte que cae sobre
+    // cuotas se aplica a las cuotas del plan, a la deuda MÁS VIEJA primero (igual que la mora). Un pago que cubre un fiado más viejo
+    // no toca ninguna cuota. Sin ese SQL la función no existe y todo sigue como antes.
+    const [{ error: errorCuotas }] = await Promise.all([
+      supabase.rpc('financiacion_aplicar_pago_cuenta_corriente', {
+        p_cliente_id: params.clienteId,
+        p_pago_id: pagoId,
+        p_monto: params.monto,
+        p_usuario: actor?.nombre ?? null,
+      }),
+      auditoria,
+    ]);
+    if (errorCuotas && !/PGRST202|Could not find the function/i.test(`${errorCuotas.code ?? ''} ${errorCuotas.message ?? ''}`)) {
+      return { ordenId, avisoCuotas: 'El pago se registró, pero no pudimos aplicarlo a las cuotas: ' + errorCuotas.message };
+    }
     return { ordenId };
   }
 
