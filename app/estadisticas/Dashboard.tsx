@@ -212,6 +212,10 @@ export default function Estadisticas() {
   const [creditoRaw, setCreditoRaw] = useState<CreditoR[]>([]);
   const [porCobrar, setPorCobrar] = useState(0);
   const [vencidoTotal, setVencidoTotal] = useState(0);
+  // Vencido separado: cuotas de financiación vs cuenta corriente / fiado (mora_fifo_supabase.sql). hayMoraSql=false si el SQL no se corrió.
+  const [vencidoCuotasTotal, setVencidoCuotasTotal] = useState(0);
+  const [vencidoFiadoTotal, setVencidoFiadoTotal] = useState(0);
+  const [hayMoraSql, setHayMoraSql] = useState(false);
   const [deudores, setDeudores] = useState(0);
   const [reparacionesRaw, setReparacionesRaw] = useState<Reparacion[]>([]);
   const [ingresosServicioRaw, setIngresosServicioRaw] = useState<IngresoServicio[]>([]);
@@ -538,9 +542,12 @@ export default function Estadisticas() {
       }
       setPagosRaw((pagosData as PagoR[]) ?? []);
       setCreditoRaw((creditoData as CreditoR[]) ?? []);
-      const saldos = (saldosData as { saldo: number; vencido: number }[]) ?? [];
+      const saldos = (saldosData as { saldo: number; vencido: number; vencido_cuotas?: number | string | null; vencido_fiado?: number | string | null }[]) ?? [];
       setPorCobrar(saldos.reduce((acc, s) => acc + Math.max(0, Number(s.saldo) || 0), 0));
       setVencidoTotal(saldos.reduce((acc, s) => acc + Math.max(0, Number(s.vencido) || 0), 0));
+      setHayMoraSql(saldos.some((s) => s.vencido_cuotas !== undefined));
+      setVencidoCuotasTotal(saldos.reduce((acc, s) => acc + Math.max(0, Number(s.vencido_cuotas) || 0), 0));
+      setVencidoFiadoTotal(saldos.reduce((acc, s) => acc + Math.max(0, Number(s.vencido_fiado) || 0), 0));
       setDeudores(saldos.filter((s) => (Number(s.saldo) || 0) > 0).length);
 
       setCategoriasStock((categoriasData as CategoriaStockR[]) ?? []);
@@ -1449,7 +1456,14 @@ export default function Estadisticas() {
           <>
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
               <StatCard etiqueta={t('Saldo por cobrar')} valor={m(porCobrar)} tooltip={t('Lo que hoy te deben tus clientes en total (deuda actual, no del período). Tocá para ver el detalle.')} tono={vencidoTotal > 0 ? 'text-warn' : undefined} sensible oculto={ocultarMontos} onClick={() => router.push('/cuentas-por-cobrar')} />
-              <StatCard etiqueta={t('Vencido')} valor={m(vencidoTotal)} tooltip={t('De lo que te deben, cuánto ya pasó su fecha de vencimiento. Tocá para ver el detalle.')} tono={vencidoTotal > 0 ? 'text-bad' : undefined} sensible oculto={ocultarMontos} onClick={() => router.push('/cuentas-por-cobrar')} />
+              {hayMoraSql ? (
+                <>
+                  <StatCard etiqueta={t('Vencido en cuotas de financiación')} valor={m(vencidoCuotasTotal)} tooltip={t('De lo que te deben en cuotas de financiación propia, cuánto ya venció y sigue sin pagar (los pagos se aplican primero a lo más viejo).')} tono={vencidoCuotasTotal > 0 ? 'text-bad' : undefined} sensible oculto={ocultarMontos} onClick={() => router.push('/cuentas-por-cobrar')} />
+                  <StatCard etiqueta={t('Vencido en cuenta corriente / fiado')} valor={m(vencidoFiadoTotal)} tooltip={t('De lo que te deben por ventas fiadas (cuenta corriente sin cuotas), cuánto ya venció y sigue sin pagar. Una venta fiada sin fecha de vencimiento no cuenta como vencida.')} tono={vencidoFiadoTotal > 0 ? 'text-bad' : undefined} sensible oculto={ocultarMontos} onClick={() => router.push('/cuentas-por-cobrar')} />
+                </>
+              ) : (
+                <StatCard etiqueta={t('Vencido')} valor={m(vencidoTotal)} tooltip={t('De lo que te deben, cuánto ya pasó su fecha de vencimiento. Tocá para ver el detalle.')} tono={vencidoTotal > 0 ? 'text-bad' : undefined} sensible oculto={ocultarMontos} onClick={() => router.push('/cuentas-por-cobrar')} />
+              )}
               <StatCard etiqueta={t('Fiado en el período')} valor={m(actualB.credito)} tooltip={t('Cuánto sumaste a cuentas corrientes en el período elegido.')} variacion={varSi(actualB.credito, prevB.credito)} positivoEsBueno={false} moneda={moneda} sensible oculto={ocultarMontos} />
             </div>
             <SeccionCard titulo={t('Cuentas por cobrar')}>
@@ -1476,9 +1490,11 @@ export default function Estadisticas() {
                   <StatCard etiqueta={t('Nuevos créditos')} valor={m(resumenFinanciacion.nuevosCreditosPeriodo)} tooltip={t('Planes de financiación creados en el período elegido.')} moneda={moneda} sensible oculto={ocultarMontos} />
                   <StatCard etiqueta={t('Cobrado en cuotas')} valor={m(resumenFinanciacion.cobradoPeriodo)} tooltip={t('Pagos de cuotas recibidos en el período (por fecha real de pago, no de vencimiento).')} moneda={moneda} tono="text-good" sensible oculto={ocultarMontos} />
                   <StatCard etiqueta={t('Saldo en cuotas')} valor={m(resumenFinanciacion.saldoPendiente)} tooltip={t('Lo que falta cobrar de cuotas pendientes (a hoy).')} moneda={moneda} sensible oculto={ocultarMontos} />
-                  <StatCard etiqueta={t('Vencido en cuotas')} valor={m(resumenFinanciacion.vencido)} tooltip={t('De las cuotas pendientes, cuánto ya pasó su vencimiento.')} tono={resumenFinanciacion.vencido > 0 ? 'text-bad' : undefined} moneda={moneda} sensible oculto={ocultarMontos}>
+                  <StatCard etiqueta={t('Vencido en cuotas')} valor={m(hayMoraSql ? vencidoCuotasTotal : resumenFinanciacion.vencido)} tooltip={t('De las cuotas pendientes, cuánto ya pasó su vencimiento.')} tono={(hayMoraSql ? vencidoCuotasTotal : resumenFinanciacion.vencido) > 0 ? 'text-bad' : undefined} moneda={moneda} sensible oculto={ocultarMontos}>
                     {!ocultarMontos && resumenFinanciacion.saldoPendiente > 0 && (
-                      <span className="text-[11px] text-muted dark:text-dark-text-secondary">{Math.round(resumenFinanciacion.pctMorosidad)}% {t('de morosidad')}</span>
+                      <span className="text-[11px] text-muted dark:text-dark-text-secondary">
+                        {Math.round(hayMoraSql ? (vencidoCuotasTotal / resumenFinanciacion.saldoPendiente) * 100 : resumenFinanciacion.pctMorosidad)}% {t('de morosidad')}
+                      </span>
                     )}
                   </StatCard>
                   <StatCard etiqueta={t('Próximas a vencer')} valor={resumenFinanciacion.proximasAVencer.toLocaleString('es-AR')} tooltip={t('Cuotas pendientes que vencen dentro de los próximos 7 días.')} tono={resumenFinanciacion.proximasAVencer > 0 ? 'text-warn' : undefined} />
@@ -1952,7 +1968,13 @@ export default function Estadisticas() {
               onClick={() => router.push('/cuentas-por-cobrar')}
             >
               {vencidoTotal > 0 && (
-                <span className="text-[11px] text-bad font-medium">{ocultarMontos ? '' : `${m(vencidoTotal)} ${t('vencidos')}`}</span>
+                <span className="text-[11px] text-bad font-medium">
+                  {ocultarMontos
+                    ? ''
+                    : hayMoraSql
+                      ? `${m(vencidoTotal)} ${t('vencidos')} (${m(vencidoCuotasTotal)} ${t('en cuotas')} · ${m(vencidoFiadoTotal)} ${t('fiado')})`
+                      : `${m(vencidoTotal)} ${t('vencidos')}`}
+                </span>
               )}
             </StatCard>
             <StatCard

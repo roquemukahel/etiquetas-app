@@ -3499,4 +3499,10 @@ export const PT: Record<string, string> = {
   'Si lo que un cliente tiene vencido es igual o menor a este monto (restos de centavos), no figura en mora ni se le cuentan días de atraso.': 'Se o valor vencido de um cliente for igual ou menor que este valor (restos de centavos), ele não aparece em atraso nem contam dias de atraso.',
   'Cobros de cuotas / cuenta corriente': 'Cobranças de parcelas / conta corrente',
   'Ingresado a caja': 'Recebido no caixa',
+  'Vencido en cuotas de financiación': 'Vencido em parcelas de financiamento',
+  'De lo que te deben en cuotas de financiación propia, cuánto ya venció y sigue sin pagar (los pagos se aplican primero a lo más viejo).': 'Do que lhe devem em parcelas de financiamento próprio, quanto já venceu e continua sem pagamento (os pagamentos são aplicados primeiro ao mais antigo).',
+  'Vencido en cuenta corriente / fiado': 'Vencido em conta corrente / fiado',
+  'De lo que te deben por ventas fiadas (cuenta corriente sin cuotas), cuánto ya venció y sigue sin pagar. Una venta fiada sin fecha de vencimiento no cuenta como vencida.': 'Do que lhe devem por vendas fiadas (conta corrente sem parcelas), quanto já venceu e continua sem pagamento. Uma venda fiada sem data de vencimento não conta como vencida.',
+  'en cuotas': 'em parcelas',
+  'fiado': 'fiado',
 };

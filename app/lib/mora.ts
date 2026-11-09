@@ -10,6 +10,8 @@ export type FilaMoraSql = {
   vencimiento_impago?: string | null;
   proximo_vencimiento?: string | null;
   proximo_monto?: number | string | null;
+  vencido_cuotas?: number | string | null;
+  vencido_fiado?: number | string | null;
 };
 
 export type MoraCliente = {
@@ -20,6 +22,9 @@ export type MoraCliente = {
   // El próximo vencimiento que de verdad falta pagar (puede ser futuro) y cuánto falta de ese cargo.
   proximoVencimiento: string | null;
   proximoMonto: number | null;
+  // El vencido separado según de dónde viene: cuotas de financiación o cuenta corriente / fiado (suman el vencido total).
+  vencidoCuotas: number;
+  vencidoFiado: number;
 };
 
 const aNumero = (v: number | string | null | undefined): number => {
@@ -37,5 +42,7 @@ export function leerMoraSql(fila: FilaMoraSql | null | undefined): MoraCliente |
     vencimientoImpago: fila.vencimiento_impago ?? null,
     proximoVencimiento: fila.proximo_vencimiento ?? null,
     proximoMonto: monto,
+    vencidoCuotas: aNumero(fila.vencido_cuotas),
+    vencidoFiado: aNumero(fila.vencido_fiado),
   };
 }

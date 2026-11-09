@@ -9,6 +9,7 @@
 --   (equivale a aplicar cada pago al cargo más viejo primero); si da cero, el cliente está AL DÍA.
 --   Los días de atraso se cuentan desde el vencimiento más viejo que todavía tiene saldo impago.
 --   Un cargo sin fecha de vencimiento NO cuenta como vencido.
+--   Se devuelve separado el vencido que viene de cuotas de financiación y el de cuenta corriente / fiado (Estadísticas los muestra aparte).
 --   Un cargo de una cuota de financiación toma el vencimiento de la cuota si el movimiento no lo trae.
 --   "Resto mínimo para considerar mora" (negocios.mora_tolerancia, se elige en Configuración → Financiación en cuotas):
 --   un vencido menor o igual a ese monto no deja al cliente en mora (restos de centavos).
@@ -22,14 +23,15 @@ alter table negocios add column if not exists mora_tolerancia numeric not null d
 -- 1) Saldo, vencido y desde cuándo está vencido, por cliente.
 drop function if exists saldos_cuenta_corriente();
 create or replace function saldos_cuenta_corriente(p_cliente_id uuid default null)
-returns table (cliente_id uuid, saldo numeric, vencido numeric, vencimiento_impago date, proximo_vencimiento date, proximo_monto numeric)
+returns table (cliente_id uuid, saldo numeric, vencido numeric, vencimiento_impago date, proximo_vencimiento date, proximo_monto numeric, vencido_cuotas numeric, vencido_fiado numeric)
 language sql
 security definer
 stable
 as $$
   with movs as (
     select m.id, m.cliente_id, m.tipo, m.monto, m.fecha,
-           coalesce(m.vencimiento, c.fecha_vencimiento) as venc
+           coalesce(m.vencimiento, c.fecha_vencimiento) as venc,
+           (m.cuota_id is not null) as es_cuota
     from cta_cte_movimientos m
     left join financiacion_cuotas c on c.id = m.cuota_id
     where m.negocio_id = negocio_actual() and not m.anulado
@@ -39,7 +41,7 @@ as $$
     select cliente_id, sum(monto) as total from movs where tipo <> 'cargo' group by cliente_id
   ),
   cargos as (
-    select cliente_id, venc, monto,
+    select cliente_id, venc, monto, es_cuota,
            sum(monto) over (
              partition by cliente_id order by (venc is null), venc, fecha, id
              rows between unbounded preceding and current row
@@ -47,13 +49,15 @@ as $$
     from movs where tipo = 'cargo'
   ),
   impagos as (
-    select c.cliente_id, c.venc,
+    select c.cliente_id, c.venc, c.es_cuota,
            greatest(0, least(c.monto, c.acumulado - coalesce(p.total, 0))) as impago
     from cargos c
     left join pagado p on p.cliente_id = c.cliente_id
   ),
   vencidos as (
-    select cliente_id, sum(impago) as vencido, min(venc) filter (where impago > 0.009) as desde
+    select cliente_id, sum(impago) as vencido, min(venc) filter (where impago > 0.009) as desde,
+           sum(impago) filter (where es_cuota) as vencido_cuotas,
+           sum(impago) filter (where not es_cuota) as vencido_fiado
     from impagos
     where venc is not null and venc < current_date
     group by cliente_id
@@ -77,7 +81,9 @@ as $$
          case when coalesce(v.vencido, 0) > (select v from umbral) then v.vencido else 0 end as vencido,
          case when coalesce(v.vencido, 0) > (select v from umbral) then v.desde end as vencimiento_impago,
          p.venc as proximo_vencimiento,
-         p.impago as proximo_monto
+         p.impago as proximo_monto,
+         case when coalesce(v.vencido, 0) > (select v from umbral) then coalesce(v.vencido_cuotas, 0) else 0 end as vencido_cuotas,
+         case when coalesce(v.vencido, 0) > (select v from umbral) then coalesce(v.vencido_fiado, 0) else 0 end as vencido_fiado
   from saldos s
   left join vencidos v on v.cliente_id = s.cliente_id
   left join proximos p on p.cliente_id = s.cliente_id

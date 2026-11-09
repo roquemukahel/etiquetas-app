@@ -3498,4 +3498,10 @@ export const EN: Record<string, string> = {
   'Si lo que un cliente tiene vencido es igual o menor a este monto (restos de centavos), no figura en mora ni se le cuentan días de atraso.': 'If what a customer has overdue is equal to or less than this amount (leftover cents), they are not shown as overdue and no days late are counted.',
   'Cobros de cuotas / cuenta corriente': 'Installment / account collections',
   'Ingresado a caja': 'Received in cash register',
+  'Vencido en cuotas de financiación': 'Overdue in financing installments',
+  'De lo que te deben en cuotas de financiación propia, cuánto ya venció y sigue sin pagar (los pagos se aplican primero a lo más viejo).': 'Of what you are owed in own-financing installments, how much is already overdue and unpaid (payments are applied to the oldest first).',
+  'Vencido en cuenta corriente / fiado': 'Overdue in account / on credit',
+  'De lo que te deben por ventas fiadas (cuenta corriente sin cuotas), cuánto ya venció y sigue sin pagar. Una venta fiada sin fecha de vencimiento no cuenta como vencida.': 'Of what you are owed for credit sales (account without installments), how much is already overdue and unpaid. A credit sale with no due date does not count as overdue.',
+  'en cuotas': 'in installments',
+  'fiado': 'on credit',
 };
