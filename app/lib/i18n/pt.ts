@@ -3497,4 +3497,6 @@ export const PT: Record<string, string> = {
   'Se reabrió, pero no pudimos quitar la marca de revisada:': 'Foi reaberto, mas não conseguimos remover a marca de revisada:',
   'Resto mínimo para considerar mora': 'Resto mínimo para considerar em atraso',
   'Si lo que un cliente tiene vencido es igual o menor a este monto (restos de centavos), no figura en mora ni se le cuentan días de atraso.': 'Se o valor vencido de um cliente for igual ou menor que este valor (restos de centavos), ele não aparece em atraso nem contam dias de atraso.',
+  'Cobros de cuotas / cuenta corriente': 'Cobranças de parcelas / conta corrente',
+  'Ingresado a caja': 'Recebido no caixa',
 };

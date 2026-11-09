@@ -3496,4 +3496,6 @@ export const EN: Record<string, string> = {
   'Se reabrió, pero no pudimos quitar la marca de revisada:': 'It was reopened, but we could not remove the reviewed mark:',
   'Resto mínimo para considerar mora': 'Minimum remainder to count as overdue',
   'Si lo que un cliente tiene vencido es igual o menor a este monto (restos de centavos), no figura en mora ni se le cuentan días de atraso.': 'If what a customer has overdue is equal to or less than this amount (leftover cents), they are not shown as overdue and no days late are counted.',
+  'Cobros de cuotas / cuenta corriente': 'Installment / account collections',
+  'Ingresado a caja': 'Received in cash register',
 };

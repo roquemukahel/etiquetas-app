@@ -15,6 +15,7 @@ import { EQUIPO_PAGO_VACIO, problemaDelEquipo, type EquipoPago } from '../lib/eq
 import { MEDIOS_PAGO, MEDIO_EQUIPO, medioLabel, calcularSaldo, diasDeMora } from '../lib/cuentaCorriente';
 import type { CuentaCorrienteServicioTecnico } from '../lib/ordenesServicio';
 import { simboloMoneda } from '../lib/monedas';
+import { resumirDia, ingresadoACajaDelDia, type PagoParaResumen } from '../lib/resumenDia';
 import { aFechaISO } from '../lib/financiacion/motor';
 import { formatearMonto, sanitizarDecimal } from '../lib/numeros';
 import { formatearFechaHora, fechaISONegocio } from '../lib/fechas';
@@ -230,6 +231,8 @@ export default function Ordenes() {
   const sucursalActual = useSucursalActual();
   const [ordenes, setOrdenes] = useState<Orden[]>([]);
   const [canjes, setCanjes] = useState<CanjeOrden[]>([]);
+  // Pagos reales (no anulados) de la misma ventana de fechas que las órdenes: de ahí sale "Ingresado a caja" de cada día.
+  const [pagosCaja, setPagosCaja] = useState<PagoParaResumen[]>([]);
   const [reparacionesListas, setReparacionesListas] = useState<ReparacionLista[]>([]);
   const [reparacionesCanceladas, setReparacionesCanceladas] = useState<ReparacionLista[]>([]);
   const [generando, setGenerando] = useState<string | null>(null);
@@ -329,7 +332,7 @@ export default function Ordenes() {
   const cargar = async (traerTodoElHistorial = false) => {
     const desdeReciente = new Date();
     desdeReciente.setDate(desdeReciente.getDate() - DIAS_VENTANA_RECIENTE);
-    const [ordenesBase, { data: listasData }, { data: canceladasData }, canjesData, entregasData] = await Promise.all([
+    const [ordenesBase, { data: listasData }, { data: canceladasData }, canjesData, entregasData, pagosData] = await Promise.all([
       obtenerTodasLasFilas<Orden>(
         supabase,
         'ordenes',
@@ -371,7 +374,18 @@ export default function Ordenes() {
           return traerTodoElHistorial ? filtrada : filtrada.gte('fecha_entrega', desdeReciente.toISOString());
         }
       ),
+      obtenerTodasLasFilas<PagoParaResumen>(
+        supabase,
+        'pagos',
+        'fecha, monto, medio, moneda, sucursal_id',
+        [{ columna: 'fecha', ascending: false }],
+        (q) => {
+          const vigentes = q.eq('anulado', false);
+          return traerTodoElHistorial ? vigentes : vigentes.gte('fecha', desdeReciente.toISOString());
+        }
+      ).catch(() => [] as PagoParaResumen[]),
     ]);
+    setPagosCaja(pagosData);
     // Una reparación recibida hace más de 90 días y cobrada recién ahora tiene
     // su orden FUERA de la ventana de arriba (esa filtra por created_at) — se
     // traen aparte, por id, solo las que faltan (normalmente ninguna, así que
@@ -1020,7 +1034,7 @@ export default function Ordenes() {
     const ayer = new Date();
     ayer.setDate(ayer.getDate() - 1);
     const ayerClave = ayer.toLocaleDateString('en-CA');
-    const grupos = new Map<string, { label: string; ordenes: Orden[]; total: number }>();
+    const grupos = new Map<string, { label: string; ordenes: Orden[] }>();
     for (const o of paraRenderizar) {
       const fechaOrden = fechaEfectiva(o);
       const clave = new Date(fechaOrden).toLocaleDateString('en-CA');
@@ -1031,19 +1045,23 @@ export default function Ordenes() {
             : clave === ayerClave
               ? t('Ayer')
               : new Date(fechaOrden).toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' });
-        grupos.set(clave, { label, ordenes: [], total: 0 });
+        grupos.set(clave, { label, ordenes: [] });
       }
       const g = grupos.get(clave)!;
       g.ordenes.push(o);
-      // Una orden cancelada sigue visible en la lista pero no es plata vendida:
-      // sumarla inflaba el total del día (Estadísticas ya la excluye).
-      if (o.estado !== 'cancelado') g.total += o.total || 0;
     }
+    // Ventas, cobros de cuotas / cuenta corriente y plata que entró a caja, por separado (ver app/lib/resumenDia.ts): una venta
+    // financiada ya no cuenta dos veces (la venta y el cobro de su cuota 1) y los cobros de créditos viejos no suman como ventas.
     return Array.from(grupos.entries())
       .sort((a, b) => b[0].localeCompare(a[0]))
-      .map(([clave, g]) => ({ clave, ...g }));
+      .map(([clave, g]) => ({
+        clave,
+        ...g,
+        ...resumirDia(g.ordenes.map((o) => ({ estado: o.estado, total: o.total, esCobro: !esServicioTecnico(o) && esCobroFinanciamiento(o) }))),
+        ingresado: ingresadoACajaDelDia(pagosCaja, clave, { moneda: monedaNegocio, sucursalId: filtroSucursal || null }),
+      }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paraRenderizar, locale, t, fechasEntregaPorOrden]);
+  }, [paraRenderizar, locale, t, fechasEntregaPorOrden, pagosCaja, monedaNegocio, filtroSucursal]);
 
   // Se me había pasado esto en la primera pasada de multisucursal: estas dos
   // NO nacen de la tabla `ordenes` (que sí ya filtraba), sino de
@@ -1582,11 +1600,29 @@ export default function Ordenes() {
           <div className="flex flex-col gap-4">
             {ordenesPorDia.map((dia) => (
               <div key={dia.clave} className="flex flex-col gap-2">
-                <div className="flex items-baseline justify-between px-1">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted dark:text-dark-text-secondary capitalize">
-                    {dia.label} · {dia.ordenes.length} {dia.ordenes.length === 1 ? t('orden') : t('órdenes')}
-                  </p>
-                  {dia.total > 0 && <p className="text-xs font-semibold">${dia.total.toLocaleString('es-AR')}</p>}
+                <div className="flex flex-col gap-0.5 px-1">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted dark:text-dark-text-secondary capitalize">{dia.label}</p>
+                  <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs">
+                    <span>
+                      <span className="text-muted dark:text-dark-text-secondary">{t('Ventas')}:</span>{' '}
+                      <strong>{dia.ventas.cantidad}</strong> · {simboloMoneda(monedaNegocio)}
+                      {formatearMonto(dia.ventas.monto)}
+                    </span>
+                    {dia.cobros.cantidad > 0 && (
+                      <span>
+                        <span className="text-muted dark:text-dark-text-secondary">{t('Cobros de cuotas / cuenta corriente')}:</span>{' '}
+                        <strong>{dia.cobros.cantidad}</strong> · {simboloMoneda(monedaNegocio)}
+                        {formatearMonto(dia.cobros.monto)}
+                      </span>
+                    )}
+                    <span>
+                      <span className="text-muted dark:text-dark-text-secondary">{t('Ingresado a caja')}:</span>{' '}
+                      <strong>
+                        {simboloMoneda(monedaNegocio)}
+                        {formatearMonto(dia.ingresado)}
+                      </strong>
+                    </span>
+                  </div>
                 </div>
                 {dia.ordenes.map((o) => {
                   const servicio = esServicioTecnico(o);
