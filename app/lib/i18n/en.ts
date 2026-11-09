@@ -3518,4 +3518,7 @@ export const EN: Record<string, string> = {
   'Ventas del período financiadas con cronograma propio de cuotas. Es plata que entra de a poco, a medida que se cobran las cuotas.': 'Sales of the period financed with an own installment schedule. The money comes in gradually, as the installments are collected.',
   'Vendido a cuenta corriente': 'Sold on account',
   'Ventas que quedaron fiadas en cuenta corriente, sin cuotas propias.': 'Sales left on credit in the account, without own installments.',
+  'Revisá estos precios, son muy altos comparados con el precio de lista:': 'Check these prices, they are much higher than the list price:',
+  'lista': 'list',
+  '¿Confirmar la orden igual?': 'Confirm the order anyway?',
 };

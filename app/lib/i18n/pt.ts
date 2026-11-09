@@ -3519,4 +3519,7 @@ export const PT: Record<string, string> = {
   'Ventas del período financiadas con cronograma propio de cuotas. Es plata que entra de a poco, a medida que se cobran las cuotas.': 'Vendas do período financiadas com cronograma próprio de parcelas. O dinheiro entra aos poucos, conforme as parcelas são recebidas.',
   'Vendido a cuenta corriente': 'Vendido em conta corrente',
   'Ventas que quedaron fiadas en cuenta corriente, sin cuotas propias.': 'Vendas que ficaram fiadas em conta corrente, sem parcelas próprias.',
+  'Revisá estos precios, son muy altos comparados con el precio de lista:': 'Confira estes preços, estão muito acima do preço de lista:',
+  'lista': 'lista',
+  '¿Confirmar la orden igual?': 'Confirmar o pedido mesmo assim?',
 };

@@ -39,6 +39,7 @@ import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
 import { limpiarImei } from '../../lib/imei';
 import { comprimirImagen } from '../../lib/comprimirImagen';
 import { formatearMonto } from '../../lib/numeros';
+import { redondearMonto, lineasConPrecioAnormal } from '../../lib/montos';
 import { cajaDeVenta } from '../../lib/caja/motor';
 import { registrarAuditoria } from '../../lib/auditoria';
 import MiniaturaDispositivo from '../../MiniaturaDispositivo';
@@ -679,8 +680,10 @@ export default function NuevaOrden() {
       );
   }, [productos, buscarProducto, sucursalActual.id]);
 
+  // Todos los totales se redondean a centavos: sumar productos con impuesto o recargo en coma flotante dejaba totales con un centavo
+  // de más o decimales largos.
   const subtotal = useMemo(
-    () => carrito.reduce((acc, i) => acc + i.cantidad * i.precioUnitario, 0),
+    () => redondearMonto(carrito.reduce((acc, i) => acc + i.cantidad * i.precioUnitario, 0)),
     [carrito]
   );
   const moneda = useMemo(() => simboloMoneda(monedaOrden), [monedaOrden]);
@@ -720,14 +723,14 @@ export default function NuevaOrden() {
   // canje. planes = los planes activos que configuró el negocio.
   const planes = useMemo(() => planesActivos(interesCuotas), [interesCuotas]);
   const interesPlan = interesDe(interesCuotas, cuotasElegidas);
-  const subtotalFinanciado = subtotal * (1 + interesPlan / 100);
+  const subtotalFinanciado = redondearMonto(subtotal * (1 + interesPlan / 100));
 
   const totalSinRecargoFinanciacion = useMemo(() => {
     const conImpuesto = subtotalFinanciado * (1 + (Number(impuesto) || 0) / 100);
     // Sin Math.max(0, ...) a propósito: si el anticipo es mayor al precio
     // (ej. seña de una compra anterior más grande que lo que se lleva hoy),
     // el total puede quedar negativo — representa saldo a favor del cliente.
-    return conImpuesto - (Number(anticipo) || 0) - montoCanjeTotal;
+    return redondearMonto(conImpuesto - (Number(anticipo) || 0) - montoCanjeTotal);
   }, [subtotalFinanciado, impuesto, anticipo, montoCanjeTotal]);
 
   // Cuánto de esta venta queda como deuda en la cuenta corriente, SIN el
@@ -744,9 +747,9 @@ export default function NuevaOrden() {
   // El recargo de "Financiar en cuotas propias" pega SOLO sobre lo que
   // efectivamente queda financiado (montoCuentaCorrienteBase), nunca sobre
   // la parte ya cobrada de contado (anticipo) ni sobre el canje.
-  const recargoFinanciacionMonto = financiarActivo ? montoCuentaCorrienteBase * ((Number(recargoFinanciacion) || 0) / 100) : 0;
-  const montoCuentaCorriente = montoCuentaCorrienteBase + recargoFinanciacionMonto;
-  const total = totalSinRecargoFinanciacion + recargoFinanciacionMonto;
+  const recargoFinanciacionMonto = financiarActivo ? redondearMonto(montoCuentaCorrienteBase * ((Number(recargoFinanciacion) || 0) / 100)) : 0;
+  const montoCuentaCorriente = redondearMonto(montoCuentaCorrienteBase + recargoFinanciacionMonto);
+  const total = redondearMonto(totalSinRecargoFinanciacion + recargoFinanciacionMonto);
 
   // Monto informativo en la segunda moneda: se recalcula solo mientras
   // el usuario no lo haya tocado a mano (si lo edita, respetamos su
@@ -1327,6 +1330,18 @@ export default function NuevaOrden() {
 
   const handleConfirmar = async () => {
     if (!puedeConfirmar) return;
+    // Un precio varias veces mayor al de lista casi siempre es un error de carga (un cero de más): se avisa antes de guardar.
+    const preciosAnormales = lineasConPrecioAnormal(carrito);
+    if (
+      preciosAnormales.length > 0 &&
+      !confirm(
+        `${t('Revisá estos precios, son muy altos comparados con el precio de lista:')}\n\n${preciosAnormales
+          .map((a) => `• ${a.descripcion}: ${moneda}${formatearMonto(a.precio)} (${t('lista')} ${moneda}${formatearMonto(a.referencia)}, ${Math.round(a.veces)}×)`)
+          .join('\n')}\n\n${t('¿Confirmar la orden igual?')}`
+      )
+    ) {
+      return;
+    }
     setGuardando(true);
     setError(null);
 
@@ -1493,7 +1508,7 @@ ${t('¿Cargarlo igual?')}`)) {
           producto_id: i.productoId || null,
           descripcion: i.descripcion,
           cantidad: i.cantidad,
-          precio_unitario: i.precioUnitario,
+          precio_unitario: redondearMonto(i.precioUnitario),
           costo: i.costo ?? null,
           tipo: i.tipo,
         }))
