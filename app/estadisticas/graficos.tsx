@@ -43,7 +43,20 @@ export function PosicionRanking({ pos }: { pos: number }) {
   );
 }
 
-export function RankingBarras({ datos, moneda, sufijo, oculto }: { datos: Dato[]; moneda?: string; sufijo?: string; oculto?: boolean }) {
+export function RankingBarras({
+  datos,
+  moneda,
+  sufijo,
+  oculto,
+  onSeleccionar,
+}: {
+  datos: Dato[];
+  moneda?: string;
+  sufijo?: string;
+  oculto?: boolean;
+  // Si se pasa, el nombre de cada fila es tocable (ej. abrir el detalle de esa categoría).
+  onSeleccionar?: (nombre: string) => void;
+}) {
   if (datos.length === 0) return <SinDatos />;
   const max = Math.max(1, ...datos.map((d) => d.valor));
 
@@ -55,7 +68,13 @@ export function RankingBarras({ datos, moneda, sufijo, oculto }: { datos: Dato[]
           {d.fotoUrl !== undefined && <Avatar src={d.fotoUrl} nombre={d.nombre} size={38} />}
           <div className="flex-1 min-w-0">
             <div className="flex items-baseline justify-between gap-2 mb-1">
-              <span className="text-sm font-medium truncate">{d.nombre}</span>
+              {onSeleccionar ? (
+                <button onClick={() => onSeleccionar(d.nombre)} className="text-sm font-medium truncate text-left hover:underline">
+                  {d.nombre} ›
+                </button>
+              ) : (
+                <span className="text-sm font-medium truncate">{d.nombre}</span>
+              )}
               <span className="text-xs text-muted dark:text-dark-text-secondary shrink-0 tabular-nums">
                 {formatearValor(d.valor, moneda, sufijo, oculto)}
               </span>

@@ -528,6 +528,8 @@ export type ItemProductoR = {
   clave: string;
   nombre: string;
   categoriaNombre: string;
+  // Subcategoría dentro de la categoría (subcategorias_supabase.sql); ausente si el producto está directo en la categoría.
+  subcategoriaNombre?: string | null;
   cantidad: number;
   precio_unitario: number;
   costo: number | null;

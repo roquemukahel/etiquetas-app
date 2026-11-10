@@ -57,6 +57,8 @@ import { obtenerAreasEgresos, obtenerCategoriasEgresos, type AreaEgreso } from '
 import { soportaMigracion } from '../lib/migraciones';
 import RubrosInversion from './RubrosInversion';
 import CarteraFinanciacion from './CarteraFinanciacion';
+import RankingDetalle from './RankingDetalle';
+import { ubicarCategoria } from '../lib/subcategorias';
 
 type VistaRanking = 'barras' | 'torta';
 // Rankings separados por métrica, no un puntaje opaco de "producto/categoría
@@ -157,7 +159,7 @@ type StockR = { modelo: string | null; precio: number | null; costo: number | nu
 // altas de 20 meses eran 7+ pedidos de 9-12 segundos cada uno (y en negocios grandes llegaba al timeout de la base). La foto de
 // cada persona se resuelve aparte, una sola vez por nombre (ver fotosRegistro).
 type RegistroDispositivo = { agregado_por_nombre: string | null; created_at: string; sucursal_id: string | null };
-type CategoriaStockR = { id: string; nombre: string };
+type CategoriaStockR = { id: string; nombre: string; padre_id?: string | null };
 type MovProveedorR = { proveedor_id: string; tipo: string; monto: number; fecha: string };
 
 const KEY_OCULTAR = 'qovento:analitica-ocultar-montos';
@@ -197,6 +199,8 @@ export default function Estadisticas() {
   const [vistaProveedoresPagado, setVistaProveedoresPagado] = useState<VistaRanking>('barras');
   const [metricaProductos, setMetricaProductos] = useState<MetricaProducto>('unidades');
   const [metricaCategorias, setMetricaCategorias] = useState<MetricaProducto>('unidades');
+  // Ranking completo de productos (ventana con todas las filas, ordenable y exportable); `categoria` es la de arranque.
+  const [rankingCompleto, setRankingCompleto] = useState<{ categoria: string | null } | null>(null);
 
   const [nombreNegocio, setNombreNegocio] = useState('');
   const [vendedores, setVendedores] = useState<Persona[]>([]);
@@ -391,6 +395,8 @@ export default function Estadisticas() {
       // meses reales contra apenas unos días de datos. Ampliar hasta acá
       // cubre lo que necesitan los 4 períodos (hoy/semana/mes/año) con una
       // sola traída, igual que antes.
+      // Subcategorías de stock (subcategorias_supabase.sql): si todavía no se corrió, se pide sin esa columna.
+      const conSubcategorias = await soportaMigracion(supabase, 'subcategorias');
       const ahoraParaVentana = new Date();
       const desde = new Date(ahoraParaVentana.getFullYear() - 1, 0, 1, 0, 0, 0, 0);
 
@@ -429,7 +435,7 @@ export default function Estadisticas() {
           // migración (o no activó el módulo), Supabase devuelve error y
           // "data: null" en vez de tirar excepción; los "?? []" de abajo
           // dejan la sección vacía en vez de romper toda la pantalla.
-          supabase.from('stock_categorias').select('id, nombre'),
+          supabase.from('stock_categorias').select(conSubcategorias ? 'id, nombre, padre_id' : 'id, nombre'),
           supabase.rpc('saldos_proveedores'),
         ]),
         obtenerTodasLasFilas<OrdenR>(
@@ -551,7 +557,7 @@ export default function Estadisticas() {
       setVencidoFiadoTotal(saldos.reduce((acc, s) => acc + Math.max(0, Number(s.vencido_fiado) || 0), 0));
       setDeudores(saldos.filter((s) => (Number(s.saldo) || 0) > 0).length);
 
-      setCategoriasStock((categoriasData as CategoriaStockR[]) ?? []);
+      setCategoriasStock((categoriasData as unknown as CategoriaStockR[]) ?? []);
       setMovsProveedor((movsProveedorData as MovProveedorR[]) ?? []);
       const saldosProv = (saldosProveedorData as { proveedor_id: string; saldo: number }[]) ?? [];
       setSaldoProveedoresTotal(saldosProveedorData ? saldosProv.reduce((acc, s) => acc + Math.max(0, Number(s.saldo) || 0), 0) : null);
@@ -911,13 +917,19 @@ export default function Estadisticas() {
   // producto en dos filas por una diferencia de redacción.
   const itemsVendidosPeriodo: ItemProductoR[] = useMemo(() => {
     const idsOrdenesPeriodo = new Set(ordenesPeriodo.map((o) => o.id));
-    const nombreCategoria = (categoriaId: string | null) => (categoriaId ? categoriasStock.find((c) => c.id === categoriaId)?.nombre ?? 'Categoría eliminada' : 'Sin categoría');
+    // La categoría que se muestra es la de primer nivel; si el producto está en una subcategoría, ésta va aparte (Categoría → Subcategoría → Producto).
+    const ubicar = (categoriaId: string | null): { categoriaNombre: string; subcategoriaNombre: string | null } => {
+      if (!categoriaId) return { categoriaNombre: 'Sin categoría', subcategoriaNombre: null };
+      const u = ubicarCategoria(categoriaId, categoriasStock);
+      if (!u.categoria) return { categoriaNombre: 'Categoría eliminada', subcategoriaNombre: null };
+      return { categoriaNombre: u.categoria.nombre, subcategoriaNombre: u.subcategoria?.nombre ?? null };
+    };
     const out: ItemProductoR[] = [];
     for (const it of ordenItems) {
       if (!idsOrdenesPeriodo.has(it.orden_id) || (it.tipo !== 'dispositivo' && it.tipo !== 'producto')) continue;
       let clave: string;
       let nombre: string;
-      let categoriaNombre: string;
+      let ubicacion: { categoriaNombre: string; subcategoriaNombre: string | null };
       if (it.dispositivo_id) {
         const info = dispositivosInfo.get(it.dispositivo_id);
         // Si no tiene modelo cargado, se agrupa por su PROPIO id (no por el
@@ -926,7 +938,7 @@ export default function Estadisticas() {
         // como si fueran el mismo producto.
         clave = info?.modelo ? `disp:${info.modelo}` : `disp-sin-modelo:${it.dispositivo_id}`;
         nombre = info?.modelo || 'Sin modelo';
-        categoriaNombre = nombreCategoria(info?.categoria_id ?? null);
+        ubicacion = ubicar(info?.categoria_id ?? null);
       } else if (it.producto_id) {
         const info = productosInfo.get(it.producto_id);
         if (info?.excluir_de_estadisticas) continue; // ej. "CREDITO ANTIGUO": ajuste, no venta.
@@ -935,21 +947,27 @@ export default function Estadisticas() {
         // salía dos veces en el ranking. Con maestro_id, se agrupan en una sola fila.
         clave = info?.producto_maestro_id ? `prod-maestro:${info.producto_maestro_id}` : `prod:${it.producto_id}`;
         nombre = info?.nombre || it.descripcion;
-        categoriaNombre = nombreCategoria(info?.categoria_id ?? null);
+        ubicacion = ubicar(info?.categoria_id ?? null);
       } else {
         // Ítem manual sin catálogo (ej. "Funda" cargada a mano en Nueva
         // Orden): no hay id estable, se agrupa por su propio texto — es lo
         // más fiel que se puede hacer sin inventar una identidad que no existe.
         clave = `manual:${it.descripcion.trim().toLowerCase()}`;
         nombre = it.descripcion;
-        categoriaNombre = 'Sin categoría';
+        ubicacion = { categoriaNombre: 'Sin categoría', subcategoriaNombre: null };
       }
-      out.push({ clave, nombre, categoriaNombre, cantidad: it.cantidad, precio_unitario: it.precio_unitario ?? 0, costo: it.costo });
+      out.push({ clave, nombre, categoriaNombre: ubicacion.categoriaNombre, subcategoriaNombre: ubicacion.subcategoriaNombre, cantidad: it.cantidad, precio_unitario: it.precio_unitario ?? 0, costo: it.costo });
     }
     return out;
   }, [ordenItems, ordenesPeriodo, dispositivosInfo, productosInfo, categoriasStock]);
 
-  const rankingProductos = useMemo(() => rankingProductosDe(itemsVendidosPeriodo), [itemsVendidosPeriodo]);
+  // Filtro por categoría del ranking de productos (el ranking de barras muestra el top 10 de esa categoría).
+  const [filtroCategoriaProductos, setFiltroCategoriaProductos] = useState('');
+  const categoriasConVentas = useMemo(() => Array.from(new Set(itemsVendidosPeriodo.map((i) => i.categoriaNombre))).sort((a, b) => a.localeCompare(b, 'es')), [itemsVendidosPeriodo]);
+  const rankingProductos = useMemo(
+    () => rankingProductosDe(filtroCategoriaProductos ? itemsVendidosPeriodo.filter((i) => i.categoriaNombre === filtroCategoriaProductos) : itemsVendidosPeriodo),
+    [itemsVendidosPeriodo, filtroCategoriaProductos]
+  );
   const rankingCategoriasVenta = useMemo(() => rankingCategoriasDe(itemsVendidosPeriodo), [itemsVendidosPeriodo]);
 
   const clientesQueCompraron = useMemo(() => new Set(ordenesPeriodo.map((o) => o.cliente_id).filter(Boolean)).size, [ordenesPeriodo]);
@@ -1369,12 +1387,29 @@ export default function Estadisticas() {
               titulo={t('Ranking de productos')}
               subtitulo={t('Por modelo o por producto de catálogo. Si borrás un modelo/producto de Stock después de haberlo vendido, sus ventas viejas pueden aparecer separadas en vez de agrupadas — no borres del historial algo que ya vendiste si querés conservar este ranking preciso.')}
               accion={
-                <SegmentedChips
-                  size="sm"
-                  valor={metricaProductos}
-                  opciones={puedeVerCostos ? [...METRICAS_PRODUCTO_BASE_T, ...METRICAS_PRODUCTO_COSTO_T] : METRICAS_PRODUCTO_BASE_T}
-                  onChange={setMetricaProductos}
-                />
+                <div className="flex flex-wrap items-center gap-2 justify-end">
+                  {categoriasConVentas.length > 1 && (
+                    <select
+                      value={filtroCategoriaProductos}
+                      onChange={(e) => setFiltroCategoriaProductos(e.target.value)}
+                      aria-label={t('Filtrar por categoría')}
+                      className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-1 text-xs"
+                    >
+                      <option value="">{t('Todas las categorías')}</option>
+                      {categoriasConVentas.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  <SegmentedChips
+                    size="sm"
+                    valor={metricaProductos}
+                    opciones={puedeVerCostos ? [...METRICAS_PRODUCTO_BASE_T, ...METRICAS_PRODUCTO_COSTO_T] : METRICAS_PRODUCTO_BASE_T}
+                    onChange={setMetricaProductos}
+                  />
+                </div>
               }
             >
               {rankingProductos.length === 0 ? (
@@ -1386,6 +1421,14 @@ export default function Estadisticas() {
                   sufijo={metricaProductos === 'unidades' ? t(' unid.') : metricaProductos === 'margen' ? '%' : undefined}
                   oculto={ocultarMontos}
                 />
+              )}
+              {rankingProductos.length > 0 && (
+                <button
+                  onClick={() => setRankingCompleto({ categoria: filtroCategoriaProductos || null })}
+                  className="mt-3 rounded-lg border border-border dark:border-dark-border px-3 py-1.5 text-xs font-medium"
+                >
+                  {t('Ver ranking completo')} ({rankingProductos.length}) ›
+                </button>
               )}
             </SeccionCard>
             <SeccionCard
@@ -1408,9 +1451,26 @@ export default function Estadisticas() {
                   moneda={metricaCategorias === 'facturacion' || metricaCategorias === 'ganancia' ? moneda : undefined}
                   sufijo={metricaCategorias === 'unidades' ? t(' unid.') : metricaCategorias === 'margen' ? '%' : undefined}
                   oculto={ocultarMontos}
+                  onSeleccionar={(nombre) => setRankingCompleto({ categoria: nombre })}
                 />
               )}
+              {rankingCategoriasVenta.length > 0 && (
+                <p className="mt-3 text-xs text-muted dark:text-dark-text-secondary">{t('Tocá una categoría para ver todos sus productos (y subcategorías).')}</p>
+              )}
             </SeccionCard>
+            {rankingCompleto && (
+              <RankingDetalle
+                items={itemsVendidosPeriodo}
+                moneda={moneda}
+                puedeVerCostos={puedeVerCostos}
+                ocultarMontos={ocultarMontos}
+                nombreNegocio={nombreNegocio}
+                etiquetaPeriodo={etiquetaTramoActual}
+                etiquetaSucursal={sucursalId ? sucursales.find((s) => s.id === sucursalId)?.nombre ?? t('Sucursal') : t('Todas las sucursales')}
+                categoriaInicial={rankingCompleto.categoria}
+                onClose={() => setRankingCompleto(null)}
+              />
+            )}
           </>
         );
       }
