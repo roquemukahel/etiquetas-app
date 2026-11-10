@@ -3623,4 +3623,5 @@ export const EN: Record<string, string> = {
   'Buscar en todas las sucursales': 'Search all branches',
   'clientes que deben no tienen sucursal asignada y no están sumados en estos totales.': 'customers with a balance have no branch assigned and are not included in these totals.',
   'Ver todas las sucursales': 'See all branches',
+  'cliente que debe no tiene sucursal asignada y no está sumado en estos totales.': 'customer with a balance has no branch assigned and is not included in these totals.',
 };

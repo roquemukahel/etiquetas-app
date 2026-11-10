@@ -397,7 +397,7 @@ export default function CuentasPorCobrar() {
 
       {deudoresSinSucursal > 0 && (
         <p className="text-xs bg-warn/10 text-warn rounded-lg px-3 py-2">
-          {deudoresSinSucursal} {t('clientes que deben no tienen sucursal asignada y no están sumados en estos totales.')}{' '}
+          {deudoresSinSucursal} {deudoresSinSucursal === 1 ? t('cliente que debe no tiene sucursal asignada y no está sumado en estos totales.') : t('clientes que deben no tienen sucursal asignada y no están sumados en estos totales.')}{' '}
           <button onClick={() => cambiarFiltros({ ...filtros, sucursal: '' })} className="underline">
             {t('Ver todas las sucursales')}
           </button>

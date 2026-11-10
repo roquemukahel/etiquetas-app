@@ -3624,4 +3624,5 @@ export const PT: Record<string, string> = {
   'Buscar en todas las sucursales': 'Buscar em todas as filiais',
   'clientes que deben no tienen sucursal asignada y no están sumados en estos totales.': 'clientes devedores não têm filial atribuída e não estão somados nestes totais.',
   'Ver todas las sucursales': 'Ver todas as filiais',
+  'cliente que debe no tiene sucursal asignada y no está sumado en estos totales.': 'cliente devedor não tem filial atribuída e não está somado nestes totais.',
 };
