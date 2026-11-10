@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../lib/supabase/client';
 import { leerArchivoDatos, valorDe, descargarDatos, insertarEnTandas } from '../lib/csv';
-import { obtenerTodasLasFilas } from '../lib/db';
+import { obtenerTodasLasFilas, porLotes } from '../lib/db';
 import { registrarAuditoria } from '../lib/auditoria';
 import { eliminarEnBloque } from '../lib/eliminarEnBloque';
 import { getActor, useActor } from '../lib/actor';
@@ -15,6 +15,12 @@ import { QoviState } from '../QoviState';
 import { useT } from '../lib/idioma';
 import FiltroLocalidad from '../FiltroLocalidad';
 import { opcionesLocalidad, coincideLocalidad } from '../lib/localidades';
+import { soportaMigracion } from '../lib/migraciones';
+import { obtenerSucursales, type Sucursal } from '../lib/sucursales';
+import { leerMoraSql } from '../lib/mora';
+import { clientesQuePagaronEsteMes, obtenerCronograma } from '../lib/clienteCobroDatos';
+import { coincideDatosCobro, diaDeCobro, FILTROS_VACIOS, SIN_SUCURSAL, yaCobroNoPago, type Cronograma, type FiltrosCliente } from '../lib/clienteCobro';
+import FiltrosClientes, { EtiquetaCalidad, EtiquetaYaCobro, useFiltroSucursal } from '../FiltrosClientes';
 
 type Cliente = {
   id: string;
@@ -27,7 +33,15 @@ type Cliente = {
   telefono: string | null;
   dni: string | null;
   cta_cte_habilitada?: boolean | null;
+  // Solo vienen si el negocio corrió financiacion_guia_cartera_supabase.sql / clientes_cobro_supabase.sql.
+  sucursal_origen_id?: string | null;
+  fuente_ingreso?: string | null;
+  dia_cobro?: number | null;
+  rango_pago?: string | null;
+  calificacion?: string | null;
 };
+
+type SaldoCliente = { saldo: number; vencido: number; proximoVencimiento: string | null };
 
 type CategoriaCtaReal = 'con_saldo' | 'vencido' | 'a_favor' | 'al_dia';
 type FiltroCuentaCorriente = 'todos' | 'con_cta' | CategoriaCtaReal;
@@ -50,7 +64,7 @@ export default function Clientes() {
   const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
   const [eliminandoSeleccion, setEliminandoSeleccion] = useState(false);
 
-  const [saldos, setSaldos] = useState<Map<string, { saldo: number; vencido: number }>>(new Map());
+  const [saldos, setSaldos] = useState<Map<string, SaldoCliente>>(new Map());
   const [monedaCodigo, setMonedaCodigo] = useState('ARS');
   const moneda = useMemo(() => simboloMoneda(monedaCodigo), [monedaCodigo]);
   // Filtro por estado de cuenta corriente — para encontrar rápido, en una
@@ -64,19 +78,42 @@ export default function Clientes() {
   // Columnas explícitas (no "*"): con miles de clientes, traer columnas que
   // esta pantalla no usa (sobre todo la foto en base64 de quién lo cargó)
   // multiplica el peso de la respuesta sin necesidad.
+  // Sucursal de origen y datos de cobro (fuente de ingreso, día de cobro, rango, calidad): solo si el negocio corrió esos SQL.
+  const [sucursales, setSucursales] = useState<Sucursal[]>([]);
+  const [conOrigen, setConOrigen] = useState(false);
+  const [conDatosCobro, setConDatosCobro] = useState(false);
+  const [cronograma, setCronograma] = useState<Cronograma | null>(null);
+  const [pagaronEsteMes, setPagaronEsteMes] = useState<Set<string>>(new Set());
+  const [filtroSucursal, setFiltroSucursal] = useFiltroSucursal();
+  const [filtrosCobro, setFiltrosCobro] = useState<FiltrosCliente>(FILTROS_VACIOS);
+  // Sin el SQL de sucursal de origen no hay nada que filtrar (si no, el filtro dejaría a todos afuera).
+  const filtros: FiltrosCliente = { ...filtrosCobro, sucursal: conOrigen ? filtroSucursal : '' };
+  const cambiarFiltros = (f: FiltrosCliente) => {
+    setFiltroSucursal(f.sucursal);
+    setFiltrosCobro(f);
+  };
+
   const cargar = async () => {
-    const data = await obtenerTodasLasFilas<Cliente>(
-      supabase,
-      'clientes',
+    const [origen, cobro] = await Promise.all([soportaMigracion(supabase, 'clienteSucursalOrigen'), soportaMigracion(supabase, 'clienteCobro')]);
+    setConOrigen(origen);
+    setConDatosCobro(cobro);
+    const columnas = [
       'id, nombre, apellido, apodo, domicilio, localidad, email, telefono, dni, cta_cte_habilitada',
-      [{ columna: 'nombre' }]
-    );
+      origen ? 'sucursal_origen_id' : '',
+      cobro ? 'fuente_ingreso, dia_cobro, rango_pago, calificacion' : '',
+    ]
+      .filter(Boolean)
+      .join(', ');
+    const data = await obtenerTodasLasFilas<Cliente>(supabase, 'clientes', columnas, [{ columna: 'nombre' }]);
     setClientes(data);
     setLoading(false);
   };
 
   useEffect(() => {
     cargar();
+    obtenerSucursales(supabase).then(setSucursales);
+    obtenerCronograma(supabase).then(setCronograma);
+    clientesQuePagaronEsteMes(supabase).then(setPagaronEsteMes);
   }, []);
 
   // Saldos de cuenta corriente de todos los clientes en un solo llamado. Si
@@ -85,9 +122,9 @@ export default function Clientes() {
   useEffect(() => {
     (async () => {
       const { data } = await supabase.rpc('saldos_cuenta_corriente');
-      const m = new Map<string, { saldo: number; vencido: number }>();
-      for (const r of (data as { cliente_id: string; saldo: number; vencido: number }[]) ?? []) {
-        m.set(r.cliente_id, { saldo: Number(r.saldo) || 0, vencido: Number(r.vencido) || 0 });
+      const m = new Map<string, SaldoCliente>();
+      for (const r of (data as { cliente_id: string; saldo: number; vencido: number; proximo_vencimiento?: string | null }[]) ?? []) {
+        m.set(r.cliente_id, { saldo: Number(r.saldo) || 0, vencido: Number(r.vencido) || 0, proximoVencimiento: leerMoraSql(r)?.proximoVencimiento ?? null });
       }
       setSaldos(m);
       const {
@@ -190,6 +227,32 @@ export default function Clientes() {
     setSeleccionados(new Set());
   };
 
+  const [sucursalMasiva, setSucursalMasiva] = useState('');
+  const [asignando, setAsignando] = useState(false);
+  const asignarSucursalMasiva = async () => {
+    const ids = Array.from(seleccionados);
+    if (!sucursalMasiva || ids.length === 0) return;
+    const nombre = sucursales.find((s) => s.id === sucursalMasiva)?.nombre ?? '';
+    if (!confirm(`${t('¿Asignar la sucursal')} "${nombre}" ${t('a')} ${ids.length} ${ids.length === 1 ? t('cliente') : t('clientes')}?`)) return;
+    setAsignando(true);
+    // En tandas: una lista larga de ids en un solo pedido puede pasarse del largo permitido de la dirección.
+    const { error: errorAsignar } = await porLotes(ids, (lote) => supabase.from('clientes').update({ sucursal_origen_id: sucursalMasiva }).in('id', lote));
+    if (errorAsignar) {
+      alert(`${t('No se pudo asignar la sucursal.')} ${errorAsignar.message}`);
+      setAsignando(false);
+      cargar();
+      return;
+    }
+    await registrarAuditoria(supabase, {
+      accion: `asignó la sucursal "${nombre}" a ${ids.length} clientes`,
+      entidad: 'cliente',
+      valorNuevo: { sucursal: nombre, cantidad: ids.length },
+    });
+    setAsignando(false);
+    salirDeSeleccion();
+    cargar();
+  };
+
   const eliminarSeleccionados = async () => {
     if (!puedeEliminar) return;
     const ids = Array.from(seleccionados);
@@ -246,6 +309,28 @@ export default function Clientes() {
     return 'con_saldo';
   };
 
+  // "Ya cobró – no pagó": pasó su día de cobro de este mes (el cargado o el del cronograma por DNI), debe la cuota y no pagó nada este mes.
+  const esYaCobroNoPago = (c: Cliente): boolean => {
+    const dia = diaDeCobro(c, cronograma);
+    if (!dia) return false;
+    const s = saldos.get(c.id);
+    if (!s) return false;
+    return yaCobroNoPago({
+      diaCobro: dia.dia,
+      hoy: new Date(),
+      saldo: s.saldo,
+      vencido: Math.min(Math.max(s.saldo, 0), s.vencido),
+      proximoVencimiento: s.proximoVencimiento,
+      pagoEsteMes: pagaronEsteMes.has(c.id),
+    });
+  };
+  const cantidadYaCobroNoPago = useMemo(
+    () => clientes.filter((c) => coincideDatosCobro(c, filtros) && esYaCobroNoPago(c)).length,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [clientes, saldos, cronograma, pagaronEsteMes, filtroSucursal, filtrosCobro]
+  );
+  const sinSucursal = useMemo(() => (conOrigen ? clientes.filter((c) => !c.sucursal_origen_id).length : 0), [clientes, conOrigen]);
+
   const conteosCta = useMemo(() => {
     const c = { con_cta: 0, con_saldo: 0, vencido: 0, a_favor: 0, al_dia: 0 };
     for (const cliente of clientes) {
@@ -269,11 +354,13 @@ export default function Clientes() {
       );
     }
     if (filtroLocalidad) base = base.filter((c) => coincideLocalidad(c.localidad, filtroLocalidad));
+    base = base.filter((c) => coincideDatosCobro(c, filtros));
+    if (filtros.soloYaCobroNoPago) base = base.filter(esYaCobroNoPago);
     if (filtroCta === 'todos') return base;
     if (filtroCta === 'con_cta') return base.filter((c) => !!c.cta_cte_habilitada);
     return base.filter((c) => categoriaCta(c) === filtroCta);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clientes, busqueda, filtroCta, filtroLocalidad, saldos]);
+  }, [clientes, busqueda, filtroCta, filtroLocalidad, saldos, filtroSucursal, filtrosCobro, cronograma, pagaronEsteMes]);
 
   // Con miles de clientes, pintar TODAS las tarjetas de una es lo que hace
   // sentir lenta la pantalla (no la consulta en sí) — de a poco entonces,
@@ -284,7 +371,7 @@ export default function Clientes() {
   const [visibles, setVisibles] = useState(PASO_VISIBLES);
   useEffect(() => {
     setVisibles(PASO_VISIBLES);
-  }, [busqueda, filtroCta, filtroLocalidad]);
+  }, [busqueda, filtroCta, filtroLocalidad, filtroSucursal, filtrosCobro]);
   const paraRenderizar = useMemo(() => filtrados.slice(0, visibles), [filtrados, visibles]);
 
   return (
@@ -304,6 +391,22 @@ export default function Clientes() {
       />
 
       <FiltroLocalidad opciones={localidadesDisponibles} value={filtroLocalidad} onChange={setFiltroLocalidad} />
+
+      <FiltrosClientes
+        filtros={filtros}
+        onChange={cambiarFiltros}
+        sucursales={conOrigen ? sucursales : []}
+        conDatosCobro={conDatosCobro}
+        cantidadYaCobroNoPago={conDatosCobro ? cantidadYaCobroNoPago : undefined}
+      />
+      {conOrigen && sucursales.length > 1 && sinSucursal > 0 && filtros.sucursal !== SIN_SUCURSAL && (
+        <p className="text-xs text-muted dark:text-dark-text-secondary bg-canvas dark:bg-dark-bg rounded-lg px-3 py-2">
+          {sinSucursal} {t('clientes todavía no tienen sucursal asignada y no aparecen al filtrar por una sucursal.')}{' '}
+          <button onClick={() => cambiarFiltros({ ...filtros, sucursal: SIN_SUCURSAL })} className="text-accent dark:text-dark-accent underline">
+            {t('Verlos y asignarles una')}
+          </button>
+        </p>
+      )}
 
       {conteosCta.con_cta > 0 && (
         <div className="flex flex-wrap gap-1.5">
@@ -380,25 +483,54 @@ export default function Clientes() {
       )}
 
       {modoSeleccion ? (
-        <div className="sticky top-0 z-10 rounded-xl border border-accent/30 dark:border-dark-accent/30 bg-accent-soft dark:bg-dark-accent-soft px-4 py-2.5 flex items-center justify-between gap-2">
+        <div className="sticky top-0 z-10 rounded-xl border border-accent/30 dark:border-dark-accent/30 bg-accent-soft dark:bg-dark-accent-soft px-4 py-2.5 flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm font-medium">
             {seleccionados.size} {seleccionados.size === 1 ? t('seleccionado') : t('seleccionados')}
           </p>
           <div className="flex items-center gap-2">
+            <button onClick={() => setSeleccionados(new Set(filtrados.map((c) => c.id)))} className="text-xs text-accent dark:text-dark-accent underline">
+              {t('Elegir los')} {filtrados.length} {t('que se ven')}
+            </button>
             <button onClick={salirDeSeleccion} className="text-xs text-muted dark:text-dark-text-secondary underline">
               {t('Cancelar')}
             </button>
-            <button
-              onClick={eliminarSeleccionados}
-              disabled={seleccionados.size === 0 || eliminandoSeleccion}
-              className="rounded-lg bg-bad text-white text-xs font-medium px-3 py-1.5 disabled:opacity-40"
-            >
-              {eliminandoSeleccion ? t('Eliminando...') : t('Eliminar')}
-            </button>
+            {puedeEliminar && (
+              <button
+                onClick={eliminarSeleccionados}
+                disabled={seleccionados.size === 0 || eliminandoSeleccion}
+                className="rounded-lg bg-bad text-white text-xs font-medium px-3 py-1.5 disabled:opacity-40"
+              >
+                {eliminandoSeleccion ? t('Eliminando...') : t('Eliminar')}
+              </button>
+            )}
           </div>
+          {conOrigen && sucursales.length > 0 && (
+            <div className="basis-full flex items-center gap-2 pt-2">
+              <select
+                value={sucursalMasiva}
+                onChange={(e) => setSucursalMasiva(e.target.value)}
+                aria-label={t('Sucursal a asignar')}
+                className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2.5 py-1.5 text-xs"
+              >
+                <option value="">🏬 {t('Elegí la sucursal a asignar')}</option>
+                {sucursales.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    🏬 {s.nombre}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={asignarSucursalMasiva}
+                disabled={!sucursalMasiva || seleccionados.size === 0 || asignando}
+                className="rounded-lg bg-accent dark:bg-dark-accent text-white text-xs font-medium px-3 py-1.5 disabled:opacity-40"
+              >
+                {asignando ? t('Asignando...') : t('Asignar sucursal')}
+              </button>
+            </div>
+          )}
         </div>
       ) : (
-        puedeEliminar && (
+        (puedeEliminar || conOrigen) && (
           <button onClick={() => setModoSeleccion(true)} className="self-start text-xs text-accent dark:text-dark-accent underline">
             {t('Seleccionar varios')}
           </button>
@@ -483,9 +615,12 @@ export default function Clientes() {
                   <p className="text-xs text-muted dark:text-dark-text-secondary truncate">
                     {c.telefono || c.email || t('sin contacto')}
                     {c.localidad ? ` · ${c.localidad}` : ''}
+                    {conOrigen && sucursales.length > 1 && c.sucursal_origen_id ? ` · 🏬 ${sucursales.find((s) => s.id === c.sucursal_origen_id)?.nombre ?? ''}` : ''}
                   </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
+                  {conDatosCobro && esYaCobroNoPago(c) && <EtiquetaYaCobro />}
+                  <EtiquetaCalidad calificacion={c.calificacion} />
                   {saldoChip}
                   {c.dni && <p className="text-xs text-muted dark:text-dark-text-secondary font-mono">{c.dni}</p>}
                 </div>

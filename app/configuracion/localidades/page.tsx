@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { useActor } from '../../lib/actor';
@@ -8,7 +8,7 @@ import { tienePermiso } from '../../lib/permisos';
 import { registrarAuditoria } from '../../lib/auditoria';
 import { falla } from '../../lib/escritura';
 import { obtenerTodasLasFilas } from '../../lib/db';
-import { crearLocalidad, claveLocalidad, obtenerLocalidades, type Localidad } from '../../lib/localidades';
+import { crearLocalidad, claveLocalidad, obtenerLocalidades, planUnificacionLocalidades, type Localidad } from '../../lib/localidades';
 import { useT } from '../../lib/idioma';
 
 // Lista de localidades/zonas del negocio: se eligen de una lista en la ficha del
@@ -28,12 +28,16 @@ export default function Localidades() {
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [nombreEdit, setNombreEdit] = useState('');
   const [procesando, setProcesando] = useState(false);
+  // Cada valor de "localidad" tal cual está guardado en los clientes (con repetidos): sirve para detectar zonas escritas distinto.
+  const [valoresClientes, setValoresClientes] = useState<string[]>([]);
+  const plan = useMemo(() => planUnificacionLocalidades(lista ?? [], valoresClientes), [lista, valoresClientes]);
 
   const cargar = async () => {
     const l = await obtenerLocalidades(supabase);
     setLista(l);
     // Cuántos clientes tiene cada zona + las que ya están escritas a mano y no están en la lista.
     const clientes = await obtenerTodasLasFilas<{ localidad: string | null }>(supabase, 'clientes', 'localidad', [], (q) => q.not('localidad', 'is', null));
+    setValoresClientes(clientes.map((c) => c.localidad ?? '').filter((v) => v.trim() !== ''));
     const porClave = new Map<string, number>();
     const escritas = new Map<string, string>();
     for (const c of clientes) {
@@ -79,6 +83,32 @@ export default function Localidades() {
       }
     }
     await registrarAuditoria(supabase, { accion: `importó ${sinLista.length} localidades ya usadas en clientes`, entidad: 'localidad' });
+    setProcesando(false);
+    await cargar();
+  };
+
+  // Deja cada zona escrita de una sola forma: cambia las escrituras repetidas de los clientes por la que queda y ordena la lista.
+  const unificar = async () => {
+    const cantidad = plan.grupos.reduce((a, g) => a + g.clientes.reduce((x, c) => x + c.cantidad, 0), 0);
+    if (!confirm(`${t('Se van a unificar')} ${plan.grupos.length} ${t('zonas escritas de distintas formas')} (${cantidad} ${t('clientes se actualizan')}). ${t('¿Seguir?')}`)) return;
+    setProcesando(true);
+    setError(null);
+    for (const g of plan.grupos) {
+      for (const c of g.clientes) {
+        if (await falla(supabase.from('clientes').update({ localidad: g.destino }).eq('localidad', c.desde), t, 'unificar la localidad de los clientes')) return setProcesando(false);
+      }
+      for (const l of g.listaQuitar) {
+        if (await falla(supabase.from('localidades').delete().eq('id', l.id), t, 'quitar la localidad repetida')) return setProcesando(false);
+      }
+      if (g.listaRenombrar && g.listaRenombrar.nombre !== g.destino) {
+        if (await falla(supabase.from('localidades').update({ nombre: g.destino }).eq('id', g.listaRenombrar.id), t, 'renombrar la localidad')) return setProcesando(false);
+      }
+    }
+    await registrarAuditoria(supabase, {
+      accion: `unificó ${plan.grupos.length} localidades escritas de distintas formas`,
+      entidad: 'localidad',
+      valorNuevo: { zonas: plan.grupos.map((g) => g.destino).slice(0, 30) },
+    });
     setProcesando(false);
     await cargar();
   };
@@ -155,6 +185,29 @@ export default function Localidades() {
               {t('Agregar')}
             </button>
           </div>
+
+          {plan.grupos.length > 0 && (
+            <div className="rounded-xl border border-warn/40 bg-warn/10 px-3 py-3 text-sm flex flex-col gap-2">
+              <p className="font-medium">
+                {plan.grupos.length} {t('zonas están escritas de distintas formas y se cuentan como separadas:')}
+              </p>
+              <ul className="text-xs flex flex-col gap-1">
+                {plan.grupos.slice(0, 10).map((g) => (
+                  <li key={g.destino}>
+                    {[...g.clientes.map((c) => `"${c.desde.trim()}"`), ...g.listaQuitar.map((l) => `"${l.nombre}"`)].join(', ') || `"${g.destino}"`} → <strong>{g.destino}</strong>
+                  </li>
+                ))}
+                {plan.grupos.length > 10 && <li>…</li>}
+              </ul>
+              <button
+                disabled={procesando}
+                onClick={unificar}
+                className="self-start rounded-lg bg-accent dark:bg-dark-accent text-white px-3 py-1.5 text-xs font-medium disabled:opacity-40"
+              >
+                {t('Unificar localidades repetidas')}
+              </button>
+            </div>
+          )}
 
           {sinLista.length > 0 && (
             <div className="rounded-xl border border-warn/40 bg-warn/10 px-3 py-3 text-sm flex flex-col gap-2">

@@ -22,6 +22,9 @@ const CHEQUEOS = {
     })),
   // reparaciones_bateria_supabase.sql (la batería del equipo acompaña a la orden de Servicio Técnico)
   bateriaServicio: (s: SupabaseClient) => s.from('reparaciones').select('salud_bateria').limit(1),
+  // clientes_cobro_supabase.sql (fuente de ingreso, día de cobro, rango de pago, calidad del cliente)
+  clienteCobro: (s: SupabaseClient) => s.from('clientes').select('fuente_ingreso, dia_cobro, rango_pago, calificacion, observaciones_cobro').limit(1),
+  cronogramaCobro: (s: SupabaseClient) => s.from('cronograma_cobro').select('id').limit(1),
   // subcategorias_supabase.sql (una categoría de stock puede colgar de otra)
   subcategorias: (s: SupabaseClient) => s.from('stock_categorias').select('padre_id').limit(1),
   // standby_supabase.sql

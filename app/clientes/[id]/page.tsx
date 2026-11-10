@@ -28,6 +28,8 @@ import SelectorLocalidad from '../../SelectorLocalidad';
 import FormularioEquipoPago from '../../FormularioEquipoPago';
 import { EQUIPO_PAGO_VACIO, problemaDelEquipo, type EquipoPago } from '../../lib/equipoPago';
 import { buscarClientesDuplicados, textoDuplicados } from '../../lib/clientesDuplicados';
+import { obtenerCronograma } from '../../lib/clienteCobroDatos';
+import { CALIFICACIONES, FUENTES_CON_CRONOGRAMA, FUENTES_INGRESO, RANGOS_PAGO, diaDeCobro, terminacionDni, type Cronograma } from '../../lib/clienteCobro';
 
 type Cliente = {
   id: string;
@@ -47,6 +49,12 @@ type Cliente = {
   portal_token: string | null;
   // Solo viene si el negocio corrió financiacion_guia_cartera_supabase.sql.
   sucursal_origen_id?: string | null;
+  // Solo vienen si el negocio corrió clientes_cobro_supabase.sql.
+  fuente_ingreso?: string | null;
+  dia_cobro?: number | null;
+  rango_pago?: string | null;
+  calificacion?: string | null;
+  observaciones_cobro?: string | null;
 };
 
 type Orden = {
@@ -97,6 +105,16 @@ export default function DetalleCliente() {
   const [negocioNombre, setNegocioNombre] = useState('');
   const [codigoPais, setCodigoPais] = useState('54');
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
+  // Los datos de cobro y la sucursal de origen se editan solo si el negocio ya corrió esos SQL.
+  const [conOrigen, setConOrigen] = useState(false);
+  const [conDatosCobro, setConDatosCobro] = useState(false);
+  const [cronograma, setCronograma] = useState<Cronograma | null>(null);
+  useEffect(() => {
+    soportaMigracion(supabase, 'clienteSucursalOrigen').then(setConOrigen);
+    soportaMigracion(supabase, 'clienteCobro').then(setConDatosCobro);
+    obtenerCronograma(supabase).then(setCronograma);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [loading, setLoading] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -279,6 +297,8 @@ export default function DetalleCliente() {
   );
 
   const campo = (k: keyof Cliente, valor: string) => setC((prev) => (prev ? { ...prev, [k]: valor } : prev));
+  // Para los campos que pueden quedar vacíos (null) o ser un número.
+  const campoOpcional = (k: keyof Cliente, valor: string | number | null) => setC((prev) => (prev ? { ...prev, [k]: valor } : prev));
 
   const abrirCorregirPago = (m: Movimiento) => {
     setCorrigiendoPago(m);
@@ -638,6 +658,16 @@ ${t('¿Guardar igual?')}`)) {
         email: c.email?.trim() || null,
         telefono: c.telefono?.trim() || null,
         dni: c.dni?.trim() || null,
+        ...(conOrigen ? { sucursal_origen_id: c.sucursal_origen_id || null } : {}),
+        ...(conDatosCobro
+          ? {
+              fuente_ingreso: c.fuente_ingreso || null,
+              dia_cobro: c.dia_cobro ?? null,
+              rango_pago: c.rango_pago || null,
+              calificacion: c.calificacion || null,
+              observaciones_cobro: c.observaciones_cobro?.trim() || null,
+            }
+          : {}),
       })
       .eq('id', id);
     if (updateError) {
@@ -1015,15 +1045,138 @@ ${t('¿Guardar igual?')}`)) {
             <Campo label={t('Apodo (opcional)')} valor={c.apodo ?? ''} onChange={(v) => campo('apodo', v)} />
             <Campo label={t('Domicilio')} valor={c.domicilio ?? ''} onChange={(v) => campo('domicilio', v)} />
             <SelectorLocalidad label={t('Localidad / zona')} value={c.localidad ?? ''} onChange={(v) => campo('localidad', v)} />
-            {c.sucursal_origen_id && sucursales.length > 1 && (
-              <p className="text-xs text-muted dark:text-dark-text-secondary">
-                {t('Sucursal de origen')}: 🏬 {sucursales.find((s) => s.id === c.sucursal_origen_id)?.nombre ?? '—'}
-              </p>
+            {conOrigen && sucursales.length > 0 ? (
+              <div>
+                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Sucursal de origen')}</label>
+                <select
+                  value={c.sucursal_origen_id ?? ''}
+                  onChange={(e) => campoOpcional('sucursal_origen_id', e.target.value || null)}
+                  className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+                >
+                  <option value="">{t('Sin sucursal asignada')}</option>
+                  {sucursales.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      🏬 {s.nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              c.sucursal_origen_id &&
+              sucursales.length > 1 && (
+                <p className="text-xs text-muted dark:text-dark-text-secondary">
+                  {t('Sucursal de origen')}: 🏬 {sucursales.find((s) => s.id === c.sucursal_origen_id)?.nombre ?? '—'}
+                </p>
+              )
             )}
             <Campo label="Email" valor={c.email ?? ''} onChange={(v) => campo('email', v)} />
             <Campo label={t('Teléfono')} valor={c.telefono ?? ''} onChange={(v) => campo('telefono', v)} />
             <Campo label="DNI" valor={c.dni ?? ''} onChange={(v) => campo('dni', v)} />
           </div>
+
+          {conDatosCobro && (
+            <div className="flex flex-col gap-3 rounded-2xl border border-border dark:border-dark-border p-4">
+              <p className="text-sm font-semibold">{t('Datos de cobro')}</p>
+              <div>
+                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Fuente de ingreso')}</label>
+                <select
+                  value={c.fuente_ingreso ?? ''}
+                  onChange={(e) => campoOpcional('fuente_ingreso', e.target.value || null)}
+                  className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+                >
+                  <option value="">{t('Sin definir')}</option>
+                  {FUENTES_INGRESO.map((f) => (
+                    <option key={f.clave} value={f.clave}>
+                      {t(f.etiqueta)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Día de cobro del cliente (1 a 31)')}</label>
+                <input
+                  value={c.dia_cobro ?? ''}
+                  onChange={(e) => {
+                    const n = parseInt(e.target.value.replace(/\D/g, '').slice(0, 2), 10);
+                    campoOpcional('dia_cobro', Number.isFinite(n) && n >= 1 && n <= 31 ? n : null);
+                  }}
+                  inputMode="numeric"
+                  placeholder={t('Ej.: 5')}
+                  className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+                />
+                {(() => {
+                  const efectivo = diaDeCobro(c, cronograma);
+                  const usaCronograma = !!c.fuente_ingreso && FUENTES_CON_CRONOGRAMA.includes(c.fuente_ingreso);
+                  if (c.dia_cobro == null && efectivo?.origen === 'cronograma') {
+                    return (
+                      <p className="text-xs text-good mt-1">
+                        {t('Sin día cargado: se usa el del cronograma por DNI')} ({t('DNI termina en')} {terminacionDni(c.dni)}) → {t('día')} {efectivo.dia}.
+                      </p>
+                    );
+                  }
+                  if (usaCronograma && c.dia_cobro == null) {
+                    return (
+                      <p className="text-xs text-muted dark:text-dark-text-secondary mt-1">
+                        {cronograma === null
+                          ? t('Para jubilaciones y AUH podés cargar el cronograma por terminación de DNI en Configuración → Cronograma de cobro.')
+                          : terminacionDni(c.dni) == null
+                            ? t('Cargá el DNI para tomar el día del cronograma según su terminación.')
+                            : t('No hay día cargado para esa terminación de DNI en Configuración → Cronograma de cobro.')}
+                      </p>
+                    );
+                  }
+                  return null;
+                })()}
+              </div>
+              <div>
+                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Rango de pago pactado')}</label>
+                <select
+                  value={c.rango_pago ?? ''}
+                  onChange={(e) => campoOpcional('rango_pago', e.target.value || null)}
+                  className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+                >
+                  <option value="">{t('Sin definir')}</option>
+                  {RANGOS_PAGO.map((r) => (
+                    <option key={r} value={r}>
+                      {t('Del')} {r.replace('-', ` ${t('al')} `)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Calidad del cliente')}</label>
+                <div className="flex gap-2">
+                  {CALIFICACIONES.map((q) => (
+                    <button
+                      key={q.clave}
+                      type="button"
+                      onClick={() => campoOpcional('calificacion', c.calificacion === q.clave ? null : q.clave)}
+                      className={`flex-1 rounded-xl border px-3 py-2.5 text-sm font-medium ${
+                        c.calificacion === q.clave
+                          ? q.clave === 'bueno'
+                            ? 'bg-good/10 border-good text-good'
+                            : q.clave === 'regular'
+                              ? 'bg-warn/10 border-warn text-warn'
+                              : 'bg-bad/10 border-bad text-bad'
+                          : 'border-border dark:border-dark-border text-muted dark:text-dark-text-secondary'
+                      }`}
+                    >
+                      {t(q.etiqueta)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Observaciones')}</label>
+                <textarea
+                  value={c.observaciones_cobro ?? ''}
+                  onChange={(e) => campoOpcional('observaciones_cobro', e.target.value)}
+                  rows={3}
+                  className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+                />
+              </div>
+            </div>
+          )}
 
           <button
             disabled={guardando}

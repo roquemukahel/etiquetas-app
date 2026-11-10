@@ -18,8 +18,23 @@ import { useT } from '../lib/idioma';
 import FiltroLocalidad from '../FiltroLocalidad';
 import { opcionesLocalidad, coincideLocalidad } from '../lib/localidades';
 import { leerMoraSql, type FilaMoraSql } from '../lib/mora';
+import { soportaMigracion } from '../lib/migraciones';
+import { obtenerSucursales, type Sucursal } from '../lib/sucursales';
+import { clientesQuePagaronEsteMes, obtenerCronograma } from '../lib/clienteCobroDatos';
+import { coincideDatosCobro, diaDeCobro, FILTROS_VACIOS, yaCobroNoPago, type Cronograma, type DatosCobro, type FiltrosCliente } from '../lib/clienteCobro';
+import FiltrosClientes, { EtiquetaCalidad, EtiquetaYaCobro, useFiltroSucursal } from '../FiltrosClientes';
 
-type Cliente = { id: string; nombre: string; apellido: string | null; suspendido: boolean | null; telefono: string | null; localidad: string | null };
+type Cliente = {
+  id: string;
+  nombre: string;
+  apellido: string | null;
+  suspendido: boolean | null;
+  telefono: string | null;
+  localidad: string | null;
+  dni?: string | null;
+  // Solo vienen si el negocio corrió financiacion_guia_cartera_supabase.sql / clientes_cobro_supabase.sql.
+  sucursal_origen_id?: string | null;
+} & DatosCobro;
 type Saldo = FilaMoraSql & { cliente_id: string; saldo: number; vencido: number };
 
 type Fila = {
@@ -76,12 +91,47 @@ export default function CuentasPorCobrar() {
   const [filtroLocalidad, setFiltroLocalidad] = useState('');
   const [localidadPorCliente, setLocalidadPorCliente] = useState<Map<string, string | null>>(new Map());
   const localidadesDisponibles = useMemo(() => opcionesLocalidad(Array.from(localidadPorCliente.values())), [localidadPorCliente]);
-  const clienteEnZona = (id: string) => coincideLocalidad(localidadPorCliente.get(id), filtroLocalidad);
-  const filas = useMemo(() => (filtroLocalidad ? filasRaw.filter((f) => clienteEnZona(f.id)) : filasRaw), [filasRaw, filtroLocalidad, localidadPorCliente]);
-  const cuotas = useMemo(() => (filtroLocalidad ? cuotasRaw.filter((c) => clienteEnZona(c.cliente_id)) : cuotasRaw), [cuotasRaw, filtroLocalidad, localidadPorCliente]);
+
+  // Sucursal de origen, fuente de ingreso, rango de pago, calidad y "ya cobró – no pagó" (si el negocio corrió esos SQL).
+  const [sucursales, setSucursales] = useState<Sucursal[]>([]);
+  const [conOrigen, setConOrigen] = useState(false);
+  const [conDatosCobro, setConDatosCobro] = useState(false);
+  const [cronograma, setCronograma] = useState<Cronograma | null>(null);
+  const [pagaronEsteMes, setPagaronEsteMes] = useState<Set<string>>(new Set());
+  const [infoClientes, setInfoClientes] = useState<Map<string, Cliente>>(new Map());
+  const [filtroSucursal, setFiltroSucursal] = useFiltroSucursal();
+  const [filtrosCobro, setFiltrosCobro] = useState<FiltrosCliente>(FILTROS_VACIOS);
+  // Sin el SQL de sucursal de origen no hay nada que filtrar (si no, el filtro dejaría a todos afuera).
+  const filtros: FiltrosCliente = { ...filtrosCobro, sucursal: conOrigen ? filtroSucursal : '' };
+  const cambiarFiltros = (f: FiltrosCliente) => {
+    setFiltroSucursal(f.sucursal);
+    setFiltrosCobro(f);
+  };
+
+  // Clientes marcados "ya cobró – no pagó" (sobre todos los que deben, sin importar los demás filtros).
+  const idsYaCobroNoPago = useMemo(() => {
+    const ids = new Set<string>();
+    if (!conDatosCobro) return ids;
+    const hoy = new Date();
+    for (const f of filasRaw) {
+      const c = infoClientes.get(f.id);
+      const dia = c ? diaDeCobro(c, cronograma) : null;
+      if (!dia) continue;
+      if (yaCobroNoPago({ diaCobro: dia.dia, hoy, saldo: f.saldo, vencido: f.vencido, proximoVencimiento: f.proximoSql?.fecha ?? null, pagoEsteMes: pagaronEsteMes.has(f.id) })) ids.add(f.id);
+    }
+    return ids;
+  }, [filasRaw, infoClientes, cronograma, pagaronEsteMes, conDatosCobro]);
+
+  const hayFiltro = !!filtroLocalidad || !!filtros.sucursal || !!filtros.fuente || !!filtros.rango || !!filtros.calificacion || filtros.soloYaCobroNoPago;
+  const clienteVisible = (id: string) =>
+    coincideLocalidad(localidadPorCliente.get(id), filtroLocalidad) &&
+    coincideDatosCobro(infoClientes.get(id) ?? {}, filtros) &&
+    (!filtros.soloYaCobroNoPago || idsYaCobroNoPago.has(id));
+  const filas = useMemo(() => (hayFiltro ? filasRaw.filter((f) => clienteVisible(f.id)) : filasRaw), [filasRaw, hayFiltro, filtroLocalidad, localidadPorCliente, infoClientes, filtroSucursal, filtrosCobro, conOrigen, idsYaCobroNoPago]);
+  const cuotas = useMemo(() => (hayFiltro ? cuotasRaw.filter((c) => clienteVisible(c.cliente_id)) : cuotasRaw), [cuotasRaw, hayFiltro, filtroLocalidad, localidadPorCliente, infoClientes, filtroSucursal, filtrosCobro, conOrigen, idsYaCobroNoPago]);
   const pagosAplicados = useMemo(
-    () => (filtroLocalidad ? pagosRaw.filter((p) => clienteEnZona(p.cliente_id)) : pagosRaw),
-    [pagosRaw, filtroLocalidad, localidadPorCliente]
+    () => (hayFiltro ? pagosRaw.filter((p) => clienteVisible(p.cliente_id)) : pagosRaw),
+    [pagosRaw, hayFiltro, filtroLocalidad, localidadPorCliente, infoClientes, filtroSucursal, filtrosCobro, conOrigen, idsYaCobroNoPago]
   );
 
   useEffect(() => {
@@ -96,7 +146,15 @@ export default function CuentasPorCobrar() {
       // "Cliente eliminado" sin estarlo de verdad.
       const [{ data: saldosData }, clientesData, { data: userData }, cuotasData, pagosData] = await Promise.all([
         supabase.rpc('saldos_cuenta_corriente'),
-        obtenerTodasLasFilas<Cliente>(supabase, 'clientes', 'id, nombre, apellido, suspendido, telefono, localidad'),
+        (async () => {
+          const [origen, cobro] = await Promise.all([soportaMigracion(supabase, 'clienteSucursalOrigen'), soportaMigracion(supabase, 'clienteCobro')]);
+          setConOrigen(origen);
+          setConDatosCobro(cobro);
+          const columnas = ['id, nombre, apellido, suspendido, telefono, localidad', origen ? 'sucursal_origen_id' : '', cobro ? 'dni, fuente_ingreso, dia_cobro, rango_pago, calificacion' : '']
+            .filter(Boolean)
+            .join(', ');
+          return obtenerTodasLasFilas<Cliente>(supabase, 'clientes', columnas);
+        })(),
         supabase.auth.getUser(),
         obtenerTodasLasFilas<any>(
           supabase,
@@ -135,6 +193,10 @@ export default function CuentasPorCobrar() {
 
       setNombresClientes(new Map(clientesData.map((c) => [c.id, `${c.nombre} ${c.apellido || ''}`.trim()])));
       setLocalidadPorCliente(new Map(clientesData.map((c) => [c.id, c.localidad])));
+      setInfoClientes(clientes);
+      obtenerSucursales(supabase).then(setSucursales);
+      obtenerCronograma(supabase).then(setCronograma);
+      clientesQuePagaronEsteMes(supabase).then(setPagaronEsteMes);
       setCuotas(
         ((cuotasData as any[]) ?? []).map((c) => ({
           id: c.id,
@@ -314,6 +376,13 @@ export default function CuentasPorCobrar() {
 
       <div className="flex flex-wrap items-center gap-2">
         <FiltroLocalidad opciones={localidadesDisponibles} value={filtroLocalidad} onChange={setFiltroLocalidad} />
+        <FiltrosClientes
+          filtros={filtros}
+          onChange={cambiarFiltros}
+          sucursales={conOrigen ? sucursales : []}
+          conDatosCobro={conDatosCobro}
+          cantidadYaCobroNoPago={conDatosCobro ? idsYaCobroNoPago.size : undefined}
+        />
         <Link href="/creditos-fuera-de-guia" className="ml-auto rounded-full border border-border dark:border-dark-border px-3 py-1.5 text-xs font-medium">
           🚩 {t('Créditos fuera de la guía')}
         </Link>
@@ -447,7 +516,7 @@ export default function CuentasPorCobrar() {
         <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{t('Cargando...')}</p>
       ) : filas.length === 0 ? (
         <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">
-          {t('Nadie te debe nada por cuenta corriente.')}
+          {hayFiltro && filasRaw.length > 0 ? t('Ningún cliente que deba entra en los filtros elegidos.') : t('Nadie te debe nada por cuenta corriente.')}
         </p>
       ) : (
         <>
@@ -485,6 +554,12 @@ export default function CuentasPorCobrar() {
                       {f.nombre}
                       {f.localidad ? <span className="text-xs font-normal text-muted dark:text-dark-text-secondary"> · 📍 {f.localidad}</span> : null}
                     </p>
+                    {(idsYaCobroNoPago.has(f.id) || infoClientes.get(f.id)?.calificacion) && (
+                      <span className="inline-flex flex-wrap items-center gap-1 mt-0.5">
+                        {idsYaCobroNoPago.has(f.id) && <EtiquetaYaCobro />}
+                        <EtiquetaCalidad calificacion={infoClientes.get(f.id)?.calificacion} />
+                      </span>
+                    )}
                     <span className={`inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full mt-0.5 ${info.fondo}`}>
                       {info.label}
                       {f.vencido > 0 ? ` · ${t('vencido')} ${fmt(f.vencido)}` : ''}
