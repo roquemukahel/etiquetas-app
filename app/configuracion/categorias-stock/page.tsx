@@ -47,6 +47,9 @@ export default function CategoriasStock() {
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [nombreEdit, setNombreEdit] = useState('');
   const [procesando, setProcesando] = useState<string | null>(null);
+  // Subcategorías (subcategorias_supabase.sql): si el negocio todavía no corrió ese SQL, no se ofrece crearlas.
+  const [conSubcategorias, setConSubcategorias] = useState(false);
+  const [nombreSub, setNombreSub] = useState<Record<string, string>>({});
   // Guía de financiación por categoría (financiacion_guia_cartera_supabase.sql): el valor por
   // defecto de todos los productos de la categoría que no tengan uno propio.
   const [conGuia, setConGuia] = useState(false);
@@ -57,6 +60,7 @@ export default function CategoriasStock() {
     const [activasData, archivadasData] = await Promise.all([obtenerCategorias(supabase, false), obtenerCategorias(supabase, true)]);
     setCategorias(activasData);
     setArchivadas(archivadasData.filter((c) => c.archivada));
+    setConSubcategorias(await soportaMigracion(supabase, 'subcategorias'));
     const soporta = await soportaMigracion(supabase, 'guiaFinanciacionCategorias');
     setConGuia(soporta);
     if (soporta) {
@@ -122,13 +126,55 @@ export default function CategoriasStock() {
     await cargar();
   };
 
+  // Las categorías de primer nivel (el orden se cambia entre ellas) y, debajo de cada una, sus subcategorías.
+  const raices = categorias.filter((c) => !c.padre_id);
+  const subcategorias = categorias.filter((c) => c.padre_id);
+
   const mover = async (idx: number, direccion: -1 | 1) => {
     const destino = idx + direccion;
-    if (destino < 0 || destino >= categorias.length) return;
-    const copia = [...categorias];
+    if (destino < 0 || destino >= raices.length) return;
+    const copia = [...raices];
     [copia[idx], copia[destino]] = [copia[destino], copia[idx]];
-    setCategorias(copia);
-    await reordenarCategorias(supabase, copia.map((c) => c.id));
+    const nuevoOrden = [...copia, ...subcategorias];
+    setCategorias(nuevoOrden);
+    await reordenarCategorias(supabase, nuevoOrden.map((c) => c.id));
+  };
+
+  const crearSubcategoria = async (padre: Categoria) => {
+    const nombre = (nombreSub[padre.id] ?? '').trim();
+    if (!nombre) return;
+    setProcesando(padre.id);
+    setError(null);
+    const resultado = await crearCategoria(supabase, {
+      nombre,
+      perfilDefault: padre.perfil_default,
+      modalidadDefault: padre.modalidad_default,
+      orden: categorias.length,
+      padreId: padre.id,
+    });
+    setProcesando(null);
+    if ('error' in resultado) {
+      setError(resultado.error);
+      return;
+    }
+    await registrarAuditoria(supabase, { accion: `creó la subcategoría "${nombre}" dentro de "${padre.nombre}"`, entidad: 'stock_categoria', entidadId: resultado.id });
+    setNombreSub((prev) => ({ ...prev, [padre.id]: '' }));
+    await cargar();
+  };
+
+  const renombrarSubcategoria = async (s: Categoria) => {
+    const nuevo = prompt(t('Nuevo nombre de la subcategoría'), s.nombre);
+    if (nuevo === null || !nuevo.trim() || nuevo.trim() === s.nombre) return;
+    setProcesando(s.id);
+    setError(null);
+    const resultado = await renombrarCategoria(supabase, s.id, nuevo);
+    setProcesando(null);
+    if ('error' in resultado) {
+      setError(resultado.error);
+      return;
+    }
+    await registrarAuditoria(supabase, { accion: `renombró la subcategoría "${s.nombre}" a "${nuevo.trim()}"`, entidad: 'stock_categoria', entidadId: s.id, valorAnterior: { nombre: s.nombre } });
+    await cargar();
   };
 
   const toggleActiva = async (c: Categoria) => {
@@ -226,13 +272,13 @@ export default function CategoriasStock() {
         <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-4">{t('Cargando...')}</p>
       ) : (
         <div className="flex flex-col gap-2">
-          {categorias.map((c, idx) => (
+          {raices.map((c, idx) => (
             <div key={c.id} className={`rounded-xl border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex items-center gap-2 ${c.activa ? 'border-border dark:border-dark-border' : 'border-border dark:border-dark-border opacity-60'}`}>
               <div className="flex flex-col shrink-0">
                 <button onClick={() => mover(idx, -1)} disabled={idx === 0} className="text-muted dark:text-dark-text-secondary disabled:opacity-30 text-xs leading-none py-0.5">
                   ▴
                 </button>
-                <button onClick={() => mover(idx, 1)} disabled={idx === categorias.length - 1} className="text-muted dark:text-dark-text-secondary disabled:opacity-30 text-xs leading-none py-0.5">
+                <button onClick={() => mover(idx, 1)} disabled={idx === raices.length - 1} className="text-muted dark:text-dark-text-secondary disabled:opacity-30 text-xs leading-none py-0.5">
                   ▾
                 </button>
               </div>
@@ -254,6 +300,42 @@ export default function CategoriasStock() {
                   {c.perfil_default === 'dispositivo' ? t('Perfil dispositivo') : t('Perfil genérico')} · {c.modalidad_default === 'serializado' ? t('Individual') : t('Por cantidad')}
                   {!c.activa ? ` · ${t('Inactiva')}` : ''}
                 </p>
+                {conSubcategorias && (
+                  <div className="mt-2 flex flex-col gap-1.5">
+                    {subcategorias.filter((s) => s.padre_id === c.id).length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {subcategorias
+                          .filter((s) => s.padre_id === c.id)
+                          .map((s) => (
+                            <span key={s.id} className="inline-flex items-center gap-1 rounded-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border px-2.5 py-0.5 text-xs">
+                              <button onClick={() => renombrarSubcategoria(s)} title={t('Renombrar')} className="font-medium">
+                                {s.nombre}
+                              </button>
+                              <button onClick={() => archivar(s)} aria-label={`${t('Archivar')} ${s.nombre}`} className="text-muted dark:text-dark-text-secondary hover:text-bad">
+                                ×
+                              </button>
+                            </span>
+                          ))}
+                      </div>
+                    )}
+                    <div className="flex items-center gap-1.5 max-w-sm">
+                      <input
+                        value={nombreSub[c.id] ?? ''}
+                        onChange={(e) => setNombreSub((prev) => ({ ...prev, [c.id]: e.target.value }))}
+                        onKeyDown={(e) => e.key === 'Enter' && crearSubcategoria(c)}
+                        placeholder={t('Nueva subcategoría (ej. Cables)')}
+                        className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-1 text-xs"
+                      />
+                      <button
+                        onClick={() => crearSubcategoria(c)}
+                        disabled={!(nombreSub[c.id] ?? '').trim() || procesando === c.id}
+                        className="rounded-lg border border-border dark:border-dark-border px-2 py-1 text-xs font-medium disabled:opacity-40"
+                      >
+                        + {t('Agregar')}
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {conGuia && (
                   <div className="mt-2 max-w-sm">
                     <SelectorFinanciacion
@@ -279,7 +361,7 @@ export default function CategoriasStock() {
               </div>
             </div>
           ))}
-          {categorias.length === 0 && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-2">{t('Todavía no creaste ninguna categoría.')}</p>}
+          {raices.length === 0 && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-2">{t('Todavía no creaste ninguna categoría.')}</p>}
         </div>
       )}
 

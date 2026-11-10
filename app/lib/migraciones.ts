@@ -22,6 +22,8 @@ const CHEQUEOS = {
     })),
   // reparaciones_bateria_supabase.sql (la batería del equipo acompaña a la orden de Servicio Técnico)
   bateriaServicio: (s: SupabaseClient) => s.from('reparaciones').select('salud_bateria').limit(1),
+  // subcategorias_supabase.sql (una categoría de stock puede colgar de otra)
+  subcategorias: (s: SupabaseClient) => s.from('stock_categorias').select('padre_id').limit(1),
   // standby_supabase.sql
   standby: (s: SupabaseClient) => s.from('dispositivos').select('en_espera, en_espera_desde, espera_origen, espera_motivo').limit(1),
   // standby_vinculo_servicio_supabase.sql

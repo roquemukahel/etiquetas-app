@@ -7,6 +7,7 @@ import { useActor } from '../lib/actor';
 import { tienePermiso } from '../lib/permisos';
 import { obtenerTodasLasFilas, porLotes } from '../lib/db';
 import { obtenerCategorias, type Categoria } from '../lib/categorias';
+import { opcionesDeCategoria, etiquetaCategoria, subcategoriasDe } from '../lib/subcategorias';
 import { obtenerSucursales, type Sucursal } from '../lib/sucursales';
 import { obtenerProductosMaestro, actualizarProductoMaestro, crearProductoMaestro, type ProductoMaestro } from '../lib/productosMaestro';
 import { registrarAuditoria } from '../lib/auditoria';
@@ -120,6 +121,8 @@ export default function Productos() {
   const [seleccion, setSeleccion] = useState<Set<string>>(new Set());
   const [guiaMasiva, setGuiaMasiva] = useState('6');
   const [aplicandoMasivo, setAplicandoMasivo] = useState(false);
+  // Categoría o subcategoría que se asigna en bloque a los productos elegidos ('' = dejarlos sin categoría).
+  const [categoriaMasiva, setCategoriaMasiva] = useState('');
   const [exportando, setExportando] = useState(false);
   const [importando, setImportando] = useState(false);
   const [progresoImport, setProgresoImport] = useState<{ hechas: number; total: number } | null>(null);
@@ -407,9 +410,50 @@ export default function Productos() {
 
   const nombreCategoria = useMemo(() => {
     const mapa = new Map<string, string>();
-    for (const c of categorias) mapa.set(c.id, c.nombre);
+    for (const c of categorias) mapa.set(c.id, etiquetaCategoria(c.id, categorias) || c.nombre);
     return mapa;
   }, [categorias]);
+
+  // Asigna la categoría (o subcategoría) elegida a todos los productos y equipos seleccionados, de una sola vez: el catálogo
+  // (producto maestro + sus filas por sucursal), los productos sueltos y los equipos de cada modelo.
+  const asignarCategoriaMasiva = async () => {
+    const elegidas = filas.filter((f) => seleccion.has(f.clave));
+    if (elegidas.length === 0) return;
+    const destino = categoriaMasiva || null;
+    const nombreDestino = destino ? etiquetaCategoria(destino, categorias) : t('Sin categoría');
+    if (!confirm(`${t('¿Asignar')} "${nombreDestino}" ${t('a los')} ${elegidas.length} ${t('productos elegidos?')}`)) return;
+    setAplicandoMasivo(true);
+    const idsMaestro = elegidas.map((f) => f.maestroId).filter((x): x is string => !!x);
+    const idsEquipos = elegidas.flatMap((f) => f.dispositivoIds);
+    const idsProductosSueltos = elegidas.filter((f) => !f.maestroId && f.productoIds.length > 0).flatMap((f) => f.productoIds);
+    const resultados = await Promise.all([
+      idsMaestro.length > 0 ? porLotes(idsMaestro, (lote) => supabase.from('productos_maestro').update({ categoria_id: destino }).in('id', lote)) : { error: null },
+      idsMaestro.length > 0 ? porLotes(idsMaestro, (lote) => supabase.from('productos').update({ categoria_id: destino }).in('producto_maestro_id', lote)) : { error: null },
+      idsProductosSueltos.length > 0 ? porLotes(idsProductosSueltos, (lote) => supabase.from('productos').update({ categoria_id: destino }).in('id', lote)) : { error: null },
+      idsEquipos.length > 0 ? porLotes(idsEquipos, (lote) => supabase.from('dispositivos').update({ categoria_id: destino }).in('id', lote)) : { error: null },
+    ]);
+    const fallo = resultados.find((r) => r.error);
+    if (fallo?.error) {
+      alert(`${t('No se pudo guardar el cambio. No se modificó nada.')}\n${fallo.error.message}`);
+      setAplicandoMasivo(false);
+      return;
+    }
+    await registrarAuditoria(supabase, {
+      accion: `asignó la categoría "${nombreDestino}" a ${elegidas.length} productos`,
+      entidad: 'producto',
+      valorNuevo: { categoria: nombreDestino, productos: elegidas.slice(0, 30).map((f) => f.nombre) },
+    });
+    const setMaestroIds = new Set(idsMaestro);
+    const setSueltos = new Set(idsProductosSueltos);
+    const setEquiposIds = new Set(idsEquipos);
+    setMaestros((prev) => prev.map((m) => (setMaestroIds.has(m.id) ? { ...m, categoria_id: destino } : m)));
+    setProductos((prev) =>
+      prev.map((p) => ((p.producto_maestro_id && setMaestroIds.has(p.producto_maestro_id)) || setSueltos.has(p.id) ? { ...p, categoria_id: destino } : p))
+    );
+    setDispositivos((prev) => prev.map((d) => (setEquiposIds.has(d.id) ? { ...d, categoria_id: destino } : d)));
+    setSeleccion(new Set());
+    setAplicandoMasivo(false);
+  };
 
   const filas: FilaGrid[] = useMemo(() => {
     const mapaMaestros = new Map(maestros.map((m) => [m.id, m]));
@@ -535,7 +579,11 @@ export default function Productos() {
     // mismo, sin importar qué campo tenga cada palabra.
     const palabras = busqueda.trim().toLowerCase().split(/\s+/).filter(Boolean);
     return filas.filter((f) => {
-      if (filtroCategoria && f.categoriaId !== filtroCategoria) return false;
+      if (filtroCategoria) {
+        // Una categoría de primer nivel incluye lo que está en sus subcategorías.
+        const aceptadas = new Set([filtroCategoria, ...subcategoriasDe(categorias, filtroCategoria).map((s) => s.id)]);
+        if (!f.categoriaId || !aceptadas.has(f.categoriaId)) return false;
+      }
       if (palabras.length === 0) return true;
       // El código de barra/SKU se lee de un lector (escribe el código
       // completo de una sola vez, sin espacios) — coincidencia exacta
@@ -548,7 +596,7 @@ export default function Productos() {
       const textoCombinado = `${f.nombre} ${f.marca} ${f.categoria}`.toLowerCase();
       return palabras.every((palabra) => textoCombinado.includes(palabra));
     });
-  }, [filas, busqueda, filtroCategoria]);
+  }, [filas, busqueda, filtroCategoria, categorias]);
 
   const nombreSucursalActual = sucursales.find((s) => s.id === sucursalActual.id)?.nombre ?? null;
 
@@ -820,9 +868,9 @@ export default function Productos() {
             className="rounded-lg border border-border dark:border-dark-border bg-surface dark:bg-dark-surface px-3 py-2 text-sm"
           >
             <option value="">{t('Todas las categorías')}</option>
-            {categorias.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.nombre}
+            {opcionesDeCategoria(categorias).map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.etiqueta}
               </option>
             ))}
           </select>
@@ -850,7 +898,7 @@ export default function Productos() {
             />
           </label>
         )}
-        {conGuia && puedeAgregarStock && (
+        {puedeAgregarStock && (
           <button
             onClick={() => {
               setModoMasivo((v) => !v);
@@ -858,7 +906,7 @@ export default function Productos() {
             }}
             className="shrink-0 rounded-lg border border-border dark:border-dark-border px-3 py-2 text-sm font-medium"
           >
-            💳 {modoMasivo ? t('Terminar edición de financiación') : t('Editar financiación en bloque')}
+            ☑ {modoMasivo ? t('Terminar edición en bloque') : t('Editar en bloque')}
           </button>
         )}
         <button
@@ -989,17 +1037,66 @@ export default function Productos() {
       )}
 
       {modoMasivo && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-border dark:border-dark-border bg-white dark:bg-dark-surface px-4 py-3 shadow-lg flex flex-col gap-2 sm:flex-row sm:items-end">
-          <div className="flex-1">
-            <SelectorFinanciacion label={`${t('Financiación para los')} ${seleccion.size} ${t('productos elegidos')}`} value={guiaMasiva} onChange={setGuiaMasiva} conHerencia />
+        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-border dark:border-dark-border bg-white dark:bg-dark-surface px-4 py-3 shadow-lg flex flex-col gap-3">
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <strong>
+              {seleccion.size} {t('elegidos')}
+            </strong>
+            <button
+              onClick={() => setSeleccion(new Set(filasFiltradas.map((f) => f.clave)))}
+              className="rounded-lg border border-border dark:border-dark-border px-3 py-1 text-xs font-medium"
+            >
+              {t('Elegir los')} {filasFiltradas.length} {t('que se ven')}
+            </button>
+            <button
+              onClick={() => setSeleccion(new Set())}
+              disabled={seleccion.size === 0}
+              className="rounded-lg border border-border dark:border-dark-border px-3 py-1 text-xs font-medium disabled:opacity-40"
+            >
+              {t('Quitar selección')}
+            </button>
+            <span className="text-xs text-muted dark:text-dark-text-secondary">
+              {t('Tip: escribí en el buscador (ej. "cable") y elegí todos los que aparecen de una vez.')}
+            </span>
           </div>
-          <button
-            disabled={seleccion.size === 0 || aplicandoMasivo}
-            onClick={aplicarGuiaMasiva}
-            className="rounded-lg bg-accent dark:bg-dark-accent text-white px-4 py-2 text-sm font-medium disabled:opacity-40"
-          >
-            {aplicandoMasivo ? t('Aplicando...') : t('Aplicar')}
-          </button>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+            <div className="flex-1">
+              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Categoría / subcategoría para los elegidos')}</label>
+              <select
+                value={categoriaMasiva}
+                onChange={(e) => setCategoriaMasiva(e.target.value)}
+                className="w-full rounded-lg border border-border dark:border-dark-border bg-surface dark:bg-dark-surface px-3 py-2 text-sm"
+              >
+                <option value="">{t('Sin categoría')}</option>
+                {opcionesDeCategoria(categorias).map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.etiqueta}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button
+              disabled={seleccion.size === 0 || aplicandoMasivo}
+              onClick={asignarCategoriaMasiva}
+              className="rounded-lg bg-accent dark:bg-dark-accent text-white px-4 py-2 text-sm font-medium disabled:opacity-40"
+            >
+              {aplicandoMasivo ? t('Aplicando...') : t('Asignar categoría')}
+            </button>
+          </div>
+          {conGuia && (
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+              <div className="flex-1">
+                <SelectorFinanciacion label={`${t('Financiación para los')} ${seleccion.size} ${t('productos elegidos')}`} value={guiaMasiva} onChange={setGuiaMasiva} conHerencia />
+              </div>
+              <button
+                disabled={seleccion.size === 0 || aplicandoMasivo}
+                onClick={aplicarGuiaMasiva}
+                className="rounded-lg bg-accent dark:bg-dark-accent text-white px-4 py-2 text-sm font-medium disabled:opacity-40"
+              >
+                {aplicandoMasivo ? t('Aplicando...') : t('Aplicar')}
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -1047,9 +1144,9 @@ export default function Productos() {
                   className="w-full bg-white dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                 >
                   <option value="">{t('Sin categoría')}</option>
-                  {categorias.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.nombre}
+                  {opcionesDeCategoria(categorias).map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.etiqueta}
                     </option>
                   ))}
                 </select>
