@@ -3625,4 +3625,8 @@ export const PT: Record<string, string> = {
   'clientes que deben no tienen sucursal asignada y no están sumados en estos totales.': 'clientes devedores não têm filial atribuída e não estão somados nestes totais.',
   'Ver todas las sucursales': 'Ver todas as filiais',
   'cliente que debe no tiene sucursal asignada y no está sumado en estos totales.': 'cliente devedor não tem filial atribuída e não está somado nestes totais.',
+  'Mostrá los montos para poder exportar.': 'Mostre os valores para poder exportar.',
+  'Poné un día del 1 al 31 (si lo dejás así no se guarda).': 'Informe um dia de 1 a 31 (assim não será salvo).',
+  'Nombre que queda': 'Nome final',
+  'Podés corregir el nombre que queda (por ejemplo, agregarle los acentos) antes de unificar.': 'Você pode corrigir o nome final (por exemplo, acrescentar os acentos) antes de unificar.',
 };

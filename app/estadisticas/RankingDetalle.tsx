@@ -253,10 +253,10 @@ export default function RankingDetalle({ items, moneda, puedeVerCostos, ocultarM
             </button>
           )}
           <div className="ml-auto flex gap-2">
-            <button onClick={descargarCSV} disabled={filas.length === 0} className="rounded-lg border border-border dark:border-dark-border px-3 py-1.5 text-sm font-medium disabled:opacity-40">
+            <button onClick={descargarCSV} disabled={filas.length === 0 || ocultarMontos} title={ocultarMontos ? t('Mostrá los montos para poder exportar.') : undefined} className="rounded-lg border border-border dark:border-dark-border px-3 py-1.5 text-sm font-medium disabled:opacity-40">
               {t('Descargar CSV')}
             </button>
-            <button onClick={descargarPDF} disabled={filas.length === 0 || exportando} className="rounded-lg bg-accent dark:bg-dark-accent text-white px-3 py-1.5 text-sm font-medium disabled:opacity-40">
+            <button onClick={descargarPDF} disabled={filas.length === 0 || exportando || ocultarMontos} title={ocultarMontos ? t('Mostrá los montos para poder exportar.') : undefined} className="rounded-lg bg-accent dark:bg-dark-accent text-white px-3 py-1.5 text-sm font-medium disabled:opacity-40">
               {exportando ? t('Generando...') : t('Descargar PDF')}
             </button>
           </div>

@@ -298,6 +298,12 @@ export default function DetalleCliente() {
 
   const campo = (k: keyof Cliente, valor: string) => setC((prev) => (prev ? { ...prev, [k]: valor } : prev));
   // Para los campos que pueden quedar vacíos (null) o ser un número.
+  // Lo que se está tipeando en "día de cobro" (puede ser un valor inválido a medio escribir; solo se guarda si es de 1 a 31).
+  const [diaTexto, setDiaTexto] = useState('');
+  useEffect(() => {
+    setDiaTexto(c?.dia_cobro != null ? String(c.dia_cobro) : '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [c?.id]);
   const campoOpcional = (k: keyof Cliente, valor: string | number | null) => setC((prev) => (prev ? { ...prev, [k]: valor } : prev));
 
   const abrirCorregirPago = (m: Movimiento) => {
@@ -1095,15 +1101,20 @@ ${t('¿Guardar igual?')}`)) {
               <div>
                 <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Día de cobro del cliente (1 a 31)')}</label>
                 <input
-                  value={c.dia_cobro ?? ''}
+                  value={diaTexto}
                   onChange={(e) => {
-                    const n = parseInt(e.target.value.replace(/\D/g, '').slice(0, 2), 10);
+                    const texto = e.target.value.replace(/\D/g, '').slice(0, 2);
+                    setDiaTexto(texto);
+                    const n = parseInt(texto, 10);
                     campoOpcional('dia_cobro', Number.isFinite(n) && n >= 1 && n <= 31 ? n : null);
                   }}
                   inputMode="numeric"
                   placeholder={t('Ej.: 5')}
                   className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
                 />
+                {diaTexto !== '' && (parseInt(diaTexto, 10) < 1 || parseInt(diaTexto, 10) > 31) && (
+                  <p className="text-xs text-bad mt-1">{t('Poné un día del 1 al 31 (si lo dejás así no se guarda).')}</p>
+                )}
                 {(() => {
                   const efectivo = diaDeCobro(c, cronograma);
                   const usaCronograma = !!c.fuente_ingreso && FUENTES_CON_CRONOGRAMA.includes(c.fuente_ingreso);

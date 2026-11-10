@@ -3624,4 +3624,8 @@ export const EN: Record<string, string> = {
   'clientes que deben no tienen sucursal asignada y no están sumados en estos totales.': 'customers with a balance have no branch assigned and are not included in these totals.',
   'Ver todas las sucursales': 'See all branches',
   'cliente que debe no tiene sucursal asignada y no está sumado en estos totales.': 'customer with a balance has no branch assigned and is not included in these totals.',
+  'Mostrá los montos para poder exportar.': 'Show the amounts to be able to export.',
+  'Poné un día del 1 al 31 (si lo dejás así no se guarda).': 'Enter a day from 1 to 31 (it will not be saved as is).',
+  'Nombre que queda': 'Final name',
+  'Podés corregir el nombre que queda (por ejemplo, agregarle los acentos) antes de unificar.': 'You can edit the final name (for example, add the accents) before merging.',
 };

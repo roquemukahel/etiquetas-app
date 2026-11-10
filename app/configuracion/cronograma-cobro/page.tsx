@@ -52,11 +52,28 @@ export default function CronogramaCobro() {
     setGuardando(true);
     setError(null);
     setMensaje(null);
-    for (const fuente of FUENTES_CON_CRONOGRAMA) {
-      if (await falla(supabase.from('cronograma_cobro').delete().eq('fuente', fuente), t, 'guardar el cronograma')) return setGuardando(false);
-      const filas = (dias[fuente] ?? []).map((v, terminacion) => (v ? { fuente, terminacion, dia: Number(v) } : null)).filter((f): f is { fuente: string; terminacion: number; dia: number } => f !== null);
-      if (filas.length > 0 && (await falla(supabase.from('cronograma_cobro').insert(filas), t, 'guardar el cronograma'))) return setGuardando(false);
+    // Se compara con lo que hay guardado y solo se toca lo que cambió: nunca hay un momento en que el cronograma quede vacío.
+    const { data: existentes, error: errorLeer } = await supabase.from('cronograma_cobro').select('id, fuente, terminacion, dia').limit(500);
+    if (errorLeer) {
+      setError(errorLeer.message);
+      return setGuardando(false);
     }
+    const actuales = new Map(((existentes as { id: string; fuente: string; terminacion: number; dia: number }[]) ?? []).map((e) => [`${e.fuente}|${e.terminacion}`, e]));
+    const nuevas: { fuente: string; terminacion: number; dia: number }[] = [];
+    for (const fuente of FUENTES_CON_CRONOGRAMA) {
+      for (let terminacion = 0; terminacion < 10; terminacion++) {
+        const valor = dias[fuente]?.[terminacion] ?? '';
+        const actual = actuales.get(`${fuente}|${terminacion}`);
+        if (!valor && actual) {
+          if (await falla(supabase.from('cronograma_cobro').delete().eq('id', actual.id), t, 'guardar el cronograma')) return setGuardando(false);
+        } else if (valor && actual && Number(valor) !== Number(actual.dia)) {
+          if (await falla(supabase.from('cronograma_cobro').update({ dia: Number(valor) }).eq('id', actual.id), t, 'guardar el cronograma')) return setGuardando(false);
+        } else if (valor && !actual) {
+          nuevas.push({ fuente, terminacion, dia: Number(valor) });
+        }
+      }
+    }
+    if (nuevas.length > 0 && (await falla(supabase.from('cronograma_cobro').insert(nuevas), t, 'guardar el cronograma'))) return setGuardando(false);
     await registrarAuditoria(supabase, { accion: 'actualizó el cronograma de cobro por terminación de DNI', entidad: 'configuracion' });
     setGuardando(false);
     setMensaje(t('Cronograma guardado.'));

@@ -80,7 +80,7 @@ ${t('¿Cargarlo igual?')}`)) {
       ...(conDatosCobro
         ? {
             fuente_ingreso: fuente || null,
-            dia_cobro: diaCobro ? Number(diaCobro) : null,
+            dia_cobro: diaCobro && Number(diaCobro) >= 1 && Number(diaCobro) <= 31 ? Number(diaCobro) : null,
             rango_pago: rango || null,
             calificacion: calificacion || null,
             observaciones_cobro: observaciones.trim() || null,
@@ -129,11 +129,11 @@ ${t('¿Cargarlo igual?')}`)) {
             <Campo
               label={t('Día de cobro del cliente (1 a 31)')}
               valor={diaCobro}
-              onChange={(v) => {
-                const n = parseInt(v.replace(/\D/g, '').slice(0, 2), 10);
-                setDiaCobro(Number.isFinite(n) && n >= 1 && n <= 31 ? String(n) : '');
-              }}
+              onChange={(v) => setDiaCobro(v.replace(/\D/g, '').slice(0, 2))}
             />
+            {diaCobro !== '' && (parseInt(diaCobro, 10) < 1 || parseInt(diaCobro, 10) > 31) && (
+              <p className="text-xs text-bad -mt-2">{t('Poné un día del 1 al 31 (si lo dejás así no se guarda).')}</p>
+            )}
             <Selector label={t('Rango de pago pactado')} valor={rango} onChange={setRango} vacio={t('Sin definir')} opciones={RANGOS_PAGO.map((r) => ({ valor: r, etiqueta: `${t('Del')} ${r.replace('-', ` ${t('al')} `)}` }))} />
             <Selector label={t('Calidad del cliente')} valor={calificacion} onChange={setCalificacion} vacio={t('Sin calificar')} opciones={CALIFICACIONES.map((q) => ({ valor: q.clave, etiqueta: t(q.etiqueta) }))} />
             <Campo label={t('Observaciones')} valor={observaciones} onChange={setObservaciones} />

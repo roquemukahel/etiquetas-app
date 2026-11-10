@@ -31,6 +31,9 @@ export default function Localidades() {
   // Cada valor de "localidad" tal cual está guardado en los clientes (con repetidos): sirve para detectar zonas escritas distinto.
   const [valoresClientes, setValoresClientes] = useState<string[]>([]);
   const plan = useMemo(() => planUnificacionLocalidades(lista ?? [], valoresClientes), [lista, valoresClientes]);
+  // Nombre final corregido a mano para cada zona (clave = el nombre propuesto): sirve para agregar acentos que nadie escribió.
+  const [destinosEditados, setDestinosEditados] = useState<Record<string, string>>({});
+  const destinoFinal = (propuesto: string) => (destinosEditados[propuesto] ?? propuesto).trim().replace(/\s+/g, ' ') || propuesto;
 
   const cargar = async () => {
     const l = await obtenerLocalidades(supabase);
@@ -94,14 +97,21 @@ export default function Localidades() {
     setProcesando(true);
     setError(null);
     for (const g of plan.grupos) {
-      for (const c of g.clientes) {
-        if (await falla(supabase.from('clientes').update({ localidad: g.destino }).eq('localidad', c.desde), t, 'unificar la localidad de los clientes')) return setProcesando(false);
+      const destino = destinoFinal(g.destino);
+      // Los clientes que ya tienen el nombre propuesto también pasan al corregido (si el nombre final cambió).
+      const desdes = new Set(g.clientes.map((c) => c.desde));
+      if (destino !== g.destino) desdes.add(g.destino);
+      for (const desde of desdes) {
+        if (desde === destino) continue;
+        if (await falla(supabase.from('clientes').update({ localidad: destino }).eq('localidad', desde), t, 'unificar la localidad de los clientes')) return setProcesando(false);
       }
       for (const l of g.listaQuitar) {
         if (await falla(supabase.from('localidades').delete().eq('id', l.id), t, 'quitar la localidad repetida')) return setProcesando(false);
       }
-      if (g.listaRenombrar && g.listaRenombrar.nombre !== g.destino) {
-        if (await falla(supabase.from('localidades').update({ nombre: g.destino }).eq('id', g.listaRenombrar.id), t, 'renombrar la localidad')) return setProcesando(false);
+      // Entrada de la lista que queda: la propuesta (o la que ya estaba bien) pasa al nombre final.
+      const enLista = g.listaRenombrar ?? (lista ?? []).find((l) => l.nombre === g.destino) ?? null;
+      if (enLista && enLista.nombre !== destino) {
+        if (await falla(supabase.from('localidades').update({ nombre: destino }).eq('id', enLista.id), t, 'renombrar la localidad')) return setProcesando(false);
       }
     }
     await registrarAuditoria(supabase, {
@@ -191,14 +201,20 @@ export default function Localidades() {
               <p className="font-medium">
                 {plan.grupos.length} {t('zonas están escritas de distintas formas y se cuentan como separadas:')}
               </p>
-              <ul className="text-xs flex flex-col gap-1">
-                {plan.grupos.slice(0, 10).map((g) => (
-                  <li key={g.destino}>
-                    {[...g.clientes.map((c) => `"${c.desde.trim()}"`), ...g.listaQuitar.map((l) => `"${l.nombre}"`)].join(', ') || `"${g.destino}"`} → <strong>{g.destino}</strong>
+              <ul className="text-xs flex flex-col gap-2">
+                {plan.grupos.map((g) => (
+                  <li key={g.destino} className="flex flex-col gap-1">
+                    <span>{[...g.clientes.map((c) => `"${c.desde.trim()}"`), ...g.listaQuitar.map((l) => `"${l.nombre}"`)].join(', ') || `"${g.destino}"`} →</span>
+                    <input
+                      value={destinosEditados[g.destino] ?? g.destino}
+                      onChange={(e) => setDestinosEditados((prev) => ({ ...prev, [g.destino]: e.target.value }))}
+                      aria-label={t('Nombre que queda')}
+                      className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-1.5 text-sm font-medium"
+                    />
                   </li>
                 ))}
-                {plan.grupos.length > 10 && <li>…</li>}
               </ul>
+              <p className="text-xs text-muted dark:text-dark-text-secondary">{t('Podés corregir el nombre que queda (por ejemplo, agregarle los acentos) antes de unificar.')}</p>
               <button
                 disabled={procesando}
                 onClick={unificar}
