@@ -329,6 +329,7 @@ export default function Clientes() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [clientes, saldos, cronograma, pagaronEsteMes, filtroSucursal, filtrosCobro]
   );
+  const hayFiltrosActivos = !!filtroLocalidad || !!filtros.sucursal || !!filtros.fuente || !!filtros.rango || !!filtros.calificacion || filtros.soloYaCobroNoPago;
   const sinSucursal = useMemo(() => (conOrigen ? clientes.filter((c) => !c.sucursal_origen_id).length : 0), [clientes, conOrigen]);
 
   const conteosCta = useMemo(() => {
@@ -548,15 +549,22 @@ export default function Clientes() {
           accionSecundaria={{ label: t('Limpiar búsqueda'), onClick: () => setBusqueda('') }}
         />
       )}
-      {!loading && filtrados.length === 0 && !busqueda && filtroCta !== 'todos' && (
+      {!loading && filtrados.length === 0 && !busqueda && (filtroCta !== 'todos' || hayFiltrosActivos) && (
         <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">
           {t('Ningún cliente entra en este filtro.')}{' '}
-          <button onClick={() => setFiltroCta('todos')} className="text-accent dark:text-dark-accent underline">
+          <button
+            onClick={() => {
+              setFiltroCta('todos');
+              setFiltroLocalidad('');
+              cambiarFiltros(FILTROS_VACIOS);
+            }}
+            className="text-accent dark:text-dark-accent underline"
+          >
             {t('Ver todos')}
           </button>
         </p>
       )}
-      {!loading && filtrados.length === 0 && !busqueda && filtroCta === 'todos' && (
+      {!loading && filtrados.length === 0 && !busqueda && filtroCta === 'todos' && !hayFiltrosActivos && (
         <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{t('Todavía no tenés clientes cargados.')}</p>
       )}
 
