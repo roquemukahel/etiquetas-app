@@ -142,7 +142,14 @@ export default function RankingDetalle({ items, moneda, puedeVerCostos, ocultarM
         doc.text(nombre, 14, y);
         fila.slice(1).forEach((v, i) => {
           const esDinero = i >= 1 && i <= 3;
-          const texto = v === '' ? '—' : esDinero ? `${moneda}${Number(v).toLocaleString('es-AR')}` : i === 4 ? `${v}%` : Number(v).toLocaleString('es-AR');
+          const texto =
+            v === ''
+              ? '—'
+              : esDinero
+                ? `${Number(v) < 0 ? '-' : ''}${moneda}${Math.abs(Number(v)).toLocaleString('es-AR')}`
+                : i === 4
+                  ? `${v}%`
+                  : Number(v).toLocaleString('es-AR');
           doc.text(texto, xs[i], y, { align: 'right' });
         });
         y += 5.5;

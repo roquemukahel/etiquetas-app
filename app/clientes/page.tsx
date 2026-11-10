@@ -83,7 +83,8 @@ export default function Clientes() {
   const [conOrigen, setConOrigen] = useState(false);
   const [conDatosCobro, setConDatosCobro] = useState(false);
   const [cronograma, setCronograma] = useState<Cronograma | null>(null);
-  const [pagaronEsteMes, setPagaronEsteMes] = useState<Set<string>>(new Set());
+  // null = todavía no se sabe quién pagó este mes: mientras tanto no se marca a nadie "ya cobró – no pagó".
+  const [pagaronEsteMes, setPagaronEsteMes] = useState<Set<string> | null>(null);
   const [filtroSucursal, setFiltroSucursal] = useFiltroSucursal();
   const [filtrosCobro, setFiltrosCobro] = useState<FiltrosCliente>(FILTROS_VACIOS);
   // Sin el SQL de sucursal de origen no hay nada que filtrar (si no, el filtro dejaría a todos afuera).
@@ -311,6 +312,7 @@ export default function Clientes() {
 
   // "Ya cobró – no pagó": pasó su día de cobro de este mes (el cargado o el del cronograma por DNI), debe la cuota y no pagó nada este mes.
   const esYaCobroNoPago = (c: Cliente): boolean => {
+    if (!pagaronEsteMes) return false;
     const dia = diaDeCobro(c, cronograma);
     if (!dia) return false;
     const s = saldos.get(c.id);
@@ -330,6 +332,16 @@ export default function Clientes() {
     [clientes, saldos, cronograma, pagaronEsteMes, filtroSucursal, filtrosCobro]
   );
   const hayFiltrosActivos = !!filtroLocalidad || !!filtros.sucursal || !!filtros.fuente || !!filtros.rango || !!filtros.calificacion || filtros.soloYaCobroNoPago;
+  // Clientes que coinciden con lo escrito en el buscador pero quedan afuera por el filtro de sucursal (la cartera es única: que buscar a
+  // alguien y no encontrarlo no sea un misterio).
+  const ocultosPorSucursal = useMemo(() => {
+    const q = busqueda.trim().toLowerCase();
+    if (!q || !conOrigen || !filtros.sucursal) return 0;
+    return clientes.filter(
+      (c) => coincideDatosCobro(c, { ...filtros, sucursal: '' }) && !coincideDatosCobro(c, filtros) && [c.nombre, c.apellido, c.apodo, c.email, c.telefono, c.dni, c.localidad].filter(Boolean).some((campo) => campo!.toLowerCase().includes(q))
+    ).length;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientes, busqueda, conOrigen, filtroSucursal, filtrosCobro]);
   const sinSucursal = useMemo(() => (conOrigen ? clientes.filter((c) => !c.sucursal_origen_id).length : 0), [clientes, conOrigen]);
 
   const conteosCta = useMemo(() => {
@@ -566,6 +578,15 @@ export default function Clientes() {
       )}
       {!loading && filtrados.length === 0 && !busqueda && filtroCta === 'todos' && !hayFiltrosActivos && (
         <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{t('Todavía no tenés clientes cargados.')}</p>
+      )}
+
+      {!loading && ocultosPorSucursal > 0 && (
+        <p className="text-xs bg-warn/10 text-warn rounded-lg px-3 py-2">
+          {ocultosPorSucursal} {ocultosPorSucursal === 1 ? t('cliente que coincide con la búsqueda no se muestra por el filtro de sucursal.') : t('clientes que coinciden con la búsqueda no se muestran por el filtro de sucursal.')}{' '}
+          <button onClick={() => cambiarFiltros({ ...filtros, sucursal: '' })} className="underline">
+            {t('Buscar en todas las sucursales')}
+          </button>
+        </p>
       )}
 
       {!loading && filtrados.length > 0 && (

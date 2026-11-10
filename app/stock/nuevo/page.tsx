@@ -7,6 +7,7 @@ import { crearClienteNavegador } from '../../lib/supabase/client';
 import { asegurarModelo, normalizarNombreModelo, sugerirCarpetas } from '../../lib/modelos';
 import { asegurarProveedor } from '../../lib/proveedores';
 import { obtenerCategorias, type Categoria } from '../../lib/categorias';
+import { etiquetaCategoria } from '../../lib/subcategorias';
 import { obtenerSucursales, type Sucursal } from '../../lib/sucursales';
 import { useSucursalActual } from '../../lib/sucursal';
 import { limpiarImei } from '../../lib/imei';
@@ -301,7 +302,7 @@ export default function NuevoDispositivo() {
             >
               {categoriasDispositivo.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.nombre}
+                  {etiquetaCategoria(c.id, categoriasDispositivo)}
                 </option>
               ))}
             </select>

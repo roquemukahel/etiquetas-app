@@ -3618,4 +3618,10 @@ export const PT: Record<string, string> = {
   'Bueno': 'Bom',
   'Regular': 'Regular',
   'Riesgoso': 'Arriscado',
+  'No se pudo completar el cambio; puede que una parte se haya guardado. Revisá la lista.': 'Não foi possível concluir a alteração; parte dela pode ter sido salva. Confira a lista.',
+  'cliente que coincide con la búsqueda no se muestra por el filtro de sucursal.': 'cliente que corresponde à busca não aparece pelo filtro de filial.',
+  'clientes que coinciden con la búsqueda no se muestran por el filtro de sucursal.': 'clientes que correspondem à busca não aparecem pelo filtro de filial.',
+  'Buscar en todas las sucursales': 'Buscar em todas as filiais',
+  'clientes que deben no tienen sucursal asignada y no están sumados en estos totales.': 'clientes devedores não têm filial atribuída e não estão somados nestes totais.',
+  'Ver todas las sucursales': 'Ver todas as filiais',
 };

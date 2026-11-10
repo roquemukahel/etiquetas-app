@@ -21,7 +21,7 @@ import { leerMoraSql, type FilaMoraSql } from '../lib/mora';
 import { soportaMigracion } from '../lib/migraciones';
 import { obtenerSucursales, type Sucursal } from '../lib/sucursales';
 import { clientesQuePagaronEsteMes, obtenerCronograma } from '../lib/clienteCobroDatos';
-import { coincideDatosCobro, diaDeCobro, FILTROS_VACIOS, yaCobroNoPago, type Cronograma, type DatosCobro, type FiltrosCliente } from '../lib/clienteCobro';
+import { coincideDatosCobro, diaDeCobro, FILTROS_VACIOS, SIN_SUCURSAL, yaCobroNoPago, type Cronograma, type DatosCobro, type FiltrosCliente } from '../lib/clienteCobro';
 import FiltrosClientes, { EtiquetaCalidad, EtiquetaYaCobro, useFiltroSucursal } from '../FiltrosClientes';
 
 type Cliente = {
@@ -97,7 +97,8 @@ export default function CuentasPorCobrar() {
   const [conOrigen, setConOrigen] = useState(false);
   const [conDatosCobro, setConDatosCobro] = useState(false);
   const [cronograma, setCronograma] = useState<Cronograma | null>(null);
-  const [pagaronEsteMes, setPagaronEsteMes] = useState<Set<string>>(new Set());
+  // null = todavía no se sabe quién pagó este mes: mientras tanto no se marca a nadie "ya cobró – no pagó".
+  const [pagaronEsteMes, setPagaronEsteMes] = useState<Set<string> | null>(null);
   const [infoClientes, setInfoClientes] = useState<Map<string, Cliente>>(new Map());
   const [filtroSucursal, setFiltroSucursal] = useFiltroSucursal();
   const [filtrosCobro, setFiltrosCobro] = useState<FiltrosCliente>(FILTROS_VACIOS);
@@ -111,7 +112,7 @@ export default function CuentasPorCobrar() {
   // Clientes marcados "ya cobró – no pagó" (sobre todos los que deben, sin importar los demás filtros).
   const idsYaCobroNoPago = useMemo(() => {
     const ids = new Set<string>();
-    if (!conDatosCobro) return ids;
+    if (!conDatosCobro || !pagaronEsteMes) return ids;
     const hoy = new Date();
     for (const f of filasRaw) {
       const c = infoClientes.get(f.id);
@@ -350,6 +351,12 @@ export default function CuentasPorCobrar() {
     return copia;
   }, [filas, orden, proximoVencPorCliente]);
 
+  // Deudores que quedan afuera de los totales porque su cliente no tiene sucursal de origen (con un filtro de sucursal puntual).
+  const deudoresSinSucursal = useMemo(
+    () => (conOrigen && filtros.sucursal && filtros.sucursal !== SIN_SUCURSAL ? filasRaw.filter((f) => !infoClientes.get(f.id)?.sucursal_origen_id).length : 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [filasRaw, infoClientes, conOrigen, filtroSucursal]
+  );
   const totalPorCobrar = filas.reduce((acc, f) => acc + f.saldo, 0);
   const totalVencido = filas.reduce((acc, f) => acc + f.vencido, 0);
   const fmt = (n: number) => `${moneda}${formatearMonto(n)}`;
@@ -387,6 +394,15 @@ export default function CuentasPorCobrar() {
           🚩 {t('Créditos fuera de la guía')}
         </Link>
       </div>
+
+      {deudoresSinSucursal > 0 && (
+        <p className="text-xs bg-warn/10 text-warn rounded-lg px-3 py-2">
+          {deudoresSinSucursal} {t('clientes que deben no tienen sucursal asignada y no están sumados en estos totales.')}{' '}
+          <button onClick={() => cambiarFiltros({ ...filtros, sucursal: '' })} className="underline">
+            {t('Ver todas las sucursales')}
+          </button>
+        </p>
+      )}
 
       {alertas.length > 0 && (
         <div className="rounded-xl border border-warn/30 bg-warn/10 flex flex-col overflow-hidden">

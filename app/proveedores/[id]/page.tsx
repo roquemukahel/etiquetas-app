@@ -19,6 +19,7 @@ import { obtenerAreasEgresos, type AreaEgreso } from '../../lib/egresos';
 import { falla } from '../../lib/escritura';
 import CompraContado from './CompraContado';
 import { obtenerCategorias, type Categoria } from '../../lib/categorias';
+import { etiquetaCategoria } from '../../lib/subcategorias';
 import { soportaRubrosCompra } from '../../lib/rubrosCompra';
 import { obtenerTodasLasFilas } from '../../lib/db';
 import { OPCIONES_ALMACENAMIENTO, formatearGB } from '../../lib/almacenamiento';
@@ -850,7 +851,7 @@ export default function DetalleProveedor() {
               <option value="">{t('Elegí el rubro')} *</option>
               {categorias.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.nombre}
+                  {etiquetaCategoria(c.id, categorias)}
                 </option>
               ))}
             </select>

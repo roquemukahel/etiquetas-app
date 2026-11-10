@@ -8,6 +8,7 @@ import { useT } from '../lib/idioma';
 import { StatCard, SeccionCard, EmptyState, formatMoneda } from './ui';
 import { RankingBarras, type Dato } from './graficos';
 import type { BloqueArea, ItemProductoR } from './datos';
+import { ubicarCategoria } from '../lib/subcategorias';
 import {
   SIN_RUBRO,
   comprasPorRubro,
@@ -26,7 +27,7 @@ type Props = {
   rango: { inicio: Date; fin: Date };
   sucursalId: string | null;
   sucursales: { id: string; nombre: string }[];
-  categorias: { id: string; nombre: string }[];
+  categorias: { id: string; nombre: string; padre_id?: string | null }[];
   proveedores: { id: string; nombre: string }[];
   itemsVendidos: ItemProductoR[];
   taller: BloqueArea | null;
@@ -49,8 +50,9 @@ export default function RubrosInversion({ supabase, rango, sucursalId, sucursale
 
   const m = (n: number) => (ocultarMontos ? '••••' : formatMoneda(n, moneda));
   const nombreDe = useMemo(() => {
-    const mapa = new Map(categorias.map((c) => [c.id, c.nombre]));
-    return (id: string | null) => (id ? mapa.get(id) ?? t('Categoría eliminada') : t(SIN_RUBRO));
+    // El rubro es la categoría de primer nivel (las ventas del ranking también se agrupan así): una compra o un stock cargado en una
+    // subcategoría cuenta en la categoría de la que cuelga.
+    return (id: string | null) => (id ? ubicarCategoria(id, categorias).categoria?.nombre ?? t('Categoría eliminada') : t(SIN_RUBRO));
   }, [categorias, t]);
 
   // Compras del período (cambian con el rango).

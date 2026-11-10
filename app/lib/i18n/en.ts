@@ -3617,4 +3617,10 @@ export const EN: Record<string, string> = {
   'Bueno': 'Good',
   'Regular': 'Fair',
   'Riesgoso': 'Risky',
+  'No se pudo completar el cambio; puede que una parte se haya guardado. Revisá la lista.': 'The change could not be completed; part of it may have been saved. Check the list.',
+  'cliente que coincide con la búsqueda no se muestra por el filtro de sucursal.': 'customer matching the search is hidden by the branch filter.',
+  'clientes que coinciden con la búsqueda no se muestran por el filtro de sucursal.': 'customers matching the search are hidden by the branch filter.',
+  'Buscar en todas las sucursales': 'Search all branches',
+  'clientes que deben no tienen sucursal asignada y no están sumados en estos totales.': 'customers with a balance have no branch assigned and are not included in these totals.',
+  'Ver todas las sucursales': 'See all branches',
 };

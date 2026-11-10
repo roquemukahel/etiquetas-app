@@ -10,6 +10,7 @@ import { montosPorRubro, pagoDeCompra, validarReparto, type LineaRubro } from '.
 import type { Sucursal } from '../../lib/sucursales';
 import type { AreaEgreso } from '../../lib/egresos';
 import type { Categoria } from '../../lib/categorias';
+import { etiquetaCategoria } from '../../lib/subcategorias';
 import { registrarFallo } from '../../lib/escritura';
 
 // Compra de contado en un solo paso: registra la compra (por rubro), la deuda y
@@ -188,7 +189,7 @@ export default function CompraContado({
               <option value="">{t('Elegí el rubro')}</option>
               {categorias.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.nombre}
+                  {etiquetaCategoria(c.id, categorias)}
                 </option>
               ))}
             </select>

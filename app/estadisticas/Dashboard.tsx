@@ -60,7 +60,7 @@ import CarteraFinanciacion from './CarteraFinanciacion';
 import RankingDetalle from './RankingDetalle';
 import PanelGananciaPorFuente from './PanelGananciaPorFuente';
 import { gananciaPorFuente, gananciaPorFuenteMensual } from './gananciaPorFuente';
-import { ubicarCategoria } from '../lib/subcategorias';
+import { etiquetaCategoria, ubicarCategoria } from '../lib/subcategorias';
 
 type VistaRanking = 'barras' | 'torta';
 // Rankings separados por métrica, no un puntaje opaco de "producto/categoría
@@ -777,8 +777,8 @@ export default function Estadisticas() {
     [pagos, idsOrdenesCobranza, rango]
   );
   const fuentesActual = useMemo(
-    () => gananciaPorFuente(ordenes, itemsPorOrden, planesFinanciacion, credito, pagos, pagosDeCuotasFuente, cobranzaActual.total, rango.inicio, rango.fin),
-    [ordenes, itemsPorOrden, planesFinanciacion, credito, pagos, pagosDeCuotasFuente, cobranzaActual, rango]
+    () => gananciaPorFuente(ordenes, itemsPorOrden, planesFinanciacion, credito, pagos, pagosDeCuotasFuente, cobranzaActual.total, rango.inicio, rango.fin, !!sucursalId),
+    [ordenes, itemsPorOrden, planesFinanciacion, credito, pagos, pagosDeCuotasFuente, cobranzaActual, rango, sucursalId]
   );
   // Quién registró cada cobro (nombre → foto, cruzando con vendedores y técnicos).
   const rankingCobrosEmpleado: Dato[] = useMemo(() => {
@@ -980,6 +980,9 @@ export default function Estadisticas() {
   // Filtro por categoría del ranking de productos (el ranking de barras muestra el top 10 de esa categoría).
   const [filtroCategoriaProductos, setFiltroCategoriaProductos] = useState('');
   const categoriasConVentas = useMemo(() => Array.from(new Set(itemsVendidosPeriodo.map((i) => i.categoriaNombre))).sort((a, b) => a.localeCompare(b, 'es')), [itemsVendidosPeriodo]);
+  useEffect(() => {
+    if (filtroCategoriaProductos && !categoriasConVentas.includes(filtroCategoriaProductos)) setFiltroCategoriaProductos('');
+  }, [categoriasConVentas, filtroCategoriaProductos]);
   const rankingProductos = useMemo(
     () => rankingProductosDe(filtroCategoriaProductos ? itemsVendidosPeriodo.filter((i) => i.categoriaNombre === filtroCategoriaProductos) : itemsVendidosPeriodo),
     [itemsVendidosPeriodo, filtroCategoriaProductos]
@@ -1056,7 +1059,7 @@ export default function Estadisticas() {
     }
     return Array.from(mapa.entries())
       .map(([id, valor]) => ({
-        nombre: id === '__sin_categoria__' ? 'Sin categoría' : categoriasStock.find((c) => c.id === id)?.nombre ?? 'Categoría eliminada',
+        nombre: id === '__sin_categoria__' ? 'Sin categoría' : etiquetaCategoria(id, categoriasStock) || 'Categoría eliminada',
         valor,
       }))
       .sort((a, b) => b.valor - a.valor);

@@ -101,6 +101,20 @@ describe('ganancia por fuente', () => {
     expect(g.total.facturado).toBe(0);
   });
 
+  it('con filtro de sucursal, las cuotas cobradas cuentan solo si son de ventas de esa sucursal', () => {
+    const items = new Map([['a', [{ orden_id: 'a', cantidad: 1, precio_unitario: 1000, costo: 600, tipo: 'producto' }]]]);
+    const cuotas = [
+      { orden_id: 'a', monto_aplicado: 300, created_at: '2026-10-20T10:00:00' },
+      { orden_id: 'otra-sucursal', monto_aplicado: 500, created_at: '2026-10-21T10:00:00' },
+      { orden_id: null, monto_aplicado: 40, created_at: '2026-10-22T10:00:00' },
+    ];
+    const planes = [{ orden_id: 'a', importe_financiado: 600, estado: 'activo' }];
+    const filtrado = gananciaPorFuente([orden('a', 1000)], items, planes, [], [], cuotas, 840, desde, hasta, true);
+    expect(filtrado.creditos.cobrado).toBe(300);
+    const todas = gananciaPorFuente([orden('a', 1000)], items, planes, [], [], cuotas, 840, desde, hasta, false);
+    expect(todas.creditos.cobrado).toBe(840);
+  });
+
   it('serie de 12 meses: un punto por mes, con la ganancia de cada fuente', () => {
     const items = new Map([['a', [{ orden_id: 'a', cantidad: 1, precio_unitario: 1000, costo: 600, tipo: 'producto' }]]]);
     const serie = gananciaPorFuenteMensual([orden('a', 1000)], items, [], [], [], [], new Date('2026-11-10T10:00:00'));

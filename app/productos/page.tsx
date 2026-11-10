@@ -388,8 +388,10 @@ export default function Productos() {
     ]);
     const fallo = resultados.find((r) => r.error);
     if (fallo?.error) {
-      alert(`${t('No se pudo guardar el cambio. No se modificó nada.')}\n${fallo.error.message}`);
+      alert(`${t('No se pudo completar el cambio; puede que una parte se haya guardado. Revisá la lista.')}\n${fallo.error.message}`);
       setAplicandoMasivo(false);
+      // Los pedidos van en paralelo: si uno falla, otros pudieron haberse guardado; se recarga para mostrar lo que quedó de verdad.
+      window.location.reload();
       return;
     }
     await registrarAuditoria(supabase, {
@@ -434,8 +436,10 @@ export default function Productos() {
     ]);
     const fallo = resultados.find((r) => r.error);
     if (fallo?.error) {
-      alert(`${t('No se pudo guardar el cambio. No se modificó nada.')}\n${fallo.error.message}`);
+      alert(`${t('No se pudo completar el cambio; puede que una parte se haya guardado. Revisá la lista.')}\n${fallo.error.message}`);
       setAplicandoMasivo(false);
+      // Los pedidos van en paralelo: si uno falla, otros pudieron haberse guardado; se recarga para mostrar lo que quedó de verdad.
+      window.location.reload();
       return;
     }
     await registrarAuditoria(supabase, {

@@ -78,7 +78,10 @@ export function gananciaPorFuente(
   pagosDeCuotas: PagoCuotaConOrden[],
   cobranzasCartera: number,
   desde: Date,
-  hasta: Date
+  hasta: Date,
+  // true cuando `ordenes` es solo una parte del negocio (filtro de sucursal): las cuotas cobradas se cuentan solo si son de una de esas
+  // ventas; las de un plan sin venta asociada no se pueden atribuir a una sucursal.
+  soloDeEstasOrdenes = false
 ): GananciaPorFuente {
   const financiadoPorOrden = sumarPorOrden(planes, (p) => p.orden_id, (p) => aNumero(p.importe_financiado), (p) => ESTADOS_PLAN_VIGENTE.includes(p.estado));
   const ctaCtePorOrden = sumarPorOrden(cargosVenta, (c) => c.orden_id, (c) => aNumero(c.monto), (c) => c.tipo === 'cargo' && c.concepto === 'venta');
@@ -139,7 +142,10 @@ export function gananciaPorFuente(
   r.productos.gananciaCobrada = r.productos.ganancia;
   r.servicio.cobrado = r.servicio.facturado;
   r.servicio.gananciaCobrada = r.servicio.ganancia;
-  const cuotasCobradas = pagosDeCuotas.filter((p) => entre(p.created_at, desde, hasta)).reduce((a, p) => a + aNumero(p.monto_aplicado), 0);
+  const idsOrdenes = soloDeEstasOrdenes ? new Set(ordenes.map((o) => o.id)) : null;
+  const cuotasCobradas = pagosDeCuotas
+    .filter((p) => entre(p.created_at, desde, hasta) && (!idsOrdenes || (!!p.orden_id && idsOrdenes.has(p.orden_id))))
+    .reduce((a, p) => a + aNumero(p.monto_aplicado), 0);
   r.creditos.cobrado = cuotasCobradas;
   r.creditos.gananciaCobrada = gananciaCreditoCobrada;
   r.fiado.cobrado = Math.max(0, cobranzasCartera - cuotasCobradas);

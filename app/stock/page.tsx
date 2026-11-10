@@ -16,6 +16,7 @@ import { asegurarModelo, normalizarNombreModelo } from '../lib/modelos';
 import { compararModelosPorSalida } from '../lib/catalogosMarcas';
 import { sanitizarDecimal, formatearMonto } from '../lib/numeros';
 import { obtenerCategorias, type Categoria } from '../lib/categorias';
+import { etiquetaCategoria } from '../lib/subcategorias';
 import { obtenerSucursales, type Sucursal } from '../lib/sucursales';
 import { obtenerProductosMaestro, crearProductoMaestro, type ProductoMaestro } from '../lib/productosMaestro';
 import { useSucursalActual } from '../lib/sucursal';
@@ -2002,7 +2003,7 @@ ${t(r.error)}`);
                       .filter((c) => c.perfil_default === 'dispositivo')
                       .map((c) => (
                         <option key={c.id} value={c.id}>
-                          {c.nombre}
+                          {etiquetaCategoria(c.id, categoriasStock)}
                         </option>
                       ))}
                   </select>
@@ -2587,7 +2588,7 @@ ${t(r.error)}`);
                   >
                     {categoriasStock.map((c) => (
                       <option key={c.id} value={c.id}>
-                        {c.nombre}
+                        {etiquetaCategoria(c.id, categoriasStock)}
                       </option>
                     ))}
                   </select>
@@ -2748,7 +2749,7 @@ ${t(r.error)}`);
                       filtroCategoriaProducto === c.id ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-canvas dark:bg-dark-bg text-muted dark:text-dark-text-secondary'
                     }`}
                   >
-                    {c.nombre} ({conteoPorCategoria.get(c.id) || 0})
+                    {etiquetaCategoria(c.id, categoriasStock)} ({conteoPorCategoria.get(c.id) || 0})
                   </button>
                 ))}
               {(conteoPorCategoria.get('__sin_categoria__') || 0) > 0 && (

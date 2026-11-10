@@ -10,8 +10,8 @@ export async function obtenerCronograma(supabase: SupabaseClient): Promise<Crono
 }
 
 // Clientes que registraron algún pago (cuenta corriente / cuotas) desde el 1º del mes en curso, hora local.
-// Sirve para no marcar "ya cobró – no pagó" a quien ya pagó este mes.
-export async function clientesQuePagaronEsteMes(supabase: SupabaseClient, hoy: Date = new Date()): Promise<Set<string>> {
+// Sirve para no marcar "ya cobró – no pagó" a quien ya pagó este mes. null = no se pudo averiguar (quien llama no marca a nadie).
+export async function clientesQuePagaronEsteMes(supabase: SupabaseClient, hoy: Date = new Date()): Promise<Set<string> | null> {
   const inicio = new Date(hoy.getFullYear(), hoy.getMonth(), 1, 0, 0, 0, 0);
   try {
     const filas = await obtenerTodasLasFilas<{ cliente_id: string }>(supabase, 'cta_cte_movimientos', 'cliente_id', [], (q) =>
@@ -19,6 +19,6 @@ export async function clientesQuePagaronEsteMes(supabase: SupabaseClient, hoy: D
     );
     return new Set(filas.map((f) => f.cliente_id));
   } catch {
-    return new Set();
+    return null;
   }
 }
