@@ -58,6 +58,8 @@ import { soportaMigracion } from '../lib/migraciones';
 import RubrosInversion from './RubrosInversion';
 import CarteraFinanciacion from './CarteraFinanciacion';
 import RankingDetalle from './RankingDetalle';
+import PanelGananciaPorFuente from './PanelGananciaPorFuente';
+import { gananciaPorFuente, gananciaPorFuenteMensual } from './gananciaPorFuente';
 import { ubicarCategoria } from '../lib/subcategorias';
 
 type VistaRanking = 'barras' | 'torta';
@@ -743,6 +745,16 @@ export default function Estadisticas() {
     [ordenes, itemsPorOrden, pagos, pagosFinanciacion, rango]
   );
 
+  // Ganancia por fuente (productos / créditos propios / fiado / servicio técnico) y su serie de 12 meses — ver gananciaPorFuente.ts.
+  const pagosDeCuotasFuente = useMemo(
+    () => pagosFinanciacion.map((p) => ({ orden_id: p.financiacion_cuotas?.financiacion_planes?.orden_id ?? null, monto_aplicado: p.monto_aplicado, created_at: p.created_at })),
+    [pagosFinanciacion]
+  );
+  const fuentesSerie = useMemo(
+    () => gananciaPorFuenteMensual(ordenes, itemsPorOrden, planesFinanciacion, credito, pagos, pagosDeCuotasFuente, rango.fin),
+    [ordenes, itemsPorOrden, planesFinanciacion, credito, pagos, pagosDeCuotasFuente, rango.fin]
+  );
+
   const serie = useMemo(
     () => serieEvolucion(ordenes, itemsPorOrden, pagos, credito, rango, metricaChart),
     [ordenes, itemsPorOrden, pagos, credito, rango, metricaChart]
@@ -763,6 +775,10 @@ export default function Estadisticas() {
   const cobranzaPrev = useMemo(
     () => cobranzasDeCartera(pagos, idsOrdenesCobranza, rango.inicioPrev, rango.finPrev),
     [pagos, idsOrdenesCobranza, rango]
+  );
+  const fuentesActual = useMemo(
+    () => gananciaPorFuente(ordenes, itemsPorOrden, planesFinanciacion, credito, pagos, pagosDeCuotasFuente, cobranzaActual.total, rango.inicio, rango.fin),
+    [ordenes, itemsPorOrden, planesFinanciacion, credito, pagos, pagosDeCuotasFuente, cobranzaActual, rango]
   );
   // Quién registró cada cobro (nombre → foto, cruzando con vendedores y técnicos).
   const rankingCobrosEmpleado: Dato[] = useMemo(() => {
@@ -1372,6 +1388,15 @@ export default function Estadisticas() {
                 />
               </QCard>
             )}
+            <PanelGananciaPorFuente
+              datos={fuentesActual}
+              serie={fuentesSerie}
+              moneda={moneda}
+              puedeVerCostos={puedeVerCostos}
+              ocultarMontos={ocultarMontos}
+              etiquetaPeriodo={etiquetaTramoActual}
+              etiquetaSucursal={sucursalId ? sucursales.find((s) => s.id === sucursalId)?.nombre ?? t('Sucursal') : t('Todas las sucursales')}
+            />
             <SeccionCard titulo={t('Evolución de ventas')} subtitulo={comparar ? `${t('Línea llena:')} ${etiquetaTramoActual}. ${t('Punteada:')} ${etiquetaTramoAnterior}.` : undefined} accion={<SegmentedChips size="sm" valor={metricaChart} opciones={metricasChart} onChange={setMetricaChart} />}>
               {ocultarMontos ? graficoOculto : <LineAreaChart puntos={serie} moneda={moneda} compararActivo={comparar} />}
             </SeccionCard>
@@ -1638,6 +1663,16 @@ export default function Estadisticas() {
               <StatCard etiqueta={t('Equipos ingresados')} valor={servicioIngresados.toLocaleString('es-AR')} tooltip={t('Equipos que entraron a Servicio Técnico en el período.')} />
               <StatCard etiqueta={t('Equipos reparados')} valor={servicioReparados.toLocaleString('es-AR')} tooltip={t('Reparaciones terminadas en el período.')} tono="text-good" />
               <StatCard etiqueta={t('Técnicos activos')} valor={rankingTecnicos.length.toLocaleString('es-AR')} tooltip={t('Técnicos con al menos un arreglo terminado en el período.')} />
+              <StatCard etiqueta={t('Facturación de servicio técnico')} valor={m(fuentesActual.servicio.facturado)} tooltip={t('Lo facturado en el período por reparaciones cobradas (mano de obra y repuestos). Es la misma cifra de "Servicio técnico" en Ganancia por fuente.')} moneda={moneda} tono="text-good" sensible oculto={ocultarMontos} />
+              {puedeVerCostos && (
+                <StatCard etiqueta={t('Ganancia de servicio técnico')} valor={m(fuentesActual.servicio.ganancia)} tooltip={t('Facturación de las reparaciones cobradas menos el costo cargado de los repuestos (la mano de obra sin costo cuenta como ganancia).')} moneda={moneda} tono="text-good" sensible oculto={ocultarMontos}>
+                  {!ocultarMontos && fuentesActual.servicio.facturado > 0 && (
+                    <span className="text-[11px] text-muted dark:text-dark-text-secondary">
+                      {t('Margen')} {Math.round((fuentesActual.servicio.ganancia / fuentesActual.servicio.facturado) * 100)}%
+                    </span>
+                  )}
+                </StatCard>
+              )}
             </div>
             <div className="grid md:grid-cols-2 gap-4">
               <SeccionCard titulo={t('Ranking de técnicos')} accion={<VistaToggle vista={vistaTecnicos} onVista={setVistaTecnicos} />}>
