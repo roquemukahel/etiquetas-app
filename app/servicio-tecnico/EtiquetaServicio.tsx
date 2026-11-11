@@ -158,7 +158,7 @@ const EtiquetaServicio = forwardRef<HTMLDivElement, Props>(function EtiquetaServ
             whiteSpace: 'nowrap',
           }}
         >
-          SERVICIO TÉCNICO
+          {tt('Servicio Técnico').toUpperCase()}
         </div>
       </div>
 

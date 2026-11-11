@@ -53,7 +53,7 @@ export async function cambiarEstadoReparacion(
       const plural = faltantes.length === 1 ? '' : 's';
       if (
         !confirm(
-          `Faltan ${faltantes.length} control${plural} de calidad obligatorio${plural} (${faltantes.join(', ')}). ¿Marcar como listo igual? Va a quedar registrado como excepción.`
+          `${tr('Faltan')} ${faltantes.length} ${plural ? tr('controles de calidad obligatorios') : tr('control de calidad obligatorio')} (${faltantes.map((f) => tr(f)).join(', ')}). ${tr('¿Marcar como listo igual? Va a quedar registrado como excepción.')}`
         )
       ) {
         return 'cancelado';

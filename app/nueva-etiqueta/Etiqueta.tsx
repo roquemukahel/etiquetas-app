@@ -1,4 +1,5 @@
 import { forwardRef } from 'react';
+import { useT } from '../lib/idioma';
 import { formatearGB } from '../lib/almacenamiento';
 
 export type FormatoEtiqueta = 'estandar' | 'termica';
@@ -51,6 +52,7 @@ const Etiqueta = forwardRef<HTMLDivElement, Props>(function Etiqueta(
   { logo, modelo, capacidadGb, imei, bateria, formato = 'estandar' },
   ref
 ) {
+  const tt = useT();
   const t = TAMANOS[formato];
 
   if (formato === 'termica') {
@@ -78,7 +80,7 @@ const Etiqueta = forwardRef<HTMLDivElement, Props>(function Etiqueta(
             // eslint-disable-next-line @next/next/no-img-element
             <img src={logo} alt="logo" style={{ height: '96px', maxWidth: '520px', objectFit: 'contain' }} />
           ) : (
-            <span style={{ fontSize: '20px', color: '#000000' }}>tu logo</span>
+            <span style={{ fontSize: '20px', color: '#000000' }}>{tt('tu logo')}</span>
           )}
         </div>
 
@@ -92,7 +94,7 @@ const Etiqueta = forwardRef<HTMLDivElement, Props>(function Etiqueta(
               wordBreak: 'break-word',
             }}
           >
-            {modelo || 'Modelo'}
+            {modelo || tt('Modelo')}
           </p>
           <p style={{ fontSize: '26px', fontWeight: 700, margin: '8px 0 0' }}>
             {capacidadGb ? `${formatearGB(capacidadGb, true)}` : ''}
@@ -103,7 +105,7 @@ const Etiqueta = forwardRef<HTMLDivElement, Props>(function Etiqueta(
 
         <div style={{ width: '100%', borderTop: '3px solid #000000', paddingTop: '12px' }}>
           <p style={{ fontSize: '15px', fontWeight: 700, margin: '0 0 4px', letterSpacing: '0.04em' }}>
-            IMEI / N&deg; DE SERIE
+            {tt('IMEI / N° de serie').toUpperCase()}
           </p>
           <p style={{ fontSize: '30px', fontWeight: 700, margin: 0, fontFamily: 'monospace', letterSpacing: '0.02em' }}>
             {imei || '--'}
@@ -139,7 +141,7 @@ const Etiqueta = forwardRef<HTMLDivElement, Props>(function Etiqueta(
             // eslint-disable-next-line @next/next/no-img-element
             <img src={logo} alt="logo" style={{ height: '84px', maxWidth: '320px', objectFit: 'contain' }} />
           ) : (
-            <span style={{ fontSize: '13px', color: '#8A8780' }}>tu logo</span>
+            <span style={{ fontSize: '13px', color: '#8A8780' }}>{tt('tu logo')}</span>
           )}
         </div>
         <div
@@ -159,14 +161,14 @@ const Etiqueta = forwardRef<HTMLDivElement, Props>(function Etiqueta(
 
       <div>
         <p style={{ fontSize: '30px', fontWeight: 600, margin: 0, lineHeight: 1.15, wordBreak: 'break-word' }}>
-          {modelo || 'Modelo'}
+          {modelo || tt('Modelo')}
         </p>
         <p style={{ fontSize: '18px', color: '#5F5E5A', margin: '4px 0 0' }}>{capacidadGb ? `${formatearGB(capacidadGb, true)}` : ''}</p>
       </div>
 
       <div style={{ borderTop: '1px solid #E5E3DB', paddingTop: '10px' }}>
         <p style={{ fontSize: '11px', color: '#8A8780', margin: '0 0 2px', letterSpacing: '0.02em' }}>
-          IMEI / N&deg; de serie
+          {tt('IMEI / N° de serie')}
         </p>
         <p style={{ fontSize: '16px', margin: 0, fontFamily: 'monospace' }}>{imei || '--'}</p>
       </div>

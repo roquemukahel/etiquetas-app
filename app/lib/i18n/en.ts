@@ -3764,4 +3764,11 @@ export const EN: Record<string, string> = {
   "Ventas financiadas (en cuotas)": "Financed sales (installments)",
   "Un tipo de ítem": "One item type",
   "Un producto": "One product",
+  "Texto para la boleta / cliente": "Text for the receipt / customer",
+  "✓ Copiado": "✓ Copied",
+  "Copiar texto": "Copy text",
+  "IMEI / N° de serie": "IMEI / Serial no.",
+  "controles de calidad obligatorios": "required quality checks",
+  "control de calidad obligatorio": "required quality check",
+  "¿Marcar como listo igual? Va a quedar registrado como excepción.": "Mark as ready anyway? It will be recorded as an exception.",
 };

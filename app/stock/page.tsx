@@ -384,7 +384,7 @@ export default function Stock() {
     setCarpetaMenuAbierta(null);
     if (
       !confirm(
-        `¿Eliminar los ${items.length} dispositivo${items.length === 1 ? '' : 's'} de "${modelo}"? No se puede deshacer.`
+        `${t('¿Eliminar los')} ${items.length} ${items.length === 1 ? t('dispositivo') : t('dispositivos')} ${t('de')} "${modelo}"? ${t('No se puede deshacer.')}`
       )
     )
       return;
