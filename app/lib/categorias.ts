@@ -7,6 +7,7 @@
 // conservar ventas/stock/historial — ver archivarCategoria().
 // ============================================================
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { tr } from './tr';
 
 export type PerfilCategoria = 'dispositivo' | 'generico';
 export type ModalidadStock = 'serializado' | 'cantidad';
@@ -64,9 +65,9 @@ export async function crearCategoria(
   params: { nombre: string; perfilDefault: PerfilCategoria; modalidadDefault: ModalidadStock; orden: number; padreId?: string | null }
 ): Promise<{ id: string } | { error: string }> {
   const nombre = params.nombre.trim();
-  if (!nombre) return { error: 'El nombre no puede estar vacío.' };
+  if (!nombre) return { error: tr('El nombre no puede estar vacío.') };
   if (await nombreDuplicado(supabase, nombre, undefined, params.padreId ?? null)) {
-    return { error: params.padreId ? `Ya existe una subcategoría activa llamada "${nombre}" en esa categoría.` : `Ya existe una categoría activa llamada "${nombre}".` };
+    return { error: params.padreId ? `${tr('Ya existe una subcategoría activa llamada')} "${nombre}" ${tr('en esa categoría.')}` : `${tr('Ya existe una categoría activa llamada')} "${nombre}".` };
   }
   const { data, error } = await supabase
     .from('stock_categorias')
@@ -85,8 +86,8 @@ export async function crearCategoria(
 
 export async function renombrarCategoria(supabase: SupabaseClient, id: string, nombre: string): Promise<{ ok: true } | { error: string }> {
   const limpio = nombre.trim();
-  if (!limpio) return { error: 'El nombre no puede estar vacío.' };
-  if (await nombreDuplicado(supabase, limpio, id)) return { error: `Ya existe una categoría activa llamada "${limpio}".` };
+  if (!limpio) return { error: tr('El nombre no puede estar vacío.') };
+  if (await nombreDuplicado(supabase, limpio, id)) return { error: `${tr('Ya existe una categoría activa llamada')} "${limpio}".` };
   const { error } = await supabase.from('stock_categorias').update({ nombre: limpio, updated_at: new Date().toISOString() }).eq('id', id);
   if (error) return { error: error.message };
   return { ok: true };
@@ -141,7 +142,7 @@ export async function archivarCategoria(supabase: SupabaseClient, id: string): P
 
 export async function restaurarCategoria(supabase: SupabaseClient, id: string, nombre: string): Promise<{ ok: true } | { error: string }> {
   if (await nombreDuplicado(supabase, nombre, id)) {
-    return { error: `Ya hay una categoría activa llamada "${nombre}" — renombrá una de las dos antes de restaurar.` };
+    return { error: `${tr('Ya hay una categoría activa llamada')} "${nombre}" — ${tr('renombrá una de las dos antes de restaurar.')}` };
   }
   const { error } = await supabase.from('stock_categorias').update({ archivada: false, activa: true }).eq('id', id);
   if (error) return { error: error.message };

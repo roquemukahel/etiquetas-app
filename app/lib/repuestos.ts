@@ -1,4 +1,5 @@
 import { SupabaseClient } from '@supabase/supabase-js';
+import { tr } from './tr';
 
 // Las funciones RPC de stock (repuesto_consumir, repuesto_registrar_movimiento,
 // repuesto_reservar — ver repuestos_reservas_movimientos_supabase.sql) tiran
@@ -40,7 +41,7 @@ export async function liberarRepuestosDeReparaciones(
     supabase.from('repuestos_reservas').select('id').in('reparacion_id', reparacionIds).eq('estado', 'activa'),
   ]);
   if (errorConsumos || errorReservas) {
-    return { ok: false, error: (errorConsumos ?? errorReservas)?.message ?? 'No pudimos leer los repuestos vinculados' };
+    return { ok: false, error: (errorConsumos ?? errorReservas)?.message ?? tr('No pudimos leer los repuestos vinculados') };
   }
 
   for (const c of consumos ?? []) {

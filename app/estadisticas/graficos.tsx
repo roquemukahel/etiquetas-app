@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Avatar from '../Avatar';
 import { useT } from '../lib/idioma';
+import { localeActual } from '../lib/formatoLocal';
 
 // Paleta categórica validada (ver skill de dataviz) contra las superficies
 // reales de las cards de Qovento (blanco en claro, #111827 en oscuro):
@@ -20,8 +21,8 @@ function formatearValor(valor: number, moneda?: string, sufijo?: string, oculto?
   // Con "ocultar montos" solo se enmascara la PLATA (rankings con moneda); los
   // conteos (arreglos, equipos, unidades) no son sensibles y se siguen viendo.
   if (oculto && moneda) return '•••';
-  if (moneda) return `${moneda}${Math.round(valor).toLocaleString('es-AR')}`;
-  return `${valor.toLocaleString('es-AR')}${sufijo ?? ''}`;
+  if (moneda) return `${moneda}${Math.round(valor).toLocaleString(localeActual())}`;
+  return `${valor.toLocaleString(localeActual())}${sufijo ?? ''}`;
 }
 
 // Medalla 🥇🥈🥉 para los puestos 1/2/3; del 4° en adelante queda el número.
@@ -57,6 +58,7 @@ export function RankingBarras({
   // Si se pasa, el nombre de cada fila es tocable (ej. abrir el detalle de esa categoría).
   onSeleccionar?: (nombre: string) => void;
 }) {
+  const t = useT();
   if (datos.length === 0) return <SinDatos />;
   const max = Math.max(1, ...datos.map((d) => d.valor));
 
@@ -70,10 +72,10 @@ export function RankingBarras({
             <div className="flex items-baseline justify-between gap-2 mb-1">
               {onSeleccionar ? (
                 <button onClick={() => onSeleccionar(d.nombre)} className="text-sm font-medium truncate text-left hover:underline">
-                  {d.nombre} ›
+                  {t(d.nombre)} ›
                 </button>
               ) : (
-                <span className="text-sm font-medium truncate">{d.nombre}</span>
+                <span className="text-sm font-medium truncate">{t(d.nombre)}</span>
               )}
               <span className="text-xs text-muted dark:text-dark-text-secondary shrink-0 tabular-nums">
                 {formatearValor(d.valor, moneda, sufijo, oculto)}
@@ -118,7 +120,7 @@ export function RankingTorta({ datos, moneda, sufijo, oculto }: { datos: Dato[];
   const top = datos.slice(0, 3);
   const restoValor = datos.slice(3).reduce((acc, d) => acc + d.valor, 0);
   const slices = [
-    ...top.map((d, i) => ({ nombre: d.nombre, valor: d.valor, fotoUrl: d.fotoUrl, light: COLOR_LIGHT[i], dark: COLOR_DARK[i] })),
+    ...top.map((d, i) => ({ nombre: t(d.nombre), valor: d.valor, fotoUrl: d.fotoUrl, light: COLOR_LIGHT[i], dark: COLOR_DARK[i] })),
     ...(restoValor > 0 ? [{ nombre: t('Otros'), valor: restoValor, fotoUrl: undefined, light: OTROS_LIGHT, dark: OTROS_DARK }] : []),
   ];
 
@@ -169,7 +171,7 @@ export function EvolucionBarras({ datos, moneda }: { datos: { label: string; val
           key={i}
           tabIndex={0}
           role="img"
-          aria-label={`${d.label}: ${moneda}${Math.round(d.valor).toLocaleString('es-AR')}`}
+          aria-label={`${d.label}: ${moneda}${Math.round(d.valor).toLocaleString(localeActual())}`}
           className="flex-1 min-w-0 flex flex-col items-center gap-1 h-full justify-end relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent dark:focus-visible:ring-dark-accent rounded-sm"
           onMouseEnter={() => setHover(i)}
           onMouseLeave={() => setHover(null)}
@@ -180,7 +182,7 @@ export function EvolucionBarras({ datos, moneda }: { datos: { label: string; val
           {hover === i && (
             <div className="absolute -top-7 left-1/2 -translate-x-1/2 whitespace-nowrap bg-ink dark:bg-dark-surface-elevated text-white text-[10px] rounded-md px-2 py-1 shadow-elevated z-10">
               {moneda}
-              {Math.round(d.valor).toLocaleString('es-AR')}
+              {Math.round(d.valor).toLocaleString(localeActual())}
             </div>
           )}
           <div

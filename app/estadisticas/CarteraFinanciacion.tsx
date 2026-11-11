@@ -25,6 +25,7 @@ import {
   type PlanCartera,
 } from '../lib/financiacion/cartera';
 import { cargarCartera, type CarteraCargada } from '../lib/financiacion/carteraDatos';
+import { localeActual } from '../lib/formatoLocal';
 
 // Pestaña "Cartera de financiación": cada crédito como una inversión (costo de lo
 // entregado → cuánto volvió → cuándo se empieza a ganar), la mora, el retorno por mes
@@ -194,7 +195,7 @@ export default function CarteraFinanciacion({ supabase, rango, sucursalId, categ
               ).map(([g, etiqueta]) => (
                 <tr key={g}>
                   <td className={`${td} font-medium`}>{t(etiqueta)}</td>
-                  <td className={td}>{ventasPorGrupo[g].cantidad.toLocaleString('es-AR')}</td>
+                  <td className={td}>{ventasPorGrupo[g].cantidad.toLocaleString(localeActual())}</td>
                   <td className={td}>{m(ventasPorGrupo[g].monto)}</td>
                   <td className={td}>{ventasPorGrupo[g].cobertura > 0 ? m(ventasPorGrupo[g].ganancia) : '—'}</td>
                 </tr>
@@ -270,7 +271,7 @@ export default function CarteraFinanciacion({ supabase, rango, sucursalId, categ
         </StatCard>
         <StatCard
           etiqueta={t('Créditos otorgados en el período')}
-          valor={otorgados.cantidad.toLocaleString('es-AR')}
+          valor={otorgados.cantidad.toLocaleString(localeActual())}
           tooltip={t('Cantidad de créditos nuevos del período, con lo financiado y lo invertido.')}
         >
           {otorgados.cantidad > 0 && (
@@ -354,7 +355,7 @@ export default function CarteraFinanciacion({ supabase, rango, sucursalId, categ
               <tbody>
                 {originacion.map((f) => (
                   <tr key={f.mes}>
-                    <td className={`${td} font-medium`}>{new Date(f.mes + '-01T00:00:00').toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })}</td>
+                    <td className={`${td} font-medium`}>{new Date(f.mes + '-01T00:00:00').toLocaleDateString(localeActual(), { month: 'long', year: 'numeric' })}</td>
                     <td className={td}>{f.creditos}</td>
                     <td className={td}>{m(f.invertido)}</td>
                     <td className={td}>{m(f.recuperado)}</td>
@@ -395,7 +396,7 @@ export default function CarteraFinanciacion({ supabase, rango, sucursalId, categ
                   <td className={td}>
                     <span className="font-medium">{datos.nombresClientes.get(p.clienteId) ?? t('Cliente')}</span>
                     <span className="block text-[11px] text-muted dark:text-dark-text-secondary">
-                      {new Date(p.creadoEn).toLocaleDateString('es-AR')}
+                      {new Date(p.creadoEn).toLocaleDateString(localeActual())}
                       {p.localidad ? ` · 📍 ${p.localidad}` : ''}
                     </span>
                   </td>

@@ -1,3 +1,4 @@
+import { tr } from './tr';
 export type EstadoReparacion =
   | 'recibido'
   | 'esperando_diagnostico'
@@ -299,45 +300,45 @@ export function calcularAlertas(reparaciones: ReparacionParaAlerta[], repuestos:
   const alertas: Alerta[] = [];
 
   for (const r of reparaciones) {
-    const titulo = `${r.numero_orden || ''} ${r.modelo || 'equipo'}`.trim();
+    const titulo = `${r.numero_orden || ''} ${r.modelo || tr('equipo')}`.trim();
     const activa = !FINALIZADOS.includes(r.estado);
     const msEnEstado = ahora - new Date(r.estado_actualizado_at).getTime();
     const push = (categoria: CategoriaAlerta, texto: string, color: 'bad' | 'warn', antiguedadMs: number) =>
       alertas.push({ id: r.id, tipo: 'reparacion', categoria, texto: `${titulo} — ${texto}`, color, antiguedadMs });
 
     if (activa && r.fecha_estimada && new Date(r.fecha_estimada + 'T00:00:00').getTime() < ahora) {
-      push('fecha_vencida', 'fecha prometida vencida', 'bad', ahora - new Date(r.fecha_estimada + 'T00:00:00').getTime());
+      push('fecha_vencida', tr('fecha prometida vencida'), 'bad', ahora - new Date(r.fecha_estimada + 'T00:00:00').getTime());
       continue;
     }
     if (r.estado === 'listo_para_entregar' && msEnEstado > 7 * DIA) {
-      push('lista_sin_retirar', 'listo hace más de 7 días sin retirar', 'bad', msEnEstado);
+      push('lista_sin_retirar', tr('listo hace más de 7 días sin retirar'), 'bad', msEnEstado);
       continue;
     }
     if (activa && !r.tecnico_id && ahora - new Date(r.fecha_ingreso_servicio).getTime() > 24 * HORA) {
-      push('sin_tecnico', 'sin técnico asignado hace más de 24 horas', 'warn', ahora - new Date(r.fecha_ingreso_servicio).getTime());
+      push('sin_tecnico', tr('sin técnico asignado hace más de 24 horas'), 'warn', ahora - new Date(r.fecha_ingreso_servicio).getTime());
       continue;
     }
     if (r.estado === 'esperando_diagnostico' && msEnEstado > 48 * HORA) {
-      push('diagnostico_demorado', 'esperando diagnóstico hace más de 48 horas', 'warn', msEnEstado);
+      push('diagnostico_demorado', tr('esperando diagnóstico hace más de 48 horas'), 'warn', msEnEstado);
       continue;
     }
     if (r.estado === 'esperando_aprobacion' && msEnEstado > 48 * HORA) {
-      push('esperando_aprobacion', 'presupuesto sin responder hace más de 48 horas', 'warn', msEnEstado);
+      push('esperando_aprobacion', tr('presupuesto sin responder hace más de 48 horas'), 'warn', msEnEstado);
       continue;
     }
     if (r.estado === 'esperando_repuesto' && msEnEstado > 3 * DIA) {
-      push('esperando_repuesto', 'esperando un repuesto hace más de 3 días', 'warn', msEnEstado);
+      push('esperando_repuesto', tr('esperando un repuesto hace más de 3 días'), 'warn', msEnEstado);
       continue;
     }
     if (r.estado === 'entregado' && r.fecha_entrega && r.garantia_dias) {
       const vencimiento = new Date(r.fecha_entrega).getTime() + r.garantia_dias * DIA;
       if (vencimiento > ahora && vencimiento - ahora < 7 * DIA) {
-        push('garantia_por_vencer', 'la garantía vence esta semana', 'warn', ahora - new Date(r.fecha_entrega).getTime());
+        push('garantia_por_vencer', tr('la garantía vence esta semana'), 'warn', ahora - new Date(r.fecha_entrega).getTime());
         continue;
       }
     }
     if (activa && msEnEstado > 10 * DIA) {
-      push('sin_actualizaciones', 'sin actualizaciones hace más de 10 días', 'warn', msEnEstado);
+      push('sin_actualizaciones', tr('sin actualizaciones hace más de 10 días'), 'warn', msEnEstado);
     }
   }
 

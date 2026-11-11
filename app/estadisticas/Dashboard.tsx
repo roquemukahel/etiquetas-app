@@ -61,6 +61,7 @@ import RankingDetalle from './RankingDetalle';
 import PanelGananciaPorFuente from './PanelGananciaPorFuente';
 import { gananciaPorFuente, gananciaPorFuenteMensual } from './gananciaPorFuente';
 import { etiquetaCategoria, ubicarCategoria } from '../lib/subcategorias';
+import { localeActual } from '../lib/formatoLocal';
 
 type VistaRanking = 'barras' | 'torta';
 // Rankings separados por métrica, no un puntaje opaco de "producto/categoría
@@ -130,18 +131,18 @@ function aFechaInput(d: Date): string {
 // navegar, si es "la semana del 11 al 17" o cuál específicamente).
 function etiquetaTramo(periodo: Periodo, rango: { inicio: Date; fin: Date }): string {
   if (periodo === 'hoy') {
-    return rango.inicio.toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' });
+    return rango.inicio.toLocaleDateString(localeActual(), { day: 'numeric', month: 'long', year: 'numeric' });
   }
   if (periodo === 'semana') {
     const finSemana = new Date(rango.inicio);
     finSemana.setDate(finSemana.getDate() + 6);
     const mismoMes = rango.inicio.getMonth() === finSemana.getMonth();
-    const desde = rango.inicio.toLocaleDateString('es-AR', mismoMes ? { day: 'numeric' } : { day: 'numeric', month: 'short' });
-    const hasta = finSemana.toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' });
+    const desde = rango.inicio.toLocaleDateString(localeActual(), mismoMes ? { day: 'numeric' } : { day: 'numeric', month: 'short' });
+    const hasta = finSemana.toLocaleDateString(localeActual(), { day: 'numeric', month: 'short', year: 'numeric' });
     return `${desde} al ${hasta}`;
   }
   if (periodo === 'mes') {
-    return rango.inicio.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' });
+    return rango.inicio.toLocaleDateString(localeActual(), { month: 'long', year: 'numeric' });
   }
   return String(rango.inicio.getFullYear());
 }
@@ -382,7 +383,7 @@ export default function Estadisticas() {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) {
-        setErrorCarga('No pudimos confirmar tu sesión. Volvé a entrar (en este dominio) para ver la analítica.');
+        setErrorCarga(t('No pudimos confirmar tu sesión. Volvé a entrar (en este dominio) para ver la analítica.'));
         setLoading(false);
         return;
       }
@@ -673,7 +674,7 @@ export default function Estadisticas() {
       setActualizado(new Date());
       } catch (e) {
         console.error('Analítica: no se pudieron cargar los datos', e);
-        setErrorCarga(e instanceof Error ? e.message : 'No se pudieron cargar los datos.');
+        setErrorCarga(e instanceof Error ? e.message : t('No se pudieron cargar los datos.'));
       } finally {
         setLoading(false);
       }
@@ -756,14 +757,14 @@ export default function Estadisticas() {
   );
 
   const serie = useMemo(
-    () => serieEvolucion(ordenes, itemsPorOrden, pagos, credito, rango, metricaChart),
-    [ordenes, itemsPorOrden, pagos, credito, rango, metricaChart]
+    () => serieEvolucion(ordenes, itemsPorOrden, pagos, credito, rango, metricaChart, localeActual()),
+    [ordenes, itemsPorOrden, pagos, credito, rango, metricaChart, idioma]
   );
   // Serie fija de "dinero ingresado" (para la pestaña Caja, sin depender del
   // selector de métrica del Resumen).
   const serieIngresado = useMemo(
-    () => serieEvolucion(ordenes, itemsPorOrden, pagos, credito, rango, 'ingresado'),
-    [ordenes, itemsPorOrden, pagos, credito, rango]
+    () => serieEvolucion(ordenes, itemsPorOrden, pagos, credito, rango, 'ingresado', localeActual()),
+    [ordenes, itemsPorOrden, pagos, credito, rango, idioma]
   );
 
   // Cobranzas de cartera (cuotas y saldos de cuenta corriente cobrados): entran a
@@ -1239,7 +1240,7 @@ export default function Estadisticas() {
   }
 
   const m = (n: number) => formatMoneda(n, moneda);
-  const hora = actualizado ? actualizado.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) : '';
+  const hora = actualizado ? actualizado.toLocaleTimeString(localeActual(), { hour: '2-digit', minute: '2-digit' }) : '';
 
   const metricasChart: { key: MetricaSerie; label: string }[] = [
     { key: 'ventas', label: t('Ventas') },
@@ -1325,9 +1326,9 @@ export default function Estadisticas() {
           <>
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
               <StatCard etiqueta={t('Ventas netas')} valor={m(actualB.ventas)} tooltip={t('Todo lo que facturaste en el período, incluido lo vendido a cuenta corriente/fiado — no es plata en mano. Para ver lo que realmente cobraste, mirá "Dinero ingresado".')} variacion={varSi(actualB.ventas, prevB.ventas)} moneda={moneda} sensible oculto={ocultarMontos} />
-              <StatCard etiqueta={t('Operaciones')} valor={actualB.operaciones.toLocaleString('es-AR')} tooltip={t('Cantidad de ventas cobradas en el período.')} variacion={varSi(actualB.operaciones, prevB.operaciones)} />
+              <StatCard etiqueta={t('Operaciones')} valor={actualB.operaciones.toLocaleString(localeActual())} tooltip={t('Cantidad de ventas cobradas en el período.')} variacion={varSi(actualB.operaciones, prevB.operaciones)} />
               <StatCard etiqueta={t('Ticket promedio')} valor={m(ticket)} tooltip={t('Promedio facturado por operación (ventas ÷ operaciones).')} variacion={varSi(ticket, ticketPrev)} moneda={moneda} sensible oculto={ocultarMontos} />
-              <StatCard etiqueta={t('Unidades vendidas')} valor={actualB.unidades.toLocaleString('es-AR')} tooltip={t('Dispositivos y productos vendidos en el período.')} variacion={varSi(actualB.unidades, prevB.unidades)} />
+              <StatCard etiqueta={t('Unidades vendidas')} valor={actualB.unidades.toLocaleString(localeActual())} tooltip={t('Dispositivos y productos vendidos en el período.')} variacion={varSi(actualB.unidades, prevB.unidades)} />
               {puedeVerCostos && (
                 <StatCard
                   etiqueta={t('Ganancia bruta')}
@@ -1366,7 +1367,7 @@ export default function Estadisticas() {
               </StatCard>
               <StatCard
                 etiqueta={t('Ventas a consumidor final')}
-                valor={ventasConsumidorFinal.operaciones.toLocaleString('es-AR')}
+                valor={ventasConsumidorFinal.operaciones.toLocaleString(localeActual())}
                 tooltip={t('Ventas del período sin cliente cargado (opción "Consumidor final" en Nueva Orden). Ya están sumadas en Ventas netas y Operaciones — esto es solo el desglose.')}
               >
                 {!ocultarMontos && ventasConsumidorFinal.monto > 0 && (
@@ -1509,7 +1510,7 @@ export default function Estadisticas() {
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
               <StatCard etiqueta={t('Dinero ingresado')} valor={m(actualB.ingresado)} tooltip={t('La plata que realmente entró a la caja en el período (incluye cobros de ventas anteriores fiadas).')} variacion={varSi(actualB.ingresado, prevB.ingresado)} moneda={moneda} tono="text-good" sensible oculto={ocultarMontos} />
               <StatCard etiqueta={t('Cobranzas de cartera')} valor={m(cobranzaActual.total)} tooltip={t('Cuotas y saldos de cuenta corriente cobrados en el período. Es plata que entró (ya está en Dinero ingresado) pero NO son ventas nuevas: esas ventas se contaron el día que se hicieron.')} variacion={varSi(cobranzaActual.total, cobranzaPrev.total)} moneda={moneda} tono="text-good" sensible oculto={ocultarMontos} />
-              <StatCard etiqueta={t('Medios de pago')} valor={cajaPorMedio.length.toLocaleString('es-AR')} tooltip={t('Cantidad de formas de pago distintas usadas en el período.')} />
+              <StatCard etiqueta={t('Medios de pago')} valor={cajaPorMedio.length.toLocaleString(localeActual())} tooltip={t('Cantidad de formas de pago distintas usadas en el período.')} />
               <StatCard etiqueta={t('Vendido a crédito')} valor={m(actualB.credito)} tooltip={t('Lo que se sumó a cuentas corrientes en el período (todavía no entró a la caja).')} moneda={moneda} tono={actualB.credito > 0 ? 'text-warn' : undefined} sensible oculto={ocultarMontos} />
             </div>
             <SeccionCard titulo={t('Evolución del dinero ingresado')} subtitulo={comparar ? `${t('Línea llena:')} ${etiquetaTramoActual}. ${t('Punteada:')} ${etiquetaTramoAnterior}.` : undefined}>
@@ -1554,7 +1555,7 @@ export default function Estadisticas() {
                       {evolucionMedios.map((f) => (
                         <tr key={f.mes} className="border-t border-border dark:border-dark-border">
                           <td className="py-1.5 pr-3 whitespace-nowrap capitalize">
-                            {new Date(f.mes + '-01T00:00:00').toLocaleDateString('es-AR', { month: 'short', year: '2-digit' })}
+                            {new Date(f.mes + '-01T00:00:00').toLocaleDateString(localeActual(), { month: 'short', year: '2-digit' })}
                           </td>
                           {mediosEnEvolucion.map((medio) => (
                             <td key={medio} className="py-1.5 px-2 text-right tabular-nums">
@@ -1618,7 +1619,7 @@ export default function Estadisticas() {
                       </span>
                     )}
                   </StatCard>
-                  <StatCard etiqueta={t('Próximas a vencer')} valor={resumenFinanciacion.proximasAVencer.toLocaleString('es-AR')} tooltip={t('Cuotas pendientes que vencen dentro de los próximos 7 días.')} tono={resumenFinanciacion.proximasAVencer > 0 ? 'text-warn' : undefined} />
+                  <StatCard etiqueta={t('Próximas a vencer')} valor={resumenFinanciacion.proximasAVencer.toLocaleString(localeActual())} tooltip={t('Cuotas pendientes que vencen dentro de los próximos 7 días.')} tono={resumenFinanciacion.proximasAVencer > 0 ? 'text-warn' : undefined} />
                 </div>
               </SeccionCard>
             )}
@@ -1629,11 +1630,11 @@ export default function Estadisticas() {
         return (
           <>
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-              <StatCard etiqueta={t('Equipos en stock')} valor={stockResumen.unidades.toLocaleString('es-AR')} tooltip={t('Dispositivos disponibles para vender ahora mismo. Tocá para ver el detalle.')} onClick={() => router.push('/stock')} />
+              <StatCard etiqueta={t('Equipos en stock')} valor={stockResumen.unidades.toLocaleString(localeActual())} tooltip={t('Dispositivos disponibles para vender ahora mismo. Tocá para ver el detalle.')} onClick={() => router.push('/stock')} />
               <StatCard etiqueta={t('Capital en stock')} valor={m(stockResumen.capitalPrecio)} tooltip={t('Suma de los precios de venta de todo el stock actual.')} moneda={moneda} sensible oculto={ocultarMontos} />
               {puedeVerCostos && <StatCard etiqueta={t('Capital a costo')} valor={m(stockResumen.capitalCosto)} tooltip={t('Lo que te costó el stock que tenés (a precio de compra).')} moneda={moneda} sensible oculto={ocultarMontos} />}
-              <StatCard etiqueta={t('Parados +30 días')} valor={stockResumen.quietos.toLocaleString('es-AR')} tooltip={t('Equipos que llevan más de 30 días sin venderse.')} tono={stockResumen.quietos > 0 ? 'text-warn' : undefined} />
-              <StatCard etiqueta={t('Sin precio')} valor={stockResumen.sinPrecio.toLocaleString('es-AR')} tooltip={t('Equipos cargados sin precio de venta (no se pueden vender así).')} tono={stockResumen.sinPrecio > 0 ? 'text-warn' : undefined} />
+              <StatCard etiqueta={t('Parados +30 días')} valor={stockResumen.quietos.toLocaleString(localeActual())} tooltip={t('Equipos que llevan más de 30 días sin venderse.')} tono={stockResumen.quietos > 0 ? 'text-warn' : undefined} />
+              <StatCard etiqueta={t('Sin precio')} valor={stockResumen.sinPrecio.toLocaleString(localeActual())} tooltip={t('Equipos cargados sin precio de venta (no se pueden vender así).')} tono={stockResumen.sinPrecio > 0 ? 'text-warn' : undefined} />
             </div>
             <SeccionCard titulo={t('Stock por modelo')} subtitulo={t('Foto del inventario de hoy (no depende del período).')}>
               {stockPorModelo.length === 0 ? <EmptyState titulo={t('Sin equipos en stock')} /> : <RankingBarras datos={stockPorModelo} sufijo={t(' equipo(s)')} />}
@@ -1663,9 +1664,9 @@ export default function Estadisticas() {
         return (
           <>
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-              <StatCard etiqueta={t('Equipos ingresados')} valor={servicioIngresados.toLocaleString('es-AR')} tooltip={t('Equipos que entraron a Servicio Técnico en el período.')} />
-              <StatCard etiqueta={t('Equipos reparados')} valor={servicioReparados.toLocaleString('es-AR')} tooltip={t('Reparaciones terminadas en el período.')} tono="text-good" />
-              <StatCard etiqueta={t('Técnicos activos')} valor={rankingTecnicos.length.toLocaleString('es-AR')} tooltip={t('Técnicos con al menos un arreglo terminado en el período.')} />
+              <StatCard etiqueta={t('Equipos ingresados')} valor={servicioIngresados.toLocaleString(localeActual())} tooltip={t('Equipos que entraron a Servicio Técnico en el período.')} />
+              <StatCard etiqueta={t('Equipos reparados')} valor={servicioReparados.toLocaleString(localeActual())} tooltip={t('Reparaciones terminadas en el período.')} tono="text-good" />
+              <StatCard etiqueta={t('Técnicos activos')} valor={rankingTecnicos.length.toLocaleString(localeActual())} tooltip={t('Técnicos con al menos un arreglo terminado en el período.')} />
               <StatCard etiqueta={t('Facturación de servicio técnico')} valor={m(fuentesActual.servicio.facturado)} tooltip={t('Lo facturado en el período por reparaciones cobradas (mano de obra y repuestos). Es la misma cifra de "Servicio técnico" en Ganancia por fuente.')} moneda={moneda} tono="text-good" sensible oculto={ocultarMontos} />
               {puedeVerCostos && (
                 <StatCard etiqueta={t('Ganancia de servicio técnico')} valor={m(fuentesActual.servicio.ganancia)} tooltip={t('Facturación de las reparaciones cobradas menos el costo cargado de los repuestos (la mano de obra sin costo cuenta como ganancia).')} moneda={moneda} tono="text-good" sensible oculto={ocultarMontos}>
@@ -1700,9 +1701,9 @@ export default function Estadisticas() {
         return (
           <>
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-              <StatCard etiqueta={t('Clientes que compraron')} valor={clientesQueCompraron.toLocaleString('es-AR')} tooltip={t('Clientes distintos con al menos una compra en el período.')} />
-              <StatCard etiqueta={t('Ventas sin cliente')} valor={opsSinCliente.toLocaleString('es-AR')} tooltip={t('Operaciones del período que no quedaron asociadas a un cliente.')} tono={opsSinCliente > 0 ? 'text-warn' : undefined} />
-              <StatCard etiqueta={t('Clientes que deben')} valor={deudores.toLocaleString('es-AR')} tooltip={t('Clientes con saldo pendiente en su cuenta corriente (a hoy).')} tono={deudores > 0 ? 'text-warn' : undefined} />
+              <StatCard etiqueta={t('Clientes que compraron')} valor={clientesQueCompraron.toLocaleString(localeActual())} tooltip={t('Clientes distintos con al menos una compra en el período.')} />
+              <StatCard etiqueta={t('Ventas sin cliente')} valor={opsSinCliente.toLocaleString(localeActual())} tooltip={t('Operaciones del período que no quedaron asociadas a un cliente.')} tono={opsSinCliente > 0 ? 'text-warn' : undefined} />
+              <StatCard etiqueta={t('Clientes que deben')} valor={deudores.toLocaleString(localeActual())} tooltip={t('Clientes con saldo pendiente en su cuenta corriente (a hoy).')} tono={deudores > 0 ? 'text-warn' : undefined} />
             </div>
             <div className="grid md:grid-cols-2 gap-4">
               <SeccionCard titulo={t('Mejores compradores')} accion={<VistaToggle vista={vistaCompradores} onVista={setVistaCompradores} />}>
@@ -1738,7 +1739,7 @@ export default function Estadisticas() {
                   {tablaVendedores.map((v, i) => (
                     <div key={i} className="grid grid-cols-[1fr_auto_auto] gap-3 py-2 items-center text-sm">
                       <span className="truncate">{v.nombre}</span>
-                      <span className="text-right w-20 tabular-nums">{v.ops.toLocaleString('es-AR')}</span>
+                      <span className="text-right w-20 tabular-nums">{v.ops.toLocaleString(localeActual())}</span>
                       <span className="text-right w-28 tabular-nums font-medium">{ocultarMontos ? '••••' : m(v.ventas)}</span>
                     </div>
                   ))}
@@ -1793,8 +1794,8 @@ export default function Estadisticas() {
           <>
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
               <StatCard etiqueta={t('Comprado en el período')} valor={m(comprasPeriodo.total)} tooltip={t('Total gastado en compras a proveedores (dispositivos + compras manuales) en el período. Esto es lo COMPRADO, no necesariamente lo pagado.')} moneda={moneda} sensible oculto={ocultarMontos} />
-              <StatCard etiqueta={t('Unidades compradas')} valor={comprasPeriodo.cantidad.toLocaleString('es-AR')} tooltip={t('Cantidad de equipos/ítems comprados a proveedores en el período.')} />
-              <StatCard etiqueta={t('Proveedores activos')} valor={rankingProveedores.length.toLocaleString('es-AR')} tooltip={t('Proveedores a los que les compraste en el período.')} />
+              <StatCard etiqueta={t('Unidades compradas')} valor={comprasPeriodo.cantidad.toLocaleString(localeActual())} tooltip={t('Cantidad de equipos/ítems comprados a proveedores en el período.')} />
+              <StatCard etiqueta={t('Proveedores activos')} valor={rankingProveedores.length.toLocaleString(localeActual())} tooltip={t('Proveedores a los que les compraste en el período.')} />
               {saldoProveedoresTotal != null && (
                 <>
                   <StatCard etiqueta={t('Pagado a proveedores')} valor={m(pagadoProveedoresPeriodo)} tooltip={t('Plata que efectivamente les pagaste a proveedores en el período (cuentas por pagar).')} moneda={moneda} tono="text-good" sensible oculto={ocultarMontos} />
@@ -1860,6 +1861,7 @@ export default function Estadisticas() {
           </button>
           <button
             onClick={exportarResumenCSV({
+              t,
               b: actualB,
               ticket,
               porCobrar,
@@ -1884,6 +1886,7 @@ export default function Estadisticas() {
           </button>
           <button
             onClick={exportarResumenPDF({
+              t,
               b: actualB,
               ticket,
               porCobrar,
@@ -2110,7 +2113,7 @@ export default function Estadisticas() {
             </StatCard>
             <StatCard
               etiqueta={t('Operaciones')}
-              valor={actualB.operaciones.toLocaleString('es-AR')}
+              valor={actualB.operaciones.toLocaleString(localeActual())}
               tooltip={t('Cantidad de ventas cobradas en el período.')}
               variacion={comparar ? variacion(actualB.operaciones, prevB.operaciones) : undefined}
             />
@@ -2272,6 +2275,7 @@ function celdaCSV(v: string): string {
 // sola fuente de verdad, para que los dos formatos de exportación (y la
 // pantalla) nunca puedan mostrar números distintos entre sí.
 type ParametrosExport = {
+  t: (texto: string) => string;
   b: { ventas: number; ganancia: number; ingresado: number; credito: number; operaciones: number };
   ticket: number;
   porCobrar: number;
@@ -2337,13 +2341,13 @@ function exportarResumenCSV(p: ParametrosExport) {
   return () => {
     const ahora = new Date();
     const filas: [string, string][] = [
-      ['Negocio', p.nombreNegocio || 'Sin nombre'],
-      ['Generado el', ahora.toLocaleString('es-AR')],
-      ['Zona horaria', Intl.DateTimeFormat().resolvedOptions().timeZone],
-      ['Moneda', p.moneda],
-      ...construirFilasExport(p),
+      [p.t('Negocio'), p.nombreNegocio || p.t('Sin nombre')],
+      [p.t('Generado el'), ahora.toLocaleString(localeActual())],
+      [p.t('Zona horaria'), Intl.DateTimeFormat().resolvedOptions().timeZone],
+      [p.t('Moneda'), p.moneda],
+      ...construirFilasExport(p).map(([k, v]): [string, string] => [p.t(k), k === 'Período' ? p.t(v) : v]),
     ];
-    const csv = `Métrica,Valor (${p.moneda})\n` + filas.map(([k, v]) => `${celdaCSV(k)},${celdaCSV(v)}`).join('\n');
+    const csv = `${p.t('Métrica')},${p.t('Valor')} (${p.moneda})\n` + filas.map(([k, v]) => `${celdaCSV(k)},${celdaCSV(v)}`).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -2369,19 +2373,19 @@ function exportarResumenPDF(p: ParametrosExport) {
     doc.text(p.nombreNegocio || 'Qovento', 14, y);
     y += 8;
     doc.setFontSize(11);
-    doc.text('Analítica del negocio', 14, y);
+    doc.text(p.t('Analítica del negocio'), 14, y);
     y += 6;
     doc.setFontSize(9);
     doc.text(
-      `Generado: ${ahora.toLocaleString('es-AR')} (${Intl.DateTimeFormat().resolvedOptions().timeZone})   ·   Moneda: ${p.moneda}`,
+      `${p.t('Generado')}: ${ahora.toLocaleString(localeActual())} (${Intl.DateTimeFormat().resolvedOptions().timeZone})   ·   ${p.t('Moneda')}: ${p.moneda}`,
       14,
       y
     );
     y += 10;
 
     doc.setFontSize(10);
-    doc.text('Métrica', 14, y);
-    doc.text('Valor', 196, y, { align: 'right' });
+    doc.text(p.t('Métrica'), 14, y);
+    doc.text(p.t('Valor'), 196, y, { align: 'right' });
     y += 2;
     doc.line(14, y, 196, y);
     y += 6;
@@ -2398,8 +2402,8 @@ function exportarResumenPDF(p: ParametrosExport) {
       const texto =
         clave === 'Período' || Number.isNaN(numero)
           ? valor
-          : `${numero < 0 ? '-' : ''}${p.moneda}${Math.abs(numero).toLocaleString('es-AR')}`;
-      doc.text(clave, 14, y);
+          : `${numero < 0 ? '-' : ''}${p.moneda}${Math.abs(numero).toLocaleString(localeActual())}`;
+      doc.text(p.t(clave), 14, y);
       doc.text(texto, 196, y, { align: 'right' });
       y += 6;
     }

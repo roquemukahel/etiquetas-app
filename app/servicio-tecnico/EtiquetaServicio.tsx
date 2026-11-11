@@ -1,4 +1,5 @@
 import { forwardRef } from 'react';
+import { useT } from '../lib/idioma';
 import { TAMANOS, type FormatoEtiqueta } from '../nueva-etiqueta/Etiqueta';
 
 type Props = {
@@ -29,6 +30,7 @@ const EtiquetaServicio = forwardRef<HTMLDivElement, Props>(function EtiquetaServ
   { logo, modelo, identificador, detalle, formato = 'estandar', codigo, qr, cliente },
   ref
 ) {
+  const tt = useT();
   const t = TAMANOS[formato];
   const conSeguimiento = !!(codigo && qr);
 
@@ -57,15 +59,15 @@ const EtiquetaServicio = forwardRef<HTMLDivElement, Props>(function EtiquetaServ
             // eslint-disable-next-line @next/next/no-img-element
             <img src={logo} alt="logo" style={{ height: '96px', maxWidth: '520px', objectFit: 'contain' }} />
           ) : (
-            <span style={{ fontSize: '20px', color: '#000000' }}>tu logo</span>
+            <span style={{ fontSize: '20px', color: '#000000' }}>{tt('tu logo')}</span>
           )}
         </div>
 
-        <p style={{ fontSize: '20px', fontWeight: 700, margin: 0, letterSpacing: '0.06em' }}>SERVICIO TÉCNICO</p>
+        <p style={{ fontSize: '20px', fontWeight: 700, margin: 0, letterSpacing: '0.06em' }}>{tt('Servicio Técnico').toUpperCase()}</p>
 
         <div style={{ width: '100%' }}>
           <p style={{ fontSize: '38px', fontWeight: 700, margin: 0, lineHeight: 1.15, wordBreak: 'break-word' }}>
-            {modelo || 'Modelo'}
+            {modelo || tt('Modelo')}
           </p>
           <p
             style={{
@@ -109,7 +111,7 @@ const EtiquetaServicio = forwardRef<HTMLDivElement, Props>(function EtiquetaServ
               textAlign: conSeguimiento ? 'left' : 'center',
             }}
           >
-            {detalle || 'Sin detalle registrado'}
+            {detalle || tt('Sin detalle registrado')}
           </p>
           {conSeguimiento && <Seguimiento codigo={codigo!} qr={qr!} lado={112} letra={22} color="#000000" />}
         </div>
@@ -141,7 +143,7 @@ const EtiquetaServicio = forwardRef<HTMLDivElement, Props>(function EtiquetaServ
             // eslint-disable-next-line @next/next/no-img-element
             <img src={logo} alt="logo" style={{ height: '84px', maxWidth: '320px', objectFit: 'contain' }} />
           ) : (
-            <span style={{ fontSize: '13px', color: '#8A8780' }}>tu logo</span>
+            <span style={{ fontSize: '13px', color: '#8A8780' }}>{tt('tu logo')}</span>
           )}
         </div>
         <div
@@ -162,7 +164,7 @@ const EtiquetaServicio = forwardRef<HTMLDivElement, Props>(function EtiquetaServ
 
       <div>
         <p style={{ fontSize: '28px', fontWeight: 600, margin: 0, lineHeight: 1.15, wordBreak: 'break-word' }}>
-          {modelo || 'Modelo'}
+          {modelo || tt('Modelo')}
         </p>
         <p style={{ fontSize: '16px', color: '#5F5E5A', margin: '4px 0 0', fontFamily: 'monospace' }}>{identificador}</p>
         {cliente && (
@@ -172,7 +174,7 @@ const EtiquetaServicio = forwardRef<HTMLDivElement, Props>(function EtiquetaServ
 
       <div style={{ borderTop: '1px solid #E5E3DB', paddingTop: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '14px' }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{ fontSize: '11px', color: '#8A8780', margin: '0 0 2px', letterSpacing: '0.02em' }}>Detalle</p>
+          <p style={{ fontSize: '11px', color: '#8A8780', margin: '0 0 2px', letterSpacing: '0.02em' }}>{tt('Detalle')}</p>
           <p
             style={{
               fontSize: '15px',
@@ -184,7 +186,7 @@ const EtiquetaServicio = forwardRef<HTMLDivElement, Props>(function EtiquetaServ
               overflow: 'hidden',
             }}
           >
-            {detalle || 'Sin detalle registrado'}
+            {detalle || tt('Sin detalle registrado')}
           </p>
         </div>
         {conSeguimiento && <Seguimiento codigo={codigo!} qr={qr!} lado={92} letra={15} color="#1C1B19" />}

@@ -3,11 +3,13 @@
 // El resto de la app guarda fotos como base64 sin comprimir — acá conviene
 // hacerlo porque puede haber varias fotos de evidencia por reparación (no
 // una sola, como un logo), y se acumulan.
+import { tr } from './tr';
+
 export function comprimirImagen(file: File, maxAncho = 1280, calidad = 0.72): Promise<string> {
   return new Promise((resolve, reject) => {
     const lector = new FileReader();
     lector.onload = () => reducirImagenDesdeUrl(lector.result as string, maxAncho, calidad).then(resolve, reject);
-    lector.onerror = () => reject(new Error('No se pudo leer el archivo'));
+    lector.onerror = () => reject(new Error(tr('No se pudo leer el archivo')));
     lector.readAsDataURL(file);
   });
 }
@@ -24,7 +26,7 @@ export function reducirImagenDesdeUrl(src: string, maxAncho = 1280, calidad = 0.
       canvas.height = Math.round(img.height * escala);
       const ctx = canvas.getContext('2d');
       if (!ctx) {
-        reject(new Error('No se pudo procesar la imagen'));
+        reject(new Error(tr('No se pudo procesar la imagen')));
         return;
       }
       // JPEG no tiene transparencia: sin fondo blanco, un PNG con fondo
@@ -34,7 +36,7 @@ export function reducirImagenDesdeUrl(src: string, maxAncho = 1280, calidad = 0.
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
       resolve(canvas.toDataURL('image/jpeg', calidad));
     };
-    img.onerror = () => reject(new Error('No se pudo leer la imagen'));
+    img.onerror = () => reject(new Error(tr('No se pudo leer la imagen')));
     img.src = src;
   });
 }

@@ -17,6 +17,7 @@ import {
   type ColumnaRanking,
   type FilaRankingCompleta,
 } from './rankingCompleto';
+import { localeActual } from '../lib/formatoLocal';
 
 type Props = {
   items: ItemProductoR[]; // ya filtrados por período y sucursal (los mismos que usan los rankings de barras)
@@ -56,13 +57,14 @@ export default function RankingDetalle({ items, moneda, puedeVerCostos, ocultarM
     return rankingProductosCompleto(filtrarItemsRanking(items, { categoria, subcategoria }));
   }, [items, categoria, subcategoria, nivelSubcategorias]);
 
-  const ordenadas = useMemo(() => ordenarRanking(filas, orden.col, orden.desc), [filas, orden]);
+  // Los nombres genéricos ("Sin categoría", "Sin modelo"...) se muestran y exportan en el idioma elegido; el orden "por nombre" sigue el texto mostrado.
+  const ordenadas = useMemo(() => ordenarRanking(filas.map((f) => ({ ...f, nombre: t(f.nombre) })), orden.col, orden.desc), [filas, orden, t]);
   const total = useMemo(() => totalDeFilas(filas), [filas]);
 
   const dinero = (n: number | null) => {
     if (n == null) return '—';
     if (ocultarMontos) return '•••';
-    return `${n < 0 ? '-' : ''}${moneda}${Math.abs(Math.round(n)).toLocaleString('es-AR')}`;
+    return `${n < 0 ? '-' : ''}${moneda}${Math.abs(Math.round(n)).toLocaleString(localeActual())}`;
   };
 
   const elegirCategoria = (c: string | null) => {
@@ -74,11 +76,11 @@ export default function RankingDetalle({ items, moneda, puedeVerCostos, ocultarM
   const ordenarPor = (col: ColumnaRanking) => setOrden((o) => (o.col === col ? { col, desc: !o.desc } : { col, desc: col !== 'nombre' }));
 
   const etiquetaPrimera = nivelSubcategorias ? t('Subcategoría') : t('Producto');
-  const titulo = [categoria, subcategoria].filter(Boolean).join(' › ') || t('Todas las categorías');
+  const titulo = [categoria, subcategoria].filter(Boolean).map((x) => t(x as string)).join(' › ') || t('Todas las categorías');
   const nombreArchivo = `ranking-${slug(titulo)}-${slug(etiquetaPeriodo)}`;
 
   const descargarCSV = () => {
-    const csv = armarCSVRanking(ordenadas, puedeVerCostos, etiquetaPrimera);
+    const csv = armarCSVRanking(ordenadas, puedeVerCostos, etiquetaPrimera, t);
     const cabecera = [
       [t('Negocio'), nombreNegocio || 'Qovento'],
       [t('Ranking'), titulo],
@@ -113,10 +115,10 @@ export default function RankingDetalle({ items, moneda, puedeVerCostos, ocultarM
       doc.setFontSize(9);
       doc.text(`${t('Período')}: ${etiquetaPeriodo}   ·   ${t('Sucursal')}: ${etiquetaSucursal}   ·   ${t('Moneda')}: ${moneda}`, 14, y);
       y += 5;
-      doc.text(`${t('Generado')}: ${new Date().toLocaleString('es-AR')}`, 14, y);
+      doc.text(`${t('Generado')}: ${new Date().toLocaleString(localeActual())}`, 14, y);
       y += 9;
 
-      const encabezados = encabezadosRanking(puedeVerCostos, etiquetaPrimera);
+      const encabezados = encabezadosRanking(puedeVerCostos, etiquetaPrimera).map((h) => t(h));
       // Columnas numéricas alineadas a la derecha.
       const xs = puedeVerCostos ? [104, 130, 154, 178, 198] : [130, 170];
       const dibujarEncabezado = () => {
@@ -146,10 +148,10 @@ export default function RankingDetalle({ items, moneda, puedeVerCostos, ocultarM
             v === ''
               ? '—'
               : esDinero
-                ? `${Number(v) < 0 ? '-' : ''}${moneda}${Math.abs(Number(v)).toLocaleString('es-AR')}`
+                ? `${Number(v) < 0 ? '-' : ''}${moneda}${Math.abs(Number(v)).toLocaleString(localeActual())}`
                 : i === 4
                   ? `${v}%`
-                  : Number(v).toLocaleString('es-AR');
+                  : Number(v).toLocaleString(localeActual());
           doc.text(texto, xs[i], y, { align: 'right' });
         });
         y += 5.5;
@@ -195,14 +197,14 @@ export default function RankingDetalle({ items, moneda, puedeVerCostos, ocultarM
                     }}
                     className="hover:underline"
                   >
-                    {categoria}
+                    {t(categoria)}
                   </button>
                 </>
               )}
               {subcategoria && (
                 <>
                   <span>›</span>
-                  <span className="text-text dark:text-dark-text">{subcategoria}</span>
+                  <span className="text-text dark:text-dark-text">{t(subcategoria)}</span>
                 </>
               )}
             </nav>
@@ -225,7 +227,7 @@ export default function RankingDetalle({ items, moneda, puedeVerCostos, ocultarM
             <option value="">{t('Todas las categorías')}</option>
             {categorias.map((c) => (
               <option key={c} value={c}>
-                {c}
+                {t(c)}
               </option>
             ))}
           </select>
@@ -242,7 +244,7 @@ export default function RankingDetalle({ items, moneda, puedeVerCostos, ocultarM
               <option value="">{t('Todas las subcategorías')}</option>
               {subcategoriasDeLaCategoria.map((s) => (
                 <option key={s} value={s}>
-                  {s}
+                  {t(s)}
                 </option>
               ))}
             </select>
@@ -297,19 +299,19 @@ export default function RankingDetalle({ items, moneda, puedeVerCostos, ocultarM
                   <tr
                     key={f.clave}
                     className={`border-b border-border/60 dark:border-dark-border/60 ${nivelSubcategorias ? 'cursor-pointer hover:bg-canvas dark:hover:bg-dark-bg' : ''}`}
-                    onClick={nivelSubcategorias ? () => setSubcategoria(f.nombre) : undefined}
+                    onClick={nivelSubcategorias ? () => setSubcategoria(f.clave) : undefined}
                   >
                     <td className="px-3 py-2 text-xs text-muted dark:text-dark-text-secondary">{i + 1}</td>
                     <td className="px-3 py-2 font-medium">
                       {nivelSubcategorias ? (
-                        <button className="text-left hover:underline" onClick={() => setSubcategoria(f.nombre)}>
+                        <button className="text-left hover:underline" onClick={() => setSubcategoria(f.clave)}>
                           {f.nombre} ›
                         </button>
                       ) : (
                         f.nombre
                       )}
                     </td>
-                    <td className="px-3 py-2 text-right">{f.unidades.toLocaleString('es-AR')}</td>
+                    <td className="px-3 py-2 text-right">{f.unidades.toLocaleString(localeActual())}</td>
                     <td className="px-3 py-2 text-right">{dinero(f.facturacion)}</td>
                     {puedeVerCostos && (
                       <>
@@ -325,7 +327,7 @@ export default function RankingDetalle({ items, moneda, puedeVerCostos, ocultarM
                 <tr className="font-semibold bg-canvas dark:bg-dark-bg">
                   <td className="px-3 py-2" />
                   <td className="px-3 py-2">{t('Total')}</td>
-                  <td className="px-3 py-2 text-right">{total.unidades.toLocaleString('es-AR')}</td>
+                  <td className="px-3 py-2 text-right">{total.unidades.toLocaleString(localeActual())}</td>
                   <td className="px-3 py-2 text-right">{dinero(total.facturacion)}</td>
                   {puedeVerCostos && (
                     <>

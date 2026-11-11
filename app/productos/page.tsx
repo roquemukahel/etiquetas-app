@@ -422,8 +422,8 @@ export default function Productos() {
     const elegidas = filas.filter((f) => seleccion.has(f.clave));
     if (elegidas.length === 0) return;
     const destino = categoriaMasiva || null;
-    const nombreDestino = destino ? etiquetaCategoria(destino, categorias) : t('Sin categoría');
-    if (!confirm(`${t('¿Asignar')} "${nombreDestino}" ${t('a los')} ${elegidas.length} ${t('productos elegidos?')}`)) return;
+    const nombreDestino = destino ? etiquetaCategoria(destino, categorias) : 'Sin categoría';
+    if (!confirm(`${t('¿Asignar')} "${t(nombreDestino)}" ${t('a los')} ${elegidas.length} ${t('productos elegidos?')}`)) return;
     setAplicandoMasivo(true);
     const idsMaestro = elegidas.map((f) => f.maestroId).filter((x): x is string => !!x);
     const idsEquipos = elegidas.flatMap((f) => f.dispositivoIds);

@@ -141,8 +141,9 @@ export function filasParaExportar(filas: FilaRankingCompleta[], conCostos: boole
   ]);
 }
 
-export function armarCSVRanking(filas: FilaRankingCompleta[], conCostos: boolean, etiquetaPrimera: string): string {
-  const encabezado = encabezadosRanking(conCostos, etiquetaPrimera).map(celdaCSV).join(',');
+// `tr` traduce los encabezados al idioma de quien exporta (por defecto quedan en español).
+export function armarCSVRanking(filas: FilaRankingCompleta[], conCostos: boolean, etiquetaPrimera: string, tr: (texto: string) => string = (s) => s): string {
+  const encabezado = encabezadosRanking(conCostos, etiquetaPrimera).map((h) => celdaCSV(tr(h))).join(',');
   const cuerpo = filasParaExportar(filas, conCostos).map((fila) => fila.map(celdaCSV).join(','));
   return [encabezado, ...cuerpo].join('\n');
 }

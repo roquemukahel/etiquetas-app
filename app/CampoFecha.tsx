@@ -1,5 +1,8 @@
 'use client';
 
+import { useT } from './lib/idioma';
+import { localeActual } from './lib/formatoLocal';
+
 // Selector de fecha Día/Mes/Año — reemplaza <input type="date"> en todo el
 // proyecto. El motivo: el orden en que un <input type="date"> nativo MUESTRA
 // la fecha (DD/MM vs MM/DD) lo decide el idioma configurado en el NAVEGADOR
@@ -8,7 +11,12 @@
 // haya forma de evitarlo con un <input type="date">. Tres <select> elimina
 // la ambigüedad para cualquiera, siempre. Mismo contrato que el input nativo
 // que reemplaza: value/onChange en 'YYYY-MM-DD'.
-const MESES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+// Nombres de los meses en el idioma elegido (es-AR / pt-BR / en-US), con la primera en mayúscula.
+const nombresMeses = (locale: string) =>
+  Array.from({ length: 12 }, (_, i) => {
+    const n = new Date(2000, i, 1).toLocaleDateString(locale, { month: 'short' }).replace('.', '');
+    return n.charAt(0).toUpperCase() + n.slice(1);
+  });
 
 function diasEnMes(anio: number, mes: number): number {
   return new Date(anio, mes, 0).getDate();
@@ -31,6 +39,7 @@ export default function CampoFecha({
   ancho?: 'auto' | 'completo'; // 'auto' = compacto en línea (filtros) · 'completo' = ocupa el ancho del formulario
   ariaLabel?: string;
 }) {
+  const t = useT();
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || '');
   const anio = m ? Number(m[1]) : undefined;
   const mes = m ? Number(m[2]) : undefined;
@@ -61,7 +70,7 @@ export default function CampoFecha({
         className={`${clase} ${anchoSelect}`}
       >
         <option value="" disabled>
-          Día
+          {t('Día')}
         </option>
         {Array.from({ length: mes && anio ? diasEnMes(anio, mes) : 31 }, (_, i) => i + 1).map((d) => (
           <option key={d} value={d}>
@@ -76,9 +85,9 @@ export default function CampoFecha({
         className={`${clase} ${anchoSelect}`}
       >
         <option value="" disabled>
-          Mes
+          {t('Mes')}
         </option>
-        {MESES.map((nombre, i) => (
+        {nombresMeses(localeActual()).map((nombre, i) => (
           <option key={nombre} value={i + 1}>
             {nombre}
           </option>
@@ -91,7 +100,7 @@ export default function CampoFecha({
         className={`${clase} ${anchoSelect}`}
       >
         <option value="" disabled>
-          Año
+          {t('Año')}
         </option>
         {anios.map((a) => (
           <option key={a} value={a}>

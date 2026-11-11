@@ -89,13 +89,13 @@ export default function ControlCalidad({
         return (
           <div key={item} className="border-b border-border dark:border-dark-border py-2 flex flex-col gap-1.5 last:border-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="basis-full sm:basis-0 sm:flex-1 min-w-0 text-sm">{item}</span>
+              <span className="basis-full sm:basis-0 sm:flex-1 min-w-0 text-sm">{t(item)}</span>
               {fotoActual && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={fotoActual} alt="" className="h-8 w-8 rounded object-cover shrink-0" />
               )}
               {!soloLectura && (
-                <label className="shrink-0 cursor-pointer text-muted dark:text-dark-text-secondary" aria-label={`${t('Foto de')} ${item}`}>
+                <label className="shrink-0 cursor-pointer text-muted dark:text-dark-text-secondary" aria-label={`${t('Foto de')} ${t(item)}`}>
                   <span aria-hidden="true" className="[&_svg]:h-4 [&_svg]:w-4 inline-flex">
                     {ICONOS.camara}
                   </span>
@@ -108,7 +108,7 @@ export default function ControlCalidad({
                     key={res.id}
                     disabled={soloLectura}
                     onClick={() => guardar(item, res.id)}
-                    aria-label={`${item}: ${res.titulo}`}
+                    aria-label={`${t(item)}: ${res.titulo}`}
                     aria-pressed={reg?.resultado === res.id}
                     title={res.titulo}
                     className={`h-7 w-7 rounded-lg text-xs flex items-center justify-center disabled:opacity-50 ${

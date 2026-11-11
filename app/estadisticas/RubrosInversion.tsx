@@ -18,6 +18,7 @@ import {
   type CompraRubroR,
   type StockRubroR,
 } from './rubros';
+import { localeActual } from '../lib/formatoLocal';
 
 // Pestaña "Inversión por rubro": cuánto se compró, cuánto vale el inventario a
 // costo, cuánto se recuperó con las ventas, rotación y alertas de agotamiento.
@@ -181,7 +182,7 @@ export default function RubrosInversion({ supabase, rango, sucursalId, sucursale
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard etiqueta={t('Comprado en el período')} valor={m(totalCompras)} tooltip={t('Compras a proveedores del período (equipos cargados al stock con proveedor + compras cargadas a mano), por rubro.')} moneda={moneda} sensible oculto={ocultarMontos} />
         <StatCard etiqueta={t('Inventario a costo')} valor={m(totalInv.costoTotal)} tooltip={t('Lo que costó todo el stock que hay hoy (equipos y accesorios), valuado al costo cargado.')} moneda={moneda} sensible oculto={ocultarMontos} />
-        <StatCard etiqueta={t('Unidades en stock')} valor={totalInv.unidades.toLocaleString('es-AR')} tooltip={t('Equipos disponibles más unidades de accesorios, hoy.')} />
+        <StatCard etiqueta={t('Unidades en stock')} valor={totalInv.unidades.toLocaleString(localeActual())} tooltip={t('Equipos disponibles más unidades de accesorios, hoy.')} />
         <StatCard
           etiqueta={t('Stock sin costo cargado')}
           valor={`${ceil1(totalInv.pctSinCosto)}%`}
@@ -259,7 +260,7 @@ export default function RubrosInversion({ supabase, rango, sucursalId, sucursale
                 {inventario.map((f) => (
                   <tr key={f.rubro}>
                     <td className={`${td} font-medium`}>{f.rubro}</td>
-                    <td className={td}>{f.unidades.toLocaleString('es-AR')}</td>
+                    <td className={td}>{f.unidades.toLocaleString(localeActual())}</td>
                     <td className={td}>{m(f.costoTotal)}</td>
                     <td className={`${td} ${f.pctSinCosto > 0 ? 'text-warn' : ''}`}>{ceil1(f.pctSinCosto)}%</td>
                     {mostrarPorSucursal &&
@@ -272,7 +273,7 @@ export default function RubrosInversion({ supabase, rango, sucursalId, sucursale
                 ))}
                 <tr>
                   <td className={`${td} font-semibold`}>{t('Total')}</td>
-                  <td className={`${td} font-semibold`}>{totalInv.unidades.toLocaleString('es-AR')}</td>
+                  <td className={`${td} font-semibold`}>{totalInv.unidades.toLocaleString(localeActual())}</td>
                   <td className={`${td} font-semibold`}>{m(totalInv.costoTotal)}</td>
                   <td className={`${td} font-semibold`}>{ceil1(totalInv.pctSinCosto)}%</td>
                   {mostrarPorSucursal && sucursalesVisibles.map((s) => <td key={s.id} className={td} />)}
@@ -311,7 +312,7 @@ export default function RubrosInversion({ supabase, rango, sucursalId, sucursale
                     <td className={td}>{f.ventasConCosto > 0 ? m(f.costoVendido) : '—'}</td>
                     <td className={td}>{m(f.ventas)}</td>
                     <td className={`${td} ${f.margen < 0 ? 'text-bad' : f.margen > 0 ? 'text-good' : ''}`}>{f.ventasConCosto > 0 ? m(f.margen) : '—'}</td>
-                    <td className={td}>{f.unidadesStock > 0 ? `${m(f.stockCosto)} (${f.unidadesStock.toLocaleString('es-AR')} u.)` : '—'}</td>
+                    <td className={td}>{f.unidadesStock > 0 ? `${m(f.stockCosto)} (${f.unidadesStock.toLocaleString(localeActual())} u.)` : '—'}</td>
                     <td className={td}>{f.pctRecuperado != null ? `${Math.round(f.pctRecuperado)}%` : '—'}</td>
                   </tr>
                 ))}
@@ -353,8 +354,8 @@ export default function RubrosInversion({ supabase, rango, sucursalId, sucursale
                     <tr key={f.rubro}>
                       <td className={`${td} font-medium`}>{f.rubro}</td>
                       <td className={td}>{f.diasDeStock != null ? Math.round(f.diasDeStock) : t('Sin ventas')}</td>
-                      <td className={td}>{f.unidadesVendidas.toLocaleString('es-AR')}</td>
-                      <td className={td}>{f.unidadesStock.toLocaleString('es-AR')}</td>
+                      <td className={td}>{f.unidadesVendidas.toLocaleString(localeActual())}</td>
+                      <td className={td}>{f.unidadesStock.toLocaleString(localeActual())}</td>
                     </tr>
                   ))}
               </tbody>
@@ -380,8 +381,8 @@ export default function RubrosInversion({ supabase, rango, sucursalId, sucursale
               <tbody>
                 {fotosPorMes.map((f) => (
                   <tr key={f.mes}>
-                    <td className={`${td} font-medium`}>{new Date(f.mes + 'T00:00:00').toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })}</td>
-                    <td className={td}>{f.unidades.toLocaleString('es-AR')}</td>
+                    <td className={`${td} font-medium`}>{new Date(f.mes + 'T00:00:00').toLocaleDateString(localeActual(), { month: 'long', year: 'numeric' })}</td>
+                    <td className={td}>{f.unidades.toLocaleString(localeActual())}</td>
                     <td className={td}>{m(f.costo)}</td>
                     <td className={td}>{f.unidades > 0 ? `${ceil1((f.sinCosto / f.unidades) * 100)}%` : '—'}</td>
                   </tr>

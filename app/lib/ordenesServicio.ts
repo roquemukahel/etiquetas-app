@@ -3,6 +3,7 @@ import { getActor } from './actor';
 import { vencimientoDesdeHoy } from './cuentaCorriente';
 import { crearPlanFinanciacion } from './financiacion/servicio';
 import { formatearGB } from './almacenamiento';
+import { tr } from './tr';
 
 // Datos mínimos de una reparación necesarios para armar/actualizar su orden de
 // cobro. Se aceptan además los campos del checklist de ingreso (para la nota de
@@ -88,7 +89,7 @@ export async function generarOrdenDeReparacion(
   if (generarCargo && r.orden_cobro_id) {
     const yaTiene = await ordenYaTieneCargoCuentaCorriente(supabase, r.orden_cobro_id);
     if (yaTiene === null) {
-      return { ordenId: null, total, error: 'No pudimos verificar si esta orden ya está cargada a la cuenta corriente. Probá de nuevo.' };
+      return { ordenId: null, total, error: tr('No pudimos verificar si esta orden ya está cargada a la cuenta corriente. Probá de nuevo.') };
     }
     generarCargo = !yaTiene;
   }
@@ -133,7 +134,7 @@ export async function generarOrdenDeReparacion(
       .from('ordenes')
       .update({ total, forma_pago: r.forma_pago || 'Efectivo', nota: notaCondicion, aclaraciones_tecnico: aclaracionesTecnico })
       .eq('id', ordenId);
-    if (updateError) return { ordenId: null, total, error: 'No pudimos actualizar la orden: ' + updateError.message };
+    if (updateError) return { ordenId: null, total, error: tr('No pudimos actualizar la orden: ') + updateError.message };
 
     const { data: itemExistente, error: itemBuscarError } = await supabase
       .from('orden_items')
@@ -143,7 +144,7 @@ export async function generarOrdenDeReparacion(
       .maybeSingle();
     // Si esto falla por un error real (no porque no exista el ítem), no hay que
     // asumir que no existe: insertar acá duplicaría la línea de la boleta.
-    if (itemBuscarError) return { ordenId: null, total, error: 'No pudimos actualizar el ítem de la orden: ' + itemBuscarError.message };
+    if (itemBuscarError) return { ordenId: null, total, error: tr('No pudimos actualizar el ítem de la orden: ') + itemBuscarError.message };
 
     // El ítem es lo que se imprime en la boleta y lo que suma la caja: si no se
     // pudo guardar hay que cortar acá, no seguir como si la orden estuviera bien.
@@ -152,7 +153,7 @@ export async function generarOrdenDeReparacion(
       : await supabase
           .from('orden_items')
           .insert({ orden_id: ordenId, descripcion, cantidad: 1, precio_unitario: total, costo: costoRepuestos, tipo: 'trabajo' });
-    if (itemGuardarError) return { ordenId: null, total, error: 'No pudimos guardar el ítem de la orden: ' + itemGuardarError.message };
+    if (itemGuardarError) return { ordenId: null, total, error: tr('No pudimos guardar el ítem de la orden: ') + itemGuardarError.message };
   } else {
     // Reparaciones sin cliente al recibirse (equipo propio) o cargadas antes de
     // que se armara la orden en el ingreso: se crea acá.
@@ -169,7 +170,7 @@ export async function generarOrdenDeReparacion(
       })
       .select()
       .single();
-    if (ordenError || !orden) return { ordenId: null, total, error: 'No pudimos generar la orden: ' + (ordenError?.message || '') };
+    if (ordenError || !orden) return { ordenId: null, total, error: tr('No pudimos generar la orden: ') + (ordenError?.message || '') };
 
     ordenId = orden.id;
     const { error: itemNuevoError } = await supabase.from('orden_items').insert({
@@ -183,7 +184,7 @@ export async function generarOrdenDeReparacion(
     if (itemNuevoError) {
       // Una orden sin su ítem quedaría en $0 para siempre: se deshace.
       await supabase.from('ordenes').delete().eq('id', orden.id);
-      return { ordenId: null, total, error: 'No pudimos guardar el ítem de la orden: ' + itemNuevoError.message };
+      return { ordenId: null, total, error: tr('No pudimos guardar el ítem de la orden: ') + itemNuevoError.message };
     }
   }
 
@@ -199,7 +200,7 @@ export async function generarOrdenDeReparacion(
   if (marcarEntregado) cambiosReparacion.estado = 'entregado';
 
   const { error: repError } = await supabase.from('reparaciones').update(cambiosReparacion).eq('id', r.id);
-  if (repError) return { ordenId, total, error: 'La orden se generó pero no pudimos actualizar la reparación: ' + repError.message };
+  if (repError) return { ordenId, total, error: tr('La orden se generó pero no pudimos actualizar la reparación: ') + repError.message };
 
   // Cuenta corriente / financiamiento: solo la primera vez (generarCargo ya
   // descartó las órdenes con cargo existente) y solo si de verdad queda algo
@@ -219,7 +220,7 @@ export async function generarOrdenDeReparacion(
         observaciones: 'Financiación generada al cobrar un Servicio Técnico.',
         sucursalId: opciones.sucursalId ?? null,
       });
-      if ('error' in resultadoPlan) return { ordenId, total, error: 'La orden se generó pero no pudimos crear el plan de financiación: ' + resultadoPlan.error };
+      if ('error' in resultadoPlan) return { ordenId, total, error: tr('La orden se generó pero no pudimos crear el plan de financiación: ') + resultadoPlan.error };
     } else {
       const actor = getActor();
       const { error: movError } = await supabase.from('cta_cte_movimientos').insert({
@@ -234,7 +235,7 @@ export async function generarOrdenDeReparacion(
         registrado_por_foto_url: actor?.fotoUrl ?? null,
         ...(opciones.sucursalId ? { sucursal_id: opciones.sucursalId } : {}),
       });
-      if (movError) return { ordenId, total, error: 'La orden se generó pero no pudimos cargarla a la cuenta corriente: ' + movError.message };
+      if (movError) return { ordenId, total, error: tr('La orden se generó pero no pudimos cargarla a la cuenta corriente: ') + movError.message };
     }
   }
 

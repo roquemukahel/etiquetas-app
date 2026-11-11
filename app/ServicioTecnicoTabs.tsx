@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { ICONOS } from './Iconos';
+import { useT } from './lib/idioma';
 
 export type SeccionServicioTecnico = 'reparaciones' | 'mibanco' | 'tecnicos' | 'repuestos' | 'servicios' | 'proveedores' | 'metricas';
 
@@ -42,6 +43,7 @@ export default function ServicioTecnicoTabs({
   onSelectMiBanco?: () => void;
   onSelectTecnicos?: () => void;
 }) {
+  const tt = useT();
   const handlers: Partial<Record<SeccionServicioTecnico, () => void>> = {
     reparaciones: onSelectReparaciones,
     mibanco: onSelectMiBanco,
@@ -49,34 +51,34 @@ export default function ServicioTecnicoTabs({
   };
   return (
     <nav
-      aria-label="Secciones de Servicio Técnico"
+      aria-label={tt('Secciones de Servicio Técnico')}
       className="flex gap-1 overflow-x-auto -mx-6 px-6 sm:mx-0 sm:px-0 border-b border-border dark:border-dark-border"
     >
-      {ITEMS.filter((t) => t.key !== 'mibanco' || mostrarMiBanco).map((t) => {
-        const activo = t.key === active;
+      {ITEMS.filter((it) => it.key !== 'mibanco' || mostrarMiBanco).map((it) => {
+        const activo = it.key === active;
         const claseComun = `shrink-0 flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent dark:focus-visible:ring-dark-accent rounded-t-md ${
           activo
             ? 'border-accent dark:border-dark-accent text-accent dark:text-dark-accent'
             : 'border-transparent text-muted dark:text-dark-text-secondary hover:text-ink dark:hover:text-dark-text hover:border-border dark:hover:border-dark-border'
         }`;
-        const handler = handlers[t.key];
+        const handler = handlers[it.key];
         const contenido = (
           <>
             <span aria-hidden="true" className="[&_svg]:h-4 [&_svg]:w-4">
-              {ICONOS[t.icono]}
+              {ICONOS[it.icono]}
             </span>
-            {t.label}
+            {tt(it.label)}
           </>
         );
         if (handler) {
           return (
-            <button key={t.key} type="button" aria-current={activo ? 'page' : undefined} onClick={handler} className={claseComun}>
+            <button key={it.key} type="button" aria-current={activo ? 'page' : undefined} onClick={handler} className={claseComun}>
               {contenido}
             </button>
           );
         }
         return (
-          <Link key={t.key} href={t.href} aria-current={activo ? 'page' : undefined} className={claseComun}>
+          <Link key={it.key} href={it.href} aria-current={activo ? 'page' : undefined} className={claseComun}>
             {contenido}
           </Link>
         );

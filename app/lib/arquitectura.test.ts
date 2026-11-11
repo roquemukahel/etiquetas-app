@@ -306,3 +306,33 @@ describe('traducciones', () => {
     expect(faltan, 'Texto nuevo sin traducir: agregalo a app/lib/i18n/en.ts y pt.ts\n' + faltan.join('\n')).toEqual([]);
   });
 });
+
+// Etiquetas de menús, tarjetas y listas que se escriben como texto fijo en un objeto (label/titulo/desc...) y después se muestran con
+// t(variable): el guard de arriba solo ve t("literal"), así que una etiqueta nueva sin traducir pasaba sin aviso (pasó con las
+// pestañas de Servicio Técnico y las descripciones de Configuración). El panel de super-admin es solo en español a propósito.
+describe('traducciones de etiquetas en objetos', () => {
+  it('toda etiqueta literal (label, titulo, desc, descripcion, etiqueta, tooltip, ayuda, subtitulo) tiene traducción', () => {
+    const PROPS = new Set(['label', 'titulo', 'desc', 'descripcion', 'etiqueta', 'tooltip', 'ayuda', 'subtitulo']);
+    const faltan: string[] = [];
+    for (const { archivo, sf } of fuentes) {
+      if (archivo.includes('/i18n/') || archivo.startsWith('app/admin/') || /ThemeToggle|LandingPublica|LandingContacto|app\/privacidad|app\/terminos/.test(archivo)) continue;
+      const visitar = (n: ts.Node) => {
+        if (
+          ts.isPropertyAssignment(n) &&
+          (ts.isIdentifier(n.name) || ts.isStringLiteral(n.name)) &&
+          PROPS.has(n.name.text) &&
+          (ts.isStringLiteral(n.initializer) || ts.isNoSubstitutionTemplateLiteral(n.initializer))
+        ) {
+          const s = n.initializer.text;
+          // texto para personas (no clases CSS ni códigos): empieza con letra, tiene al menos una palabra de 3 letras y no es solo minúsculas-guion
+          if (/^[A-Za-zÁÉÍÓÚáéíóúñÑ¿¡]/.test(s) && /[a-záéíóúñ]{3}/.test(s) && !/^[a-z]+(-[a-z0-9/\[\]:.]+)+$/.test(s) && !(s in EN && s in PT)) {
+            faltan.push(`${archivo}:${linea(sf, n)}  ${n.name.text}=${JSON.stringify(s).slice(0, 90)}`);
+          }
+        }
+        ts.forEachChild(n, visitar);
+      };
+      visitar(sf);
+    }
+    expect(faltan, 'Etiqueta sin traducir: agregala a app/lib/i18n/en.ts y pt.ts\n' + faltan.join('\n')).toEqual([]);
+  });
+});

@@ -19,6 +19,7 @@ import {
   aFechaISO,
   type CuotaParaAplicar,
 } from './motor';
+import { tr } from '../tr';
 
 export type PlanFinanciacion = {
   id: string;
@@ -64,7 +65,7 @@ export async function crearPlanFinanciacion(
   }
 ): Promise<{ planId: string; cuotas: ReturnType<typeof generarCronograma> } | { error: string }> {
   const importeFinanciado = params.importeOriginal - params.entregaInicial;
-  if (importeFinanciado <= 0) return { error: 'La entrega inicial no puede ser mayor o igual al importe de la venta.' };
+  if (importeFinanciado <= 0) return { error: tr('La entrega inicial no puede ser mayor o igual al importe de la venta.') };
 
   let cuotas;
   try {
@@ -75,7 +76,7 @@ export async function crearPlanFinanciacion(
       decimales: decimalesMoneda(params.moneda),
     });
   } catch (e) {
-    return { error: e instanceof Error ? e.message : 'No se pudo armar el cronograma.' };
+    return { error: e instanceof Error ? e.message : tr('No se pudo armar el cronograma.') };
   }
 
   const actor = getActor();
@@ -124,7 +125,7 @@ export async function aplicarPagoAFinanciacion(
     .eq('financiacion_planes.moneda', params.moneda)
     .eq('financiacion_planes.estado', 'activo')
     .eq('estado', 'pendiente');
-  if (fetchError) return { error: 'No pudimos revisar las cuotas pendientes: ' + fetchError.message };
+  if (fetchError) return { error: tr('No pudimos revisar las cuotas pendientes: ') + fetchError.message };
 
   const cuotas: CuotaParaAplicar[] = ((cuotasData as any[]) ?? []).map((c) => ({
     id: c.id,
@@ -210,7 +211,7 @@ export async function registrarCobroFinanciamiento(
     p_orden_original_id: params.ordenOriginalId ?? null,
     p_usuario: actor?.nombre ?? null,
   });
-  if (error || !data) return { error: 'No pudimos registrar el cobro: ' + (error?.message ?? '') };
+  if (error || !data) return { error: tr('No pudimos registrar el cobro: ') + (error?.message ?? '') };
   const ordenId = (data as { orden_id: string; pago_id: string }).orden_id;
   const pagoId = (data as { orden_id: string; pago_id: string }).pago_id;
 
@@ -237,7 +238,7 @@ export async function registrarCobroFinanciamiento(
       auditoria,
     ]);
     if (errorCuotas && !/PGRST202|Could not find the function/i.test(`${errorCuotas.code ?? ''} ${errorCuotas.message ?? ''}`)) {
-      return { ordenId, avisoCuotas: 'El pago se registró, pero no pudimos aplicarlo a las cuotas: ' + errorCuotas.message };
+      return { ordenId, avisoCuotas: tr('El pago se registró, pero no pudimos aplicarlo a las cuotas: ') + errorCuotas.message };
     }
     return { ordenId };
   }
@@ -259,7 +260,7 @@ export async function registrarCobroFinanciamiento(
   ]);
 
   if ('error' in resultadoCuotas) {
-    return { ordenId, avisoCuotas: 'El pago se registró, pero no pudimos aplicarlo a las cuotas: ' + resultadoCuotas.error };
+    return { ordenId, avisoCuotas: tr('El pago se registró, pero no pudimos aplicarlo a las cuotas: ') + resultadoCuotas.error };
   }
   return { ordenId };
 }
@@ -295,7 +296,7 @@ export async function registrarCobroConEquipo(
     })
     .select('id')
     .single();
-  if (canjeError || !canje) return { error: 'No pudimos cargar el equipo: ' + (canjeError?.message ?? 'error desconocido') };
+  if (canjeError || !canje) return { error: tr('No pudimos cargar el equipo: ') + (canjeError?.message ?? tr('error desconocido')) };
   const canjeId = (canje as { id: string }).id;
   const descripcion = descripcionDelEquipo(equipo);
 
@@ -307,7 +308,7 @@ export async function registrarCobroConEquipo(
   if ('error' in resultado) {
     // Rollback del equipo recién cargado (todavía no está atado a nada ni lo vio nadie).
     const { error: errorDescarte } = await supabase.from('canjes').delete().eq('id', canjeId);
-    if (errorDescarte) return { error: resultado.error + ' (y el equipo cargado quedó en Plan Canje sin pago: eliminalo desde ahí)' };
+    if (errorDescarte) return { error: resultado.error + tr(' (y el equipo cargado quedó en Plan Canje sin pago: eliminalo desde ahí)') };
     return resultado;
   }
 
@@ -319,7 +320,7 @@ export async function registrarCobroConEquipo(
     valorNuevo: { cliente_id: cobro.clienteId, monto: cobro.monto, orden_id: resultado.ordenId },
   });
   if (errorVinculo) {
-    return { ...resultado, avisoCuotas: [resultado.avisoCuotas, 'El pago y el equipo se registraron, pero el equipo no quedó vinculado a la boleta: ' + errorVinculo.message].filter(Boolean).join(' ') };
+    return { ...resultado, avisoCuotas: [resultado.avisoCuotas, tr('El pago y el equipo se registraron, pero el equipo no quedó vinculado a la boleta: ') + errorVinculo.message].filter(Boolean).join(' ') };
   }
   return resultado;
 }
@@ -339,7 +340,7 @@ export async function corregirMontoPago(
     .select('cuota_id, monto_aplicado')
     .eq('pago_id', params.pagoId)
     .eq('tipo', 'pago');
-  if (apsError) return { error: 'No pudimos revisar a qué cuotas se aplicó el pago: ' + apsError.message };
+  if (apsError) return { error: tr('No pudimos revisar a qué cuotas se aplicó el pago: ') + apsError.message };
   const aplicaciones = ((apsData as AplicacionAnterior[]) ?? []).map((a) => ({ cuota_id: a.cuota_id, monto_aplicado: Number(a.monto_aplicado) }));
 
   // Cuotas en juego: las pendientes del cliente (igual que al cobrar) + las que este pago tocó.
@@ -351,13 +352,13 @@ export async function corregirMontoPago(
     .eq('financiacion_planes.estado', 'activo')
     .eq('estado', 'pendiente')
     .limit(1000); // las cuotas pendientes de UN cliente
-  if (pendError) return { error: 'No pudimos revisar las cuotas del cliente: ' + pendError.message };
+  if (pendError) return { error: tr('No pudimos revisar las cuotas del cliente: ') + pendError.message };
   const cuotas = new Map<string, CuotaParaCorregir>();
   for (const c of (pendData as any[]) ?? []) cuotas.set(c.id, { id: c.id, importe_original: Number(c.importe_original), importe_pagado: Number(c.importe_pagado) });
   const saldoCuotasPendientes = Array.from(cuotas.values()).reduce((a, c) => a + Math.max(0, c.importe_original - c.importe_pagado), 0);
   for (const lote of enLotes(aplicaciones.map((a) => a.cuota_id))) {
     const { data, error } = await supabase.from('financiacion_cuotas').select('id, importe_original, importe_pagado').in('id', lote);
-    if (error) return { error: 'No pudimos revisar las cuotas del pago: ' + error.message };
+    if (error) return { error: tr('No pudimos revisar las cuotas del pago: ') + error.message };
     for (const c of (data as any[]) ?? []) cuotas.set(c.id, { id: c.id, importe_original: Number(c.importe_original), importe_pagado: Number(c.importe_pagado) });
   }
 
@@ -369,12 +370,12 @@ export async function corregirMontoPago(
     saldoCuotasPendientes,
   });
   if (tope != null && params.nuevoMonto > tope + 0.01) {
-    return { error: 'El monto no puede ser mayor a ' + Math.round(tope * 100) / 100 + ': es lo máximo que ese pago puede cubrir de lo que se debe.' };
+    return { error: tr('El monto no puede ser mayor a ') + Math.round(tope * 100) / 100 + tr(': es lo máximo que ese pago puede cubrir de lo que se debe.') };
   }
 
   if (aplicaciones.length > 0) {
     const { error: revertError } = await supabase.rpc('financiacion_revertir_pago', { p_pago_id: params.pagoId, p_usuario: actor?.nombre ?? null });
-    if (revertError) return { error: 'No pudimos desarmar el reparto a cuotas: ' + revertError.message };
+    if (revertError) return { error: tr('No pudimos desarmar el reparto a cuotas: ') + revertError.message };
   }
 
   const { error: corregirError } = await supabase.rpc('cta_cte_corregir_monto_pago', {
@@ -390,7 +391,7 @@ export async function corregirMontoPago(
         p_asignaciones: aplicaciones.map((a) => ({ cuota_id: a.cuota_id, monto: a.monto_aplicado })),
         p_usuario: actor?.nombre ?? null,
       });
-      if (restaurarError) return { error: corregirError.message + ' (y no pudimos dejar las cuotas como estaban: revisalas en Financiación — ' + restaurarError.message + ')' };
+      if (restaurarError) return { error: corregirError.message + tr(' (y no pudimos dejar las cuotas como estaban: revisalas en Financiación — ') + restaurarError.message + ')' };
     }
     return { error: corregirError.message };
   }
@@ -404,8 +405,8 @@ export async function corregirMontoPago(
       moneda: params.moneda,
       cuotaIdElegida: aplicaciones.length === 1 ? aplicaciones[0].cuota_id : undefined,
     });
-    if ('error' in reaplicado) aviso = 'El monto se corrigió, pero no pudimos volver a aplicarlo a las cuotas: ' + reaplicado.error;
-    else if (reaplicado.sobrante > 0.01) aviso = 'El monto se corrigió, pero ' + Math.round(reaplicado.sobrante * 100) / 100 + ' no entraron en ninguna cuota pendiente.';
+    if ('error' in reaplicado) aviso = tr('El monto se corrigió, pero no pudimos volver a aplicarlo a las cuotas: ') + reaplicado.error;
+    else if (reaplicado.sobrante > 0.01) aviso = tr('El monto se corrigió, pero ') + Math.round(reaplicado.sobrante * 100) / 100 + tr(' no entraron en ninguna cuota pendiente.');
   }
 
   await registrarAuditoria(supabase, {
@@ -495,7 +496,7 @@ export async function reprogramarFinanciacion(
       decimales: decimalesMoneda(params.moneda),
     });
   } catch (e) {
-    return { error: e instanceof Error ? e.message : 'No se pudo armar el cronograma.' };
+    return { error: e instanceof Error ? e.message : tr('No se pudo armar el cronograma.') };
   }
 
   const actor = getActor();

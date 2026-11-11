@@ -332,7 +332,7 @@ export default function DatosNegocio() {
                     className="h-4 w-4 accent-ink shrink-0"
                   />
                   <span>
-                    {m.nombre} ({m.simbolo})
+                    {t(m.nombre)} ({m.simbolo})
                   </span>
                 </label>
               );
@@ -370,7 +370,7 @@ export default function DatosNegocio() {
           >
             {PAISES.map((p) => (
               <option key={p.codigo} value={p.codigo}>
-                {p.nombre} (+{p.llamada})
+                {t(p.nombre)} (+{p.llamada})
               </option>
             ))}
           </select>

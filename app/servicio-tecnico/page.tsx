@@ -754,7 +754,7 @@ export default function ServicioTecnico() {
       )
       .select('id, modelo, token_seguimiento');
     if (repError) {
-      setErrorNuevo('No pudimos registrar los equipos: ' + repError.message);
+      setErrorNuevo(t('No pudimos registrar los equipos: ') + repError.message);
       setGuardandoNuevo(false);
       return;
     }

@@ -289,7 +289,8 @@ export function serieEvolucion(
   pagos: PagoR[],
   credito: CreditoR[],
   rango: Rango,
-  metrica: MetricaSerie
+  metrica: MetricaSerie,
+  locale = 'es-AR'
 ): PuntoSerie[] {
   const cobradas = (desde: Date, hasta: Date) =>
     ordenes.filter((o) => ESTADOS_COBRADOS.includes(o.estado) && entre(o.created_at, desde, hasta));
@@ -301,7 +302,7 @@ export function serieEvolucion(
     for (let m = 0; m <= meses; m++) {
       const ini = new Date(rango.inicio.getFullYear(), m, 1, 0, 0, 0, 0);
       const fin = new Date(rango.inicio.getFullYear(), m + 1, 0, 23, 59, 59, 999);
-      buckets.push({ label: new Date(2000, m, 1).toLocaleDateString('es-AR', { month: 'short' }).replace('.', ''), ini, fin });
+      buckets.push({ label: new Date(2000, m, 1).toLocaleDateString(locale, { month: 'short' }).replace('.', ''), ini, fin });
     }
   } else if (rango.bucket === 'hora') {
     for (let h = 0; h < 24; h++) {
@@ -319,7 +320,7 @@ export function serieEvolucion(
       const fin = new Date(cursor);
       fin.setHours(23, 59, 59, 999);
       buckets.push({
-        label: cursor.toLocaleDateString('es-AR', { day: 'numeric', month: rango.periodo === 'semana' ? 'short' : undefined }),
+        label: cursor.toLocaleDateString(locale, { day: 'numeric', month: rango.periodo === 'semana' ? 'short' : undefined }),
         ini,
         fin,
       });

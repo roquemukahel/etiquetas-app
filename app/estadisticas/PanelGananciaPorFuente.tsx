@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useT } from '../lib/idioma';
 import { FUENTES, type FuenteGanancia, type FilaFuente, type GananciaPorFuente, type MesFuente } from './gananciaPorFuente';
+import { localeActual } from '../lib/formatoLocal';
 
 type Props = {
   datos: GananciaPorFuente;
@@ -43,13 +44,19 @@ export default function PanelGananciaPorFuente({ datos, serie, moneda, puedeVerC
     if (n == null) return '—';
     if (ocultarMontos) return '•••';
     const r = Math.round(n);
-    return `${r < 0 ? '-' : conSigno && r > 0 ? '+' : ''}${moneda}${Math.abs(r).toLocaleString('es-AR')}`;
+    return `${r < 0 ? '-' : conSigno && r > 0 ? '+' : ''}${moneda}${Math.abs(r).toLocaleString(localeActual())}`;
   };
 
   const filas: [FuenteGanancia | 'total', FilaFuente][] = [...FUENTES.map((f) => [f, datos[f]] as [FuenteGanancia, FilaFuente]), ['total', datos.total]];
   const maxMes = Math.max(1, ...serie.map((m) => Math.max(0, FUENTES.reduce((a, f) => a + Math.max(0, m.ganancia[f]), 0))));
   const hayGananciaMensual = serie.some((m) => m.total !== 0);
   const mes = mesActivo != null ? serie[mesActivo] : null;
+  // Etiqueta corta del mes en el idioma elegido ("dic", "Jan 26"...): el año solo en enero.
+  const etiquetaMes = (clave: string) => {
+    const [anio, mm] = clave.split('-').map(Number);
+    const nombre = new Date(anio, mm - 1, 1).toLocaleDateString(localeActual(), { month: 'short' }).replace('.', '');
+    return mm === 1 ? `${nombre} ${String(anio).slice(2)}` : nombre;
+  };
 
   return (
     <section className="rounded-2xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface p-4 flex flex-col gap-4">
@@ -139,7 +146,7 @@ export default function PanelGananciaPorFuente({ datos, serie, moneda, puedeVerC
                         return v > 0 ? <div key={f} className={COLOR[f]} style={{ height: `${(v / suma) * 100}%` }} /> : null;
                       })}
                     </div>
-                    <span className="text-[9px] text-muted dark:text-dark-text-secondary truncate max-w-full">{m.etiqueta}</span>
+                    <span className="text-[9px] text-muted dark:text-dark-text-secondary truncate max-w-full">{etiquetaMes(m.clave)}</span>
                   </button>
                 ))}
               </div>
@@ -147,7 +154,7 @@ export default function PanelGananciaPorFuente({ datos, serie, moneda, puedeVerC
                 {mes ? (
                   <div className="flex flex-wrap gap-x-4 gap-y-1">
                     <strong>
-                      {mes.etiqueta}: {dinero(mes.total)}
+                      {etiquetaMes(mes.clave)}: {dinero(mes.total)}
                     </strong>
                     {FUENTES.map((f) => (
                       <span key={f} className="inline-flex items-center gap-1.5">

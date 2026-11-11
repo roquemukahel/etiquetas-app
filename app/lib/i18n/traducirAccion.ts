@@ -73,6 +73,67 @@ const PATRONES: { re: RegExp; pt: Constructor; en: Constructor }[] = [
     en: (m) => `restored the stock category "${m[1]}"`,
   },
 
+  // --- Subcategorías y asignación en bloque de productos ---
+  {
+    re: /^creó la subcategoría "(.+)" dentro de "(.+)"$/,
+    pt: (m) => `criou a subcategoria "${m[1]}" dentro de "${m[2]}"`,
+    en: (m) => `created the subcategory "${m[1]}" inside "${m[2]}"`,
+  },
+  {
+    re: /^renombró la subcategoría "(.+)" a "(.+)"$/,
+    pt: (m) => `renomeou a subcategoria "${m[1]}" para "${m[2]}"`,
+    en: (m) => `renamed the subcategory "${m[1]}" to "${m[2]}"`,
+  },
+  {
+    re: /^asignó la categoría "(.+)" a ([0-9]+) productos$/,
+    pt: (m) => `atribuiu a categoria "${m[1] === 'Sin categoría' ? 'Sem categoria' : m[1]}" a ${m[2]} produtos`,
+    en: (m) => `assigned the category "${m[1] === 'Sin categoría' ? 'No category' : m[1]}" to ${m[2]} products`,
+  },
+
+  // --- Clientes: sucursal, cobro y localidades ---
+  {
+    re: /^asignó la sucursal "(.+)" a ([0-9]+) clientes$/,
+    pt: (m) => `atribuiu a filial "${m[1]}" a ${m[2]} clientes`,
+    en: (m) => `assigned the branch "${m[1]}" to ${m[2]} customers`,
+  },
+  {
+    re: /^actualizó el cronograma de cobro por terminación de DNI$/,
+    pt: () => 'atualizou o cronograma de cobrança por final do DNI',
+    en: () => 'updated the collection schedule by ID ending',
+  },
+  {
+    re: /^unificó ([0-9]+) localidades escritas de distintas formas$/,
+    pt: (m) => `unificou ${m[1]} localidades escritas de formas diferentes`,
+    en: (m) => `merged ${m[1]} localities written in different ways`,
+  },
+  {
+    re: /^agregó la localidad "(.+)"$/,
+    pt: (m) => `adicionou a localidade "${m[1]}"`,
+    en: (m) => `added the locality "${m[1]}"`,
+  },
+  {
+    re: /^renombró la localidad "(.+)" a "(.+)"$/,
+    pt: (m) => `renomeou a localidade "${m[1]}" para "${m[2]}"`,
+    en: (m) => `renamed the locality "${m[1]}" to "${m[2]}"`,
+  },
+  {
+    re: /^quitó la localidad "(.+)" de la lista$/,
+    pt: (m) => `removeu a localidade "${m[1]}" da lista`,
+    en: (m) => `removed the locality "${m[1]}" from the list`,
+  },
+  {
+    re: /^importó ([0-9]+) localidades ya usadas en clientes$/,
+    pt: (m) => `importou ${m[1]} localidades já usadas em clientes`,
+    en: (m) => `imported ${m[1]} localities already used by customers`,
+  },
+
+  // --- Caja ---
+  {
+    re: /^(marcó como revisado|quitó la marca de revisado de) el cierre N° ([0-9]+) de (.+)$/,
+    pt: (m) => `${m[1] === 'marcó como revisado' ? 'marcou como conferido' : 'removeu a marca de conferido de'} o fechamento N° ${m[2]} de ${m[3]}`,
+    en: (m) => `${m[1] === 'marcó como revisado' ? 'marked as reviewed' : 'removed the reviewed mark from'} closing no. ${m[2]} of ${m[3]}`,
+  },
+
   // --- Categorías de egresos ---
   {
     re: /^creó la categoría de egresos "(.+)"$/,

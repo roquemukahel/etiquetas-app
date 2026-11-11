@@ -1,5 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { registrarAuditoria } from './auditoria';
+import { tr } from './tr';
 import { infoEstado, CHECKLIST_CALIDAD_GENERICO } from './reparaciones';
 import { liberarRepuestosDeReparaciones } from './repuestos';
 
@@ -74,7 +75,7 @@ export async function cambiarEstadoReparacion(
     // Si el cambio no se guardó no hay que seguir (ni liberar repuestos ni
     // dejar auditado un cambio que no ocurrió). Los dos llamadores tratan
     // 'cancelado' como "no se aplicó nada".
-    alert('No pudimos cambiar el estado de la reparación. No se modificó nada.\n' + cambioError.message);
+    alert(tr('No pudimos cambiar el estado de la reparación. No se modificó nada.') + '\n' + cambioError.message);
     return 'cancelado';
   }
 

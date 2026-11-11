@@ -6,6 +6,7 @@
 // generen números de turno pisados.
 import { SupabaseClient } from '@supabase/supabase-js';
 import { TipoCaja } from './motor';
+import { tr } from '../tr';
 
 export type Caja = {
   id: string;
@@ -96,7 +97,7 @@ export async function marcarTurnoRevisado(
   const { data, error } = await supabase.from('caja_turnos').update(cambios).eq('id', turnoId).eq('estado', 'cerrada').select('id');
   if (error) return { error: error.message, cambios };
   // Sin filas actualizadas: el cierre se reabrió (o ya no existe) mientras se miraba la pantalla.
-  if (!data || data.length === 0) return { error: 'Este cierre ya no está cerrado. Recargá la pantalla.', cambios };
+  if (!data || data.length === 0) return { error: tr('Este cierre ya no está cerrado. Recargá la pantalla.'), cambios };
   return { error: null, cambios };
 }
 
