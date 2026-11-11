@@ -1253,7 +1253,7 @@ export const PT: Record<string, string> = {
   'Financiación propia en cuotas': 'Financiamento próprio em parcelas',
   'Financiado activo': 'Financiado ativo',
   'Foto del inventario de hoy (no depende del período).': 'Foto do inventário de hoje (não depende do período).',
-  Ganancia: 'Ganho',
+  Ganancia: 'Lucro',
   'Ganancia bruta menos egresos operativos del período. Es una ESTIMACIÓN: no incluye impuestos ni otras obligaciones contables, no lo confundas con una ganancia neta real.':
     'Ganho bruto menos saídas operacionais do período. É uma ESTIMATIVA: não inclui impostos nem outras obrigações contábeis, não confunda com um lucro líquido real.',
   'Gasto operativo y ajustes registrados en el período — no incluye retiros de caja (no son un gasto) ni compras de mercadería o pagos a proveedores (esos ya tienen su propio total).':
