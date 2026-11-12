@@ -20,6 +20,7 @@ export const LABEL_ALCANCE: Record<AlcanceRegla, string> = {
   contado: 'Ventas de contado',
   financiado: 'Ventas financiadas (en cuotas)',
   tipo_item: 'Un tipo de ítem',
+  categoria: 'Una categoría',
   producto: 'Un producto',
 };
 

@@ -20,6 +20,7 @@ import {
   type CuotaParaAplicar,
 } from './motor';
 import { tr } from '../tr';
+import { sincronizarComisionesDeCliente } from '../comisiones/sincronizar';
 
 export type PlanFinanciacion = {
   id: string;
@@ -168,7 +169,17 @@ export async function aplicarPagoAFinanciacion(
 // Reemplaza el insert manual a pagos/cta_cte_movimientos que antes vivía
 // directo en la ficha del cliente (ver registrarPago en
 // app/clientes/[id]/page.tsx) — misma lógica, un solo lugar.
+// Registra el cobro y después ajusta las comisiones de las ventas financiadas del cliente a lo cobrado (si el negocio eligió esa opción).
 export async function registrarCobroFinanciamiento(
+  supabase: SupabaseClient,
+  params: Parameters<typeof registrarCobroFinanciamientoBase>[1]
+): Promise<{ ordenId: string; avisoCuotas?: string } | { error: string }> {
+  const resultado = await registrarCobroFinanciamientoBase(supabase, params);
+  if (!('error' in resultado)) await sincronizarComisionesDeCliente(params.clienteId);
+  return resultado;
+}
+
+async function registrarCobroFinanciamientoBase(
   supabase: SupabaseClient,
   params: {
     clienteId: string;
@@ -416,6 +427,7 @@ export async function corregirMontoPago(
     valorAnterior: { monto: params.montoActual },
     valorNuevo: { monto: params.nuevoMonto, movimiento_id: params.movimientoId },
   });
+  await sincronizarComisionesDeCliente(params.clienteId);
   return { ok: true, aviso };
 }
 

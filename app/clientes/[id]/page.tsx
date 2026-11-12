@@ -29,6 +29,7 @@ import FormularioEquipoPago from '../../FormularioEquipoPago';
 import { EQUIPO_PAGO_VACIO, problemaDelEquipo, type EquipoPago } from '../../lib/equipoPago';
 import { buscarClientesDuplicados, textoDuplicados } from '../../lib/clientesDuplicados';
 import { obtenerCronograma } from '../../lib/clienteCobroDatos';
+import { sincronizarComisionesDeCliente } from '../../lib/comisiones/sincronizar';
 import { CALIFICACIONES, FUENTES_CON_CRONOGRAMA, FUENTES_INGRESO, RANGOS_PAGO, diaDeCobro, terminacionDni, type Cronograma } from '../../lib/clienteCobro';
 
 type Cliente = {
@@ -602,6 +603,8 @@ export default function DetalleCliente() {
         }
       }
     }
+    // Si la comisión de las ventas financiadas se genera "sobre lo cobrado", un pago anulado resta lo que ya no se cobró.
+    await sincronizarComisionesDeCliente(String(id));
     await cargarMovimientos();
     setRecargarFinanciacion((n) => n + 1);
   };

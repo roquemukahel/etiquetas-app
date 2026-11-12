@@ -25,6 +25,10 @@ const CHEQUEOS = {
   // clientes_cobro_supabase.sql (fuente de ingreso, día de cobro, rango de pago, calidad del cliente)
   clienteCobro: (s: SupabaseClient) => s.from('clientes').select('fuente_ingreso, dia_cobro, rango_pago, calificacion, observaciones_cobro').limit(1),
   cronogramaCobro: (s: SupabaseClient) => s.from('cronograma_cobro').select('id').limit(1),
+  // comisiones_categoria_supabase.sql (reglas por categoría, comisión sobre lo cobrado y reporte por categoría)
+  comisionesCategoria: (s: SupabaseClient) => s.from('comision_reglas').select('categoria_id, marca').limit(1),
+  comisionesMovCategoria: (s: SupabaseClient) => s.from('comision_movimientos').select('categoria_id').limit(1),
+  comisionesSobreCobrado: (s: SupabaseClient) => s.from('negocios').select('comisiones_sobre_cobrado').limit(1),
   // subcategorias_supabase.sql (una categoría de stock puede colgar de otra)
   subcategorias: (s: SupabaseClient) => s.from('stock_categorias').select('padre_id').limit(1),
   // standby_supabase.sql

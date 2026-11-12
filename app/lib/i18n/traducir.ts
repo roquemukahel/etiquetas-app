@@ -43,3 +43,18 @@ const LOCALE_POR_IDIOMA: Record<Idioma, string> = { es: 'es-AR', pt: 'pt-BR', en
 export function localeDe(idioma: Idioma): string {
   return LOCALE_POR_IDIOMA[idioma];
 }
+
+// Traduce un mensaje que puede traer un detalle técnico al final ("No se pudo leer el plan del vendedor: <error de la base>"): primero
+// busca el texto entero y, si no está, traduce solo el inicio hasta los dos puntos y deja el detalle como viene. Sirve para los
+// mensajes que arma el servidor en español y la pantalla muestra en el idioma elegido.
+export function traducirConDetalle(texto: string, t: (texto: string) => string): string {
+  const entero = t(texto);
+  if (entero !== texto) return entero;
+  const i = texto.indexOf(': ');
+  if (i > 0) {
+    const cabeza = texto.slice(0, i + 2);
+    const traducida = t(cabeza);
+    if (traducida !== cabeza) return traducida + texto.slice(i + 2);
+  }
+  return texto;
+}

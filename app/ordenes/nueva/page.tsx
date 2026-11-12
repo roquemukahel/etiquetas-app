@@ -30,6 +30,7 @@ import { resolverMaxCuotas, maximoDeCarrito, excedeGuia, mensajeAvisoGuia, aplic
 import { generarCronograma, sumarMesConClamp, aFechaISO } from '../../lib/financiacion/motor';
 import { decimalesMoneda } from '../../lib/monedas';
 import { generarComisionesAccion } from '../../comisiones/acciones';
+import { traducirConDetalle } from '../../lib/i18n/traducir';
 import CampoFecha from '../../CampoFecha';
 import { ITEMS_CHECKLIST_INGRESO, CAMPOS_DEPENDEN_MODULO, generarTextoCondicionIngreso, type TipoBloqueo, type TipoDispositivo } from '../../lib/reparaciones';
 import CapturarBloqueo from '../../CapturarBloqueo';
@@ -1734,11 +1735,14 @@ ${t('¿Cargarlo igual?')}`)) {
             'Esta venta no genera comisión',
             'La venta todavía no está cobrada',
             'La comisión de esta venta ya estaba generada',
+            'La comisión se genera a medida que se cobran las cuotas',
+            'La venta está cancelada',
           ];
+          // Los mensajes salen del servidor en español: se traducen acá (los que traen un detalle al final, como "…: <error>", por su inicio).
           if (rc.error) {
-            alert(`⚠️ ${t('No se pudo generar la comisión:')} ` + rc.error);
+            alert(`⚠️ ${t('No se pudo generar la comisión:')} ` + traducirConDetalle(rc.error, t));
           } else if (rc.generadas === 0 && rc.motivo && !motivosSilenciosos.includes(rc.motivo)) {
-            alert(`⚠️ ${t('Esta venta no generó comisión:')} ` + rc.motivo + '.');
+            alert(`⚠️ ${t('Esta venta no generó comisión:')} ` + t(rc.motivo) + '.');
           }
         } catch {}
       }

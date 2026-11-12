@@ -89,7 +89,17 @@ export default function Productos() {
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState('');
+  // Valor especial del filtro de categoría: los productos que no tienen ninguna (los que quedan fuera de las reglas de comisión por categoría).
+  const SIN_CATEGORIA = '__sin_categoria__';
   const [filtroCategoria, setFiltroCategoria] = useState('');
+  // /productos?sinCategoria=1 (enlace desde Comisiones): abre la lista ya filtrada y lista para asignarles una categoría en bloque.
+  const [llegoSinCategoria, setLlegoSinCategoria] = useState(false);
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('sinCategoria') === '1') {
+      setFiltroCategoria('__sin_categoria__');
+      setLlegoSinCategoria(true);
+    }
+  }, []);
   const [editando, setEditando] = useState<ProductoMaestro | null>(null);
   const [formNombre, setFormNombre] = useState('');
   const [formMarca, setFormMarca] = useState('');
@@ -118,6 +128,9 @@ export default function Productos() {
   const [formGuia, setFormGuia] = useState('');
   // Edición masiva de la guía.
   const [modoMasivo, setModoMasivo] = useState(false);
+  useEffect(() => {
+    if (llegoSinCategoria && puedeAgregarStock) setModoMasivo(true);
+  }, [llegoSinCategoria, puedeAgregarStock]);
   const [seleccion, setSeleccion] = useState<Set<string>>(new Set());
   const [guiaMasiva, setGuiaMasiva] = useState('6');
   const [aplicandoMasivo, setAplicandoMasivo] = useState(false);
@@ -583,7 +596,9 @@ export default function Productos() {
     // mismo, sin importar qué campo tenga cada palabra.
     const palabras = busqueda.trim().toLowerCase().split(/\s+/).filter(Boolean);
     return filas.filter((f) => {
-      if (filtroCategoria) {
+      if (filtroCategoria === SIN_CATEGORIA) {
+        if (f.categoriaId) return false;
+      } else if (filtroCategoria) {
         // Una categoría de primer nivel incluye lo que está en sus subcategorías.
         const aceptadas = new Set([filtroCategoria, ...subcategoriasDe(categorias, filtroCategoria).map((s) => s.id)]);
         if (!f.categoriaId || !aceptadas.has(f.categoriaId)) return false;
@@ -872,6 +887,7 @@ export default function Productos() {
             className="rounded-lg border border-border dark:border-dark-border bg-surface dark:bg-dark-surface px-3 py-2 text-sm"
           >
             <option value="">{t('Todas las categorías')}</option>
+            <option value={SIN_CATEGORIA}>{t('Sin categoría')}</option>
             {opcionesDeCategoria(categorias).map((o) => (
               <option key={o.id} value={o.id}>
                 {o.etiqueta}

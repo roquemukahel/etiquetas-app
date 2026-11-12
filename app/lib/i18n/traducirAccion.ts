@@ -134,6 +134,33 @@ const PATRONES: { re: RegExp; pt: Constructor; en: Constructor }[] = [
     en: (m) => `${m[1] === 'marcó como revisado' ? 'marked as reviewed' : 'removed the reviewed mark from'} closing no. ${m[2]} of ${m[3]}`,
   },
 
+  // --- Comisiones ---
+  {
+    re: /^agregó una regla de comisión \((.+?) ([0-9.]+) · (.+)\)$/,
+    pt: (m) => `adicionou uma regra de comissão (${m[1]} ${m[2]} · ${m[3]})`,
+    en: (m) => `added a commission rule (${m[1]} ${m[2]} · ${m[3]})`,
+  },
+  {
+    re: /^eliminó una regla de comisión$/,
+    pt: () => 'excluiu uma regra de comissão',
+    en: () => 'deleted a commission rule',
+  },
+  {
+    re: /^desactivó el sistema de comisiones$/,
+    pt: () => 'desativou o sistema de comissões',
+    en: () => 'turned off the commission system',
+  },
+  {
+    re: /^activó\/actualizó las comisiones \((.+)\)$/,
+    pt: (m) => `ativou/atualizou as comissões (${m[1]})`,
+    en: (m) => `turned on/updated commissions (${m[1]})`,
+  },
+  {
+    re: /^creó una liquidación de comisiones de (.+) \((.+)\)$/,
+    pt: (m) => `criou uma liquidação de comissões de ${m[1]} (${m[2]})`,
+    en: (m) => `created a commission settlement for ${m[1]} (${m[2]})`,
+  },
+
   // --- Categorías de egresos ---
   {
     re: /^creó la categoría de egresos "(.+)"$/,

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { simboloMoneda } from '../../lib/monedas';
@@ -12,8 +12,21 @@ import type { TipoCalculo, AlcanceRegla } from '../../lib/comisiones/motor';
 import { useT } from '../../lib/idioma';
 import { falla } from '../../lib/escritura';
 import { obtenerTodasLasFilas } from '../../lib/db';
+import { obtenerCategorias, type Categoria } from '../../lib/categorias';
+import { etiquetaCategoria, opcionesDeCategoria } from '../../lib/subcategorias';
+import { soportaMigracion } from '../../lib/migraciones';
+import { productosSinCategoria } from '../../lib/comisiones/sinCategoria';
 
-type Regla = { id: string; tipo_calculo: TipoCalculo; valor: number; alcance: AlcanceRegla; tipo_item: string | null; producto_id: string | null };
+type Regla = {
+  id: string;
+  tipo_calculo: TipoCalculo;
+  valor: number;
+  alcance: AlcanceRegla;
+  tipo_item: string | null;
+  producto_id: string | null;
+  categoria_id?: string | null;
+  marca?: string | null;
+};
 type Producto = { id: string; nombre: string };
 
 const TIPO_ITEM_LABEL: Record<string, string> = {
@@ -22,7 +35,8 @@ const TIPO_ITEM_LABEL: Record<string, string> = {
   trabajo: 'los trabajos / servicios',
 };
 
-function describirRegla(r: Regla, moneda: string, productos: Producto[], t: (texto: string) => string): string {
+function describirRegla(r: Regla, moneda: string, productos: Producto[], categorias: Categoria[], t: (texto: string) => string): string {
+  const categoria = r.categoria_id ? etiquetaCategoria(r.categoria_id, categorias) : '';
   const donde =
     r.alcance === 'todas' ? t('todas las ventas')
     : r.alcance === 'minorista' ? t('las ventas minoristas')
@@ -30,6 +44,7 @@ function describirRegla(r: Regla, moneda: string, productos: Producto[], t: (tex
     : r.alcance === 'contado' ? t('las ventas de contado')
     : r.alcance === 'financiado' ? t('las ventas financiadas (en cuotas)')
     : r.alcance === 'tipo_item' ? t(TIPO_ITEM_LABEL[r.tipo_item || ''] ?? 'un tipo de ítem')
+    : r.alcance === 'categoria' ? `${t('la categoría')} ${categoria || t('(categoría eliminada)')}${r.marca ? ` · ${t('marca')} ${r.marca}` : ''}`
     : `${t('el producto')} ${productos.find((p) => p.id === r.producto_id)?.nombre ?? ''}`.trim();
 
   if (r.tipo_calculo === 'porcentaje_venta') return `${r.valor}% ${t('sobre la venta de')} ${donde}`;
@@ -47,36 +62,56 @@ export default function PlanesComisiones() {
   const [planId, setPlanId] = useState<string | null>(null);
   const [reglas, setReglas] = useState<Regla[]>([]);
   const [productos, setProductos] = useState<Producto[]>([]);
+  const [categorias, setCategorias] = useState<Categoria[]>([]);
+  const [marcas, setMarcas] = useState<string[]>([]);
+  // Si el negocio corrió comisiones_categoria_supabase.sql: sin eso no se ofrece "Una categoría".
+  const [conCategorias, setConCategorias] = useState(false);
+  const [sinCategoria, setSinCategoria] = useState(0);
   const [moneda, setMoneda] = useState('$');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
 
   // Form nueva regla
-  const [alcance, setAlcance] = useState<AlcanceRegla>('tipo_item');
+  const [alcance, setAlcance] = useState<AlcanceRegla>('categoria');
   const [tipoItem, setTipoItem] = useState('dispositivo');
   const [productoId, setProductoId] = useState('');
+  const [categoriaId, setCategoriaId] = useState('');
+  const [marca, setMarca] = useState('');
   const [tipoCalculo, setTipoCalculo] = useState<TipoCalculo>('porcentaje_venta');
   const [valor, setValor] = useState('');
 
   const cargar = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return setLoading(false);
+    const soportado = await soportaMigracion(supabase, 'comisionesCategoria');
+    setConCategorias(soportado);
+    if (!soportado) setAlcance((a) => (a === 'categoria' ? 'tipo_item' : a));
     const { data: perfil } = await supabase.from('perfiles').select('negocios ( moneda, comision_plan_default_id )').eq('id', user.id).single();
     const neg = (perfil as any)?.negocios;
     if (neg?.moneda) setMoneda(simboloMoneda(neg.moneda));
     const pid = neg?.comision_plan_default_id ?? null;
     setPlanId(pid);
     if (pid) {
-      const { data: rg } = await supabase.from('comision_reglas').select('id, tipo_calculo, valor, alcance, tipo_item, producto_id').eq('plan_id', pid).eq('activo', true).order('created_at');
+      const { data: rg } = await supabase
+        .from('comision_reglas')
+        .select('id, tipo_calculo, valor, alcance, tipo_item, producto_id' + (soportado ? ', categoria_id, marca' : ''))
+        .eq('plan_id', pid)
+        .eq('activo', true)
+        .order('created_at');
       setReglas((rg as any) ?? []);
     }
-    const prod = await obtenerTodasLasFilas<any>(supabase, 'productos', 'id, nombre', [{ columna: 'nombre' }]);
-    setProductos(prod);
+    const prod = await obtenerTodasLasFilas<any>(supabase, 'productos', 'id, nombre, marca', [{ columna: 'nombre' }]);
+    setProductos(prod.map((p: any) => ({ id: p.id, nombre: p.nombre })));
+    setMarcas(Array.from(new Set(prod.map((p: any) => (p.marca ?? '').trim()).filter(Boolean))).sort((a: any, b: any) => a.localeCompare(b, 'es')) as string[]);
+    setCategorias(await obtenerCategorias(supabase, true));
+    setSinCategoria((await productosSinCategoria(supabase)).total);
     setLoading(false);
   };
 
   useEffect(() => { cargar(); /* eslint-disable-next-line */ }, []);
+
+  const opcionesCategoria = useMemo(() => opcionesDeCategoria(categorias.filter((c) => !c.archivada)), [categorias]);
 
   const subirVersion = async (pid: string) => {
     const { data: pl } = await supabase.from('comision_planes').select('version').eq('id', pid).single();
@@ -88,6 +123,10 @@ export default function PlanesComisiones() {
     const v = Number(valor.replace(',', '.'));
     if (!v || v <= 0) return setError(t('Ingresá un valor válido.'));
     if (alcance === 'producto' && !productoId) return setError(t('Elegí un producto.'));
+    if (alcance === 'categoria' && !categoriaId) return setError(t('Elegí una categoría.'));
+    if (alcance === 'categoria' && reglas.some((r) => r.alcance === 'categoria' && r.categoria_id === categoriaId && (r.marca ?? '') === marca)) {
+      return setError(t('Ya hay una regla para esa categoría. Eliminala primero si querés cambiarla.'));
+    }
     setGuardando(true);
     setError(null);
     const { error: e } = await supabase.from('comision_reglas').insert({
@@ -97,10 +136,12 @@ export default function PlanesComisiones() {
       alcance,
       tipo_item: alcance === 'tipo_item' ? tipoItem : null,
       producto_id: alcance === 'producto' ? productoId : null,
+      ...(alcance === 'categoria' ? { categoria_id: categoriaId, marca: marca || null } : {}),
     });
     if (e) { setError(e.message); setGuardando(false); return; }
     await subirVersion(planId);
-    await registrarAuditoria(supabase, { accion: `agregó una regla de comisión (${tipoCalculo} ${v} · ${alcance})`, entidad: 'comision_regla' });
+    const detalle = alcance === 'categoria' ? `${alcance} "${etiquetaCategoria(categoriaId, categorias)}"${marca ? ` marca ${marca}` : ''}` : alcance;
+    await registrarAuditoria(supabase, { accion: `agregó una regla de comisión (${tipoCalculo} ${v} · ${detalle})`, entidad: 'comision_regla' });
     setValor('');
     setGuardando(false);
     cargar();
@@ -124,6 +165,8 @@ export default function PlanesComisiones() {
     );
   }
 
+  const hayReglasPorCategoria = reglas.some((r) => r.alcance === 'categoria');
+
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4 max-w-2xl mx-auto w-full">
       <header className="flex items-center gap-3">
@@ -144,8 +187,24 @@ export default function PlanesComisiones() {
         <>
           <p className="text-sm text-muted dark:text-dark-text-secondary">
             {t('Podés tener una comisión distinta según lo que se venda. Cuando una venta encaja en varias reglas, se aplica la')}{' '}
-            <strong>{t('más específica')}</strong>: {t('un producto puntual gana sobre un tipo de ítem, y un tipo de ítem gana sobre la regla general de minorista/mayorista.')}
+            <strong>{t('más específica')}</strong>: {t('un producto puntual gana sobre una categoría, una categoría gana sobre un tipo de ítem, y un tipo de ítem gana sobre la regla general de minorista/mayorista.')}
           </p>
+          {conCategorias && (
+            <p className="text-xs text-muted dark:text-dark-text-secondary">
+              {t('Entre categorías: una subcategoría gana sobre su categoría, y una regla con marca gana sobre la misma categoría sin marca.')}
+            </p>
+          )}
+
+          {conCategorias && hayReglasPorCategoria && sinCategoria > 0 && (
+            <div className="rounded-xl border border-warn/40 bg-warn/10 px-4 py-3 text-sm flex flex-col gap-1">
+              <p>
+                ⚠️ {sinCategoria} {sinCategoria === 1 ? t('producto no tiene categoría') : t('productos no tienen categoría')} {t('y no entran en las reglas por categoría (se les aplica la del tipo de ítem o la general).')}
+              </p>
+              <Link href="/productos?sinCategoria=1" className="text-accent dark:text-dark-accent underline text-xs">
+                {t('Verlos y asignarles una categoría')} →
+              </Link>
+            </div>
+          )}
 
           {/* Reglas actuales */}
           <div className="rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card divide-y divide-border dark:divide-dark-border">
@@ -154,7 +213,7 @@ export default function PlanesComisiones() {
             ) : (
               reglas.map((r) => (
                 <div key={r.id} className="flex items-center gap-3 px-4 py-3">
-                  <p className="text-sm flex-1">{describirRegla(r, moneda, productos, t)}</p>
+                  <p className="text-sm flex-1">{describirRegla(r, moneda, productos, categorias, t)}</p>
                   <button onClick={() => eliminar(r.id)} className="text-xs text-bad hover:underline shrink-0">{t('Eliminar')}</button>
                 </div>
               ))
@@ -167,8 +226,9 @@ export default function PlanesComisiones() {
 
             <label className="text-xs text-muted dark:text-dark-text-secondary">{t('Se aplica a')}</label>
             <select value={alcance} onChange={(e) => setAlcance(e.target.value as AlcanceRegla)} className="bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm">
-              <option value="tipo_item">{t('Un tipo de ítem (dispositivos / accesorios / trabajos)')}</option>
               <option value="producto">{t('Un producto puntual del catálogo')}</option>
+              {conCategorias && <option value="categoria">{t('Una categoría (o subcategoría) de productos')}</option>}
+              <option value="tipo_item">{t('Un tipo de ítem (dispositivos / accesorios / trabajos)')}</option>
               <option value="minorista">{t('Todas las ventas minoristas')}</option>
               <option value="mayorista">{t('Todas las ventas mayoristas')}</option>
               <option value="contado">{t('Todas las ventas de contado')}</option>
@@ -188,6 +248,23 @@ export default function PlanesComisiones() {
                 <option value="">{t('Elegí un producto…')}</option>
                 {productos.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
               </select>
+            )}
+            {alcance === 'categoria' && (
+              <>
+                <select value={categoriaId} onChange={(e) => setCategoriaId(e.target.value)} className="bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm">
+                  <option value="">{t('Elegí una categoría…')}</option>
+                  {opcionesCategoria.map((o) => <option key={o.id} value={o.id}>{o.etiqueta}</option>)}
+                </select>
+                {marcas.length > 0 && (
+                  <select value={marca} onChange={(e) => setMarca(e.target.value)} className="bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm">
+                    <option value="">{t('Todas las marcas')}</option>
+                    {marcas.map((m) => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                )}
+                <p className="text-[11px] text-muted dark:text-dark-text-secondary">
+                  {t('Una regla de una categoría alcanza también a sus subcategorías. La marca es opcional y se toma de los productos del catálogo.')}
+                </p>
+              </>
             )}
 
             <label className="text-xs text-muted dark:text-dark-text-secondary">{t('Cómo se calcula')}</label>

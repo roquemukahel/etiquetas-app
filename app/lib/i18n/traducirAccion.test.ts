@@ -5,6 +5,7 @@ describe('traducirAccion: frases de auditoría nuevas', () => {
   const casos: [string, string, string][] = [
     ['creó la subcategoría "Cables" dentro de "ACC"', 'created the subcategory "Cables" inside "ACC"', 'criou a subcategoria "Cables" dentro de "ACC"'],
     ['renombró la subcategoría "Cables" a "Cables USB"', 'renamed the subcategory "Cables" to "Cables USB"', 'renomeou a subcategoria "Cables" para "Cables USB"'],
+    ['agregó una regla de comisión (porcentaje_venta 5 · categoria "Accesorios")', 'added a commission rule (porcentaje_venta 5 · categoria "Accesorios")', 'adicionou uma regra de comissão (porcentaje_venta 5 · categoria "Accesorios")'],
     ['asignó la categoría "ACC › Cables" a 12 productos', 'assigned the category "ACC › Cables" to 12 products', 'atribuiu a categoria "ACC › Cables" a 12 produtos'],
     ['asignó la categoría "Sin categoría" a 3 productos', 'assigned the category "No category" to 3 products', 'atribuiu a categoria "Sem categoria" a 3 produtos'],
     ['asignó la sucursal "Estación Aráoz" a 40 clientes', 'assigned the branch "Estación Aráoz" to 40 customers', 'atribuiu a filial "Estación Aráoz" a 40 clientes'],
