@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextRequest, NextResponse } from 'next/server';
+import { esErrorTransitorioDeAuth } from './app/lib/authTransitorio';
 
 // '/cuenta/' (con la barra al final) es el portal público de cuenta
 // corriente de un cliente (app/cuenta/[token]/page.tsx, RPC cuenta_publica)
@@ -80,14 +81,25 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Si el servicio de autenticación falla un instante (red, timeout, 5xx), "no hay usuario" NO quiere decir "no hay sesión": antes eso
+  // mandaba a /login a alguien que estaba trabajando (por ejemplo a mitad de una boleta) y le hacía perder lo cargado. Se reintenta
+  // una vez y, si sigue fallando por un motivo transitorio, se deja pasar: la sesión sigue en su cookie y la pantalla se encarga.
+  let user: Awaited<ReturnType<typeof supabase.auth.getUser>>['data']['user'] = null;
+  let falloTransitorio = false;
+  for (let intento = 0; intento < 2; intento++) {
+    const { data, error: errorAuth } = await supabase.auth.getUser();
+    user = data.user;
+    falloTransitorio = !user && esErrorTransitorioDeAuth(errorAuth);
+    if (user || !falloTransitorio) break;
+    if (intento === 0) await new Promise((r) => setTimeout(r, 400));
+  }
 
   const esPublica = RUTAS_PUBLICAS.some((r) => request.nextUrl.pathname.startsWith(r));
   // La raíz muestra la landing pública si no hay sesión (la decide la propia
   // página, no el middleware), así que no la redirigimos a /login.
   const esRaiz = request.nextUrl.pathname === '/';
+
+  if (!user && falloTransitorio && !esPublica) return response;
 
   if (!user && !esPublica && !esRaiz) {
     const url = request.nextUrl.clone();
