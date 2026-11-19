@@ -22,6 +22,7 @@ import {
   type MovimientoCaja,
 } from '../lib/caja/servicio';
 import { obtenerIngresosDeCaja, ingresosEnEfectivo, type Ingreso } from '../lib/ingresos';
+import { obtenerEgresosDeCaja, egresosEnEfectivo, egresosSinMedio, saleDeLaCaja, type EgresoDeCaja } from '../lib/egresosCaja';
 import ModalIngreso from '../ingresos/ModalIngreso';
 import CasillaRevisada from './CasillaRevisada';
 import { totalesPorMedio, totalGeneral, efectivoEsperado, diferenciaArqueo, MEDIOS_CAJA, NOMBRE_CAJA, type TipoCaja } from '../lib/caja/motor';
@@ -63,6 +64,8 @@ export default function CajaPage() {
   const [movimientos, setMovimientos] = useState<MovimientoCaja[]>([]);
   // Ingresos de capital que entraron a esta caja durante el turno (ingresos_capital_supabase.sql): el efectivo suma al esperado.
   const [ingresos, setIngresos] = useState<Ingreso[]>([]);
+  // Egresos del período de la sucursal: los pagados en efectivo desde esta caja bajan el efectivo esperado.
+  const [egresos, setEgresos] = useState<EgresoDeCaja[]>([]);
   const [modalIngreso, setModalIngreso] = useState(false);
   const [verMovimientos, setVerMovimientos] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -126,10 +129,12 @@ export default function CajaPage() {
           setMovimientos(movs);
           setTotales(totalesPorMedio(movs));
           setIngresos(await obtenerIngresosDeCaja(supabase, caja, t1.abierta_en, undefined, t1.moneda));
+          setEgresos(await obtenerEgresosDeCaja(supabase, caja, t1.abierta_en, undefined, t1.moneda));
         } else {
           setMovimientos([]);
           setTotales(totalesPorMedio([]));
           setIngresos([]);
+          setEgresos([]);
         }
       }
     } catch (e) {
@@ -220,7 +225,10 @@ export default function CajaPage() {
   }
 
   const ingresosEfectivo = ingresosEnEfectivo(ingresos);
-  const esperado = turno ? efectivoEsperado(turno.efectivo_inicial, totales.efectivo + ingresosEfectivo) : 0;
+  const egresosCaja = egresos.filter((e) => saleDeLaCaja(e, tipo));
+  const egresosEfectivo = egresosEnEfectivo(egresos, tipo);
+  const egresosPendientesDeMedio = egresosSinMedio(egresos);
+  const esperado = turno ? efectivoEsperado(turno.efectivo_inicial, totales.efectivo + ingresosEfectivo, egresosEfectivo) : 0;
 
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4 max-w-2xl mx-auto w-full">
@@ -325,17 +333,33 @@ export default function CajaPage() {
                   {' '}
                   + {t('ingresos de capital')} ${formatearMonto(ingresosEfectivo)}
                 </>
+              )}
+              {egresosEfectivo > 0 && (
+                <>
+                  {' '}
+                  − {t('egresos en efectivo')} ${formatearMonto(egresosEfectivo)}
+                </>
               )}{' '}
               = {t('efectivo esperado')}{' '}
               <span className="font-medium text-ink dark:text-dark-text">${formatearMonto(esperado)}</span>
             </p>
+
+            {egresosPendientesDeMedio.length > 0 && (
+              <p className="text-[11px] rounded-lg bg-warn/10 text-warn px-3 py-2">
+                ⚠️ {egresosPendientesDeMedio.length} {egresosPendientesDeMedio.length === 1 ? t('egreso de este turno no tiene medio de pago') : t('egresos de este turno no tienen medio de pago')} ($
+                {formatearMonto(egresosPendientesDeMedio.reduce((a, e) => a + (e.importe || 0), 0))}). {t('No se descuentan del efectivo esperado. Editalos en Egresos y elegí "Efectivo" si salieron del cajón.')}{' '}
+                <Link href="/egresos" className="underline">
+                  {t('Ir a Egresos')}
+                </Link>
+              </p>
+            )}
 
             <button onClick={() => setVerMovimientos((v) => !v)} className="text-xs text-accent dark:text-dark-accent underline self-start">
               {verMovimientos ? t('Ocultar movimientos') : t('Ver movimientos')} ({movimientos.length})
             </button>
             {verMovimientos && (
               <div className="flex flex-col gap-2 border-t border-border dark:border-dark-border pt-2 max-h-64 overflow-y-auto">
-                {movimientos.length === 0 && ingresos.length === 0 && (
+                {movimientos.length === 0 && ingresos.length === 0 && egresosCaja.length === 0 && (
                   <p className="text-xs text-muted dark:text-dark-text-secondary text-center">{t('Todavía no hay movimientos en este turno.')}</p>
                 )}
                 {ingresos.map((i) => (
@@ -350,6 +374,20 @@ export default function CajaPage() {
                       </p>
                     </div>
                     <span className="font-medium tabular-nums text-good shrink-0">+${formatearMonto(i.importe)}</span>
+                  </div>
+                ))}
+                {egresosCaja.map((e) => (
+                  <div key={e.id} className="flex items-center justify-between gap-2 text-xs">
+                    <div className="min-w-0">
+                      <p className="truncate">
+                        {t('Egreso')} · {e.descripcion} · {medioLabel('efectivo', t)}
+                      </p>
+                      <p className="text-[11px] text-muted dark:text-dark-text-secondary">
+                        {new Date(e.created_at).toLocaleString(locale)}
+                        {e.registrado_por_nombre && ` · ${e.registrado_por_nombre}`}
+                      </p>
+                    </div>
+                    <span className="font-medium tabular-nums text-bad shrink-0">−${formatearMonto(e.importe)}</span>
                   </div>
                 ))}
                 {movimientos.map((m) => (

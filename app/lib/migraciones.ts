@@ -41,6 +41,8 @@ const CHEQUEOS = {
   ingresosCapital: (s: SupabaseClient) => s.from('ingresos').select('id').limit(1),
   // egresos_duenos_supabase.sql
   egresosDuenos: (s: SupabaseClient) => s.from('egresos').select('pagado_desde').limit(1),
+  // egresos_caja_supabase.sql (de qué caja sale un egreso en efectivo; el efectivo esperado del cierre los resta)
+  egresosCaja: (s: SupabaseClient) => s.from('egresos').select('caja_tipo').limit(1),
   categoriasEgresosDuenos: (s: SupabaseClient) => s.from('egresos_categorias').select('solo_duenos, rol').limit(1),
 } as const;
 

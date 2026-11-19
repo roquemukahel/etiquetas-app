@@ -3820,4 +3820,13 @@ export const EN: Record<string, string> = {
   "Esta venta no genera comisión": "This sale does not generate commission",
   "La comisión de esta venta ya estaba generada": "The commission for this sale was already generated",
   "Esta función todavía no está activada en la base de datos (comisiones_categoria_supabase.sql).": "This feature is not activated in the database yet (comisiones_categoria_supabase.sql).",
+  "Si no elegís el medio de pago, este egreso no se descuenta del efectivo de la Caja. Elegí \"Efectivo\" si salió del cajón.": "If you don't choose a payment method, this expense is not deducted from the cash in the Cash register. Choose \"Cash\" if it came out of the drawer.",
+  "¿De qué caja sale el efectivo?": "Which cash register does the cash come from?",
+  "egresos en efectivo": "cash expenses",
+  "Egresos en efectivo": "Cash expenses",
+  "egreso de este turno no tiene medio de pago": "expense in this shift has no payment method",
+  "egresos de este turno no tienen medio de pago": "expenses in this shift have no payment method",
+  "No se descuentan del efectivo esperado. Editalos en Egresos y elegí \"Efectivo\" si salieron del cajón.": "They are not deducted from the expected cash. Edit them in Expenses and choose \"Cash\" if they came out of the drawer.",
+  "Ir a Egresos": "Go to Expenses",
+  "Egreso": "Expense",
 };

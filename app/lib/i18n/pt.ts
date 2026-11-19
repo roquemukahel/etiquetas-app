@@ -3821,4 +3821,13 @@ export const PT: Record<string, string> = {
   "Esta venta no genera comisión": "Esta venda não gera comissão",
   "La comisión de esta venta ya estaba generada": "A comissão desta venda já havia sido gerada",
   "Esta función todavía no está activada en la base de datos (comisiones_categoria_supabase.sql).": "Este recurso ainda não está ativado no banco de dados (comisiones_categoria_supabase.sql).",
+  "Si no elegís el medio de pago, este egreso no se descuenta del efectivo de la Caja. Elegí \"Efectivo\" si salió del cajón.": "Se você não escolher o meio de pagamento, esta despesa não é descontada do dinheiro do Caixa. Escolha \"Dinheiro\" se saiu da gaveta.",
+  "¿De qué caja sale el efectivo?": "De qual caixa sai o dinheiro?",
+  "egresos en efectivo": "despesas em dinheiro",
+  "Egresos en efectivo": "Despesas em dinheiro",
+  "egreso de este turno no tiene medio de pago": "despesa deste turno não tem meio de pagamento",
+  "egresos de este turno no tienen medio de pago": "despesas deste turno não têm meio de pagamento",
+  "No se descuentan del efectivo esperado. Editalos en Egresos y elegí \"Efectivo\" si salieron del cajón.": "Não são descontadas do dinheiro esperado. Edite-as em Despesas e escolha \"Dinheiro\" se saíram da gaveta.",
+  "Ir a Egresos": "Ir para Despesas",
+  "Egreso": "Despesa",
 };

@@ -44,6 +44,9 @@ describe('efectivoEsperado / diferenciaArqueo', () => {
   it('esperado = inicial + efectivo del período', () => {
     expect(efectivoEsperado(5000, 12000)).toBe(17000);
   });
+  it('los egresos en efectivo salen del cajón: se restan', () => {
+    expect(efectivoEsperado(5000, 12000, 3000)).toBe(14000);
+  });
   it('diferencia positiva = sobra plata, negativa = falta', () => {
     expect(diferenciaArqueo(17500, 17000)).toBe(500);
     expect(diferenciaArqueo(16800, 17000)).toBe(-200);

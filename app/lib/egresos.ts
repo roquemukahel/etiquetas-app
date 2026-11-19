@@ -84,6 +84,8 @@ export type Egreso = {
   area_id?: string | null;
   // Solo existe si el negocio corrió egresos_duenos_supabase.sql; sin él, todo se pagó desde la caja.
   pagado_desde?: PagadoDesde;
+  // Solo existe con egresos_caja_supabase.sql: de qué caja sale el efectivo (si no se eligió, de Venta diaria).
+  caja_tipo?: 'venta_diaria' | 'financiamiento' | null;
 };
 
 // ---------- Áreas (Local / Taller / lo que el negocio use) ----------
@@ -306,6 +308,7 @@ export async function crearEgreso(
     sucursalId?: string | null;
     areaId?: string | null;
     pagadoDesde?: PagadoDesde;
+    cajaTipo?: 'venta_diaria' | 'financiamiento' | null;
   }
 ): Promise<{ id: string } | { error: string }> {
   const descripcion = params.descripcion.trim();
@@ -330,6 +333,7 @@ export async function crearEgreso(
       ...(params.sucursalId ? { sucursal_id: params.sucursalId } : {}),
       ...(params.areaId ? { area_id: params.areaId } : {}),
       ...(params.pagadoDesde ? { pagado_desde: params.pagadoDesde } : {}),
+      ...(params.cajaTipo ? { caja_tipo: params.cajaTipo } : {}),
     })
     .select('id')
     .single();
@@ -366,6 +370,7 @@ export async function editarEgreso(
     sucursalId?: string | null;
     areaId?: string | null;
     pagadoDesde?: PagadoDesde;
+    cajaTipo?: 'venta_diaria' | 'financiamiento' | null;
   }
 ): Promise<{ ok: true } | { error: string }> {
   const descripcion = params.descripcion.trim();
@@ -387,6 +392,7 @@ export async function editarEgreso(
       sucursal_id: params.sucursalId || null,
       area_id: params.areaId || null,
       ...(params.pagadoDesde ? { pagado_desde: params.pagadoDesde } : {}),
+      ...(params.cajaTipo !== undefined ? { caja_tipo: params.cajaTipo } : {}),
       updated_at: new Date().toISOString(),
     })
     .eq('id', egreso.id);

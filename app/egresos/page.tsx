@@ -455,6 +455,14 @@ function ModalEgreso({
   const [proveedorId, setProveedorId] = useState(egresoAEditar?.proveedor_id ?? '');
   const [sucursalId, setSucursalId] = useState(egresoAEditar?.sucursal_id ?? sucursalActual.id ?? (sucursales.length === 1 ? sucursales[0].id : ''));
   const [pagadoDesde, setPagadoDesde] = useState<PagadoDesde>(egresoAEditar?.pagado_desde ?? 'caja');
+  // De qué caja sale el efectivo (egresos_caja_supabase.sql). Sin esa migración, todo sale de Venta diaria.
+  const [conCaja, setConCaja] = useState(false);
+  useEffect(() => {
+    soportaMigracion(supabase, 'egresosCaja').then(setConCaja);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const [cajaTipo, setCajaTipo] = useState<'venta_diaria' | 'financiamiento'>(egresoAEditar?.caja_tipo === 'financiamiento' ? 'financiamiento' : 'venta_diaria');
+  const salePorCaja = pagadoDesde === 'caja';
   // Para quien no es dueño: sin las categorías "solo dueños" ni los tipos Retiro/Ajuste.
   const categoriasVisibles = categorias.filter((c) => esDueno || !c.solo_duenos);
   const tiposVisibles = (Object.entries(ETIQUETA_TIPO_EGRESO) as [TipoEgreso, string][]).filter(([valor]) => esDueno || (valor !== 'retiro' && valor !== 'ajuste'));
@@ -538,6 +546,8 @@ function ModalEgreso({
       sucursalId: sucursalId || null,
       areaId: areaId || null,
       ...(conDuenos ? { pagadoDesde } : {}),
+      // Solo el efectivo pagado desde la caja sale de un cajón: ahí se elige de cuál (si no, null → Venta diaria).
+      ...(conCaja ? { cajaTipo: medioPago === 'efectivo' && salePorCaja ? cajaTipo : null } : {}),
     };
     const resultado = egresoAEditar ? await editarEgreso(supabase, egresoAEditar, params) : await crearEgreso(supabase, params);
     setGuardando(false);
@@ -662,6 +672,20 @@ function ModalEgreso({
             </select>
           </div>
         </div>
+        {salePorCaja && medioPago === '' && (
+          <p className="text-[11px] text-muted dark:text-dark-text-secondary -mt-1">
+            {t('Si no elegís el medio de pago, este egreso no se descuenta del efectivo de la Caja. Elegí "Efectivo" si salió del cajón.')}
+          </p>
+        )}
+        {conCaja && salePorCaja && medioPago === 'efectivo' && (
+          <div>
+            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('¿De qué caja sale el efectivo?')}</label>
+            <select value={cajaTipo} onChange={(e) => setCajaTipo(e.target.value as 'venta_diaria' | 'financiamiento')} className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm">
+              <option value="venta_diaria">{t('Venta diaria')}</option>
+              <option value="financiamiento">{t('Financiamiento')}</option>
+            </select>
+          </div>
+        )}
         {conDuenos && esDueno && (
           <div>
             <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Pagado desde')}</label>

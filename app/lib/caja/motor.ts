@@ -39,8 +39,9 @@ export function totalGeneral(totales: TotalesPorMedio): number {
 // Efectivo esperado en el cajón: lo que había al abrir + lo que entró en
 // efectivo durante el turno. Transferencia/débito/crédito no pasan por el
 // cajón físico, por eso no suman acá (sí en el total general de arriba).
-export function efectivoEsperado(efectivoInicial: number, totalEfectivoPeriodo: number): number {
-  return efectivoInicial + totalEfectivoPeriodo;
+// Los egresos pagados en efectivo desde la caja (un gasto, un pago a un proveedor, un retiro) SALEN del cajón: se restan.
+export function efectivoEsperado(efectivoInicial: number, totalEfectivoPeriodo: number, egresosEfectivo = 0): number {
+  return efectivoInicial + totalEfectivoPeriodo - egresosEfectivo;
 }
 
 export function diferenciaArqueo(declarado: number, esperado: number): number {
