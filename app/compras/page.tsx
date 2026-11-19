@@ -11,6 +11,8 @@ import MiniaturaDispositivo from '../MiniaturaDispositivo';
 import { useT } from '../lib/idioma';
 import { porLotes, obtenerTodasLasFilas } from '../lib/db';
 import { formatearGB } from '../lib/almacenamiento';
+import { formatearFechaYHoraCorta } from '../lib/fechas';
+import { buscarPorTexto } from '../lib/buscar';
 
 type Compra = {
   id: string;
@@ -140,13 +142,20 @@ export default function Compras() {
     cargar(historialCompleto);
   };
 
-  const filtradas = useMemo(() => {
-    const q = busqueda.trim().toLowerCase();
-    if (!q) return compras;
-    return compras.filter((c) =>
-      [c.modelo, c.clientes?.nombre, c.clientes?.apellido].filter(Boolean).some((x) => x!.toLowerCase().includes(q))
-    );
-  }, [compras, busqueda]);
+  // Igual que Plan Canje: modelo, capacidad, IMEI (completo o un tramo), cliente, precio y la fecha de la compra. Cada palabra tiene que aparecer en algún dato.
+  const filtradas = useMemo(
+    () =>
+      buscarPorTexto(compras, busqueda, (c) => [
+        c.modelo,
+        c.capacidad_gb ? `${c.capacidad_gb}gb ${formatearGB(c.capacidad_gb)}` : null,
+        c.imei,
+        c.clientes?.nombre,
+        c.clientes?.apellido,
+        c.precio,
+        formatearFechaYHoraCorta(c.created_at),
+      ]),
+    [compras, busqueda]
+  );
 
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
@@ -172,7 +181,7 @@ export default function Compras() {
       <input
         value={busqueda}
         onChange={(e) => setBusqueda(e.target.value)}
-        placeholder={t('Buscar por modelo o cliente...')}
+        placeholder={t('Buscar por modelo, IMEI, cliente o fecha...')}
         className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
       />
 
@@ -248,6 +257,11 @@ export default function Compras() {
                   <p className="text-xs text-muted dark:text-dark-text-secondary">
                     {c.clientes ? `${c.clientes.nombre} ${c.clientes.apellido || ''}` : t('Sin cliente')}
                   </p>
+                  {c.created_at && (
+                    <p className="text-xs text-muted dark:text-dark-text-secondary">
+                      {t('Comprado el:')} <span className="font-medium text-ink dark:text-dark-text">{formatearFechaYHoraCorta(c.created_at)}</span>
+                    </p>
+                  )}
                 </div>
                 <div className="text-right">
                   {c.precio != null && <p className="text-sm font-medium">${c.precio.toLocaleString('es-AR')}</p>}

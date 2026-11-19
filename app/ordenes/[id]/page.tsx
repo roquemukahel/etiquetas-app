@@ -8,7 +8,7 @@ import { registrarAuditoria } from '../../lib/auditoria';
 import { revertirComisionesOrden } from '../../lib/comisiones/operaciones';
 import { limpiarImei } from '../../lib/imei';
 import { asegurarModelo, normalizarNombreModelo } from '../../lib/modelos';
-import { useActor, getActor } from '../../lib/actor';
+import { useActor, getActor, MENSAJE_ACTOR_REQUERIDO } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import { useT } from '../../lib/idioma';
 import { simboloMoneda } from '../../lib/monedas';
@@ -548,6 +548,14 @@ export default function DetalleOrden() {
     if (imeiLimpio) {
       const { data: existente } = await supabase.from('dispositivos').select('id').eq('imei', imeiLimpio).limit(1).maybeSingle();
       if (existente && !confirm(`${t('Ya hay un dispositivo en Stock con el IMEI')} ${imeiLimpio}. ${t('¿Agregarlo igual?')}`)) return;
+    }
+    if (!tienePermiso(actor, 'agregar_stock')) {
+      setError(t('No tenés permiso para agregar dispositivos al stock.'));
+      return;
+    }
+    if (!actor) {
+      setError(t(MENSAJE_ACTOR_REQUERIDO));
+      return;
     }
     setCargandoDispositivoEdit(true);
     setError(null);

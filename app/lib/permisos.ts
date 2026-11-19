@@ -3,6 +3,8 @@ import { Actor } from './actor';
 export type Permiso =
   | 'vender'
   | 'eliminar'
+  // Eliminar un dispositivo del Stock a mano (sin venderlo): permiso propio, separado de 'eliminar' (que junta órdenes, clientes, canjes y compras).
+  | 'eliminar_dispositivos'
   | 'agregar_stock'
   | 'ver_estadisticas'
   | 'recibir_servicio_tecnico'
@@ -85,6 +87,9 @@ export function tienePermiso(actor: Actor | null, permiso: Permiso): boolean {
       return actor.permisos.puedeVender ?? true;
     case 'eliminar':
       return actor.permisos.puedeEliminar ?? true;
+    case 'eliminar_dispositivos':
+      // Sin dato propio (negocio que no corrió el SQL, o un actor guardado antes) vale lo mismo que el 'eliminar' de siempre.
+      return actor.permisos.puedeEliminarDispositivos ?? actor.permisos.puedeEliminar ?? true;
     case 'agregar_stock':
       return actor.permisos.puedeAgregarStock ?? true;
     case 'ver_estadisticas':

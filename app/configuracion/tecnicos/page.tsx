@@ -29,6 +29,8 @@ type Tecnico = {
   puede_recibir_servicio_tecnico: boolean;
   puede_gestionar_servicio_tecnico: boolean;
   puede_gestionar_financiacion: boolean;
+  // Solo existe si el negocio corrió dispositivos_registro_permisos_supabase.sql.
+  puede_eliminar_dispositivos?: boolean;
   // Solo existen si el negocio corrió permisos_sensibles_supabase.sql.
   puede_cargar_egresos?: boolean;
   puede_registrar_pagos_proveedores?: boolean;
@@ -46,6 +48,7 @@ const PERMISOS_DEFAULT: PermisosForm = {
   puedeRecibirServicioTecnico: true,
   puedeGestionarServicioTecnico: true,
   puedeGestionarFinanciacion: true,
+  puedeEliminarDispositivos: true,
   puedeCargarEgresos: false,
   puedeRegistrarPagosProveedores: false,
   puedeVerCostos: false,
@@ -60,7 +63,10 @@ export default function Tecnicos() {
   const [loading, setLoading] = useState(true);
   // Permisos sensibles (cargar egresos, pagos a proveedores, ver costos): solo si se corrió permisos_sensibles_supabase.sql.
   const [conSensibles, setConSensibles] = useState(false);
+  // Permiso propio para eliminar dispositivos del Stock: solo si se corrió dispositivos_registro_permisos_supabase.sql.
+  const [conElimDisp, setConElimDisp] = useState(false);
   useEffect(() => {
+    soportaMigracion(supabase, 'permisoEliminarDispositivos').then(setConElimDisp);
     soportaMigracion(supabase, 'permisosSensibles').then(setConSensibles);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -167,6 +173,7 @@ export default function Tecnicos() {
       puedeRecibirServicioTecnico: tec.puede_recibir_servicio_tecnico,
       puedeGestionarServicioTecnico: tec.puede_gestionar_servicio_tecnico,
       puedeGestionarFinanciacion: tec.puede_gestionar_financiacion,
+      puedeEliminarDispositivos: tec.puede_eliminar_dispositivos ?? tec.puede_eliminar,
       puedeCargarEgresos: tec.puede_cargar_egresos ?? false,
       puedeRegistrarPagosProveedores: tec.puede_registrar_pagos_proveedores ?? false,
       puedeVerCostos: tec.puede_ver_costos ?? false,
@@ -218,6 +225,7 @@ export default function Tecnicos() {
         puede_recibir_servicio_tecnico: permisosEdit.puedeRecibirServicioTecnico,
         puede_gestionar_servicio_tecnico: permisosEdit.puedeGestionarServicioTecnico,
         puede_gestionar_financiacion: permisosEdit.puedeGestionarFinanciacion,
+        ...(conElimDisp ? { puede_eliminar_dispositivos: permisosEdit.puedeEliminarDispositivos } : {}),
         ...(conSensibles
           ? {
               puede_cargar_egresos: permisosEdit.puedeCargarEgresos,
@@ -363,7 +371,7 @@ export default function Tecnicos() {
                   </div>
                 )}
 
-                <PermisosEditor mostrarSensibles={conSensibles} valor={permisosEdit} onChange={setPermisosEdit} tienePin={pinTocado ? !!pinEdit.trim() : conPin.has(tec.id)} />
+                <PermisosEditor mostrarSensibles={conSensibles} mostrarEliminarDispositivos={conElimDisp} valor={permisosEdit} onChange={setPermisosEdit} tienePin={pinTocado ? !!pinEdit.trim() : conPin.has(tec.id)} />
 
                 <button
                   disabled={guardandoPerfil}

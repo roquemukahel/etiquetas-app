@@ -253,6 +253,7 @@ export async function crearEquipoEnStandby(
     actor: { nombre?: string | null; fotoUrl?: string | null } | null;
   }
 ): Promise<Resultado> {
+  if (!datos.actor?.nombre) return { error: 'Elegí primero quién sos (arriba, donde dice "Cambiar") antes de continuar.' };
   const modelo = normalizarNombreModelo(datos.modelo.trim());
   const { data, error } = await supabase
     .from('dispositivos')
@@ -334,6 +335,7 @@ export async function mandarReparacionAStandby(
   r: { id: string; numero_orden?: string | null; modelo: string | null; capacidad_gb: number | null; color: string | null; imei: string | null; sucursal_id?: string | null; fecha_reparado?: string | null },
   opciones: { motivo: string; actor: { nombre?: string | null; fotoUrl?: string | null } | null }
 ): Promise<Resultado> {
+  if (!opciones.actor?.nombre) return { error: 'Elegí primero quién sos (arriba, donde dice "Cambiar") antes de continuar.' };
   const modelo = r.modelo ? normalizarNombreModelo(r.modelo) : r.modelo;
   // Si la reparación salió de un equipo que ya existe, vuelve a Standby ese mismo equipo (sin duplicarlo).
   const costoCanje = await costoDeCanjeDeOrigen(supabase, r.id);

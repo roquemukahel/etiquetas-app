@@ -22,6 +22,7 @@ import { camposRecibidoPor, registrarRecepcionEnHistorial } from '../../lib/reci
 import { guiaDeFormulario, guiaAFormulario } from '../../lib/financiacionGuia';
 import { compararModelosPorSalida } from '../../lib/catalogosMarcas';
 import { OPCIONES_ALMACENAMIENTO, formatearGB } from '../../lib/almacenamiento';
+import { formatearFechaYHoraCorta } from '../../lib/fechas';
 
 const STORAGE_OPTIONS = OPCIONES_ALMACENAMIENTO;
 
@@ -41,6 +42,7 @@ type Dispositivo = {
   en_stock: boolean;
   garantia_vencimiento: string | null;
   agregado_por_nombre: string | null;
+  created_at?: string | null;
   mostrar_en_stock_publico: boolean;
   sucursal_id?: string | null;
   // Solo vienen si el negocio corrió standby_supabase.sql (select('*') las trae).
@@ -57,7 +59,7 @@ export default function DetalleDispositivo() {
   const supabase = crearClienteNavegador();
   const actor = useActor();
   const t = useT();
-  const puedeEliminar = tienePermiso(actor, 'eliminar');
+  const puedeEliminar = tienePermiso(actor, 'eliminar_dispositivos'); // eliminar este dispositivo del Stock: permiso propio
   const puedeAgregarStock = tienePermiso(actor, 'agregar_stock');
   const puedeRecibirServicioTecnico = tienePermiso(actor, 'recibir_servicio_tecnico');
   // Costo, proveedor y margen son datos sensibles del dueño — mismo permiso
@@ -325,15 +327,23 @@ export default function DetalleDispositivo() {
 
       {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
 
-      {(d.garantia_vencimiento || d.agregado_por_nombre) && (
+      {(d.garantia_vencimiento || d.agregado_por_nombre || d.created_at) && (
         <div className="flex flex-col gap-0.5">
           {d.garantia_vencimiento && (
             <p className="text-xs text-muted dark:text-dark-text-secondary">
               🛡️ {t('Garantía hasta el')} {new Date(d.garantia_vencimiento + 'T00:00:00').toLocaleDateString('es-AR')}
             </p>
           )}
-          {d.agregado_por_nombre && (
-            <p className="text-xs text-muted dark:text-dark-text-secondary">{t('Agregado por')} {d.agregado_por_nombre}</p>
+          {d.agregado_por_nombre ? (
+            <p className="text-xs text-muted dark:text-dark-text-secondary">
+              {t('Agregado por')} {d.agregado_por_nombre}
+              {d.created_at ? ` · ${formatearFechaYHoraCorta(d.created_at)}` : ''}
+            </p>
+          ) : (
+            <p className="text-xs text-warn">
+              ⚠️ {t('No quedó registrado quién agregó este dispositivo.')}
+              {d.created_at ? ` ${t('Se cargó el')} ${formatearFechaYHoraCorta(d.created_at)}.` : ''}
+            </p>
           )}
         </div>
       )}

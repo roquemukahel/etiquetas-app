@@ -64,7 +64,7 @@ export default function Standby() {
   const puedeVender = tienePermiso(actor, 'vender');
   const puedeServicio = tienePermiso(actor, 'recibir_servicio_tecnico');
   const puedeVerCostos = tienePermiso(actor, 'ver_costos');
-  const puedeEliminar = tienePermiso(actor, 'eliminar');
+  const puedeEliminar = tienePermiso(actor, 'eliminar_dispositivos'); // eliminar un equipo en espera (es un dispositivo): permiso propio
 
   const [activo, setActivo] = useState<boolean | null>(null);
   const [equipos, setEquipos] = useState<EquipoStandby[]>([]);

@@ -148,6 +148,8 @@ export default function Stock() {
   const t = useT();
   const sucursalActual = useSucursalActual();
   const puedeEliminar = tienePermiso(actor, 'eliminar');
+  // Eliminar un dispositivo del Stock a mano (sin venderlo) es un permiso aparte, que cada local reparte en Configuración.
+  const puedeEliminarDisp = tienePermiso(actor, 'eliminar_dispositivos');
   const puedeAgregarStock = tienePermiso(actor, 'agregar_stock');
   const puedeRecibirServicioTecnico = tienePermiso(actor, 'recibir_servicio_tecnico');
   // El capital muestra costos y ganancias (info sensible del dueño): se
@@ -380,7 +382,7 @@ export default function Stock() {
   // — distinta de "eliminar carpeta" del menú, que borra solo el catálogo
   // vacío y por eso está bloqueada si hay dispositivos adentro.
   const eliminarCarpeta = async (modelo: string, items: Dispositivo[]) => {
-    if (items.length === 0 || !puedeEliminar) return;
+    if (items.length === 0 || !puedeEliminarDisp) return;
     setCarpetaMenuAbierta(null);
     if (
       !confirm(
@@ -655,6 +657,12 @@ export default function Stock() {
 
   const confirmarImportacion = async () => {
     if (!planImport || !puedeAgregarStock) return;
+    // Todo dispositivo tiene que quedar con quién lo agregó: sin alguien elegido en "Cambiar" no se importa.
+    const actorImport = getActor();
+    if (!actorImport) {
+      alert(t(MENSAJE_ACTOR_REQUERIDO));
+      return;
+    }
     if (
       canjesEnImport.length > 0 &&
       !confirm(
@@ -690,6 +698,8 @@ export default function Stock() {
       return {
         ...f,
         ...(categoriaImportId ? { categoria_id: categoriaImportId } : {}),
+        agregado_por_nombre: actorImport.nombre ?? null,
+        agregado_por_foto_url: actorImport.fotoUrl ?? null,
         ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
         ...(nombreProveedor ? { proveedor_id: proveedorIdPorNombre.get(nombreProveedor) ?? null } : {}),
       };
@@ -774,7 +784,7 @@ export default function Stock() {
   };
 
   const eliminarSeleccionados = async () => {
-    if (!puedeEliminar) return;
+    if (!puedeEliminarDisp) return;
     const ids = Array.from(seleccionados);
     if (ids.length === 0) return;
     if (
@@ -1037,7 +1047,7 @@ ${t(r.error)}`);
   };
 
   const eliminarDispositivo = async (d: Dispositivo) => {
-    if (!puedeEliminar) return;
+    if (!puedeEliminarDisp) return;
     setAccionAbiertaId(null);
     if (!confirm(`${t('¿Eliminar')} ${d.modelo || t('este dispositivo')} ${t('del historial? No se puede deshacer.')}`)) return;
     setProcesandoAccion(d.id);
@@ -2133,7 +2143,7 @@ ${t(r.error)}`);
                 </div>
               )}
 
-              {puedeEliminar && (
+              {puedeEliminarDisp && (
                 <div className="pt-1.5 border-t border-accent/20 dark:border-dark-accent/20 flex justify-end">
                   <button
                     onClick={eliminarSeleccionados}
@@ -2146,7 +2156,7 @@ ${t(r.error)}`);
               )}
             </div>
           ) : (
-            (puedeEliminar || puedeAgregarStock) && (
+            (puedeEliminarDisp || puedeAgregarStock) && (
               <button
                 onClick={() => setModoSeleccion(true)}
                 className="self-start text-xs text-accent dark:text-dark-accent underline"
@@ -2235,7 +2245,7 @@ ${t(r.error)}`);
                       )}
                     </span>
                   </button>
-                  {(puedeAgregarStock || puedeEliminar) && modelo !== 'Sin modelo' && (
+                  {(puedeAgregarStock || puedeEliminar || puedeEliminarDisp) && modelo !== 'Sin modelo' && (
                     <div className="relative shrink-0">
                       <button
                         onClick={() => setCarpetaMenuAbierta(carpetaMenuAbierta === modelo ? null : modelo)}
@@ -2264,7 +2274,7 @@ ${t(r.error)}`);
                               {t('Renombrar / administrar')}
                             </Link>
                           )}
-                          {puedeEliminar &&
+                          {(items.length === 0 ? puedeEliminar : puedeEliminarDisp) &&
                             (items.length === 0 ? (
                               <button
                                 onClick={() => eliminarCarpetaVacia(modelo)}
@@ -2485,7 +2495,7 @@ ${t(r.error)}`);
                                     {t('Derivar a Servicio Técnico')}
                                   </button>
                                 )}
-                                {puedeEliminar && (
+                                {puedeEliminarDisp && (
                                   <button
                                     onClick={() => eliminarDispositivo(d)}
                                     className="px-3.5 py-2.5 text-sm text-left text-bad hover:bg-bad/5 border-t border-border dark:border-dark-border mt-1"

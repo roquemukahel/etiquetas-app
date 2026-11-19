@@ -3866,4 +3866,9 @@ export const PT: Record<string, string> = {
   "sin área": "sem área",
   "de egresos no tienen el área Local ni Taller: se restan solo del resultado total, no del de cada área. Asignales un área en Egresos para que se descuenten del lado que corresponde (por ejemplo, el sueldo de los técnicos en Taller).": "de despesas não têm a área Loja nem Oficina: são subtraídas apenas do resultado total, não do de cada área. Atribua uma área em Despesas para que sejam descontadas do lado correto (por exemplo, o salário dos técnicos na Oficina).",
   "Facturación de las reparaciones cobradas menos el costo cargado de los repuestos. Las reparaciones con costo pendiente (no se cargó el repuesto) no cuentan como ganancia.": "Faturamento das reparações cobradas menos o custo lançado das peças. As reparações com custo pendente (peça não lançada) não contam como lucro.",
+  "Puede eliminar dispositivos del stock a mano (sin venderlos)": "Pode excluir dispositivos do estoque manualmente (sem vendê-los)",
+  "Comprado el:": "Comprado em:",
+  "Buscar por modelo, IMEI, cliente o fecha...": "Buscar por modelo, IMEI, cliente ou data...",
+  "No quedó registrado quién agregó este dispositivo.": "Não ficou registrado quem adicionou este dispositivo.",
+  "Se cargó el": "Foi carregado em",
 };

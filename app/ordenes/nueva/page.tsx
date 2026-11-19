@@ -12,7 +12,7 @@ import { obtenerTodasLasFilas } from '../../lib/db';
 import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../../lib/carpetas';
 import { obtenerDispositivosSenados } from '../../lib/planAhorro';
 import { simboloMoneda } from '../../lib/monedas';
-import { getActor, useActor } from '../../lib/actor';
+import { getActor, useActor, MENSAJE_ACTOR_REQUERIDO } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import {
   MEDIOS_PAGO,
@@ -895,9 +895,17 @@ export default function NuevaOrden() {
 
   const agregarDispositivoNuevo = async () => {
     if (!nuevoModelo.trim()) return;
+    const actorDispositivo = getActor();
+    if (!tienePermiso(actorDispositivo, 'agregar_stock')) {
+      setError(t('No tenés permiso para agregar dispositivos al stock.'));
+      return;
+    }
+    if (!actorDispositivo) {
+      setError(t(MENSAJE_ACTOR_REQUERIDO));
+      return;
+    }
     setCargandoDispositivo(true);
     setError(null);
-    const actorDispositivo = getActor();
     const modeloNormalizado = normalizarNombreModelo(nuevoModelo.trim());
     const { data, error: dErr } = await supabase
       .from('dispositivos')

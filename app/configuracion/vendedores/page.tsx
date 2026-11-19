@@ -29,6 +29,8 @@ type Vendedor = {
   puede_recibir_servicio_tecnico: boolean;
   puede_gestionar_servicio_tecnico: boolean;
   puede_gestionar_financiacion: boolean;
+  // Solo existe si el negocio corrió dispositivos_registro_permisos_supabase.sql.
+  puede_eliminar_dispositivos?: boolean;
   // Solo existen si el negocio corrió permisos_sensibles_supabase.sql.
   puede_cargar_egresos?: boolean;
   puede_registrar_pagos_proveedores?: boolean;
@@ -46,6 +48,7 @@ const PERMISOS_DEFAULT: PermisosForm = {
   puedeRecibirServicioTecnico: true,
   puedeGestionarServicioTecnico: true,
   puedeGestionarFinanciacion: true,
+  puedeEliminarDispositivos: true,
   puedeCargarEgresos: false,
   puedeRegistrarPagosProveedores: false,
   puedeVerCostos: false,
@@ -60,7 +63,10 @@ export default function Vendedores() {
   const [loading, setLoading] = useState(true);
   // Permisos sensibles (cargar egresos, pagos a proveedores, ver costos): solo si se corrió permisos_sensibles_supabase.sql.
   const [conSensibles, setConSensibles] = useState(false);
+  // Permiso propio para eliminar dispositivos del Stock: solo si se corrió dispositivos_registro_permisos_supabase.sql.
+  const [conElimDisp, setConElimDisp] = useState(false);
   useEffect(() => {
+    soportaMigracion(supabase, 'permisoEliminarDispositivos').then(setConElimDisp);
     soportaMigracion(supabase, 'permisosSensibles').then(setConSensibles);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -170,6 +176,7 @@ export default function Vendedores() {
       puedeRecibirServicioTecnico: v.puede_recibir_servicio_tecnico,
       puedeGestionarServicioTecnico: v.puede_gestionar_servicio_tecnico,
       puedeGestionarFinanciacion: v.puede_gestionar_financiacion,
+      puedeEliminarDispositivos: v.puede_eliminar_dispositivos ?? v.puede_eliminar,
       puedeCargarEgresos: v.puede_cargar_egresos ?? false,
       puedeRegistrarPagosProveedores: v.puede_registrar_pagos_proveedores ?? false,
       puedeVerCostos: v.puede_ver_costos ?? false,
@@ -221,6 +228,7 @@ export default function Vendedores() {
         puede_recibir_servicio_tecnico: permisosEdit.puedeRecibirServicioTecnico,
         puede_gestionar_servicio_tecnico: permisosEdit.puedeGestionarServicioTecnico,
         puede_gestionar_financiacion: permisosEdit.puedeGestionarFinanciacion,
+        ...(conElimDisp ? { puede_eliminar_dispositivos: permisosEdit.puedeEliminarDispositivos } : {}),
         ...(conSensibles
           ? {
               puede_cargar_egresos: permisosEdit.puedeCargarEgresos,
@@ -366,7 +374,7 @@ export default function Vendedores() {
                   </div>
                 )}
 
-                <PermisosEditor mostrarSensibles={conSensibles} valor={permisosEdit} onChange={setPermisosEdit} tienePin={pinTocado ? !!pinEdit.trim() : conPin.has(v.id)} />
+                <PermisosEditor mostrarSensibles={conSensibles} mostrarEliminarDispositivos={conElimDisp} valor={permisosEdit} onChange={setPermisosEdit} tienePin={pinTocado ? !!pinEdit.trim() : conPin.has(v.id)} />
 
                 <button
                   disabled={guardandoPerfil}

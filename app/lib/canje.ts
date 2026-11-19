@@ -148,6 +148,8 @@ export async function agregarCanjeAlStock(
   c: CanjeParaStock,
   opciones: { sucursalId: string | null; actor: { nombre?: string | null; fotoUrl?: string | null } | null; standby?: { motivo: string } }
 ): Promise<{ ok: true } | { ok: false; yaAgregado: boolean; mensaje: string }> {
+  // Todo dispositivo del Stock tiene que quedar con quién lo agregó. Se chequea ANTES de tocar el canje.
+  if (!opciones.actor?.nombre) return { ok: false, yaAgregado: false, mensaje: 'Elegí primero quién sos (arriba, donde dice "Cambiar") antes de continuar.' };
   const { data: actualizado, error: estadoErr } = await supabase
     .from('canjes')
     .update({ agregado_a_stock: true })

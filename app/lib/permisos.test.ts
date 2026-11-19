@@ -49,3 +49,21 @@ describe('permisos sensibles (costos, egresos, pagos a proveedores)', () => {
     expect(tienePermiso(null, 'ver_costos')).toBe(true);
   });
 });
+
+describe('eliminar dispositivos del stock a mano', () => {
+  it('sin dato propio vale lo mismo que "Puede eliminar" (nadie gana ni pierde acceso de golpe)', () => {
+    expect(tienePermiso(actor({ puedeEliminar: true }), 'eliminar_dispositivos')).toBe(true);
+    expect(tienePermiso(actor({ puedeEliminar: false }), 'eliminar_dispositivos')).toBe(false);
+  });
+  it('con el permiso propio manda ese, aunque "Puede eliminar" diga otra cosa', () => {
+    expect(tienePermiso(actor({ puedeEliminar: true, puedeEliminarDispositivos: false }), 'eliminar_dispositivos')).toBe(false);
+    expect(tienePermiso(actor({ puedeEliminar: false, puedeEliminarDispositivos: true }), 'eliminar_dispositivos')).toBe(true);
+    // y no habilita eliminar órdenes, clientes ni canjes
+    expect(tienePermiso(actor({ puedeEliminar: false, puedeEliminarDispositivos: true }), 'eliminar')).toBe(false);
+  });
+  it('el administrador y el acceso completo siempre pueden; sin persona elegida no se restringe', () => {
+    expect(tienePermiso(actor({ esAdministrador: true, puedeEliminarDispositivos: false }), 'eliminar_dispositivos')).toBe(true);
+    expect(tienePermiso(actor({ accesoCompleto: true, puedeEliminarDispositivos: false }), 'eliminar_dispositivos')).toBe(true);
+    expect(tienePermiso(null, 'eliminar_dispositivos')).toBe(true);
+  });
+});

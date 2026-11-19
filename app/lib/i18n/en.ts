@@ -3865,4 +3865,9 @@ export const EN: Record<string, string> = {
   "sin área": "no area",
   "de egresos no tienen el área Local ni Taller: se restan solo del resultado total, no del de cada área. Asignales un área en Egresos para que se descuenten del lado que corresponde (por ejemplo, el sueldo de los técnicos en Taller).": "of expenses have neither the Store nor the Workshop area: they are subtracted only from the total result, not from each area's. Assign them an area in Expenses so they are deducted from the right side (for example, technicians' salaries in Workshop).",
   "Facturación de las reparaciones cobradas menos el costo cargado de los repuestos. Las reparaciones con costo pendiente (no se cargó el repuesto) no cuentan como ganancia.": "Billing of the repairs collected minus the entered cost of the spare parts. Repairs with a pending cost (part not entered) do not count as profit.",
+  "Puede eliminar dispositivos del stock a mano (sin venderlos)": "Can delete devices from stock manually (without selling them)",
+  "Comprado el:": "Purchased on:",
+  "Buscar por modelo, IMEI, cliente o fecha...": "Search by model, IMEI, customer or date...",
+  "No quedó registrado quién agregó este dispositivo.": "Who added this device was not recorded.",
+  "Se cargó el": "It was loaded on",
 };

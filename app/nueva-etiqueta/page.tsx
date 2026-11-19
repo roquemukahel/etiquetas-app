@@ -7,6 +7,7 @@ import { crearClienteNavegador } from '../lib/supabase/client';
 import { asegurarModelo, normalizarNombreModelo } from '../lib/modelos';
 import { limpiarImei } from '../lib/imei';
 import { getActor, MENSAJE_ACTOR_REQUERIDO } from '../lib/actor';
+import { tienePermiso } from '../lib/permisos';
 import SelectorColorAuto from '../SelectorColorAuto';
 import { useT } from '../lib/idioma';
 import { useSucursalActual } from '../lib/sucursal';
@@ -199,6 +200,10 @@ export default function NuevaEtiqueta() {
       if (imeiLimpio) {
         const { data: existente } = await supabase.from('dispositivos').select('id').eq('imei', imeiLimpio).limit(1).maybeSingle();
         if (existente && !confirm(`${t('Ya hay un dispositivo en Stock con el IMEI')} ${imeiLimpio}. ${t('¿Agregarlo igual?')}`)) return;
+      }
+      if (!tienePermiso(actor, 'agregar_stock')) {
+        setError(t('No tenés permiso para agregar dispositivos al stock.'));
+        return;
       }
       setGuardandoStock(true);
       const modeloNormalizado = datos.modelo ? normalizarNombreModelo(datos.modelo.trim()) : datos.modelo;

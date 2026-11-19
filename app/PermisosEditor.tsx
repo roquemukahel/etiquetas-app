@@ -15,6 +15,8 @@ export type PermisosForm = {
   puedeRecibirServicioTecnico: boolean;
   puedeGestionarServicioTecnico: boolean;
   puedeGestionarFinanciacion: boolean;
+  // Solo se muestra si el negocio corrió dispositivos_registro_permisos_supabase.sql.
+  puedeEliminarDispositivos: boolean;
   // Permisos sensibles (permisos_sensibles_supabase.sql): apagados por defecto, valen aunque tenga acceso completo.
   puedeCargarEgresos: boolean;
   puedeRegistrarPagosProveedores: boolean;
@@ -26,12 +28,15 @@ export default function PermisosEditor({
   onChange,
   tienePin,
   mostrarSensibles = false,
+  mostrarEliminarDispositivos = false,
 }: {
   valor: PermisosForm;
   onChange: (v: PermisosForm) => void;
   tienePin: boolean;
   // Solo si el negocio ya corrió permisos_sensibles_supabase.sql.
   mostrarSensibles?: boolean;
+  // Solo si el negocio ya corrió dispositivos_registro_permisos_supabase.sql.
+  mostrarEliminarDispositivos?: boolean;
 }) {
   const t = useT();
   const set = (k: keyof PermisosForm, v: boolean) => onChange({ ...valor, [k]: v });
@@ -89,6 +94,17 @@ export default function PermisosEditor({
                 />
                 <span className="text-sm">{t('Puede eliminar (órdenes, clientes, stock, canjes, compras)')}</span>
               </label>
+              {mostrarEliminarDispositivos && (
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={valor.puedeEliminarDispositivos}
+                    onChange={(e) => set('puedeEliminarDispositivos', e.target.checked)}
+                    className="h-4 w-4 accent-ink"
+                  />
+                  <span className="text-sm">{t('Puede eliminar dispositivos del stock a mano (sin venderlos)')}</span>
+                </label>
+              )}
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
