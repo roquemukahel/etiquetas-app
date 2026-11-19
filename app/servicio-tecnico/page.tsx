@@ -11,6 +11,7 @@ import { codigoLlamada } from '../lib/paises';
 import { obtenerImagenesCarpetas } from '../lib/carpetas';
 import { registrarAuditoria } from '../lib/auditoria';
 import { cambiarEstadoReparacion } from '../lib/estadoReparacion';
+import { tieneCostoPendiente } from '../lib/costoRepuesto';
 import { liberarRepuestosDeReparaciones } from '../lib/repuestos';
 import { getActor, useActor, MENSAJE_ACTOR_REQUERIDO } from '../lib/actor';
 import { tienePermiso } from '../lib/permisos';
@@ -122,6 +123,8 @@ export default function ServicioTecnico() {
     const tabParam = new URLSearchParams(window.location.search).get('tab');
     if (tabParam === 'tecnicos') setTab('tecnicos');
     if (tabParam === 'mibanco') setTab('mibanco');
+    // Desde Estadísticas: "Ver reparaciones sin costo".
+    if (new URLSearchParams(window.location.search).get('sinCosto') === '1') setFiltroIndicador('sin_costo');
   }, []);
   const cambiarTab = (nuevoTab: 'lista' | 'mibanco' | 'tecnicos') => {
     setTab(nuevoTab);
@@ -131,7 +134,15 @@ export default function ServicioTecnico() {
   // Indicador operativo elegido (fila clickeable arriba de la lista). Por
   // defecto "activas" para no arrancar mostrando entregados/cancelados
   // viejos mezclados con lo que sí necesita atención hoy.
-  const [filtroIndicador, setFiltroIndicador] = useState<'activas' | 'demoradas' | 'aprobacion' | 'repuesto' | 'listas' | null>('activas');
+  const [filtroIndicador, setFiltroIndicador] = useState<'activas' | 'demoradas' | 'aprobacion' | 'repuesto' | 'listas' | 'sin_costo' | null>('activas');
+  // ¿El negocio corrió servicio_costo_repuesto_supabase.sql? Sin eso no hay pregunta de repuesto ni filtro "Reparaciones sin costo".
+  const [conCostoRepuesto, setConCostoRepuesto] = useState(false);
+  useEffect(() => {
+    soportaMigracion(supabase, 'costoRepuestoServicio').then(setConCostoRepuesto);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // Cuántas reparaciones (de cualquier estado, entregadas incluidas) tienen el costo pendiente: la lista solo trae lo activo, así que se cuenta aparte.
+  const [sinCostoTotal, setSinCostoTotal] = useState<number | null>(null);
   const [busqueda, setBusqueda] = useState('');
   // Debounce de 250ms: la búsqueda filtra en memoria (no dispara consultas
   // nuevas), pero igual se separa el valor "en vivo" del input del valor que
@@ -245,10 +256,13 @@ export default function ServicioTecnico() {
     // (esta pantalla promete mirar TODAS las reparaciones al buscar texto,
     // ver comentario en `filtrados` más abajo) — mismo bug de truncamiento
     // de PostgREST ya corregido en Stock/Dispositivos.
+    const conDecision = await soportaMigracion(supabase, 'costoRepuestoServicio');
     const data = await obtenerTodasLasFilas<Reparacion>(
       supabase,
       'reparaciones',
-      'id, numero_orden, modelo, capacidad_gb, color, imei, falla_declarada, diagnostico, ubicacion_fisica, tecnico_id, estado, prioridad, trabajos_realizados, fecha_ingreso_servicio, fecha_estimada, fecha_reparado, fecha_entrega, garantia_dias, estado_actualizado_at, cliente_id, token_seguimiento, en_poder_tecnico, presupuesto_mano_obra, presupuesto_repuestos, importe_total, orden_cobro_id, agregado_a_stock, sucursal_id, clientes ( nombre, apellido, telefono )',
+      'id, numero_orden, modelo, capacidad_gb, color, imei, falla_declarada, diagnostico, ubicacion_fisica, tecnico_id, estado, prioridad, trabajos_realizados, fecha_ingreso_servicio, fecha_estimada, fecha_reparado, fecha_entrega, garantia_dias, estado_actualizado_at, cliente_id, token_seguimiento, en_poder_tecnico, presupuesto_mano_obra, presupuesto_repuestos, importe_total, orden_cobro_id, agregado_a_stock, sucursal_id, ' +
+        (conDecision ? 'repuesto_decision, ' : '') +
+        'clientes ( nombre, apellido, telefono )',
       [{ columna: 'fecha_ingreso_servicio', ascending: false }],
       soloActivas ? (q) => q.not('estado', 'in', `(${FINALIZADOS.join(',')})`) : undefined
     );
@@ -272,7 +286,7 @@ export default function ServicioTecnico() {
   // por técnico, historial de entregas de un técnico puntual) que quedarían
   // en cero/incompletas si solo hubiera llegado lo activo.
   useEffect(() => {
-    if (busquedaDebounced.trim() !== '' || filtroIndicador === null || tab !== 'lista') {
+    if (busquedaDebounced.trim() !== '' || filtroIndicador === null || filtroIndicador === 'sin_costo' || tab !== 'lista') {
       asegurarHistorialCompleto();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -403,6 +417,7 @@ export default function ServicioTecnico() {
       if (filtroIndicador === 'aprobacion' && r.estado !== 'esperando_aprobacion') return false;
       if (filtroIndicador === 'repuesto' && r.estado !== 'esperando_repuesto') return false;
       if (filtroIndicador === 'listas' && r.estado !== 'listo_para_entregar') return false;
+      if (filtroIndicador === 'sin_costo' && !tieneCostoPendiente(r)) return false;
       if (filtroTecnico && r.tecnico_id !== filtroTecnico) return false;
       return true;
     });
@@ -415,6 +430,21 @@ export default function ServicioTecnico() {
     setBusqueda('');
   };
 
+  useEffect(() => {
+    if (!conCostoRepuesto) return;
+    let cancelado = false;
+    (async () => {
+      let q = supabase.from('reparaciones').select('id', { count: 'exact', head: true }).eq('repuesto_decision', 'pendiente');
+      if (filtroSucursal) q = q.eq('sucursal_id', filtroSucursal);
+      const { count, error } = await q;
+      if (!cancelado && !error) setSinCostoTotal(count ?? 0);
+    })();
+    return () => {
+      cancelado = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conCostoRepuesto, filtroSucursal, reparaciones]);
+
   const indicadores = useMemo(() => {
     const activas = reparacionesSucursal.filter((r) => !FINALIZADOS.includes(r.estado));
     return {
@@ -423,6 +453,8 @@ export default function ServicioTecnico() {
       aprobacion: reparacionesSucursal.filter((r) => r.estado === 'esperando_aprobacion').length,
       repuesto: reparacionesSucursal.filter((r) => r.estado === 'esperando_repuesto').length,
       listas: reparacionesSucursal.filter((r) => r.estado === 'listo_para_entregar').length,
+      // Reparaciones (de cualquier estado, ya entregadas incluidas) cuyo costo de repuesto quedó pendiente de cargar.
+      sinCosto: reparacionesSucursal.filter(tieneCostoPendiente).length,
       sinAsignar: activas.filter((r) => !r.tecnico_id).length,
     };
   }, [reparacionesSucursal]);
@@ -1792,7 +1824,7 @@ ${reutilizado.error}`);
 
           {/* Resumen operativo: indicadores clickeables con datos reales,
               icono + color (nunca solo color) y su propio filtro. */}
-          <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5 text-xs">
+          <div className={`grid grid-cols-3 ${conCostoRepuesto ? 'sm:grid-cols-6' : 'sm:grid-cols-5'} gap-1.5 text-xs`}>
             {(
               [
                 { id: 'activas', icono: 'herramienta', label: t('Activas'), valor: indicadores.activas, acento: 'accent' },
@@ -1800,6 +1832,7 @@ ${reutilizado.error}`);
                 { id: 'aprobacion', icono: 'documento', label: t('Esperando aprobación'), valor: indicadores.aprobacion, acento: 'warn' },
                 { id: 'repuesto', icono: 'stock', label: t('Esperando repuesto'), valor: indicadores.repuesto, acento: 'warn' },
                 { id: 'listas', icono: 'chequeado', label: t('Listas'), valor: indicadores.listas, acento: 'good' },
+                ...(conCostoRepuesto ? ([{ id: 'sin_costo', icono: 'stock', label: t('Reparaciones sin costo'), valor: sinCostoTotal ?? indicadores.sinCosto, acento: 'warn' }] as const) : []),
               ] as const
             ).map((ind) => {
               const activo = filtroIndicador === ind.id;
@@ -1922,6 +1955,8 @@ ${reutilizado.error}`);
                   ? t('Ninguna reparación está esperando un repuesto.')
                   : filtroIndicador === 'listas'
                   ? t('No hay equipos listos para entregar todavía.')
+                  : filtroIndicador === 'sin_costo'
+                  ? t('Ninguna reparación tiene el costo del repuesto pendiente. Todo está cargado.')
                   : t('No hay reparaciones en este filtro.')}
               </p>
               {hayFiltrosActivos && (

@@ -262,6 +262,8 @@ export type ReparacionParaAlerta = {
   fecha_estimada: string | null;
   fecha_entrega: string | null;
   garantia_dias: number | null;
+  // Respuesta a "¿se usó repuesto?" (servicio_costo_repuesto_supabase.sql): 'pendiente' = costo de repuesto sin cargar.
+  repuesto_decision?: string | null;
 };
 
 export type CategoriaAlerta =
@@ -272,6 +274,7 @@ export type CategoriaAlerta =
   | 'esperando_aprobacion'
   | 'esperando_repuesto'
   | 'garantia_por_vencer'
+  | 'costo_pendiente'
   | 'sin_actualizaciones'
   | 'stock_bajo'
   | 'sin_stock';
@@ -336,6 +339,10 @@ export function calcularAlertas(reparaciones: ReparacionParaAlerta[], repuestos:
         push('garantia_por_vencer', tr('la garantía vence esta semana'), 'warn', ahora - new Date(r.fecha_entrega).getTime());
         continue;
       }
+    }
+    if (r.repuesto_decision === 'pendiente') {
+      push('costo_pendiente', tr('costo del repuesto pendiente de cargar'), 'warn', msEnEstado);
+      continue;
     }
     if (activa && msEnEstado > 10 * DIA) {
       push('sin_actualizaciones', tr('sin actualizaciones hace más de 10 días'), 'warn', msEnEstado);

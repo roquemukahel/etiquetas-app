@@ -1,4 +1,4 @@
-import { entre, ESTADOS_COBRADOS, esLineaDeTaller, montoVenta, type ItemR, type OrdenR, type PagoR } from './datos';
+import { costoDeLinea, entre, ESTADOS_COBRADOS, esLineaDeTaller, montoVenta, type ItemR, type OrdenR, type PagoR } from './datos';
 import { repartirVenta, type CargoVentaR, type PagoCuotaR, type PlanVentaR } from './ventasPorForma';
 
 // "Ganancia por fuente": de dónde sale la plata del negocio. Cada venta cobrada del período se reparte entre cuatro fuentes:
@@ -60,7 +60,7 @@ function totalesDeLineas(items: LineaTipada[]): { valor: number; costo: number; 
     const cant = it.cantidad || 0;
     const precio = it.precio_unitario ?? 0;
     valor += precio * cant;
-    const c = it.costo != null ? it.costo : it.tipo === 'trabajo' ? 0 : null; // misma regla que costoDeLinea
+    const c = costoDeLinea(it);
     if (c != null && it.precio_unitario != null) {
       costo += c * cant;
       ganancia += (precio - c) * cant;

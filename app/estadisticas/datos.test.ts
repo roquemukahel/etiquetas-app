@@ -316,7 +316,7 @@ describe('esLineaDeTaller / bloqueVentasPorArea', () => {
       ['o1', [{ orden_id: 'o1', cantidad: 1, precio_unitario: 1000, costo: null, tipo: 'producto' }]],
       ['o2', [{ orden_id: 'o2', cantidad: 1, precio_unitario: 1000, costo: null, tipo: 'producto' }]],
     ]);
-    expect(bloqueVentasPorArea(ordenes, itemsPorOrden, INICIO, FIN, false)).toEqual({ ventas: 0, ventasConCosto: 0, ganancia: 0 });
+    expect(bloqueVentasPorArea(ordenes, itemsPorOrden, INICIO, FIN, false)).toEqual({ ventas: 0, ventasConCosto: 0, ganancia: 0, lineas: 0, lineasConCosto: 0 });
   });
 });
 

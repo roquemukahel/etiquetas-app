@@ -35,6 +35,7 @@ import {
   evolucionMediosPagoDe,
   esLineaDeTaller,
   bloqueVentasPorArea,
+  esAreaTaller,
   PlanFinR,
   CuotaFinR,
   PagoFinR,
@@ -400,6 +401,8 @@ export default function Estadisticas() {
       // sola traída, igual que antes.
       // Subcategorías de stock (subcategorias_supabase.sql): si todavía no se corrió, se pide sin esa columna.
       const conSubcategorias = await soportaMigracion(supabase, 'subcategorias');
+      // Costo pendiente de las reparaciones (servicio_costo_repuesto_supabase.sql): si todavía no se corrió, se pide sin esa columna.
+      const conCostoPendiente = await soportaMigracion(supabase, 'costoPendienteItems');
       const ahoraParaVentana = new Date();
       const desde = new Date(ahoraParaVentana.getFullYear() - 1, 0, 1, 0, 0, 0, 0);
 
@@ -451,7 +454,7 @@ export default function Estadisticas() {
         obtenerTodasLasFilas<ItemPeriodoR>(
           supabase,
           'orden_items',
-          'orden_id, cantidad, precio_unitario, costo, created_at, dispositivo_id, producto_id, descripcion, tipo',
+          'orden_id, cantidad, precio_unitario, costo, created_at, dispositivo_id, producto_id, descripcion, tipo' + (conCostoPendiente ? ', costo_pendiente' : ''),
           [],
           (q) => q.gte('created_at', desde.toISOString())
         ),
@@ -781,6 +784,8 @@ export default function Estadisticas() {
     () => gananciaPorFuente(ordenes, itemsPorOrden, planesFinanciacion, credito, pagos, pagosDeCuotasFuente, cobranzaActual.total, rango.inicio, rango.fin, !!sucursalId),
     [ordenes, itemsPorOrden, planesFinanciacion, credito, pagos, pagosDeCuotasFuente, cobranzaActual, rango, sucursalId]
   );
+  // Taller del período: cuántas reparaciones tienen el costo de repuestos cargado (las pendientes no cuentan como ganancia).
+  const tallerPeriodo = useMemo(() => bloqueVentasPorArea(ordenes, itemsPorOrden, rango.inicio, rango.fin, true), [ordenes, itemsPorOrden, rango]);
   // Quién registró cada cobro (nombre → foto, cruzando con vendedores y técnicos).
   const rankingCobrosEmpleado: Dato[] = useMemo(() => {
     const fotoPorNombre = new Map<string, string | null>();
@@ -1118,7 +1123,8 @@ export default function Estadisticas() {
   // egresos sin área) se muestran aparte, sin atribuir a ninguno de los dos
   // lados, para no inventar una asignación que nadie cargó.
   const areaLocalId = useMemo(() => areas.find((a) => a.nombre.trim().toLowerCase() === 'local')?.id ?? null, [areas]);
-  const areaTallerId = useMemo(() => areas.find((a) => a.nombre.trim().toLowerCase() === 'taller')?.id ?? null, [areas]);
+  // El taller también se reconoce como "Servicio técnico" o "Reparaciones" (sin tildes, sin importar mayúsculas).
+  const areaTallerId = useMemo(() => areas.find((a) => esAreaTaller(a.nombre))?.id ?? null, [areas]);
 
   type FilaRentabilidad = {
     sucursalNombre: string | null; // null = "todo el negocio" (sin multisucursal) o "sin sucursal" (ver esSinAsignar)
@@ -1669,10 +1675,23 @@ export default function Estadisticas() {
               <StatCard etiqueta={t('Técnicos activos')} valor={rankingTecnicos.length.toLocaleString(localeActual())} tooltip={t('Técnicos con al menos un arreglo terminado en el período.')} />
               <StatCard etiqueta={t('Facturación de servicio técnico')} valor={m(fuentesActual.servicio.facturado)} tooltip={t('Lo facturado en el período por reparaciones cobradas (mano de obra y repuestos). Es la misma cifra de "Servicio técnico" en Ganancia por fuente.')} moneda={moneda} tono="text-good" sensible oculto={ocultarMontos} />
               {puedeVerCostos && (
-                <StatCard etiqueta={t('Ganancia de servicio técnico')} valor={m(fuentesActual.servicio.ganancia)} tooltip={t('Facturación de las reparaciones cobradas menos el costo cargado de los repuestos (la mano de obra sin costo cuenta como ganancia).')} moneda={moneda} tono="text-good" sensible oculto={ocultarMontos}>
-                  {!ocultarMontos && fuentesActual.servicio.facturado > 0 && (
+                <StatCard etiqueta={t('Ganancia de servicio técnico')} valor={m(fuentesActual.servicio.ganancia)} tooltip={t('Facturación de las reparaciones cobradas menos el costo cargado de los repuestos. Las reparaciones con costo pendiente (no se cargó el repuesto) no cuentan como ganancia.')} moneda={moneda} tono="text-good" sensible oculto={ocultarMontos}>
+                  {!ocultarMontos && tallerPeriodo.ventasConCosto > 0 && (
                     <span className="text-[11px] text-muted dark:text-dark-text-secondary">
-                      {t('Margen')} {Math.round((fuentesActual.servicio.ganancia / fuentesActual.servicio.facturado) * 100)}%
+                      {t('Margen')} {Math.round((fuentesActual.servicio.ganancia / tallerPeriodo.ventasConCosto) * 100)}%
+                    </span>
+                  )}
+                  {!ocultarMontos && tallerPeriodo.lineas > 0 && (
+                    <span className={`block text-[11px] ${tallerPeriodo.lineasConCosto < tallerPeriodo.lineas ? 'text-warn' : 'text-muted dark:text-dark-text-secondary'}`}>
+                      {Math.round((tallerPeriodo.lineasConCosto / tallerPeriodo.lineas) * 100)}% {t('de las reparaciones con costo cargado')} ({tallerPeriodo.lineasConCosto}/{tallerPeriodo.lineas})
+                      {tallerPeriodo.lineasConCosto < tallerPeriodo.lineas && (
+                        <>
+                          {' · '}
+                          <Link href="/servicio-tecnico?sinCosto=1" className="underline">
+                            {t('Ver reparaciones sin costo')}
+                          </Link>
+                        </>
+                      )}
                     </span>
                   )}
                 </StatCard>
@@ -2167,10 +2186,19 @@ export default function Estadisticas() {
                               {f.sucursalNombre ?? (f.esSinAsignar ? t('Sin sucursal') : t('Todo el negocio'))}
                             </td>
                             <td className="py-2 px-3 text-right tabular-nums">{m(f.local.ventas)}</td>
-                            <td className={`py-2 px-3 text-right tabular-nums font-medium ${resultadoLocal >= 0 ? 'text-good' : 'text-bad'}`}>{m(resultadoLocal)}</td>
+                            <td className={`py-2 px-3 text-right tabular-nums font-medium ${resultadoLocal >= 0 ? 'text-good' : 'text-bad'}`}>
+                              {m(resultadoLocal)}
+                              {f.egresosLocal > 0 && <span className="block text-[10px] font-normal text-muted dark:text-dark-text-secondary">{t('egresos')} −{m(f.egresosLocal)}</span>}
+                            </td>
                             <td className="py-2 px-3 text-right tabular-nums">{m(f.taller.ventas)}</td>
-                            <td className={`py-2 px-3 text-right tabular-nums font-medium ${resultadoTaller >= 0 ? 'text-good' : 'text-bad'}`}>{m(resultadoTaller)}</td>
-                            <td className={`py-2 pl-3 text-right tabular-nums font-semibold ${resultadoTotal >= 0 ? 'text-good' : 'text-bad'}`}>{m(resultadoTotal)}</td>
+                            <td className={`py-2 px-3 text-right tabular-nums font-medium ${resultadoTaller >= 0 ? 'text-good' : 'text-bad'}`}>
+                              {m(resultadoTaller)}
+                              {f.egresosTaller > 0 && <span className="block text-[10px] font-normal text-muted dark:text-dark-text-secondary">{t('egresos')} −{m(f.egresosTaller)}</span>}
+                            </td>
+                            <td className={`py-2 pl-3 text-right tabular-nums font-semibold ${resultadoTotal >= 0 ? 'text-good' : 'text-bad'}`}>
+                              {m(resultadoTotal)}
+                              {f.egresosSinAsignar > 0 && <span className="block text-[10px] font-normal text-muted dark:text-dark-text-secondary">{t('sin área')} −{m(f.egresosSinAsignar)}</span>}
+                            </td>
                           </tr>
                         );
                       })}
@@ -2189,6 +2217,11 @@ export default function Estadisticas() {
                     </tbody>
                   </table>
                 </div>
+              )}
+              {(areaLocalId != null || areaTallerId != null) && filasRentabilidad.some((f) => f.egresosSinAsignar > 0) && (
+                <p className="text-[11px] text-warn">
+                  ⚠️ {m(filasRentabilidad.reduce((a, f) => a + f.egresosSinAsignar, 0))} {t('de egresos no tienen el área Local ni Taller: se restan solo del resultado total, no del de cada área. Asignales un área en Egresos para que se descuenten del lado que corresponde (por ejemplo, el sueldo de los técnicos en Taller).')}
+                </p>
               )}
               {areaLocalId == null && areaTallerId == null && (
                 <p className="text-[11px] text-muted dark:text-dark-text-secondary">

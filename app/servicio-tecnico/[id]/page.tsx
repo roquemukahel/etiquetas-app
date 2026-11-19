@@ -29,7 +29,9 @@ import MostrarBloqueo from '../../MostrarBloqueo';
 import SelectorTipoDispositivo from '../../SelectorTipoDispositivo';
 import { cambiarEstadoReparacion } from '../../lib/estadoReparacion';
 import { generarOrdenDeReparacion, ordenYaTieneCargoCuentaCorriente } from '../../lib/ordenesServicio';
-import { extraerStockInsuficiente } from '../../lib/repuestos';
+import { consumirRepuesto } from '../../lib/repuestos';
+import { alCambiarRepuestos, registrarDecisionRepuesto, type DecisionRepuesto } from '../../lib/costoRepuesto';
+import { palabrasDeBusqueda, repuestoCoincide, repuestoEnSucursal, repuestosDisponibles } from '../../lib/repuestosBusqueda';
 import { sanitizarDecimal, formatearMonto } from '../../lib/numeros';
 import { calcularSaldo } from '../../lib/cuentaCorriente';
 import { aFechaISO, sumarMesConClamp } from '../../lib/financiacion/motor';
@@ -186,6 +188,8 @@ type Reparacion = {
   codigo_seguimiento: string | null;
   nota_cliente: string | null;
   salud_bateria?: number | null;
+  // undefined = el negocio todavía no corrió servicio_costo_repuesto_supabase.sql
+  repuesto_decision?: DecisionRepuesto | null;
   fecha_ingreso_servicio: string;
   fecha_reparado: string | null;
   agregado_a_stock: boolean;
@@ -792,13 +796,10 @@ export default function FichaReparacion() {
   const sucursalDeLaOrden = r?.sucursal_id ?? null;
   // Búsqueda por palabras (no por frase exacta) sobre nombre + calidad:
   // "modulo g60s premium" encuentra "Modulo Motorola g60s" de calidad Premium.
-  const palabrasBusqueda = buscarRepuesto.trim().toLowerCase().split(/s+/).filter(Boolean);
-  const coincideBusqueda = (rp: RepuestoStock) => {
-    const texto = `${rp.nombre} ${rp.calidad ?? ''}`.toLowerCase();
-    return palabrasBusqueda.every((p) => texto.includes(p));
-  };
-  const enSucursalDeLaOrden = (rp: RepuestoStock) => !sucursalDeLaOrden || rp.sucursal_id == null || rp.sucursal_id === sucursalDeLaOrden;
-  const repuestosFiltrados = repuestosStock.filter((rp) => rp.cantidad_stock > 0 && coincideBusqueda(rp) && enSucursalDeLaOrden(rp));
+  const palabrasBusqueda = palabrasDeBusqueda(buscarRepuesto);
+  const coincideBusqueda = (rp: RepuestoStock) => repuestoCoincide(rp, palabrasBusqueda);
+  const enSucursalDeLaOrden = (rp: RepuestoStock) => repuestoEnSucursal(rp, sucursalDeLaOrden);
+  const repuestosFiltrados = repuestosDisponibles(repuestosStock, buscarRepuesto, sucursalDeLaOrden);
   // Para explicar un "sin resultados": hay repuestos con ese nombre pero sin
   // stock o de otra sucursal.
   const coincidenciasSinStockODeOtraSucursal = buscarRepuesto
@@ -819,40 +820,24 @@ export default function FichaReparacion() {
     if (cantidad <= 0) return;
     setGuardandoRepuesto(true);
     const actor = getActor();
-    const intentar = async (forzar: boolean) =>
-      supabase.rpc('repuesto_consumir', {
-        p_repuesto_id: repuestoElegido.id,
-        p_reparacion_id: r.id,
-        p_cantidad: cantidad,
-        p_actor_nombre: actor?.nombre ?? null,
-        p_forzar: forzar,
-      });
-
-    let { error: rpcError } = await intentar(false);
-    if (rpcError) {
-      const stockActual = extraerStockInsuficiente(rpcError.message);
-      if (
-        stockActual == null ||
-        !confirm(
-          `${t('Solo quedan')} ${stockActual} ${t('de')} "${repuestoElegido.nombre}" ${t('en stock. ¿Usar')} ${cantidad} ${t('igual? El stock va a quedar en negativo.')}`
-        )
-      ) {
-        setGuardandoRepuesto(false);
-        return;
-      }
-      ({ error: rpcError } = await intentar(true));
-      if (rpcError) {
-        setError(t('No pudimos guardar el repuesto:') + ' ' + rpcError.message);
-        setGuardandoRepuesto(false);
-        return;
-      }
-    }
-
-    await registrarAuditoria(supabase, {
-      accion: `usó ${cantidad} de "${repuestoElegido.nombre}" en la reparación ${r.numero_orden || ''}`,
-      entidad: 'reparacion',
-      entidadId: r.id,
+    const resultado = await consumirRepuesto(supabase, {
+      repuestoId: repuestoElegido.id,
+      nombre: repuestoElegido.nombre,
+      reparacionId: r.id,
+      numeroOrden: r.numero_orden,
+      cantidad,
+      actorNombre: actor?.nombre ?? null,
+      confirmarNegativo: (stockActual) =>
+        confirm(`${t('Solo quedan')} ${stockActual} ${t('de')} "${repuestoElegido.nombre}" ${t('en stock. ¿Usar')} ${cantidad} ${t('igual? El stock va a quedar en negativo.')}`),
     });
+    if (!resultado.ok) {
+      if (resultado.error) setError(t('No pudimos guardar el repuesto:') + ' ' + resultado.error);
+      setGuardandoRepuesto(false);
+      return;
+    }
+    // Con un repuesto cargado la reparación deja de tener "costo pendiente" y el costo de su boleta se recalcula.
+    const errorCosto = await alCambiarRepuestos(supabase, r.id);
+    if (errorCosto) setError(t('El repuesto se usó, pero no pudimos actualizar el costo:') + ' ' + errorCosto);
     setRepuestoElegido(null);
     setBuscarRepuesto('');
     setCantidadRepuesto('1');
@@ -881,11 +866,21 @@ export default function FichaReparacion() {
       entidad: 'reparacion',
       entidadId: id,
     });
+    const errorCostoQuitar = await alCambiarRepuestos(supabase, id);
+    if (errorCostoQuitar) setError(t('El repuesto se quitó, pero no pudimos actualizar el costo:') + ' ' + errorCostoQuitar);
     cargar();
     (async () => {
       const data = await obtenerTodasLasFilas<any>(supabase, 'repuestos', 'id, nombre, cantidad_stock, costo_unitario, precio_venta, sucursal_id, calidad', [{ columna: 'nombre' }]);
       setRepuestosStock((data as RepuestoStock[]) ?? []);
     })();
+  };
+
+  // Cambiar la respuesta a "¿se usó repuesto?" desde la ficha (por ejemplo, confirmar que no usó, o dejar el costo pendiente).
+  const responderRepuesto = async (decision: DecisionRepuesto) => {
+    if (!r || !puedeGestionar) return;
+    const mensaje = await registrarDecisionRepuesto(supabase, r, decision, getActor()?.nombre ?? null);
+    if (mensaje) setError(t('No pudimos guardar la respuesta:') + ' ' + mensaje);
+    cargar();
   };
 
   const enviarWhatsApp = async (tipo: 'recibido' | 'presupuesto' | 'repuesto' | 'listo') => {
@@ -2061,6 +2056,39 @@ export default function FichaReparacion() {
               </Seccion>
 
               <Seccion titulo={t('Repuestos usados (del stock)')}>
+                {r.repuesto_decision !== undefined && (
+                  <div
+                    className={`rounded-lg px-3 py-2 mb-2 text-xs flex flex-col gap-1.5 ${
+                      r.repuesto_decision === 'pendiente' || (r.repuesto_decision == null && repuestosUsados.length === 0)
+                        ? 'bg-warn/10 text-warn'
+                        : 'bg-canvas dark:bg-dark-bg text-muted dark:text-dark-text-secondary'
+                    }`}
+                  >
+                    <p className="font-medium">
+                      {repuestosUsados.length > 0
+                        ? t('Con repuesto del stock.')
+                        : r.repuesto_decision === 'pendiente'
+                        ? t('Costo pendiente: se usó un repuesto que todavía no se cargó. No cuenta como ganancia hasta que lo cargues.')
+                        : r.repuesto_decision === 'sin_repuesto'
+                        ? t('No usó repuesto: es mano de obra, cuenta entera como ganancia.')
+                        : t('Todavía no se respondió si se usó repuesto.')}
+                    </p>
+                    {puedeGestionar && repuestosUsados.length === 0 && (
+                      <div className="flex gap-3">
+                        {r.repuesto_decision !== 'pendiente' && (
+                          <button onClick={() => responderRepuesto('pendiente')} className="underline">
+                            {t('Marcar: usó repuesto, pendiente de cargar')}
+                          </button>
+                        )}
+                        {r.repuesto_decision !== 'sin_repuesto' && (
+                          <button onClick={() => responderRepuesto('sin_repuesto')} className="underline">
+                            {t('Marcar: no usó repuesto')}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
                 <p className="text-xs text-muted dark:text-dark-text-secondary -mt-1 mb-2">
                   {t('Distinto de la nota de arriba: acá se descuenta stock real y queda el costo de verdad, para calcular la ganancia de esta reparación.')}
                 </p>

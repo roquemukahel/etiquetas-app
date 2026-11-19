@@ -51,6 +51,8 @@ export type Reparacion = {
   importe_total: number | null;
   orden_cobro_id: string | null;
   agregado_a_stock: boolean;
+  // Solo existe con servicio_costo_repuesto_supabase.sql.
+  repuesto_decision?: 'del_stock' | 'pendiente' | 'sin_repuesto' | null;
   clientes: { nombre: string; apellido: string | null; telefono: string | null } | null;
   sucursal_id?: string | null;
 };
@@ -204,6 +206,11 @@ export default function TarjetaReparacion({
 
       <div className="flex items-center gap-2 flex-wrap text-xs">
         <EstadoBadge estado={r.estado} />
+        {r.repuesto_decision === 'pendiente' && (
+          <span className="rounded-full px-2 py-0.5 bg-warn/15 text-warn font-medium" title={t('No se cargó el repuesto usado: no cuenta como ganancia hasta que se cargue.')}>
+            {t('Costo pendiente')}
+          </span>
+        )}
         {r.prioridad !== 'normal' && (
           <span className={`font-medium ${PRIORIDADES.find((p) => p.id === r.prioridad)?.color}`}>
             {t(PRIORIDADES.find((p) => p.id === r.prioridad)?.label ?? '')}

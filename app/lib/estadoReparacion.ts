@@ -3,6 +3,9 @@ import { registrarAuditoria } from './auditoria';
 import { tr } from './tr';
 import { infoEstado, CHECKLIST_CALIDAD_GENERICO } from './reparaciones';
 import { liberarRepuestosDeReparaciones } from './repuestos';
+import { soportaMigracion } from './migraciones';
+import { hayQuePreguntarRepuesto, type DecisionRepuesto } from './costoRepuesto';
+import { preguntarSiSeUsoRepuesto } from './preguntaRepuesto';
 
 // Cambiar el estado de una reparación se podía disparar desde 3 lugares
 // (lista de Reparaciones, Mi banco, la ficha) y cada uno tenía su propia
@@ -36,6 +39,25 @@ async function controlesDeCalidadFaltantes(supabase: SupabaseClient, r: Reparaci
   return checklist.filter((item) => !hechos.has(item));
 }
 
+// ¿Hay que preguntar "¿se usó repuesto?" antes de marcar esta reparación como lista? Solo si nadie respondió todavía y no hay ningún repuesto
+// cargado. Devuelve la reparación completa para el cartel, o null si no hace falta preguntar (o el negocio no activó la función).
+async function reparacionPorPreguntar(supabase: SupabaseClient, r: ReparacionMinima) {
+  if (!(await soportaMigracion(supabase, 'costoRepuestoServicio'))) return null;
+  const [{ data: rep, error: repError }, { count, error: countError }, { data: conSucursal }] = await Promise.all([
+    supabase.from('reparaciones').select('repuesto_decision').eq('id', r.id).maybeSingle(),
+    supabase.from('reparaciones_repuestos').select('id', { count: 'exact', head: true }).eq('reparacion_id', r.id),
+    // sucursal_id solo existe si el negocio usa multisucursal: si falla, se ofrece el stock de todas.
+    supabase.from('reparaciones').select('sucursal_id').eq('id', r.id).maybeSingle(),
+  ]);
+  if (repError || countError) {
+    // Ante un error de lectura NO se avanza como si ya estuviera respondida: se pregunta igual.
+    return { id: r.id, numero_orden: r.numero_orden, modelo: r.modelo, sucursal_id: null as string | null };
+  }
+  const decision = (rep as { repuesto_decision: DecisionRepuesto | null } | null)?.repuesto_decision ?? null;
+  if (!hayQuePreguntarRepuesto(decision, count ?? 0)) return null;
+  return { id: r.id, numero_orden: r.numero_orden, modelo: r.modelo, sucursal_id: (conSucursal as { sucursal_id: string | null } | null)?.sucursal_id ?? null };
+}
+
 // Devuelve null si el cambio se aplicó, o el motivo si el usuario canceló
 // (para que el que llama sepa que no debe seguir con sus propios efectos,
 // como el cartel de WhatsApp).
@@ -61,6 +83,12 @@ export async function cambiarEstadoReparacion(
       overrideControlCalidad = true;
       controlesFaltantes = faltantes;
     }
+  }
+
+  // Pregunta obligatoria: ¿se usó repuesto? No frena el avance (puede contestar "pendiente de cargar"), pero no se puede saltear.
+  if (nuevoEstado === 'listo_para_entregar' || nuevoEstado === 'entregado') {
+    const porPreguntar = await reparacionPorPreguntar(supabase, r);
+    if (porPreguntar && (await preguntarSiSeUsoRepuesto(porPreguntar)) === 'cancelada') return 'cancelado';
   }
 
   const cambios: Record<string, unknown> = { estado: nuevoEstado, estado_actualizado_at: new Date().toISOString() };

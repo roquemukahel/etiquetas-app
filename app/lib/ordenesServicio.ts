@@ -4,6 +4,8 @@ import { vencimientoDesdeHoy } from './cuentaCorriente';
 import { crearPlanFinanciacion } from './financiacion/servicio';
 import { formatearGB } from './almacenamiento';
 import { tr } from './tr';
+import { soportaMigracion } from './migraciones';
+import { resolverCostoServicio, type DecisionRepuesto } from './costoRepuesto';
 
 // Datos mínimos de una reparación necesarios para armar/actualizar su orden de
 // cobro. Se aceptan además los campos del checklist de ingreso (para la nota de
@@ -105,10 +107,25 @@ export async function generarOrdenDeReparacion(
     .from('reparaciones_repuestos')
     .select('cantidad, costo_unitario')
     .eq('reparacion_id', r.id);
-  const costoRepuestos = ((repuestosUsados as { cantidad: number; costo_unitario: number | null }[]) ?? []).reduce(
-    (acc, u) => acc + (u.costo_unitario ?? 0) * (u.cantidad ?? 0),
-    0
-  );
+  const usados = (repuestosUsados as { cantidad: number; costo_unitario: number | null }[]) ?? [];
+  const costoRepuestos = usados.reduce((acc, u) => acc + (u.costo_unitario ?? 0) * (u.cantidad ?? 0), 0);
+  // Con la pregunta "¿se usó repuesto?" (servicio_costo_repuesto_supabase.sql): una reparación sin repuestos cargados y sin haber
+  // confirmado "No usó repuesto" NO tiene costo conocido — la línea queda con costo pendiente en vez de contarse como 100% de ganancia.
+  let costoLinea: number | null = costoRepuestos;
+  let costoPendiente = false;
+  let decisionActual: DecisionRepuesto | null = null;
+  if (await soportaMigracion(supabase, 'costoRepuestoServicio')) {
+    const { data: decisionData, error: decisionError } = await supabase.from('reparaciones').select('repuesto_decision').eq('id', r.id).maybeSingle();
+    if (decisionError) return { ordenId: null, total, error: tr('No pudimos leer si se usó repuesto: ') + decisionError.message };
+    decisionActual = (decisionData?.repuesto_decision as DecisionRepuesto | null) ?? null;
+    const resuelto = resolverCostoServicio(decisionActual, usados);
+    costoLinea = resuelto.costo;
+    costoPendiente = resuelto.pendiente;
+  }
+  const camposCosto: Record<string, unknown> = {
+    costo: costoLinea,
+    ...((await soportaMigracion(supabase, 'costoPendienteItems')) ? { costo_pendiente: costoPendiente } : {}),
+  };
   // Modelo/capacidad/color/IMEI se cargaron al recibir el equipo — sin esto,
   // al generar la orden de cobro se pisaba la línea de la boleta (que sí los
   // tenía desde el ingreso) con una que solo decía "Servicio técnico — modelo".
@@ -149,10 +166,10 @@ export async function generarOrdenDeReparacion(
     // El ítem es lo que se imprime en la boleta y lo que suma la caja: si no se
     // pudo guardar hay que cortar acá, no seguir como si la orden estuviera bien.
     const { error: itemGuardarError } = itemExistente
-      ? await supabase.from('orden_items').update({ descripcion, precio_unitario: total, costo: costoRepuestos }).eq('id', itemExistente.id)
+      ? await supabase.from('orden_items').update({ descripcion, precio_unitario: total, ...camposCosto }).eq('id', itemExistente.id)
       : await supabase
           .from('orden_items')
-          .insert({ orden_id: ordenId, descripcion, cantidad: 1, precio_unitario: total, costo: costoRepuestos, tipo: 'trabajo' });
+          .insert({ orden_id: ordenId, descripcion, cantidad: 1, precio_unitario: total, ...camposCosto, tipo: 'trabajo' });
     if (itemGuardarError) return { ordenId: null, total, error: tr('No pudimos guardar el ítem de la orden: ') + itemGuardarError.message };
   } else {
     // Reparaciones sin cliente al recibirse (equipo propio) o cargadas antes de
@@ -178,7 +195,7 @@ export async function generarOrdenDeReparacion(
       descripcion,
       cantidad: 1,
       precio_unitario: total,
-      costo: costoRepuestos,
+      ...camposCosto,
       tipo: 'trabajo',
     });
     if (itemNuevoError) {
@@ -198,6 +215,11 @@ export async function generarOrdenDeReparacion(
     fecha_reparado: r.fecha_reparado ?? new Date().toISOString(),
   };
   if (marcarEntregado) cambiosReparacion.estado = 'entregado';
+  // Se cobró sin que nadie respondiera si se usó repuesto (y no hay ninguno cargado): queda como "costo pendiente" para que aparezca en el filtro y en las alertas.
+  if (costoPendiente && decisionActual == null && (await soportaMigracion(supabase, 'costoRepuestoServicio'))) {
+    cambiosReparacion.repuesto_decision = 'pendiente';
+    cambiosReparacion.repuesto_decision_at = new Date().toISOString();
+  }
 
   const { error: repError } = await supabase.from('reparaciones').update(cambiosReparacion).eq('id', r.id);
   if (repError) return { ordenId, total, error: tr('La orden se generó pero no pudimos actualizar la reparación: ') + repError.message };

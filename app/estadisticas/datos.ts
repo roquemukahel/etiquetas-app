@@ -41,13 +41,17 @@ export type ItemR = {
   precio_unitario: number | null;
   costo: number | null;
   tipo?: string | null;
+  // Reparación cuyo costo de repuestos todavía no se cargó (servicio_costo_repuesto_supabase.sql): no cuenta como ganancia.
+  costo_pendiente?: boolean | null;
 };
 
 // Costo de una línea para calcular ganancia. Una línea de taller (mano de obra) sin costo cargado cuesta cero: sin esto toda la mano de obra
 // de las órdenes que no pasaron por Servicio Técnico quedaba afuera de la ganancia y el "Resultado taller" aparecía siempre en cero.
 // Las demás líneas sin costo siguen sin entrar a la ganancia (no se inventa un costo que nadie cargó).
-export function costoDeLinea(it: { costo: number | null; tipo?: string | null }): number | null {
+// Excepción: una reparación marcada con costo pendiente (no se sabe si usó repuesto) tampoco cuenta como ganancia: su costo es desconocido, no cero.
+export function costoDeLinea(it: { costo: number | null; tipo?: string | null; costo_pendiente?: boolean | null }): number | null {
   if (it.costo != null) return it.costo;
+  if (it.costo_pendiente) return null;
   return it.tipo === 'trabajo' ? 0 : null;
 }
 export type PagoR = {
@@ -482,9 +486,20 @@ export function esLineaDeTaller(tipo: string | null | undefined): boolean {
   return tipo === 'trabajo';
 }
 
+// ¿Esta área de egresos es el taller? Se reconoce por el nombre ("Taller", "Servicio técnico" o "Reparaciones"), sin tildes ni mayúsculas.
+export function esAreaTaller(nombre: string): boolean {
+  const limpio = nombre
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .trim()
+    .toLowerCase();
+  return limpio === 'taller' || limpio === 'servicio tecnico' || limpio === 'reparaciones';
+}
+
 export type ItemAreaR = ItemR & { tipo?: string | null };
 
-export type BloqueArea = { ventas: number; ventasConCosto: number; ganancia: number };
+// lineas / lineasConCosto: cuántas líneas se vendieron y cuántas tienen costo conocido (en el taller, cuántas reparaciones tienen el costo cargado).
+export type BloqueArea = { ventas: number; ventasConCosto: number; ganancia: number; lineas: number; lineasConCosto: number };
 
 // Mismo cálculo que bloqueVentas() (ventas/ventasConCosto/ganancia), pero
 // recortado a las líneas de un solo lado (Local o Taller) — para poder
@@ -501,18 +516,22 @@ export function bloqueVentasPorArea(
   let ventas = 0;
   let ganancia = 0;
   let ventasConCosto = 0;
+  let lineas = 0;
+  let lineasConCosto = 0;
   for (const o of cobradas) {
     const items = (itemsPorOrden.get(o.id) ?? []).filter((it) => esLineaDeTaller(it.tipo) === esTaller);
     for (const it of items) {
       ventas += (it.precio_unitario || 0) * (it.cantidad || 0);
+      lineas += 1;
       const costo = costoDeLinea(it);
       if (costo != null && it.precio_unitario != null) {
         ganancia += (it.precio_unitario - costo) * (it.cantidad || 0);
         ventasConCosto += it.precio_unitario * (it.cantidad || 0);
+        lineasConCosto += 1;
       }
     }
   }
-  return { ventas, ventasConCosto, ganancia };
+  return { ventas, ventasConCosto, ganancia, lineas, lineasConCosto };
 }
 
 // ---------- Ranking por producto y por categoría (para Estadísticas) ----------

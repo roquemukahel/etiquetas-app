@@ -41,6 +41,9 @@ const CHEQUEOS = {
   ingresosCapital: (s: SupabaseClient) => s.from('ingresos').select('id').limit(1),
   // egresos_duenos_supabase.sql
   egresosDuenos: (s: SupabaseClient) => s.from('egresos').select('pagado_desde').limit(1),
+  // servicio_costo_repuesto_supabase.sql (¿se usó repuesto?, costo pendiente en reparaciones y en la línea de la boleta)
+  costoRepuestoServicio: (s: SupabaseClient) => s.from('reparaciones').select('repuesto_decision').limit(1),
+  costoPendienteItems: (s: SupabaseClient) => s.from('orden_items').select('costo_pendiente').limit(1),
   // egresos_caja_supabase.sql (de qué caja sale un egreso en efectivo; el efectivo esperado del cierre los resta)
   egresosCaja: (s: SupabaseClient) => s.from('egresos').select('caja_tipo').limit(1),
   categoriasEgresosDuenos: (s: SupabaseClient) => s.from('egresos_categorias').select('solo_duenos, rol').limit(1),

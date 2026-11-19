@@ -10,6 +10,7 @@ import { useT } from './lib/idioma';
 import { useSucursalActual, setSucursalManual, getSucursalManual } from './lib/sucursal';
 import { obtenerSucursales, type Sucursal } from './lib/sucursales';
 import { soportaMigracion } from './lib/migraciones';
+import AnfitrionRepuesto from './AnfitrionRepuesto';
 
 // El sidebar solo existe en pantallas grandes (ver <aside className="hidden
 // lg:flex">) — en el celular la navegación sigue exactamente igual que
@@ -170,6 +171,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div>
+      <AnfitrionRepuesto />
       {conMenu && mostrarAvisoPrueba && (
         <div className="no-print sticky top-[52px] z-30 w-full bg-accent-soft dark:bg-dark-accent-soft text-accent dark:text-dark-accent text-xs px-4 py-2 flex items-center justify-center gap-3 flex-wrap">
           <span>
