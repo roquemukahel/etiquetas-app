@@ -3871,4 +3871,5 @@ export const PT: Record<string, string> = {
   "Buscar por modelo, IMEI, cliente o fecha...": "Buscar por modelo, IMEI, cliente ou data...",
   "No quedó registrado quién agregó este dispositivo.": "Não ficou registrado quem adicionou este dispositivo.",
   "Se cargó el": "Foi carregado em",
+  "Está en Standby, fuera del Stock para vender.": "Está em Standby, fora do Estoque para vender.",
 };

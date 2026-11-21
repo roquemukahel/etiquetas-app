@@ -28,6 +28,7 @@ type Compra = {
 const ETIQUETA_ESTADO: Record<string, string> = {
   pendiente: 'Pendiente',
   en_stock: 'En stock',
+  standby: 'En Standby',
   servicio_tecnico: 'Servicio técnico',
 };
 

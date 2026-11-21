@@ -22,6 +22,7 @@ import { useCoincidenciasCanje } from '../../lib/useCoincidenciasCanje';
 import { hayCanjeConEseImei } from '../../lib/canje';
 import { campoBateriaServicio } from '../../lib/bateriaServicio';
 import { falla } from '../../lib/escritura';
+import { soportaMigracion } from '../../lib/migraciones';
 import { camposRecibidoPor, registrarRecepcionEnHistorial } from '../../lib/recibidoPor';
 import { OPCIONES_ALMACENAMIENTO, formatearGB } from '../../lib/almacenamiento';
 
@@ -88,13 +89,22 @@ export default function DetalleCompra() {
     })();
   }, [id]);
 
-  const agregarAlStock = async () => {
+  // Standby (standby_supabase.sql): el botón "Mandar a Standby" solo aparece si el negocio ya lo tiene activado.
+  const [conStandby, setConStandby] = useState(false);
+  useEffect(() => {
+    soportaMigracion(supabase, 'standby').then(setConStandby);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Con `standby` el equipo no entra al Stock vendible sino a Standby (con ese motivo): para el que llegó con detalles
+  // y todavía no se sabe qué hacer con él.
+  const agregarAlStock = async (standby?: { motivo: string }) => {
     if (!compra || procesando || !puedeAgregarStock) return;
     if (!getActor()) {
       setError(t(MENSAJE_ACTOR_REQUERIDO));
       return;
     }
-    if (!confirm(t('¿Agregar este dispositivo al Stock para venderlo?'))) return;
+    if (!standby && !confirm(t('¿Agregar este dispositivo al Stock para venderlo?'))) return;
     if (hayCanjeConEseImei(coincidenciasCanje.porImei, compra.imei ?? '') && !confirm(t('Este dispositivo está en Plan Canje. Si lo cargás acá queda duplicado en el Stock. ¿Cargarlo igual?'))) return;
     const enStandbyConEseImei = hayCanjeConEseImei(coincidenciasStandby.porImei, compra.imei ?? '');
     if (enStandbyConEseImei && !confirm(t('Este dispositivo está en Standby. Si lo cargás acá queda duplicado en el Stock. ¿Cargarlo igual?'))) return;
@@ -112,7 +122,7 @@ export default function DetalleCompra() {
     // reservarla — la segunda no llega a duplicar el dispositivo.
     const { data: actualizada, error: estadoErr } = await supabase
       .from('compras')
-      .update({ estado: 'en_stock' })
+      .update({ estado: standby ? 'standby' : 'en_stock' })
       .eq('id', id)
       .eq('estado', 'pendiente')
       .select('id');
@@ -139,7 +149,15 @@ export default function DetalleCompra() {
       estado: compra.condicion || 'usado',
       ...(bateriaDeLaCompra != null ? { salud_bateria: bateriaDeLaCompra } : {}),
       detalles: compra.detalles,
-      en_stock: true,
+      ...(standby
+        ? {
+            en_stock: false,
+            en_espera: true,
+            en_espera_desde: new Date().toISOString(),
+            espera_origen: 'compra',
+            espera_motivo: standby.motivo.trim() || null,
+          }
+        : { en_stock: true }),
       agregado_por_nombre: actor?.nombre ?? null,
       agregado_por_foto_url: actor?.fotoUrl ?? null,
       ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
@@ -152,12 +170,19 @@ export default function DetalleCompra() {
     }
     await asegurarModelo(supabase, modeloNormalizado);
     await registrarAuditoria(supabase, {
-      accion: `agregó al Stock un dispositivo comprado (${compra.modelo || 'sin modelo'}${compra.imei ? `, IMEI ${compra.imei}` : ''}) de ${nombreCliente(compra)}`,
+      accion: `${standby ? 'mandó a Standby' : 'agregó al Stock'} un dispositivo comprado (${compra.modelo || 'sin modelo'}${compra.imei ? `, IMEI ${compra.imei}` : ''}) de ${nombreCliente(compra)}`,
       entidad: 'compra',
       entidadId: compra.id,
     });
-    setCompra({ ...compra, estado: 'en_stock' });
+    setCompra({ ...compra, estado: standby ? 'standby' : 'en_stock' });
     setProcesando(false);
+  };
+
+  const mandarAStandby = () => {
+    if (!compra || procesando || !puedeAgregarStock) return;
+    const motivo = prompt(`${t('¿Qué le pasa a')} ${compra.modelo || t('este equipo')}? ${t('Queda en Standby, fuera del Stock para vender.')}`, compra.detalles ?? '');
+    if (motivo === null) return;
+    return agregarAlStock({ motivo });
   };
 
   const derivarAServicioTecnico = async () => {
@@ -525,10 +550,19 @@ export default function DetalleCompra() {
           {puedeAgregarStock && (
             <button
               disabled={procesando}
-              onClick={agregarAlStock}
+              onClick={() => agregarAlStock()}
               className="w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
             >
               {t('Agregar al Stock')}
+            </button>
+          )}
+          {conStandby && puedeAgregarStock && (
+            <button
+              disabled={procesando}
+              onClick={mandarAStandby}
+              className="w-full rounded-2xl border border-border dark:border-dark-border py-4 text-center text-base font-medium disabled:opacity-40"
+            >
+              {t('Mandar a Standby')}
             </button>
           )}
           {puedeRecibirServicioTecnico && (
@@ -552,7 +586,11 @@ export default function DetalleCompra() {
         </div>
       ) : (
         <p className="text-sm text-good bg-good/10 rounded-lg px-3 py-2">
-          {compra.estado === 'en_stock' ? `✓ ${t('Ya está en el Stock, listo para vender.')}` : `✓ ${t('Derivado a Servicio Técnico.')}`}
+          {compra.estado === 'en_stock'
+            ? `✓ ${t('Ya está en el Stock, listo para vender.')}`
+            : compra.estado === 'standby'
+              ? `✓ ${t('Está en Standby, fuera del Stock para vender.')}`
+              : `✓ ${t('Derivado a Servicio Técnico.')}`}
         </p>
       )}
 

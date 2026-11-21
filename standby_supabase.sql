@@ -6,7 +6,7 @@
 -- ============================================================
 alter table dispositivos add column if not exists en_espera boolean not null default false;
 alter table dispositivos add column if not exists en_espera_desde timestamptz;
-alter table dispositivos add column if not exists espera_origen text;   -- 'stock' | 'canje' | 'servicio_tecnico' | 'manual'
+alter table dispositivos add column if not exists espera_origen text;   -- 'stock' | 'canje' | 'compra' | 'servicio_tecnico' | 'manual'
 alter table dispositivos add column if not exists espera_motivo text;   -- qué le pasa / por qué está en espera
 
 create index if not exists idx_dispositivos_en_espera on dispositivos(negocio_id) where en_espera;

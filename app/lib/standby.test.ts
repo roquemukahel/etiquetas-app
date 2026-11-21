@@ -209,6 +209,6 @@ describe('orden, antigüedad y origen de la lista de Standby', () => {
       { espera_origen: 'canje' },
       { espera_origen: null },
     ]);
-    expect(cuenta).toEqual({ stock: 2, canje: 1, servicio_tecnico: 0, manual: 0, sin_origen: 1 });
+    expect(cuenta).toEqual({ stock: 2, canje: 1, compra: 0, servicio_tecnico: 0, manual: 0, sin_origen: 1 });
   });
 });

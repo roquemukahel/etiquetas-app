@@ -42,7 +42,7 @@ import { ModalMotivo, ModalNuevoEquipo } from './ModalesStandby';
 const POR_PAGINA = 40;
 
 type FiltroOrigen = OrigenStandby | 'sin_origen' | null;
-const ORIGENES: (OrigenStandby | 'sin_origen')[] = ['stock', 'canje', 'servicio_tecnico', 'manual', 'sin_origen'];
+const ORIGENES: (OrigenStandby | 'sin_origen')[] = ['stock', 'canje', 'compra', 'servicio_tecnico', 'manual', 'sin_origen'];
 
 const chip = (activo: boolean) =>
   `inline-flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent dark:focus-visible:ring-dark-accent ${

@@ -11,11 +11,12 @@ import { obtenerTodasLasFilas } from './db';
 import { costoDeCanjeDeOrigen, marcarCanjeDeOrigenAgregado } from './canje';
 import { bateriaDeReparacion, campoBateriaServicio } from './bateriaServicio';
 
-export type OrigenStandby = 'stock' | 'canje' | 'servicio_tecnico' | 'manual';
+export type OrigenStandby = 'stock' | 'canje' | 'compra' | 'servicio_tecnico' | 'manual';
 
 export const ETIQUETA_ORIGEN_STANDBY: Record<OrigenStandby, string> = {
   stock: 'Stock',
   canje: 'Plan Canje',
+  compra: 'Compras',
   servicio_tecnico: 'Servicio Técnico',
   manual: 'Cargado a mano',
 };
@@ -120,7 +121,7 @@ export function esAntiguoEnStandby(e: Pick<EquipoStandby, 'en_espera_desde' | 'c
 
 // Cuántos equipos hay de cada origen (para los filtros de la lista). Los que no tienen origen cargado van en 'sin_origen'.
 export function contarPorOrigen(equipos: Pick<EquipoStandby, 'espera_origen'>[]): Record<OrigenStandby | 'sin_origen', number> {
-  const cuenta: Record<OrigenStandby | 'sin_origen', number> = { stock: 0, canje: 0, servicio_tecnico: 0, manual: 0, sin_origen: 0 };
+  const cuenta: Record<OrigenStandby | 'sin_origen', number> = { stock: 0, canje: 0, compra: 0, servicio_tecnico: 0, manual: 0, sin_origen: 0 };
   for (const e of equipos) cuenta[e.espera_origen ?? 'sin_origen'] += 1;
   return cuenta;
 }
