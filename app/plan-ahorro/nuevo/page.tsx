@@ -7,6 +7,7 @@ import { crearClienteNavegador } from '../../lib/supabase/client';
 import { obtenerTodasLasFilas } from '../../lib/db';
 import { sanitizarDecimal } from '../../lib/numeros';
 import { obtenerDispositivosSenados } from '../../lib/planAhorro';
+import { telefonoIncompleto } from '../../lib/telefono';
 import SelectorColorAuto from '../../SelectorColorAuto';
 import { useT } from '../../lib/idioma';
 
@@ -117,7 +118,7 @@ export default function NuevoPlanAhorro() {
   };
 
   const confirmarClienteNuevo = () => {
-    if (!nuevoNombre.trim()) return;
+    if (!nuevoNombre.trim() || telefonoIncompleto(nuevoTelefono)) return;
     setStep('plan');
   };
 
@@ -268,9 +269,14 @@ export default function NuevoPlanAhorro() {
                 onChange={(e) => setNuevoTelefono(e.target.value)}
                 className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
               />
+              {telefonoIncompleto(nuevoTelefono) && (
+                <p className="text-xs text-bad mt-1">
+                  {t('Parece incompleto. Completá el número o dejalo vacío.')}
+                </p>
+              )}
             </div>
             <button
-              disabled={!nuevoNombre.trim()}
+              disabled={!nuevoNombre.trim() || telefonoIncompleto(nuevoTelefono)}
               onClick={confirmarClienteNuevo}
               className="mt-2 w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
             >

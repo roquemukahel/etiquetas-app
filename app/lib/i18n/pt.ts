@@ -529,6 +529,8 @@ export const PT: Record<string, string> = {
   Apellido: 'Sobrenome',
   Domicilio: 'Endereço',
   'Guardar cliente': 'Salvar cliente',
+  // Usado también en el alta rápida de cliente desde Órdenes, Compras y Plan de ahorro.
+  'Parece incompleto. Completá el número o dejalo vacío.': 'Parece incompleto. Complete o número ou deixe em branco.',
 
   // Clientes — ficha (cuenta corriente / financiación / compras / datos)
   'Agregar deuda': 'Adicionar dívida',

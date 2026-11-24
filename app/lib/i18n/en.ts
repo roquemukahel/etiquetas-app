@@ -528,6 +528,8 @@ export const EN: Record<string, string> = {
   Apellido: 'Last name',
   Domicilio: 'Address',
   'Guardar cliente': 'Save customer',
+  // Usado también en el alta rápida de cliente desde Órdenes, Compras y Plan de ahorro.
+  'Parece incompleto. Completá el número o dejalo vacío.': "That looks incomplete. Finish the number or leave it blank.",
 
   // Clientes — ficha (cuenta corriente / financiación / compras / datos)
   'Agregar deuda': 'Add debt',

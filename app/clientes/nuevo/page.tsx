@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { getActor } from '../../lib/actor';
 import { useT } from '../../lib/idioma';
+import { telefonoIncompleto } from '../../lib/telefono';
 
 export default function NuevoCliente() {
   const router = useRouter();
@@ -23,7 +24,7 @@ export default function NuevoCliente() {
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
 
-  const puedeGuardar = nombre.trim().length > 0;
+  const puedeGuardar = nombre.trim().length > 0 && !telefonoIncompleto(telefono);
 
   const handleGuardar = async () => {
     if (!puedeGuardar) return;
@@ -72,7 +73,12 @@ export default function NuevoCliente() {
         <Campo label={t('Domicilio')} valor={domicilio} onChange={setDomicilio} />
         <Campo label={t('Localidad (opcional)')} valor={localidad} onChange={setLocalidad} />
         <Campo label={t('Email')} valor={email} onChange={setEmail} />
-        <Campo label={t('Teléfono')} valor={telefono} onChange={setTelefono} />
+        <div>
+          <Campo label={t('Teléfono')} valor={telefono} onChange={setTelefono} />
+          {telefonoIncompleto(telefono) && (
+            <p className="text-xs text-bad mt-1">{t('Parece incompleto. Completá el número o dejalo vacío.')}</p>
+          )}
+        </div>
         <Campo label={t('DNI')} valor={dni} onChange={setDni} />
       </div>
 
