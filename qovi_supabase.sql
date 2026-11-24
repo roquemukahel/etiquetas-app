@@ -31,13 +31,26 @@ create table if not exists qovi_articulos (
   constraint qovi_articulos_contenido_no_vacio check (length(trim(contenido)) > 0)
 );
 
+-- Postgres no deja usar to_tsvector('spanish', texto) directo en una columna
+-- generada: lo marca como "no inmutable" (depende de la configuración de
+-- idioma, que en teoría podría cambiar). El arreglo estándar es envolverlo en
+-- una función propia marcada IMMUTABLE a mano — es seguro acá porque el
+-- idioma ('spanish') siempre va fijo, nunca cambia por fila.
+create or replace function qovi_to_tsvector(config text, texto text)
+returns tsvector
+language sql
+immutable
+as $$
+  select to_tsvector(config::regconfig, coalesce(texto, ''));
+$$;
+
 -- Columna de búsqueda de texto completo (RAG liviano, sin servicios externos):
 -- título con más peso que el contenido, más las palabras clave.
 alter table qovi_articulos add column if not exists busqueda tsvector
   generated always as (
-    setweight(to_tsvector('spanish', coalesce(titulo, '')), 'A') ||
-    setweight(to_tsvector('spanish', array_to_string(coalesce(palabras_clave, '{}'), ' ')), 'A') ||
-    setweight(to_tsvector('spanish', coalesce(contenido, '')), 'B')
+    setweight(qovi_to_tsvector('spanish', titulo), 'A') ||
+    setweight(qovi_to_tsvector('spanish', array_to_string(coalesce(palabras_clave, '{}'), ' ')), 'A') ||
+    setweight(qovi_to_tsvector('spanish', contenido), 'B')
   ) stored;
 create index if not exists idx_qovi_articulos_busqueda on qovi_articulos using gin (busqueda);
 create index if not exists idx_qovi_articulos_modulo on qovi_articulos(modulo) where estado = 'publicado';
