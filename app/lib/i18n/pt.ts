@@ -3874,4 +3874,17 @@ export const PT: Record<string, string> = {
   "No quedó registrado quién agregó este dispositivo.": "Não ficou registrado quem adicionou este dispositivo.",
   "Se cargó el": "Foi carregado em",
   "Está en Standby, fuera del Stock para vender.": "Está em Standby, fora do Estoque para vender.",
+  // Fondos disponibles (Caja → Fondos, independiente del turno)
+  "Fondos disponibles": "Fundos disponíveis",
+  "Dinero disponible de la empresa en todo momento, aparte de la apertura y el cierre de caja. Solo vos podés registrar ingresos y egresos acá.": "Dinheiro disponível da empresa em qualquer momento, separado da abertura e do fechamento do caixa. Só você pode registrar entradas e saídas aqui.",
+  "No tenés permiso para ver Fondos disponibles.": "Você não tem permissão para ver Fundos disponíveis.",
+  "Volver a Caja": "Voltar ao Caixa",
+  "No pudimos cargar los fondos:": "Não conseguimos carregar os fundos:",
+  "Efectivo en pesos": "Dinheiro em pesos",
+  "Transferencias en pesos": "Transferências em pesos",
+  "Dólares en efectivo": "Dólares em espécie",
+  "Historial de movimientos": "Histórico de movimentos",
+  "Ingreso": "Entrada",
+  "Ej. Retiro para pagar un proveedor": "Ex. Retirada para pagar um fornecedor",
+  "Anular movimiento": "Anular movimento",
 };

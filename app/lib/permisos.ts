@@ -53,7 +53,13 @@ export type Permiso =
   // Cargar gastos (solo ve los que cargó él/ella) y registrar pagos a proveedores sin ver saldos ni compras:
   // permisos propios, para una persona de confianza que NO es administradora ni tiene acceso completo.
   | 'cargar_egresos'
-  | 'registrar_pagos_proveedores';
+  | 'registrar_pagos_proveedores'
+  // Fondos disponibles (saldo manual de la empresa en efectivo/transferencias/
+  // dólares, independiente de la apertura/cierre de turno): mismo nivel que
+  // 'auditoria'/'gestionar_usuarios' — SOLO esAdministrador, ni siquiera
+  // accesoCompleto alcanza. Pedido explícito del dueño: "únicamente mi
+  // usuario" pueda registrar movimientos ahí.
+  | 'gestionar_fondos';
 
 // Sin actor elegido todavía, o un actor sin datos de permisos (guardado
 // antes de que existiera esto): no restringimos — mantiene el
@@ -80,7 +86,14 @@ export function tienePermiso(actor: Actor | null, permiso: Permiso): boolean {
   // este cambio no existía la distinción, así que un vendedor con acceso
   // completo pero sin ser administrador ahora pierde estas dos, algo que
   // no pasaba con ninguno de los otros permisos).
-  if (permiso === 'auditoria' || permiso === 'gestionar_usuarios' || permiso === 'exportar_eliminar_datos' || permiso === 'ajustar_financiacion') return false;
+  if (
+    permiso === 'auditoria' ||
+    permiso === 'gestionar_usuarios' ||
+    permiso === 'exportar_eliminar_datos' ||
+    permiso === 'ajustar_financiacion' ||
+    permiso === 'gestionar_fondos'
+  )
+    return false;
   if (actor.permisos.accesoCompleto) return true;
   switch (permiso) {
     case 'vender':

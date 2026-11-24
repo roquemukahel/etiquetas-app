@@ -3873,4 +3873,17 @@ export const EN: Record<string, string> = {
   "No quedó registrado quién agregó este dispositivo.": "Who added this device was not recorded.",
   "Se cargó el": "It was loaded on",
   "Está en Standby, fuera del Stock para vender.": "It is in Standby, out of the sellable Stock.",
+  // Fondos disponibles (Caja → Fondos, independiente del turno)
+  "Fondos disponibles": "Available funds",
+  "Dinero disponible de la empresa en todo momento, aparte de la apertura y el cierre de caja. Solo vos podés registrar ingresos y egresos acá.": "Money the business has on hand at any moment, separate from opening and closing the register. Only you can record income and expenses here.",
+  "No tenés permiso para ver Fondos disponibles.": "You don't have permission to see Available funds.",
+  "Volver a Caja": "Back to Cash register",
+  "No pudimos cargar los fondos:": "We couldn't load the funds:",
+  "Efectivo en pesos": "Cash (pesos)",
+  "Transferencias en pesos": "Transfers (pesos)",
+  "Dólares en efectivo": "Cash (dollars)",
+  "Historial de movimientos": "Movement history",
+  "Ingreso": "Income",
+  "Ej. Retiro para pagar un proveedor": "E.g. Withdrawal to pay a supplier",
+  "Anular movimiento": "Void movement",
 };

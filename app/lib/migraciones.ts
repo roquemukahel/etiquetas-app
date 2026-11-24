@@ -49,6 +49,10 @@ const CHEQUEOS = {
   // egresos_caja_supabase.sql (de qué caja sale un egreso en efectivo; el efectivo esperado del cierre los resta)
   egresosCaja: (s: SupabaseClient) => s.from('egresos').select('caja_tipo').limit(1),
   categoriasEgresosDuenos: (s: SupabaseClient) => s.from('egresos_categorias').select('solo_duenos, rol').limit(1),
+  // fondos_manuales_supabase.sql (Fondos disponibles: saldo manual en efectivo/transferencias/dólares, independiente de Caja)
+  fondosManuales: (s: SupabaseClient) => s.from('fondos_movimientos').select('id').limit(1),
+  // recibido_por_canje_compras_supabase.sql (quién recibió la compra/el canje, separado de quién lo agrega al Stock)
+  recibidoPorCanjeCompras: (s: SupabaseClient) => s.from('canjes').select('recibido_por_nombre').limit(1),
 } as const;
 
 export type MigracionOpcional = keyof typeof CHEQUEOS;

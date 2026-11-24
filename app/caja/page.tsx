@@ -40,6 +40,8 @@ export default function CajaPage() {
   const puede = tienePermiso(actor, 'vender');
   // Tildar un cierre como revisado es un control: lo hace quien administra la caja (mismo nivel que los egresos), no cualquier cajero.
   const puedeRevisar = tienePermiso(actor, 'gestionar_egresos');
+  // Fondos disponibles (saldo manual en efectivo/transferencias/dólares, independiente del turno): solo administradores.
+  const puedeFondos = tienePermiso(actor, 'gestionar_fondos');
   const sucursalActualGlobal = useSucursalActual();
 
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
@@ -237,6 +239,11 @@ export default function CajaPage() {
           &larr;
         </Link>
         <span className="text-lg font-medium">{t('Caja')}</span>
+        {puedeFondos && (
+          <Link href="/caja/fondos" className="ml-auto text-xs text-accent dark:text-dark-accent underline whitespace-nowrap">
+            💰 {t('Fondos disponibles')}
+          </Link>
+        )}
       </header>
 
       {sucursales.length > 1 && !sucursalActualGlobal.fija && (
