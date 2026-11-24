@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Building2, Receipt, ScrollText, ArrowLeft, Menu, X } from 'lucide-react';
+import { LayoutDashboard, Building2, Receipt, ScrollText, Bot, ArrowLeft, Menu, X } from 'lucide-react';
 import { crearClienteNavegador } from '../lib/supabase/client';
 
 const NAV = [
@@ -11,6 +11,7 @@ const NAV = [
   { href: '/admin/negocios', label: 'Negocios', icon: Building2, exact: false },
   { href: '/admin/pagos', label: 'Pagos', icon: Receipt, exact: false },
   { href: '/admin/auditoria', label: 'Auditoría', icon: ScrollText, exact: false },
+  { href: '/admin/qovi', label: 'Qovi', icon: Bot, exact: false },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

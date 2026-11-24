@@ -11,6 +11,7 @@ import { useSucursalActual, setSucursalManual, getSucursalManual } from './lib/s
 import { obtenerSucursales, type Sucursal } from './lib/sucursales';
 import { soportaMigracion } from './lib/migraciones';
 import AnfitrionRepuesto from './AnfitrionRepuesto';
+import QoviWidget from './QoviWidget';
 
 // El sidebar solo existe en pantallas grandes (ver <aside className="hidden
 // lg:flex">) — en el celular la navegación sigue exactamente igual que
@@ -335,6 +336,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       )}
 
       <div className={conMenu ? 'lg:pl-64' : undefined}>{children}</div>
+      {conMenu && <QoviWidget />}
     </div>
   );
 }
