@@ -10,6 +10,8 @@ import { sanitizarDecimal } from '../../lib/numeros';
 import { limpiarImei } from '../../lib/imei';
 import { telefonoIncompleto } from '../../lib/telefono';
 import { extraerBateriaDeDetalles, parsearBateria, soloPorcentajeBateria } from '../../lib/bateria';
+import { getActor } from '../../lib/actor';
+import { camposRecibidoPorOperacion } from '../../lib/recibidoPor';
 import SelectorColorAuto from '../../SelectorColorAuto';
 import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
 import { useT } from '../../lib/idioma';
@@ -98,6 +100,10 @@ export default function NuevaCompra() {
 
   const handleConfirmar = async () => {
     if (!puedeConfirmar) return;
+    // Se captura UNA sola vez, acá al principio, antes de cualquier await — quien
+    // quede registrado como "Recibido por" es quien arrancó a cargar la compra,
+    // no quien esté elegido cuando terminan de correr los pasos de abajo.
+    const actor = getActor();
     setGuardando(true);
     setError(null);
 
@@ -138,6 +144,7 @@ export default function NuevaCompra() {
           ...(bateriaFinal != null ? { salud_bateria: bateriaFinal } : {}),
           detalles: detalles.trim() || null,
           precio: precio ? Number(precio) : null,
+          ...(await camposRecibidoPorOperacion(supabase, actor)),
         })
         .select()
         .single();

@@ -7,7 +7,7 @@ import { crearClienteNavegador } from '../../lib/supabase/client';
 import { useT } from '../../lib/idioma';
 import { asegurarModelo, normalizarNombreModelo } from '../../lib/modelos';
 import { TODOS_LOS_MODELOS_CATALOGO, compararModelosPorSalida } from '../../lib/catalogosMarcas';
-import { camposRecibidoPor, registrarRecepcionEnHistorial } from '../../lib/recibidoPor';
+import { camposRecibidoPor, camposRecibidoPorOperacion, registrarRecepcionEnHistorial } from '../../lib/recibidoPor';
 import { obtenerTodasLasFilas } from '../../lib/db';
 import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../../lib/carpetas';
 import { obtenerDispositivosSenados } from '../../lib/planAhorro';
@@ -1340,6 +1340,11 @@ export default function NuevaOrden() {
 
   const handleConfirmar = async () => {
     if (!puedeConfirmar) return;
+    // Se captura UNA sola vez, acá al principio, antes de cualquier await — es
+    // quien queda como "Recibido por" en un canje de esta venta (si trae algún
+    // equipo como parte de pago), sin importar cuánto tarden los pasos de
+    // abajo ni si alguien cambia de cuenta mientras se termina de guardar.
+    const actorOrden = getActor();
     // Un precio varias veces mayor al de lista casi siempre es un error de carga (un cero de más): se avisa antes de guardar.
     const preciosAnormales = lineasConPrecioAnormal(carrito);
     if (
@@ -1493,6 +1498,7 @@ ${t('¿Cargarlo igual?')}`)) {
       ordenCreadaId = orden.id;
 
       if (canjesEfectivos.length > 0) {
+        const camposRecibido = await camposRecibidoPorOperacion(supabase, actorOrden);
         const { error: canjesErr } = await supabase.from('canjes').insert(
           canjesEfectivos.map((c) => ({
             orden_id: orden.id,
@@ -1506,6 +1512,7 @@ ${t('¿Cargarlo igual?')}`)) {
             vendedor_id: vendedorId || null,
             condicion: c.condicion,
             ubicacion_fisica: c.ubicacion_fisica.trim() || null,
+            ...camposRecibido,
           }))
         );
         if (canjesErr) throw new Error(canjesErr.message || t('no se pudieron cargar los dispositivos de canje'));

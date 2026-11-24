@@ -42,6 +42,8 @@ type Compra = {
   precio: number | null;
   estado: string;
   clientes: { nombre: string; apellido: string | null; telefono: string | null } | null;
+  // Opcional en el tipo: la columna existe recién después de correr recibido_por_canje_compras_supabase.sql.
+  recibido_por_nombre?: string | null;
 };
 
 export default function DetalleCompra() {
@@ -100,7 +102,14 @@ export default function DetalleCompra() {
   // y todavía no se sabe qué hacer con él.
   const agregarAlStock = async (standby?: { motivo: string }) => {
     if (!compra || procesando || !puedeAgregarStock) return;
-    if (!getActor()) {
+    // Se captura UNA sola vez, acá al principio — no se vuelve a leer más
+    // abajo. Antes se volvía a llamar getActor() después de los confirm()
+    // y de un await real a Supabase (unos segundos de ventana real); si en
+    // ese lapso alguien cambiaba de cuenta (selector de PIN), el dispositivo
+    // quedaba agregado a nombre de la cuenta NUEVA en vez de quien realmente
+    // inició la acción (bug real reportado por el usuario, 2026-11-24).
+    const actor = getActor();
+    if (!actor) {
       setError(t(MENSAJE_ACTOR_REQUERIDO));
       return;
     }
@@ -137,7 +146,6 @@ export default function DetalleCompra() {
       return;
     }
 
-    const actor = getActor();
     const modeloNormalizado = compra.modelo ? normalizarNombreModelo(compra.modelo) : compra.modelo;
     // La batería de la compra pasa al equipo; en compras viejas (escrita en los detalles) se rescata de ahí.
     const bateriaDeLaCompra = compra.salud_bateria ?? extraerBateriaDeDetalles(compra.detalles);
@@ -516,6 +524,12 @@ export default function DetalleCompra() {
         {compra.precio != null && (
           <p>
             <span className="text-muted dark:text-dark-text-secondary">{t('Precio pagado:')} </span>${compra.precio.toLocaleString('es-AR')}
+          </p>
+        )}
+        {compra.recibido_por_nombre && (
+          <p>
+            <span className="text-muted dark:text-dark-text-secondary">{t('Recibido por:')} </span>
+            {compra.recibido_por_nombre}
           </p>
         )}
       </div>

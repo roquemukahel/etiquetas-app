@@ -40,6 +40,10 @@ type Canje = {
   ubicacion_fisica: string | null;
   vendedor_id: string | null;
   created_at: string | null;
+  // Opcionales: existen recién después de correr recibido_por_canje_compras_supabase.sql.
+  // Quién recibió este canje al cargarlo — separado de quién después lo agrega al Stock
+  // (dispositivos.agregado_por_nombre, puede ser otra persona y en otro momento).
+  recibido_por_nombre?: string | null;
 };
 
 type VendedorCanje = { id: string; nombre: string; foto_url: string | null };
@@ -48,7 +52,11 @@ type VendedorCanje = { id: string; nombre: string; foto_url: string | null };
 // (la foto viaja como data URL y pesa), y de todo el historial: la pantalla se ponía lenta a medida
 // que crecían los canjes. Ahora: solo estas columnas, la foto de cada vendedor una sola vez, y cada
 // solapa se carga cuando se abre.
-const COLUMNAS_CANJE =
+// recibido_por_nombre se agrega aparte, condicionado a soportaMigracion
+// ('recibidoPorCanjeCompras') más abajo: seleccionar una columna que todavía
+// no existe rompe TODA la consulta (a diferencia de un `select('*')`), así
+// que no puede ir fija en esta lista mientras el negocio no corrió esa SQL.
+const COLUMNAS_CANJE_BASE =
   'id, modelo, capacidad_gb, color, imei, salud_bateria, detalles, monto, estado, agregado_a_stock, oculto_en_canje, condicion, ubicacion_fisica, vendedor_id, created_at';
 const TAMANO_PAGINA_HISTORIAL = 50;
 
@@ -96,10 +104,15 @@ export default function PlanCanje() {
     if (nuevas.size > 0) setImagenesCarpetas((prev) => new Map([...prev, ...nuevas]));
   };
 
+  // soportaMigracion cachea la promesa (ver migraciones.ts), así que llamarla
+  // en cada fetch no repite la consulta de red más que la primera vez — más
+  // simple que sincronizar un estado de React con el momento exacto de cada pedido.
+  const columnasCanje = async () => COLUMNAS_CANJE_BASE + ((await soportaMigracion(supabase, 'recibidoPorCanjeCompras')) ? ', recibido_por_nombre' : '');
+
   const cargarVista = async (v: Vista) => {
     if (v === 'en_canje') {
       const [pendientes, derivadosIds] = await Promise.all([
-        obtenerTodasLasFilas<Canje>(supabase, 'canjes', COLUMNAS_CANJE, [{ columna: 'created_at', ascending: false }], (q) =>
+        obtenerTodasLasFilas<Canje>(supabase, 'canjes', await columnasCanje(), [{ columna: 'created_at', ascending: false }], (q) =>
           q.eq('estado', 'en_canje').eq('agregado_a_stock', false).or('oculto_en_canje.is.null,oculto_en_canje.eq.false')
         ),
         // La orden de Servicio Técnico que apunta al canje es la prueba de que ya salió de acá (no depende de la marca "oculto").
@@ -111,7 +124,7 @@ export default function PlanCanje() {
     } else if (v === 'historial') {
       const { data, error } = await supabase
         .from('canjes')
-        .select(COLUMNAS_CANJE)
+        .select(await columnasCanje())
         .eq('agregado_a_stock', true)
         .order('created_at', { ascending: false })
         .range(0, TAMANO_PAGINA_HISTORIAL - 1);
@@ -142,7 +155,7 @@ export default function PlanCanje() {
     const desde = canjes.filter((c) => c.agregado_a_stock).length;
     const { data, error } = await supabase
       .from('canjes')
-      .select(COLUMNAS_CANJE)
+      .select(await columnasCanje())
       .eq('agregado_a_stock', true)
       .order('created_at', { ascending: false })
       .range(desde, desde + TAMANO_PAGINA_HISTORIAL - 1);
@@ -229,7 +242,8 @@ export default function PlanCanje() {
   useEffect(() => {
     if (vista !== 'historial' || !hayBusqueda || !hayMasHistorial || completandoHistorial) return;
     setCompletandoHistorial(true);
-    obtenerTodasLasFilas<Canje>(supabase, 'canjes', COLUMNAS_CANJE, [{ columna: 'created_at', ascending: false }], (q) => q.eq('agregado_a_stock', true))
+    columnasCanje()
+      .then((columnas) => obtenerTodasLasFilas<Canje>(supabase, 'canjes', columnas, [{ columna: 'created_at', ascending: false }], (q) => q.eq('agregado_a_stock', true)))
       .then((todos) => {
         setCanjes((prev) => [...prev.filter((x) => !x.agregado_a_stock), ...todos]);
         setHayMasHistorial(false);
@@ -515,12 +529,16 @@ export default function PlanCanje() {
                     </p>
                   )}
                   {c.detalles && <p>{t('Detalles:')} {c.detalles}</p>}
+                  {/* El vendedor asignado es quien se lleva la comisión de la venta — no necesariamente
+                      quien físicamente recibió este equipo. Antes decía "Recibido por", lo cual confundía
+                      ambas cosas (bug real reportado por el usuario, 2026-11-24). */}
                   {c.vendedor_id && vendedores.get(c.vendedor_id)?.nombre && (
                     <p className="flex items-center gap-1.5">
-                      {t('Recibido por:')} <Avatar src={vendedores.get(c.vendedor_id)?.foto_url ?? null} nombre={vendedores.get(c.vendedor_id)?.nombre ?? ''} size={34} />{' '}
+                      {t('Vendedor:')} <Avatar src={vendedores.get(c.vendedor_id)?.foto_url ?? null} nombre={vendedores.get(c.vendedor_id)?.nombre ?? ''} size={34} />{' '}
                       {vendedores.get(c.vendedor_id)?.nombre}
                     </p>
                   )}
+                  {c.recibido_por_nombre && <p>{t('Recibido por:')} {c.recibido_por_nombre}</p>}
                 </div>
 
                 {editandoUbicacionId === c.id ? (

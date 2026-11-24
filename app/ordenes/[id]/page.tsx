@@ -34,7 +34,7 @@ import {
 import { cuotasEfectivasDeOrden, etiquetaCuotas, interesDe, interesGuardadoDeOrden, planesActivos, valorCuota } from '../../lib/cuotas';
 import { registrarFallo, falla } from '../../lib/escritura';
 import { obtenerTodasLasFilas } from '../../lib/db';
-import { camposRecibidoPor } from '../../lib/recibidoPor';
+import { camposRecibidoPor, camposRecibidoPorOperacion } from '../../lib/recibidoPor';
 import { OPCIONES_ALMACENAMIENTO, formatearGB } from '../../lib/almacenamiento';
 
 const ESTADOS = ['pendiente', 'pagado', 'entregado'];
@@ -656,6 +656,9 @@ export default function DetalleOrden() {
 
   const guardarEdicion = async () => {
     if (!orden) return;
+    // Se captura UNA sola vez, acá al principio, antes de cualquier await — es
+    // quien queda como "Recibido por" si esta edición agrega un canje nuevo.
+    const actorEdicion = getActor();
     setGuardando(true);
     setError(null);
 
@@ -866,6 +869,7 @@ export default function DetalleOrden() {
     }
 
     if (canjesNuevos.length > 0) {
+      const camposRecibidoCanje = await camposRecibidoPorOperacion(supabase, actorEdicion);
       const { error: canjesInsError } = await supabase.from('canjes').insert(
         canjesNuevos.map((c) => ({
           orden_id: id,
@@ -879,6 +883,7 @@ export default function DetalleOrden() {
           vendedor_id: vendedorNuevo,
           condicion: c.condicion,
           ubicacion_fisica: c.ubicacion_fisica.trim() || null,
+          ...camposRecibidoCanje,
         }))
       );
       if (canjesInsError) {
