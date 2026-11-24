@@ -13,13 +13,17 @@ import { asegurarModelo, normalizarNombreModelo } from '../../lib/modelos';
 import { limpiarImei } from '../../lib/imei';
 import { obtenerCategorias } from '../../lib/categorias';
 import { obtenerDispositivosSenados } from '../../lib/planAhorro';
+import { sacarDeStandbyParaEntregar } from '../../lib/standby';
 import SelectorColorAuto from '../../SelectorColorAuto';
 import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
 import { ICONOS } from '../../Iconos';
 import { useT } from '../../lib/idioma';
 import { useSucursalActual } from '../../lib/sucursal';
+import { falla } from '../../lib/escritura';
+import { obtenerTodasLasFilas } from '../../lib/db';
+import { OPCIONES_ALMACENAMIENTO, formatearGB } from '../../lib/almacenamiento';
 
-const STORAGE_OPTIONS = [64, 128, 256, 512];
+const STORAGE_OPTIONS = OPCIONES_ALMACENAMIENTO;
 
 function idTemporal() {
   return Math.random().toString(36).slice(2);
@@ -77,6 +81,8 @@ export default function DetallePlanAhorro() {
   const t = useT();
   const sucursalActual = useSucursalActual();
   const puedeVer = tienePermiso(actor, 'ver_plan_ahorro');
+  // El costo del equipo es información sensible: solo con el permiso "ver costos y márgenes".
+  const puedeVerCostos = tienePermiso(actor, 'ver_costos');
   const puedeEliminar = tienePermiso(actor, 'eliminar');
   const puedeAgregarStock = tienePermiso(actor, 'agregar_stock');
 
@@ -201,7 +207,9 @@ export default function DetallePlanAhorro() {
     (async () => {
       setBuscandoEquipos(true);
       const [{ data }, senados] = await Promise.all([
-        supabase.from('dispositivos').select('id, modelo, capacidad_gb, color, imei, precio').eq('en_stock', true).order('modelo'),
+        obtenerTodasLasFilas<DispositivoStock>(supabase, 'dispositivos', 'id, modelo, capacidad_gb, color, imei, precio', [{ columna: 'modelo' }], (q) =>
+          q.eq('en_stock', true)
+        ).then((data) => ({ data })),
         obtenerDispositivosSenados(supabase),
       ]);
       setEquiposStockRaw((data as DispositivoStock[]) ?? []);
@@ -344,7 +352,7 @@ export default function DetallePlanAhorro() {
       }
       canjeIds = nuevosCanjes.map((c) => c.id);
       const descripcionCanje = canjesEfectivos
-        .map((c) => `${normalizarNombreModelo(c.modelo.trim())}${c.capacidad_gb ? ` ${c.capacidad_gb}GB` : ''}${c.color.trim() ? ` ${c.color.trim()}` : ''}`)
+        .map((c) => `${normalizarNombreModelo(c.modelo.trim())}${c.capacidad_gb ? ` ${formatearGB(c.capacidad_gb)}` : ''}${c.color.trim() ? ` ${c.color.trim()}` : ''}`)
         .join(' + ');
       observacionFinal = observacionFinal ? `${descripcionCanje} · ${observacionFinal}` : descripcionCanje;
     }
@@ -388,7 +396,7 @@ export default function DetallePlanAhorro() {
 
   const anularMovimiento = async (movId: string) => {
     if (!confirm(t('¿Anular este pago? Deja de contar para el total juntado (queda registrado como anulado, no se borra).'))) return;
-    await supabase.from('plan_ahorro_movimientos').update({ anulado: true }).eq('id', movId);
+    if (await falla(supabase.from('plan_ahorro_movimientos').update({ anulado: true }).eq('id', movId), t, 'anular pago del plan de ahorro')) return;
     // Si este pago era parte de lo que había completado el plan, anularlo
     // lo deja por debajo del objetivo otra vez, pero el plan sigue
     // figurando "completado" (y si era una seña, el equipo ya se entregó
@@ -421,7 +429,10 @@ export default function DetallePlanAhorro() {
     };
     if (!confirm(mensajes[nuevoEstado])) return;
     setProcesando(true);
-    await supabase.from('planes_ahorro').update({ estado: nuevoEstado }).eq('id', plan.id);
+    if (await falla(supabase.from('planes_ahorro').update({ estado: nuevoEstado }).eq('id', plan.id), t, 'cambiar el estado del plan')) {
+      setProcesando(false);
+      return;
+    }
     await registrarAuditoria(supabase, {
       accion: `cambió el estado del plan de ahorro de ${nombreCliente(plan)} de "${plan.estado}" a "${nuevoEstado}"`,
       entidad: 'plan_ahorro',
@@ -487,6 +498,17 @@ export default function DetallePlanAhorro() {
       }
     }
 
+    // Si el equipo señado esperaba en Standby, pasa al Stock recién ahora, al entregarlo (la venta lo toma de ahí).
+    const equipoAEntregar = dispositivoIdElegido ?? plan.dispositivo_id;
+    if (equipoAEntregar) {
+      const desdeStandby = await sacarDeStandbyParaEntregar(supabase, equipoAEntregar);
+      if (desdeStandby.error) {
+        setError(t('No pudimos pasar el equipo de Standby al Stock:') + ' ' + desdeStandby.error);
+        setProcesando(false);
+        return;
+      }
+    }
+
     const { data, error: rpcError } = await supabase.rpc('plan_ahorro_completar', {
       p_plan_id: plan.id,
       p_sucursal_id: sucursalActual.id || null,
@@ -544,7 +566,7 @@ export default function DetallePlanAhorro() {
     if (imeiLimpio) {
       // Mismo aviso que /stock/nuevo y /stock/foto: fácil escanear o tipear
       // dos veces el mismo IMEI sin querer.
-      const { data: existente } = await supabase.from('dispositivos').select('id').eq('imei', imeiLimpio).maybeSingle();
+      const { data: existente } = await supabase.from('dispositivos').select('id').eq('imei', imeiLimpio).limit(1).maybeSingle();
       if (existente && !confirm(`${t('Ya hay un dispositivo en Stock con el IMEI')} ${imeiLimpio}. ${t('¿Agregarlo igual?')}`)) return;
     }
     // Se confirma ACÁ, antes de crear el equipo — completarPlan(id, true) se
@@ -599,16 +621,25 @@ export default function DetallePlanAhorro() {
     }
     setGuardandoEdicion(true);
     const nuevoMontoObjetivo = Number(editMontoObjetivo);
-    await supabase
-      .from('planes_ahorro')
-      .update({
-        modelo: editModelo.trim() || null,
-        capacidad_gb: editCapacidad,
-        color: editColor.trim() || null,
-        monto_objetivo: nuevoMontoObjetivo,
-        detalles: editDetalles.trim() || null,
-      })
-      .eq('id', plan.id);
+    if (
+      await falla(
+        supabase
+          .from('planes_ahorro')
+          .update({
+            modelo: editModelo.trim() || null,
+            capacidad_gb: editCapacidad,
+            color: editColor.trim() || null,
+            monto_objetivo: nuevoMontoObjetivo,
+            detalles: editDetalles.trim() || null,
+          })
+          .eq('id', plan.id),
+        t,
+        'guardar cambios del plan de ahorro'
+      )
+    ) {
+      setGuardandoEdicion(false);
+      return;
+    }
     // El objetivo define cuándo el plan se considera completo (y se entrega
     // el equipo) — a diferencia del resto de los campos, un cambio acá
     // queda registrado para poder auditarlo después.
@@ -636,7 +667,7 @@ export default function DetallePlanAhorro() {
   const eliminarPlan = async () => {
     if (!plan || !puedeEliminar) return;
     if (!confirm(`${t('¿Eliminar este plan de ahorro de')} ${nombreCliente(plan)}? ${t('Se pierde el historial de pagos. No se puede deshacer.')}`)) return;
-    await supabase.from('planes_ahorro').delete().eq('id', plan.id);
+    if (await falla(supabase.from('planes_ahorro').delete().eq('id', plan.id), t, 'eliminar plan de ahorro')) return;
     await registrarAuditoria(supabase, {
       accion: `eliminó un plan de ahorro (${nombreCliente(plan)}${plan.modelo ? `, ${plan.modelo}` : ''})`,
       entidad: 'plan_ahorro',
@@ -737,7 +768,7 @@ export default function DetallePlanAhorro() {
                     editCapacidad === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                   }`}
                 >
-                  {gb}GB
+                  {formatearGB(gb)}
                 </button>
               ))}
             </div>
@@ -791,7 +822,7 @@ export default function DetallePlanAhorro() {
           )}
           <p className="font-medium">
             {plan.modelo || t('Sin modelo')}
-            {plan.capacidad_gb ? ` · ${plan.capacidad_gb}GB` : ''}
+            {plan.capacidad_gb ? ` · ${formatearGB(plan.capacidad_gb)}` : ''}
             {plan.color ? ` · ${plan.color}` : ''}
           </p>
           {plan.clientes?.telefono && <p className="text-muted dark:text-dark-text-secondary">{plan.clientes.telefono}</p>}
@@ -905,7 +936,7 @@ export default function DetallePlanAhorro() {
                       <div className="min-w-0">
                         <p className="font-medium truncate">
                           {d.modelo || t('Sin modelo')}
-                          {d.capacidad_gb ? ` · ${d.capacidad_gb}GB` : ''}
+                          {d.capacidad_gb ? ` · ${formatearGB(d.capacidad_gb)}` : ''}
                           {d.color ? ` · ${d.color}` : ''}
                         </p>
                         {(d.imei || d.precio != null) && (
@@ -945,7 +976,7 @@ export default function DetallePlanAhorro() {
                         nuevoCapacidad === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                       }`}
                     >
-                      {gb}GB
+                      {formatearGB(gb)}
                     </button>
                   ))}
                 </div>
@@ -971,13 +1002,15 @@ export default function DetallePlanAhorro() {
                   placeholder={t('Precio')}
                   className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                 />
-                <input
-                  value={nuevoCosto}
-                  onChange={(e) => setNuevoCosto(sanitizarDecimal(e.target.value))}
-                  inputMode="decimal"
-                  placeholder={t('Costo (opcional)')}
-                  className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
-                />
+                {puedeVerCostos && (
+                  <input
+                    value={nuevoCosto}
+                    onChange={(e) => setNuevoCosto(sanitizarDecimal(e.target.value))}
+                    inputMode="decimal"
+                    placeholder={t('Costo (opcional)')}
+                    className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                  />
+                )}
                 <button
                   disabled={!nuevoModelo.trim() || guardandoNuevoEquipo || procesando}
                   onClick={guardarNuevoEquipoYCompletar}
@@ -1021,7 +1054,7 @@ export default function DetallePlanAhorro() {
                         <p className="font-medium truncate">
                           {canjesCarrito.length > 1 ? `${idx + 1}. ` : ''}
                           {c.modelo}
-                          {c.capacidad_gb ? ` · ${c.capacidad_gb}GB` : ''}
+                          {c.capacidad_gb ? ` · ${formatearGB(c.capacidad_gb)}` : ''}
                           {c.color ? ` · ${c.color}` : ''}
                         </p>
                         <div className="flex items-center gap-2 shrink-0">
@@ -1058,7 +1091,7 @@ export default function DetallePlanAhorro() {
                         canjeCapacidad === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                       }`}
                     >
-                      {gb}GB
+                      {formatearGB(gb)}
                     </button>
                   ))}
                 </div>

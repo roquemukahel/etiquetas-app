@@ -8,6 +8,8 @@ import { tienePermiso } from '../../lib/permisos';
 import { registrarAuditoria } from '../../lib/auditoria';
 import CampoFecha from '../../CampoFecha';
 import { useT } from '../../lib/idioma';
+import { aFechaISO } from '../../lib/financiacion/motor';
+import { soportaMigracion } from '../../lib/migraciones';
 
 // Configuración rápida: enciende el módulo y crea/actualiza un plan general con
 // dos reglas (minorista %, mayorista %). Usa el MISMO motor de reglas que el
@@ -25,6 +27,9 @@ export default function ConfiguracionComisiones() {
   const [minorista, setMinorista] = useState('2');
   const [mayorista, setMayorista] = useState('0.5');
   const [mostrarTipoVenta, setMostrarTipoVenta] = useState(true);
+  // Ventas financiadas: generar la comisión a medida que se cobran las cuotas (comisiones_categoria_supabase.sql).
+  const [conSobreCobrado, setConSobreCobrado] = useState(false);
+  const [sobreCobrado, setSobreCobrado] = useState(false);
   const [planId, setPlanId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [guardando, setGuardando] = useState(false);
@@ -35,15 +40,18 @@ export default function ConfiguracionComisiones() {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return setLoading(false);
+      const soporta = await soportaMigracion(supabase, 'comisionesSobreCobrado');
+      setConSobreCobrado(soporta);
       const { data: perfil } = await supabase
         .from('perfiles')
-        .select('negocio_id, negocios ( comisiones_activas, comisiones_desde, comision_plan_default_id, mostrar_tipo_venta )')
+        .select('negocio_id, negocios ( comisiones_activas, comisiones_desde, comision_plan_default_id, mostrar_tipo_venta' + (soporta ? ', comisiones_sobre_cobrado' : '') + ' )')
         .eq('id', user.id)
         .single();
       const neg = (perfil as any)?.negocios;
+      setSobreCobrado(!!neg?.comisiones_sobre_cobrado);
       setNegocioId((perfil as any)?.negocio_id ?? null);
       setActivas(!!neg?.comisiones_activas);
-      setDesde(neg?.comisiones_desde ?? new Date().toISOString().slice(0, 10));
+      setDesde(neg?.comisiones_desde ?? aFechaISO(new Date()));
       // "?? true": si el negocio todavía no corrió tipo_venta_opcional_supabase.sql,
       // la columna no existe y viene undefined — se mantiene el comportamiento de
       // siempre (selector visible) en vez de ocultarlo sin que nadie lo haya pedido.
@@ -86,12 +94,16 @@ export default function ConfiguracionComisiones() {
         if (ePlan || !plan) throw new Error(ePlan?.message || t('No se pudo crear el plan'));
         pid = plan.id;
       } else {
-        await supabase.from('comision_planes').update({ es_default: true, updated_at: new Date().toISOString() }).eq('id', pid);
+        const { error: ePlanUpd } = await supabase.from('comision_planes').update({ es_default: true, updated_at: new Date().toISOString() }).eq('id', pid);
+        if (ePlanUpd) throw new Error(ePlanUpd.message);
       }
 
       // 2. Reglas minorista/mayorista: se reemplazan (borrar + insertar) para que
       //    queden exactamente las dos del asistente rápido.
-      await supabase.from('comision_reglas').delete().eq('plan_id', pid).in('alcance', ['minorista', 'mayorista']);
+      // Si el borrado fallara y el insert de abajo igual funcionara, quedarían
+      // reglas repetidas y se calcularía comisión de más: se corta acá.
+      const { error: eBorrar } = await supabase.from('comision_reglas').delete().eq('plan_id', pid).in('alcance', ['minorista', 'mayorista']);
+      if (eBorrar) throw new Error(eBorrar.message);
       const { error: eReglas } = await supabase.from('comision_reglas').insert([
         { plan_id: pid, tipo_calculo: 'porcentaje_venta', valor: nMin, alcance: 'minorista' },
         { plan_id: pid, tipo_calculo: 'porcentaje_venta', valor: nMay, alcance: 'mayorista' },
@@ -101,12 +113,13 @@ export default function ConfiguracionComisiones() {
       // Subir la versión del plan: las comisiones YA generadas conservan la
       // versión anterior (histórico intacto); las nuevas usan la nueva.
       const { data: pl } = await supabase.from('comision_planes').select('version').eq('id', pid).single();
-      await supabase.from('comision_planes').update({ version: ((pl?.version as number) || 1) + 1 }).eq('id', pid);
+      const { error: eVersion } = await supabase.from('comision_planes').update({ version: ((pl?.version as number) || 1) + 1 }).eq('id', pid);
+      if (eVersion) throw new Error(eVersion.message);
 
       // 3. Config del negocio.
       const { error: eNeg } = await supabase
         .from('negocios')
-        .update({ comisiones_activas: encender, comisiones_desde: desde || null, comision_plan_default_id: pid, mostrar_tipo_venta: mostrarTipoVenta })
+        .update({ comisiones_activas: encender, comisiones_desde: desde || null, comision_plan_default_id: pid, mostrar_tipo_venta: mostrarTipoVenta, ...(conSobreCobrado ? { comisiones_sobre_cobrado: sobreCobrado } : {}) })
         .eq('id', negocioId);
       if (eNeg) throw new Error(eNeg.message);
 
@@ -116,7 +129,7 @@ export default function ConfiguracionComisiones() {
           : 'desactivó el sistema de comisiones',
         entidad: 'negocio',
         entidadId: negocioId,
-        valorNuevo: { comisiones_activas: encender, minorista: nMin, mayorista: nMay, desde },
+        valorNuevo: { comisiones_activas: encender, minorista: nMin, mayorista: nMay, desde, ...(conSobreCobrado ? { sobre_cobrado: sobreCobrado } : {}) },
       });
 
       setActivas(encender);
@@ -196,6 +209,18 @@ export default function ConfiguracionComisiones() {
             </span>
           </label>
 
+          {conSobreCobrado && (
+            <label className="flex items-center gap-3 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 cursor-pointer">
+              <input type="checkbox" checked={sobreCobrado} onChange={(e) => setSobreCobrado(e.target.checked)} className="h-5 w-5 accent-ink shrink-0" />
+              <span className="text-sm">
+                <span className="font-medium block">{t('En ventas financiadas, generar la comisión a medida que se cobran las cuotas')}</span>
+                <span className="text-xs text-muted dark:text-dark-text-secondary">
+                  {t('La parte que entra al vender (entrega, anticipo) comisiona en el momento; el resto, cuota por cuota. Si una cuota no se paga, esa parte no genera comisión. Si se anula un pago, se revierte lo que ya no se cobró. Vale para las ventas nuevas y para las que todavía no tenían comisión.')}
+                </span>
+              </span>
+            </label>
+          )}
+
           <div className="flex flex-col sm:flex-row gap-2">
             <button
               disabled={guardando}
@@ -218,7 +243,7 @@ export default function ConfiguracionComisiones() {
           {activas && (
             <div className="flex flex-col items-center gap-1.5">
               <Link href="/comisiones/planes" className="text-sm text-accent dark:text-dark-accent underline text-center">
-                {t('Reglas avanzadas (distinta comisión por dispositivos, accesorios, producto…) →')}
+                {t('Reglas avanzadas (distinta comisión por categoría, tipo de ítem, producto…) →')}
               </Link>
               <Link href="/comisiones" className="text-sm text-accent dark:text-dark-accent underline text-center">
                 {t('Ir al panel de comisiones →')}

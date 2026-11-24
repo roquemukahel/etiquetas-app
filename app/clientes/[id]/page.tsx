@@ -10,8 +10,11 @@ import { tienePermiso } from '../../lib/permisos';
 import { simboloMoneda } from '../../lib/monedas';
 import { armarLinkWhatsApp } from '../../lib/whatsapp';
 import { codigoLlamada } from '../../lib/paises';
-import { MEDIOS_PAGO, calcularSaldo, estadoCuenta, ESTADO_INFO, diasDeMora, medioLabel } from '../../lib/cuentaCorriente';
-import { registrarCobroFinanciamiento } from '../../lib/financiacion/servicio';
+import { MEDIOS_PAGO, MEDIO_EQUIPO, calcularSaldo, estadoCuenta, ESTADO_INFO, diasDeMora, medioLabel } from '../../lib/cuentaCorriente';
+import { leerMoraSql, type MoraCliente } from '../../lib/mora';
+import { registrarCobroFinanciamiento, registrarCobroConEquipo, corregirMontoPago } from '../../lib/financiacion/servicio';
+import { soportaMigracion } from '../../lib/migraciones';
+import { aFechaISO } from '../../lib/financiacion/motor';
 import { sanitizarDecimal, formatearMonto } from '../../lib/numeros';
 import { formatearFechaHora } from '../../lib/fechas';
 import { ESTADOS_COBRADOS } from '../../estadisticas/datos';
@@ -20,6 +23,14 @@ import { useT, useIdioma } from '../../lib/idioma';
 import { localeDe } from '../../lib/i18n/traducir';
 import { useSucursalActual } from '../../lib/sucursal';
 import { obtenerSucursales, type Sucursal } from '../../lib/sucursales';
+import { falla } from '../../lib/escritura';
+import SelectorLocalidad from '../../SelectorLocalidad';
+import FormularioEquipoPago from '../../FormularioEquipoPago';
+import { EQUIPO_PAGO_VACIO, problemaDelEquipo, type EquipoPago } from '../../lib/equipoPago';
+import { buscarClientesDuplicados, textoDuplicados } from '../../lib/clientesDuplicados';
+import { obtenerCronograma } from '../../lib/clienteCobroDatos';
+import { sincronizarComisionesDeCliente } from '../../lib/comisiones/sincronizar';
+import { CALIFICACIONES, FUENTES_CON_CRONOGRAMA, FUENTES_INGRESO, RANGOS_PAGO, diaDeCobro, terminacionDni, type Cronograma } from '../../lib/clienteCobro';
 
 type Cliente = {
   id: string;
@@ -37,6 +48,14 @@ type Cliente = {
   suspendido: boolean | null;
   cta_cte_observaciones: string | null;
   portal_token: string | null;
+  // Solo viene si el negocio corrió financiacion_guia_cartera_supabase.sql.
+  sucursal_origen_id?: string | null;
+  // Solo vienen si el negocio corrió clientes_cobro_supabase.sql.
+  fuente_ingreso?: string | null;
+  dia_cobro?: number | null;
+  rango_pago?: string | null;
+  calificacion?: string | null;
+  observaciones_cobro?: string | null;
 };
 
 type Orden = {
@@ -81,10 +100,22 @@ export default function DetalleCliente() {
   // Si falla la consulta, el saldo NO debe mostrarse como si fuera $0 real
   // (confundiría "no debe nada" con "no pudimos confirmarlo").
   const [movimientosError, setMovimientosError] = useState(false);
+  // Mora según la base (pagos imputados a la deuda más vieja primero). null = la base todavía tiene el cálculo viejo.
+  const [moraSql, setMoraSql] = useState<MoraCliente | null>(null);
   const [monedaCodigo, setMonedaCodigo] = useState('ARS');
   const [negocioNombre, setNegocioNombre] = useState('');
   const [codigoPais, setCodigoPais] = useState('54');
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
+  // Los datos de cobro y la sucursal de origen se editan solo si el negocio ya corrió esos SQL.
+  const [conOrigen, setConOrigen] = useState(false);
+  const [conDatosCobro, setConDatosCobro] = useState(false);
+  const [cronograma, setCronograma] = useState<Cronograma | null>(null);
+  useEffect(() => {
+    soportaMigracion(supabase, 'clienteSucursalOrigen').then(setConOrigen);
+    soportaMigracion(supabase, 'clienteCobro').then(setConDatosCobro);
+    obtenerCronograma(supabase).then(setCronograma);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [loading, setLoading] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -99,6 +130,18 @@ export default function DetalleCliente() {
   const [pagoMonto, setPagoMonto] = useState('');
   const [pagoMedio, setPagoMedio] = useState<string>('efectivo');
   const [pagoObs, setPagoObs] = useState('');
+  // Corregir el monto de un pago ya registrado (cta_cte_corregir_pago_supabase.sql): solo aparece si el negocio ya la tiene.
+  const [puedeCorregirPagos, setPuedeCorregirPagos] = useState(false);
+  useEffect(() => {
+    soportaMigracion(supabase, 'corregirPagoCtaCte').then(setPuedeCorregirPagos);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const [corrigiendoPago, setCorrigiendoPago] = useState<Movimiento | null>(null);
+  const [montoCorregido, setMontoCorregido] = useState('');
+  const [errorCorreccion, setErrorCorreccion] = useState<string | null>(null);
+  const [guardandoCorreccion, setGuardandoCorreccion] = useState(false);
+  // Equipo que deja como parte de pago (solo cuando el medio es "Equipo (plan canje)").
+  const [equipoPago, setEquipoPago] = useState<EquipoPago>(EQUIPO_PAGO_VACIO);
   const [guardandoPago, setGuardandoPago] = useState(false);
   const [linkCopiado, setLinkCopiado] = useState(false);
   // A qué se aplica el pago: 'cuenta_corriente' (fiado sin cuota puntual) o
@@ -136,6 +179,13 @@ export default function DetalleCliente() {
       .order('fecha', { ascending: true });
     setMovimientosError(!!error);
     setMovimientos(error ? [] : ((data as any) ?? []));
+    // El mismo cálculo que usa Cuentas por cobrar, para que la ficha y la tarjeta digan lo mismo.
+    const { data: filaMora, error: errorMora } = await supabase.rpc('saldos_cuenta_corriente', { p_cliente_id: id });
+    setMoraSql(
+      errorMora
+        ? null
+        : leerMoraSql(((filaMora as any[]) ?? [])[0] ?? { saldo: 0, vencido: 0, vencimiento_impago: null, proximo_vencimiento: null, proximo_monto: null })
+    );
   };
 
   useEffect(() => {
@@ -191,14 +241,17 @@ export default function DetalleCliente() {
 
   // --- Cálculos de cuenta corriente ---
   const saldo = useMemo(() => calcularSaldo(movimientos), [movimientos]);
-  const hoyISO = new Date().toISOString().slice(0, 10);
+  const hoyISO = aFechaISO(new Date());
   const cargosVencidos = useMemo(
     () => movimientos.filter((m) => m.tipo === 'cargo' && m.vencimiento && m.vencimiento < hoyISO),
     [movimientos, hoyISO]
   );
   const sumaVencida = cargosVencidos.reduce((acc, m) => acc + (m.monto || 0), 0);
-  const vencido = Math.min(Math.max(saldo, 0), sumaVencida);
-  const vencMasAntiguo = useMemo(() => cargosVencidos.map((m) => m.vencimiento!).sort().at(0), [cargosVencidos]);
+  const vencMasAntiguoLocal = useMemo(() => cargosVencidos.map((m) => m.vencimiento!).sort().at(0), [cargosVencidos]);
+  // Con el cálculo nuevo de la base: vencido = lo que realmente falta pagar de lo vencido, y los días de atraso salen del vencimiento
+  // más viejo que todavía tiene saldo impago. Sin él (SQL sin correr) queda el cálculo de siempre.
+  const vencido = moraSql ? moraSql.vencido : Math.min(Math.max(saldo, 0), sumaVencida);
+  const vencMasAntiguo = moraSql ? moraSql.vencimientoImpago : vencMasAntiguoLocal;
   const diasMora = vencido > 0 ? diasDeMora(vencMasAntiguo) : null;
   const estado = estadoCuenta(saldo, vencido, !!c?.suspendido);
   const infoEstado = ESTADO_INFO[estado];
@@ -234,12 +287,64 @@ export default function DetalleCliente() {
   // Mismo criterio que Estadísticas (ESTADOS_COBRADOS): una orden pendiente
   // o cancelada no es una compra "cumplida" — sumarla acá infla el total
   // histórico que se le muestra al vendedor sobre este cliente.
+  // Los cobros de deuda (ítem tipo 'financiamiento') NO son compras: la compra ya se contó cuando se hizo, y sumar también
+  // cada pago la duplicaba (ej. compró $100 a cuenta corriente y pagó $100 -> "compró $200").
   const totalComprado = useMemo(
-    () => ordenes.filter((o) => ESTADOS_COBRADOS.includes(o.estado)).reduce((acc, o) => acc + (o.total || 0), 0),
+    () =>
+      ordenes
+        .filter((o) => ESTADOS_COBRADOS.includes(o.estado) && !(o.orden_items.length > 0 && o.orden_items.every((i) => i.tipo === 'financiamiento')))
+        .reduce((acc, o) => acc + (o.total || 0), 0),
     [ordenes]
   );
 
   const campo = (k: keyof Cliente, valor: string) => setC((prev) => (prev ? { ...prev, [k]: valor } : prev));
+  // Para los campos que pueden quedar vacíos (null) o ser un número.
+  // Lo que se está tipeando en "día de cobro" (puede ser un valor inválido a medio escribir; solo se guarda si es de 1 a 31).
+  const [diaTexto, setDiaTexto] = useState('');
+  useEffect(() => {
+    setDiaTexto(c?.dia_cobro != null ? String(c.dia_cobro) : '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [c?.id]);
+  const campoOpcional = (k: keyof Cliente, valor: string | number | null) => setC((prev) => (prev ? { ...prev, [k]: valor } : prev));
+
+  const abrirCorregirPago = (m: Movimiento) => {
+    setCorrigiendoPago(m);
+    setMontoCorregido(String(m.monto));
+    setErrorCorreccion(null);
+  };
+
+  const guardarCorreccionPago = async () => {
+    if (!corrigiendoPago || !corrigiendoPago.pago_id) return;
+    const nuevo = Number(montoCorregido);
+    if (!nuevo || nuevo <= 0) {
+      setErrorCorreccion(t('Poné un monto mayor a cero.'));
+      return;
+    }
+    if (Math.abs(nuevo - corrigiendoPago.monto) < 0.005) {
+      setErrorCorreccion(t('Ese es el mismo monto que ya tiene el pago.'));
+      return;
+    }
+    setGuardandoCorreccion(true);
+    setErrorCorreccion(null);
+    const resultado = await corregirMontoPago(supabase, {
+      movimientoId: corrigiendoPago.id,
+      pagoId: corrigiendoPago.pago_id,
+      clienteId: String(id),
+      moneda: monedaCodigo,
+      montoActual: corrigiendoPago.monto,
+      nuevoMonto: nuevo,
+      saldoCuenta: saldo,
+    });
+    setGuardandoCorreccion(false);
+    if ('error' in resultado) {
+      setErrorCorreccion(resultado.error);
+      return;
+    }
+    setCorrigiendoPago(null);
+    await cargarMovimientos();
+    setRecargarFinanciacion((n) => n + 1);
+    if (resultado.aviso) alert('⚠️ ' + resultado.aviso);
+  };
 
   const abrirRegistrarPago = async () => {
     // Sin redondear: si el saldo tiene centavos (ej. $1.500,64) y se
@@ -248,6 +353,7 @@ export default function DetalleCliente() {
     // saldo mostrado de más arriba, reportado por un cliente (2026-08-26).
     setPagoMonto(saldo > 0 ? String(Math.round(saldo * 100) / 100) : '');
     setPagoMedio('efectivo');
+    setEquipoPago(EQUIPO_PAGO_VACIO);
     setPagoObs('');
     setError(null);
     setPagoDestino('');
@@ -322,6 +428,12 @@ export default function DetalleCliente() {
       );
       return;
     }
+    const conEquipo = pagoMedio === MEDIO_EQUIPO.codigo;
+    const problemaEquipo = conEquipo ? problemaDelEquipo(equipoPago) : null;
+    if (problemaEquipo) {
+      setError(t(problemaEquipo));
+      return;
+    }
     setGuardandoPago(true);
     setError(null);
     // A qué se aplica lo elige quien cobra (ver pagoDestino) — antes el pago
@@ -331,7 +443,7 @@ export default function DetalleCliente() {
     // pagada. Genera además su propia boleta (ver registrarCobroFinanciamiento)
     // — antes esto solo quedaba asentado en la cuenta corriente, sin ningún
     // rastro visible desde Órdenes.
-    const resultado = await registrarCobroFinanciamiento(supabase, {
+    const datosCobro = {
       clienteId: String(id),
       monto,
       medio: pagoMedio,
@@ -339,7 +451,9 @@ export default function DetalleCliente() {
       sucursalId: sucursalActual.id,
       observacion: pagoObs,
       ...(pagoDestino === 'cuenta_corriente' ? { omitirFinanciacion: true } : { cuotaIdElegida: pagoDestino }),
-    });
+    };
+    // Con un equipo como pago, el equipo queda en Plan Canje atado a la boleta de este cobro.
+    const resultado = conEquipo ? await registrarCobroConEquipo(supabase, { ...datosCobro, equipo: equipoPago }) : await registrarCobroFinanciamiento(supabase, datosCobro);
     if ('error' in resultado) {
       setError(`${t('No pudimos registrar el pago:')} ` + resultado.error);
       setGuardandoPago(false);
@@ -442,7 +556,16 @@ export default function DetalleCliente() {
     // Si el movimiento venía de un pago, también anulamos ese pago para que
     // no siga contando en la caja de Estadísticas.
     if (m.pago_id) {
-      await supabase.from('pagos').update({ anulado: true }).eq('id', m.pago_id);
+      await falla(supabase.from('pagos').update({ anulado: true }).eq('id', m.pago_id), t, 'anular el pago en la caja (el movimiento sí quedó anulado)');
+      // La orden que generó este cobro (solo las de "Cobro de financiamiento / cuenta corriente", nunca una venta) también
+      // se cancela: sin esto seguía figurando "pagada" en Órdenes aunque su pago ya estaba anulado.
+      if (m.orden_id) {
+        await falla(
+          supabase.from('ordenes').update({ estado: 'cancelado' }).eq('id', m.orden_id).eq('nota', 'Cobro de financiamiento / cuenta corriente.'),
+          t,
+          'cancelar la orden del cobro anulado (el pago sí quedó anulado)'
+        );
+      }
       // Si ese pago se había aplicado a una o más cuotas de financiación
       // (aplicarPagoAFinanciacion), esa aplicación quedaba sin revertir: la
       // cuota seguía figurando "pagada" aunque el pago que la saldó ya no
@@ -450,9 +573,38 @@ export default function DetalleCliente() {
       // financiacion_revertir_pago_supabase.sql todavía, esto no bloquea la
       // anulación del movimiento (que ya se aplicó arriba).
       try {
-        await supabase.rpc('financiacion_revertir_pago', { p_pago_id: m.pago_id, p_usuario: actor?.nombre ?? null });
-      } catch {}
+        const { error: errorRevertir } = await supabase.rpc('financiacion_revertir_pago', { p_pago_id: m.pago_id, p_usuario: actor?.nombre ?? null });
+        // Sin la función (SQL sin correr) no hay nada que revertir; cualquier otro error deja cuotas "pagadas" de un pago anulado.
+        if (errorRevertir && !/PGRST202|Could not find the function/i.test(`${errorRevertir.code ?? ''} ${errorRevertir.message ?? ''}`)) {
+          alert(`${t('El pago se anuló, pero no pudimos deshacer su reparto a las cuotas de financiación. Revisá las cuotas del cliente:')} ${errorRevertir.message}`);
+        }
+      } catch {
+        // Sin conexión con la base: ya se avisó arriba si el pago mismo no se pudo anular.
+      }
+      // Si el pago era un equipo recibido como parte de pago, el equipo ya no tiene pago que lo respalde: si todavía espera en
+      // Plan Canje se quita de ahí; si ya se agregó al Stock se avisa (no se saca solo del Stock).
+      if (m.pagos?.medio === MEDIO_EQUIPO.codigo && m.orden_id) {
+        const { data: equipos, error: equiposError } = await supabase.from('canjes').select('id, modelo, imei, agregado_a_stock').eq('orden_id', m.orden_id);
+        if (equiposError) {
+          alert(`${t('El pago se anuló, pero no pudimos revisar el equipo recibido:')} ${equiposError.message}`);
+        } else {
+          const lista = (equipos ?? []) as { id: string; modelo: string | null; imei: string | null; agregado_a_stock: boolean }[];
+          for (const e of lista.filter((x) => !x.agregado_a_stock)) {
+            if (await falla(supabase.from('canjes').delete().eq('id', e.id), t, 'quitar de Plan Canje el equipo del pago anulado')) continue;
+            await registrarAuditoria(supabase, {
+              accion: `quitó de Plan Canje un equipo (${e.modelo || 'sin modelo'}${e.imei ? `, IMEI ${e.imei}` : ''}) porque se anuló el pago con el que se recibió`,
+              entidad: 'canje',
+              entidadId: e.id,
+            });
+          }
+          if (lista.some((x) => x.agregado_a_stock)) {
+            alert(t('El equipo que se había recibido como pago ya fue agregado al Stock: queda en el Stock, sacalo desde ahí si corresponde.'));
+          }
+        }
+      }
     }
+    // Si la comisión de las ventas financiadas se genera "sobre lo cobrado", un pago anulado resta lo que ya no se cobró.
+    await sincronizarComisionesDeCliente(String(id));
     await cargarMovimientos();
     setRecargarFinanciacion((n) => n + 1);
   };
@@ -495,6 +647,15 @@ export default function DetalleCliente() {
     if (!c) return;
     setGuardando(true);
     setError(null);
+    // Aviso (no bloquea) si el DNI o teléfono ya lo tiene OTRO cliente.
+    const duplicados = await buscarClientesDuplicados(supabase, { dni: c.dni, telefono: c.telefono }, String(id));
+    if (duplicados.length > 0 && !confirm(`${t('Ya hay otro cliente con el mismo DNI o teléfono:')}
+${textoDuplicados(duplicados)}
+
+${t('¿Guardar igual?')}`)) {
+      setGuardando(false);
+      return;
+    }
     const { error: updateError } = await supabase
       .from('clientes')
       .update({
@@ -506,6 +667,16 @@ export default function DetalleCliente() {
         email: c.email?.trim() || null,
         telefono: c.telefono?.trim() || null,
         dni: c.dni?.trim() || null,
+        ...(conOrigen ? { sucursal_origen_id: c.sucursal_origen_id || null } : {}),
+        ...(conDatosCobro
+          ? {
+              fuente_ingreso: c.fuente_ingreso || null,
+              dia_cobro: c.dia_cobro ?? null,
+              rango_pago: c.rango_pago || null,
+              calificacion: c.calificacion || null,
+              observaciones_cobro: c.observaciones_cobro?.trim() || null,
+            }
+          : {}),
       })
       .eq('id', id);
     if (updateError) {
@@ -809,7 +980,7 @@ export default function DetalleCliente() {
                         </p>
                         <p className="text-xs text-muted dark:text-dark-text-secondary">
                           {formatearFechaHora(m.fecha, locale)}
-                          {esCargo && m.vencimiento ? ` · ${t('vence')} ${new Date(m.vencimiento).toLocaleDateString(locale)}` : ''}
+                          {esCargo && m.vencimiento ? ` · ${t('vence')} ${new Date(m.vencimiento + 'T00:00:00').toLocaleDateString(locale)}` : ''}
                         </p>
                         <p className="text-xs text-muted dark:text-dark-text-secondary truncate">
                           {[
@@ -837,6 +1008,11 @@ export default function DetalleCliente() {
                           <Link href={`/clientes/${id}/comprobante/${m.id}`} className="text-[10px] text-accent dark:text-dark-accent underline">
                             {t('Comprobante')}
                           </Link>
+                          {puedeCorregirPagos && m.concepto === 'pago' && m.pago_id && !m.anulado && tienePermiso(actor, 'gestionar_financiacion') && (
+                            <button onClick={() => abrirCorregirPago(m)} className="text-[10px] text-accent dark:text-dark-accent underline">
+                              {t('Editar monto')}
+                            </button>
+                          )}
                           {tienePermiso(actor, 'ajustar_financiacion') && (
                             <button onClick={() => anularMovimiento(m)} className="text-[10px] text-bad underline">
                               {t('Anular')}
@@ -877,11 +1053,144 @@ export default function DetalleCliente() {
             <Campo label={t('Apellido')} valor={c.apellido ?? ''} onChange={(v) => campo('apellido', v)} />
             <Campo label={t('Apodo (opcional)')} valor={c.apodo ?? ''} onChange={(v) => campo('apodo', v)} />
             <Campo label={t('Domicilio')} valor={c.domicilio ?? ''} onChange={(v) => campo('domicilio', v)} />
-            <Campo label={t('Localidad (opcional)')} valor={c.localidad ?? ''} onChange={(v) => campo('localidad', v)} />
+            <SelectorLocalidad label={t('Localidad / zona')} value={c.localidad ?? ''} onChange={(v) => campo('localidad', v)} />
+            {conOrigen && sucursales.length > 0 ? (
+              <div>
+                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Sucursal de origen')}</label>
+                <select
+                  value={c.sucursal_origen_id ?? ''}
+                  onChange={(e) => campoOpcional('sucursal_origen_id', e.target.value || null)}
+                  className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+                >
+                  <option value="">{t('Sin sucursal asignada')}</option>
+                  {sucursales.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      🏬 {s.nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              c.sucursal_origen_id &&
+              sucursales.length > 1 && (
+                <p className="text-xs text-muted dark:text-dark-text-secondary">
+                  {t('Sucursal de origen')}: 🏬 {sucursales.find((s) => s.id === c.sucursal_origen_id)?.nombre ?? '—'}
+                </p>
+              )
+            )}
             <Campo label="Email" valor={c.email ?? ''} onChange={(v) => campo('email', v)} />
             <Campo label={t('Teléfono')} valor={c.telefono ?? ''} onChange={(v) => campo('telefono', v)} />
             <Campo label="DNI" valor={c.dni ?? ''} onChange={(v) => campo('dni', v)} />
           </div>
+
+          {conDatosCobro && (
+            <div className="flex flex-col gap-3 rounded-2xl border border-border dark:border-dark-border p-4">
+              <p className="text-sm font-semibold">{t('Datos de cobro')}</p>
+              <div>
+                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Fuente de ingreso')}</label>
+                <select
+                  value={c.fuente_ingreso ?? ''}
+                  onChange={(e) => campoOpcional('fuente_ingreso', e.target.value || null)}
+                  className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+                >
+                  <option value="">{t('Sin definir')}</option>
+                  {FUENTES_INGRESO.map((f) => (
+                    <option key={f.clave} value={f.clave}>
+                      {t(f.etiqueta)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Día de cobro del cliente (1 a 31)')}</label>
+                <input
+                  value={diaTexto}
+                  onChange={(e) => {
+                    const texto = e.target.value.replace(/\D/g, '').slice(0, 2);
+                    setDiaTexto(texto);
+                    const n = parseInt(texto, 10);
+                    campoOpcional('dia_cobro', Number.isFinite(n) && n >= 1 && n <= 31 ? n : null);
+                  }}
+                  inputMode="numeric"
+                  placeholder={t('Ej.: 5')}
+                  className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+                />
+                {diaTexto !== '' && (parseInt(diaTexto, 10) < 1 || parseInt(diaTexto, 10) > 31) && (
+                  <p className="text-xs text-bad mt-1">{t('Poné un día del 1 al 31 (si lo dejás así no se guarda).')}</p>
+                )}
+                {(() => {
+                  const efectivo = diaDeCobro(c, cronograma);
+                  const usaCronograma = !!c.fuente_ingreso && FUENTES_CON_CRONOGRAMA.includes(c.fuente_ingreso);
+                  if (c.dia_cobro == null && efectivo?.origen === 'cronograma') {
+                    return (
+                      <p className="text-xs text-good mt-1">
+                        {t('Sin día cargado: se usa el del cronograma por DNI')} ({t('DNI termina en')} {terminacionDni(c.dni)}) → {t('día')} {efectivo.dia}.
+                      </p>
+                    );
+                  }
+                  if (usaCronograma && c.dia_cobro == null) {
+                    return (
+                      <p className="text-xs text-muted dark:text-dark-text-secondary mt-1">
+                        {cronograma === null
+                          ? t('Para jubilaciones y AUH podés cargar el cronograma por terminación de DNI en Configuración → Cronograma de cobro.')
+                          : terminacionDni(c.dni) == null
+                            ? t('Cargá el DNI para tomar el día del cronograma según su terminación.')
+                            : t('No hay día cargado para esa terminación de DNI en Configuración → Cronograma de cobro.')}
+                      </p>
+                    );
+                  }
+                  return null;
+                })()}
+              </div>
+              <div>
+                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Rango de pago pactado')}</label>
+                <select
+                  value={c.rango_pago ?? ''}
+                  onChange={(e) => campoOpcional('rango_pago', e.target.value || null)}
+                  className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+                >
+                  <option value="">{t('Sin definir')}</option>
+                  {RANGOS_PAGO.map((r) => (
+                    <option key={r} value={r}>
+                      {t('Del')} {r.replace('-', ` ${t('al')} `)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Calidad del cliente')}</label>
+                <div className="flex gap-2">
+                  {CALIFICACIONES.map((q) => (
+                    <button
+                      key={q.clave}
+                      type="button"
+                      onClick={() => campoOpcional('calificacion', c.calificacion === q.clave ? null : q.clave)}
+                      className={`flex-1 rounded-xl border px-3 py-2.5 text-sm font-medium ${
+                        c.calificacion === q.clave
+                          ? q.clave === 'bueno'
+                            ? 'bg-good/10 border-good text-good'
+                            : q.clave === 'regular'
+                              ? 'bg-warn/10 border-warn text-warn'
+                              : 'bg-bad/10 border-bad text-bad'
+                          : 'border-border dark:border-dark-border text-muted dark:text-dark-text-secondary'
+                      }`}
+                    >
+                      {t(q.etiqueta)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Observaciones')}</label>
+                <textarea
+                  value={c.observaciones_cobro ?? ''}
+                  onChange={(e) => campoOpcional('observaciones_cobro', e.target.value)}
+                  rows={3}
+                  className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+                />
+              </div>
+            </div>
+          )}
 
           <button
             disabled={guardando}
@@ -905,7 +1214,7 @@ export default function DetalleCliente() {
       {/* Modal registrar pago */}
       {registrandoPago && (
         <div className="fixed inset-0 z-50 bg-ink/60 backdrop-blur-sm flex items-center justify-center px-6" onClick={() => setRegistrandoPago(false)}>
-          <div className="w-full max-w-sm bg-white dark:bg-dark-surface rounded-2xl shadow-elevated p-5 flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-sm max-h-[90vh] overflow-y-auto bg-white dark:bg-dark-surface rounded-2xl shadow-elevated p-5 flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
             <p className="text-base font-semibold">{t('Registrar pago de')} {c.nombre}</p>
             {saldo > 0 && <p className="text-xs text-muted dark:text-dark-text-secondary">{t('Debe')} {fmt(saldo)}.</p>}
 
@@ -947,19 +1256,20 @@ export default function DetalleCliente() {
             )}
 
             <div>
-              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Monto')}</label>
+              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{pagoMedio === MEDIO_EQUIPO.codigo ? t('Valor que se le reconoce por el equipo') : t('Monto')}</label>
               <input value={pagoMonto} onChange={(e) => setPagoMonto(sanitizarDecimal(e.target.value))} inputMode="decimal" autoFocus placeholder="0" className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2.5 text-lg" />
             </div>
             <div>
               <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Medio de pago')}</label>
               <div className="flex flex-wrap gap-2">
-                {MEDIOS_PAGO.map((m) => (
+                {[...MEDIOS_PAGO, MEDIO_EQUIPO].map((m) => (
                   <button key={m.codigo} onClick={() => setPagoMedio(m.codigo)} className={`rounded-lg px-3 py-2 text-sm font-medium ${pagoMedio === m.codigo ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'}`}>
-                    {m.icono} {m.label}
+                    {m.icono} {t(m.label)}
                   </button>
                 ))}
               </div>
             </div>
+            {pagoMedio === MEDIO_EQUIPO.codigo && <FormularioEquipoPago value={equipoPago} onChange={setEquipoPago} />}
             <textarea value={pagoObs} onChange={(e) => setPagoObs(e.target.value)} rows={2} placeholder={t('Observación (opcional)')} className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm" />
             <div className="flex gap-2">
               <button onClick={() => setRegistrandoPago(false)} className="flex-1 rounded-xl border border-border dark:border-dark-border py-2.5 text-sm font-medium">
@@ -971,6 +1281,45 @@ export default function DetalleCliente() {
                 className="flex-1 rounded-xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2.5 text-sm font-medium text-white disabled:opacity-40"
               >
                 {guardandoPago ? t('Guardando...') : t('Registrar')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal corregir el monto de un pago */}
+      {corrigiendoPago && (
+        <div className="fixed inset-0 z-50 bg-ink/60 backdrop-blur-sm flex items-center justify-center px-6" onClick={() => !guardandoCorreccion && setCorrigiendoPago(null)}>
+          <div className="w-full max-w-sm bg-white dark:bg-dark-surface rounded-2xl shadow-elevated p-5 flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
+            <p className="text-base font-semibold">{t('Corregir el monto del pago')}</p>
+            <p className="text-xs text-muted dark:text-dark-text-secondary">
+              {t('Monto actual')}: {fmt(corrigiendoPago.monto)}. {t('Se corrige todo junto: la cuenta del cliente, la caja y la boleta de este cobro.')}
+            </p>
+            {errorCorreccion && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{errorCorreccion}</p>}
+            <div>
+              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Monto correcto')}</label>
+              <input
+                value={montoCorregido}
+                onChange={(e) => setMontoCorregido(sanitizarDecimal(e.target.value))}
+                inputMode="decimal"
+                autoFocus
+                className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2.5 text-lg"
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                disabled={guardandoCorreccion}
+                onClick={() => setCorrigiendoPago(null)}
+                className="flex-1 rounded-xl border border-border dark:border-dark-border py-2.5 text-sm font-medium disabled:opacity-40"
+              >
+                {t('Cancelar')}
+              </button>
+              <button
+                disabled={guardandoCorreccion || !montoCorregido}
+                onClick={guardarCorreccionPago}
+                className="flex-1 rounded-xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2.5 text-sm font-medium text-white disabled:opacity-40"
+              >
+                {guardandoCorreccion ? t('Guardando...') : t('Guardar monto')}
               </button>
             </div>
           </div>

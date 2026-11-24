@@ -17,13 +17,13 @@ export type TipoCalculo =
   | 'fijo_por_unidad' // importe fijo × cantidad
   | 'fijo_por_venta'; // importe fijo una sola vez por venta
 
-// A qué se aplica una regla. "categoria" en Qovento se mapea al TIPO de ítem
-// (dispositivo/producto/trabajo), que es lo más parecido que existe hoy.
+// A qué se aplica una regla. 'tipo_item' es el tipo de línea (dispositivo/producto/trabajo); 'categoria' es la categoría de stock del
+// producto (o una subcategoría, y opcionalmente una marca).
 // 'contado'/'financiado' son la misma idea que minorista/mayorista pero sobre
 // otra dimensión de la venta (cómo se pagó, no a quién se le vendió) — no se
 // combinan entre sí: una regla es de una dimensión U OTRA, igual que ya
 // pasaba entre minorista/mayorista y tipo_item/producto.
-export type AlcanceRegla = 'todas' | 'minorista' | 'mayorista' | 'contado' | 'financiado' | 'tipo_item' | 'producto';
+export type AlcanceRegla = 'todas' | 'minorista' | 'mayorista' | 'contado' | 'financiado' | 'tipo_item' | 'categoria' | 'producto';
 
 export type TipoVenta = 'minorista' | 'mayorista';
 
@@ -36,8 +36,12 @@ export type TipoVenta = 'minorista' | 'mayorista';
 // desempate cayera en el id (arbitrario para quien lo mira desde afuera). Con
 // el desnivel, financiado/contado gana de forma predecible: "no importa si
 // es minorista o mayorista, si es financiado se aplica esta regla".
+//
+// Orden pedido por un cliente: producto puntual > categoría > tipo de ítem > regla general. Dentro de las categorías, una regla de
+// subcategoría gana sobre la de su categoría, y una regla con marca gana sobre la misma categoría sin marca (ver especificidadDe).
 const ESPECIFICIDAD: Record<AlcanceRegla, number> = {
-  producto: 4,
+  producto: 5,
+  categoria: 4, // la categoría de primer nivel; la subcategoría y la marca suben esto (especificidadDe)
   tipo_item: 3,
   contado: 2.5,
   financiado: 2.5,
@@ -53,6 +57,8 @@ export type Regla = {
   alcance: AlcanceRegla;
   tipo_item?: string | null; // requerido si alcance === 'tipo_item'
   producto_id?: string | null; // requerido si alcance === 'producto'
+  categoria_id?: string | null; // requerido si alcance === 'categoria' (una categoría o una subcategoría de stock)
+  marca?: string | null; // opcional con alcance 'categoria': solo los productos de esa marca
   prioridad?: number; // desempate explícito cuando la especificidad es igual (mayor gana)
 };
 
@@ -60,6 +66,9 @@ export type LineaVenta = {
   id: string;
   tipo_item: string; // 'dispositivo' | 'producto' | 'trabajo'
   producto_id: string | null;
+  // Categoría de stock del producto o equipo (puede ser una subcategoría) y marca del producto, para las reglas por categoría.
+  categoria_id?: string | null;
+  marca?: string | null;
   cantidad: number;
   precio_unitario: number;
   // Descuentos: hoy Qovento no los guarda (se pasan 0), pero el motor los
@@ -77,6 +86,9 @@ export type Venta = {
   lineas: LineaVenta[];
   descuento_general?: number; // descuento a nivel venta (hoy 0), se prorratea entre líneas
 };
+
+// Árbol de categorías (un solo nivel de subcategorías): padre de una categoría, o null si es de primer nivel.
+export type ContextoCategorias = { padreDe: (categoriaId: string) => string | null };
 
 export type DetalleLinea = {
   linea_id: string;
@@ -141,7 +153,16 @@ function basesConDescuentoGeneral(venta: Venta, decimales: number): number[] {
 }
 
 // ---------- Resolver qué regla aplica a una línea ----------
-function reglaAplicaALinea(r: Regla, l: LineaVenta, venta: Venta): boolean {
+const normalizarMarca = (m: string | null | undefined) => (m ?? '').trim().toLowerCase();
+
+// ¿La categoría de la línea es la de la regla, o cuelga de ella? (una regla de "Accesorios" alcanza a "Accesorios › Cables")
+function lineaEnCategoria(l: LineaVenta, categoriaId: string, ctx?: ContextoCategorias): boolean {
+  if (!l.categoria_id) return false;
+  if (l.categoria_id === categoriaId) return true;
+  return ctx?.padreDe(l.categoria_id) === categoriaId;
+}
+
+function reglaAplicaALinea(r: Regla, l: LineaVenta, venta: Venta, ctx?: ContextoCategorias): boolean {
   switch (r.alcance) {
     case 'todas':
       return true;
@@ -156,20 +177,34 @@ function reglaAplicaALinea(r: Regla, l: LineaVenta, venta: Venta): boolean {
       return !!r.tipo_item && l.tipo_item === r.tipo_item;
     case 'producto':
       return !!r.producto_id && l.producto_id === r.producto_id;
+    case 'categoria':
+      if (!r.categoria_id || !lineaEnCategoria(l, r.categoria_id, ctx)) return false;
+      return !r.marca || normalizarMarca(l.marca) === normalizarMarca(r.marca);
     default:
       return false;
   }
 }
 
-// Devuelve la regla MÁS específica que aplica a la línea (producto > tipo_item >
+// Especificidad de una regla concreta. Las de categoría suben medio punto si son de una subcategoría y otro medio si piden una marca,
+// así "Cables › marca X" > "Cables" > "Accesorios" (todas por debajo de un producto puntual y por encima del tipo de ítem).
+function especificidadDe(r: Regla, ctx?: ContextoCategorias): number {
+  let e = ESPECIFICIDAD[r.alcance];
+  if (r.alcance === 'categoria') {
+    if (r.categoria_id && ctx?.padreDe(r.categoria_id)) e += 0.4;
+    if (r.marca) e += 0.2;
+  }
+  return e;
+}
+
+// Devuelve la regla MÁS específica que aplica a la línea (producto > categoría > tipo_item >
 // minorista/mayorista > todas). Empate de especificidad → mayor `prioridad` →
 // menor id (determinista). Por defecto NO se suman reglas: una sola por línea.
-export function reglaParaLinea(l: LineaVenta, venta: Venta, reglas: Regla[]): Regla | null {
-  const candidatas = reglas.filter((r) => reglaAplicaALinea(r, l, venta));
+export function reglaParaLinea(l: LineaVenta, venta: Venta, reglas: Regla[], ctx?: ContextoCategorias): Regla | null {
+  const candidatas = reglas.filter((r) => reglaAplicaALinea(r, l, venta, ctx));
   if (candidatas.length === 0) return null;
   candidatas.sort((a, b) => {
-    const ea = ESPECIFICIDAD[a.alcance];
-    const eb = ESPECIFICIDAD[b.alcance];
+    const ea = especificidadDe(a, ctx);
+    const eb = especificidadDe(b, ctx);
     if (ea !== eb) return eb - ea;
     const pa = a.prioridad ?? 0;
     const pb = b.prioridad ?? 0;
@@ -183,7 +218,7 @@ export function reglaParaLinea(l: LineaVenta, venta: Venta, reglas: Regla[]): Re
 // Suma, por línea, la comisión de su regla más específica. `fijo_por_venta` es
 // una regla de venta (todas/minorista/mayorista): se aplica UNA sola vez y, en
 // ese caso, reemplaza el cálculo por línea (no se suma sobre otras reglas).
-export function calcularComisionVenta(venta: Venta, reglas: Regla[], decimales: number): ResultadoComision {
+export function calcularComisionVenta(venta: Venta, reglas: Regla[], decimales: number, ctx?: ContextoCategorias): ResultadoComision {
   const bases = basesConDescuentoGeneral(venta, decimales);
 
   const detalle: DetalleLinea[] = [];
@@ -197,7 +232,7 @@ export function calcularComisionVenta(venta: Venta, reglas: Regla[], decimales: 
   venta.lineas.forEach((l, i) => {
     const base = bases[i];
     baseTotal += base;
-    const regla = reglaParaLinea(l, venta, reglas);
+    const regla = reglaParaLinea(l, venta, reglas, ctx);
     let comision = 0;
     if (regla) {
       switch (regla.tipo_calculo) {

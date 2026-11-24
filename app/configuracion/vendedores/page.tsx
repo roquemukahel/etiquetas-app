@@ -8,8 +8,10 @@ import { useActor } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import Avatar from '../../Avatar';
 import PermisosEditor, { PermisosForm } from '../../PermisosEditor';
+import { soportaMigracion } from '../../lib/migraciones';
 import { obtenerSucursales, type Sucursal } from '../../lib/sucursales';
 import { useT } from '../../lib/idioma';
+import { falla } from '../../lib/escritura';
 
 type Vendedor = {
   id: string;
@@ -27,6 +29,12 @@ type Vendedor = {
   puede_recibir_servicio_tecnico: boolean;
   puede_gestionar_servicio_tecnico: boolean;
   puede_gestionar_financiacion: boolean;
+  // Solo existe si el negocio corrió dispositivos_registro_permisos_supabase.sql.
+  puede_eliminar_dispositivos?: boolean;
+  // Solo existen si el negocio corrió permisos_sensibles_supabase.sql.
+  puede_cargar_egresos?: boolean;
+  puede_registrar_pagos_proveedores?: boolean;
+  puede_ver_costos?: boolean;
   sucursal_id?: string | null;
 };
 
@@ -40,6 +48,10 @@ const PERMISOS_DEFAULT: PermisosForm = {
   puedeRecibirServicioTecnico: true,
   puedeGestionarServicioTecnico: true,
   puedeGestionarFinanciacion: true,
+  puedeEliminarDispositivos: true,
+  puedeCargarEgresos: false,
+  puedeRegistrarPagosProveedores: false,
+  puedeVerCostos: false,
 };
 
 export default function Vendedores() {
@@ -49,6 +61,15 @@ export default function Vendedores() {
   const puedeGestionarUsuarios = tienePermiso(actor, 'gestionar_usuarios');
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [loading, setLoading] = useState(true);
+  // Permisos sensibles (cargar egresos, pagos a proveedores, ver costos): solo si se corrió permisos_sensibles_supabase.sql.
+  const [conSensibles, setConSensibles] = useState(false);
+  // Permiso propio para eliminar dispositivos del Stock: solo si se corrió dispositivos_registro_permisos_supabase.sql.
+  const [conElimDisp, setConElimDisp] = useState(false);
+  useEffect(() => {
+    soportaMigracion(supabase, 'permisoEliminarDispositivos').then(setConElimDisp);
+    soportaMigracion(supabase, 'permisosSensibles').then(setConSensibles);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [nombre, setNombre] = useState('');
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -127,7 +148,7 @@ export default function Vendedores() {
       return;
     }
 
-    await supabase.from('vendedores').delete().eq('id', id);
+    if (await falla(supabase.from('vendedores').delete().eq('id', id), t, 'eliminar vendedor')) return;
     await registrarAuditoria(supabase, {
       accion: `eliminó un vendedor (${vendedor?.nombre || 'sin nombre'})`,
       entidad: 'vendedor',
@@ -155,6 +176,10 @@ export default function Vendedores() {
       puedeRecibirServicioTecnico: v.puede_recibir_servicio_tecnico,
       puedeGestionarServicioTecnico: v.puede_gestionar_servicio_tecnico,
       puedeGestionarFinanciacion: v.puede_gestionar_financiacion,
+      puedeEliminarDispositivos: v.puede_eliminar_dispositivos ?? v.puede_eliminar,
+      puedeCargarEgresos: v.puede_cargar_egresos ?? false,
+      puedeRegistrarPagosProveedores: v.puede_registrar_pagos_proveedores ?? false,
+      puedeVerCostos: v.puede_ver_costos ?? false,
     });
     setSucursalIdEdit(v.sucursal_id ?? '');
     setError(null);
@@ -167,7 +192,7 @@ export default function Vendedores() {
     reader.onload = async () => {
       const dataUrl = reader.result as string;
       setVendedores((vs) => vs.map((x) => (x.id === v.id ? { ...x, foto_url: dataUrl } : x)));
-      await supabase.from('vendedores').update({ foto_url: dataUrl }).eq('id', v.id);
+      if (await falla(supabase.from('vendedores').update({ foto_url: dataUrl }).eq('id', v.id), t, 'guardar foto')) cargar();
     };
     reader.readAsDataURL(file);
   };
@@ -182,9 +207,14 @@ export default function Vendedores() {
     // se guarda ni se compara en texto plano. Solo se toca si de verdad lo
     // tocaron (pinTocado); si no, el que ya tenía queda como estaba.
     if (pinTocado) {
-      await supabase.rpc('establecer_pin_vendedor', { p_vendedor_id: v.id, p_pin: pinEdit.trim() || null });
+      if (await falla(supabase.rpc('establecer_pin_vendedor', { p_vendedor_id: v.id, p_pin: pinEdit.trim() || null }), t, 'guardar PIN')) {
+        setGuardandoPerfil(false);
+        return;
+      }
     }
-    await supabase
+    if (
+      await falla(
+        supabase
       .from('vendedores')
       .update({
         telefono: telefonoEdit.trim() || null,
@@ -198,9 +228,24 @@ export default function Vendedores() {
         puede_recibir_servicio_tecnico: permisosEdit.puedeRecibirServicioTecnico,
         puede_gestionar_servicio_tecnico: permisosEdit.puedeGestionarServicioTecnico,
         puede_gestionar_financiacion: permisosEdit.puedeGestionarFinanciacion,
+        ...(conElimDisp ? { puede_eliminar_dispositivos: permisosEdit.puedeEliminarDispositivos } : {}),
+        ...(conSensibles
+          ? {
+              puede_cargar_egresos: permisosEdit.puedeCargarEgresos,
+              puede_registrar_pagos_proveedores: permisosEdit.puedeRegistrarPagosProveedores,
+              puede_ver_costos: permisosEdit.puedeVerCostos,
+            }
+          : {}),
         ...(sucursales.length > 0 ? { sucursal_id: sucursalIdEdit || null } : {}),
       })
-      .eq('id', v.id);
+      .eq('id', v.id),
+        t,
+        'guardar perfil del vendedor'
+      )
+    ) {
+      setGuardandoPerfil(false);
+      return;
+    }
     setGuardandoPerfil(false);
     setEditando(null);
     cargar();
@@ -329,7 +374,7 @@ export default function Vendedores() {
                   </div>
                 )}
 
-                <PermisosEditor valor={permisosEdit} onChange={setPermisosEdit} tienePin={pinTocado ? !!pinEdit.trim() : conPin.has(v.id)} />
+                <PermisosEditor mostrarSensibles={conSensibles} mostrarEliminarDispositivos={conElimDisp} valor={permisosEdit} onChange={setPermisosEdit} tienePin={pinTocado ? !!pinEdit.trim() : conPin.has(v.id)} />
 
                 <button
                   disabled={guardandoPerfil}

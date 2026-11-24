@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/stock-quieto",
       "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/cron/inventario-mensual",
+      "schedule": "0 6 1 * *"
     }
   ]
 }

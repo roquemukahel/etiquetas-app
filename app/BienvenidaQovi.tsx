@@ -54,7 +54,7 @@ export default function BienvenidaQovi() {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/qovi-saludo.webp"
-          alt="Qovi, la mascota de Qovento, saludando"
+          alt={t('Qovi, la mascota de Qovento, saludando')}
           className="qv-saludo-robot pointer-events-none relative z-[2] w-24 sm:w-28 lg:w-36 shrink-0 object-contain drop-shadow-2xl"
         />
 

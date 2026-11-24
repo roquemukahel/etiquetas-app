@@ -118,8 +118,7 @@ const IPHONE_13: ModeloColores = {
   ],
 };
 
-// iPhone 14 (render angulado sobre fondo claro). Falta Amarillo (Apple lo
-// agregó en 2023): cuando haya imagen se suma.
+// iPhone 14 (render angulado sobre fondo claro). Los 6 colores oficiales tienen foto.
 const IPHONE_14: ModeloColores = {
   carpeta: 'iphone-14',
   colores: [
@@ -395,6 +394,17 @@ const GALAXY_A32: ModeloColores = {
   ],
 };
 
+// Samsung Galaxy A52 — colores oficiales: Awesome Black, Awesome White,
+// Awesome Violet, Awesome Blue (fotos disponibles: negro, blanco, azul).
+const GALAXY_A52: ModeloColores = {
+  carpeta: 'galaxy-a52',
+  colores: [
+    { nombre: 'Blanco', archivo: 'blanco', hex: '#f3f3ef' },
+    { nombre: 'Azul', archivo: 'azul', hex: '#5fa8cc' },
+    { nombre: 'Negro', archivo: 'negro', hex: '#1c1c1e' },
+  ],
+};
+
 // Samsung Galaxy A07 — colores oficiales: Black, Light Violet, Green.
 const GALAXY_A07: ModeloColores = {
   carpeta: 'galaxy-a07',
@@ -464,6 +474,31 @@ const GALAXY_A56: ModeloColores = {
     { nombre: 'Grafito', archivo: 'grafito', hex: '#515355' },
     { nombre: 'Rosa', archivo: 'rosa', hex: '#f0d9e0' },
     { nombre: 'Oliva', archivo: 'oliva', hex: '#c3d6c0' },
+  ],
+};
+
+// Samsung Galaxy A57 — colores oficiales: Awesome Navy, Icyblue, Gray, Lilac.
+const GALAXY_A57: ModeloColores = {
+  carpeta: 'galaxy-a57',
+  colores: [
+    { nombre: 'Azul marino', archivo: 'azulmarino', hex: '#1f2a44' },
+    { nombre: 'Gris', archivo: 'gris', hex: '#5a5558' },
+    { nombre: 'Azul hielo', archivo: 'azulhielo', hex: '#d7e3f2' },
+    { nombre: 'Lila', archivo: 'lila', hex: '#c9b8e0' },
+  ],
+};
+
+// Samsung Galaxy S25 Ultra — colores oficiales: Titanium Silverblue, Black, Whitesilver, Gray + exclusivos online
+// Jetblack (se ve igual que el Titanium Black: una sola entrada), Jadegreen y Pinkgold.
+const GALAXY_S25_ULTRA: ModeloColores = {
+  carpeta: 'galaxy-s25-ultra',
+  colores: [
+    { nombre: 'Titanio azul plata', archivo: 'azulplata', hex: '#b6c0d8' },
+    { nombre: 'Titanio negro', archivo: 'negro', hex: '#2b2b2e' },
+    { nombre: 'Titanio blanco plata', archivo: 'blancoplata', hex: '#e6e7ea' },
+    { nombre: 'Titanio gris', archivo: 'gris', hex: '#b4aea3' },
+    { nombre: 'Titanio verde jade', archivo: 'jadegreen', hex: '#b9cdb3' },
+    { nombre: 'Titanio oro rosa', archivo: 'pinkgold', hex: '#ecd3c4' },
   ],
 };
 
@@ -552,8 +587,8 @@ const GALAXY_A54: ModeloColores = {
   ],
 };
 
-// Samsung Galaxy S26 (mismas fotos para S26, S26+ y S26 Ultra, a pedido del
-// usuario). Colores oficiales: Black, White, Cobalt Violet, Sky Blue +
+// Samsung Galaxy S26 (mismas fotos para S26 y S26+, a pedido del
+// usuario; el S26 Ultra tiene las suyas, con S Pen). Colores oficiales: Black, White, Cobalt Violet, Sky Blue +
 // online-exclusive Silver Shadow y Pink Gold.
 const GALAXY_S26: ModeloColores = {
   carpeta: 'galaxy-s26',
@@ -564,6 +599,17 @@ const GALAXY_S26: ModeloColores = {
     { nombre: 'Azul cielo', archivo: 'azulcielo', hex: '#c7dced' },
     { nombre: 'Plata', archivo: 'plata', hex: '#c6c8ca' },
     { nombre: 'Oro rosa', archivo: 'orosa', hex: '#f2ded0' },
+  ],
+};
+
+// Samsung Galaxy S26 Ultra — fotos propias (con S Pen). Colores oficiales: Black, White, Cobalt Violet, Sky Blue.
+const GALAXY_S26_ULTRA: ModeloColores = {
+  carpeta: 'galaxy-s26-ultra',
+  colores: [
+    { nombre: 'Negro', archivo: 'negro', hex: '#3a3a3c' },
+    { nombre: 'Blanco', archivo: 'blanco', hex: '#eef0ef' },
+    { nombre: 'Violeta cobalto', archivo: 'violeta', hex: '#5f5a86' },
+    { nombre: 'Azul cielo', archivo: 'azulcielo', hex: '#b9d6ea' },
   ],
 };
 
@@ -599,6 +645,20 @@ const GALAXY_S24_FE: ModeloColores = {
   ],
 };
 
+// Samsung Galaxy S22 — colores oficiales: Phantom Black, Phantom White, Green, Pink Gold + exclusivos online Violet, Sky Blue,
+// Graphite y Cream. Faltan las fotos de Grafito y Crema.
+const GALAXY_S22: ModeloColores = {
+  carpeta: 'galaxy-s22',
+  colores: [
+    { nombre: 'Negro', archivo: 'negro', hex: '#26262a' },
+    { nombre: 'Verde', archivo: 'verde', hex: '#34524a' },
+    { nombre: 'Oro rosa', archivo: 'orosa', hex: '#ecd9d0' },
+    { nombre: 'Violeta', archivo: 'violeta', hex: '#cdbbe0' },
+    { nombre: 'Blanco', archivo: 'blanco', hex: '#f4f4f2' },
+    { nombre: 'Azul cielo', archivo: 'azulcielo', hex: '#aecbe8' },
+  ],
+};
+
 // Samsung Galaxy S23 — colores oficiales: Phantom Black, Green, Cream,
 // Lavender + exclusivo online Lime.
 const GALAXY_S23: ModeloColores = {
@@ -621,6 +681,163 @@ const GALAXY_S23_ULTRA: ModeloColores = {
     { nombre: 'Crema', archivo: 'crema', hex: '#ede4d3' },
     { nombre: 'Verde', archivo: 'verde', hex: '#4a5c4e' },
     { nombre: 'Lavanda', archivo: 'lavanda', hex: '#e6d9e6' },
+  ],
+};
+
+// Samsung Galaxy Note 9 — colores oficiales: Midnight Black, Ocean Blue,
+// Lavender Purple, Metallic Copper. De las fotos cargadas se descartó 1 que no
+// era un Note 9 (un celular plateado de otra línea) y 1 negro repetido.
+const GALAXY_NOTE_9: ModeloColores = {
+  carpeta: 'galaxy-note-9',
+  colores: [
+    { nombre: 'Negro', archivo: 'negro', hex: '#18181a' },
+    { nombre: 'Azul', archivo: 'azul', hex: '#27408b' },
+    { nombre: 'Lavanda', archivo: 'lavanda', hex: '#b9a2cf' },
+    { nombre: 'Cobre metálico', archivo: 'cobre', hex: '#c98a63' },
+  ],
+};
+
+// Samsung Galaxy Z Flip 5 — colores oficiales: Mint, Graphite, Cream, Lavender
+// (más Gray, Blue, Green y Yellow exclusivos de Samsung.com). Fotos cargadas:
+// Mint y Graphite. La de Graphite venía en baja resolución y se amplió.
+const GALAXY_Z_FLIP_5: ModeloColores = {
+  carpeta: 'galaxy-z-flip-5',
+  colores: [
+    { nombre: 'Menta', archivo: 'menta', hex: '#cfe3d6' },
+    { nombre: 'Grafito', archivo: 'grafito', hex: '#4a4a4f' },
+  ],
+};
+
+// Samsung Galaxy Z Flip 7 — colores oficiales: Blue Shadow, Jet Black, Coral
+// Red y Mint (este último exclusivo de Samsung.com). Fotos cargadas: Blue
+// Shadow y Jet Black.
+const GALAXY_Z_FLIP_7: ModeloColores = {
+  carpeta: 'galaxy-z-flip-7',
+  colores: [
+    { nombre: 'Azul sombra', archivo: 'azul-sombra', hex: '#2c3e8c' },
+    { nombre: 'Negro azabache', archivo: 'negro-azabache', hex: '#232326' },
+  ],
+};
+
+// Samsung Galaxy Z Flip 8 — colores oficiales: Graphite, Cream y Pink (más
+// Mint exclusivo de Samsung.com). Fotos cargadas: Cream y Graphite. De las 3
+// fotos de la carpeta se descartó 1 negra que no era un Flip 8 (otra
+// generación, sin el diseño de cámaras ni la pantalla del Flip 8).
+const GALAXY_Z_FLIP_8: ModeloColores = {
+  carpeta: 'galaxy-z-flip-8',
+  colores: [
+    { nombre: 'Crema', archivo: 'crema', hex: '#f1ece2' },
+    { nombre: 'Grafito', archivo: 'grafito', hex: '#4b4d57' },
+  ],
+};
+
+// Samsung Galaxy A72 — colores oficiales: Awesome Black, Awesome Violet,
+// Awesome White, Awesome Blue.
+const GALAXY_A72: ModeloColores = {
+  carpeta: 'galaxy-a72',
+  colores: [
+    { nombre: 'Negro', archivo: 'negro', hex: '#1c1c1e' },
+    { nombre: 'Violeta', archivo: 'violeta', hex: '#c9b8dc' },
+    { nombre: 'Blanco', archivo: 'blanco', hex: '#f1f1f1' },
+    { nombre: 'Azul', archivo: 'azul', hex: '#6fa8d6' },
+  ],
+};
+
+// Samsung Galaxy A33 5G — colores oficiales: Awesome Blue, Awesome Black,
+// Awesome White, Awesome Peach.
+const GALAXY_A33: ModeloColores = {
+  carpeta: 'galaxy-a33',
+  colores: [
+    { nombre: 'Azul', archivo: 'azul', hex: '#b5d6f2' },
+    { nombre: 'Negro', archivo: 'negro', hex: '#1c1c1e' },
+    { nombre: 'Blanco', archivo: 'blanco', hex: '#f1f1f1' },
+    { nombre: 'Durazno', archivo: 'durazno', hex: '#f3c5a8' },
+  ],
+};
+
+// Samsung Galaxy Note 20 — colores oficiales: Mystic Bronze, Mystic Gray,
+// Mystic Green.
+const GALAXY_NOTE_20: ModeloColores = {
+  carpeta: 'galaxy-note-20',
+  colores: [
+    { nombre: 'Bronce místico', archivo: 'bronce', hex: '#c58f78' },
+    { nombre: 'Gris místico', archivo: 'gris', hex: '#6b6b6e' },
+    { nombre: 'Verde místico', archivo: 'verde', hex: '#9fc4a8' },
+  ],
+};
+
+// Samsung Galaxy Note 20 Ultra — colores oficiales: Mystic Black, Mystic White,
+// Mystic Bronze.
+const GALAXY_NOTE_20_ULTRA: ModeloColores = {
+  carpeta: 'galaxy-note-20-ultra',
+  colores: [
+    { nombre: 'Negro místico', archivo: 'negro', hex: '#1b1b1d' },
+    { nombre: 'Blanco místico', archivo: 'blanco', hex: '#f1f1f1' },
+    { nombre: 'Bronce místico', archivo: 'bronce', hex: '#c58f78' },
+  ],
+};
+
+// Samsung Galaxy S21 Ultra — colores oficiales: Phantom Black, Phantom Silver,
+// Phantom Titanium, Phantom Navy, Phantom Brown.
+const GALAXY_S21_ULTRA: ModeloColores = {
+  carpeta: 'galaxy-s21-ultra',
+  colores: [
+    { nombre: 'Negro', archivo: 'negro', hex: '#1a1a1c' },
+    { nombre: 'Plata', archivo: 'plata', hex: '#cdd3dc' },
+    { nombre: 'Titanio', archivo: 'titanio', hex: '#77787b' },
+    { nombre: 'Azul marino', archivo: 'azul', hex: '#3a4658' },
+    { nombre: 'Marrón', archivo: 'marron', hex: '#6d5446' },
+  ],
+};
+
+// Samsung Galaxy Note 10 y Note 10+ — colores oficiales: Aura Black, Aura White,
+// Aura Glow (los dos modelos) + Aura Pink (solo Note 10) / Aura Blue (solo Note
+// 10+). Comparten carpeta de fotos. OJO: las fotos de Negro, Blanco y Aura Glow
+// son del Note 10+ (no había de la versión chica); el Rosa sí es del Note 10.
+const NOTE_10_FOTOS = 'galaxy-note-10';
+const GALAXY_NOTE_10: ModeloColores = {
+  carpeta: NOTE_10_FOTOS,
+  colores: [
+    { nombre: 'Negro', archivo: 'negro', hex: '#1a1a1c' },
+    { nombre: 'Blanco', archivo: 'blanco', hex: '#efefef' },
+    { nombre: 'Aura Glow', archivo: 'glow', hex: '#c9d0e8' },
+    { nombre: 'Rosa', archivo: 'rosa', hex: '#e58a8a' },
+  ],
+};
+const GALAXY_NOTE_10_PLUS: ModeloColores = {
+  carpeta: NOTE_10_FOTOS,
+  colores: [
+    { nombre: 'Negro', archivo: 'negro', hex: '#1a1a1c' },
+    { nombre: 'Blanco', archivo: 'blanco', hex: '#efefef' },
+    { nombre: 'Aura Glow', archivo: 'glow', hex: '#c9d0e8' },
+    { nombre: 'Azul', archivo: 'azul', hex: '#2438a8' },
+  ],
+};
+
+// Redmi 13C — colores oficiales (versión 4G): Midnight Black, Navy Blue,
+// Clover Green, Glacier White. De las fotos cargadas se descartaron 1 duplicado
+// exacto y las repetidas de negro/azul de la versión 5G; el Blanco sale de la
+// versión 5G (no había foto del blanco en la 4G).
+const REDMI_13C: ModeloColores = {
+  carpeta: 'redmi-13c',
+  colores: [
+    { nombre: 'Negro', archivo: 'negro', hex: '#1d1e22' },
+    { nombre: 'Azul', archivo: 'azul', hex: '#1f5f73' },
+    { nombre: 'Verde trébol', archivo: 'verde', hex: '#bcd8b0' },
+    { nombre: 'Blanco', archivo: 'blanco', hex: '#e6edf6' },
+  ],
+};
+
+// Redmi 14C — colores oficiales: Midnight Black, Sage Green, Dreamy Purple,
+// Starry Blue (se descartó 1 foto duplicada/casi-duplicada del mismo azul,
+// quedándonos con la mejor toma).
+const REDMI_14C: ModeloColores = {
+  carpeta: 'redmi-14c',
+  colores: [
+    { nombre: 'Negro', archivo: 'negro', hex: '#18181a' },
+    { nombre: 'Azul', archivo: 'azul', hex: '#20396b' },
+    { nombre: 'Lavanda', archivo: 'lavanda', hex: '#d7d3e0' },
+    { nombre: 'Verde salvia', archivo: 'verde', hex: '#7c8a5a' },
   ],
 };
 
@@ -879,6 +1096,72 @@ const RAZR_70_ULTRA: ModeloColores = {
 };
 
 // Clave de modelo normalizada: "iPhone 11", "iphone 11", "iPhone11" -> "iphone11".
+// Samsung Galaxy S23 FE — colores oficiales: Mint, Cream, Graphite, Purple + exclusivos online Indigo y Tangerine.
+const GALAXY_S23_FE: ModeloColores = {
+  carpeta: 'galaxy-s23-fe',
+  colores: [
+    { nombre: 'Menta', archivo: 'menta', hex: '#d7e6dd' },
+    { nombre: 'Crema', archivo: 'crema', hex: '#f3ede2' },
+    { nombre: 'Grafito', archivo: 'grafito', hex: '#2f3033' },
+    { nombre: 'Púrpura', archivo: 'purpura', hex: '#6a597a' },
+    { nombre: 'Índigo', archivo: 'indigo', hex: '#7b94b0' },
+    { nombre: 'Mandarina', archivo: 'mandarina', hex: '#c98040' },
+  ],
+};
+
+// Samsung Galaxy S24 Ultra — colores oficiales: Titanium Black, Gray, Violet, Yellow + exclusivos online Green, Blue y
+// Orange. Faltan las fotos de Negro, Amarillo, Verde, Azul y Naranja.
+const GALAXY_S24_ULTRA: ModeloColores = {
+  carpeta: 'galaxy-s24-ultra',
+  colores: [
+    { nombre: 'Titanio gris', archivo: 'gris', hex: '#989085' },
+    { nombre: 'Titanio violeta', archivo: 'violeta', hex: '#474258' },
+  ],
+};
+
+// Samsung Galaxy S25+ — mismos colores que el S25 (Navy, Mint, Icyblue, Silver Shadow). Azul marino es la foto real del
+// S25+; Plata y Azul hielo siguen siendo las del S25 hasta que haya fotos del S25+.
+const GALAXY_S25_PLUS: ModeloColores = {
+  carpeta: 'galaxy-s25-plus',
+  colores: [
+    { nombre: 'Plata', archivo: 'plata', hex: '#a8abae' },
+    { nombre: 'Azul marino', archivo: 'azulmarino', hex: '#393e47' },
+    { nombre: 'Azul hielo', archivo: 'azulhielo', hex: '#c9d6e8' },
+  ],
+};
+
+// Redmi 9A — colores oficiales: Midnight Black, Nature Green, Sea Blue.
+const REDMI_9A: ModeloColores = {
+  carpeta: 'redmi-9a',
+  colores: [
+    { nombre: 'Negro', archivo: 'negro', hex: '#2a292c' },
+    { nombre: 'Verde', archivo: 'verde', hex: '#0b7480' },
+    { nombre: 'Azul', archivo: 'azul', hex: '#2865a8' },
+  ],
+};
+
+// Redmi 17 (4G) — colores oficiales: Black, Deep Blue, Lotus Purple, Oak Green. Falta la foto de Lotus Purple.
+const REDMI_17: ModeloColores = {
+  carpeta: 'redmi-17',
+  colores: [
+    { nombre: 'Negro', archivo: 'negro', hex: '#2c2f33' },
+    { nombre: 'Azul profundo', archivo: 'azul', hex: '#2b3f8c' },
+    { nombre: 'Verde roble', archivo: 'verde', hex: '#33403a' },
+  ],
+};
+
+// Redmi Note 17 Pro Max — colores: Cloud Blush (acabado fotocromático), Green, Purple, Black (según la prensa del lanzamiento;
+// Xiaomi no publica la lista en una página oficial que haya podido ver).
+const REDMI_NOTE_17_PRO_MAX: ModeloColores = {
+  carpeta: 'redmi-note-17-pro-max',
+  colores: [
+    { nombre: 'Negro', archivo: 'negro', hex: '#2a2b2e' },
+    { nombre: 'Verde', archivo: 'verde', hex: '#a9cfa5' },
+    { nombre: 'Púrpura', archivo: 'purpura', hex: '#d2bfe6' },
+    { nombre: 'Rosa nube', archivo: 'rosanube', hex: '#f1e6e4' },
+  ],
+};
+
 const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   iphone7: IPHONE_7,
   iphonex: IPHONE_X,
@@ -922,6 +1205,7 @@ const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   iphone18pro: IPHONE_18_PRO,
   iphone18promax: IPHONE_18_PRO,
   galaxya32: GALAXY_A32,
+  galaxya52: GALAXY_A52,
   galaxya07: GALAXY_A07,
   galaxya17: GALAXY_A17,
   galaxya26: GALAXY_A26,
@@ -929,6 +1213,7 @@ const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   galaxya16: GALAXY_A16,
   galaxya36: GALAXY_A36,
   galaxya56: GALAXY_A56,
+  galaxya57: GALAXY_A57,
   galaxya25: GALAXY_A25,
   galaxya35: GALAXY_A35,
   galaxya55: GALAXY_A55,
@@ -939,16 +1224,36 @@ const MODELOS_CON_COLOR: Record<string, ModeloColores> = {
   galaxya54: GALAXY_A54,
   galaxys26: GALAXY_S26,
   'galaxys26+': GALAXY_S26,
-  galaxys26ultra: GALAXY_S26,
+  galaxys26ultra: GALAXY_S26_ULTRA,
   galaxys25: GALAXY_S25,
-  'galaxys25+': GALAXY_S25,
+  'galaxys25+': GALAXY_S25_PLUS,
+  galaxys25ultra: GALAXY_S25_ULTRA,
   galaxys24: GALAXY_S24,
   'galaxys24+': GALAXY_S24,
   galaxys24fe: GALAXY_S24_FE,
+  galaxys22: GALAXY_S22,
   galaxys23: GALAXY_S23,
   'galaxys23+': GALAXY_S23,
   galaxys23ultra: GALAXY_S23_ULTRA,
+  galaxynote9: GALAXY_NOTE_9,
+  galaxyzflip5: GALAXY_Z_FLIP_5,
+  galaxyzflip7: GALAXY_Z_FLIP_7,
+  galaxyzflip8: GALAXY_Z_FLIP_8,
+  galaxya72: GALAXY_A72,
+  galaxya33: GALAXY_A33,
+  galaxynote20: GALAXY_NOTE_20,
+  galaxynote20ultra: GALAXY_NOTE_20_ULTRA,
+  galaxys21ultra: GALAXY_S21_ULTRA,
+  galaxynote10: GALAXY_NOTE_10,
+  'galaxynote10+': GALAXY_NOTE_10_PLUS,
+  redmi13c: REDMI_13C,
+  redmi14c: REDMI_14C,
   redmi15c: REDMI_15C,
+  redmi9a: REDMI_9A,
+  redmi17: REDMI_17,
+  redminote17promax: REDMI_NOTE_17_PRO_MAX,
+  galaxys23fe: GALAXY_S23_FE,
+  galaxys24ultra: GALAXY_S24_ULTRA,
   galaxya14: GALAXY_A14,
   motoe22: MOTO_E22,
   motog04s: MOTO_G04S,

@@ -7,6 +7,7 @@ import { crearClienteNavegador } from '../../lib/supabase/client';
 import { asegurarModelo, normalizarNombreModelo, sugerirCarpetas } from '../../lib/modelos';
 import { asegurarProveedor } from '../../lib/proveedores';
 import { obtenerCategorias, type Categoria } from '../../lib/categorias';
+import { etiquetaCategoria } from '../../lib/subcategorias';
 import { obtenerSucursales, type Sucursal } from '../../lib/sucursales';
 import { useSucursalActual } from '../../lib/sucursal';
 import { limpiarImei } from '../../lib/imei';
@@ -17,9 +18,23 @@ import { simboloMoneda } from '../../lib/monedas';
 import { sanitizarDecimal, formatearMonto } from '../../lib/numeros';
 import SelectorColorAuto from '../../SelectorColorAuto';
 import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
+import SelectorFinanciacion from '../../SelectorFinanciacion';
+import AvisoCanje from '../../AvisoCanje';
+import AvisoStandby from '../../AvisoStandby';
+import AvisoServicioTecnico from '../../AvisoServicioTecnico';
+import { reparacionesAbiertasConImei, propias, textoDeOrdenes, equipoDeOrigen, reutilizarEquipoDeOrigen, cerrarReparacionesAlPasarAlStock } from '../../lib/servicioEnStock';
+import { useCoincidenciasStandby } from '../../lib/useCoincidenciasStandby';
+import { SelectorFotosNuevas } from '../../FotosDispositivo';
+import { guardarFotos, type FotoPreparada } from '../../lib/fotosDispositivo';
+import { useCoincidenciasCanje } from '../../lib/useCoincidenciasCanje';
+import { hayCanjeConEseImei } from '../../lib/canje';
+import { guiaDeFormulario } from '../../lib/financiacionGuia';
+import { soportaMigracion } from '../../lib/migraciones';
 import { useT } from '../../lib/idioma';
+import { compararModelosPorSalida } from '../../lib/catalogosMarcas';
+import { OPCIONES_ALMACENAMIENTO, formatearGB } from '../../lib/almacenamiento';
 
-const STORAGE_OPTIONS = [64, 128, 256, 512];
+const STORAGE_OPTIONS = OPCIONES_ALMACENAMIENTO;
 
 export default function NuevoDispositivo() {
   const router = useRouter();
@@ -27,6 +42,8 @@ export default function NuevoDispositivo() {
   const actorActual = useActor();
   const t = useT();
   const puedeAgregarStock = tienePermiso(actorActual, 'agregar_stock');
+  // El costo es información sensible: solo con el permiso "ver costos y márgenes".
+  const puedeVerCostos = tienePermiso(actorActual, 'ver_costos');
   const sucursalActual = useSucursalActual();
 
   const [carpetas, setCarpetas] = useState<string[]>([]);
@@ -59,7 +76,7 @@ export default function NuevoDispositivo() {
   useEffect(() => {
     (async () => {
       const { data } = await supabase.from('modelos_stock').select('nombre').order('nombre');
-      setCarpetas((data ?? []).map((m) => m.nombre));
+      setCarpetas((data ?? []).map((m) => m.nombre).sort(compararModelosPorSalida));
     })();
     (async () => {
       const { data } = await supabase.from('proveedores').select('nombre').order('nombre');
@@ -100,7 +117,22 @@ export default function NuevoDispositivo() {
   const [color, setColor] = useState('');
   const [precio, setPrecio] = useState('');
   const [costo, setCosto] = useState('');
+  // Precio de lista y guía de cuotas: solo si el negocio corrió financiacion_guia_cartera_supabase.sql.
+  const [conGuia, setConGuia] = useState(false);
+  const [precioLista, setPrecioLista] = useState('');
+  const [guia, setGuia] = useState('');
+  useEffect(() => {
+    soportaMigracion(supabase, 'guiaFinanciacion').then(setConGuia);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [proveedor, setProveedor] = useState('');
+  // Fotos reales del equipo (opcionales): se suben después de crearlo. Solo si corrió dispositivo_fotos_supabase.sql.
+  const [conFotos, setConFotos] = useState(false);
+  const [fotosNuevas, setFotosNuevas] = useState<FotoPreparada[]>([]);
+  useEffect(() => {
+    soportaMigracion(supabase, 'fotosDispositivo').then(setConFotos);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [detalles, setDetalles] = useState('');
   const [estado, setEstado] = useState('usado');
   const [error, setError] = useState<string | null>(null);
@@ -116,6 +148,10 @@ export default function NuevoDispositivo() {
   }, []);
 
   const puedeGuardar = modelo.trim().length > 0 && puedeAgregarStock;
+  // Si el equipo que se carga a mano ya está en Plan Canje, se avisa para que se agregue desde ahí.
+  const coincidenciasCanje = useCoincidenciasCanje(supabase, imei, modelo);
+  // Igual con Standby: si ya está esperando ahí, se avisa para pasarlo al Stock desde ahí.
+  const coincidenciasStandby = useCoincidenciasStandby(supabase, imei, modelo);
 
   const handleGuardar = async () => {
     if (!puedeGuardar) return;
@@ -125,16 +161,39 @@ export default function NuevoDispositivo() {
       return;
     }
     const imeiLimpio = limpiarImei(imei);
-    if (imeiLimpio) {
-      const { data: existente } = await supabase.from('dispositivos').select('id').eq('imei', imeiLimpio).maybeSingle();
+    const enStandbyConEseImei = hayCanjeConEseImei(coincidenciasStandby.porImei, imei);
+    // Si el IMEI es el de una orden abierta en Servicio Técnico: de un equipo propio se pregunta si ya fue reparado
+    // (si sí, entra al Stock y la orden se cierra); de un cliente solo se avisa, esa orden nunca se cierra desde acá.
+    const enServicio = imeiLimpio ? await reparacionesAbiertasConImei(supabase, imeiLimpio) : [];
+    const ordenesPropias = propias(enServicio);
+    const ordenesDeClientes = enServicio.filter((o) => o.cliente_id);
+    if (ordenesPropias.length > 0) {
+      if (
+        !confirm(
+          `${t('Este dispositivo se encuentra en Servicio Técnico')} (${textoDeOrdenes(ordenesPropias)}). ${t('¿Ya fue reparado? ¿Agregarlo al Stock? Si aceptás, se agrega al Stock y esa orden se cierra en Servicio Técnico.')}`
+        )
+      )
+        return;
+    } else if (ordenesDeClientes.length > 0) {
+      if (!confirm(`${t('Este dispositivo se encuentra en Servicio Técnico')} (${textoDeOrdenes(ordenesDeClientes)}). ${t('Es el equipo de un cliente que está en reparación.')} ${t('¿Agregarlo igual?')}`)) return;
+    }
+    // El equipo de origen de esa orden es el mismo que vuelve: no cuenta como duplicado.
+    const origenId = ordenesPropias.length > 0 ? await equipoDeOrigen(supabase, ordenesPropias) : null;
+    // Si está en Standby se pregunta eso (más abajo) en vez del aviso genérico de IMEI repetido.
+    if (imeiLimpio && !enStandbyConEseImei) {
+      let busquedaDuplicado = supabase.from('dispositivos').select('id').eq('imei', imeiLimpio).limit(1);
+      if (origenId) busquedaDuplicado = busquedaDuplicado.neq('id', origenId);
+      const { data: existente } = await busquedaDuplicado.maybeSingle();
       if (existente && !confirm(`${t('Ya hay un dispositivo en Stock con el IMEI')} ${imeiLimpio}. ${t('¿Agregarlo igual?')}`)) return;
     }
+    if (hayCanjeConEseImei(coincidenciasCanje.porImei, imei) && !confirm(t('Este dispositivo está en Plan Canje. Si lo cargás acá queda duplicado en el Stock. ¿Cargarlo igual?'))) return;
+    if (enStandbyConEseImei && !confirm(t('Este dispositivo está en Standby. Si lo cargás acá queda duplicado en el Stock. ¿Cargarlo igual?'))) return;
     setGuardando(true);
     setError(null);
 
     const modeloNormalizado = normalizarNombreModelo(modelo.trim());
     const proveedorId = await asegurarProveedor(supabase, proveedor);
-    const { error: insertError } = await supabase.from('dispositivos').insert({
+    const campos = {
       modelo: modeloNormalizado,
       capacidad_gb: capacidad,
       imei: imeiLimpio,
@@ -146,20 +205,57 @@ export default function NuevoDispositivo() {
       proveedor_id: proveedorId,
       detalles: detalles.trim() || null,
       estado,
+      ...(conGuia ? { precio_lista: precioLista ? Number(precioLista) : null, financiacion_max_cuotas: guiaDeFormulario(guia) } : {}),
       ...(categoriaId ? { categoria_id: categoriaId } : {}),
       ...(sucursalElegida ? { sucursal_id: sucursalElegida } : {}),
       en_stock: true,
-      agregado_por_nombre: actor?.nombre ?? null,
-      agregado_por_foto_url: actor?.fotoUrl ?? null,
-    });
-
-    if (insertError) {
-      setError(`${t('No pudimos guardar el dispositivo:')} ` + insertError.message);
-      setGuardando(false);
-      return;
+    };
+    // Si la orden de Servicio Técnico salió de un equipo que ya existe, vuelve ese mismo equipo (no se crea un duplicado).
+    let creadoId: string | null = null;
+    if (ordenesPropias.length > 0) {
+      const reutilizado = await reutilizarEquipoDeOrigen(supabase, ordenesPropias);
+      if (reutilizado.error) {
+        setError(`${t('No pudimos guardar el dispositivo:')} ` + reutilizado.error);
+        setGuardando(false);
+        return;
+      }
+      if (reutilizado.usado && reutilizado.id) {
+        const { error: errorActualizar } = await supabase.from('dispositivos').update(campos).eq('id', reutilizado.id);
+        if (errorActualizar) {
+          setError(`${t('No pudimos guardar el dispositivo:')} ` + errorActualizar.message);
+          setGuardando(false);
+          return;
+        }
+        creadoId = reutilizado.id;
+      }
+    }
+    if (!creadoId) {
+      const { data: creado, error: insertError } = await supabase
+        .from('dispositivos')
+        .insert({ ...campos, agregado_por_nombre: actor?.nombre ?? null, agregado_por_foto_url: actor?.fotoUrl ?? null })
+        .select('id')
+        .single();
+      if (insertError) {
+        setError(`${t('No pudimos guardar el dispositivo:')} ` + insertError.message);
+        setGuardando(false);
+        return;
+      }
+      creadoId = (creado as { id: string } | null)?.id ?? null;
     }
 
     await asegurarModelo(supabase, modeloNormalizado);
+
+    // El equipo ya está en el Stock: la orden de Servicio Técnico se cierra (el historial queda guardado).
+    if (ordenesPropias.length > 0) {
+      const cierre = await cerrarReparacionesAlPasarAlStock(supabase, ordenesPropias);
+      if (cierre.error) alert(`${t('El equipo se agregó al Stock, pero no pudimos cerrar la orden de Servicio Técnico:')} ${cierre.error}`);
+    }
+
+    // El equipo ya está cargado: si las fotos no se pueden guardar no se deshace nada, se avisa.
+    if (conFotos && creadoId && fotosNuevas.length > 0) {
+      const { error: errorFotos } = await guardarFotos(supabase, creadoId, fotosNuevas, 0);
+      if (errorFotos) alert(`${t('El equipo se cargó bien, pero no pudimos guardar las fotos:')} ${errorFotos}`);
+    }
 
     router.push('/stock');
     router.refresh();
@@ -206,7 +302,7 @@ export default function NuevoDispositivo() {
             >
               {categoriasDispositivo.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.nombre}
+                  {etiquetaCategoria(c.id, categoriasDispositivo)}
                 </option>
               ))}
             </select>
@@ -250,13 +346,33 @@ export default function NuevoDispositivo() {
                   capacidad === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
                 }`}
               >
-                {gb} GB
+                {formatearGB(gb, true)}
               </button>
             ))}
           </div>
         </div>
 
         <Campo label="IMEI" valor={imei} onChange={setImei} mono />
+        <AvisoCanje
+          supabase={supabase}
+          porImei={coincidenciasCanje.porImei}
+          porModelo={coincidenciasCanje.porModelo}
+          sucursalId={sucursalElegida || null}
+          onAgregado={() => {
+            router.push('/stock');
+            router.refresh();
+          }}
+        />
+        <AvisoServicioTecnico supabase={supabase} imei={imei} />
+        <AvisoStandby
+          supabase={supabase}
+          porImei={coincidenciasStandby.porImei}
+          porModelo={coincidenciasStandby.porModelo}
+          onAgregado={() => {
+            router.push('/stock');
+            router.refresh();
+          }}
+        />
         <Campo label={t('Salud de batería (%)')} valor={bateria} onChange={setBateria} numerico />
         <SelectorColorAuto label={t('Color')} modelo={modelo} value={color} onChange={setColor} />
         <Campo label={t('Precio')} valor={precio} onChange={setPrecio} numerico />
@@ -278,7 +394,13 @@ export default function NuevoDispositivo() {
             </div>
           );
         })()}
-        <Campo label={t('Costo (lo que le pagaste al proveedor, opcional)')} valor={costo} onChange={setCosto} numerico />
+        {conGuia && (
+          <>
+            <Campo label={t('Precio de lista (financiación)')} valor={precioLista} onChange={setPrecioLista} numerico />
+            <SelectorFinanciacion label={t('Financiación')} value={guia} onChange={setGuia} heredado={null} />
+          </>
+        )}
+        {puedeVerCostos && <Campo label={t('Costo (lo que le pagaste al proveedor, opcional)')} valor={costo} onChange={setCosto} numerico />}
         <Campo label={t('Proveedor (opcional)')} valor={proveedor} onChange={setProveedor} listaId="proveedores-stock" />
         <datalist id="proveedores-stock">
           {proveedores.map((p) => (
@@ -298,6 +420,8 @@ export default function NuevoDispositivo() {
             className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
           />
         </div>
+
+        {conFotos && <SelectorFotosNuevas fotos={fotosNuevas} onChange={setFotosNuevas} />}
 
         <SelectorEstadoDispositivo value={estado} onChange={setEstado} />
       </div>

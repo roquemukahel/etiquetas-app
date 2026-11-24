@@ -4,13 +4,14 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../lib/supabase/client';
 import { asegurarModelo, normalizarNombreModelo } from '../lib/modelos';
-import { TODOS_LOS_MODELOS_CATALOGO } from '../lib/catalogosMarcas';
+import { TODOS_LOS_MODELOS_CATALOGO, compararModelosPorSalida } from '../lib/catalogosMarcas';
 import { limpiarImei } from '../lib/imei';
 import { armarLinkWhatsApp, mensajeSeguimientoServicio, mensajeListoServicio } from '../lib/whatsapp';
 import { codigoLlamada } from '../lib/paises';
 import { obtenerImagenesCarpetas } from '../lib/carpetas';
 import { registrarAuditoria } from '../lib/auditoria';
 import { cambiarEstadoReparacion } from '../lib/estadoReparacion';
+import { tieneCostoPendiente } from '../lib/costoRepuesto';
 import { liberarRepuestosDeReparaciones } from '../lib/repuestos';
 import { getActor, useActor, MENSAJE_ACTOR_REQUERIDO } from '../lib/actor';
 import { tienePermiso } from '../lib/permisos';
@@ -45,8 +46,16 @@ import { QoviState } from '../QoviState';
 import { useT } from '../lib/idioma';
 import { useSucursalActual } from '../lib/sucursal';
 import { obtenerSucursales, type Sucursal } from '../lib/sucursales';
+import { falla } from '../lib/escritura';
+import { camposRecibidoPor, registrarRecepcionEnHistorial } from '../lib/recibidoPor';
+import { soportaMigracion } from '../lib/migraciones';
+import { costoDeCanjeDeOrigen, marcarCanjeDeOrigenAgregado } from '../lib/canje';
+import { bateriaDeReparacion } from '../lib/bateriaServicio';
+import { mandarReparacionAStandby, reubicarEquipoDeServicio, dispositivoOrigenDe } from '../lib/standby';
+import { origenDeCliente } from '../lib/clientesDuplicados';
+import { OPCIONES_ALMACENAMIENTO, formatearGB } from '../lib/almacenamiento';
 
-const STORAGE_OPTIONS = [64, 128, 256, 512];
+const STORAGE_OPTIONS = OPCIONES_ALMACENAMIENTO;
 
 function idTemporal() {
   return Math.random().toString(36).slice(2);
@@ -114,6 +123,8 @@ export default function ServicioTecnico() {
     const tabParam = new URLSearchParams(window.location.search).get('tab');
     if (tabParam === 'tecnicos') setTab('tecnicos');
     if (tabParam === 'mibanco') setTab('mibanco');
+    // Desde Estadísticas: "Ver reparaciones sin costo".
+    if (new URLSearchParams(window.location.search).get('sinCosto') === '1') setFiltroIndicador('sin_costo');
   }, []);
   const cambiarTab = (nuevoTab: 'lista' | 'mibanco' | 'tecnicos') => {
     setTab(nuevoTab);
@@ -123,7 +134,15 @@ export default function ServicioTecnico() {
   // Indicador operativo elegido (fila clickeable arriba de la lista). Por
   // defecto "activas" para no arrancar mostrando entregados/cancelados
   // viejos mezclados con lo que sí necesita atención hoy.
-  const [filtroIndicador, setFiltroIndicador] = useState<'activas' | 'demoradas' | 'aprobacion' | 'repuesto' | 'listas' | null>('activas');
+  const [filtroIndicador, setFiltroIndicador] = useState<'activas' | 'demoradas' | 'aprobacion' | 'repuesto' | 'listas' | 'sin_costo' | null>('activas');
+  // ¿El negocio corrió servicio_costo_repuesto_supabase.sql? Sin eso no hay pregunta de repuesto ni filtro "Reparaciones sin costo".
+  const [conCostoRepuesto, setConCostoRepuesto] = useState(false);
+  useEffect(() => {
+    soportaMigracion(supabase, 'costoRepuestoServicio').then(setConCostoRepuesto);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // Cuántas reparaciones (de cualquier estado, entregadas incluidas) tienen el costo pendiente: la lista solo trae lo activo, así que se cuenta aparte.
+  const [sinCostoTotal, setSinCostoTotal] = useState<number | null>(null);
   const [busqueda, setBusqueda] = useState('');
   // Debounce de 250ms: la búsqueda filtra en memoria (no dispara consultas
   // nuevas), pero igual se separa el valor "en vivo" del input del valor que
@@ -237,10 +256,13 @@ export default function ServicioTecnico() {
     // (esta pantalla promete mirar TODAS las reparaciones al buscar texto,
     // ver comentario en `filtrados` más abajo) — mismo bug de truncamiento
     // de PostgREST ya corregido en Stock/Dispositivos.
+    const conDecision = await soportaMigracion(supabase, 'costoRepuestoServicio');
     const data = await obtenerTodasLasFilas<Reparacion>(
       supabase,
       'reparaciones',
-      'id, numero_orden, modelo, capacidad_gb, color, imei, falla_declarada, diagnostico, ubicacion_fisica, tecnico_id, estado, prioridad, trabajos_realizados, fecha_ingreso_servicio, fecha_estimada, fecha_reparado, fecha_entrega, garantia_dias, estado_actualizado_at, cliente_id, token_seguimiento, en_poder_tecnico, presupuesto_mano_obra, presupuesto_repuestos, importe_total, orden_cobro_id, agregado_a_stock, sucursal_id, clientes ( nombre, apellido, telefono )',
+      'id, numero_orden, modelo, capacidad_gb, color, imei, falla_declarada, diagnostico, ubicacion_fisica, tecnico_id, estado, prioridad, trabajos_realizados, fecha_ingreso_servicio, fecha_estimada, fecha_reparado, fecha_entrega, garantia_dias, estado_actualizado_at, cliente_id, token_seguimiento, en_poder_tecnico, presupuesto_mano_obra, presupuesto_repuestos, importe_total, orden_cobro_id, agregado_a_stock, sucursal_id, ' +
+        (conDecision ? 'repuesto_decision, ' : '') +
+        'clientes ( nombre, apellido, telefono )',
       [{ columna: 'fecha_ingreso_servicio', ascending: false }],
       soloActivas ? (q) => q.not('estado', 'in', `(${FINALIZADOS.join(',')})`) : undefined
     );
@@ -264,7 +286,7 @@ export default function ServicioTecnico() {
   // por técnico, historial de entregas de un técnico puntual) que quedarían
   // en cero/incompletas si solo hubiera llegado lo activo.
   useEffect(() => {
-    if (busquedaDebounced.trim() !== '' || filtroIndicador === null || tab !== 'lista') {
+    if (busquedaDebounced.trim() !== '' || filtroIndicador === null || filtroIndicador === 'sin_costo' || tab !== 'lista') {
       asegurarHistorialCompleto();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -273,6 +295,13 @@ export default function ServicioTecnico() {
   useEffect(() => {
     cargar();
     (async () => {
+      // Con la sucursal de cada técnico (para ofrecer primero los de la sucursal donde se carga la orden); si el
+      // negocio no tiene sucursales, esa columna no existe y se trae como siempre.
+      const conSucursal = await supabase.from('tecnicos').select('id, nombre, foto_url, sucursal_id').order('nombre');
+      if (!conSucursal.error) {
+        setTecnicos((conSucursal.data as Tecnico[]) ?? []);
+        return;
+      }
       const { data } = await supabase.from('tecnicos').select('id, nombre, foto_url').order('nombre');
       setTecnicos((data as Tecnico[]) ?? []);
     })();
@@ -286,14 +315,14 @@ export default function ServicioTecnico() {
       // duplicar los que ya están en las dos listas.
       const yaEnStock = new Set((data ?? []).map((m) => m.nombre.toLowerCase()));
       const delCatalogo = TODOS_LOS_MODELOS_CATALOGO.filter((m) => !yaEnStock.has(m.toLowerCase()));
-      setCarpetasStock([...(data ?? []).map((m) => m.nombre), ...delCatalogo]);
+      setCarpetasStock([...(data ?? []).map((m) => m.nombre), ...delCatalogo].sort(compararModelosPorSalida));
     })();
     (async () => setImagenesCarpetas(await obtenerImagenesCarpetas(supabase)))();
     (async () => {
       setClientes(await obtenerTodasLasFilas<Cliente>(supabase, 'clientes', 'id, nombre, apellido, telefono', [{ columna: 'nombre' }]));
     })();
     (async () => {
-      const { data } = await supabase.from('repuestos').select('id, nombre, cantidad_stock, cantidad_reservada, stock_minimo');
+      const data = await obtenerTodasLasFilas<any>(supabase, 'repuestos', 'id, nombre, cantidad_stock, cantidad_reservada, stock_minimo');
       setRepuestosParaAlertas((data as RepuestoParaAlerta[]) ?? []);
     })();
     (async () => {
@@ -316,6 +345,17 @@ export default function ServicioTecnico() {
     setClienteInput(valor);
     const encontrado = clientes.find((c) => nombreCompleto(c).toLowerCase() === valor.trim().toLowerCase());
     if (encontrado) setClienteTelefono(encontrado.telefono ?? '');
+  };
+
+  // Técnicos de la sucursal donde se carga la orden (la elegida arriba): son los que se ofrecen primero, y si
+  // hay uno solo —o quien recibe es un técnico de esa sucursal— queda asignado de entrada. Antes quedaba el
+  // de la pestaña Técnicos que se estuviera mirando (a veces de otra sucursal).
+  const tecnicosDeSucursal = sucursalActual.id ? tecnicos.filter((tec) => tec.sucursal_id === sucursalActual.id) : [];
+  const tecnicoPorDefecto = (): string => {
+    if (actor?.tipo === 'tecnico' && (!sucursalActual.id || tecnicosDeSucursal.some((tec) => tec.id === actor.id))) return actor.id;
+    if (tab === 'tecnicos' && tecnicoSeleccionado && (!sucursalActual.id || tecnicos.find((tec) => tec.id === tecnicoSeleccionado)?.sucursal_id === sucursalActual.id)) return tecnicoSeleccionado;
+    if (tecnicosDeSucursal.length === 1) return tecnicosDeSucursal[0].id;
+    return '';
   };
 
   const nombreTecnico = (tecnicoId: string | null) => tecnicos.find((tec) => tec.id === tecnicoId)?.nombre;
@@ -377,6 +417,7 @@ export default function ServicioTecnico() {
       if (filtroIndicador === 'aprobacion' && r.estado !== 'esperando_aprobacion') return false;
       if (filtroIndicador === 'repuesto' && r.estado !== 'esperando_repuesto') return false;
       if (filtroIndicador === 'listas' && r.estado !== 'listo_para_entregar') return false;
+      if (filtroIndicador === 'sin_costo' && !tieneCostoPendiente(r)) return false;
       if (filtroTecnico && r.tecnico_id !== filtroTecnico) return false;
       return true;
     });
@@ -389,6 +430,21 @@ export default function ServicioTecnico() {
     setBusqueda('');
   };
 
+  useEffect(() => {
+    if (!conCostoRepuesto) return;
+    let cancelado = false;
+    (async () => {
+      let q = supabase.from('reparaciones').select('id', { count: 'exact', head: true }).eq('repuesto_decision', 'pendiente');
+      if (filtroSucursal) q = q.eq('sucursal_id', filtroSucursal);
+      const { count, error } = await q;
+      if (!cancelado && !error) setSinCostoTotal(count ?? 0);
+    })();
+    return () => {
+      cancelado = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conCostoRepuesto, filtroSucursal, reparaciones]);
+
   const indicadores = useMemo(() => {
     const activas = reparacionesSucursal.filter((r) => !FINALIZADOS.includes(r.estado));
     return {
@@ -397,6 +453,8 @@ export default function ServicioTecnico() {
       aprobacion: reparacionesSucursal.filter((r) => r.estado === 'esperando_aprobacion').length,
       repuesto: reparacionesSucursal.filter((r) => r.estado === 'esperando_repuesto').length,
       listas: reparacionesSucursal.filter((r) => r.estado === 'listo_para_entregar').length,
+      // Reparaciones (de cualquier estado, ya entregadas incluidas) cuyo costo de repuesto quedó pendiente de cargar.
+      sinCosto: reparacionesSucursal.filter(tieneCostoPendiente).length,
       sinAsignar: activas.filter((r) => !r.tecnico_id).length,
     };
   }, [reparacionesSucursal]);
@@ -601,9 +659,10 @@ export default function ServicioTecnico() {
     const nombreParaMensaje = clienteCoincidente ? nombreCompleto(clienteCoincidente) : clienteInput.trim();
 
     if (!clienteId && clienteInput.trim()) {
+      const origenCliente = await origenDeCliente(supabase, sucursalActual.id);
       const { data: nuevoCliente } = await supabase
         .from('clientes')
-        .insert({ nombre: clienteInput.trim(), telefono: clienteTelefono.trim() || null })
+        .insert({ ...origenCliente, nombre: clienteInput.trim(), telefono: clienteTelefono.trim() || null })
         .select('id')
         .single();
       clienteId = nuevoCliente?.id ?? null;
@@ -664,7 +723,7 @@ export default function ServicioTecnico() {
           // técnico — {modelo}". Se arma igual que la línea de un dispositivo
           // vendido (ver agregarDispositivoDelStock en Nueva Orden) para que
           // toda esa info quede visible en la boleta.
-          descripcion: `Servicio técnico — ${eq.modelo}${eq.capacidad_gb ? ` ${eq.capacidad_gb}GB` : ''}${
+          descripcion: `Servicio técnico — ${eq.modelo}${eq.capacidad_gb ? ` ${formatearGB(eq.capacidad_gb)}` : ''}${
             eq.color ? ` ${eq.color}` : ''
           }${eq.imei ? ` · IMEI ${eq.imei}` : ''}`,
           cantidad: 1,
@@ -683,6 +742,7 @@ export default function ServicioTecnico() {
     }
 
     const actorRecepcion = getActor();
+    const recibidoPor = await camposRecibidoPor(supabase);
     const { data: creadas, error: repError } = await supabase
       .from('reparaciones')
       .insert(
@@ -706,6 +766,7 @@ export default function ServicioTecnico() {
             falla_declarada: eq.falla || null,
             ubicacion_fisica: eq.ubicacion || null,
             estado: 'recibido',
+            ...recibidoPor,
             cliente_id: clienteId,
             tecnico_id: asignadoTecnicoId || null,
             orden_cobro_id: ordenId,
@@ -725,10 +786,16 @@ export default function ServicioTecnico() {
       )
       .select('id, modelo, token_seguimiento');
     if (repError) {
-      setErrorNuevo('No pudimos registrar los equipos: ' + repError.message);
+      setErrorNuevo(t('No pudimos registrar los equipos: ') + repError.message);
       setGuardandoNuevo(false);
       return;
     }
+
+    // Queda en el historial de cada ficha quién recibió el equipo.
+    await registrarRecepcionEnHistorial(
+      supabase,
+      (creadas ?? []).map((c) => c.id)
+    );
 
     // Evidencia fotográfica al recepcionar (opcional, una o varias por
     // equipo) — mismo destino (reparaciones_evidencias) que la pestaña
@@ -816,7 +883,10 @@ export default function ServicioTecnico() {
     const r = reparaciones.find((x) => x.id === id);
     const cambios: { tecnico_id: string | null; en_poder_tecnico?: boolean } = { tecnico_id: tecnicoId || null };
     if (tecnicoId) cambios.en_poder_tecnico = true;
-    await supabase.from('reparaciones').update(cambios).eq('id', id);
+    if (await falla(supabase.from('reparaciones').update(cambios).eq('id', id), t, 'asignar técnico')) {
+      setGuardando(null);
+      return;
+    }
     const nombreNuevo = tecnicos.find((tec) => tec.id === tecnicoId)?.nombre;
     await registrarAuditoria(supabase, {
       accion: tecnicoId
@@ -835,7 +905,10 @@ export default function ServicioTecnico() {
       return;
     }
     setGuardando(r.id);
-    await supabase.from('reparaciones').update({ en_poder_tecnico: enPoder }).eq('id', r.id);
+    if (await falla(supabase.from('reparaciones').update({ en_poder_tecnico: enPoder }).eq('id', r.id), t, 'marcar equipo en poder del técnico')) {
+      setGuardando(null);
+      return;
+    }
     await registrarAuditoria(supabase, {
       accion: `registró que ${nombreTecnico(r.tecnico_id) || 'el técnico'} ${enPoder ? 'todavía tiene' : 'ya entregó'} la reparación ${r.numero_orden || ''} (${r.modelo || 'sin modelo'})`,
       entidad: 'reparacion',
@@ -875,6 +948,30 @@ export default function ServicioTecnico() {
     cargar();
   };
 
+  // Standby (standby_supabase.sql): equipo propio que no se va a arreglar por ahora. Sale de Servicio Técnico y queda en Standby.
+  const [conStandby, setConStandby] = useState(false);
+  useEffect(() => {
+    soportaMigracion(supabase, 'standby').then(setConStandby);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const mandarAStandby = async (r: Reparacion) => {
+    if (guardando || !puedeAgregarStock) return;
+    const actor = getActor();
+    if (!actor) {
+      alert(t(MENSAJE_ACTOR_REQUERIDO));
+      return;
+    }
+    const motivo = prompt(`${t('¿Qué le pasa a')} ${r.modelo || t('este equipo')}? ${t('Queda en Standby y sale de Servicio Técnico.')}`, r.diagnostico ?? r.falla_declarada ?? '');
+    if (motivo === null) return;
+    setGuardando(r.id);
+    const resultado = await mandarReparacionAStandby(supabase, r, { motivo, actor });
+    setGuardando(null);
+    if (resultado.error) alert(`${t('No se pudo guardar el cambio. No se modificó nada.')}
+${resultado.error}`);
+    cargar();
+  };
+
   const agregarAlStock = async (r: Reparacion) => {
     if (guardando || !puedeAgregarStock) return;
     const actor = getActor();
@@ -883,19 +980,43 @@ export default function ServicioTecnico() {
       return;
     }
     if (r.imei) {
-      const { data: existente } = await supabase.from('dispositivos').select('id').eq('imei', r.imei).maybeSingle();
+      // El equipo de origen (si lo hay) es el mismo que vuelve: no cuenta como duplicado.
+      const origenId = await dispositivoOrigenDe(supabase, r.id);
+      const { data: existente } = await supabase
+        .from('dispositivos')
+        .select('id')
+        .eq('imei', r.imei)
+        .neq('id', origenId ?? '00000000-0000-0000-0000-000000000000')
+        .limit(1)
+        .maybeSingle();
       if (existente && !confirm(`${t('Ya hay un dispositivo en Stock con el IMEI')} ${r.imei}. ${t('¿Agregarlo igual?')}`)) return;
     }
     if (!confirm(t('¿Pasar este equipo al Stock como dispositivo disponible para vender?'))) return;
     setGuardando(r.id);
     setAvisoAgregarStockPara(null);
     const modeloNormalizado = r.modelo ? normalizarNombreModelo(r.modelo) : r.modelo;
-    await supabase.from('dispositivos').insert({
+    // Si la reparación salió de un equipo del Stock/Standby, vuelve ese mismo equipo (no se crea un duplicado).
+    // Si el equipo vino de Plan Canje, entra al Stock con lo que se le reconoció al cliente como costo.
+    const costoCanje = await costoDeCanjeDeOrigen(supabase, r.id);
+    const bateria = await bateriaDeReparacion(supabase, r.id);
+    const reutilizado = await reubicarEquipoDeServicio(supabase, r.id, 'stock');
+    if (reutilizado.error) {
+      alert(`${t('No se pudo guardar el cambio. No se modificó nada.')}
+${reutilizado.error}`);
+      setGuardando(null);
+      return;
+    }
+    if (
+      !reutilizado.usado &&
+      (await falla(
+        supabase.from('dispositivos').insert({
       modelo: modeloNormalizado,
       capacidad_gb: r.capacidad_gb,
       color: r.color,
       imei: r.imei,
       estado: 'usado',
+      ...(costoCanje ? { costo: costoCanje } : {}),
+      ...(bateria != null ? { salud_bateria: bateria } : {}),
       en_stock: true,
       agregado_por_nombre: actor?.nombre ?? null,
       agregado_por_foto_url: actor?.fotoUrl ?? null,
@@ -903,17 +1024,35 @@ export default function ServicioTecnico() {
       // eligiendo ahora quien aprieta el botón — quien agrega al Stock
       // puede estar viendo "Todas las sucursales" en ese momento.
       ...(r.sucursal_id ? { sucursal_id: r.sucursal_id } : {}),
-    });
-    await asegurarModelo(supabase, modeloNormalizado);
-    await supabase
-      .from('reparaciones')
-      .update({
-        estado: 'entregado',
-        estado_actualizado_at: new Date().toISOString(),
-        agregado_a_stock: true,
-        fecha_reparado: r.fecha_reparado ?? new Date().toISOString(),
-      })
-      .eq('id', r.id);
+        }),
+        t,
+        'agregar equipo al stock'
+      ))
+    ) {
+      setGuardando(null);
+      return;
+    }
+    if (!reutilizado.usado) await asegurarModelo(supabase, modeloNormalizado);
+    if (
+      await falla(
+        supabase
+          .from('reparaciones')
+          .update({
+            estado: 'entregado',
+            estado_actualizado_at: new Date().toISOString(),
+            agregado_a_stock: true,
+            fecha_reparado: r.fecha_reparado ?? new Date().toISOString(),
+          })
+          .eq('id', r.id),
+        t,
+        'marcar reparación como agregada al stock'
+      )
+    ) {
+      setGuardando(null);
+      cargar();
+      return;
+    }
+    await marcarCanjeDeOrigenAgregado(supabase, r.id);
     await registrarAuditoria(supabase, {
       accion: `agregó al Stock un equipo propio reparado en Servicio Técnico (${r.numero_orden || ''}, ${r.modelo || 'sin modelo'}${r.imei ? `, IMEI ${r.imei}` : ''})`,
       entidad: 'reparacion',
@@ -927,15 +1066,24 @@ export default function ServicioTecnico() {
     if (guardando || !puedeGestionar) return;
     if (!confirm(t('¿Marcar este equipo como entregado al cliente?'))) return;
     setGuardando(r.id);
-    await supabase
-      .from('reparaciones')
-      .update({
-        estado: 'entregado',
-        fecha_entrega: new Date().toISOString(),
-        estado_actualizado_at: new Date().toISOString(),
-        fecha_reparado: r.fecha_reparado ?? new Date().toISOString(),
-      })
-      .eq('id', r.id);
+    if (
+      await falla(
+        supabase
+          .from('reparaciones')
+          .update({
+            estado: 'entregado',
+            fecha_entrega: new Date().toISOString(),
+            estado_actualizado_at: new Date().toISOString(),
+            fecha_reparado: r.fecha_reparado ?? new Date().toISOString(),
+          })
+          .eq('id', r.id),
+        t,
+        'marcar como entregado'
+      )
+    ) {
+      setGuardando(null);
+      return;
+    }
     await registrarAuditoria(supabase, {
       accion: `marcó como entregado al cliente un equipo reparado en Servicio Técnico (${r.numero_orden || ''}, ${r.modelo || 'sin modelo'}${r.imei ? `, IMEI ${r.imei}` : ''})`,
       entidad: 'reparacion',
@@ -977,7 +1125,10 @@ export default function ServicioTecnico() {
       setGuardando(null);
       return;
     }
-    await supabase.from('reparaciones').delete().eq('id', r.id);
+    if (await falla(supabase.from('reparaciones').delete().eq('id', r.id), t, 'eliminar reparación')) {
+      setGuardando(null);
+      return;
+    }
     await registrarAuditoria(supabase, {
       accion: `eliminó definitivamente una reparación (${r.numero_orden || ''}, ${r.modelo || 'sin modelo'}${r.imei ? `, IMEI ${r.imei}` : ''})`,
       entidad: 'reparacion',
@@ -1021,7 +1172,7 @@ export default function ServicioTecnico() {
         {puedeRecibir && (
           <button
             onClick={() => {
-              if (!panelNuevo && tab === 'tecnicos' && tecnicoSeleccionado) setAsignadoTecnicoId(tecnicoSeleccionado);
+              if (!panelNuevo) setAsignadoTecnicoId(tecnicoPorDefecto());
               setPanelNuevo((v) => !v);
             }}
             className="shrink-0 rounded-xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors px-4 py-2.5 text-sm font-medium text-white"
@@ -1077,7 +1228,7 @@ export default function ServicioTecnico() {
                     <div key={eq.tempId} className="flex items-center justify-between gap-2 text-xs">
                       <span className="text-ink dark:text-dark-text">
                         {idx + 1}. {eq.modelo}
-                        {eq.capacidad_gb ? ` · ${eq.capacidad_gb}GB` : ''}
+                        {eq.capacidad_gb ? ` · ${formatearGB(eq.capacidad_gb)}` : ''}
                         {eq.imei ? ` · IMEI ${eq.imei}` : ''}
                       </span>
                       <button onClick={() => quitarEquipoAgregado(eq.tempId)} className="text-bad underline shrink-0">
@@ -1112,7 +1263,7 @@ export default function ServicioTecnico() {
                       nuevaCapacidad === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                     }`}
                   >
-                    {gb}GB
+                    {formatearGB(gb)}
                   </button>
                 ))}
               </div>
@@ -1248,11 +1399,32 @@ export default function ServicioTecnico() {
                 className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
               >
                 <option value="">{t('Sin asignar')}</option>
-                {tecnicos.map((tec) => (
-                  <option key={tec.id} value={tec.id}>
-                    {tec.nombre}
-                  </option>
-                ))}
+                {tecnicosDeSucursal.length > 0 ? (
+                  <>
+                    <optgroup label={t('Técnicos de esta sucursal')}>
+                      {tecnicosDeSucursal.map((tec) => (
+                        <option key={tec.id} value={tec.id}>
+                          {tec.nombre}
+                        </option>
+                      ))}
+                    </optgroup>
+                    <optgroup label={t('Otras sucursales')}>
+                      {tecnicos
+                        .filter((tec) => !tecnicosDeSucursal.some((x) => x.id === tec.id))
+                        .map((tec) => (
+                          <option key={tec.id} value={tec.id}>
+                            {tec.nombre}
+                          </option>
+                        ))}
+                    </optgroup>
+                  </>
+                ) : (
+                  tecnicos.map((tec) => (
+                    <option key={tec.id} value={tec.id}>
+                      {tec.nombre}
+                    </option>
+                  ))
+                )}
               </select>
 
               <p className="text-xs font-medium text-muted dark:text-dark-text-secondary mt-1">
@@ -1359,6 +1531,7 @@ export default function ServicioTecnico() {
             onArchivar={archivarCancelar}
             onEliminar={eliminarDefinitivo}
             onAgregarAlStock={agregarAlStock}
+ onMandarAStandby={conStandby && puedeAgregarStock ? mandarAStandby : undefined}
             onEntregadoCliente={marcarEntregadoCliente}
             imagenesCarpetas={imagenesCarpetas}
             puedeAgregarStock={puedeAgregarStock}
@@ -1425,6 +1598,7 @@ export default function ServicioTecnico() {
                 onArchivar={archivarCancelar}
                 onEliminar={eliminarDefinitivo}
                 onAgregarAlStock={agregarAlStock}
+ onMandarAStandby={conStandby && puedeAgregarStock ? mandarAStandby : undefined}
                 onEntregadoCliente={marcarEntregadoCliente}
                 imagenesCarpetas={imagenesCarpetas}
                 puedeAgregarStock={puedeAgregarStock}
@@ -1455,6 +1629,7 @@ export default function ServicioTecnico() {
                       onArchivar={archivarCancelar}
                       onEliminar={eliminarDefinitivo}
                       onAgregarAlStock={agregarAlStock}
+ onMandarAStandby={conStandby && puedeAgregarStock ? mandarAStandby : undefined}
                       onEntregadoCliente={marcarEntregadoCliente}
                       imagenesCarpetas={imagenesCarpetas}
                       puedeAgregarStock={puedeAgregarStock}
@@ -1486,7 +1661,7 @@ export default function ServicioTecnico() {
                     <div key={r.id} className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex flex-col gap-1">
                       <p className="text-sm font-medium">
                         {r.numero_orden} · {r.modelo}
-                        {r.capacidad_gb ? ` · ${r.capacidad_gb}GB` : ''}
+                        {r.capacidad_gb ? ` · ${formatearGB(r.capacidad_gb)}` : ''}
                       </p>
                       {r.imei && (
                         <p className="text-xs text-muted dark:text-dark-text-secondary">
@@ -1649,7 +1824,7 @@ export default function ServicioTecnico() {
 
           {/* Resumen operativo: indicadores clickeables con datos reales,
               icono + color (nunca solo color) y su propio filtro. */}
-          <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5 text-xs">
+          <div className={`grid grid-cols-3 ${conCostoRepuesto ? 'sm:grid-cols-6' : 'sm:grid-cols-5'} gap-1.5 text-xs`}>
             {(
               [
                 { id: 'activas', icono: 'herramienta', label: t('Activas'), valor: indicadores.activas, acento: 'accent' },
@@ -1657,6 +1832,7 @@ export default function ServicioTecnico() {
                 { id: 'aprobacion', icono: 'documento', label: t('Esperando aprobación'), valor: indicadores.aprobacion, acento: 'warn' },
                 { id: 'repuesto', icono: 'stock', label: t('Esperando repuesto'), valor: indicadores.repuesto, acento: 'warn' },
                 { id: 'listas', icono: 'chequeado', label: t('Listas'), valor: indicadores.listas, acento: 'good' },
+                ...(conCostoRepuesto ? ([{ id: 'sin_costo', icono: 'stock', label: t('Reparaciones sin costo'), valor: sinCostoTotal ?? indicadores.sinCosto, acento: 'warn' }] as const) : []),
               ] as const
             ).map((ind) => {
               const activo = filtroIndicador === ind.id;
@@ -1779,6 +1955,8 @@ export default function ServicioTecnico() {
                   ? t('Ninguna reparación está esperando un repuesto.')
                   : filtroIndicador === 'listas'
                   ? t('No hay equipos listos para entregar todavía.')
+                  : filtroIndicador === 'sin_costo'
+                  ? t('Ninguna reparación tiene el costo del repuesto pendiente. Todo está cargado.')
                   : t('No hay reparaciones en este filtro.')}
               </p>
               {hayFiltrosActivos && (
@@ -1818,6 +1996,7 @@ export default function ServicioTecnico() {
                   onArchivar={archivarCancelar}
                   onEliminar={eliminarDefinitivo}
                   onAgregarAlStock={agregarAlStock}
+ onMandarAStandby={conStandby && puedeAgregarStock ? mandarAStandby : undefined}
                   onEntregadoCliente={marcarEntregadoCliente}
                   imagenesCarpetas={imagenesCarpetas}
                   puedeAgregarStock={puedeAgregarStock}

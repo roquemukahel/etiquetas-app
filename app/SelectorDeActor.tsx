@@ -9,6 +9,8 @@ import { useIdioma, setIdioma, useT, IDIOMAS_DISPONIBLES, type Idioma } from './
 import { sincronizarCookieSucursal, getSucursalManual } from './lib/sucursal';
 import Avatar from './Avatar';
 import BotonSalir from './BotonSalir';
+import { falla } from './lib/escritura';
+import { estaInactivo, leerMinutosDeBloqueo, leerUltimaActividad, marcarActividad } from './lib/inactividad';
 
 const RUTAS_SIN_SELECTOR = [
   '/login',
@@ -28,6 +30,8 @@ const RUTAS_SIN_SELECTOR = [
 ];
 
 const KEY_POSTERGADO = 'qovento:actor-postergado';
+// Que el cartel explique "pasó un rato sin usar el sistema" también si la página se recarga antes de volver a elegir.
+const KEY_BLOQUEADO_INACTIVIDAD = 'qovento:bloqueado-por-inactividad';
 
 type Persona = {
   id: string;
@@ -52,12 +56,21 @@ type Persona = {
   puede_recibir_servicio_tecnico?: boolean;
   puede_gestionar_servicio_tecnico?: boolean;
   puede_gestionar_financiacion?: boolean;
+  // Permisos sensibles: en su propia consulta (permisos_sensibles_supabase.sql); si falta, valen NO.
+  puede_cargar_egresos?: boolean;
+  puede_registrar_pagos_proveedores?: boolean;
+  puede_ver_costos?: boolean;
+  // Permiso propio para eliminar dispositivos del Stock (dispositivos_registro_permisos_supabase.sql), también en su consulta aparte.
+  puede_eliminar_dispositivos?: boolean;
   // Sucursal asignada (Configuración > Vendedores/Técnicos) — misma
   // consulta aparte que los permisos de arriba, por el mismo motivo: si
   // sucursales_supabase.sql todavía no se corrió, esta columna no existe
   // y esa consulta puede fallar sola sin romper nombre/foto/PIN.
   sucursal_id?: string | null;
 };
+
+const COLUMNAS_SENSIBLES = 'id, puede_cargar_egresos, puede_registrar_pagos_proveedores, puede_ver_costos';
+const COLUMNAS_ELIMINAR_DISP = 'id, puede_eliminar_dispositivos';
 
 const COLUMNAS_PERMISOS =
   'id, es_administrador, acceso_completo, puede_vender, puede_eliminar, puede_agregar_stock, puede_ver_estadisticas, puede_recibir_servicio_tecnico, puede_gestionar_servicio_tecnico, puede_gestionar_financiacion';
@@ -72,6 +85,8 @@ export default function SelectorDeActor() {
   const [actor, setActorState] = useState<Actor | null | undefined>(undefined);
   const [postergado, setPostergado] = useState(false);
   const [cambiando, setCambiando] = useState(false);
+  // true cuando el cartel apareció porque pasó mucho tiempo sin usar el sistema (para explicarlo en el cartel).
+  const [bloqueadoPorInactividad, setBloqueadoPorInactividad] = useState(false);
   const [eligiendoTipo, setEligiendoTipo] = useState<'vendedor' | 'tecnico' | null>(null);
   const [vendedores, setVendedores] = useState<Persona[]>([]);
   const [tecnicos, setTecnicos] = useState<Persona[]>([]);
@@ -100,11 +115,15 @@ export default function SelectorDeActor() {
 
   const esRaiz = pathname === '/';
   const esRutaExcluida = RUTAS_SIN_SELECTOR.some((r) => pathname?.startsWith(r)) || (esRaiz && sesion === 'no');
-  const mostrarOverlay = (!actor && !postergado) || cambiando;
+  // OJO: `actor === undefined` significa "todavía no se leyó" (primer render), NO "no hay actor". Con `!actor` el cartel
+  // contaba como abierto en el primer render de CADA carga de página y disparaba 10 consultas (vendedores, técnicos,
+  // PIN, permisos...) aunque ya hubiera alguien trabajando y el cartel nunca se mostrara.
+  const mostrarOverlay = (actor === null && !postergado) || cambiando;
 
   useEffect(() => {
     setActorState(getActor());
     setPostergado(window.sessionStorage.getItem(KEY_POSTERGADO) === '1');
+    setBloqueadoPorInactividad(window.sessionStorage.getItem(KEY_BLOQUEADO_INACTIVIDAD) === '1');
   }, []);
 
   // El actor queda guardado en este navegador, no en la cuenta — si en algún
@@ -125,6 +144,65 @@ export default function SelectorDeActor() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [actor?.id]);
+
+  // Bloqueo por inactividad (ver app/lib/inactividad.ts): si en este equipo nadie toca el sistema durante el tiempo elegido en
+  // Configuración, se borra quién estaba trabajando y vuelve el cartel "¿Con quién tengo el gusto?" (con PIN si la persona
+  // lo tiene). Evita que alguien siga cargando cosas a nombre de la persona anterior.
+  useEffect(() => {
+    if (!actor || esRutaExcluida) return;
+
+    const bloquear = () => {
+      clearActor();
+      setActorState(null);
+      window.sessionStorage.removeItem(KEY_POSTERGADO);
+      setPostergado(false);
+      setCambiando(false);
+      setEligiendoTipo(null);
+      setPersonaPin(null);
+      setPinIngresado('');
+      window.sessionStorage.setItem(KEY_BLOQUEADO_INACTIVIDAD, '1');
+      setBloqueadoPorInactividad(true);
+    };
+    const revisar = (): boolean => {
+      if (!estaInactivo(leerUltimaActividad(), Date.now(), leerMinutosDeBloqueo())) return false;
+      bloquear();
+      return true;
+    };
+
+    // Al cargar la página: si el navegador quedó abierto (o se reabrió) mucho después de la última vez que alguien lo usó,
+    // se pide de nuevo. Sin dato todavía (primera vez en este equipo) se empieza a contar desde ahora.
+    if (leerUltimaActividad() == null) marcarActividad();
+    else if (revisar()) return;
+
+    let ultimoEvento = 0;
+    let ultimoMarcado = 0;
+    const alActividad = () => {
+      const ahora = Date.now();
+      if (ahora - ultimoEvento < 1000) return;
+      ultimoEvento = ahora;
+      // Se revisa ANTES de anotar la actividad: si alguien se sienta frente a una PC que quedó sola y mueve el mouse, ese
+      // movimiento no cuenta como "seguía trabajando" (si no, el bloqueo nunca llegaría a saltar).
+      if (revisar()) return;
+      if (ahora - ultimoMarcado > 5000) {
+        ultimoMarcado = ahora;
+        marcarActividad(ahora);
+      }
+    };
+    const eventos = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'wheel'] as const;
+    // capture: el scroll de un contenedor interno no sube hasta window si no se escucha en la fase de captura.
+    eventos.forEach((e) => window.addEventListener(e, alActividad, { passive: true, capture: true }));
+    const intervalo = window.setInterval(revisar, 30_000);
+    const alVolver = () => {
+      if (document.visibilityState === 'visible') revisar();
+    };
+    document.addEventListener('visibilitychange', alVolver);
+    return () => {
+      eventos.forEach((e) => window.removeEventListener(e, alActividad, { capture: true }));
+      window.clearInterval(intervalo);
+      document.removeEventListener('visibilitychange', alVolver);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [actor?.id, esRutaExcluida]);
 
   useEffect(() => {
     if (!menuIdiomaAbierto) return;
@@ -155,7 +233,7 @@ export default function SelectorDeActor() {
     if (esRutaExcluida || !mostrarOverlay || cargando) return;
     setCargando(true);
     (async () => {
-      const [{ data: vend }, { data: tec }, { data: idsVend }, { data: idsTec }, permVendRes, permTecRes, sucVendRes, sucTecRes] = await Promise.all([
+      const [{ data: vend }, { data: tec }, { data: idsVend }, { data: idsTec }, permVendRes, permTecRes, sucVendRes, sucTecRes, sensVendRes, sensTecRes, elimVendRes, elimTecRes] = await Promise.all([
         supabase.from('vendedores').select('id, nombre, foto_url, telefono, edad').order('nombre'),
         supabase.from('tecnicos').select('id, nombre, foto_url, telefono, edad').order('nombre'),
         supabase.rpc('ids_vendedores_con_pin'),
@@ -169,6 +247,12 @@ export default function SelectorDeActor() {
         // que sí existe siempre.
         supabase.from('vendedores').select('id, sucursal_id'),
         supabase.from('tecnicos').select('id, sucursal_id'),
+        // Permisos sensibles, también aparte: si el SQL no se corrió, esta consulta falla sola.
+        supabase.from('vendedores').select(COLUMNAS_SENSIBLES),
+        supabase.from('tecnicos').select(COLUMNAS_SENSIBLES),
+        // Eliminar dispositivos, también aparte: si el SQL no se corrió falla sola y vale lo mismo que "Puede eliminar".
+        supabase.from('vendedores').select(COLUMNAS_ELIMINAR_DISP),
+        supabase.from('tecnicos').select(COLUMNAS_ELIMINAR_DISP),
       ]);
       const conPinVend = new Set(((idsVend as { id: string }[]) ?? []).map((r) => r.id));
       const conPinTec = new Set(((idsTec as { id: string }[]) ?? []).map((r) => r.id));
@@ -180,8 +264,12 @@ export default function SelectorDeActor() {
       const permisosTec = new Map(((permTecRes.data as any[]) ?? []).map((p) => [p.id, p]));
       const sucursalVend = new Map(((sucVendRes.data as { id: string; sucursal_id: string | null }[]) ?? []).map((p) => [p.id, p.sucursal_id]));
       const sucursalTec = new Map(((sucTecRes.data as { id: string; sucursal_id: string | null }[]) ?? []).map((p) => [p.id, p.sucursal_id]));
-      setVendedores((vend ?? []).map((v) => ({ ...v, tienePin: conPinVend.has(v.id), ...permisosVend.get(v.id), sucursal_id: sucursalVend.get(v.id) ?? null })));
-      setTecnicos((tec ?? []).map((tc) => ({ ...tc, tienePin: conPinTec.has(tc.id), ...permisosTec.get(tc.id), sucursal_id: sucursalTec.get(tc.id) ?? null })));
+      const sensiblesVend = new Map(((sensVendRes.data as any[]) ?? []).map((p) => [p.id, p]));
+      const sensiblesTec = new Map(((sensTecRes.data as any[]) ?? []).map((p) => [p.id, p]));
+      const elimVend = new Map(((elimVendRes.data as any[]) ?? []).map((p) => [p.id, p]));
+      const elimTec = new Map(((elimTecRes.data as any[]) ?? []).map((p) => [p.id, p]));
+      setVendedores((vend ?? []).map((v) => ({ ...v, tienePin: conPinVend.has(v.id), ...permisosVend.get(v.id), ...sensiblesVend.get(v.id), ...elimVend.get(v.id), sucursal_id: sucursalVend.get(v.id) ?? null })));
+      setTecnicos((tec ?? []).map((tc) => ({ ...tc, tienePin: conPinTec.has(tc.id), ...permisosTec.get(tc.id), ...sensiblesTec.get(tc.id), ...elimTec.get(tc.id), sucursal_id: sucursalTec.get(tc.id) ?? null })));
       setCargando(false);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -205,10 +293,20 @@ export default function SelectorDeActor() {
         puedeRecibirServicioTecnico: persona.puede_recibir_servicio_tecnico ?? true,
         puedeGestionarServicioTecnico: persona.puede_gestionar_servicio_tecnico ?? true,
         puedeGestionarFinanciacion: persona.puede_gestionar_financiacion ?? true,
+        // Sin dato propio vale lo mismo que "Puede eliminar" (el de siempre).
+        puedeEliminarDispositivos: persona.puede_eliminar_dispositivos ?? persona.puede_eliminar ?? true,
+        // Estos tres, a diferencia de los de arriba, sin dato valen NO.
+        puedeCargarEgresos: persona.puede_cargar_egresos ?? false,
+        puedeRegistrarPagosProveedores: persona.puede_registrar_pagos_proveedores ?? false,
+        puedeVerCostos: persona.puede_ver_costos ?? false,
       },
       sucursalId: persona.sucursal_id ?? null,
     };
     guardarActor(nuevo);
+    // Recién elegido: empieza a contar el tiempo de inactividad desde ahora (si no, la última actividad vieja lo volvería a bloquear).
+    marcarActividad();
+    window.sessionStorage.removeItem(KEY_BLOQUEADO_INACTIVIDAD);
+    setBloqueadoPorInactividad(false);
     setActorState(nuevo);
     setEligiendoTipo(null);
     setCambiando(false);
@@ -262,7 +360,7 @@ export default function SelectorDeActor() {
     reader.onload = async () => {
       const dataUrl = reader.result as string;
       const tabla = actor.tipo === 'vendedor' ? 'vendedores' : 'tecnicos';
-      await supabase.from(tabla).update({ foto_url: dataUrl }).eq('id', actor.id);
+      if (await falla(supabase.from(tabla).update({ foto_url: dataUrl }).eq('id', actor.id), t, 'guardar foto de perfil')) return;
       const actualizado = { ...actor, fotoUrl: dataUrl };
       guardarActor(actualizado);
       setActorState(actualizado);
@@ -274,10 +372,19 @@ export default function SelectorDeActor() {
     if (!actor) return;
     setGuardandoPerfil(true);
     const tabla = actor.tipo === 'vendedor' ? 'vendedores' : 'tecnicos';
-    await supabase
-      .from(tabla)
-      .update({ telefono: telefonoPerfil.trim() || null, edad: edadPerfil ? Number(edadPerfil) : null })
-      .eq('id', actor.id);
+    if (
+      await falla(
+        supabase
+          .from(tabla)
+          .update({ telefono: telefonoPerfil.trim() || null, edad: edadPerfil ? Number(edadPerfil) : null })
+          .eq('id', actor.id),
+        t,
+        'guardar mi perfil'
+      )
+    ) {
+      setGuardandoPerfil(false);
+      return;
+    }
     setGuardandoPerfil(false);
     setEditandoPerfil(false);
   };
@@ -432,6 +539,12 @@ export default function SelectorDeActor() {
                   <p className="text-lg font-display font-semibold">{t('¡Bienvenido/a! 👋')}</p>
                   <p className="text-sm text-muted dark:text-dark-text-secondary mt-1">{t('¿Con quién tengo el gusto?')}</p>
                 </div>
+
+                {bloqueadoPorInactividad && (
+                  <p className="text-xs text-center text-warn bg-warn/10 rounded-lg px-3 py-2">
+                    {t('Pasó un rato sin usar el sistema. Por seguridad, volvé a elegir quién sos para seguir.')}
+                  </p>
+                )}
 
                 {cargando ? (
                   <p className="text-sm text-muted dark:text-dark-text-secondary text-center">{t('Cargando...')}</p>

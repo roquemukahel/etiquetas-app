@@ -7,9 +7,11 @@
 // ============================================================
 
 import React from 'react';
+import { useT } from '../lib/idioma';
+import { localeActual } from '../lib/formatoLocal';
 
 export function formatMoneda(n: number, moneda: string): string {
-  return `${moneda}${Math.round(n).toLocaleString('es-AR')}`;
+  return `${moneda}${Math.round(n).toLocaleString(localeActual())}`;
 }
 
 // Leyenda al pasar el mouse o enfocar. Accesible (aria-label + title).
@@ -45,16 +47,17 @@ export function TrendIndicator({
   moneda?: string;
   positivoEsBueno?: boolean;
 }) {
+  const t = useT();
   const sinCambio = Math.round(abs) === 0;
   const sube = abs > 0;
   const bueno = positivoEsBueno ? sube : !sube;
   const color = sinCambio ? 'text-muted dark:text-dark-text-secondary' : bueno ? 'text-good' : 'text-bad';
   const flecha = sinCambio ? '→' : sube ? '↑' : '↓';
-  const absTxt = moneda ? formatMoneda(Math.abs(abs), moneda) : Math.abs(abs).toLocaleString('es-AR');
+  const absTxt = moneda ? formatMoneda(Math.abs(abs), moneda) : Math.abs(abs).toLocaleString(localeActual());
   return (
     <span className={`inline-flex items-center gap-1 text-[11px] font-medium ${color}`}>
       <span aria-hidden>{flecha}</span>
-      {pct != null ? `${Math.abs(pct).toFixed(1).replace('.', ',')}%` : 'nuevo'}
+      {pct != null ? `${Math.abs(pct).toFixed(1).replace('.', ',')}%` : t('nuevo')}
       <span className="text-muted dark:text-dark-text-secondary font-normal">· {sube ? '+' : sinCambio ? '' : '−'}{absTxt}</span>
     </span>
   );

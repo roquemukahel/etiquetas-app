@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import ThemeToggle from '../ThemeToggle';
 import Secciones from './Secciones';
+import BloqueoInactividad from '../BloqueoInactividad';
 import { obtenerIdiomaServidor, traducir } from '../lib/idiomaServidor';
 
 export default function Configuracion() {
@@ -16,6 +17,7 @@ export default function Configuracion() {
 
       <div className="flex flex-col gap-3">
         <ThemeToggle />
+        <BloqueoInactividad />
         <Secciones />
       </div>
 

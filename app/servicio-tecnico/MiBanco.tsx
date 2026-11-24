@@ -11,6 +11,7 @@ import EstadoBadge from '../EstadoBadge';
 import { ICONOS } from '../Iconos';
 import TarjetaReparacion, { Reparacion, Tecnico } from './TarjetaReparacion';
 import { useT } from '../lib/idioma';
+import { formatearGB } from '../lib/almacenamiento';
 
 // Estados donde el técnico tiene algo concreto para hacer ahora mismo (a
 // diferencia de "esperando aprobación"/"esperando repuesto", que dependen
@@ -60,6 +61,7 @@ export default function MiBanco({
   onArchivar,
   onEliminar,
   onAgregarAlStock,
+  onMandarAStandby,
   onEntregadoCliente,
   imagenesCarpetas,
   puedeAgregarStock,
@@ -79,6 +81,7 @@ export default function MiBanco({
   onArchivar: (r: Reparacion) => void;
   onEliminar: (r: Reparacion) => void;
   onAgregarAlStock: (r: Reparacion) => void;
+  onMandarAStandby?: (r: Reparacion) => void;
   onEntregadoCliente: (r: Reparacion) => void;
   imagenesCarpetas: Map<string, string>;
   puedeAgregarStock: boolean;
@@ -207,7 +210,7 @@ export default function MiBanco({
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium truncate">
                 {proximaAccion.numero_orden} · {proximaAccion.modelo}
-                {proximaAccion.capacidad_gb ? ` · ${proximaAccion.capacidad_gb}GB` : ''}
+                {proximaAccion.capacidad_gb ? ` · ${formatearGB(proximaAccion.capacidad_gb)}` : ''}
               </p>
               <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
                 <EstadoBadge estado={proximaAccion.estado} />
@@ -261,6 +264,7 @@ export default function MiBanco({
               onArchivar={onArchivar}
               onEliminar={onEliminar}
               onAgregarAlStock={onAgregarAlStock}
+              onMandarAStandby={onMandarAStandby}
               onEntregadoCliente={onEntregadoCliente}
               imagenesCarpetas={imagenesCarpetas}
               puedeAgregarStock={puedeAgregarStock}

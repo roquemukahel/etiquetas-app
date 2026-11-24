@@ -5,8 +5,9 @@ import Link from 'next/link';
 import { crearClienteNavegador } from '../lib/supabase/client';
 import { useActor } from '../lib/actor';
 import { tienePermiso } from '../lib/permisos';
-import { obtenerTodasLasFilas } from '../lib/db';
+import { obtenerTodasLasFilas, porLotes } from '../lib/db';
 import { obtenerCategorias, type Categoria } from '../lib/categorias';
+import { opcionesDeCategoria, etiquetaCategoria, subcategoriasDe } from '../lib/subcategorias';
 import { obtenerSucursales, type Sucursal } from '../lib/sucursales';
 import { obtenerProductosMaestro, actualizarProductoMaestro, crearProductoMaestro, type ProductoMaestro } from '../lib/productosMaestro';
 import { registrarAuditoria } from '../lib/auditoria';
@@ -14,8 +15,14 @@ import { descargarDatos, leerArchivoDatos, valorDe, insertarEnTandas } from '../
 import { sanitizarDecimal } from '../lib/numeros';
 import { useSucursalActual } from '../lib/sucursal';
 import { useT } from '../lib/idioma';
-import { marcaDeModelo } from '../lib/catalogosMarcas';
+import { marcaDeModelo, rangoDeModelo } from '../lib/catalogosMarcas';
 import Modal from '../Modal';
+import HistorialProducto from './HistorialProducto';
+import EtiquetaFinanciacion from '../EtiquetaFinanciacion';
+import SelectorFinanciacion from '../SelectorFinanciacion';
+import { soportaMigracion } from '../lib/migraciones';
+import { resolverMaxCuotas, guiaDeFormulario, guiaAFormulario, type MaxCuotas } from '../lib/financiacionGuia';
+import { falla } from '../lib/escritura';
 
 type ProductoFila = {
   id: string;
@@ -36,6 +43,9 @@ type DispositivoFila = {
   precio: number | null;
   sucursal_id: string | null;
   imei: string | null;
+  // Solo vienen si el negocio corrió financiacion_guia_cartera_supabase.sql.
+  financiacion_max_cuotas?: number | null;
+  precio_lista?: number | null;
 };
 
 type FilaGrid = {
@@ -52,6 +62,15 @@ type FilaGrid = {
   // cada unidad del grupo, para poder encontrar un equipo puntual por su
   // número de serie sin tener que ir a Stock.
   imeis: string[];
+  // Filas de `productos` (una por sucursal) que componen esta fila, y su maestro:
+  // con eso se arma el historial. Vacío para celulares (no tienen catálogo).
+  productoIds: string[];
+  maestroId: string | null;
+  // Guía de financiación ya resuelta (producto → categoría) y precio de lista.
+  guia: MaxCuotas;
+  precioLista: number | null;
+  // Equipos (celulares) del grupo, para editar su guía en bloque.
+  dispositivoIds: string[];
 };
 
 export default function Productos() {
@@ -60,6 +79,8 @@ export default function Productos() {
   const t = useT();
   const sucursalActual = useSucursalActual();
   const puedeAgregarStock = tienePermiso(actor, 'agregar_stock');
+  // Costo y ganancia: permiso propio, apagado por defecto.
+  const puedeVerCostos = tienePermiso(actor, 'ver_costos');
 
   const [productos, setProductos] = useState<ProductoFila[]>([]);
   const [dispositivos, setDispositivos] = useState<DispositivoFila[]>([]);
@@ -68,7 +89,17 @@ export default function Productos() {
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState('');
+  // Valor especial del filtro de categoría: los productos que no tienen ninguna (los que quedan fuera de las reglas de comisión por categoría).
+  const SIN_CATEGORIA = '__sin_categoria__';
   const [filtroCategoria, setFiltroCategoria] = useState('');
+  // /productos?sinCategoria=1 (enlace desde Comisiones): abre la lista ya filtrada y lista para asignarles una categoría en bloque.
+  const [llegoSinCategoria, setLlegoSinCategoria] = useState(false);
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('sinCategoria') === '1') {
+      setFiltroCategoria('__sin_categoria__');
+      setLlegoSinCategoria(true);
+    }
+  }, []);
   const [editando, setEditando] = useState<ProductoMaestro | null>(null);
   const [formNombre, setFormNombre] = useState('');
   const [formMarca, setFormMarca] = useState('');
@@ -87,6 +118,24 @@ export default function Productos() {
   const [formCantidades, setFormCantidades] = useState<Record<string, string>>({});
   const [guardandoEdicion, setGuardandoEdicion] = useState(false);
   const [errorEdicion, setErrorEdicion] = useState<string | null>(null);
+  const [historialDe, setHistorialDe] = useState<FilaGrid | null>(null);
+
+  // Guía de financiación y precio de lista (financiacion_guia_cartera_supabase.sql).
+  const [conGuia, setConGuia] = useState(false);
+  const [extraMaestros, setExtraMaestros] = useState<Map<string, { max: number | null; lista: number | null }>>(new Map());
+  const [guiaCategorias, setGuiaCategorias] = useState<Map<string, number | null>>(new Map());
+  const [formPrecioLista, setFormPrecioLista] = useState('');
+  const [formGuia, setFormGuia] = useState('');
+  // Edición masiva de la guía.
+  const [modoMasivo, setModoMasivo] = useState(false);
+  useEffect(() => {
+    if (llegoSinCategoria && puedeAgregarStock) setModoMasivo(true);
+  }, [llegoSinCategoria, puedeAgregarStock]);
+  const [seleccion, setSeleccion] = useState<Set<string>>(new Set());
+  const [guiaMasiva, setGuiaMasiva] = useState('6');
+  const [aplicandoMasivo, setAplicandoMasivo] = useState(false);
+  // Categoría o subcategoría que se asigna en bloque a los productos elegidos ('' = dejarlos sin categoría).
+  const [categoriaMasiva, setCategoriaMasiva] = useState('');
   const [exportando, setExportando] = useState(false);
   const [importando, setImportando] = useState(false);
   const [progresoImport, setProgresoImport] = useState<{ hechas: number; total: number } | null>(null);
@@ -95,6 +144,8 @@ export default function Productos() {
 
   useEffect(() => {
     (async () => {
+      const soporta = await soportaMigracion(supabase, 'guiaFinanciacionMaestro');
+      setConGuia(soporta);
       const [filas, dispositivosData, maestrosData, categoriasData] = await Promise.all([
         obtenerTodasLasFilas<ProductoFila>(
           supabase,
@@ -106,7 +157,7 @@ export default function Productos() {
         // perspectiva de esta vista, aunque vivan en una tabla distinta a
         // los accesorios. Solo los que siguen en stock — vendidos no cuentan
         // como stock disponible en ninguna sucursal.
-        obtenerTodasLasFilas<DispositivoFila>(supabase, 'dispositivos', 'id, modelo, categoria_id, precio, sucursal_id, imei', [], (q) =>
+        obtenerTodasLasFilas<DispositivoFila>(supabase, 'dispositivos', 'id, modelo, categoria_id, precio, sucursal_id, imei' + (soporta ? ', financiacion_max_cuotas, precio_lista' : ''), [], (q) =>
           q.eq('en_stock', true)
         ),
         obtenerProductosMaestro(supabase, false),
@@ -116,6 +167,20 @@ export default function Productos() {
       setDispositivos(dispositivosData);
       setMaestros(maestrosData);
       setCategorias(categoriasData);
+      if (soporta) {
+        const [mx, cx] = await Promise.all([
+          obtenerTodasLasFilas<{ id: string; financiacion_max_cuotas: number | null; precio_lista: number | null }>(
+            supabase,
+            'productos_maestro',
+            'id, financiacion_max_cuotas, precio_lista'
+          ),
+          supabase.from('stock_categorias').select('id, financiacion_max_cuotas').limit(1000),
+        ]);
+        setExtraMaestros(new Map(mx.map((m) => [m.id, { max: m.financiacion_max_cuotas, lista: m.precio_lista }])));
+        setGuiaCategorias(
+          new Map(((cx.data as { id: string; financiacion_max_cuotas: number | null }[]) ?? []).map((c) => [c.id, c.financiacion_max_cuotas]))
+        );
+      }
       try {
         setSucursales(await obtenerSucursales(supabase, false));
       } catch {
@@ -137,6 +202,9 @@ export default function Productos() {
     setFormCodigoBarras(maestro.codigo_barras ?? '');
     setFormGarantiaDias(maestro.garantia_dias != null ? String(maestro.garantia_dias) : '');
     setFormStockMinimo(maestro.stock_minimo != null ? String(maestro.stock_minimo) : '');
+    const extra = extraMaestros.get(maestro.id);
+    setFormPrecioLista(extra?.lista != null ? String(extra.lista) : '');
+    setFormGuia(guiaAFormulario(extra?.max));
     setFormCantidades(
       Object.fromEntries(productos.filter((p) => p.producto_maestro_id === maestro.id).map((p) => [p.id, String(p.cantidad)]))
     );
@@ -185,6 +253,21 @@ export default function Productos() {
       return;
     }
 
+    // Guía de financiación y precio de lista (si el negocio activó la función):
+    // se guardan en el maestro y en cada fila de `productos` (la que lee Nueva Orden).
+    if (conGuia) {
+      const lista = formPrecioLista ? Number(formPrecioLista) : null;
+      const guia = guiaDeFormulario(formGuia);
+      if (
+        (await falla(supabase.from('productos_maestro').update({ precio_lista: lista, financiacion_max_cuotas: guia }).eq('id', editando.id), t, 'guardar precio de lista y financiación')) ||
+        (await falla(supabase.from('productos').update({ precio_lista: lista, financiacion_max_cuotas: guia }).eq('producto_maestro_id', editando.id), t, 'guardar precio de lista y financiación'))
+      ) {
+        setGuardandoEdicion(false);
+        return;
+      }
+      setExtraMaestros((prev) => new Map(prev).set(editando.id, { max: guia, lista }));
+    }
+
     // Cantidad: por fila de `productos` (una por sucursal), no por maestro —
     // pedido real de un cliente ("necesito modificar las cantidades y no me
     // da la opción" desde Productos, antes solo se podía desde Stock
@@ -218,18 +301,53 @@ export default function Productos() {
         errorCantidad = `${t('No pudimos ajustar la cantidad en')} ${fallidos.length} ${fallidos.length === 1 ? t('sucursal') : t('sucursales')}: ${fallidos[0].error!.message}`;
       }
       cantidadesExitosas = cantidadesCambiadas.filter((_, i) => !resultados[i].error);
-      if (cantidadesExitosas.length > 0) {
-        await registrarAuditoria(supabase, {
-          accion: `ajustó la cantidad de "${formNombre.trim()}" en ${cantidadesExitosas.length} ${cantidadesExitosas.length === 1 ? 'sucursal' : 'sucursales'}`,
-          entidad: 'producto',
-        });
-      }
+      // Una auditoría por cada fila (sucursal) ajustada, ligada a ESA fila de
+      // producto y con la cantidad de antes y de después — así aparece en el
+      // historial del producto. Antes era un solo renglón sin id ni valores.
+      await Promise.all(
+        cantidadesExitosas.map(({ id, cantidad, actual }) => {
+          const fila = productos.find((p) => p.id === id);
+          const sucursal = sucursales.length > 1 ? sucursales.find((s) => s.id === fila?.sucursal_id)?.nombre : null;
+          return registrarAuditoria(supabase, {
+            accion: `ajustó la cantidad de "${formNombre.trim()}"${sucursal ? ` (${sucursal})` : ''} de ${actual} a ${cantidad}`,
+            entidad: 'producto',
+            entidadId: id,
+            valorAnterior: { cantidad: actual },
+            valorNuevo: { cantidad },
+          });
+        })
+      );
     }
 
+    // Qué campos cambiaron (antes → después): sin esto la auditoría solo decía
+    // "editó el producto", sin poder saber qué precio o costo tenía antes.
+    const nombreDeCategoria = (id: string | null) => (id ? nombreCategoria.get(id) ?? null : null);
     await registrarAuditoria(supabase, {
       accion: `editó el producto "${formNombre.trim()}" del catálogo`,
       entidad: 'producto_maestro',
       entidadId: editando.id,
+      valorAnterior: {
+        nombre: editando.nombre,
+        marca: editando.marca,
+        categoria: nombreDeCategoria(editando.categoria_id),
+        costo: editando.costo,
+        precio: editando.precio,
+        sku: editando.sku,
+        codigo_barras: editando.codigo_barras,
+        garantia_dias: editando.garantia_dias,
+        stock_minimo: editando.stock_minimo,
+      },
+      valorNuevo: {
+        nombre: formNombre.trim(),
+        marca: formMarca.trim() || null,
+        categoria: nombreDeCategoria(formCategoriaId || null),
+        costo: nuevoCosto,
+        precio: nuevoPrecio,
+        sku: formSku.trim() || null,
+        codigo_barras: formCodigoBarras.trim() || null,
+        garantia_dias: formGarantiaDias ? Number(formGarantiaDias) : null,
+        stock_minimo: formStockMinimo ? Number(formStockMinimo) : null,
+      },
     });
     setMaestros((prev) =>
       prev.map((m) =>
@@ -265,16 +383,99 @@ export default function Productos() {
     if (errorCantidad) alert('⚠️ ' + errorCantidad);
   };
 
+  // Guía de financiación en bloque: a los accesorios elegidos (catálogo + sus filas por
+  // sucursal) y a los equipos de los modelos elegidos.
+  const aplicarGuiaMasiva = async () => {
+    const guia = guiaDeFormulario(guiaMasiva);
+    const elegidas = filas.filter((f) => seleccion.has(f.clave));
+    if (elegidas.length === 0) return;
+    setAplicandoMasivo(true);
+    const idsMaestro = elegidas.map((f) => f.maestroId).filter((x): x is string => !!x);
+    const idsEquipos = elegidas.flatMap((f) => f.dispositivoIds);
+    const idsProductosSueltos = elegidas.filter((f) => !f.maestroId && f.productoIds.length > 0).flatMap((f) => f.productoIds);
+    const resultados = await Promise.all([
+      idsMaestro.length > 0 ? porLotes(idsMaestro, (lote) => supabase.from('productos_maestro').update({ financiacion_max_cuotas: guia }).in('id', lote)) : { error: null },
+      idsMaestro.length > 0 ? porLotes(idsMaestro, (lote) => supabase.from('productos').update({ financiacion_max_cuotas: guia }).in('producto_maestro_id', lote)) : { error: null },
+      idsProductosSueltos.length > 0 ? porLotes(idsProductosSueltos, (lote) => supabase.from('productos').update({ financiacion_max_cuotas: guia }).in('id', lote)) : { error: null },
+      idsEquipos.length > 0 ? porLotes(idsEquipos, (lote) => supabase.from('dispositivos').update({ financiacion_max_cuotas: guia }).in('id', lote)) : { error: null },
+    ]);
+    const fallo = resultados.find((r) => r.error);
+    if (fallo?.error) {
+      alert(`${t('No se pudo completar el cambio; puede que una parte se haya guardado. Revisá la lista.')}\n${fallo.error.message}`);
+      setAplicandoMasivo(false);
+      // Los pedidos van en paralelo: si uno falla, otros pudieron haberse guardado; se recarga para mostrar lo que quedó de verdad.
+      window.location.reload();
+      return;
+    }
+    await registrarAuditoria(supabase, {
+      accion: `cambió la guía de financiación de ${elegidas.length} productos (${guia == null ? 'según la categoría' : guia === 0 ? 'sin financiación' : `hasta ${guia} cuotas`})`,
+      entidad: 'producto',
+      valorNuevo: { financiacion_max_cuotas: guia, productos: elegidas.slice(0, 30).map((f) => f.nombre) },
+    });
+    setExtraMaestros((prev) => {
+      const n = new Map(prev);
+      for (const id of idsMaestro) n.set(id, { max: guia, lista: prev.get(id)?.lista ?? null });
+      return n;
+    });
+    const setEquipos = new Set(idsEquipos);
+    setDispositivos((prev) => prev.map((d) => (setEquipos.has(d.id) ? { ...d, financiacion_max_cuotas: guia } : d)));
+    setSeleccion(new Set());
+    setAplicandoMasivo(false);
+  };
+
   const nombreCategoria = useMemo(() => {
     const mapa = new Map<string, string>();
-    for (const c of categorias) mapa.set(c.id, c.nombre);
+    for (const c of categorias) mapa.set(c.id, etiquetaCategoria(c.id, categorias) || c.nombre);
     return mapa;
   }, [categorias]);
+
+  // Asigna la categoría (o subcategoría) elegida a todos los productos y equipos seleccionados, de una sola vez: el catálogo
+  // (producto maestro + sus filas por sucursal), los productos sueltos y los equipos de cada modelo.
+  const asignarCategoriaMasiva = async () => {
+    const elegidas = filas.filter((f) => seleccion.has(f.clave));
+    if (elegidas.length === 0) return;
+    const destino = categoriaMasiva || null;
+    const nombreDestino = destino ? etiquetaCategoria(destino, categorias) : 'Sin categoría';
+    if (!confirm(`${t('¿Asignar')} "${t(nombreDestino)}" ${t('a los')} ${elegidas.length} ${t('productos elegidos?')}`)) return;
+    setAplicandoMasivo(true);
+    const idsMaestro = elegidas.map((f) => f.maestroId).filter((x): x is string => !!x);
+    const idsEquipos = elegidas.flatMap((f) => f.dispositivoIds);
+    const idsProductosSueltos = elegidas.filter((f) => !f.maestroId && f.productoIds.length > 0).flatMap((f) => f.productoIds);
+    const resultados = await Promise.all([
+      idsMaestro.length > 0 ? porLotes(idsMaestro, (lote) => supabase.from('productos_maestro').update({ categoria_id: destino }).in('id', lote)) : { error: null },
+      idsMaestro.length > 0 ? porLotes(idsMaestro, (lote) => supabase.from('productos').update({ categoria_id: destino }).in('producto_maestro_id', lote)) : { error: null },
+      idsProductosSueltos.length > 0 ? porLotes(idsProductosSueltos, (lote) => supabase.from('productos').update({ categoria_id: destino }).in('id', lote)) : { error: null },
+      idsEquipos.length > 0 ? porLotes(idsEquipos, (lote) => supabase.from('dispositivos').update({ categoria_id: destino }).in('id', lote)) : { error: null },
+    ]);
+    const fallo = resultados.find((r) => r.error);
+    if (fallo?.error) {
+      alert(`${t('No se pudo completar el cambio; puede que una parte se haya guardado. Revisá la lista.')}\n${fallo.error.message}`);
+      setAplicandoMasivo(false);
+      // Los pedidos van en paralelo: si uno falla, otros pudieron haberse guardado; se recarga para mostrar lo que quedó de verdad.
+      window.location.reload();
+      return;
+    }
+    await registrarAuditoria(supabase, {
+      accion: `asignó la categoría "${nombreDestino}" a ${elegidas.length} productos`,
+      entidad: 'producto',
+      valorNuevo: { categoria: nombreDestino, productos: elegidas.slice(0, 30).map((f) => f.nombre) },
+    });
+    const setMaestroIds = new Set(idsMaestro);
+    const setSueltos = new Set(idsProductosSueltos);
+    const setEquiposIds = new Set(idsEquipos);
+    setMaestros((prev) => prev.map((m) => (setMaestroIds.has(m.id) ? { ...m, categoria_id: destino } : m)));
+    setProductos((prev) =>
+      prev.map((p) => ((p.producto_maestro_id && setMaestroIds.has(p.producto_maestro_id)) || setSueltos.has(p.id) ? { ...p, categoria_id: destino } : p))
+    );
+    setDispositivos((prev) => prev.map((d) => (setEquiposIds.has(d.id) ? { ...d, categoria_id: destino } : d)));
+    setSeleccion(new Set());
+    setAplicandoMasivo(false);
+  };
 
   const filas: FilaGrid[] = useMemo(() => {
     const mapaMaestros = new Map(maestros.map((m) => [m.id, m]));
     const normalizar = (s: string | null) => (s ?? '').trim().toLowerCase();
-    type Grupo = { maestro: ProductoMaestro | null; nombre: string; marca: string | null; categoriaId: string | null; precio: number | null; stockTotal: number; stockSucursal: number };
+    type Grupo = { maestro: ProductoMaestro | null; nombre: string; marca: string | null; categoriaId: string | null; precio: number | null; stockTotal: number; stockSucursal: number; productoIds: string[] };
     const porClave = new Map<string, Grupo>();
 
     for (const p of productos) {
@@ -297,7 +498,9 @@ export default function Productos() {
           precio: maestro?.precio ?? p.precio,
           stockTotal: 0,
           stockSucursal: 0,
+          productoIds: [],
         } as Grupo);
+      actual.productoIds.push(p.id);
       actual.stockTotal += p.cantidad;
       if (sucursalActual.id && p.sucursal_id === sucursalActual.id) actual.stockSucursal += p.cantidad;
       porClave.set(clave, actual);
@@ -310,18 +513,21 @@ export default function Productos() {
     // "Final" solo muestra un número cuando TODAS las unidades del grupo
     // comparten exactamente el mismo precio — mostrar cualquier otro
     // inventaría un precio único donde no lo hay.
-    type GrupoDisp = { nombre: string; marca: string; categoriaId: string | null; stockTotal: number; stockSucursal: number; precios: Set<number>; imeis: string[] };
+    type GrupoDisp = { nombre: string; marca: string; categoriaId: string | null; stockTotal: number; stockSucursal: number; precios: Set<number>; imeis: string[]; guias: number[]; listas: Set<number>; ids: string[] };
     const porClaveDisp = new Map<string, GrupoDisp>();
     for (const d of dispositivos) {
       const modelo = d.modelo || 'Sin modelo';
       const clave = `disp:${normalizar(modelo)}`;
       const actual =
         porClaveDisp.get(clave) ??
-        ({ nombre: modelo, marca: marcaDeModelo(d.modelo), categoriaId: d.categoria_id, stockTotal: 0, stockSucursal: 0, precios: new Set<number>(), imeis: [] } as GrupoDisp);
+        ({ nombre: modelo, marca: marcaDeModelo(d.modelo), categoriaId: d.categoria_id, stockTotal: 0, stockSucursal: 0, precios: new Set<number>(), imeis: [], guias: [], listas: new Set<number>(), ids: [] } as GrupoDisp);
       actual.stockTotal += 1;
       if (sucursalActual.id && d.sucursal_id === sucursalActual.id) actual.stockSucursal += 1;
       if (d.precio != null) actual.precios.add(d.precio);
       if (d.imei) actual.imeis.push(d.imei);
+      if (d.financiacion_max_cuotas != null) actual.guias.push(d.financiacion_max_cuotas);
+      if (d.precio_lista != null) actual.listas.add(d.precio_lista);
+      actual.ids.push(d.id);
       porClaveDisp.set(clave, actual);
     }
 
@@ -338,6 +544,11 @@ export default function Productos() {
         stockSucursal: info.stockSucursal,
         final: info.precio,
         imeis: [],
+        productoIds: info.productoIds,
+        maestroId: info.maestro?.id ?? null,
+        guia: resolverMaxCuotas(info.maestro ? extraMaestros.get(info.maestro.id)?.max : null, info.categoriaId ? guiaCategorias.get(info.categoriaId) : null),
+        precioLista: info.maestro ? extraMaestros.get(info.maestro.id)?.lista ?? null : null,
+        dispositivoIds: [],
       });
     }
     for (const [clave, info] of porClaveDisp) {
@@ -352,12 +563,26 @@ export default function Productos() {
         stockSucursal: info.stockSucursal,
         final: info.precios.size === 1 ? [...info.precios][0] : null,
         imeis: info.imeis,
+        productoIds: [],
+        maestroId: null,
+        // Con equipos que tienen guía propia distinta, manda la más baja (la más prudente).
+        guia: resolverMaxCuotas(info.guias.length > 0 ? Math.min(...info.guias) : null, info.categoriaId ? guiaCategorias.get(info.categoriaId) : null),
+        precioLista: info.listas.size === 1 ? [...info.listas][0] : null,
+        dispositivoIds: info.ids,
       });
     }
-    resultado.sort((a, b) => a.nombre.localeCompare(b.nombre));
+    // Los celulares van en orden de salida (iPhone 16e antes que el 16, 17e antes que el 17...); lo demás, alfabético.
+    resultado.sort((a, b) => {
+      const ra = rangoDeModelo(a.nombre);
+      const rb = rangoDeModelo(b.nombre);
+      if (ra != null && rb != null) return ra - rb;
+      if (ra != null) return -1;
+      if (rb != null) return 1;
+      return a.nombre.localeCompare(b.nombre);
+    });
     return resultado;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [productos, dispositivos, maestros, nombreCategoria, sucursalActual.id]);
+  }, [productos, dispositivos, maestros, nombreCategoria, sucursalActual.id, extraMaestros, guiaCategorias]);
 
   const filasFiltradas = useMemo(() => {
     // Por PALABRAS, no por una sola frase exacta — bug real reportado por
@@ -371,7 +596,13 @@ export default function Productos() {
     // mismo, sin importar qué campo tenga cada palabra.
     const palabras = busqueda.trim().toLowerCase().split(/\s+/).filter(Boolean);
     return filas.filter((f) => {
-      if (filtroCategoria && f.categoriaId !== filtroCategoria) return false;
+      if (filtroCategoria === SIN_CATEGORIA) {
+        if (f.categoriaId) return false;
+      } else if (filtroCategoria) {
+        // Una categoría de primer nivel incluye lo que está en sus subcategorías.
+        const aceptadas = new Set([filtroCategoria, ...subcategoriasDe(categorias, filtroCategoria).map((s) => s.id)]);
+        if (!f.categoriaId || !aceptadas.has(f.categoriaId)) return false;
+      }
       if (palabras.length === 0) return true;
       // El código de barra/SKU se lee de un lector (escribe el código
       // completo de una sola vez, sin espacios) — coincidencia exacta
@@ -384,7 +615,7 @@ export default function Productos() {
       const textoCombinado = `${f.nombre} ${f.marca} ${f.categoria}`.toLowerCase();
       return palabras.every((palabra) => textoCombinado.includes(palabra));
     });
-  }, [filas, busqueda, filtroCategoria]);
+  }, [filas, busqueda, filtroCategoria, categorias]);
 
   const nombreSucursalActual = sucursales.find((s) => s.id === sucursalActual.id)?.nombre ?? null;
 
@@ -454,7 +685,7 @@ export default function Productos() {
       // Mapa (no array) para que si el mismo nombre+marca aparece dos veces
       // en el archivo, la segunda aparición pise a la primera en vez de
       // mandar dos updates para la misma fila.
-      const actualizacionesPorClave = new Map<string, { id: string; cantidad: number; precio: number | null; costo: number | null }>();
+      const actualizacionesPorClave = new Map<string, { id: string; cantidad: number; cantidadAntes: number; precio: number | null; costo: number | null }>();
       // Si el mismo nombre+marca aparece dos veces en el archivo Y es un
       // producto NUEVO (todavía no insertado), la segunda aparición pisa los
       // valores de la fila ya encolada en vez de sumar otra fila nueva.
@@ -498,6 +729,7 @@ export default function Productos() {
           actualizacionesPorClave.set(clave, {
             id: existente.id,
             cantidad,
+            cantidadAntes: existente.cantidad,
             precio: precio ?? existente.precio,
             costo: costo ?? existente.costo,
           });
@@ -552,7 +784,24 @@ export default function Productos() {
       for (let i = 0; i < actualizacionesFilas.length && !errorActualizacion; i += TANDA_ACTUALIZACION) {
         const tanda = actualizacionesFilas.slice(i, i + TANDA_ACTUALIZACION);
         const resultados = await Promise.all(
-          tanda.map((f) => supabase.from('productos').update({ cantidad: f.cantidad, precio: f.precio, costo: f.costo }).eq('id', f.id))
+          tanda.map(async (f) => {
+            // La cantidad cambia por el RPC que deja rastro en el historial del
+            // producto (quién, cuándo, de cuánto a cuánto) en vez de escribirse
+            // directo: una importación que pisaba la cantidad sin dejar nada
+            // registrado era justo el tipo de cambio que después nadie sabe explicar.
+            const diferencia = f.cantidad - f.cantidadAntes;
+            if (diferencia !== 0) {
+              const { error: movError } = await supabase.rpc('producto_mover_stock', {
+                p_producto_id: f.id,
+                p_tipo: 'ajuste',
+                p_cantidad: diferencia,
+                p_motivo: 'Importación desde archivo',
+                p_usuario: actor?.nombre ?? null,
+              });
+              if (movError) return { error: movError };
+            }
+            return supabase.from('productos').update({ precio: f.precio, costo: f.costo }).eq('id', f.id);
+          })
         );
         for (const r of resultados) {
           if (r.error && !errorActualizacion) errorActualizacion = r.error.message;
@@ -638,9 +887,10 @@ export default function Productos() {
             className="rounded-lg border border-border dark:border-dark-border bg-surface dark:bg-dark-surface px-3 py-2 text-sm"
           >
             <option value="">{t('Todas las categorías')}</option>
-            {categorias.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.nombre}
+            <option value={SIN_CATEGORIA}>{t('Sin categoría')}</option>
+            {opcionesDeCategoria(categorias).map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.etiqueta}
               </option>
             ))}
           </select>
@@ -667,6 +917,17 @@ export default function Productos() {
               onChange={importarProductos}
             />
           </label>
+        )}
+        {puedeAgregarStock && (
+          <button
+            onClick={() => {
+              setModoMasivo((v) => !v);
+              setSeleccion(new Set());
+            }}
+            className="shrink-0 rounded-lg border border-border dark:border-dark-border px-3 py-2 text-sm font-medium"
+          >
+            ☑ {modoMasivo ? t('Terminar edición en bloque') : t('Editar en bloque')}
+          </button>
         )}
         <button
           onClick={() => exportarCatalogo('csv')}
@@ -697,6 +958,7 @@ export default function Productos() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-surface dark:bg-dark-surface text-left text-xs uppercase text-muted dark:text-dark-text-secondary">
+                {modoMasivo && <th className="px-3 py-2 w-8" />}
                 <th className="px-3 py-2 font-medium">{t('Categoría')}</th>
                 <th className="px-3 py-2 font-medium">{t('Marca')}</th>
                 <th className="px-3 py-2 font-medium">{t('Producto')}</th>
@@ -708,20 +970,68 @@ export default function Productos() {
                   </th>
                 )}
                 <th className="px-3 py-2 font-medium text-right">{t('Final')}</th>
+                {puedeAgregarStock && <th className="px-3 py-2 font-medium text-right">{t('Historial')}</th>}
                 {puedeAgregarStock && <th className="px-3 py-2 font-medium text-right">{t('Editar')}</th>}
               </tr>
             </thead>
             <tbody>
               {filasFiltradas.map((f) => (
                 <tr key={f.clave} className="border-t border-border dark:border-dark-border">
+                  {modoMasivo && (
+                    <td className="px-3 py-2">
+                      <input
+                        type="checkbox"
+                        checked={seleccion.has(f.clave)}
+                        onChange={() =>
+                          setSeleccion((prev) => {
+                            const n = new Set(prev);
+                            if (n.has(f.clave)) n.delete(f.clave);
+                            else n.add(f.clave);
+                            return n;
+                          })
+                        }
+                        aria-label={`${t('Seleccionar')} ${f.nombre}`}
+                      />
+                    </td>
+                  )}
                   <td className="px-3 py-2 text-muted dark:text-dark-text-secondary">{f.categoria || '—'}</td>
                   <td className="px-3 py-2">{f.marca || '—'}</td>
-                  <td className="px-3 py-2 font-medium">{f.nombre}</td>
+                  <td className="px-3 py-2 font-medium">
+                    {f.nombre}
+                    {conGuia && f.guia != null && (
+                      <div className="mt-0.5">
+                        <EtiquetaFinanciacion max={f.guia} />
+                      </div>
+                    )}
+                  </td>
                   <td className="px-3 py-2 text-right tabular-nums">{f.stockTotal}</td>
                   {sucursales.length > 1 && (
                     <td className="px-3 py-2 text-right tabular-nums">{sucursalActual.id ? f.stockSucursal : f.stockTotal}</td>
                   )}
-                  <td className="px-3 py-2 text-right tabular-nums">{f.final != null ? `$${f.final.toLocaleString()}` : '—'}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    {f.final != null ? `$${f.final.toLocaleString()}` : '—'}
+                    {conGuia && f.precioLista != null && (
+                      <div className="text-[11px] text-muted dark:text-dark-text-secondary">
+                        {t('Lista')} ${f.precioLista.toLocaleString()}
+                      </div>
+                    )}
+                  </td>
+                  {puedeAgregarStock && (
+                    <td className="px-3 py-2 text-right">
+                      {f.productoIds.length > 0 ? (
+                        <button
+                          onClick={() => setHistorialDe(f)}
+                          aria-label={`${t('Historial')} ${f.nombre}`}
+                          title={t('Ver últimos movimientos y modificaciones')}
+                          className="text-accent dark:text-dark-accent hover:opacity-70"
+                        >
+                          🕘
+                        </button>
+                      ) : (
+                        <span className="text-muted dark:text-dark-text-secondary">—</span>
+                      )}
+                    </td>
+                  )}
                   {puedeAgregarStock && (
                     <td className="px-3 py-2 text-right">
                       {f.maestro ? (
@@ -744,6 +1054,86 @@ export default function Productos() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {modoMasivo && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-border dark:border-dark-border bg-white dark:bg-dark-surface px-4 py-3 shadow-lg flex flex-col gap-3">
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <strong>
+              {seleccion.size} {t('elegidos')}
+            </strong>
+            <button
+              onClick={() => setSeleccion(new Set(filasFiltradas.map((f) => f.clave)))}
+              className="rounded-lg border border-border dark:border-dark-border px-3 py-1 text-xs font-medium"
+            >
+              {t('Elegir los')} {filasFiltradas.length} {t('que se ven')}
+            </button>
+            <button
+              onClick={() => setSeleccion(new Set())}
+              disabled={seleccion.size === 0}
+              className="rounded-lg border border-border dark:border-dark-border px-3 py-1 text-xs font-medium disabled:opacity-40"
+            >
+              {t('Quitar selección')}
+            </button>
+            <span className="text-xs text-muted dark:text-dark-text-secondary">
+              {t('Tip: escribí en el buscador (ej. "cable") y elegí todos los que aparecen de una vez.')}
+            </span>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+            <div className="flex-1">
+              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Categoría / subcategoría para los elegidos')}</label>
+              <select
+                value={categoriaMasiva}
+                onChange={(e) => setCategoriaMasiva(e.target.value)}
+                className="w-full rounded-lg border border-border dark:border-dark-border bg-surface dark:bg-dark-surface px-3 py-2 text-sm"
+              >
+                <option value="">{t('Sin categoría')}</option>
+                {opcionesDeCategoria(categorias).map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.etiqueta}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button
+              disabled={seleccion.size === 0 || aplicandoMasivo}
+              onClick={asignarCategoriaMasiva}
+              className="rounded-lg bg-accent dark:bg-dark-accent text-white px-4 py-2 text-sm font-medium disabled:opacity-40"
+            >
+              {aplicandoMasivo ? t('Aplicando...') : t('Asignar categoría')}
+            </button>
+          </div>
+          {conGuia && (
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+              <div className="flex-1">
+                <SelectorFinanciacion label={`${t('Financiación para los')} ${seleccion.size} ${t('productos elegidos')}`} value={guiaMasiva} onChange={setGuiaMasiva} conHerencia />
+              </div>
+              <button
+                disabled={seleccion.size === 0 || aplicandoMasivo}
+                onClick={aplicarGuiaMasiva}
+                className="rounded-lg bg-accent dark:bg-dark-accent text-white px-4 py-2 text-sm font-medium disabled:opacity-40"
+              >
+                {aplicandoMasivo ? t('Aplicando...') : t('Aplicar')}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {historialDe && (
+        <HistorialProducto
+          nombre={historialDe.nombre}
+          productoIds={historialDe.productoIds}
+          maestroId={historialDe.maestroId}
+          stockActual={historialDe.stockTotal}
+          sucursalPorProducto={
+            sucursales.length > 1
+              ? new Map(productos.filter((p) => historialDe.productoIds.includes(p.id)).map((p) => [p.id, sucursales.find((x) => x.id === p.sucursal_id)?.nombre ?? t('Sin sucursal')]))
+              : new Map()
+          }
+          puedeVerModificaciones={tienePermiso(actor, 'auditoria')}
+          onClose={() => setHistorialDe(null)}
+        />
       )}
 
       {editando && (
@@ -774,13 +1164,14 @@ export default function Productos() {
                   className="w-full bg-white dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                 >
                   <option value="">{t('Sin categoría')}</option>
-                  {categorias.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.nombre}
+                  {opcionesDeCategoria(categorias).map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.etiqueta}
                     </option>
                   ))}
                 </select>
               </div>
+              {puedeVerCostos && (
               <div>
                 <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Costo')}</label>
                 <input
@@ -790,8 +1181,9 @@ export default function Productos() {
                   className="w-full bg-white dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                 />
               </div>
+              )}
               <div>
-                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Final')}</label>
+                <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{conGuia ? t('Final (precio exclusivo)') : t('Final')}</label>
                 <input
                   value={formPrecio}
                   onChange={(e) => setFormPrecio(sanitizarDecimal(e.target.value))}
@@ -799,6 +1191,30 @@ export default function Productos() {
                   className="w-full bg-white dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
                 />
               </div>
+              {conGuia && (
+                <>
+                  <div>
+                    <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Precio de lista (financiación)')}</label>
+                    <input
+                      value={formPrecioLista}
+                      onChange={(e) => setFormPrecioLista(sanitizarDecimal(e.target.value))}
+                      inputMode="decimal"
+                      className="w-full bg-white dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <SelectorFinanciacion
+                      label={t('Financiación')}
+                      value={formGuia}
+                      onChange={setFormGuia}
+                      heredado={formCategoriaId ? guiaCategorias.get(formCategoriaId) ?? null : null}
+                    />
+                    <p className="text-[11px] text-muted dark:text-dark-text-secondary mt-1">
+                      {t('El precio exclusivo es para contado, transferencia y débito. El de lista es el que usa Financiamiento. Si no cargás el de lista, se usa el exclusivo.')}
+                    </p>
+                  </div>
+                </>
+              )}
               <div>
                 <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">SKU</label>
                 <input

@@ -12,6 +12,9 @@ import { useT, useIdioma } from '../../../../lib/idioma';
 import { localeDe } from '../../../../lib/i18n/traducir';
 import { formatearMonto } from '../../../../lib/numeros';
 import { formatearFechaHora } from '../../../../lib/fechas';
+import { obtenerTodasLasFilas } from '../../../../lib/db';
+import { resumenDeCobro, type MovimientoConFecha, type ResumenDeCobro } from '../../../../lib/cuentaCorriente';
+import ResumenSaldoCobro from '../../../../ResumenSaldoCobro';
 
 type Movimiento = {
   id: string;
@@ -54,6 +57,8 @@ export default function ComprobanteCliente() {
   const [cliente, setCliente] = useState<Cliente | null>(null);
   const [movimiento, setMovimiento] = useState<Movimiento | null>(null);
   const [medioPago, setMedioPago] = useState<string | null>(null);
+  // Cuánto debía antes de este pago/crédito y qué saldo le quedó (solo en los abonos, no en los cargos).
+  const [resumen, setResumen] = useState<ResumenDeCobro | null>(null);
   const [negocio, setNegocio] = useState<Negocio | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -72,6 +77,14 @@ export default function ComprobanteCliente() {
       if (movError) setError(movError.message);
       setCliente((cli as Cliente) ?? null);
       setMovimiento((mov as Movimiento) ?? null);
+
+      const m = mov as Movimiento | null;
+      if (m && m.tipo === 'abono' && !m.anulado) {
+        const movsCliente = await obtenerTodasLasFilas<MovimientoConFecha>(supabase, 'cta_cte_movimientos', 'tipo, monto, fecha', [], (q) =>
+          q.eq('cliente_id', id).eq('anulado', false)
+        );
+        setResumen(resumenDeCobro(movsCliente, m.fecha, m.monto));
+      }
 
       if ((mov as Movimiento | null)?.pago_id) {
         const { data: pago } = await supabase.from('pagos').select('medio').eq('id', (mov as Movimiento).pago_id).maybeSingle();
@@ -257,6 +270,16 @@ export default function ComprobanteCliente() {
           <span className="text-sm font-sans font-medium opacity-80">{esCargo ? t('MONTO ADEUDADO') : t('MONTO ABONADO')}</span>
           <span>${formatearMonto(movimiento.monto, locale)}</span>
         </div>
+
+        {resumen && (
+          <ResumenSaldoCobro
+            deudaAnterior={resumen.deudaAnterior}
+            pagado={resumen.pagado}
+            saldoRestante={resumen.saldoRestante}
+            etiquetaPago={esPago ? t('Este pago') : t('Este crédito')}
+            fmt={(n) => `$${formatearMonto(n, locale)}`}
+          />
+        )}
 
         <div className="mt-4 print:mt-2 flex flex-col items-center gap-1 self-center">
           <div className="w-64 border-t border-border" />

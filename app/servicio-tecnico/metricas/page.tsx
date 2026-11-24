@@ -45,6 +45,8 @@ export default function MetricasServicioTecnico() {
   // Técnicos (Fase 3) y en el panel lateral de la ficha (Fase 6), en vez de
   // crear uno nuevo solo para esta pantalla.
   const puedeVerEstadisticas = tienePermiso(actor, 'ver_estadisticas');
+  // Costo de repuestos, ganancia y margen: permiso propio (apagado por defecto).
+  const puedeVerCostos = tienePermiso(actor, 'ver_costos');
   const sucursalActual = useSucursalActual();
 
   const [reparaciones, setReparaciones] = useState<ReparacionMetrica[]>([]);
@@ -84,7 +86,7 @@ export default function MetricasServicioTecnico() {
           'id, modelo, estado, tecnico_id, fecha_ingreso_servicio, fecha_reparado, fecha_entrega, fecha_estimada, estado_actualizado_at, importe_total, presupuesto_estado, presupuesto_respondido_at, tipo_ingreso, trabajos_realizados, sucursal_id'
         ),
         obtenerTodasLasFilas<RepuestoUsoMetrica>(supabase, 'reparaciones_repuestos', 'reparacion_id, nombre_repuesto, cantidad, costo_unitario'),
-        supabase.from('repuestos').select('id, nombre, cantidad_stock, cantidad_reservada, stock_minimo, sucursal_id'),
+        obtenerTodasLasFilas<RepuestoMetrica>(supabase, 'repuestos', 'id, nombre, cantidad_stock, cantidad_reservada, stock_minimo, sucursal_id').then((data) => ({ data })),
         supabase.from('tecnicos').select('id, nombre').order('nombre'),
       ]);
       setReparaciones(reps);
@@ -255,9 +257,13 @@ export default function MetricasServicioTecnico() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard etiqueta={t('Facturación')} valor={fmt(kpis.facturacion)} tooltip={t('Importe total de las reparaciones entregadas en el período.')} />
+        {puedeVerCostos && (
+        <>
         <StatCard etiqueta={t('Costo de repuestos')} valor={fmt(kpis.costoRepuestos)} tooltip={t('Costo histórico (congelado al momento de usarlo) de los repuestos de esas reparaciones.')} />
         <StatCard etiqueta={t('Ganancia bruta')} valor={fmt(kpis.gananciaBruta)} tono={kpis.gananciaBruta >= 0 ? 'text-good' : 'text-bad'} tooltip={t('Facturación menos costo de repuestos.')} />
         <StatCard etiqueta={t('Margen')} valor={pct(kpis.margenPct)} tono={kpis.margenPct != null && kpis.margenPct >= 0 ? 'text-good' : 'text-bad'} />
+        </>
+        )}
       </div>
 
       <SeccionCard titulo={t('Reparaciones ingresadas por día')} subtitulo={`${t('Últimos')} ${diasEvolucionPara(periodo)} ${t('días.')}`}>

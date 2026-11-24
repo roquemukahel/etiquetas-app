@@ -9,6 +9,8 @@ import QMark from './QMark';
 import { useT } from './lib/idioma';
 import { useSucursalActual, setSucursalManual, getSucursalManual } from './lib/sucursal';
 import { obtenerSucursales, type Sucursal } from './lib/sucursales';
+import { soportaMigracion } from './lib/migraciones';
+import AnfitrionRepuesto from './AnfitrionRepuesto';
 
 // El sidebar solo existe en pantallas grandes (ver <aside className="hidden
 // lg:flex">) — en el celular la navegación sigue exactamente igual que
@@ -38,6 +40,7 @@ const RUTAS_FONDO_SUTIL = [
   '/ordenes',
   '/caja',
   '/stock',
+  '/standby',
   '/productos',
   '/comisiones',
   '/canje',
@@ -45,11 +48,12 @@ const RUTAS_FONDO_SUTIL = [
   '/cuentas-por-cobrar',
 ];
 
-const NAV = [
+const NAV: { href: string; label: string; icono: keyof typeof ICONOS; soloConStandby?: boolean }[] = [
   { href: '/', label: 'Inicio', icono: 'inicio' },
   { href: '/ordenes', label: 'Órdenes', icono: 'ordenes' },
   { href: '/caja', label: 'Caja', icono: 'caja' },
   { href: '/stock', label: 'Stock', icono: 'stock' },
+  { href: '/standby', label: 'Standby', icono: 'reloj', soloConStandby: true },
   { href: '/productos', label: 'Productos', icono: 'productos' },
   { href: '/clientes', label: 'Clientes', icono: 'clientes' },
   { href: '/cuentas-por-cobrar', label: 'Cuentas por cobrar', icono: 'cobrar' },
@@ -59,6 +63,7 @@ const NAV = [
   { href: '/compras', label: 'Compras', icono: 'compra' },
   { href: '/proveedores', label: 'Proveedores', icono: 'proveedores' },
   { href: '/egresos', label: 'Egresos', icono: 'documento' },
+  { href: '/ingresos', label: 'Ingresos', icono: 'documento' },
   { href: '/plan-ahorro', label: 'Plan de ahorro', icono: 'ahorro' },
   { href: '/estadisticas', label: 'Estadísticas', icono: 'estadisticas' },
   { href: '/configuracion/sucursales', label: 'Sucursales', icono: 'local' },
@@ -77,6 +82,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
   const [menuSucursalAbierto, setMenuSucursalAbierto] = useState(false);
   const { id: sucursalActualId, fija: sucursalFija } = useSucursalActual();
+  // Standby aparece en el menú solo si el negocio ya corrió standby_supabase.sql.
+  const [conStandby, setConStandby] = useState(false);
+  useEffect(() => {
+    if (sesion === 'si') soportaMigracion(supabase, 'standby').then(setConStandby);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sesion]);
 
   useEffect(() => {
     (async () => {
@@ -140,7 +151,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     (pathname?.includes('/etiqueta/') ?? false) ||
     (pathname === '/' && sesion === 'no');
 
-  if (ocultar || sesion !== 'si') return <>{children}</>;
+  // OJO: antes acá había un `return <>{children}</>` distinto del árbol de abajo. Al resolverse la sesión (~0,3 s) el árbol
+  // cambiaba y React volvía a MONTAR la pantalla entera, así que TODAS las pantallas pedían sus datos dos veces en cada
+  // carga. Ahora el contenido está siempre en la misma posición del mismo árbol (solo se agrega/quita el menú alrededor).
+  const conMenu = !(ocultar || sesion !== 'si');
 
   const esActivo = (href: string) => (href === '/' ? pathname === '/' : (pathname?.startsWith(href) ?? false));
   const mostrarAvisoPrueba = diasPrueba !== null && !pathname?.startsWith('/configuracion/suscripcion');
@@ -157,7 +171,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div>
-      {mostrarAvisoPrueba && (
+      <AnfitrionRepuesto />
+      {conMenu && mostrarAvisoPrueba && (
         <div className="no-print sticky top-[52px] z-30 w-full bg-accent-soft dark:bg-dark-accent-soft text-accent dark:text-dark-accent text-xs px-4 py-2 flex items-center justify-center gap-3 flex-wrap">
           <span>
             {t('Te quedan')} <strong>{diasPrueba}</strong> {diasPrueba === 1 ? t('día') : t('días')} {t('de prueba gratis.')}
@@ -177,6 +192,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
          top-0, fuera de este componente); si además se muestra el aviso de
          prueba (otro sticky, justo debajo), se suma su alto para que no se
          tapen entre sí. */}
+      {conMenu && (
       <aside
         className={`hidden lg:flex lg:flex-col lg:fixed lg:w-64 ${mostrarAvisoPrueba ? 'lg:top-[88px]' : 'lg:top-[52px]'} lg:bottom-0 lg:left-0 lg:z-20 lg:border-r lg:border-border dark:lg:border-dark-border lg:bg-white dark:lg:bg-dark-surface`}
       >
@@ -245,7 +261,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         )}
 
         <nav className="flex-1 overflow-y-auto px-3 py-4 flex flex-col gap-1">
-          {NAV.map((item) => {
+          {NAV.filter((item) => !item.soloConStandby || conStandby).map((item) => {
             const activo = esActivo(item.href);
             return (
               <Link
@@ -272,6 +288,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </p>
         </div>
       </aside>
+      )}
 
       {/* Versión celular del bloque de arriba: el aside completo es
          hidden lg:flex (ver comentario al principio del archivo — en
@@ -280,7 +297,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
          componente aparte) para heredar gratis las mismas exclusiones de
          ruta/sesión que ya resolvió el "if (ocultar || sesion !== 'si')"
          de arriba, en vez de duplicar esa lista en otro lado. */}
-      {sucursales.length > 0 && !sucursalFija && (
+      {conMenu && sucursales.length > 0 && !sucursalFija && (
         <div className="no-print lg:hidden fixed bottom-3 left-3 z-40">
           {menuSucursalAbierto && (
             <div className="absolute bottom-full left-0 mb-1.5 w-52 rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-elevated py-1">
@@ -317,7 +334,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      <div className="lg:pl-64">{children}</div>
+      <div className={conMenu ? 'lg:pl-64' : undefined}>{children}</div>
     </div>
   );
 }

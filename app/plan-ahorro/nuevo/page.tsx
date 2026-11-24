@@ -8,10 +8,15 @@ import { obtenerTodasLasFilas } from '../../lib/db';
 import { sanitizarDecimal } from '../../lib/numeros';
 import { obtenerDispositivosSenados } from '../../lib/planAhorro';
 import { telefonoIncompleto } from '../../lib/telefono';
+import { equiposEnStandby } from '../../lib/standby';
 import SelectorColorAuto from '../../SelectorColorAuto';
 import { useT } from '../../lib/idioma';
+import { useSucursalActual } from '../../lib/sucursal';
+import { origenDeCliente } from '../../lib/clientesDuplicados';
+import { compararModelosPorSalida } from '../../lib/catalogosMarcas';
+import { OPCIONES_ALMACENAMIENTO, formatearGB } from '../../lib/almacenamiento';
 
-const STORAGE_OPTIONS = [64, 128, 256, 512];
+const STORAGE_OPTIONS = OPCIONES_ALMACENAMIENTO;
 
 type Cliente = {
   id: string;
@@ -33,6 +38,7 @@ export default function NuevoPlanAhorro() {
   const router = useRouter();
   const supabase = crearClienteNavegador();
   const t = useT();
+  const sucursalActual = useSucursalActual();
 
   const [step, setStep] = useState<'cliente' | 'plan'>('cliente');
 
@@ -59,6 +65,9 @@ export default function NuevoPlanAhorro() {
   const [reservados, setReservados] = useState<Set<string>>(new Set());
   const [buscarDispositivo, setBuscarDispositivo] = useState('');
   const [dispositivoElegido, setDispositivoElegido] = useState<DispositivoStock | null>(null);
+  // También se puede señar un equipo que está en Standby (queda reservado ahí hasta entregarlo).
+  const [dispositivosStandby, setDispositivosStandby] = useState<DispositivoStock[]>([]);
+  const [origenSena, setOrigenSena] = useState<'stock' | 'standby'>('stock');
 
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
@@ -69,11 +78,13 @@ export default function NuevoPlanAhorro() {
     })();
     (async () => {
       const { data } = await supabase.from('modelos_stock').select('nombre').order('nombre');
-      setCarpetas((data ?? []).map((m) => m.nombre));
+      setCarpetas((data ?? []).map((m) => m.nombre).sort(compararModelosPorSalida));
     })();
     (async () => {
       const [{ data: disp }, senados] = await Promise.all([
-        supabase.from('dispositivos').select('id, modelo, capacidad_gb, color, imei, precio').eq('en_stock', true).order('modelo'),
+        obtenerTodasLasFilas<DispositivoStock>(supabase, 'dispositivos', 'id, modelo, capacidad_gb, color, imei, precio', [{ columna: 'modelo' }], (q) =>
+          q.eq('en_stock', true)
+        ).then((data) => ({ data })),
         // Un equipo ya señado por otro plan activo no debería poder volver a
         // señarse — si no, dos clientes podrían terminar reservando el mismo.
         obtenerDispositivosSenados(supabase),
@@ -81,11 +92,19 @@ export default function NuevoPlanAhorro() {
       setDispositivosStock((disp as DispositivoStock[]) ?? []);
       setReservados(senados);
     })();
+    (async () => {
+      try {
+        // Solo las columnas que se muestran (no la ficha completa de cada equipo).
+        setDispositivosStandby(await equiposEnStandby<DispositivoStock>(supabase, 'id, modelo, capacidad_gb, color, imei, precio'));
+      } catch {
+        // Sin Standby legible, la seña sigue siendo solo de equipos del Stock.
+      }
+    })();
   }, []);
 
   const dispositivosDisponibles = useMemo(
-    () => dispositivosStock.filter((d) => !reservados.has(d.id)),
-    [dispositivosStock, reservados]
+    () => (origenSena === 'standby' ? dispositivosStandby : dispositivosStock).filter((d) => !reservados.has(d.id)),
+    [dispositivosStock, dispositivosStandby, origenSena, reservados]
   );
 
   const dispositivosFiltrados = useMemo(() => {
@@ -135,21 +154,24 @@ export default function NuevoPlanAhorro() {
       // equipo (u otra persona lo pudo vender) mientras esta pantalla
       // estaba abierta.
       if (esSena && dispositivoElegido) {
+        const deStandby = origenSena === 'standby';
         const { data: actual } = await supabase
           .from('dispositivos')
-          .select('en_stock')
+          .select(deStandby ? 'en_espera' : 'en_stock')
           .eq('id', dispositivoElegido.id)
           .single();
-        if (!actual?.en_stock) {
+        if (!(deStandby ? (actual as { en_espera?: boolean } | null)?.en_espera : (actual as { en_stock?: boolean } | null)?.en_stock)) {
           throw new Error(t('Este equipo ya no está disponible en Stock — puede que se haya vendido o señado recién. Elegí otro.'));
         }
       }
 
       let clienteId = clienteElegido?.id;
       if (modoCliente === 'nuevo') {
+        const origenCliente = await origenDeCliente(supabase, sucursalActual.id);
         const { data, error: cErr } = await supabase
           .from('clientes')
           .insert({
+            ...origenCliente,
             nombre: nuevoNombre.trim(),
             apellido: nuevoApellido.trim() || null,
             telefono: nuevoTelefono.trim() || null,
@@ -322,7 +344,7 @@ export default function NuevoPlanAhorro() {
             esSena ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
           }`}
         >
-          {t('Señar un equipo del Stock')}
+          {dispositivosStandby.length > 0 ? t('Señar un equipo') : t('Señar un equipo del Stock')}
         </button>
       </div>
 
@@ -332,13 +354,29 @@ export default function NuevoPlanAhorro() {
             <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">
               {t('Equipo a reservar (queda apartado hasta que se complete la venta)')}
             </label>
+            {dispositivosStandby.length > 0 && !dispositivoElegido && (
+              <div className="flex gap-2 mb-2 text-xs">
+                {(['stock', 'standby'] as const).map((o) => (
+                  <button
+                    key={o}
+                    onClick={() => setOrigenSena(o)}
+                    className={`flex-1 rounded-lg py-1.5 font-medium ${
+                      origenSena === o ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
+                    }`}
+                  >
+                    {o === 'stock' ? `${t('Del Stock')} (${dispositivosStock.filter((d) => !reservados.has(d.id)).length})` : `${t('De Standby')} (${dispositivosStandby.filter((d) => !reservados.has(d.id)).length})`}
+                  </button>
+                ))}
+              </div>
+            )}
             {dispositivoElegido ? (
               <div className="rounded-xl border border-accent/40 dark:border-dark-accent/40 bg-accent-soft dark:bg-dark-accent-soft px-4 py-3 flex items-center justify-between gap-2">
                 <p className="text-sm font-medium">
                   {dispositivoElegido.modelo}
-                  {dispositivoElegido.capacidad_gb ? ` · ${dispositivoElegido.capacidad_gb}GB` : ''}
+                  {dispositivoElegido.capacidad_gb ? ` · ${formatearGB(dispositivoElegido.capacidad_gb)}` : ''}
                   {dispositivoElegido.color ? ` · ${dispositivoElegido.color}` : ''}
                   {dispositivoElegido.imei ? ` · IMEI ${dispositivoElegido.imei}` : ''}
+                  {origenSena === 'standby' ? ` · ${t('En Standby')}` : ''}
                 </p>
                 <button onClick={() => setDispositivoElegido(null)} className="text-xs text-accent dark:text-dark-accent underline shrink-0">
                   {t('Cambiar')}
@@ -355,7 +393,7 @@ export default function NuevoPlanAhorro() {
                 <div className="flex flex-col gap-2 mt-2 max-h-64 overflow-y-auto">
                   {dispositivosFiltrados.length === 0 && (
                     <p className="text-xs text-muted dark:text-dark-text-secondary text-center py-2">
-                      {t('No hay equipos en Stock disponibles con esa búsqueda.')}
+                      {origenSena === 'standby' ? t('No hay equipos en Standby disponibles con esa búsqueda.') : t('No hay equipos en Stock disponibles con esa búsqueda.')}
                     </p>
                   )}
                   {dispositivosFiltrados.map((d) => (
@@ -367,7 +405,7 @@ export default function NuevoPlanAhorro() {
                       <span className="min-w-0">
                         <span className="block">
                           {d.modelo}
-                          {d.capacidad_gb ? ` · ${d.capacidad_gb}GB` : ''}
+                          {d.capacidad_gb ? ` · ${formatearGB(d.capacidad_gb)}` : ''}
                           {d.color ? ` · ${d.color}` : ''}
                         </span>
                         {/* Sin esto, dos unidades del mismo modelo/color eran
@@ -413,7 +451,7 @@ export default function NuevoPlanAhorro() {
                       capacidad === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
                     }`}
                   >
-                    {gb} GB
+                    {formatearGB(gb, true)}
                   </button>
                 ))}
               </div>

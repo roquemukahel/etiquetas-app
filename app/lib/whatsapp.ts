@@ -12,8 +12,9 @@ export function armarLinkWhatsApp(telefono: string | null | undefined, mensaje: 
     : `https://api.whatsapp.com/send?${params.toString()}`;
 }
 
-export function mensajeSeguimientoServicio(nombreCliente: string, modelo: string, urlSeguimiento: string) {
-  return `Hola ${nombreCliente}! Gracias por elegirnos 🙌 Ya registramos tu ${modelo} para el servicio técnico. Podés seguir el estado de tu reparación en este link: ${urlSeguimiento}`;
+export function mensajeSeguimientoServicio(nombreCliente: string, modelo: string, urlSeguimiento: string, codigoSeguimiento?: string | null) {
+  const codigo = codigoSeguimiento ? ` Tu código de seguimiento es ${codigoSeguimiento}.` : '';
+  return `Hola ${nombreCliente}! Gracias por elegirnos 🙌 Ya registramos tu ${modelo} para el servicio técnico.${codigo} Podés seguir el estado de tu reparación en este link: ${urlSeguimiento}`;
 }
 
 export function mensajeListoServicio(nombreCliente: string, modelo: string, urlSeguimiento: string) {

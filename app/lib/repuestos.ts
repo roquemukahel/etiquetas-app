@@ -1,4 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js';
+import { tr } from './tr';
+import { registrarAuditoria } from './auditoria';
 
 // Las funciones RPC de stock (repuesto_consumir, repuesto_registrar_movimiento,
 // repuesto_reservar — ver repuestos_reservas_movimientos_supabase.sql) tiran
@@ -18,6 +20,45 @@ export function extraerDisponibleInsuficiente(mensaje: string | undefined | null
   if (!mensaje) return null;
   const m = mensaje.match(/DISPONIBLE_INSUFICIENTE:(-?\d+(?:\.\d+)?)/);
   return m ? Number(m[1]) : null;
+}
+
+// Usa un repuesto del stock en una reparación (función repuesto_consumir: bloquea la fila del repuesto mientras dura, así que dos consumos
+// simultáneos del mismo repuesto no se pisan). Si no alcanza el stock, pregunta con `confirmarNegativo` si usarlo igual. Devuelve ok:false con
+// error null cuando la persona decidió no usarlo (no hay nada que mostrar), o el mensaje si falló de verdad.
+export async function consumirRepuesto(
+  supabase: SupabaseClient,
+  p: {
+    repuestoId: string;
+    nombre: string;
+    reparacionId: string;
+    numeroOrden: string | null;
+    cantidad: number;
+    actorNombre: string | null;
+    confirmarNegativo: (stockActual: number) => boolean;
+  }
+): Promise<{ ok: true } | { ok: false; error: string | null }> {
+  const intentar = (forzar: boolean) =>
+    supabase.rpc('repuesto_consumir', {
+      p_repuesto_id: p.repuestoId,
+      p_reparacion_id: p.reparacionId,
+      p_cantidad: p.cantidad,
+      p_actor_nombre: p.actorNombre,
+      p_forzar: forzar,
+    });
+
+  let { error } = await intentar(false);
+  if (error) {
+    const stockActual = extraerStockInsuficiente(error.message);
+    if (stockActual == null || !p.confirmarNegativo(stockActual)) return { ok: false, error: stockActual == null ? error.message : null };
+    ({ error } = await intentar(true));
+    if (error) return { ok: false, error: error.message };
+  }
+  await registrarAuditoria(supabase, {
+    accion: `usó ${p.cantidad} de "${p.nombre}" en la reparación ${p.numeroOrden || ''}`,
+    entidad: 'reparacion',
+    entidadId: p.reparacionId,
+  });
+  return { ok: true };
 }
 
 // Antes de borrar definitivamente una o varias reparaciones (acá, o al
@@ -40,7 +81,7 @@ export async function liberarRepuestosDeReparaciones(
     supabase.from('repuestos_reservas').select('id').in('reparacion_id', reparacionIds).eq('estado', 'activa'),
   ]);
   if (errorConsumos || errorReservas) {
-    return { ok: false, error: (errorConsumos ?? errorReservas)?.message ?? 'No pudimos leer los repuestos vinculados' };
+    return { ok: false, error: (errorConsumos ?? errorReservas)?.message ?? tr('No pudimos leer los repuestos vinculados') };
   }
 
   for (const c of consumos ?? []) {

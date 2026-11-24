@@ -2,6 +2,10 @@ import { generarTextoCondicionIngreso, type ChecklistIngreso } from './reparacio
 import { getActor } from './actor';
 import { vencimientoDesdeHoy } from './cuentaCorriente';
 import { crearPlanFinanciacion } from './financiacion/servicio';
+import { formatearGB } from './almacenamiento';
+import { tr } from './tr';
+import { soportaMigracion } from './migraciones';
+import { resolverCostoServicio, type DecisionRepuesto } from './costoRepuesto';
 
 // Datos mínimos de una reparación necesarios para armar/actualizar su orden de
 // cobro. Se aceptan además los campos del checklist de ingreso (para la nota de
@@ -36,6 +40,27 @@ export type CuentaCorrienteServicioTecnico = {
   financiar?: { cantidadCuotas: number; primeraFecha: string };
 };
 
+// ¿Esta orden ya generó su cargo a cuenta corriente (o un plan de cuotas)?
+// Devuelve null si no se pudo verificar — quien llama NO debe asumir "no" en
+// ese caso, porque cobrar dos veces la misma deuda es peor que pedir reintentar.
+export async function ordenYaTieneCargoCuentaCorriente(supabase: any, ordenId: string): Promise<boolean | null> {
+  const [movs, planes] = await Promise.all([
+    supabase
+      .from('cta_cte_movimientos')
+      .select('id', { count: 'exact', head: true })
+      .eq('orden_id', ordenId)
+      .eq('tipo', 'cargo')
+      .eq('anulado', false),
+    supabase
+      .from('financiacion_planes')
+      .select('id', { count: 'exact', head: true })
+      .eq('orden_id', ordenId)
+      .not('estado', 'in', '(anulado,cancelado)'),
+  ]);
+  if (movs.error || planes.error) return null;
+  return (movs.count ?? 0) > 0 || (planes.count ?? 0) > 0;
+}
+
 // Arma (o actualiza, si ya existía desde que se recibió el equipo) la orden de
 // cobro de una reparación y deja la reparación como "entregado". Es la MISMA
 // lógica que usa la ficha de Servicio Técnico y la sección "Listos para cobrar"
@@ -54,8 +79,22 @@ export async function generarOrdenDeReparacion(
   } = {}
 ): Promise<{ ordenId: string | null; total: number; error: string | null }> {
   const marcarEntregado = opciones.marcarEntregado ?? true;
-  const esOrdenNueva = !r.orden_cobro_id;
   const total = r.importe_total ?? (r.presupuesto_mano_obra || 0) + (r.presupuesto_repuestos || 0);
+
+  // Antes el cargo solo se generaba si la orden era "nueva" (!orden_cobro_id),
+  // pero hoy TODA reparación con cliente ya nace con su orden desde la
+  // recepción — así que el cargo a cuenta corriente/financiación nunca se
+  // generaba y la deuda quedaba sin registrar. Lo que importa es si ESTA
+  // orden ya tiene su cargo, no si se acaba de crear. Se verifica antes de
+  // tocar nada, para no dejar una orden a medias si la verificación falla.
+  let generarCargo = r.forma_pago === 'Cuenta corriente' && !!r.cliente_id && !!opciones.cuentaCorriente && total > 0.009;
+  if (generarCargo && r.orden_cobro_id) {
+    const yaTiene = await ordenYaTieneCargoCuentaCorriente(supabase, r.orden_cobro_id);
+    if (yaTiene === null) {
+      return { ordenId: null, total, error: tr('No pudimos verificar si esta orden ya está cargada a la cuenta corriente. Probá de nuevo.') };
+    }
+    generarCargo = !yaTiene;
+  }
   // Costo real de los repuestos usados en esta reparación (foto tomada al
   // momento de usarlos, ver reparaciones_repuestos.costo_unitario) — sin
   // esto, el ítem de la boleta quedaba con costo=null y Estadísticas no
@@ -68,14 +107,29 @@ export async function generarOrdenDeReparacion(
     .from('reparaciones_repuestos')
     .select('cantidad, costo_unitario')
     .eq('reparacion_id', r.id);
-  const costoRepuestos = ((repuestosUsados as { cantidad: number; costo_unitario: number | null }[]) ?? []).reduce(
-    (acc, u) => acc + (u.costo_unitario ?? 0) * (u.cantidad ?? 0),
-    0
-  );
+  const usados = (repuestosUsados as { cantidad: number; costo_unitario: number | null }[]) ?? [];
+  const costoRepuestos = usados.reduce((acc, u) => acc + (u.costo_unitario ?? 0) * (u.cantidad ?? 0), 0);
+  // Con la pregunta "¿se usó repuesto?" (servicio_costo_repuesto_supabase.sql): una reparación sin repuestos cargados y sin haber
+  // confirmado "No usó repuesto" NO tiene costo conocido — la línea queda con costo pendiente en vez de contarse como 100% de ganancia.
+  let costoLinea: number | null = costoRepuestos;
+  let costoPendiente = false;
+  let decisionActual: DecisionRepuesto | null = null;
+  if (await soportaMigracion(supabase, 'costoRepuestoServicio')) {
+    const { data: decisionData, error: decisionError } = await supabase.from('reparaciones').select('repuesto_decision').eq('id', r.id).maybeSingle();
+    if (decisionError) return { ordenId: null, total, error: tr('No pudimos leer si se usó repuesto: ') + decisionError.message };
+    decisionActual = (decisionData?.repuesto_decision as DecisionRepuesto | null) ?? null;
+    const resuelto = resolverCostoServicio(decisionActual, usados);
+    costoLinea = resuelto.costo;
+    costoPendiente = resuelto.pendiente;
+  }
+  const camposCosto: Record<string, unknown> = {
+    costo: costoLinea,
+    ...((await soportaMigracion(supabase, 'costoPendienteItems')) ? { costo_pendiente: costoPendiente } : {}),
+  };
   // Modelo/capacidad/color/IMEI se cargaron al recibir el equipo — sin esto,
   // al generar la orden de cobro se pisaba la línea de la boleta (que sí los
   // tenía desde el ingreso) con una que solo decía "Servicio técnico — modelo".
-  const descripcion = `Servicio técnico — ${r.modelo || 'equipo'}${r.capacidad_gb ? ` ${r.capacidad_gb}GB` : ''}${
+  const descripcion = `Servicio técnico — ${r.modelo || 'equipo'}${r.capacidad_gb ? ` ${formatearGB(r.capacidad_gb)}` : ''}${
     r.color ? ` ${r.color}` : ''
   }${r.imei ? ` · IMEI ${r.imei}` : ''}${r.diagnostico ? `: ${r.diagnostico}` : ''}`;
   // Constancia de cómo llegó el equipo (para la boleta), sin frase de "no se
@@ -97,7 +151,7 @@ export async function generarOrdenDeReparacion(
       .from('ordenes')
       .update({ total, forma_pago: r.forma_pago || 'Efectivo', nota: notaCondicion, aclaraciones_tecnico: aclaracionesTecnico })
       .eq('id', ordenId);
-    if (updateError) return { ordenId: null, total, error: 'No pudimos actualizar la orden: ' + updateError.message };
+    if (updateError) return { ordenId: null, total, error: tr('No pudimos actualizar la orden: ') + updateError.message };
 
     const { data: itemExistente, error: itemBuscarError } = await supabase
       .from('orden_items')
@@ -107,15 +161,16 @@ export async function generarOrdenDeReparacion(
       .maybeSingle();
     // Si esto falla por un error real (no porque no exista el ítem), no hay que
     // asumir que no existe: insertar acá duplicaría la línea de la boleta.
-    if (itemBuscarError) return { ordenId: null, total, error: 'No pudimos actualizar el ítem de la orden: ' + itemBuscarError.message };
+    if (itemBuscarError) return { ordenId: null, total, error: tr('No pudimos actualizar el ítem de la orden: ') + itemBuscarError.message };
 
-    if (itemExistente) {
-      await supabase.from('orden_items').update({ descripcion, precio_unitario: total, costo: costoRepuestos }).eq('id', itemExistente.id);
-    } else {
-      await supabase
-        .from('orden_items')
-        .insert({ orden_id: ordenId, descripcion, cantidad: 1, precio_unitario: total, costo: costoRepuestos, tipo: 'trabajo' });
-    }
+    // El ítem es lo que se imprime en la boleta y lo que suma la caja: si no se
+    // pudo guardar hay que cortar acá, no seguir como si la orden estuviera bien.
+    const { error: itemGuardarError } = itemExistente
+      ? await supabase.from('orden_items').update({ descripcion, precio_unitario: total, ...camposCosto }).eq('id', itemExistente.id)
+      : await supabase
+          .from('orden_items')
+          .insert({ orden_id: ordenId, descripcion, cantidad: 1, precio_unitario: total, ...camposCosto, tipo: 'trabajo' });
+    if (itemGuardarError) return { ordenId: null, total, error: tr('No pudimos guardar el ítem de la orden: ') + itemGuardarError.message };
   } else {
     // Reparaciones sin cliente al recibirse (equipo propio) o cargadas antes de
     // que se armara la orden en el ingreso: se crea acá.
@@ -132,17 +187,22 @@ export async function generarOrdenDeReparacion(
       })
       .select()
       .single();
-    if (ordenError || !orden) return { ordenId: null, total, error: 'No pudimos generar la orden: ' + (ordenError?.message || '') };
+    if (ordenError || !orden) return { ordenId: null, total, error: tr('No pudimos generar la orden: ') + (ordenError?.message || '') };
 
     ordenId = orden.id;
-    await supabase.from('orden_items').insert({
+    const { error: itemNuevoError } = await supabase.from('orden_items').insert({
       orden_id: orden.id,
       descripcion,
       cantidad: 1,
       precio_unitario: total,
-      costo: costoRepuestos,
+      ...camposCosto,
       tipo: 'trabajo',
     });
+    if (itemNuevoError) {
+      // Una orden sin su ítem quedaría en $0 para siempre: se deshace.
+      await supabase.from('ordenes').delete().eq('id', orden.id);
+      return { ordenId: null, total, error: tr('No pudimos guardar el ítem de la orden: ') + itemNuevoError.message };
+    }
   }
 
   const cambiosReparacion: Record<string, unknown> = {
@@ -155,14 +215,20 @@ export async function generarOrdenDeReparacion(
     fecha_reparado: r.fecha_reparado ?? new Date().toISOString(),
   };
   if (marcarEntregado) cambiosReparacion.estado = 'entregado';
+  // Se cobró sin que nadie respondiera si se usó repuesto (y no hay ninguno cargado): queda como "costo pendiente" para que aparezca en el filtro y en las alertas.
+  if (costoPendiente && decisionActual == null && (await soportaMigracion(supabase, 'costoRepuestoServicio'))) {
+    cambiosReparacion.repuesto_decision = 'pendiente';
+    cambiosReparacion.repuesto_decision_at = new Date().toISOString();
+  }
 
   const { error: repError } = await supabase.from('reparaciones').update(cambiosReparacion).eq('id', r.id);
-  if (repError) return { ordenId, total, error: 'La orden se generó pero no pudimos actualizar la reparación: ' + repError.message };
+  if (repError) return { ordenId, total, error: tr('La orden se generó pero no pudimos actualizar la reparación: ') + repError.message };
 
-  // Cuenta corriente / financiamiento: solo al CREAR la orden (esOrdenNueva),
-  // y solo si de verdad queda algo por cobrar — mismo criterio que Nueva
-  // Orden (montoCuentaCorriente > 0.009 en app/ordenes/nueva/page.tsx).
-  if (esOrdenNueva && r.forma_pago === 'Cuenta corriente' && r.cliente_id && opciones.cuentaCorriente && total > 0.009) {
+  // Cuenta corriente / financiamiento: solo la primera vez (generarCargo ya
+  // descartó las órdenes con cargo existente) y solo si de verdad queda algo
+  // por cobrar — mismo criterio que Nueva Orden (montoCuentaCorriente > 0.009
+  // en app/ordenes/nueva/page.tsx).
+  if (generarCargo && opciones.cuentaCorriente && r.cliente_id) {
     const cc = opciones.cuentaCorriente;
     if (cc.financiar) {
       const resultadoPlan = await crearPlanFinanciacion(supabase, {
@@ -176,7 +242,7 @@ export async function generarOrdenDeReparacion(
         observaciones: 'Financiación generada al cobrar un Servicio Técnico.',
         sucursalId: opciones.sucursalId ?? null,
       });
-      if ('error' in resultadoPlan) return { ordenId, total, error: 'La orden se generó pero no pudimos crear el plan de financiación: ' + resultadoPlan.error };
+      if ('error' in resultadoPlan) return { ordenId, total, error: tr('La orden se generó pero no pudimos crear el plan de financiación: ') + resultadoPlan.error };
     } else {
       const actor = getActor();
       const { error: movError } = await supabase.from('cta_cte_movimientos').insert({
@@ -191,7 +257,7 @@ export async function generarOrdenDeReparacion(
         registrado_por_foto_url: actor?.fotoUrl ?? null,
         ...(opciones.sucursalId ? { sucursal_id: opciones.sucursalId } : {}),
       });
-      if (movError) return { ordenId, total, error: 'La orden se generó pero no pudimos cargarla a la cuenta corriente: ' + movError.message };
+      if (movError) return { ordenId, total, error: tr('La orden se generó pero no pudimos cargarla a la cuenta corriente: ') + movError.message };
     }
   }
 

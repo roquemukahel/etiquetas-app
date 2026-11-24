@@ -8,7 +8,7 @@ import { registrarAuditoria } from '../../lib/auditoria';
 import { revertirComisionesOrden } from '../../lib/comisiones/operaciones';
 import { limpiarImei } from '../../lib/imei';
 import { asegurarModelo, normalizarNombreModelo } from '../../lib/modelos';
-import { useActor, getActor } from '../../lib/actor';
+import { useActor, getActor, MENSAJE_ACTOR_REQUERIDO } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import { useT } from '../../lib/idioma';
 import { simboloMoneda } from '../../lib/monedas';
@@ -22,10 +22,23 @@ import { useSucursalActual } from '../../lib/sucursal';
 import { type TipoBloqueo, type TipoDispositivo } from '../../lib/reparaciones';
 import CapturarBloqueo from '../../CapturarBloqueo';
 import SelectorTipoDispositivo from '../../SelectorTipoDispositivo';
+import SelectorFormaPago from '../../SelectorFormaPago';
+import {
+  etiquetaDeMedios,
+  lineasCierranConElTotal,
+  lineasIniciales,
+  mediosDeEtiqueta,
+  restanteDeLineas,
+  type LineaCobro,
+} from '../../lib/formaPago';
+import { cuotasEfectivasDeOrden, etiquetaCuotas, interesDe, interesGuardadoDeOrden, planesActivos, valorCuota } from '../../lib/cuotas';
+import { registrarFallo, falla } from '../../lib/escritura';
+import { obtenerTodasLasFilas } from '../../lib/db';
+import { camposRecibidoPor } from '../../lib/recibidoPor';
+import { OPCIONES_ALMACENAMIENTO, formatearGB } from '../../lib/almacenamiento';
 
 const ESTADOS = ['pendiente', 'pagado', 'entregado'];
-const FORMAS_PAGO = ['Efectivo', 'Transferencia', 'Tarjeta'];
-const STORAGE_OPTIONS = [64, 128, 256, 512];
+const STORAGE_OPTIONS = OPCIONES_ALMACENAMIENTO;
 
 function idTemporal() {
   return Math.random().toString(36).slice(2);
@@ -47,6 +60,7 @@ type Orden = {
   id: string;
   numero_orden: string | null;
   forma_pago: string | null;
+  cuotas: number | null;
   total: number | null;
   anticipo: number | null;
   impuesto_porcentaje: number | null;
@@ -165,7 +179,12 @@ export default function DetalleOrden() {
   // `pagos` — solo cambiaba el texto del estado. Sin esto, esa plata no
   // tenía forma de llegar a ninguna caja ni a las estadísticas de cobro.
   const [modalCobro, setModalCobro] = useState(false);
-  const [medioCobro, setMedioCobro] = useState('efectivo');
+  // Cobro con uno o varios medios (mixto): cada línea es plata que entra por un
+  // medio distinto — mismo criterio que Nueva Orden. Arranca con los medios que
+  // ya se habían elegido como forma de pago de la orden.
+  const [lineasCobro, setLineasCobro] = useState<LineaCobro[]>([{ medio: 'efectivo', monto: '' }]);
+  const [vendedorCobro, setVendedorCobro] = useState('');
+  const [pagosYaRegistrados, setPagosYaRegistrados] = useState(false);
   const [cobrando, setCobrando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -217,6 +236,14 @@ export default function DetalleOrden() {
 
   const [yaDerivado, setYaDerivado] = useState(false);
   const [reparacionesDerivadasIds, setReparacionesDerivadasIds] = useState<string[]>([]);
+  // Reparaciones cuyo COBRO es esta orden (orden_cobro_id): si hay alguna, la
+  // orden YA es de Servicio Técnico — no tiene sentido ofrecer "Derivar a
+  // Servicio Técnico", y de acá sale el número ST y el link a la ficha.
+  const [reparacionesCobro, setReparacionesCobro] = useState<{ id: string; numero_orden: string | null; modelo: string | null; tecnicos: { nombre: string } | null }[]>([]);
+  // Plan de cuotas (financiación con tarjeta) — mismo esquema que Nueva Orden:
+  // el interés por plan viene de la configuración del negocio.
+  const [interesCuotasConfig, setInteresCuotasConfig] = useState<Record<string, number> | null>(null);
+  const [cuotasEdit, setCuotasEdit] = useState(0);
   const [derivarAbierto, setDerivarAbierto] = useState(false);
   const [derivarModelo, setDerivarModelo] = useState('');
   const [derivarCapacidad, setDerivarCapacidad] = useState<number | null>(null);
@@ -232,7 +259,7 @@ export default function DetalleOrden() {
   const cargar = async () => {
     // Las 3 consultas son independientes entre sí (todas filtran por el
     // mismo id de orden) — antes se pedían una tras otra, ahora en paralelo.
-    const [{ data }, { data: reparacionesLigadas }, { data: canjesData, error: canjesErr }] = await Promise.all([
+    const [{ data }, { data: reparacionesLigadas }, { data: canjesData, error: canjesErr }, { data: reparacionesDeCobro }] = await Promise.all([
       supabase
         .from('ordenes')
         .select(
@@ -250,8 +277,10 @@ export default function DetalleOrden() {
         .eq('orden_id', id)
         .eq('estado', 'en_canje')
         .order('created_at'),
+      supabase.from('reparaciones').select('id, numero_orden, modelo, orden_cobro_id, tecnicos ( nombre )').or(`orden_cobro_id.eq.${id},orden_origen_id.eq.${id}`).order('created_at'),
     ]);
     setOrden(data as any);
+    setReparacionesCobro((reparacionesDeCobro as any) ?? []);
     const idsRep = (reparacionesLigadas ?? []).map((r: any) => r.id as string);
     setYaDerivado(idsRep.length > 0);
     setReparacionesDerivadasIds(idsRep);
@@ -286,12 +315,13 @@ export default function DetalleOrden() {
       if (!user) return;
       const { data: perfil } = await supabase
         .from('perfiles')
-        .select('negocios ( monedas_habilitadas, tipo_cambio )')
+        .select('negocios ( monedas_habilitadas, tipo_cambio, interes_cuotas )')
         .eq('id', user.id)
         .single();
       const negocio = (perfil as any)?.negocios;
       setMonedasDisponibles(negocio?.monedas_habilitadas?.length ? negocio.monedas_habilitadas : []);
       setTipoCambio(negocio?.tipo_cambio ?? null);
+      setInteresCuotasConfig(negocio?.interes_cuotas ?? null);
     })();
   }, []);
 
@@ -337,6 +367,7 @@ export default function DetalleOrden() {
         patron_desbloqueo: derivarTipoBloqueo === 'patron' ? derivarPatronDesbloqueo || null : null,
         falla_declarada: derivarDetalles.trim() || null,
         estado: 'recibido',
+        ...(await camposRecibidoPor(supabase)),
         enciende: ci.enciende ?? null,
         modulo_ok: ci.modulo_ok ?? null,
         senal_ok: ci.senal_ok ?? null,
@@ -372,6 +403,7 @@ export default function DetalleOrden() {
   const empezarEdicion = () => {
     if (!orden) return;
     setFormaPagoEdit(orden.forma_pago || 'Efectivo');
+    setCuotasEdit(cuotasEfectivasDeOrden(orden));
     setNotaEdit(orden.nota || '');
     setIncluirGarantiaEdit(orden.incluir_garantia);
     setAclaracionesEdit(orden.aclaraciones_tecnico || '');
@@ -478,15 +510,16 @@ export default function DetalleOrden() {
   const abrirDispositivoEdit = async () => {
     setAgregandoDispositivoEdit(true);
     setModoDispositivoEdit('stock');
-    const { data, error: fetchError } = await supabase
-      .from('dispositivos')
-      .select('id, modelo, capacidad_gb, color, imei, precio, salud_bateria')
-      .eq('en_stock', true);
-    if (fetchError) {
-      setError(t('No pudimos traer el stock:') + ' ' + fetchError.message);
-      return;
-    }
-    setDispositivosStockEdit((data as DispositivoStockEdit[]) ?? []);
+    // Paginado: con más de 1000 equipos en stock una sola consulta los cortaba
+    // sin avisar y los últimos no se podían agregar a la orden.
+    const data = await obtenerTodasLasFilas<DispositivoStockEdit>(
+      supabase,
+      'dispositivos',
+      'id, modelo, capacidad_gb, color, imei, precio, salud_bateria',
+      [],
+      (q) => q.eq('en_stock', true)
+    );
+    setDispositivosStockEdit(data);
   };
 
   const agregarDispositivoDelStockEdit = (d: DispositivoStockEdit) => {
@@ -494,7 +527,7 @@ export default function DetalleOrden() {
       ...items,
       {
         id: idTemporal(),
-        descripcion: `${d.modelo || 'Dispositivo'}${d.capacidad_gb ? ` ${d.capacidad_gb}GB` : ''}${
+        descripcion: `${d.modelo || 'Dispositivo'}${d.capacidad_gb ? ` ${formatearGB(d.capacidad_gb)}` : ''}${
           d.color ? ` ${d.color}` : ''
         }${d.imei ? ` · IMEI ${d.imei}` : ''}`,
         cantidad: '1',
@@ -513,8 +546,16 @@ export default function DetalleOrden() {
     if (!nuevoModeloDispEdit.trim()) return;
     const imeiLimpio = limpiarImei(nuevoImeiDispEdit);
     if (imeiLimpio) {
-      const { data: existente } = await supabase.from('dispositivos').select('id').eq('imei', imeiLimpio).maybeSingle();
+      const { data: existente } = await supabase.from('dispositivos').select('id').eq('imei', imeiLimpio).limit(1).maybeSingle();
       if (existente && !confirm(`${t('Ya hay un dispositivo en Stock con el IMEI')} ${imeiLimpio}. ${t('¿Agregarlo igual?')}`)) return;
+    }
+    if (!tienePermiso(actor, 'agregar_stock')) {
+      setError(t('No tenés permiso para agregar dispositivos al stock.'));
+      return;
+    }
+    if (!actor) {
+      setError(t(MENSAJE_ACTOR_REQUERIDO));
+      return;
     }
     setCargandoDispositivoEdit(true);
     setError(null);
@@ -595,10 +636,23 @@ export default function DetalleOrden() {
     return acc + cantidad * (Number(i.precioUnitario) || 0);
   }, 0);
   const montoCanjeEdit = canjesEdit.reduce((acc, c) => acc + (Number(c.monto) || 0), 0);
+
+  // Interés del plan de cuotas. Si la orden ya estaba en ese mismo plan se
+  // conserva el interés CON EL QUE SE GUARDÓ (se despeja de su total) — si no,
+  // cambiar la tasa en Configuración después reescribiría el total de órdenes
+  // viejas al editarlas. Antes el total de edición ignoraba por completo el
+  // interés: editar una orden en cuotas le sacaba el recargo en silencio.
+  const planesDisponibles = planesActivos(interesCuotasConfig);
+  const interesGuardado = interesGuardadoDeOrden(orden);
+  const cuotasOriginales = cuotasEfectivasDeOrden(orden);
+  const interesEdit =
+    orden && cuotasEdit === cuotasOriginales && interesGuardado != null ? interesGuardado : interesDe(interesCuotasConfig, cuotasEdit);
+  const subtotalFinanciadoEdit = subtotalEdit * (1 + interesEdit / 100);
+
   // Sin Math.max(0, ...) a propósito: un anticipo mayor al precio puede dejar
   // el total en negativo (saldo a favor del cliente), y eso es válido.
   const totalEdit =
-    subtotalEdit * (1 + (Number(impuestoEdit) || 0) / 100) - (Number(anticipoEdit) || 0) - montoCanjeEdit;
+    subtotalFinanciadoEdit * (1 + (Number(impuestoEdit) || 0) / 100) - (Number(anticipoEdit) || 0) - montoCanjeEdit;
 
   const guardarEdicion = async () => {
     if (!orden) return;
@@ -607,6 +661,7 @@ export default function DetalleOrden() {
 
     const cambios: Record<string, { antes: unknown; despues: unknown }> = {};
     if ((orden.forma_pago || '') !== formaPagoEdit) cambios.forma_pago = { antes: orden.forma_pago, despues: formaPagoEdit };
+    if (cuotasEfectivasDeOrden(orden) !== cuotasEdit) cambios.cuotas = { antes: orden.cuotas ?? 0, despues: cuotasEdit };
     if ((orden.nota || '') !== notaEdit.trim()) cambios.nota = { antes: orden.nota, despues: notaEdit.trim() || null };
     if (orden.incluir_garantia !== incluirGarantiaEdit) cambios.incluir_garantia = { antes: orden.incluir_garantia, despues: incluirGarantiaEdit };
     if ((orden.aclaraciones_tecnico || '') !== aclaracionesEdit.trim())
@@ -619,6 +674,13 @@ export default function DetalleOrden() {
     if ((orden.impuesto_porcentaje || 0) !== impuestoNuevo) cambios.impuesto_porcentaje = { antes: orden.impuesto_porcentaje, despues: impuestoNuevo };
     if ((orden.total || 0) !== totalEdit) cambios.total = { antes: orden.total, despues: totalEdit };
     const vendedorNuevo = vendedorEdit || null;
+    // Una venta ya cobrada/entregada no puede quedar sin vendedor: aparecería
+    // como "Sin asignar" en el ranking de Estadísticas.
+    if (!vendedorNuevo && vendedores.length > 0 && !esOrdenDeCobranza && ['pagado', 'entregado'].includes(orden.estado)) {
+      setError(t('Elegí el vendedor: una venta cobrada no puede quedar sin vendedor.'));
+      setGuardando(false);
+      return;
+    }
     if ((orden.vendedor_id || null) !== vendedorNuevo) {
       const nombreAntes = orden.vendedores?.nombre || 'Sin asignar';
       const nombreDespues = vendedores.find((v) => v.id === vendedorNuevo)?.nombre || 'Sin asignar';
@@ -837,6 +899,7 @@ export default function DetalleOrden() {
       .from('ordenes')
       .update({
         forma_pago: formaPagoEdit,
+        ...(cuotasEfectivasDeOrden(orden) !== cuotasEdit ? { cuotas: cuotasEdit } : {}),
         nota: notaEdit.trim() || null,
         incluir_garantia: incluirGarantiaEdit,
         aclaraciones_tecnico: aclaracionesEdit.trim() || null,
@@ -883,8 +946,17 @@ export default function DetalleOrden() {
     cargar();
   };
 
+  // Las órdenes de "Cobro de financiamiento" no son ventas: no llevan vendedor.
+  const esOrdenDeCobranza = !!orden && orden.orden_items.length > 0 && orden.orden_items.every((i) => i.tipo === 'financiamiento');
+
   const cambiarEstado = async (nuevoEstado: string) => {
     if (!orden) return;
+    // Marcar "entregado" una venta sin vendedor la dejaba como "Sin asignar" en
+    // Estadísticas (y sin comisión para nadie).
+    if (['pagado', 'entregado'].includes(nuevoEstado) && !orden.vendedor_id && vendedores.length > 0 && !esOrdenDeCobranza && (orden.total || 0) > 0) {
+      setError(t('Esta orden no tiene vendedor. Tocá Editar, elegí el vendedor y guardá; después podés cambiarle el estado.'));
+      return;
+    }
     setGuardando(true);
     setError(null);
     const { error: updateError } = await supabase
@@ -905,35 +977,85 @@ export default function DetalleOrden() {
   // "pendiente" (sobre todo las de Servicio Técnico, vía generarOrdenDeReparacion)
   // termina de cobrarse. Caja Venta diaria: es una venta/reparación que se
   // cobra íntegra en el momento, no un anticipo ni una cobranza de cta cte.
+  const abrirCobro = () => {
+    if (!orden) return;
+    // Se precargan los medios que ya se habían elegido como forma de pago de
+    // la orden (ej. "Efectivo + Transferencia"); los montos los confirma quien cobra.
+    const medios = mediosDeEtiqueta(orden.forma_pago).filter((c) => c !== 'cuenta_corriente');
+    setLineasCobro(lineasIniciales(medios, orden.total || 0));
+    setVendedorCobro(orden.vendedor_id || '');
+    setPagosYaRegistrados(false);
+    setError(null);
+    setModalCobro(true);
+  };
+
   const confirmarCobro = async () => {
     if (!orden) return;
+    const total = orden.total || 0;
+    const esMixto = lineasCobro.length > 1;
+    if (esMixto && !lineasCierranConElTotal(lineasCobro, total)) {
+      setError(t('Los montos de cada medio tienen que sumar el total a cobrar.'));
+      return;
+    }
+    // El vendedor es obligatorio para que el cobro no quede "Sin asignar" en
+    // Estadísticas — salvo que el negocio todavía no haya cargado ninguno.
+    if (vendedores.length > 0 && !vendedorCobro) {
+      setError(t('Elegí quién cobró para poder confirmar.'));
+      return;
+    }
+    // Un solo medio cobra el total completo; con varios, solo los que tienen monto.
+    const lineas = esMixto ? lineasCobro.filter((l) => Number(l.monto) > 0) : [{ medio: lineasCobro[0]?.medio ?? 'efectivo', monto: String(total) }];
+    const lineasAPagar = lineas.length === 0 ? [{ medio: 'efectivo', monto: String(total) }] : lineas;
+
     setCobrando(true);
     setError(null);
     const a = getActor();
-    const { error: pagoErr } = await supabase.from('pagos').insert({
-      cliente_id: orden.cliente_id,
-      orden_id: orden.id,
-      medio: medioCobro,
-      monto: orden.total || 0,
-      moneda: orden.moneda || 'ARS',
-      caja_tipo: 'venta_diaria',
-      registrado_por_nombre: a?.nombre ?? null,
-      registrado_por_foto_url: a?.fotoUrl ?? null,
-      ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
-    });
-    if (pagoErr) {
-      setError(t('No pudimos registrar el cobro:') + ' ' + pagoErr.message);
+    // Todas las líneas entran en UN solo insert: o se registran todas o ninguna.
+    // Si el último paso (actualizar la orden) falla, al reintentar no se vuelve
+    // a registrar el pago (pagosYaRegistrados) — si no, el cliente quedaría cobrado dos veces.
+    if (!pagosYaRegistrados) {
+      const { error: pagoErr } = await supabase.from('pagos').insert(
+        lineasAPagar.map((l) => ({
+          cliente_id: orden.cliente_id,
+          orden_id: orden.id,
+          medio: l.medio,
+          monto: Number(l.monto) || 0,
+          moneda: orden.moneda || 'ARS',
+          caja_tipo: 'venta_diaria',
+          registrado_por_nombre: a?.nombre ?? null,
+          registrado_por_foto_url: a?.fotoUrl ?? null,
+          ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
+        }))
+      );
+      if (pagoErr) {
+        setError(t('No pudimos registrar el cobro:') + ' ' + pagoErr.message);
+        setCobrando(false);
+        return;
+      }
+      setPagosYaRegistrados(true);
+    }
+    const etiqueta = etiquetaDeMedios(lineasAPagar.map((l) => l.medio));
+    const vendedorFinal = vendedorCobro || orden.vendedor_id || null;
+    const { error: ordenErr } = await supabase
+      .from('ordenes')
+      .update({ estado: 'pagado', fecha_entrega: null, forma_pago: etiqueta, vendedor_id: vendedorFinal })
+      .eq('id', orden.id);
+    if (ordenErr) {
+      setError(
+        t('El pago ya quedó registrado, pero no pudimos marcar la orden como pagada:') + ' ' + ordenErr.message + ' — ' + t('tocá "Confirmar cobro" de nuevo (no se vuelve a cobrar).')
+      );
       setCobrando(false);
       return;
     }
+    const detalle = lineasAPagar.map((l) => `${medioLabel(l.medio)} ${formatearMonto(Number(l.monto) || 0)}`).join(' + ');
     await registrarAuditoria(supabase, {
-      accion: `cobró la orden ${orden.numero_orden || orden.id.slice(0, 8)} (${medioLabel(medioCobro, t)}, ${formatearMonto(orden.total || 0)})`,
+      accion: `cobró la orden ${orden.numero_orden || orden.id.slice(0, 8)} (${detalle})`,
       entidad: 'orden',
       entidadId: orden.id,
     });
-    await cambiarEstado('pagado');
     setCobrando(false);
     setModalCobro(false);
+    cargar();
   };
 
   const handleCancelar = async () => {
@@ -946,31 +1068,21 @@ export default function DetalleOrden() {
     setError(null);
 
     const dispositivoIds = orden.orden_items.map((i) => i.dispositivo_id).filter(Boolean) as string[];
+    // Cada paso de abajo se verifica: la orden se borra RECIÉN al final, y si un
+    // paso anterior fallara en silencio los equipos quedaban vendidos sin orden o
+    // los pagos activos sin orden (inflando la caja para siempre). Todos los pasos
+    // son repetibles: si algo falla se corta acá y se puede volver a intentar.
     if (dispositivoIds.length > 0) {
-      await supabase
+      const { error: stockErr } = await supabase
         .from('dispositivos')
         .update({ en_stock: true, en_stock_desde: new Date().toISOString(), alerta_stock_enviada: false })
         .in('id', dispositivoIds);
+      if (stockErr) {
+      setError(t('No pudimos cancelar la orden:') + ' ' + stockErr.message);
+      setGuardando(false);
+      return;
     }
-    // Devuelve al stock los accesorios (tipo 'producto') vendidos en esta
-    // orden — simétrico al descuento que se hace al crearla en Nueva Orden.
-    // Best-effort: si falla, no bloquea la cancelación (mismo criterio que
-    // el resto de esta función).
-    await Promise.all(
-      orden.orden_items
-        .filter((i) => i.producto_id)
-        .map((i) =>
-          Promise.resolve(
-            supabase.rpc('producto_mover_stock', {
-              p_producto_id: i.producto_id,
-              p_tipo: 'devolucion',
-              p_cantidad: i.cantidad,
-              p_motivo: 'Venta cancelada',
-              p_usuario: actor?.nombre ?? null,
-            })
-          ).catch(() => {})
-        )
-    );
+    }
     // Se borran antes de eliminar la orden: canjes.orden_id queda en null
     // automáticamente al borrar la orden (on delete set null), así que
     // después ya no se los podría encontrar por ese filtro.
@@ -980,14 +1092,29 @@ export default function DetalleOrden() {
     // al agregarlo a Stock. Filtrar por estado acá borraba también canjes
     // que ya eran inventario vendible, perdiendo su trazabilidad (de dónde
     // salió, a quién se le recibió, en qué monto) sin necesidad.
-    await supabase.from('canjes').delete().eq('orden_id', id).eq('agregado_a_stock', false);
+    const { error: canjesErr } = await supabase.from('canjes').delete().eq('orden_id', id).eq('agregado_a_stock', false);
+    if (canjesErr) {
+      setError(t('No pudimos cancelar la orden:') + ' ' + canjesErr.message);
+      setGuardando(false);
+      return;
+    }
     // Lo mismo con la cuenta corriente: si esta venta había generado deuda
     // (cargo) o registrado pagos, hay que anularlos ANTES de borrar la orden
     // (después orden_id queda en null y no se los encuentra). Se anulan (no
     // se borran) para no perder el historial; al estar anulados dejan de
     // contar en el saldo del cliente y en la caja.
-    await supabase.from('cta_cte_movimientos').update({ anulado: true }).eq('orden_id', id).eq('anulado', false);
-    await supabase.from('pagos').update({ anulado: true }).eq('orden_id', id).eq('anulado', false);
+    const { error: ctaErr } = await supabase.from('cta_cte_movimientos').update({ anulado: true }).eq('orden_id', id).eq('anulado', false);
+    if (ctaErr) {
+      setError(t('No pudimos cancelar la orden:') + ' ' + ctaErr.message);
+      setGuardando(false);
+      return;
+    }
+    const { error: pagosErr } = await supabase.from('pagos').update({ anulado: true }).eq('orden_id', id).eq('anulado', false);
+    if (pagosErr) {
+      setError(t('No pudimos cancelar la orden:') + ' ' + pagosErr.message);
+      setGuardando(false);
+      return;
+    }
     // Comisiones: revertir las de esta venta ANTES de borrar la orden (después
     // orden_id queda en null). Si el módulo no está activo o no había
     // comisiones, la función no hace nada. No rompe la cancelación si falla,
@@ -1019,7 +1146,12 @@ export default function DetalleOrden() {
     // Se hace ANTES de borrar la orden: si el FK fuera "set null", después no
     // se la podría encontrar por orden_origen_id. reparaciones_eventos se va
     // en cascada. No rompe la eliminación de la orden si esto falla.
-    await supabase.from('reparaciones').delete().eq('orden_origen_id', id);
+    const { error: repDelErr } = await supabase.from('reparaciones').delete().eq('orden_origen_id', id);
+    if (repDelErr) {
+      setError(t('No pudimos cancelar la orden:') + ' ' + repDelErr.message);
+      setGuardando(false);
+      return;
+    }
     if (yaDerivado) {
       const clienteRep = orden.clientes ? `${orden.clientes.nombre} ${orden.clientes.apellido || ''}`.trim() : 'sin cliente';
       const cuenta = reparacionesDerivadasIds.length;
@@ -1037,6 +1169,30 @@ export default function DetalleOrden() {
       setGuardando(false);
       return;
     }
+    // Devuelve al stock los accesorios (tipo 'producto') vendidos en esta
+    // orden — simétrico al descuento que se hace al crearla en Nueva Orden.
+    // Se hace DESPUÉS de borrar la orden (no antes): esta operación NO se puede
+    // repetir sin duplicar el stock, así que solo corre cuando ya no hay vuelta
+    // atrás. Si falla no bloquea (la orden ya no existe), queda en la consola.
+    await Promise.all(
+      orden.orden_items
+        .filter((i) => i.producto_id)
+        .map((i) =>
+          Promise.resolve(
+            supabase.rpc('producto_mover_stock', {
+              p_producto_id: i.producto_id,
+              p_tipo: 'devolucion',
+              p_cantidad: i.cantidad,
+              p_motivo: 'Venta cancelada',
+              p_usuario: actor?.nombre ?? null,
+            })
+          )
+            .then((r) => {
+              if (r.error) registrarFallo(r.error, 'devolver stock de accesorio al cancelar orden');
+            })
+            .catch((e) => registrarFallo(e, 'devolver stock de accesorio al cancelar orden'))
+        )
+    );
     const nombreCliente = orden.clientes ? `${orden.clientes.nombre} ${orden.clientes.apellido || ''}`.trim() : 'sin cliente';
     const avisoComision = comisionError ? ` (no se pudo revertir la comisión: ${comisionError})` : '';
     await registrarAuditoria(supabase, {
@@ -1100,20 +1256,47 @@ export default function DetalleOrden() {
 
         <div>
           <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Forma de pago')}</label>
-          <div className="flex gap-2">
-            {FORMAS_PAGO.map((f) => (
+          <SelectorFormaPago value={formaPagoEdit} onChange={setFormaPagoEdit} />
+        </div>
+
+        {planesDisponibles.length > 0 && subtotalEdit > 0 && (
+          <div>
+            <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Plan de pago')}</label>
+            <div className="flex flex-wrap gap-2">
               <button
-                key={f}
-                onClick={() => setFormaPagoEdit(f)}
-                className={`flex-1 rounded-xl py-2 text-sm font-medium ${
-                  formaPagoEdit === f ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
+                type="button"
+                onClick={() => setCuotasEdit(0)}
+                className={`rounded-xl px-3 py-2 text-sm font-medium ${
+                  cuotasEdit === 0 ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
                 }`}
               >
-                {t(f)}
+                {t('Contado')}
+                <span className="block text-[10px] opacity-80 font-normal">{t('ahora · sin recargo')}</span>
               </button>
-            ))}
+              {planesDisponibles.map((p) => (
+                <button
+                  type="button"
+                  key={p.cuotas}
+                  onClick={() => setCuotasEdit(p.cuotas)}
+                  className={`rounded-xl px-3 py-2 text-sm font-medium text-center ${
+                    cuotasEdit === p.cuotas ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
+                  }`}
+                >
+                  {t(etiquetaCuotas(p.cuotas))}
+                  <span className="block text-[10px] opacity-80 font-normal">
+                    {t('de')} ${formatearMonto(valorCuota(subtotalEdit, p.cuotas, p.interes))}
+                  </span>
+                </button>
+              ))}
+            </div>
+            {cuotasEdit >= 1 && (
+              <p className="text-[11px] text-muted dark:text-dark-text-secondary mt-1">
+                {t(etiquetaCuotas(cuotasEdit))} {t('de')} ${formatearMonto(valorCuota(subtotalEdit, cuotasEdit, interesEdit))} · {t('total financiado')} $
+                {formatearMonto(subtotalFinanciadoEdit)} ({t('interés')} {interesEdit}%)
+              </p>
+            )}
           </div>
-        </div>
+        )}
 
         <div>
           <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Vendedor')}</label>
@@ -1285,7 +1468,7 @@ export default function DetalleOrden() {
                       >
                         <span className="min-w-0">
                           <span className="block truncate">
-                            {d.modelo} {d.capacidad_gb ? `· ${d.capacidad_gb}GB` : ''} {d.color ? `· ${d.color}` : ''}
+                            {d.modelo} {d.capacidad_gb ? `· ${formatearGB(d.capacidad_gb)}` : ''} {d.color ? `· ${d.color}` : ''}
                           </span>
                           {d.imei && (
                             <span className="block text-xs font-bold font-mono text-ink dark:text-dark-text truncate">{d.imei}</span>
@@ -1318,7 +1501,7 @@ export default function DetalleOrden() {
                           nuevaCapacidadDispEdit === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                         }`}
                       >
-                        {gb}GB
+                        {formatearGB(gb)}
                       </button>
                     ))}
                   </div>
@@ -1361,7 +1544,7 @@ export default function DetalleOrden() {
                     <p className="text-sm font-medium truncate flex items-center gap-1.5">
                       {canjesEdit.length > 1 ? `${idx + 1}. ` : ''}
                       {c.modelo || t('Sin modelo')}
-                      {c.capacidad_gb ? ` · ${c.capacidad_gb}GB` : ''}
+                      {c.capacidad_gb ? ` · ${formatearGB(c.capacidad_gb)}` : ''}
                       {c.color ? ` · ${c.color}` : ''}
                       {c.condicion === 'sellado' && (
                         <span className="text-[10px] font-bold text-black bg-gradient-to-b from-amber-300 to-amber-500 border border-black/40 rounded-full px-2 py-0.5 shrink-0">
@@ -1407,7 +1590,7 @@ export default function DetalleOrden() {
                       canjeCapacidad === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                     }`}
                   >
-                    {gb}GB
+                    {formatearGB(gb)}
                   </button>
                 ))}
               </div>
@@ -1561,6 +1744,9 @@ export default function DetalleOrden() {
         <span className="text-lg font-medium mr-auto">
           {t('Orden')}
           {orden?.numero_orden && <span className="text-muted dark:text-dark-text-secondary text-sm font-normal"> {orden.numero_orden}</span>}
+          {reparacionesCobro.length > 0 && (
+            <span className="text-repar text-sm font-normal"> · {reparacionesCobro.map((r) => r.numero_orden).filter(Boolean).join(', ')}</span>
+          )}
         </span>
         <button onClick={empezarEdicion} className="text-xs text-accent dark:text-dark-accent underline">
           {t('Editar')}
@@ -1586,8 +1772,20 @@ export default function DetalleOrden() {
           </p>
         )}
         <p>
-          <span className="text-muted dark:text-dark-text-secondary">{t('Forma de pago:')}</span> {orden.forma_pago && t(orden.forma_pago)}
+          <span className="text-muted dark:text-dark-text-secondary">{t('Forma de pago:')}</span>{' '}
+          {orden.forma_pago ? orden.forma_pago.split(' + ').map((f) => (medioLabel(f, t) === f ? t(f) : medioLabel(f, t))).join(' + ') : t('Sin definir')}
         </p>
+        {reparacionesCobro.map((r) => (
+          <p key={r.id} className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-muted dark:text-dark-text-secondary">{t('Servicio técnico:')}</span>
+            <span className="font-medium">{r.numero_orden || t('Sin número')}</span>
+            {r.modelo && <span className="text-muted dark:text-dark-text-secondary">· {r.modelo}</span>}
+            {r.tecnicos?.nombre && <span className="text-muted dark:text-dark-text-secondary">· {t('Técnico:')} {r.tecnicos.nombre}</span>}
+            <Link href={`/servicio-tecnico/${r.id}`} className="text-accent dark:text-dark-accent underline text-xs">
+              {t('Ver ficha ST')}
+            </Link>
+          </p>
+        ))}
         {orden.total != null && (
           <p>
             <span className="text-muted dark:text-dark-text-secondary">{t('Total:')}</span> ${orden.total.toLocaleString('es-AR')}
@@ -1611,7 +1809,9 @@ export default function DetalleOrden() {
               onChange={async (e) => {
                 const val = e.target.checked;
                 setOrden((o) => (o ? { ...o, incluir_aclaraciones_tecnico: val } : o));
-                await supabase.from('ordenes').update({ incluir_aclaraciones_tecnico: val }).eq('id', orden.id);
+                if (await falla(supabase.from('ordenes').update({ incluir_aclaraciones_tecnico: val }).eq('id', orden.id), t, 'guardar la opción de aclaraciones')) {
+                  setOrden((o) => (o ? { ...o, incluir_aclaraciones_tecnico: !val } : o));
+                }
               }}
               className="h-4 w-4 accent-ink"
             />
@@ -1645,7 +1845,7 @@ export default function DetalleOrden() {
               <div className="flex items-center justify-between gap-2">
                 <span className="flex items-center gap-1.5 flex-wrap">
                   {c.modelo || t('Sin modelo')}
-                  {c.capacidad_gb ? ` · ${c.capacidad_gb}GB` : ''}
+                  {c.capacidad_gb ? ` · ${formatearGB(c.capacidad_gb)}` : ''}
                   {c.color ? ` · ${c.color}` : ''}
                   {c.imei ? ` · IMEI ${c.imei}` : ''}
                   {c.condicion === 'sellado' && (
@@ -1679,7 +1879,7 @@ export default function DetalleOrden() {
         </p>
       )}
 
-      {tieneTrabajo && !yaDerivado && !derivarAbierto && puedeRecibirServicioTecnico && (
+      {tieneTrabajo && !yaDerivado && reparacionesCobro.length === 0 && !derivarAbierto && puedeRecibirServicioTecnico && (
         <button
           onClick={abrirDerivar}
           className="w-full rounded-2xl border-2 border-amber-400 bg-amber-50 text-amber-900 dark:bg-amber-400/10 dark:text-amber-300 dark:border-amber-400/50 py-3 text-center text-sm font-semibold flex items-center justify-center gap-1.5"
@@ -1707,7 +1907,7 @@ export default function DetalleOrden() {
                   derivarCapacidad === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                 }`}
               >
-                {gb}GB
+                {formatearGB(gb)}
               </button>
             ))}
           </div>
@@ -1758,7 +1958,7 @@ export default function DetalleOrden() {
             <button
               key={e}
               disabled={guardando}
-              onClick={() => (e === 'pagado' && orden.estado === 'pendiente' ? setModalCobro(true) : cambiarEstado(e))}
+              onClick={() => (e === 'pagado' && orden.estado === 'pendiente' ? abrirCobro() : cambiarEstado(e))}
               className={`flex-1 rounded-xl py-2 text-sm font-medium capitalize disabled:opacity-40 ${
                 orden.estado === e ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
               }`}
@@ -1776,19 +1976,82 @@ export default function DetalleOrden() {
             <p className="text-xs text-muted dark:text-dark-text-secondary">
               {t('Total a cobrar:')} <span className="font-medium text-ink dark:text-dark-text">{simboloMoneda(orden.moneda)}{formatearMonto(orden.total || 0)}</span>
             </p>
-            <div className="flex flex-wrap gap-2">
-              {MEDIOS_PAGO.map((m) => (
-                <button
-                  key={m.codigo}
-                  onClick={() => setMedioCobro(m.codigo)}
-                  className={`rounded-xl px-3 py-2 text-sm font-medium ${
-                    medioCobro === m.codigo ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border text-ink dark:text-dark-text'
-                  }`}
-                >
-                  {m.icono} {t(m.label)}
-                </button>
+            <div className="flex flex-col gap-2">
+              {lineasCobro.map((l, idx) => (
+                <div key={idx} className="flex gap-2 items-center">
+                  <select
+                    value={l.medio}
+                    onChange={(e) => setLineasCobro((ls) => ls.map((x, i) => (i === idx ? { ...x, medio: e.target.value } : x)))}
+                    className="flex-1 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-2 py-2 text-sm"
+                  >
+                    {MEDIOS_PAGO.map((m) => (
+                      <option key={m.codigo} value={m.codigo}>
+                        {m.icono} {t(m.label)}
+                      </option>
+                    ))}
+                  </select>
+                  {lineasCobro.length > 1 && (
+                    <>
+                      <input
+                        value={l.monto}
+                        onChange={(e) => setLineasCobro((ls) => ls.map((x, i) => (i === idx ? { ...x, monto: sanitizarDecimal(e.target.value) } : x)))}
+                        inputMode="decimal"
+                        placeholder={t('Monto')}
+                        className="w-24 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                      />
+                      <button onClick={() => setLineasCobro((ls) => ls.filter((_, i) => i !== idx))} className="text-bad text-xs font-medium shrink-0">
+                        {t('Quitar')}
+                      </button>
+                    </>
+                  )}
+                </div>
               ))}
+              <button
+                onClick={() => {
+                  const usados = new Set(lineasCobro.map((l) => l.medio));
+                  const libre = MEDIOS_PAGO.map((m) => m.codigo as string).find((c) => !usados.has(c)) ?? 'efectivo';
+                  const resto = restanteDeLineas(lineasCobro, orden.total || 0);
+                  setLineasCobro((ls) => [...ls, { medio: libre, monto: resto > 0 ? String(resto) : '' }]);
+                }}
+                className="rounded-lg border border-border dark:border-dark-border py-2 text-sm font-medium"
+              >
+                {lineasCobro.length > 1 ? `+ ${t('Agregar medio')}` : t('Dividir en varios (mixto)')}
+              </button>
+              {lineasCobro.length > 1 && (
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted dark:text-dark-text-secondary">{t('Asignado')}</span>
+                  <span className={lineasCierranConElTotal(lineasCobro, orden.total || 0) ? 'text-good font-medium' : 'text-warn font-medium'}>
+                    {simboloMoneda(orden.moneda)}
+                    {formatearMonto(Math.max(0, (orden.total || 0) - restanteDeLineas(lineasCobro, orden.total || 0)))} / {simboloMoneda(orden.moneda)}
+                    {formatearMonto(orden.total || 0)}
+                    {lineasCierranConElTotal(lineasCobro, orden.total || 0) ? ' ✓' : ''}
+                  </span>
+                </div>
+              )}
             </div>
+            <div>
+              <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Vendedor')}</label>
+              <select
+                value={vendedorCobro}
+                onChange={(e) => setVendedorCobro(e.target.value)}
+                className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+              >
+                <option value="" disabled>
+                  {t('Elegí quién cobró...')}
+                </option>
+                {vendedores.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.nombre}
+                  </option>
+                ))}
+              </select>
+              {!vendedorCobro && vendedores.length > 0 && (
+                <p className="text-[10px] text-warn mt-1">
+                  {t('Es obligatorio para poder confirmar la orden — así no queda como "Sin asignar" en Estadísticas.')}
+                </p>
+              )}
+            </div>
+            {error && <p className="text-xs text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
             <div className="flex gap-2 mt-1">
               <button onClick={() => setModalCobro(false)} className="flex-1 rounded-xl border border-border dark:border-dark-border py-2.5 text-sm font-medium">
                 {t('Cancelar')}

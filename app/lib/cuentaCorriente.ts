@@ -16,6 +16,10 @@ export const MEDIOS_PAGO: { codigo: MedioPago; label: string; icono: string }[] 
   { codigo: 'credito', label: 'Crédito', icono: '💳' },
 ];
 
+// Al cobrar una deuda, además de los medios de arriba el cliente puede dejar un EQUIPO como parte de pago: se guarda con
+// el medio 'canje' (el mismo que ya usa Plan de ahorro) y el equipo queda en Plan Canje. No es plata que entra al cajón.
+export const MEDIO_EQUIPO = { codigo: 'canje', label: 'Equipo (plan canje)', icono: '📱' };
+
 // Valor especial usado en la pantalla de cobro para representar "esto queda
 // como deuda en la cuenta corriente del cliente" (no genera un pago, genera
 // un cargo). No es un MedioPago real.
@@ -46,6 +50,7 @@ export function medioLabel(codigo: string, t: (texto: string) => string = (s) =>
 
 export function medioIcono(codigo: string): string {
   if (codigo === CUENTA_CORRIENTE) return '📒';
+  if (codigo === MEDIO_EQUIPO.codigo) return MEDIO_EQUIPO.icono;
   return MEDIOS_PAGO.find((m) => m.codigo === codigo)?.icono ?? '💰';
 }
 
@@ -54,6 +59,22 @@ export type MovimientoBase = { tipo: string; monto: number | null };
 
 export function calcularSaldo(movimientos: MovimientoBase[]): number {
   return movimientos.reduce((acc, m) => acc + (m.tipo === 'cargo' ? (m.monto || 0) : -(m.monto || 0)), 0);
+}
+
+// --- Comprobante de un cobro: cuánto debía, cuánto pagó y qué saldo quedó ---
+export type MovimientoConFecha = MovimientoBase & { fecha: string };
+export type ResumenDeCobro = { deudaAnterior: number; pagado: number; saldoRestante: number };
+
+const aCentavos = (n: number) => Math.round(n * 100) / 100;
+
+// "hasta" es el momento del cobro: se cuentan los movimientos hasta ahí (incluido el propio cobro), así el comprobante de un
+// pago viejo sigue mostrando el saldo de ESE día aunque después haya habido movimientos nuevos. La deuda anterior es lo que
+// quedaba antes de ese pago (saldo restante + lo pagado).
+export function resumenDeCobro(movimientos: MovimientoConFecha[], hasta: string, pagado: number): ResumenDeCobro {
+  const limite = Date.parse(hasta);
+  const hastaElCobro = Number.isFinite(limite) ? movimientos.filter((m) => Date.parse(m.fecha) <= limite) : movimientos;
+  const saldoRestante = aCentavos(calcularSaldo(hastaElCobro));
+  return { deudaAnterior: aCentavos(saldoRestante + pagado), pagado: aCentavos(pagado), saldoRestante };
 }
 
 // --- Estado de la cuenta ---
@@ -78,9 +99,11 @@ export const ESTADO_INFO: Record<EstadoCuenta, { label: string; texto: string; f
 // Días de mora del cargo vencido más antiguo (para "vencido hace N días").
 export function diasDeMora(vencimientoMasAntiguo: string | null | undefined): number | null {
   if (!vencimientoMasAntiguo) return null;
-  const venc = new Date(vencimientoMasAntiguo);
+  // 'YYYY-MM-DD' a secas se interpreta como UTC: en Argentina (UTC-3) eso es
+  // el día ANTERIOR a las 21 h, así que la mora salía con un día de más.
+  const [anio, mes, dia] = vencimientoMasAntiguo.slice(0, 10).split('-').map(Number);
+  const venc = new Date(anio, (mes || 1) - 1, dia || 1);
   const hoy = new Date();
-  venc.setHours(0, 0, 0, 0);
   hoy.setHours(0, 0, 0, 0);
   const dias = Math.floor((hoy.getTime() - venc.getTime()) / 86400000);
   return dias > 0 ? dias : null;
@@ -92,5 +115,7 @@ export function vencimientoDesdeHoy(plazoDias: number | null | undefined): strin
   if (!plazoDias || plazoDias <= 0) return null;
   const d = new Date();
   d.setDate(d.getDate() + plazoDias);
-  return d.toISOString().slice(0, 10);
+  // Fecha LOCAL: toISOString() es UTC y, pasadas las 21 h en Argentina, da el
+  // día siguiente (el vencimiento quedaba un día más tarde de lo pactado).
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }

@@ -40,11 +40,81 @@ export type ItemR = {
   cantidad: number;
   precio_unitario: number | null;
   costo: number | null;
+  tipo?: string | null;
+  // Reparación cuyo costo de repuestos todavía no se cargó (servicio_costo_repuesto_supabase.sql): no cuenta como ganancia.
+  costo_pendiente?: boolean | null;
 };
-export type PagoR = { medio: string; monto: number; fecha: string; sucursal_id?: string | null };
-export type CreditoR = { concepto: string; tipo: string; monto: number; fecha: string; sucursal_id?: string | null };
+
+// Costo de una línea para calcular ganancia. Una línea de taller (mano de obra) sin costo cargado cuesta cero: sin esto toda la mano de obra
+// de las órdenes que no pasaron por Servicio Técnico quedaba afuera de la ganancia y el "Resultado taller" aparecía siempre en cero.
+// Las demás líneas sin costo siguen sin entrar a la ganancia (no se inventa un costo que nadie cargó).
+// Excepción: una reparación marcada con costo pendiente (no se sabe si usó repuesto) tampoco cuenta como ganancia: su costo es desconocido, no cero.
+export function costoDeLinea(it: { costo: number | null; tipo?: string | null; costo_pendiente?: boolean | null }): number | null {
+  if (it.costo != null) return it.costo;
+  if (it.costo_pendiente) return null;
+  return it.tipo === 'trabajo' ? 0 : null;
+}
+export type PagoR = {
+  medio: string;
+  monto: number;
+  fecha: string;
+  sucursal_id?: string | null;
+  orden_id?: string | null;
+  registrado_por_nombre?: string | null;
+};
+export type CreditoR = { concepto: string; tipo: string; monto: number; fecha: string; sucursal_id?: string | null; orden_id?: string | null };
 
 export const ESTADOS_COBRADOS = ['pagado', 'entregado'];
+
+// "Dinero ingresado" es plata (efectivo, transferencia, tarjeta...). Un equipo que el cliente deja como parte de pago de
+// una deuda queda en `pagos` con medio 'canje' (baja la deuda, cuenta en Cobranzas de cartera y en el reparto por medio),
+// pero NO es dinero que entró: igual que el canje de una venta en Nueva Orden, que ni siquiera pasa por `pagos`.
+export const esDineroIngresado = (p: { medio: string }) => p.medio !== 'canje';
+
+// Una orden de "Cobro de financiamiento / cuenta corriente" (la que se genera
+// al cobrar una cuota o un saldo) arma su boleta con ítems tipo 'financiamiento'
+// y nada más. NO es una venta: la venta ya se contó el día que se hizo (a cuenta
+// corriente), así que contarla de nuevo duplicaba Ventas netas, Operaciones,
+// Ticket promedio, el ranking de vendedores y Mejores compradores. La plata sí
+// entró, y se ve en "Dinero ingresado" y en "Cobranzas de cartera".
+// "every" a propósito: una orden que mezclara una venta real con un ítem de
+// financiamiento sigue contando como venta (perder una venta de vista es peor).
+export function idsOrdenesDeCobranza(items: { orden_id: string; tipo?: string | null }[]): Set<string> {
+  const porOrden = new Map<string, { total: number; financiamiento: number }>();
+  for (const it of items) {
+    const e = porOrden.get(it.orden_id) ?? { total: 0, financiamiento: 0 };
+    e.total += 1;
+    if (it.tipo === 'financiamiento') e.financiamiento += 1;
+    porOrden.set(it.orden_id, e);
+  }
+  const ids = new Set<string>();
+  for (const [id, e] of porOrden) if (e.total > 0 && e.total === e.financiamiento) ids.add(id);
+  return ids;
+}
+
+// Cobranzas de cartera del período: pagos aplicados a órdenes de cobranza, por
+// la fecha real del pago. Devuelve el total y lo que cobró cada empleado.
+export function cobranzasDeCartera(
+  pagos: PagoR[],
+  idsCobranza: Set<string>,
+  desde: Date,
+  hasta: Date
+): { total: number; porEmpleado: { nombre: string | null; monto: number }[] } {
+  const mapa = new Map<string, number>();
+  let total = 0;
+  for (const p of pagos) {
+    if (!p.orden_id || !idsCobranza.has(p.orden_id)) continue;
+    if (!entre(p.fecha, desde, hasta)) continue;
+    const monto = p.monto || 0;
+    total += monto;
+    const clave = p.registrado_por_nombre?.trim() || '';
+    mapa.set(clave, (mapa.get(clave) ?? 0) + monto);
+  }
+  const porEmpleado = Array.from(mapa.entries())
+    .map(([nombre, monto]) => ({ nombre: nombre || null, monto }))
+    .sort((a, b) => b.monto - a.monto);
+  return { total, porEmpleado };
+}
 
 // Valor real de la venta (ver comentario original en la página): el "total"
 // ya viene con anticipo y canje descontados, pero la venta valió eso igual.
@@ -133,7 +203,7 @@ export function rangoDe(periodo: Periodo, ahora: Date, fechaReferencia: Date = a
   return { periodo, inicio, fin, inicioPrev, finPrev, bucket };
 }
 
-function entre(fechaISO: string, desde: Date, hasta: Date): boolean {
+export function entre(fechaISO: string, desde: Date, hasta: Date): boolean {
   const t = new Date(fechaISO).getTime();
   return t >= desde.getTime() && t <= hasta.getTime();
 }
@@ -167,15 +237,16 @@ export function bloqueVentas(
     const items = itemsPorOrden.get(o.id) ?? [];
     for (const it of items) {
       unidades += it.cantidad || 0;
-      if (it.costo != null && it.precio_unitario != null) {
-        ganancia += (it.precio_unitario - it.costo) * (it.cantidad || 0);
+      const costo = costoDeLinea(it);
+      if (costo != null && it.precio_unitario != null) {
+        ganancia += (it.precio_unitario - costo) * (it.cantidad || 0);
         ventasConCosto += it.precio_unitario * (it.cantidad || 0);
       }
     }
     if (items.length === 0) unidades += 1; // fallback si no vinieron los ítems
   }
 
-  const ingresado = pagos.filter((p) => entre(p.fecha, desde, hasta)).reduce((a, p) => a + (p.monto || 0), 0);
+  const ingresado = pagos.filter((p) => esDineroIngresado(p) && entre(p.fecha, desde, hasta)).reduce((a, p) => a + (p.monto || 0), 0);
   const creditoOtorgado = credito
     .filter((m) => m.tipo === 'cargo' && m.concepto === 'venta' && entre(m.fecha, desde, hasta))
     .reduce((a, m) => a + (m.monto || 0), 0);
@@ -206,7 +277,10 @@ export type MetricaSerie = 'ventas' | 'ingresado' | 'ganancia' | 'credito';
 function valorOrdenPara(o: OrdenR, items: ItemR[], metrica: MetricaSerie): number {
   if (metrica === 'ventas') return montoVenta(o);
   if (metrica === 'ganancia') {
-    return items.reduce((a, it) => a + (it.costo != null && it.precio_unitario != null ? (it.precio_unitario - it.costo) * (it.cantidad || 0) : 0), 0);
+    return items.reduce((a, it) => {
+      const costo = costoDeLinea(it);
+      return a + (costo != null && it.precio_unitario != null ? (it.precio_unitario - costo) * (it.cantidad || 0) : 0);
+    }, 0);
   }
   return 0; // 'ingresado'/'credito' se calculan aparte (vienen de pagos/cta_cte, no de órdenes)
 }
@@ -219,7 +293,8 @@ export function serieEvolucion(
   pagos: PagoR[],
   credito: CreditoR[],
   rango: Rango,
-  metrica: MetricaSerie
+  metrica: MetricaSerie,
+  locale = 'es-AR'
 ): PuntoSerie[] {
   const cobradas = (desde: Date, hasta: Date) =>
     ordenes.filter((o) => ESTADOS_COBRADOS.includes(o.estado) && entre(o.created_at, desde, hasta));
@@ -231,7 +306,7 @@ export function serieEvolucion(
     for (let m = 0; m <= meses; m++) {
       const ini = new Date(rango.inicio.getFullYear(), m, 1, 0, 0, 0, 0);
       const fin = new Date(rango.inicio.getFullYear(), m + 1, 0, 23, 59, 59, 999);
-      buckets.push({ label: new Date(2000, m, 1).toLocaleDateString('es-AR', { month: 'short' }).replace('.', ''), ini, fin });
+      buckets.push({ label: new Date(2000, m, 1).toLocaleDateString(locale, { month: 'short' }).replace('.', ''), ini, fin });
     }
   } else if (rango.bucket === 'hora') {
     for (let h = 0; h < 24; h++) {
@@ -249,7 +324,7 @@ export function serieEvolucion(
       const fin = new Date(cursor);
       fin.setHours(23, 59, 59, 999);
       buckets.push({
-        label: cursor.toLocaleDateString('es-AR', { day: 'numeric', month: rango.periodo === 'semana' ? 'short' : undefined }),
+        label: cursor.toLocaleDateString(locale, { day: 'numeric', month: rango.periodo === 'semana' ? 'short' : undefined }),
         ini,
         fin,
       });
@@ -261,7 +336,7 @@ export function serieEvolucion(
 
   const sumaEnTramo = (desde: Date, hasta: Date): number => {
     if (metrica === 'ingresado') {
-      return pagos.filter((p) => entre(p.fecha, desde, hasta)).reduce((a, p) => a + (p.monto || 0), 0);
+      return pagos.filter((p) => esDineroIngresado(p) && entre(p.fecha, desde, hasta)).reduce((a, p) => a + (p.monto || 0), 0);
     }
     if (metrica === 'credito') {
       // Mismo criterio que bloqueVentas() para "credito otorgado": cargos
@@ -292,9 +367,14 @@ export function serieEvolucion(
 // cuotas/pagos) — NO reimplementa el motor de cronogramas/proyección de
 // app/lib/financiacion/motor.ts, son sumas directas sobre lo que ese módulo
 // ya persiste. Función pura: recibe filas + fechas, no toca Supabase.
-export type PlanFinR = { importe_financiado: number; estado: string; created_at: string };
+export type PlanFinR = { importe_financiado: number; estado: string; created_at: string; orden_id?: string | null };
 export type CuotaFinR = { importe_original: number; importe_pagado: number; estado: string; fecha_vencimiento: string };
-export type PagoFinR = { monto_aplicado: number; created_at: string };
+export type PagoFinR = {
+  monto_aplicado: number;
+  created_at: string;
+  // La venta de origen del plan al que pertenece la cuota pagada (para saber qué venta se está cobrando).
+  financiacion_cuotas?: { financiacion_planes?: { orden_id: string | null } | null } | null;
+};
 export type ResumenFinanciacion = {
   totalFinanciadoActivo: number;
   nuevosCreditosPeriodo: number;
@@ -370,7 +450,26 @@ export function resumenComisionesDe(movimientos: ComisionMovR[], inicio: Date, f
 // `new Date(fechaISO)`, que para una fecha "pelada" cae en medianoche UTC, no
 // local — podía correr un egreso al mes de al lado cerca del límite del
 // período según el huso horario del que mira la pantalla.
-export type EgresoR = { importe: number; fecha: string; sucursal_id?: string | null; area_id?: string | null };
+export type EgresoR = {
+  importe: number;
+  fecha: string;
+  sucursal_id?: string | null;
+  area_id?: string | null;
+  categoria_id?: string | null;
+  registrado_por_nombre?: string | null;
+};
+
+// Retiros de los dueños: suma por persona (quien registró el egreso, que solo puede ser un dueño).
+export function retirosPorPersona(egresos: EgresoR[], inicio: Date, fin: Date): { nombre: string; total: number }[] {
+  const mapa = new Map<string, number>();
+  for (const e of egresos.filter((x) => entre(x.fecha + 'T00:00:00', inicio, fin))) {
+    const nombre = e.registrado_por_nombre?.trim() || 'Sin nombre';
+    mapa.set(nombre, (mapa.get(nombre) ?? 0) + e.importe);
+  }
+  return Array.from(mapa.entries())
+    .map(([nombre, total]) => ({ nombre, total }))
+    .sort((a, b) => b.total - a.total);
+}
 
 export function egresosPeriodoDe(egresos: EgresoR[], inicio: Date, fin: Date): number {
   return egresos.filter((e) => entre(e.fecha + 'T00:00:00', inicio, fin)).reduce((a, e) => a + e.importe, 0);
@@ -387,9 +486,20 @@ export function esLineaDeTaller(tipo: string | null | undefined): boolean {
   return tipo === 'trabajo';
 }
 
+// ¿Esta área de egresos es el taller? Se reconoce por el nombre ("Taller", "Servicio técnico" o "Reparaciones"), sin tildes ni mayúsculas.
+export function esAreaTaller(nombre: string): boolean {
+  const limpio = nombre
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .trim()
+    .toLowerCase();
+  return limpio === 'taller' || limpio === 'servicio tecnico' || limpio === 'reparaciones';
+}
+
 export type ItemAreaR = ItemR & { tipo?: string | null };
 
-export type BloqueArea = { ventas: number; ventasConCosto: number; ganancia: number };
+// lineas / lineasConCosto: cuántas líneas se vendieron y cuántas tienen costo conocido (en el taller, cuántas reparaciones tienen el costo cargado).
+export type BloqueArea = { ventas: number; ventasConCosto: number; ganancia: number; lineas: number; lineasConCosto: number };
 
 // Mismo cálculo que bloqueVentas() (ventas/ventasConCosto/ganancia), pero
 // recortado a las líneas de un solo lado (Local o Taller) — para poder
@@ -406,17 +516,22 @@ export function bloqueVentasPorArea(
   let ventas = 0;
   let ganancia = 0;
   let ventasConCosto = 0;
+  let lineas = 0;
+  let lineasConCosto = 0;
   for (const o of cobradas) {
     const items = (itemsPorOrden.get(o.id) ?? []).filter((it) => esLineaDeTaller(it.tipo) === esTaller);
     for (const it of items) {
       ventas += (it.precio_unitario || 0) * (it.cantidad || 0);
-      if (it.costo != null && it.precio_unitario != null) {
-        ganancia += (it.precio_unitario - it.costo) * (it.cantidad || 0);
+      lineas += 1;
+      const costo = costoDeLinea(it);
+      if (costo != null && it.precio_unitario != null) {
+        ganancia += (it.precio_unitario - costo) * (it.cantidad || 0);
         ventasConCosto += it.precio_unitario * (it.cantidad || 0);
+        lineasConCosto += 1;
       }
     }
   }
-  return { ventas, ventasConCosto, ganancia };
+  return { ventas, ventasConCosto, ganancia, lineas, lineasConCosto };
 }
 
 // ---------- Ranking por producto y por categoría (para Estadísticas) ----------
@@ -433,6 +548,8 @@ export type ItemProductoR = {
   clave: string;
   nombre: string;
   categoriaNombre: string;
+  // Subcategoría dentro de la categoría (subcategorias_supabase.sql); ausente si el producto está directo en la categoría.
+  subcategoriaNombre?: string | null;
   cantidad: number;
   precio_unitario: number;
   costo: number | null;

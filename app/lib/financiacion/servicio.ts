@@ -8,12 +8,19 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { getActor } from '../actor';
 import { registrarAuditoria } from '../auditoria';
 import { decimalesMoneda } from '../monedas';
+import { limpiarImei } from '../imei';
+import { normalizarNombreModelo } from '../modelos';
+import { descripcionDelEquipo, type EquipoPago } from '../equipoPago';
+import { enLotes } from '../db';
+import { topeParaCorregirPago, type AplicacionAnterior, type CuotaParaCorregir } from './correccionPago';
 import {
   generarCronograma,
   aplicarPagoACuotas,
   aFechaISO,
   type CuotaParaAplicar,
 } from './motor';
+import { tr } from '../tr';
+import { sincronizarComisionesDeCliente } from '../comisiones/sincronizar';
 
 export type PlanFinanciacion = {
   id: string;
@@ -59,7 +66,7 @@ export async function crearPlanFinanciacion(
   }
 ): Promise<{ planId: string; cuotas: ReturnType<typeof generarCronograma> } | { error: string }> {
   const importeFinanciado = params.importeOriginal - params.entregaInicial;
-  if (importeFinanciado <= 0) return { error: 'La entrega inicial no puede ser mayor o igual al importe de la venta.' };
+  if (importeFinanciado <= 0) return { error: tr('La entrega inicial no puede ser mayor o igual al importe de la venta.') };
 
   let cuotas;
   try {
@@ -70,7 +77,7 @@ export async function crearPlanFinanciacion(
       decimales: decimalesMoneda(params.moneda),
     });
   } catch (e) {
-    return { error: e instanceof Error ? e.message : 'No se pudo armar el cronograma.' };
+    return { error: e instanceof Error ? e.message : tr('No se pudo armar el cronograma.') };
   }
 
   const actor = getActor();
@@ -119,7 +126,7 @@ export async function aplicarPagoAFinanciacion(
     .eq('financiacion_planes.moneda', params.moneda)
     .eq('financiacion_planes.estado', 'activo')
     .eq('estado', 'pendiente');
-  if (fetchError) return { error: 'No pudimos revisar las cuotas pendientes: ' + fetchError.message };
+  if (fetchError) return { error: tr('No pudimos revisar las cuotas pendientes: ') + fetchError.message };
 
   const cuotas: CuotaParaAplicar[] = ((cuotasData as any[]) ?? []).map((c) => ({
     id: c.id,
@@ -162,7 +169,17 @@ export async function aplicarPagoAFinanciacion(
 // Reemplaza el insert manual a pagos/cta_cte_movimientos que antes vivía
 // directo en la ficha del cliente (ver registrarPago en
 // app/clientes/[id]/page.tsx) — misma lógica, un solo lugar.
+// Registra el cobro y después ajusta las comisiones de las ventas financiadas del cliente a lo cobrado (si el negocio eligió esa opción).
 export async function registrarCobroFinanciamiento(
+  supabase: SupabaseClient,
+  params: Parameters<typeof registrarCobroFinanciamientoBase>[1]
+): Promise<{ ordenId: string; avisoCuotas?: string } | { error: string }> {
+  const resultado = await registrarCobroFinanciamientoBase(supabase, params);
+  if (!('error' in resultado)) await sincronizarComisionesDeCliente(params.clienteId);
+  return resultado;
+}
+
+async function registrarCobroFinanciamientoBase(
   supabase: SupabaseClient,
   params: {
     clienteId: string;
@@ -205,7 +222,7 @@ export async function registrarCobroFinanciamiento(
     p_orden_original_id: params.ordenOriginalId ?? null,
     p_usuario: actor?.nombre ?? null,
   });
-  if (error || !data) return { error: 'No pudimos registrar el cobro: ' + (error?.message ?? '') };
+  if (error || !data) return { error: tr('No pudimos registrar el cobro: ') + (error?.message ?? '') };
   const ordenId = (data as { orden_id: string; pago_id: string }).orden_id;
   const pagoId = (data as { orden_id: string; pago_id: string }).pago_id;
 
@@ -219,7 +236,21 @@ export async function registrarCobroFinanciamiento(
   // Pago explícitamente de cuenta corriente: no se intenta repartir entre
   // cuotas de financiación, aunque el cliente tenga alguna pendiente.
   if (params.omitirFinanciacion) {
-    await auditoria;
+    // Un solo saldo por cliente (cuotas_conciliar_supabase.sql): el pago va a la cuenta corriente y, además, la parte que cae sobre
+    // cuotas se aplica a las cuotas del plan, a la deuda MÁS VIEJA primero (igual que la mora). Un pago que cubre un fiado más viejo
+    // no toca ninguna cuota. Sin ese SQL la función no existe y todo sigue como antes.
+    const [{ error: errorCuotas }] = await Promise.all([
+      supabase.rpc('financiacion_aplicar_pago_cuenta_corriente', {
+        p_cliente_id: params.clienteId,
+        p_pago_id: pagoId,
+        p_monto: params.monto,
+        p_usuario: actor?.nombre ?? null,
+      }),
+      auditoria,
+    ]);
+    if (errorCuotas && !/PGRST202|Could not find the function/i.test(`${errorCuotas.code ?? ''} ${errorCuotas.message ?? ''}`)) {
+      return { ordenId, avisoCuotas: tr('El pago se registró, pero no pudimos aplicarlo a las cuotas: ') + errorCuotas.message };
+    }
     return { ordenId };
   }
 
@@ -240,9 +271,164 @@ export async function registrarCobroFinanciamiento(
   ]);
 
   if ('error' in resultadoCuotas) {
-    return { ordenId, avisoCuotas: 'El pago se registró, pero no pudimos aplicarlo a las cuotas: ' + resultadoCuotas.error };
+    return { ordenId, avisoCuotas: tr('El pago se registró, pero no pudimos aplicarlo a las cuotas: ') + resultadoCuotas.error };
   }
   return { ordenId };
+}
+
+// ---------- Cobro con un equipo como forma de pago ----------
+// El cliente que debe plata deja un celular como parte de pago: el valor que se le reconoce (= params.monto) baja su
+// deuda igual que cualquier otro medio (medio 'canje', queda en "Otro" en Caja porque no es plata en el cajón), y el
+// equipo entra a Plan Canje atado a la orden de este cobro — desde ahí se agrega al Stock (o a Standby / Servicio
+// Técnico) como cualquier otro canje, y sale impreso en la boleta.
+// El equipo se carga PRIMERO y el cobro después: si el cobro falla, el equipo recién cargado se descarta (nunca queda
+// un celular en Plan Canje sin pago que lo respalde); si el cobro sale bien pero no se puede vincular, el cobro y el
+// equipo igual quedaron registrados y se avisa.
+export async function registrarCobroConEquipo(
+  supabase: SupabaseClient,
+  params: Parameters<typeof registrarCobroFinanciamiento>[1] & { equipo: EquipoPago }
+): Promise<{ ordenId: string; avisoCuotas?: string } | { error: string }> {
+  const { equipo, ...cobro } = params;
+  const actor = getActor();
+  const modelo = normalizarNombreModelo(equipo.modelo.trim());
+  const { data: canje, error: canjeError } = await supabase
+    .from('canjes')
+    .insert({
+      cliente_id: cobro.clienteId,
+      modelo,
+      capacidad_gb: equipo.capacidad_gb,
+      color: equipo.color.trim() || null,
+      imei: limpiarImei(equipo.imei),
+      salud_bateria: equipo.bateria.trim() ? Number(equipo.bateria) : null,
+      detalles: equipo.detalles.trim() || null,
+      monto: cobro.monto,
+      condicion: equipo.condicion,
+      vendedor_id: actor?.tipo === 'vendedor' ? actor.id : null,
+    })
+    .select('id')
+    .single();
+  if (canjeError || !canje) return { error: tr('No pudimos cargar el equipo: ') + (canjeError?.message ?? tr('error desconocido')) };
+  const canjeId = (canje as { id: string }).id;
+  const descripcion = descripcionDelEquipo(equipo);
+
+  const resultado = await registrarCobroFinanciamiento(supabase, {
+    ...cobro,
+    medio: 'canje',
+    observacion: ['Equipo recibido como pago: ' + descripcion, cobro.observacion?.trim()].filter(Boolean).join(' · '),
+  });
+  if ('error' in resultado) {
+    // Rollback del equipo recién cargado (todavía no está atado a nada ni lo vio nadie).
+    const { error: errorDescarte } = await supabase.from('canjes').delete().eq('id', canjeId);
+    if (errorDescarte) return { error: resultado.error + tr(' (y el equipo cargado quedó en Plan Canje sin pago: eliminalo desde ahí)') };
+    return resultado;
+  }
+
+  const { error: errorVinculo } = await supabase.from('canjes').update({ orden_id: resultado.ordenId }).eq('id', canjeId);
+  await registrarAuditoria(supabase, {
+    accion: 'recibió un equipo como pago de deuda (' + descripcion + (equipo.imei.trim() ? ', IMEI ' + equipo.imei.trim() : '') + ', valor ' + cobro.monto + ')',
+    entidad: 'canje',
+    entidadId: canjeId,
+    valorNuevo: { cliente_id: cobro.clienteId, monto: cobro.monto, orden_id: resultado.ordenId },
+  });
+  if (errorVinculo) {
+    return { ...resultado, avisoCuotas: [resultado.avisoCuotas, tr('El pago y el equipo se registraron, pero el equipo no quedó vinculado a la boleta: ') + errorVinculo.message].filter(Boolean).join(' ') };
+  }
+  return resultado;
+}
+
+// ---------- Corregir el monto de un pago ya registrado ----------
+// Cambia el monto en TODOS lados a la vez (pago/Caja, saldo del cliente, boleta del cobro, equipo recibido): lo hace la función
+// cta_cte_corregir_monto_pago en una sola transacción. Si el pago estaba aplicado a cuotas de financiación, primero se revierte
+// esa aplicación y después se vuelve a aplicar con el monto nuevo (a la misma cuota si era una sola); si el cambio falla, se
+// restaura exactamente lo que había. Devuelve un aviso (no un error) si el monto quedó bien pero algo de las cuotas no se pudo rehacer.
+export async function corregirMontoPago(
+  supabase: SupabaseClient,
+  params: { movimientoId: string; pagoId: string; clienteId: string; moneda: string; montoActual: number; nuevoMonto: number; saldoCuenta: number }
+): Promise<{ ok: true; aviso?: string } | { error: string }> {
+  const actor = getActor();
+  const { data: apsData, error: apsError } = await supabase
+    .from('financiacion_pagos')
+    .select('cuota_id, monto_aplicado')
+    .eq('pago_id', params.pagoId)
+    .eq('tipo', 'pago');
+  if (apsError) return { error: tr('No pudimos revisar a qué cuotas se aplicó el pago: ') + apsError.message };
+  const aplicaciones = ((apsData as AplicacionAnterior[]) ?? []).map((a) => ({ cuota_id: a.cuota_id, monto_aplicado: Number(a.monto_aplicado) }));
+
+  // Cuotas en juego: las pendientes del cliente (igual que al cobrar) + las que este pago tocó.
+  const { data: pendData, error: pendError } = await supabase
+    .from('financiacion_cuotas')
+    .select('id, importe_original, importe_pagado, financiacion_planes!inner(cliente_id, moneda, estado)')
+    .eq('financiacion_planes.cliente_id', params.clienteId)
+    .eq('financiacion_planes.moneda', params.moneda)
+    .eq('financiacion_planes.estado', 'activo')
+    .eq('estado', 'pendiente')
+    .limit(1000); // las cuotas pendientes de UN cliente
+  if (pendError) return { error: tr('No pudimos revisar las cuotas del cliente: ') + pendError.message };
+  const cuotas = new Map<string, CuotaParaCorregir>();
+  for (const c of (pendData as any[]) ?? []) cuotas.set(c.id, { id: c.id, importe_original: Number(c.importe_original), importe_pagado: Number(c.importe_pagado) });
+  const saldoCuotasPendientes = Array.from(cuotas.values()).reduce((a, c) => a + Math.max(0, c.importe_original - c.importe_pagado), 0);
+  for (const lote of enLotes(aplicaciones.map((a) => a.cuota_id))) {
+    const { data, error } = await supabase.from('financiacion_cuotas').select('id, importe_original, importe_pagado').in('id', lote);
+    if (error) return { error: tr('No pudimos revisar las cuotas del pago: ') + error.message };
+    for (const c of (data as any[]) ?? []) cuotas.set(c.id, { id: c.id, importe_original: Number(c.importe_original), importe_pagado: Number(c.importe_pagado) });
+  }
+
+  const tope = topeParaCorregirPago({
+    montoActual: params.montoActual,
+    aplicaciones,
+    cuotas: Array.from(cuotas.values()),
+    saldoCuenta: params.saldoCuenta,
+    saldoCuotasPendientes,
+  });
+  if (tope != null && params.nuevoMonto > tope + 0.01) {
+    return { error: tr('El monto no puede ser mayor a ') + Math.round(tope * 100) / 100 + tr(': es lo máximo que ese pago puede cubrir de lo que se debe.') };
+  }
+
+  if (aplicaciones.length > 0) {
+    const { error: revertError } = await supabase.rpc('financiacion_revertir_pago', { p_pago_id: params.pagoId, p_usuario: actor?.nombre ?? null });
+    if (revertError) return { error: tr('No pudimos desarmar el reparto a cuotas: ') + revertError.message };
+  }
+
+  const { error: corregirError } = await supabase.rpc('cta_cte_corregir_monto_pago', {
+    p_movimiento_id: params.movimientoId,
+    p_nuevo_monto: params.nuevoMonto,
+    p_usuario: actor?.nombre ?? null,
+  });
+  if (corregirError) {
+    if (aplicaciones.length > 0) {
+      // Se deja todo como estaba: se vuelve a aplicar exactamente lo que se había revertido.
+      const { error: restaurarError } = await supabase.rpc('financiacion_aplicar_pago', {
+        p_pago_id: params.pagoId,
+        p_asignaciones: aplicaciones.map((a) => ({ cuota_id: a.cuota_id, monto: a.monto_aplicado })),
+        p_usuario: actor?.nombre ?? null,
+      });
+      if (restaurarError) return { error: corregirError.message + tr(' (y no pudimos dejar las cuotas como estaban: revisalas en Financiación — ') + restaurarError.message + ')' };
+    }
+    return { error: corregirError.message };
+  }
+
+  let aviso: string | undefined;
+  if (aplicaciones.length > 0) {
+    const reaplicado = await aplicarPagoAFinanciacion(supabase, {
+      pagoId: params.pagoId,
+      clienteId: params.clienteId,
+      monto: params.nuevoMonto,
+      moneda: params.moneda,
+      cuotaIdElegida: aplicaciones.length === 1 ? aplicaciones[0].cuota_id : undefined,
+    });
+    if ('error' in reaplicado) aviso = tr('El monto se corrigió, pero no pudimos volver a aplicarlo a las cuotas: ') + reaplicado.error;
+    else if (reaplicado.sobrante > 0.01) aviso = tr('El monto se corrigió, pero ') + Math.round(reaplicado.sobrante * 100) / 100 + tr(' no entraron en ninguna cuota pendiente.');
+  }
+
+  await registrarAuditoria(supabase, {
+    accion: 'corrigió el monto de un pago recibido de ' + params.montoActual + ' a ' + params.nuevoMonto,
+    entidad: 'cliente',
+    entidadId: params.clienteId,
+    valorAnterior: { monto: params.montoActual },
+    valorNuevo: { monto: params.nuevoMonto, movimiento_id: params.movimientoId },
+  });
+  await sincronizarComisionesDeCliente(params.clienteId);
+  return { ok: true, aviso };
 }
 
 // ---------- Ajuste (reduce deuda futura, sin tocar cuotas pagadas) ----------
@@ -322,7 +508,7 @@ export async function reprogramarFinanciacion(
       decimales: decimalesMoneda(params.moneda),
     });
   } catch (e) {
-    return { error: e instanceof Error ? e.message : 'No se pudo armar el cronograma.' };
+    return { error: e instanceof Error ? e.message : tr('No se pudo armar el cronograma.') };
   }
 
   const actor = getActor();

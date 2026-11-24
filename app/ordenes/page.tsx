@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../lib/supabase/client';
@@ -8,21 +8,29 @@ import { obtenerTodasLasFilas } from '../lib/db';
 import { useActor } from '../lib/actor';
 import { tienePermiso } from '../lib/permisos';
 import { registrarAuditoria } from '../lib/auditoria';
-import { generarOrdenDeReparacion } from '../lib/ordenesServicio';
-import { registrarCobroFinanciamiento } from '../lib/financiacion/servicio';
-import { MEDIOS_PAGO, medioLabel, calcularSaldo, diasDeMora } from '../lib/cuentaCorriente';
+import { generarOrdenDeReparacion, ordenYaTieneCargoCuentaCorriente } from '../lib/ordenesServicio';
+import { registrarCobroFinanciamiento, registrarCobroConEquipo } from '../lib/financiacion/servicio';
+import FormularioEquipoPago from '../FormularioEquipoPago';
+import { EQUIPO_PAGO_VACIO, problemaDelEquipo, type EquipoPago } from '../lib/equipoPago';
+import { MEDIOS_PAGO, MEDIO_EQUIPO, medioLabel, calcularSaldo, diasDeMora } from '../lib/cuentaCorriente';
 import type { CuentaCorrienteServicioTecnico } from '../lib/ordenesServicio';
 import { simboloMoneda } from '../lib/monedas';
+import { resumirDia, ingresadoACajaDelDia, type PagoParaResumen } from '../lib/resumenDia';
+import { aFechaISO } from '../lib/financiacion/motor';
 import { formatearMonto, sanitizarDecimal } from '../lib/numeros';
-import { formatearFechaHora } from '../lib/fechas';
+import { formatearFechaHora, fechaISONegocio } from '../lib/fechas';
+import { infoEstado } from '../lib/reparaciones';
 import { descargarXLSX } from '../lib/csv';
 import { ICONOS } from '../Iconos';
 import { QoviState } from '../QoviState';
 import Modal from '../Modal';
 import { useT, useIdioma } from '../lib/idioma';
+import FiltroLocalidad from '../FiltroLocalidad';
+import { opcionesLocalidad, coincideLocalidad } from '../lib/localidades';
 import { localeDe } from '../lib/i18n/traducir';
 import { useSucursalActual } from '../lib/sucursal';
 import { obtenerSucursales, type Sucursal } from '../lib/sucursales';
+import { soportaMigracion } from '../lib/migraciones';
 
 type Orden = {
   id: string;
@@ -164,6 +172,34 @@ function esCobroFinanciamiento(o: Orden) {
   return o.orden_items.length > 0 && o.orden_items.every((i) => i.tipo === 'financiamiento');
 }
 
+// Lo que las tarjetas de Servicio Técnico muestran de la reparación asociada
+// (número ST, trabajo, técnico, estado) — se trae solo para las tarjetas que
+// están a la vista, no para todo el historial.
+type RepST = {
+  orden_cobro_id: string | null;
+  orden_origen_id: string | null;
+  numero_orden: string | null;
+  modelo: string | null;
+  falla_declarada: string | null;
+  diagnostico: string | null;
+  resultado_final: string | null;
+  estado: string;
+  forma_pago: string | null;
+  tecnicos: { nombre: string } | null;
+  recibido_por_nombre?: string | null;
+};
+const COLUMNAS_REP_ST =
+  'orden_cobro_id, orden_origen_id, numero_orden, modelo, falla_declarada, diagnostico, resultado_final, estado, forma_pago, tecnicos ( nombre )';
+
+// "Cambio de módulo" si el técnico lo cargó; si no, el diagnóstico; si no, la
+// falla que contó el cliente al dejar el equipo.
+function trabajoDeRep(r: RepST): string | null {
+  return r.resultado_final?.trim() || r.diagnostico?.trim() || r.falla_declarada?.trim() || null;
+}
+
+const COLUMNAS_ORDEN_LISTA =
+  'id, numero_orden, forma_pago, total, estado, created_at, sucursal_id, clientes ( nombre, apellido ), orden_items ( descripcion, tipo ), vendedores ( nombre )';
+
 type FiltroFecha = 'hoy' | 'ayer' | 'semana' | 'mes' | 'todo';
 
 // Mismo criterio de rangos que ya usa la vista Movimientos de Financiamiento
@@ -195,6 +231,8 @@ export default function Ordenes() {
   const sucursalActual = useSucursalActual();
   const [ordenes, setOrdenes] = useState<Orden[]>([]);
   const [canjes, setCanjes] = useState<CanjeOrden[]>([]);
+  // Pagos reales (no anulados) de la misma ventana de fechas que las órdenes: de ahí sale "Ingresado a caja" de cada día.
+  const [pagosCaja, setPagosCaja] = useState<PagoParaResumen[]>([]);
   const [reparacionesListas, setReparacionesListas] = useState<ReparacionLista[]>([]);
   const [reparacionesCanceladas, setReparacionesCanceladas] = useState<ReparacionLista[]>([]);
   const [generando, setGenerando] = useState<string | null>(null);
@@ -219,6 +257,9 @@ export default function Ordenes() {
   const [cuotasFinanciamiento, setCuotasFinanciamiento] = useState<CuotaFinanciamiento[]>([]);
   const [saldosCtaCte, setSaldosCtaCte] = useState<SaldoCtaCte[]>([]);
   const [nombresClientesFinanciamiento, setNombresClientesFinanciamiento] = useState<Map<string, string>>(new Map());
+  // Localidad/zona de cada cliente de la cartera, para filtrar y armar recorridos de cobranza.
+  const [localidadesClientesFin, setLocalidadesClientesFin] = useState<Map<string, string | null>>(new Map());
+  const [filtroLocalidadCartera, setFiltroLocalidadCartera] = useState('');
   // Moneda de respaldo para un cliente con fiado simple (sin ningún plan de
   // cuotas propio que indique en qué moneda es su saldo) — la del negocio.
   const [monedaNegocio, setMonedaNegocio] = useState('ARS');
@@ -247,6 +288,8 @@ export default function Ordenes() {
   const [cobrando, setCobrando] = useState<ResumenFinanciamiento | null>(null);
   const [cobroMonto, setCobroMonto] = useState('');
   const [cobroMedio, setCobroMedio] = useState('efectivo');
+  // Equipo que deja como parte de pago (solo con el medio "Equipo (plan canje)").
+  const [cobroEquipo, setCobroEquipo] = useState<EquipoPago>(EQUIPO_PAGO_VACIO);
   const [cobroObs, setCobroObs] = useState('');
   // A qué se aplica el pago: 'cuenta_corriente' (fiado sin cuota puntual) o
   // el id de una cuota de financiación puntual — pedido real de un cliente
@@ -276,16 +319,24 @@ export default function Ordenes() {
     setFiltroSucursal(sucursalActual.id ?? '');
   }, [sucursalActual.id]);
 
+  const [fechasEntregaPorOrden, setFechasEntregaPorOrden] = useState<Map<string, string>>(new Map());
+  const [repsPorOrden, setRepsPorOrden] = useState<Map<string, RepST[]>>(new Map());
+  const repsSolicitadas = useRef<Set<string>>(new Set());
+  const fechaEfectiva = (o: Orden) => {
+    const entrega = fechasEntregaPorOrden.get(o.id);
+    return entrega && entrega > o.created_at ? entrega : o.created_at;
+  };
+
   const DIAS_VENTANA_RECIENTE = 90;
 
   const cargar = async (traerTodoElHistorial = false) => {
     const desdeReciente = new Date();
     desdeReciente.setDate(desdeReciente.getDate() - DIAS_VENTANA_RECIENTE);
-    const [ordenesData, { data: listasData }, { data: canceladasData }, canjesData] = await Promise.all([
+    const [ordenesBase, { data: listasData }, { data: canceladasData }, canjesData, entregasData, pagosData] = await Promise.all([
       obtenerTodasLasFilas<Orden>(
         supabase,
         'ordenes',
-        'id, numero_orden, forma_pago, total, estado, created_at, sucursal_id, clientes ( nombre, apellido ), orden_items ( descripcion, tipo ), vendedores ( nombre )',
+        COLUMNAS_ORDEN_LISTA,
         [{ columna: 'created_at', ascending: false }],
         traerTodoElHistorial ? undefined : (q) => q.gte('created_at', desdeReciente.toISOString())
       ),
@@ -309,7 +360,49 @@ export default function Ordenes() {
       // Plan canje de cada orden, para poder buscar por el equipo que el
       // cliente entregó (no solo por el que se llevó).
       obtenerTodasLasFilas<CanjeOrden>(supabase, 'canjes', 'orden_id, modelo, imei, color', [], (q) => q.not('orden_id', 'is', null)),
+      // Fecha en que se entregó/cobró cada reparación: la orden de un Servicio
+      // Técnico nace al RECIBIR el equipo (días antes de cobrarlo), así que
+      // sin esta fecha "Generar boleta" dejaba la orden escondida en un día
+      // viejo y el filtro "Hoy" parecía que no se había guardado.
+      obtenerTodasLasFilas<{ orden_cobro_id: string; fecha_entrega: string }>(
+        supabase,
+        'reparaciones',
+        'orden_cobro_id, fecha_entrega',
+        [{ columna: 'fecha_entrega', ascending: false }],
+        (q) => {
+          const filtrada = q.not('orden_cobro_id', 'is', null).not('fecha_entrega', 'is', null);
+          return traerTodoElHistorial ? filtrada : filtrada.gte('fecha_entrega', desdeReciente.toISOString());
+        }
+      ),
+      obtenerTodasLasFilas<PagoParaResumen>(
+        supabase,
+        'pagos',
+        'fecha, monto, medio, moneda, sucursal_id',
+        [{ columna: 'fecha', ascending: false }],
+        (q) => {
+          const vigentes = q.eq('anulado', false);
+          return traerTodoElHistorial ? vigentes : vigentes.gte('fecha', desdeReciente.toISOString());
+        }
+      ).catch(() => [] as PagoParaResumen[]),
     ]);
+    setPagosCaja(pagosData);
+    // Una reparación recibida hace más de 90 días y cobrada recién ahora tiene
+    // su orden FUERA de la ventana de arriba (esa filtra por created_at) — se
+    // traen aparte, por id, solo las que faltan (normalmente ninguna, así que
+    // el caso común no paga ninguna consulta extra).
+    let ordenesData = ordenesBase;
+    if (!traerTodoElHistorial) {
+      const yaCargadas = new Set(ordenesBase.map((o) => o.id));
+      const faltantes = Array.from(new Set(entregasData.map((e) => e.orden_cobro_id))).filter((id) => !yaCargadas.has(id));
+      if (faltantes.length > 0) {
+        const lotes: string[][] = [];
+        for (let i = 0; i < faltantes.length; i += 100) lotes.push(faltantes.slice(i, i + 100));
+        const resultados = await Promise.all(lotes.map((ids) => supabase.from('ordenes').select(COLUMNAS_ORDEN_LISTA).in('id', ids)));
+        const extras = resultados.flatMap((r) => ((r.data as unknown as Orden[]) ?? []));
+        ordenesData = [...ordenesBase, ...extras];
+      }
+    }
+    setFechasEntregaPorOrden(new Map(entregasData.map((e) => [e.orden_cobro_id, e.fecha_entrega])));
     setOrdenes(ordenesData);
     setReparacionesListas((listasData as any) ?? []);
     setReparacionesCanceladas((canceladasData as any) ?? []);
@@ -330,35 +423,67 @@ export default function Ordenes() {
     // saldos_cuenta_corriente(): el libro mayor real (Σcargos−Σabonos), trae
     // a CUALQUIER cliente con saldo — con o sin plan de cuotas formal. Mismo
     // RPC que ya usa /cuentas-por-cobrar para esto mismo.
-    const [{ data: saldosData }, { data: planesData }] = await Promise.all([
+    // Todo lo que no depende del saldo (planes y cuotas) se pide en paralelo
+    // con el saldo, en vez de esperar uno detrás de otro. Cada tabla pasa por
+    // obtenerTodasLasFilas: PostgREST corta en silencio a las 1000 filas, y
+    // con muchos planes activos las cuotas (varias por plan) lo superan
+    // fácil — la Cartera mostraba cuotas/próximo vencimiento incompletos.
+    // Las cuotas se filtran por el estado de su plan con un join (igual que
+    // aplicarPagoAFinanciacion) en vez de .in(plan_id, [cientos de ids]), que
+    // revienta el largo máximo de la URL. Se traen TODAS las cuotas (no solo
+    // las pendientes): una cuota parcialmente pagada sigue en 'pendiente' con
+    // importe_pagado > 0, así que hace falta verlas todas para sumar bien lo
+    // ya cobrado (mismo criterio que el resumen de FinanciacionCliente).
+    const [{ data: saldosData }, planes, cuotasData] = await Promise.all([
       supabase.rpc('saldos_cuenta_corriente'),
-      supabase.from('financiacion_planes').select('id, cliente_id, orden_id, moneda, estado').eq('estado', 'activo'),
+      obtenerTodasLasFilas<PlanFinanciamiento>(supabase, 'financiacion_planes', 'id, cliente_id, orden_id, moneda, estado', [], (q) =>
+        q.eq('estado', 'activo')
+      ),
+      obtenerTodasLasFilas<CuotaFinanciamiento>(
+        supabase,
+        'financiacion_cuotas',
+        'id, plan_id, numero, fecha_vencimiento, importe_original, importe_pagado, estado, financiacion_planes!inner(estado)',
+        [],
+        (q) => q.eq('financiacion_planes.estado', 'activo')
+      ),
     ]);
     const saldos = (((saldosData ?? []) as { cliente_id: string; saldo: number; vencido: number }[])
       .map((s) => ({ clienteId: s.cliente_id, saldo: Number(s.saldo) || 0, vencido: Number(s.vencido) || 0 }))
       .filter((s) => s.saldo > 0.009));
     setSaldosCtaCte(saldos);
-
-    const planes = (planesData as PlanFinanciamiento[]) ?? [];
     setPlanesFinanciamiento(planes);
+    setCuotasFinanciamiento(cuotasData);
 
     const idsClientes = Array.from(new Set(saldos.map((s) => s.clienteId)));
     if (idsClientes.length > 0) {
-      const [{ data: clientesData }, { data: movsData }] = await Promise.all([
-        supabase.from('clientes').select('id, nombre, apellido').in('id', idsClientes),
-        supabase
-          .from('cta_cte_movimientos')
-          .select('cliente_id, tipo, concepto, monto, vencimiento, fecha, sucursal_id')
-          .in('cliente_id', idsClientes)
-          .eq('anulado', false),
+      // En lotes: con cientos de clientes con saldo, una sola lista en
+      // .in(...) supera el largo máximo de la URL y la consulta fallaba entera.
+      const lotes: string[][] = [];
+      for (let i = 0; i < idsClientes.length; i += 100) lotes.push(idsClientes.slice(i, i + 100));
+      const [clientesLotes, movsLotes] = await Promise.all([
+        Promise.all(lotes.map((ids) => supabase.from('clientes').select('id, nombre, apellido, localidad').in('id', ids))),
+        Promise.all(
+          lotes.map((ids) =>
+            obtenerTodasLasFilas<{ cliente_id: string; tipo: string; concepto: string; monto: number; vencimiento: string | null; fecha: string; sucursal_id: string | null }>(
+              supabase,
+              'cta_cte_movimientos',
+              'cliente_id, tipo, concepto, monto, vencimiento, fecha, sucursal_id',
+              [],
+              (q) => q.in('cliente_id', ids).eq('anulado', false)
+            )
+          )
+        ),
       ]);
-      setNombresClientesFinanciamiento(
-        new Map(((clientesData ?? []) as { id: string; nombre: string; apellido: string | null }[]).map((c) => [c.id, `${c.nombre} ${c.apellido || ''}`.trim()]))
-      );
+      const clientesData = clientesLotes.flatMap((r) => ((r.data ?? []) as { id: string; nombre: string; apellido: string | null; localidad: string | null }[]));
+      const movsData = movsLotes.flat();
+      setNombresClientesFinanciamiento(new Map(clientesData.map((c) => [c.id, `${c.nombre} ${c.apellido || ''}`.trim()])));
+      setLocalidadesClientesFin(new Map(clientesData.map((c) => [c.id, c.localidad])));
 
-      const hoyISO = new Date().toISOString().slice(0, 10);
+      // Fecha LOCAL (no toISOString, que es UTC): pasadas las 21 h en
+      // Argentina ya da el día siguiente y marcaba cargos como vencidos un día antes.
+      const hoyISO = aFechaISO(new Date());
       const extra = new Map<string, { ultimoPago: string | null; sucursalUltimoPago: string | null; vencMasAntiguo: string | null }>();
-      for (const m of (movsData as { cliente_id: string; tipo: string; concepto: string; monto: number; vencimiento: string | null; fecha: string; sucursal_id: string | null }[]) ?? []) {
+      for (const m of movsData) {
         const info = extra.get(m.cliente_id) ?? { ultimoPago: null, sucursalUltimoPago: null, vencMasAntiguo: null };
         if (m.tipo === 'abono' && m.concepto === 'pago' && (!info.ultimoPago || m.fecha > info.ultimoPago)) {
           info.ultimoPago = m.fecha;
@@ -375,22 +500,6 @@ export default function Ordenes() {
       setCarteraExtra(new Map());
     }
 
-    if (planes.length > 0) {
-      // Se traen TODAS las cuotas (no solo las pendientes): una cuota
-      // parcialmente pagada sigue en estado 'pendiente' con importe_pagado
-      // > 0, así que hace falta ver todas para sumar bien lo ya cobrado
-      // (mismo criterio que el resumen de FinanciacionCliente en la ficha).
-      const { data: cuotasData } = await supabase
-        .from('financiacion_cuotas')
-        .select('id, plan_id, numero, fecha_vencimiento, importe_original, importe_pagado, estado')
-        .in(
-          'plan_id',
-          planes.map((p) => p.id)
-        );
-      setCuotasFinanciamiento((cuotasData as CuotaFinanciamiento[]) ?? []);
-    } else {
-      setCuotasFinanciamiento([]);
-    }
     setCargandoFinanciamiento(false);
     setFinanciamientoCargado(true);
   };
@@ -399,19 +508,19 @@ export default function Ordenes() {
 
   const cargarMovimientosFinanciamiento = async (traerTodoElHistorial = false) => {
     setCargandoMovimientos(true);
-    let query = supabase
-      .from('cta_cte_movimientos')
-      .select(
-        'id, fecha, cliente_id, tipo, concepto, monto, moneda, anulado, observacion, motivo_anulacion, registrado_por_nombre, sucursal_id, orden_id, clientes ( nombre, apellido ), financiacion_cuotas ( numero ), pagos ( medio )'
-      )
-      .order('fecha', { ascending: false });
-    if (!traerTodoElHistorial) {
-      const desde = new Date();
-      desde.setDate(desde.getDate() - MOV_DIAS_VENTANA_RECIENTE);
-      query = query.gte('fecha', desde.toISOString());
-    }
-    const { data } = await query;
-    setMovimientosFinanciamiento((data as any) ?? []);
+    const desde = new Date();
+    desde.setDate(desde.getDate() - MOV_DIAS_VENTANA_RECIENTE);
+    // Paginado: antes un solo .select() se cortaba en silencio a las 1000
+    // filas, y con mucha actividad en 90 días los movimientos y los totales
+    // por día quedaban incompletos sin ningún aviso.
+    const data = await obtenerTodasLasFilas<MovimientoFinanciamiento>(
+      supabase,
+      'cta_cte_movimientos',
+      'id, fecha, cliente_id, tipo, concepto, monto, moneda, anulado, observacion, motivo_anulacion, registrado_por_nombre, sucursal_id, orden_id, clientes ( nombre, apellido ), financiacion_cuotas ( numero ), pagos ( medio )',
+      [{ columna: 'fecha', ascending: false }],
+      traerTodoElHistorial ? undefined : (q) => q.gte('fecha', desde.toISOString())
+    );
+    setMovimientosFinanciamiento(data);
     setCargandoMovimientos(false);
     setMovimientosCargados(true);
     if (traerTodoElHistorial) setMovHistorialCompleto(true);
@@ -469,7 +578,14 @@ export default function Ordenes() {
   const prepararCuentaCorrienteReparacion = async (
     r: ReparacionLista
   ): Promise<{ opciones?: { cuentaCorriente: CuentaCorrienteServicioTecnico }; error?: string }> => {
-    if (r.forma_pago !== 'Cuenta corriente' || !r.cliente_id || r.orden_cobro_id) return {};
+    if (r.forma_pago !== 'Cuenta corriente' || !r.cliente_id) return {};
+    // La orden suele existir desde la recepción: lo que importa es si ya tiene
+    // su cargo (en ese caso no hay nada nuevo que validar ni cargar).
+    if (r.orden_cobro_id) {
+      const yaTiene = await ordenYaTieneCargoCuentaCorriente(supabase, r.orden_cobro_id);
+      if (yaTiene === null) return { error: t('No pudimos verificar la cuenta corriente de esta orden. Probá de nuevo.') };
+      if (yaTiene) return {};
+    }
     const [{ data: cliente }, { data: movs }] = await Promise.all([
       supabase.from('clientes').select('cta_cte_habilitada, suspendido, limite_credito, plazo_dias').eq('id', r.cliente_id).single(),
       supabase.from('cta_cte_movimientos').select('tipo, monto').eq('cliente_id', r.cliente_id).eq('anulado', false),
@@ -608,6 +724,7 @@ export default function Ordenes() {
         return {
           clienteId: s.clienteId,
           clienteNombre: nombresClientesFinanciamiento.get(s.clienteId) ?? t('Cliente'),
+          localidad: localidadesClientesFin.get(s.clienteId) ?? null,
           moneda: info?.moneda ?? monedaNegocio,
           saldo: s.saldo,
           proximoVencimiento: info?.proximoVencimiento ?? null,
@@ -622,7 +739,13 @@ export default function Ordenes() {
         };
       })
       .sort((a, b) => (a.proximoVencimiento ?? '9999-99-99').localeCompare(b.proximoVencimiento ?? '9999-99-99'));
-  }, [planesFinanciamiento, cuotasFinanciamiento, saldosCtaCte, nombresClientesFinanciamiento, monedaNegocio, carteraExtra, t]);
+  }, [planesFinanciamiento, cuotasFinanciamiento, saldosCtaCte, nombresClientesFinanciamiento, localidadesClientesFin, monedaNegocio, carteraExtra, t]);
+
+  const localidadesCartera = useMemo(() => opcionesLocalidad(resumenFinanciamiento.map((r) => r.localidad)), [resumenFinanciamiento]);
+  const resumenFinanciamientoVisible = useMemo(
+    () => (filtroLocalidadCartera ? resumenFinanciamiento.filter((r) => coincideLocalidad(r.localidad, filtroLocalidadCartera)) : resumenFinanciamiento),
+    [resumenFinanciamiento, filtroLocalidadCartera]
+  );
 
   // Cajeros que realmente aparecen en lo cargado — no tiene sentido ofrecer
   // en el filtro a alguien que nunca cobró nada en la ventana visible.
@@ -660,7 +783,7 @@ export default function Ordenes() {
         anulado: m.anulado ? t('Sí') : t('No'),
       }));
       await descargarXLSX(
-        `movimientos-financiamiento-${new Date().toISOString().slice(0, 10)}.xlsx`,
+        `movimientos-financiamiento-${fechaISONegocio()}.xlsx`,
         ['fecha_hora', 'cliente', 'tipo', 'cuota', 'monto', 'moneda', 'forma_pago', 'cobrado_por', 'sucursal', 'anulado'],
         filas
       );
@@ -709,6 +832,7 @@ export default function Ordenes() {
     setCobrando(r);
     setCobroMonto(String(r.saldo));
     setCobroMedio('efectivo');
+    setCobroEquipo(EQUIPO_PAGO_VACIO);
     setCobroObs('');
     setErrorCobro(null);
     setCobroDestino('');
@@ -763,9 +887,15 @@ export default function Ordenes() {
         return;
       }
     }
+    const conEquipo = cobroMedio === MEDIO_EQUIPO.codigo;
+    const problemaEquipo = conEquipo ? problemaDelEquipo(cobroEquipo) : null;
+    if (problemaEquipo) {
+      setErrorCobro(t(problemaEquipo));
+      return;
+    }
     setGuardandoCobro(true);
     setErrorCobro(null);
-    const resultado = await registrarCobroFinanciamiento(supabase, {
+    const datosCobro = {
       clienteId: cobrando.clienteId,
       monto,
       medio: cobroMedio,
@@ -774,7 +904,9 @@ export default function Ordenes() {
       observacion: cobroObs,
       ordenOriginalId: cobrando.ordenOriginalId,
       ...(cobroDestino === 'cuenta_corriente' ? { omitirFinanciacion: true } : { cuotaIdElegida: cobroDestino }),
-    });
+    };
+    // Con un equipo como pago, el equipo queda en Plan Canje atado a la boleta de este cobro.
+    const resultado = conEquipo ? await registrarCobroConEquipo(supabase, { ...datosCobro, equipo: cobroEquipo }) : await registrarCobroFinanciamiento(supabase, datosCobro);
     if ('error' in resultado) {
       setErrorCobro(resultado.error);
       setGuardandoCobro(false);
@@ -802,7 +934,7 @@ export default function Ordenes() {
       // No aplica dentro de Financiamiento > Cartera: esa lista de boletas de
       // cobro ya tiene su propia ventana de 90 días, independiente de este
       // filtro rápido (que es para la pantalla de Órdenes en general).
-      .filter((o) => filtroTipo === 'financiamiento' || q !== '' || estaEnRangoFecha(o.created_at, filtroFecha))
+      .filter((o) => filtroTipo === 'financiamiento' || q !== '' || estaEnRangoFecha(fechaEfectiva(o), filtroFecha))
       .filter((o) => !filtroSucursal || o.sucursal_id === filtroSucursal)
       .filter((o) => {
         if (filtroTipo === 'todas') return true;
@@ -836,8 +968,10 @@ export default function Ordenes() {
           .join(' ')
           .toLowerCase();
         return nombreCliente.includes(q) || itemsTexto.includes(q) || canjesTexto.includes(q);
-      });
-  }, [ordenes, filtroEstado, filtroFecha, filtroSucursal, filtroTipo, busqueda, canjesPorOrden]);
+      })
+      .sort((a, b) => fechaEfectiva(b).localeCompare(fechaEfectiva(a)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ordenes, filtroEstado, filtroFecha, filtroSucursal, filtroTipo, busqueda, canjesPorOrden, fechasEntregaPorOrden]);
 
   // Con "ver todo el historial" activado (años de órdenes), pintar TODAS las
   // tarjetas de una es lo que hace sentir lenta la pantalla que todo vendedor
@@ -851,6 +985,47 @@ export default function Ordenes() {
   }, [busqueda, filtroEstado, filtroFecha, filtroTipo, filtroSucursal]);
   const paraRenderizar = useMemo(() => filtradas.slice(0, visibles), [filtradas, visibles]);
 
+  // Detalle de Servicio Técnico (número ST, trabajo, técnico, estado) solo de
+  // las tarjetas que se están mostrando, en lotes — traerlo para todo el
+  // historial haría más lenta la pantalla que más se abre.
+  useEffect(() => {
+    const ids = paraRenderizar.filter((o) => esServicioTecnico(o) && !repsSolicitadas.current.has(o.id)).map((o) => o.id);
+    if (ids.length === 0) return;
+    ids.forEach((id) => repsSolicitadas.current.add(id));
+    (async () => {
+      const conRecibidoPor = await soportaMigracion(supabase, 'recibidoPor');
+      const lotes: string[][] = [];
+      for (let i = 0; i < ids.length; i += 100) lotes.push(ids.slice(i, i + 100));
+      const resultados = await Promise.all(
+        lotes.map(async (lote) => {
+          // Una reparación se liga a la orden por su COBRO (orden_cobro_id) o por la
+          // venta de la que se DERIVÓ (orden_origen_id): las dos son "su orden".
+          const lista = lote.join(',');
+          const { data, error } = await supabase
+            .from('reparaciones')
+            .select(COLUMNAS_REP_ST + (conRecibidoPor ? ', recibido_por_nombre' : ''))
+            .or(`orden_cobro_id.in.(${lista}),orden_origen_id.in.(${lista})`);
+          // Si falla, se vuelve a intentar la próxima vez que esas tarjetas se muestren.
+          if (error) lote.forEach((id) => repsSolicitadas.current.delete(id));
+          return error ? [] : ((data as unknown as RepST[]) ?? []);
+        })
+      );
+      const nuevas = resultados.flat();
+      if (nuevas.length === 0) return;
+      setRepsPorOrden((previo) => {
+        const mapa = new Map(previo);
+        for (const r of nuevas) {
+          for (const ordenId of new Set([r.orden_cobro_id, r.orden_origen_id])) {
+            if (!ordenId) continue;
+            mapa.set(ordenId, [...(mapa.get(ordenId) ?? []).filter((x) => x.numero_orden !== r.numero_orden), r]);
+          }
+        }
+        return mapa;
+      });
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paraRenderizar]);
+
   // Agrupado por día con separador y total — pedido real de un cliente: de
   // un vistazo, "Hoy · 12 órdenes · $184.300" en vez de tener que contar
   // tarjeta por tarjeta cuánto se vendió hoy.
@@ -859,26 +1034,34 @@ export default function Ordenes() {
     const ayer = new Date();
     ayer.setDate(ayer.getDate() - 1);
     const ayerClave = ayer.toLocaleDateString('en-CA');
-    const grupos = new Map<string, { label: string; ordenes: Orden[]; total: number }>();
+    const grupos = new Map<string, { label: string; ordenes: Orden[] }>();
     for (const o of paraRenderizar) {
-      const clave = new Date(o.created_at).toLocaleDateString('en-CA');
+      const fechaOrden = fechaEfectiva(o);
+      const clave = new Date(fechaOrden).toLocaleDateString('en-CA');
       if (!grupos.has(clave)) {
         const label =
           clave === hoyClave
             ? t('Hoy')
             : clave === ayerClave
               ? t('Ayer')
-              : new Date(o.created_at).toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' });
-        grupos.set(clave, { label, ordenes: [], total: 0 });
+              : new Date(fechaOrden).toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' });
+        grupos.set(clave, { label, ordenes: [] });
       }
       const g = grupos.get(clave)!;
       g.ordenes.push(o);
-      g.total += o.total || 0;
     }
+    // Ventas, cobros de cuotas / cuenta corriente y plata que entró a caja, por separado (ver app/lib/resumenDia.ts): una venta
+    // financiada ya no cuenta dos veces (la venta y el cobro de su cuota 1) y los cobros de créditos viejos no suman como ventas.
     return Array.from(grupos.entries())
       .sort((a, b) => b[0].localeCompare(a[0]))
-      .map(([clave, g]) => ({ clave, ...g }));
-  }, [paraRenderizar, locale, t]);
+      .map(([clave, g]) => ({
+        clave,
+        ...g,
+        ...resumirDia(g.ordenes.map((o) => ({ estado: o.estado, total: o.total, esCobro: !esServicioTecnico(o) && esCobroFinanciamiento(o) }))),
+        ingresado: ingresadoACajaDelDia(pagosCaja, clave, { moneda: monedaNegocio, sucursalId: filtroSucursal || null }),
+      }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paraRenderizar, locale, t, fechasEntregaPorOrden, pagosCaja, monedaNegocio, filtroSucursal]);
 
   // Se me había pasado esto en la primera pasada de multisucursal: estas dos
   // NO nacen de la tabla `ordenes` (que sí ya filtraba), sino de
@@ -1118,6 +1301,9 @@ export default function Ordenes() {
                 {v === 'movimientos' ? t('Movimientos') : t('Cartera')}
               </button>
             ))}
+            <Link href="/creditos-fuera-de-guia" className="ml-auto rounded-full border border-border dark:border-dark-border px-3 py-1.5 text-xs font-medium">
+              🚩 {t('Créditos fuera de la guía')}
+            </Link>
           </div>
 
           {vistaFinanciamiento === 'movimientos' && (
@@ -1178,7 +1364,7 @@ export default function Ordenes() {
                   className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-1.5 text-xs"
                 >
                   <option value="">{t('Todas las formas de pago')}</option>
-                  {MEDIOS_PAGO.map((m) => (
+                  {[...MEDIOS_PAGO, MEDIO_EQUIPO].map((m) => (
                     <option key={m.codigo} value={m.codigo}>
                       {medioLabel(m.codigo, t)}
                     </option>
@@ -1289,19 +1475,25 @@ export default function Ordenes() {
           {cargandoFinanciamiento && (
             <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{t('Cargando...')}</p>
           )}
-          {!cargandoFinanciamiento && resumenFinanciamiento.length === 0 && (
+          <div className="mb-2">
+            <FiltroLocalidad opciones={localidadesCartera} value={filtroLocalidadCartera} onChange={setFiltroLocalidadCartera} />
+          </div>
+          {!cargandoFinanciamiento && resumenFinanciamientoVisible.length === 0 && (
             <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">
               {t('No hay clientes que deban plata en cuenta corriente.')}
             </p>
           )}
           <div className="flex flex-col gap-2">
-            {resumenFinanciamiento.map((r) => (
+            {resumenFinanciamientoVisible.map((r) => (
               <div
                 key={r.clienteId}
                 className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card px-4 py-3 flex items-center justify-between gap-3"
               >
                 <div className="min-w-0">
-                  <p className="text-sm font-medium truncate">{r.clienteNombre}</p>
+                  <p className="text-sm font-medium truncate">
+                    {r.clienteNombre}
+                    {r.localidad ? <span className="text-xs font-normal text-muted dark:text-dark-text-secondary"> · 📍 {r.localidad}</span> : null}
+                  </p>
                   <p className="text-xs text-muted dark:text-dark-text-secondary truncate">
                     {t('Saldo')}: {simboloMoneda(r.moneda)}
                     {formatearMonto(r.saldo)}
@@ -1408,11 +1600,29 @@ export default function Ordenes() {
           <div className="flex flex-col gap-4">
             {ordenesPorDia.map((dia) => (
               <div key={dia.clave} className="flex flex-col gap-2">
-                <div className="flex items-baseline justify-between px-1">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted dark:text-dark-text-secondary capitalize">
-                    {dia.label} · {dia.ordenes.length} {dia.ordenes.length === 1 ? t('orden') : t('órdenes')}
-                  </p>
-                  {dia.total > 0 && <p className="text-xs font-semibold">${dia.total.toLocaleString('es-AR')}</p>}
+                <div className="flex flex-col gap-0.5 px-1">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted dark:text-dark-text-secondary capitalize">{dia.label}</p>
+                  <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs">
+                    <span>
+                      <span className="text-muted dark:text-dark-text-secondary">{t('Ventas')}:</span>{' '}
+                      <strong>{dia.ventas.cantidad}</strong> · {simboloMoneda(monedaNegocio)}
+                      {formatearMonto(dia.ventas.monto)}
+                    </span>
+                    {dia.cobros.cantidad > 0 && (
+                      <span>
+                        <span className="text-muted dark:text-dark-text-secondary">{t('Cobros de cuotas / cuenta corriente')}:</span>{' '}
+                        <strong>{dia.cobros.cantidad}</strong> · {simboloMoneda(monedaNegocio)}
+                        {formatearMonto(dia.cobros.monto)}
+                      </span>
+                    )}
+                    <span>
+                      <span className="text-muted dark:text-dark-text-secondary">{t('Ingresado a caja')}:</span>{' '}
+                      <strong>
+                        {simboloMoneda(monedaNegocio)}
+                        {formatearMonto(dia.ingresado)}
+                      </strong>
+                    </span>
+                  </div>
                 </div>
                 {dia.ordenes.map((o) => {
                   const servicio = esServicioTecnico(o);
@@ -1421,6 +1631,22 @@ export default function Ordenes() {
                   const icono = servicio ? 'herramienta' : cobroFinanciamiento ? 'cobrar' : 'ordenes';
                   const etiquetaTipo = servicio ? t('Servicio técnico') : cobroFinanciamiento ? t('Cobro financiamiento') : t('Venta');
                   const estadoInfo = ESTADO_ORDEN_COLOR[o.estado] ?? ESTADO_ORDEN_COLOR.pendiente;
+                  // Servicio técnico: en vez del genérico "Servicio técnico — modelo",
+                  // el trabajo/falla; más el número ST, el técnico y el estado de la
+                  // reparación — para identificarlas sin entrar a cada una.
+                  const reps = servicio ? repsPorOrden.get(o.id) ?? [] : [];
+                  const trabajoST = reps[0] ? trabajoDeRep(reps[0]) : null;
+                  const tituloOrden =
+                    servicio && reps[0] && trabajoST
+                      ? `${trabajoST}${reps[0].modelo ? ` — ${reps[0].modelo}` : ''}${reps.length > 1 ? ` +${reps.length - 1}` : ''}`
+                      : o.orden_items.length > 0
+                        ? `${o.orden_items[0].descripcion}${o.orden_items.length > 1 ? ` +${o.orden_items.length - 1}` : ''}`
+                        : t('Orden vacía');
+                  const numerosST = reps.map((r) => r.numero_orden).filter(Boolean).join(', ');
+                  const recibioST = Array.from(new Set(reps.map((r) => r.recibido_por_nombre).filter((n): n is string => !!n))).join(', ');
+                  const tecnicosST = Array.from(new Set(reps.map((r) => r.tecnicos?.nombre).filter((n): n is string => !!n))).join(', ');
+                  const formaPagoOrden = o.forma_pago || reps.find((r) => r.forma_pago)?.forma_pago || null;
+                  const estadoRep = reps[0] ? infoEstado(reps[0].estado) : null;
                   return (
                     <Link
                       key={o.id}
@@ -1436,20 +1662,23 @@ export default function Ordenes() {
                           <span aria-hidden="true" className={`shrink-0 [&_svg]:h-3.5 [&_svg]:w-3.5 ${colorTipo}`}>
                             {ICONOS[icono]}
                           </span>
-                          <span className="truncate">
-                            {o.orden_items.length > 0
-                              ? `${o.orden_items[0].descripcion}${o.orden_items.length > 1 ? ` +${o.orden_items.length - 1}` : ''}`
-                              : t('Orden vacía')}
-                          </span>
+                          <span className="truncate">{tituloOrden}</span>
                         </p>
                         <p className="text-xs text-muted dark:text-dark-text-secondary truncate">
                           <span className={`font-medium ${colorTipo}`}>{etiquetaTipo}</span>
                           {' · '}
                           {o.clientes ? `${o.clientes.nombre} ${o.clientes.apellido || ''}` : t('Sin cliente')}
                           {o.numero_orden && <span className="text-muted dark:text-dark-text-secondary"> · {o.numero_orden}</span>}
+                          {numerosST && <span className="text-repar font-medium"> · {numerosST}</span>}
                         </p>
                         <p className="text-[11px] text-muted dark:text-dark-text-secondary truncate">
-                          {[formatearFechaHora(o.created_at, locale), o.vendedores?.nombre, o.forma_pago ? t(o.forma_pago) : null]
+                          {[
+                            formatearFechaHora(fechaEfectiva(o), locale),
+                            o.vendedores?.nombre ? `${t('Vend.:')} ${o.vendedores.nombre}` : servicio ? `${t('Vend.:')} ${t('Sin asignar')}` : null,
+                            recibioST ? `${t('Recibió:')} ${recibioST}` : null,
+                            tecnicosST ? `${t('Téc.:')} ${tecnicosST}` : null,
+                            formaPagoOrden ? formaPagoOrden.split(' + ').map((f) => t(f)).join(' + ') : t('Sin definir'),
+                          ]
                             .filter(Boolean)
                             .join(' · ')}
                         </p>
@@ -1461,9 +1690,16 @@ export default function Ordenes() {
                       </div>
                       <div className="text-right shrink-0">
                         {o.total != null && <p className="text-sm font-medium">${o.total.toLocaleString('es-AR')}</p>}
-                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium capitalize mt-0.5 ${estadoInfo}`}>
-                          {t(o.estado)}
-                        </span>
+                        <div className="flex flex-col items-end gap-0.5 mt-0.5">
+                          {estadoRep && (
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${estadoRep.color}`}>
+                              {t(estadoRep.label)}
+                            </span>
+                          )}
+                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium capitalize ${estadoInfo}`}>
+                            {t(o.estado)}
+                          </span>
+                        </div>
                       </div>
                     </Link>
                   );
@@ -1540,7 +1776,7 @@ export default function Ordenes() {
             </div>
           )}
 
-          <label className="text-xs font-medium text-muted dark:text-dark-text-secondary">{t('Monto a cobrar')}</label>
+          <label className="text-xs font-medium text-muted dark:text-dark-text-secondary">{cobroMedio === MEDIO_EQUIPO.codigo ? t('Valor que se le reconoce por el equipo') : t('Monto a cobrar')}</label>
           <input
             value={cobroMonto}
             onChange={(e) => setCobroMonto(sanitizarDecimal(e.target.value))}
@@ -1554,12 +1790,13 @@ export default function Ordenes() {
             onChange={(e) => setCobroMedio(e.target.value)}
             className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
           >
-            {MEDIOS_PAGO.map((m) => (
+            {[...MEDIOS_PAGO, MEDIO_EQUIPO].map((m) => (
               <option key={m.codigo} value={m.codigo}>
-                {m.icono} {t(medioLabel(m.codigo))}
+                {m.icono} {t(m.label)}
               </option>
             ))}
           </select>
+          {cobroMedio === MEDIO_EQUIPO.codigo && <FormularioEquipoPago value={cobroEquipo} onChange={setCobroEquipo} />}
           <input
             value={cobroObs}
             onChange={(e) => setCobroObs(e.target.value)}

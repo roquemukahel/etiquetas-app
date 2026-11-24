@@ -1,11 +1,14 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { crearClienteNavegador } from '../lib/supabase/client';
 import { obtenerTodasLasFilas } from '../lib/db';
-import { asegurarModelo, normalizarNombreModelo } from '../lib/modelos';
-import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../lib/carpetas';
+import { agregarCanjeAlStock, idsDeCanjesDerivados } from '../lib/canje';
+import { buscarPorTexto } from '../lib/buscar';
+import { soportaMigracion } from '../lib/migraciones';
+import { campoBateriaServicio } from '../lib/bateriaServicio';
+import { obtenerImagenesDeCarpetas, imagenPorNombreExacto } from '../lib/carpetas';
 import { registrarAuditoria } from '../lib/auditoria';
 import { getActor, useActor, MENSAJE_ACTOR_REQUERIDO } from '../lib/actor';
 import { tienePermiso } from '../lib/permisos';
@@ -16,6 +19,10 @@ import { ICONOS } from '../Iconos';
 import { Boton, BotonIcono } from '../Boton';
 import { useT } from '../lib/idioma';
 import { useSucursalActual } from '../lib/sucursal';
+import { falla, registrarFallo } from '../lib/escritura';
+import { camposRecibidoPor, registrarRecepcionEnHistorial } from '../lib/recibidoPor';
+import { formatearGB } from '../lib/almacenamiento';
+import { formatearFechaYHoraCorta } from '../lib/fechas';
 
 type Canje = {
   id: string;
@@ -31,8 +38,19 @@ type Canje = {
   oculto_en_canje: boolean;
   condicion: string | null;
   ubicacion_fisica: string | null;
-  vendedores: { nombre: string; foto_url: string | null } | null;
+  vendedor_id: string | null;
+  created_at: string | null;
 };
+
+type VendedorCanje = { id: string; nombre: string; foto_url: string | null };
+
+// Columnas que se muestran. Antes se traía todo ('*') más la foto del vendedor repetida en CADA fila
+// (la foto viaja como data URL y pesa), y de todo el historial: la pantalla se ponía lenta a medida
+// que crecían los canjes. Ahora: solo estas columnas, la foto de cada vendedor una sola vez, y cada
+// solapa se carga cuando se abre.
+const COLUMNAS_CANJE =
+  'id, modelo, capacidad_gb, color, imei, salud_bateria, detalles, monto, estado, agregado_a_stock, oculto_en_canje, condicion, ubicacion_fisica, vendedor_id, created_at';
+const TAMANO_PAGINA_HISTORIAL = 50;
 
 type ReparacionDerivada = {
   id: string;
@@ -64,31 +82,163 @@ export default function PlanCanje() {
   const [editandoUbicacionId, setEditandoUbicacionId] = useState<string | null>(null);
   const [ubicacionInput, setUbicacionInput] = useState('');
 
-  const cargar = async () => {
-    const [c, r] = await Promise.all([
-      obtenerTodasLasFilas<Canje>(supabase, 'canjes', '*, vendedores ( nombre, foto_url )', [{ columna: 'created_at', ascending: false }]),
-      obtenerTodasLasFilas<ReparacionDerivada>(
+  const [vendedores, setVendedores] = useState<Map<string, VendedorCanje>>(new Map());
+  const [hayMasHistorial, setHayMasHistorial] = useState(false);
+  const [cargandoMas, setCargandoMas] = useState(false);
+  // Solapas ya cargadas: Derivados e Historial recién se piden la primera vez que se abren.
+  const solapasCargadas = useRef<Set<Vista>>(new Set());
+
+  // Trae las miniaturas solo de los modelos que se están mostrando (no las de las 200 carpetas).
+  const cargarImagenes = async (modelos: (string | null)[]) => {
+    const faltan = modelos.filter((m): m is string => !!m && !imagenesCarpetas.has(m));
+    if (faltan.length === 0) return;
+    const nuevas = await obtenerImagenesDeCarpetas(supabase, faltan);
+    if (nuevas.size > 0) setImagenesCarpetas((prev) => new Map([...prev, ...nuevas]));
+  };
+
+  const cargarVista = async (v: Vista) => {
+    if (v === 'en_canje') {
+      const [pendientes, derivadosIds] = await Promise.all([
+        obtenerTodasLasFilas<Canje>(supabase, 'canjes', COLUMNAS_CANJE, [{ columna: 'created_at', ascending: false }], (q) =>
+          q.eq('estado', 'en_canje').eq('agregado_a_stock', false).or('oculto_en_canje.is.null,oculto_en_canje.eq.false')
+        ),
+        // La orden de Servicio Técnico que apunta al canje es la prueba de que ya salió de acá (no depende de la marca "oculto").
+        idsDeCanjesDerivados(supabase),
+      ]);
+      const c = pendientes.filter((x) => !derivadosIds.has(x.id));
+      setCanjes((prev) => [...c, ...prev.filter((x) => x.agregado_a_stock)]);
+      cargarImagenes(c.map((x) => x.modelo));
+    } else if (v === 'historial') {
+      const { data, error } = await supabase
+        .from('canjes')
+        .select(COLUMNAS_CANJE)
+        .eq('agregado_a_stock', true)
+        .order('created_at', { ascending: false })
+        .range(0, TAMANO_PAGINA_HISTORIAL - 1);
+      if (error) {
+        registrarFallo(error, 'cargar el historial de Plan Canje');
+        return;
+      }
+      const h = (data as unknown as Canje[]) ?? [];
+      setCanjes((prev) => [...prev.filter((x) => !x.agregado_a_stock), ...h]);
+      setHayMasHistorial(h.length === TAMANO_PAGINA_HISTORIAL);
+      cargarImagenes(h.map((x) => x.modelo));
+    } else {
+      const r = await obtenerTodasLasFilas<ReparacionDerivada>(
         supabase,
         'reparaciones',
         'id, numero_orden, modelo, capacidad_gb, color, imei, estado, fecha_ingreso_servicio',
         [{ columna: 'fecha_ingreso_servicio', ascending: false }],
         (q) => q.not('canje_origen_id', 'is', null)
-      ),
-    ]);
-    setCanjes(c);
-    setDerivados(r);
+      );
+      setDerivados(r);
+      cargarImagenes(r.map((x) => x.modelo));
+    }
+    solapasCargadas.current.add(v);
+  };
+
+  const verMasHistorial = async () => {
+    setCargandoMas(true);
+    const desde = canjes.filter((c) => c.agregado_a_stock).length;
+    const { data, error } = await supabase
+      .from('canjes')
+      .select(COLUMNAS_CANJE)
+      .eq('agregado_a_stock', true)
+      .order('created_at', { ascending: false })
+      .range(desde, desde + TAMANO_PAGINA_HISTORIAL - 1);
+    setCargandoMas(false);
+    if (error) {
+      registrarFallo(error, 'cargar más del historial de Plan Canje');
+      return;
+    }
+    const h = (data as unknown as Canje[]) ?? [];
+    setCanjes((prev) => [...prev, ...h]);
+    setHayMasHistorial(h.length === TAMANO_PAGINA_HISTORIAL);
+    cargarImagenes(h.map((x) => x.modelo));
+  };
+
+  // Después de una acción (agregar al stock, derivar, eliminar) se recarga lo que se está viendo y las
+  // otras solapas quedan para recargarse cuando se abran (un canje agregado pasa al Historial, etc.).
+  const cargar = async () => {
+    solapasCargadas.current.clear();
+    await cargarVista(vista);
     setLoading(false);
   };
 
   useEffect(() => {
-    cargar();
-    (async () => setImagenesCarpetas(await obtenerImagenesCarpetas(supabase)))();
+    (async () => {
+      const { data, error } = await supabase.from('vendedores').select('id, nombre, foto_url');
+      if (error) {
+        registrarFallo(error, 'cargar los vendedores de Plan Canje');
+        return;
+      }
+      setVendedores(new Map(((data as VendedorCanje[]) ?? []).map((v) => [v.id, v])));
+    })();
   }, []);
 
-  const filtrados = useMemo(() => {
+  useEffect(() => {
+    if (solapasCargadas.current.has(vista)) return;
+    setLoading(true);
+    cargarVista(vista).finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vista]);
+
+  const baseFiltrados = useMemo(() => {
     if (vista === 'historial') return canjes.filter((c) => c.agregado_a_stock);
     return canjes.filter((c) => c.estado === 'en_canje' && !c.agregado_a_stock && !c.oculto_en_canje);
   }, [canjes, vista]);
+
+  // Buscador (igual que el de Stock y Standby): modelo, capacidad, color, IMEI (completo o un tramo, ej. los últimos 4 dígitos),
+  // detalles, ubicación, quién lo recibió y la fecha. Cada palabra tiene que aparecer en algún dato.
+  const [busqueda, setBusqueda] = useState('');
+  const busquedaDiferida = useDeferredValue(busqueda);
+  const hayBusqueda = busqueda.trim() !== '';
+  const filtrados = useMemo(
+    () =>
+      buscarPorTexto(baseFiltrados, busquedaDiferida, (c) => [
+        c.modelo,
+        c.capacidad_gb ? `${c.capacidad_gb}gb ${formatearGB(c.capacidad_gb)}` : null,
+        c.color,
+        c.imei,
+        c.detalles,
+        c.ubicacion_fisica,
+        c.condicion,
+        c.vendedor_id ? vendedores.get(c.vendedor_id)?.nombre : null,
+        c.monto,
+        formatearFechaYHoraCorta(c.created_at),
+      ]),
+    [baseFiltrados, busquedaDiferida, vendedores]
+  );
+  const derivadosFiltrados = useMemo(
+    () =>
+      buscarPorTexto(derivados, busquedaDiferida, (r) => [
+        r.numero_orden,
+        r.modelo,
+        r.capacidad_gb ? `${r.capacidad_gb}gb ${formatearGB(r.capacidad_gb)}` : null,
+        r.color,
+        r.imei,
+        infoEstado(r.estado).label,
+        formatearFechaYHoraCorta(r.fecha_ingreso_servicio),
+      ]),
+    [derivados, busquedaDiferida]
+  );
+
+  // El Historial se trae de a 50. Si se busca ahí, se completa el resto una sola vez para que la búsqueda encuentre
+  // también los equipos más viejos (no solo los 50 que ya estaban cargados).
+  const [completandoHistorial, setCompletandoHistorial] = useState(false);
+  useEffect(() => {
+    if (vista !== 'historial' || !hayBusqueda || !hayMasHistorial || completandoHistorial) return;
+    setCompletandoHistorial(true);
+    obtenerTodasLasFilas<Canje>(supabase, 'canjes', COLUMNAS_CANJE, [{ columna: 'created_at', ascending: false }], (q) => q.eq('agregado_a_stock', true))
+      .then((todos) => {
+        setCanjes((prev) => [...prev.filter((x) => !x.agregado_a_stock), ...todos]);
+        setHayMasHistorial(false);
+        cargarImagenes(todos.map((x) => x.modelo));
+      })
+      .catch((e) => registrarFallo(e, 'cargar todo el historial de Plan Canje para buscar'))
+      .finally(() => setCompletandoHistorial(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vista, hayBusqueda, hayMasHistorial]);
 
   // Ya no cambia el estado del canje: crea una reparación nueva en
   // Servicio Técnico (vinculada por canje_origen_id) y solo oculta el
@@ -106,18 +256,54 @@ export default function PlanCanje() {
         color: c.color,
         imei: c.imei,
         falla_declarada: c.detalles,
+        ...(await campoBateriaServicio(supabase, c.salud_bateria)),
         ubicacion_fisica: c.ubicacion_fisica,
         estado: 'recibido',
+        ...(await camposRecibidoPor(supabase)),
         canje_origen_id: c.id,
         ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
       })
       .select('id, numero_orden')
       .single();
-    await supabase.from('canjes').update({ oculto_en_canje: true }).eq('id', c.id);
+    await registrarRecepcionEnHistorial(supabase, nueva?.id ? [nueva.id] : []);
+    await falla(supabase.from('canjes').update({ oculto_en_canje: true }).eq('id', c.id), t, 'ocultar el canje derivado');
     await registrarAuditoria(supabase, {
       accion: `derivó a Servicio Técnico un dispositivo de Plan Canje (${nueva?.numero_orden || ''}, ${c.modelo || 'sin modelo'}${c.imei ? `, IMEI ${c.imei}` : ''})`,
       entidad: 'reparacion',
       entidadId: nueva?.id,
+    });
+    setProcesando(null);
+    cargar();
+  };
+
+  // Standby (standby_supabase.sql): el botón "Mandar a Standby" solo aparece si el negocio ya lo tiene activado.
+  const [conStandby, setConStandby] = useState(false);
+  useEffect(() => {
+    soportaMigracion(supabase, 'standby').then(setConStandby);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Un canje que entró con detalles y no se va a arreglar por ahora: pasa a Standby en vez de al Stock vendible.
+  const mandarAStandby = async (c: Canje) => {
+    if (procesando || !puedeAgregarStock) return;
+    if (!getActor()) {
+      alert(t(MENSAJE_ACTOR_REQUERIDO));
+      return;
+    }
+    const motivo = prompt(`${t('¿Qué le pasa a')} ${c.modelo || t('este equipo')}? ${t('Queda en Standby, fuera del Stock para vender.')}`, c.detalles ?? '');
+    if (motivo === null) return;
+    setProcesando(c.id);
+    const resultado = await agregarCanjeAlStock(supabase, c, { sucursalId: sucursalActual.id, actor: getActor(), standby: { motivo } });
+    if (!resultado.ok) {
+      alert(resultado.yaAgregado ? t('Este canje ya había sido agregado al stock (quizás desde otra pestaña).') : `${t('No pudimos mandarlo a Standby:')} ${resultado.mensaje}`);
+      setProcesando(null);
+      if (resultado.yaAgregado) cargar();
+      return;
+    }
+    await registrarAuditoria(supabase, {
+      accion: `mandó a Standby un canje (${c.modelo || 'sin modelo'}${c.imei ? `, IMEI ${c.imei}` : ''})`,
+      entidad: 'canje',
+      entidadId: c.id,
     });
     setProcesando(null);
     cargar();
@@ -130,56 +316,26 @@ export default function PlanCanje() {
       return;
     }
     if (c.imei) {
-      const { data: existente } = await supabase.from('dispositivos').select('id').eq('imei', c.imei).maybeSingle();
+      const { data: existente } = await supabase.from('dispositivos').select('id').eq('imei', c.imei).limit(1).maybeSingle();
       if (existente && !confirm(`${t('Ya hay un dispositivo en Stock con el IMEI')} ${c.imei}. ${t('¿Agregarlo igual?')}`)) return;
     }
     if (!confirm(t('¿Agregar este dispositivo al Stock para venderlo?'))) return;
     setProcesando(c.id);
 
-    // Igual que en Compras: se reserva el canje ANTES de crear el
-    // dispositivo, y solo si seguía con agregado_a_stock=false en ese
-    // momento (condición evaluada en la base). Evita duplicar el
-    // dispositivo si el mismo canje se procesa desde dos pestañas.
-    const { data: actualizado, error: estadoErr } = await supabase
-      .from('canjes')
-      .update({ agregado_a_stock: true })
-      .eq('id', c.id)
-      .eq('agregado_a_stock', false)
-      .select('id');
-    if (estadoErr) {
-      alert(`${t('No pudimos agregar al stock:')} ` + estadoErr.message);
+    // La reserva del canje y la creación del dispositivo viven en lib/canje.ts (las comparte
+    // el aviso de Stock > Cargar dispositivo).
+    const resultado = await agregarCanjeAlStock(supabase, c, { sucursalId: sucursalActual.id, actor: getActor() });
+    if (!resultado.ok) {
+      if (resultado.yaAgregado) {
+        alert(t('Este canje ya había sido agregado al stock (quizás desde otra pestaña).'));
+        setProcesando(null);
+        cargar();
+        return;
+      }
+      alert(`${t('No pudimos agregar al stock:')} ` + resultado.mensaje);
       setProcesando(null);
       return;
     }
-    if (!actualizado || actualizado.length === 0) {
-      alert(t('Este canje ya había sido agregado al stock (quizás desde otra pestaña).'));
-      setProcesando(null);
-      cargar();
-      return;
-    }
-
-    const actor = getActor();
-    const modeloNormalizado = c.modelo ? normalizarNombreModelo(c.modelo) : c.modelo;
-    const { error: insertError } = await supabase.from('dispositivos').insert({
-      modelo: modeloNormalizado,
-      capacidad_gb: c.capacidad_gb,
-      color: c.color,
-      imei: c.imei,
-      salud_bateria: c.salud_bateria,
-      estado: c.condicion || 'usado',
-      detalles: c.detalles,
-      en_stock: true,
-      agregado_por_nombre: actor?.nombre ?? null,
-      agregado_por_foto_url: actor?.fotoUrl ?? null,
-      ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
-    });
-    if (insertError) {
-      await supabase.from('canjes').update({ agregado_a_stock: false }).eq('id', c.id);
-      alert(`${t('No pudimos agregar al stock:')} ` + insertError.message);
-      setProcesando(null);
-      return;
-    }
-    await asegurarModelo(supabase, modeloNormalizado);
     setProcesando(null);
     cargar();
   };
@@ -188,7 +344,10 @@ export default function PlanCanje() {
     if (!puedeEliminar) return;
     if (!confirm(t('¿Eliminar este dispositivo de Plan Canje? Esta acción no se puede deshacer.'))) return;
     setProcesando(c.id);
-    await supabase.from('canjes').delete().eq('id', c.id);
+    if (await falla(supabase.from('canjes').delete().eq('id', c.id), t, 'eliminar canje')) {
+      setProcesando(null);
+      return;
+    }
     await registrarAuditoria(supabase, {
       accion: `eliminó de Plan Canje un dispositivo (${c.modelo || 'sin modelo'}${c.imei ? `, IMEI ${c.imei}` : ''})`,
       entidad: 'canje',
@@ -206,7 +365,10 @@ export default function PlanCanje() {
 
   const guardarUbicacion = async (c: Canje) => {
     setProcesando(c.id);
-    await supabase.from('canjes').update({ ubicacion_fisica: ubicacionInput.trim() || null }).eq('id', c.id);
+    if (await falla(supabase.from('canjes').update({ ubicacion_fisica: ubicacionInput.trim() || null }).eq('id', c.id), t, 'guardar ubicación')) {
+      setProcesando(null);
+      return;
+    }
     setEditandoUbicacionId(null);
     setProcesando(null);
     cargar();
@@ -248,6 +410,23 @@ export default function PlanCanje() {
         </button>
       </div>
 
+      <div className="flex flex-col gap-1">
+        <input
+          type="search"
+          value={busqueda}
+          onChange={(e) => setBusqueda(e.target.value)}
+          placeholder={t('Buscar por modelo, IMEI (o parte del IMEI), color, detalle...')}
+          aria-label={t('Buscar en Plan Canje')}
+          className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+        />
+        {hayBusqueda && !loading && (
+          <p className="text-xs text-muted dark:text-dark-text-secondary" aria-live="polite">
+            {vista === 'derivados' ? derivadosFiltrados.length : filtrados.length} {t('de')} {vista === 'derivados' ? derivados.length : baseFiltrados.length}
+            {completandoHistorial ? ` · ${t('Buscando en todo el historial...')}` : ''}
+          </p>
+        )}
+      </div>
+
       {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{t('Cargando...')}</p>}
 
       {vista === 'derivados' ? (
@@ -257,8 +436,11 @@ export default function PlanCanje() {
               {t('Todavía no derivaste ningún canje a Servicio Técnico.')}
             </p>
           )}
+          {!loading && derivados.length > 0 && derivadosFiltrados.length === 0 && (
+            <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{t('Ningún equipo coincide con la búsqueda.')}</p>
+          )}
           <div className="flex flex-col gap-2">
-            {derivados.map((r) => {
+            {derivadosFiltrados.map((r) => {
               const est = infoEstado(r.estado);
               return (
                 <Link
@@ -271,7 +453,7 @@ export default function PlanCanje() {
                     <div className="min-w-0">
                       <p className="text-sm font-medium truncate">
                         {r.numero_orden} · {r.modelo}
-                        {r.capacidad_gb ? ` · ${r.capacidad_gb}GB` : ''}
+                        {r.capacidad_gb ? ` · ${formatearGB(r.capacidad_gb)}` : ''}
                         {r.color ? ` · ${r.color}` : ''}
                       </p>
                       {r.imei && (
@@ -291,7 +473,11 @@ export default function PlanCanje() {
         <>
           {!loading && filtrados.length === 0 && (
             <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">
-              {vista === 'historial' ? t('Todavía no agregaste ningún canje al stock.') : t('No hay dispositivos para mostrar acá.')}
+              {hayBusqueda && baseFiltrados.length > 0
+                ? t('Ningún equipo coincide con la búsqueda.')
+                : vista === 'historial'
+                  ? t('Todavía no agregaste ningún canje al stock.')
+                  : t('No hay dispositivos para mostrar acá.')}
             </p>
           )}
 
@@ -304,7 +490,7 @@ export default function PlanCanje() {
                     <div>
                       <p className="text-sm font-medium flex items-center gap-1.5 flex-wrap">
                         {c.modelo}
-                        {c.capacidad_gb ? ` · ${c.capacidad_gb}GB` : ''}
+                        {c.capacidad_gb ? ` · ${formatearGB(c.capacidad_gb)}` : ''}
                         {c.color ? ` · ${c.color}` : ''}
                         {c.condicion === 'sellado' && (
                           <span className="text-[10px] font-bold text-black bg-gradient-to-b from-amber-300 to-amber-500 border border-black/40 rounded-full px-2 py-0.5">
@@ -323,10 +509,16 @@ export default function PlanCanje() {
                   {c.monto != null && <p className="text-sm font-medium">${c.monto.toLocaleString('es-AR')}</p>}
                 </div>
                 <div className="text-xs text-muted dark:text-dark-text-secondary flex flex-col gap-0.5">
+                  {c.created_at && (
+                    <p>
+                      {t('Recibido el:')} <span className="font-medium text-ink dark:text-dark-text">{formatearFechaYHoraCorta(c.created_at)}</span>
+                    </p>
+                  )}
                   {c.detalles && <p>{t('Detalles:')} {c.detalles}</p>}
-                  {c.vendedores?.nombre && (
+                  {c.vendedor_id && vendedores.get(c.vendedor_id)?.nombre && (
                     <p className="flex items-center gap-1.5">
-                      {t('Recibido por:')} <Avatar src={c.vendedores.foto_url} nombre={c.vendedores.nombre} size={34} /> {c.vendedores.nombre}
+                      {t('Recibido por:')} <Avatar src={vendedores.get(c.vendedor_id)?.foto_url ?? null} nombre={vendedores.get(c.vendedor_id)?.nombre ?? ''} size={34} />{' '}
+                      {vendedores.get(c.vendedor_id)?.nombre}
                     </p>
                   )}
                 </div>
@@ -364,7 +556,7 @@ export default function PlanCanje() {
                 )}
 
                 {vista === 'en_canje' && (
-                  <div className="flex items-center gap-2 mt-1">
+                  <div className="flex flex-wrap items-center gap-2 mt-1">
                     {puedeAgregarStock && (
                       <Boton
                         variante="primario"
@@ -374,6 +566,11 @@ export default function PlanCanje() {
                         className="flex-1"
                       >
                         {t('Agregar al Stock')}
+                      </Boton>
+                    )}
+                    {puedeAgregarStock && conStandby && (
+                      <Boton variante="secundario" tamano="sm" disabled={procesando === c.id} onClick={() => mandarAStandby(c)} className="flex-1">
+                        {t('Mandar a Standby')}
                       </Boton>
                     )}
                     {puedeRecibirServicioTecnico && (
@@ -402,6 +599,15 @@ export default function PlanCanje() {
               </div>
             ))}
           </div>
+          {vista === 'historial' && hayMasHistorial && (
+            <button
+              onClick={verMasHistorial}
+              disabled={cargandoMas}
+              className="self-center rounded-full border border-border dark:border-dark-border px-4 py-2 text-xs font-medium disabled:opacity-50"
+            >
+              {cargandoMas ? t('Cargando...') : t('Ver más')}
+            </button>
+          )}
         </>
       )}
     </main>

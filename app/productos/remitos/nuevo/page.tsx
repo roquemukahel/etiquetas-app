@@ -28,6 +28,11 @@ type ItemOrigen = {
 
 type ItemRemito = ItemOrigen & { cantidad: number };
 
+// Una unidad con identidad propia (celular, o producto serializado con 1 sola unidad) se transfiere de a 1.
+// Un producto marcado 'serializado' pero con varias unidades (se cargó como individual y después se le
+// subió la cantidad) se maneja por cantidad como cualquier accesorio: antes quedaba fijo en "1 unidad".
+const esUnidadUnica = (p: ItemOrigen) => p.tipo === 'dispositivo' || (p.modalidad === 'serializado' && p.disponible <= 1);
+
 export default function NuevoRemitoInterno() {
   const supabase = crearClienteNavegador();
   const t = useT();
@@ -259,7 +264,7 @@ export default function NuevoRemitoInterno() {
                   {p.nombre} {p.marca ? `· ${p.marca}` : ''}
                 </span>
                 <span className="text-xs text-muted dark:text-dark-text-secondary shrink-0">
-                  {p.tipo === 'dispositivo' ? t('1 unidad') : `${p.disponible} ${t('disp.')}`}
+                  {esUnidadUnica(p) ? t('1 unidad') : `${p.disponible} ${t('disp.')}`}
                 </span>
               </button>
             ))}
@@ -275,9 +280,10 @@ export default function NuevoRemitoInterno() {
               <span className="flex-1 text-sm truncate">
                 {i.nombre} {i.marca ? `· ${i.marca}` : ''}
               </span>
-              {i.modalidad === 'serializado' ? (
+              {esUnidadUnica(i) ? (
                 <span className="text-xs text-muted dark:text-dark-text-secondary">1 {t('unidad')}</span>
               ) : (
+                <>
                 <input
                   type="number"
                   min={1}
@@ -286,6 +292,10 @@ export default function NuevoRemitoInterno() {
                   onChange={(e) => cambiarCantidad(i.tipo, i.id, Number(e.target.value) || 1)}
                   className="w-16 rounded-lg border border-border dark:border-dark-border bg-surface dark:bg-dark-surface px-2 py-1 text-sm text-right"
                 />
+                <span className="text-xs text-muted dark:text-dark-text-secondary shrink-0">
+                  {t('de')} {i.disponible} {t('disp.')}
+                </span>
+                </>
               )}
               <button onClick={() => quitarItem(i.tipo, i.id)} className="text-xs text-bad shrink-0">
                 {t('Quitar')}

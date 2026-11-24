@@ -14,7 +14,11 @@ export default function Proveedores() {
   const supabase = crearClienteNavegador();
   const actor = useActor();
   const t = useT();
-  const puedeVer = tienePermiso(actor, 'ver_proveedores');
+  const puedeVerTodo = tienePermiso(actor, 'ver_proveedores');
+  // Quien solo puede registrar pagos ve la lista de proveedores y entra a cargar un pago, pero sin saldos, totales
+  // ni compras (permisos_sensibles_supabase.sql).
+  const soloPagos = !puedeVerTodo && tienePermiso(actor, 'registrar_pagos_proveedores');
+  const puedeVer = puedeVerTodo || soloPagos;
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [loading, setLoading] = useState(true);
   const [nombre, setNombre] = useState('');
@@ -24,7 +28,7 @@ export default function Proveedores() {
   const cargar = async () => {
     const [{ data }, { data: saldosData }] = await Promise.all([
       supabase.from('proveedores').select('id, nombre, telefono').order('nombre'),
-      supabase.rpc('saldos_proveedores'),
+      soloPagos ? Promise.resolve({ data: [] }) : supabase.rpc('saldos_proveedores'),
     ]);
     const saldoPorId = new Map<string, number>(
       ((saldosData as { proveedor_id: string; saldo: number }[]) ?? []).map((s) => [s.proveedor_id, Number(s.saldo) || 0])
@@ -50,7 +54,7 @@ export default function Proveedores() {
     }
     cargar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [puedeVer]);
+  }, [puedeVer, soloPagos]);
 
   const agregar = async () => {
     if (!nombre.trim()) return;
@@ -88,10 +92,12 @@ export default function Proveedores() {
       </header>
 
       <p className="text-xs text-muted dark:text-dark-text-secondary -mt-2">
-        {t('A quién le comprás stock en lote. Entrá a cada uno para ver las compras y llevar la cuenta de lo que le debés.')}
+        {soloPagos
+          ? t('Elegí el proveedor al que le vas a registrar un pago.')
+          : t('A quién le comprás stock en lote. Entrá a cada uno para ver las compras y llevar la cuenta de lo que le debés.')}
       </p>
 
-      {(totalPorPagar > 0 || totalAFavor > 0) && (
+      {!soloPagos && (totalPorPagar > 0 || totalAFavor > 0) && (
         <div className={totalPorPagar > 0 && totalAFavor > 0 ? 'grid grid-cols-2 gap-3' : 'flex'}>
           {totalPorPagar > 0 && (
             <div className="flex-1 rounded-2xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-4">
@@ -110,6 +116,7 @@ export default function Proveedores() {
 
       {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
 
+      {!soloPagos && (
       <div className="flex gap-2">
         <input
           value={nombre}
@@ -125,6 +132,7 @@ export default function Proveedores() {
           {t('Agregar')}
         </button>
       </div>
+      )}
 
       {loading && <p className="text-sm text-muted dark:text-dark-text-secondary text-center mt-6">{t('Cargando...')}</p>}
       {!loading && proveedores.length === 0 && (
@@ -143,7 +151,7 @@ export default function Proveedores() {
               {p.telefono && <p className="text-xs text-muted dark:text-dark-text-secondary">{p.telefono}</p>}
             </div>
             <div className="flex items-center gap-2">
-              {p.saldo > 0 ? (
+              {soloPagos ? null : p.saldo > 0 ? (
                 <span className="text-sm font-medium text-bad">{t('le debés')} ${formatearMonto(p.saldo)}</span>
               ) : p.saldo < 0 ? (
                 <span className="text-xs font-medium text-good">{t('saldo a favor')} ${formatearMonto(-p.saldo)}</span>

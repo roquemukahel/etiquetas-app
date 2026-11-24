@@ -45,9 +45,18 @@ export default function DetalleLiquidacion() {
   const [refPago, setRefPago] = useState('');
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Un vendedor sin permiso de gestionar no ve el detalle por producto si alguna comisión se calcula sobre la ganancia (se podría
+  // deducir el costo): solo ve los totales de su liquidación y sus pagos.
+  const [restringido, setRestringido] = useState(false);
 
   const cargar = async () => {
     const { data: { user } } = await supabase.auth.getUser();
+    const [{ count: reglasGanancia }, { count: movsGanancia }] = await Promise.all([
+      supabase.from('comision_reglas').select('id', { count: 'exact', head: true }).eq('tipo_calculo', 'porcentaje_ganancia').eq('activo', true),
+      supabase.from('comision_movimientos').select('id', { count: 'exact', head: true }).filter('regla_snapshot->>tipo_calculo', 'eq', 'porcentaje_ganancia'),
+    ]);
+    const ocultar = !puedeGestionar && ((reglasGanancia ?? 0) > 0 || (movsGanancia ?? 0) > 0);
+    setRestringido(ocultar);
     // Estas 4 son independientes entre sí (todas filtran por "id"/"user.id",
     // ya conocidos) — pedirlas en paralelo evita encadenar 4 round-trips.
     const [{ data: perfil }, { data: l }, { data: m }, { data: p }] = await Promise.all([
@@ -59,7 +68,7 @@ export default function DetalleLiquidacion() {
         .single(),
       supabase
         .from('comision_movimientos')
-        .select('id, tipo_movimiento, fecha_hecho, base, comision, orden_id, tipo_venta, motivo')
+        .select(ocultar ? 'id, tipo_movimiento, comision' : 'id, tipo_movimiento, fecha_hecho, base, comision, orden_id, tipo_venta, motivo')
         .eq('liquidacion_id', id)
         .order('fecha_hecho', { ascending: true }),
       supabase.from('comision_liquidacion_pagos').select('id, monto, medio, referencia, fecha').eq('liquidacion_id', id).order('fecha'),
@@ -186,7 +195,7 @@ export default function DetalleLiquidacion() {
         </div>
       </div>
 
-      <div className="flex gap-2">
+      <div className={`flex gap-2 ${restringido ? 'hidden' : ''}`}>
         <button onClick={exportarPDF} className="flex-1 rounded-xl border border-border dark:border-dark-border py-2.5 text-sm font-medium">{t('Descargar PDF')}</button>
         <button onClick={exportarCSV} className="flex-1 rounded-xl border border-border dark:border-dark-border py-2.5 text-sm font-medium">{t('Exportar CSV')}</button>
       </div>
@@ -208,7 +217,12 @@ export default function DetalleLiquidacion() {
 
       <section className="rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card">
         <div className="px-4 py-3 border-b border-border dark:border-dark-border"><p className="text-sm font-semibold">{t('Detalle')}</p></div>
-        <div className="flex flex-col divide-y divide-border dark:divide-dark-border">
+        {restringido && (
+          <p className="px-4 py-4 text-xs text-muted dark:text-dark-text-secondary">
+            🔒 {t('Por privacidad, el detalle por producto no se muestra porque algunas comisiones se calculan sobre la ganancia. Acá ves el total de tu liquidación.')}
+          </p>
+        )}
+        <div className={`flex flex-col divide-y divide-border dark:divide-dark-border ${restringido ? 'hidden' : ''}`}>
           {movs.map((mv) => (
             <div key={mv.id} className="flex items-center gap-3 px-4 py-2.5">
               <div className="min-w-0 flex-1">

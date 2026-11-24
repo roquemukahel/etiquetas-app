@@ -1,12 +1,13 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextRequest, NextResponse } from 'next/server';
+import { esErrorTransitorioDeAuth } from './app/lib/authTransitorio';
 
 // '/cuenta/' (con la barra al final) es el portal público de cuenta
 // corriente de un cliente (app/cuenta/[token]/page.tsx, RPC cuenta_publica)
 // — un cliente externo nunca tiene sesión, así que sin esto el middleware
 // lo mandaba derecho a /login. Con la barra no choca con '/cuenta-desactivada'
 // (ruta distinta, ya pública, para negocios suspendidos).
-const RUTAS_PUBLICAS = ['/login', '/registro', '/cuenta-desactivada', '/suscripcion-vencida', '/terminos', '/privacidad', '/seguimiento', '/boleta', '/comprobante-plan-ahorro', '/stock-publico', '/cuenta/'];
+const RUTAS_PUBLICAS = ['/login', '/registro', '/cuenta-desactivada', '/suscripcion-vencida', '/terminos', '/privacidad', '/seguimiento', '/boleta', '/comprobante-plan-ahorro', '/stock-publico', '/orden-publica', '/cuenta/'];
 
 // El deployment de PRODUCCIÓN de Vercel siempre queda accesible además por
 // su propio dominio genérico (*.vercel.app) — no se puede desactivar. Para
@@ -31,6 +32,16 @@ export async function middleware(request: NextRequest) {
   if (esProduccion && !esRutaApi && !esLocal && host && host !== DOMINIO_CANONICO && host !== `www.${DOMINIO_CANONICO}`) {
     const destino = new URL(request.nextUrl.pathname + request.nextUrl.search, `https://${DOMINIO_CANONICO}`);
     return NextResponse.redirect(destino, 308);
+  }
+
+  // Stock en JSON para otra app (/stock-publico/<token>/json): público y sin sesión, se resuelve acá antes de consultar la
+  // sesión, igual que los webhooks. Es un enlace aparte del que se le manda a los clientes (la página no cambia).
+  if (/^\/stock-publico\/[0-9a-f-]{36}\/json\/?$/i.test(request.nextUrl.pathname)) return NextResponse.next();
+
+  // Seguimiento de órdenes de Servicio Técnico para otra app (/orden-publica/<código>/json y /suscribir): públicos y sin sesión,
+  // igual que el stock en JSON. El aviso push (/api/push-orden) lo llama la base de datos con pg_net, tampoco trae sesión.
+  if (/^\/orden-publica\/[A-Za-z0-9]{8}\/(json|suscribir)\/?$/.test(request.nextUrl.pathname) || request.nextUrl.pathname === '/api/push-orden') {
+    return NextResponse.next();
   }
 
   // Los webhooks (ej. Lemon Squeezy) y los cron jobs (ej. Vercel Cron) son
@@ -70,14 +81,25 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Si el servicio de autenticación falla un instante (red, timeout, 5xx), "no hay usuario" NO quiere decir "no hay sesión": antes eso
+  // mandaba a /login a alguien que estaba trabajando (por ejemplo a mitad de una boleta) y le hacía perder lo cargado. Se reintenta
+  // una vez y, si sigue fallando por un motivo transitorio, se deja pasar: la sesión sigue en su cookie y la pantalla se encarga.
+  let user: Awaited<ReturnType<typeof supabase.auth.getUser>>['data']['user'] = null;
+  let falloTransitorio = false;
+  for (let intento = 0; intento < 2; intento++) {
+    const { data, error: errorAuth } = await supabase.auth.getUser();
+    user = data.user;
+    falloTransitorio = !user && esErrorTransitorioDeAuth(errorAuth);
+    if (user || !falloTransitorio) break;
+    if (intento === 0) await new Promise((r) => setTimeout(r, 400));
+  }
 
   const esPublica = RUTAS_PUBLICAS.some((r) => request.nextUrl.pathname.startsWith(r));
   // La raíz muestra la landing pública si no hay sesión (la decide la propia
   // página, no el middleware), así que no la redirigimos a /login.
   const esRaiz = request.nextUrl.pathname === '/';
+
+  if (!user && falloTransitorio && !esPublica) return response;
 
   if (!user && !esPublica && !esRaiz) {
     const url = request.nextUrl.clone();
@@ -89,7 +111,7 @@ export async function middleware(request: NextRequest) {
   // (a diferencia de /login, que no tiene sentido ver estando adentro).
   // /registro sí puede hacer falta verla estando logueado: es donde se
   // recupera una cuenta que quedó sin negocio creado (ver app/registro).
-  const RUTAS_SIEMPRE_ACCESIBLES = ['/registro', '/cuenta-desactivada', '/suscripcion-vencida', '/terminos', '/privacidad', '/seguimiento', '/boleta', '/comprobante-plan-ahorro', '/stock-publico', '/cuenta/'];
+  const RUTAS_SIEMPRE_ACCESIBLES = ['/registro', '/cuenta-desactivada', '/suscripcion-vencida', '/terminos', '/privacidad', '/seguimiento', '/boleta', '/comprobante-plan-ahorro', '/stock-publico', '/orden-publica', '/cuenta/'];
   const esPantallaDeBloqueo = RUTAS_SIEMPRE_ACCESIBLES.some((r) => request.nextUrl.pathname.startsWith(r));
 
   if (user && esPublica && !esPantallaDeBloqueo) {

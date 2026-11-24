@@ -19,6 +19,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No configurado' }, { status: 500 });
     }
 
+    if ((nombre ?? '').length > 100 || (apellido ?? '').length > 100 || emailLimpio.length > 200 || (telefono ?? '').length > 50 || (mensaje ?? '').length > 4000) {
+      return NextResponse.json({ error: 'Datos demasiado largos' }, { status: 400 });
+    }
+
     const telefonoLimpio = (telefono ?? '').trim();
 
     const res = await fetch('https://api.resend.com/emails', {

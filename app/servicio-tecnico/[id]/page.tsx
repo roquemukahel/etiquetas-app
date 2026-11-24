@@ -28,13 +28,16 @@ import CapturarBloqueo from '../../CapturarBloqueo';
 import MostrarBloqueo from '../../MostrarBloqueo';
 import SelectorTipoDispositivo from '../../SelectorTipoDispositivo';
 import { cambiarEstadoReparacion } from '../../lib/estadoReparacion';
-import { generarOrdenDeReparacion } from '../../lib/ordenesServicio';
-import { extraerStockInsuficiente } from '../../lib/repuestos';
+import { generarOrdenDeReparacion, ordenYaTieneCargoCuentaCorriente } from '../../lib/ordenesServicio';
+import { consumirRepuesto } from '../../lib/repuestos';
+import { alCambiarRepuestos, registrarDecisionRepuesto, type DecisionRepuesto } from '../../lib/costoRepuesto';
+import { palabrasDeBusqueda, repuestoCoincide, repuestoEnSucursal, repuestosDisponibles } from '../../lib/repuestosBusqueda';
 import { sanitizarDecimal, formatearMonto } from '../../lib/numeros';
 import { calcularSaldo } from '../../lib/cuentaCorriente';
 import { aFechaISO, sumarMesConClamp } from '../../lib/financiacion/motor';
 import { comprimirImagen } from '../../lib/comprimirImagen';
 import SelectorColorAuto from '../../SelectorColorAuto';
+import SelectorFormaPago from '../../SelectorFormaPago';
 import Avatar from '../../Avatar';
 import CheckTri from '../../CheckTri';
 import TextoCondicionGenerado from '../../TextoCondicionGenerado';
@@ -45,6 +48,13 @@ import CampoFecha from '../../CampoFecha';
 import { useT, useIdioma } from '../../lib/idioma';
 import { traducirAccion } from '../../lib/i18n/traducirAccion';
 import { useSucursalActual } from '../../lib/sucursal';
+import { falla } from '../../lib/escritura';
+import { obtenerTodasLasFilas } from '../../lib/db';
+import { soportaMigracion } from '../../lib/migraciones';
+import { costoDeCanjeDeOrigen, marcarCanjeDeOrigenAgregado } from '../../lib/canje';
+import { bateriaDeReparacion } from '../../lib/bateriaServicio';
+import { mandarReparacionAStandby, reubicarEquipoDeServicio, dispositivoOrigenDe } from '../../lib/standby';
+import { OPCIONES_ALMACENAMIENTO, formatearGB } from '../../lib/almacenamiento';
 
 // Mismo patrón que TarjetaReparacion/EstadoBadge para reescalar los SVG de
 // 24px a un tamaño chico inline junto a texto.
@@ -56,10 +66,8 @@ function IconoChico({ nombre, className = '' }: { nombre: string; className?: st
   );
 }
 
-const STORAGE_OPTIONS = [64, 128, 256, 512];
+const STORAGE_OPTIONS = OPCIONES_ALMACENAMIENTO;
 const ACCESORIOS_OPCIONES = ['Funda', 'Cargador', 'SIM', 'Bandeja SIM'];
-const FORMAS_PAGO = ['Efectivo', 'Transferencia', 'Tarjeta'];
-
 type Tab = 'resumen' | 'recepcion' | 'diagnostico' | 'presupuesto' | 'servicios' | 'control' | 'evidencias' | 'comunicacion' | 'historial';
 
 const TABS: { id: Tab; label: string }[] = [
@@ -113,6 +121,8 @@ type Reparacion = {
   numero_orden: string | null;
   cliente_id: string | null;
   sucursal_id: string | null;
+  // Quién recibió el equipo (servicio_tecnico_recibido_por_supabase.sql).
+  recibido_por_nombre?: string | null;
   modelo: string | null;
   capacidad_gb: number | null;
   color: string | null;
@@ -175,6 +185,11 @@ type Reparacion = {
   fecha_entrega: string | null;
   orden_cobro_id: string | null;
   token_seguimiento: string;
+  codigo_seguimiento: string | null;
+  nota_cliente: string | null;
+  salud_bateria?: number | null;
+  // undefined = el negocio todavía no corrió servicio_costo_repuesto_supabase.sql
+  repuesto_decision?: DecisionRepuesto | null;
   fecha_ingreso_servicio: string;
   fecha_reparado: string | null;
   agregado_a_stock: boolean;
@@ -204,6 +219,7 @@ type RepuestoStock = {
   costo_unitario: number | null;
   precio_venta: number | null;
   sucursal_id: string | null;
+  calidad: string | null;
 };
 type RepuestoUsado = {
   id: string;
@@ -265,6 +281,9 @@ export default function FichaReparacion() {
   const [avisoAgregarStock, setAvisoAgregarStock] = useState(false);
   const [tab, setTab] = useState<Tab>('resumen');
   const [linkCopiado, setLinkCopiado] = useState(false);
+  const [codigoCopiado, setCodigoCopiado] = useState(false);
+  const [notaCliente, setNotaCliente] = useState('');
+  const [guardandoNotaCliente, setGuardandoNotaCliente] = useState(false);
   const [controlCalidad, setControlCalidad] = useState<ControlCalidadItem[]>([]);
   const [reparacionesRelacionadas, setReparacionesRelacionadas] = useState<ReparacionRelacionada[]>([]);
   const [guardandoClasificacion, setGuardandoClasificacion] = useState(false);
@@ -286,6 +305,9 @@ export default function FichaReparacion() {
     plazo_dias: number | null;
   } | null>(null);
   const [saldoCliente, setSaldoCliente] = useState(0);
+  // La orden de cobro suele existir desde la recepción: si ya tiene su cargo a
+  // cuenta corriente no hay que volver a validar crédito ni a cargarla.
+  const [ordenCobroConCargo, setOrdenCobroConCargo] = useState(false);
   const [monedaNegocio, setMonedaNegocio] = useState('ARS');
   const [financiarActivo, setFinanciarActivo] = useState(false);
   const [financiarCuotas, setFinanciarCuotas] = useState('3');
@@ -349,6 +371,11 @@ export default function FichaReparacion() {
     setEventos([...deAuditoria, ...deEventos].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
   };
 
+  // La nota para el cliente se actualiza en pantalla solo cuando cambia lo guardado (no pisa lo que se está escribiendo).
+  useEffect(() => {
+    setNotaCliente(r?.nota_cliente ?? '');
+  }, [r?.nota_cliente]);
+
   useEffect(() => {
     cargar();
     (async () => {
@@ -360,7 +387,7 @@ export default function FichaReparacion() {
       setTrabajos((data as Trabajo[]) ?? []);
     })();
     (async () => {
-      const { data } = await supabase.from('repuestos').select('id, nombre, cantidad_stock, costo_unitario, precio_venta, sucursal_id').order('nombre');
+      const data = await obtenerTodasLasFilas<any>(supabase, 'repuestos', 'id, nombre, cantidad_stock, costo_unitario, precio_venta, sucursal_id, calidad', [{ columna: 'nombre' }]);
       setRepuestosStock((data as RepuestoStock[]) ?? []);
     })();
     (async () => {
@@ -390,6 +417,21 @@ export default function FichaReparacion() {
       setSaldoCliente(calcularSaldo((movs as { tipo: string; monto: number }[]) ?? []));
     })();
   }, [r?.cliente_id, supabase]);
+
+  useEffect(() => {
+    if (!r?.orden_cobro_id || r.forma_pago !== 'Cuenta corriente') {
+      setOrdenCobroConCargo(false);
+      return;
+    }
+    let cancelado = false;
+    (async () => {
+      const yaTiene = await ordenYaTieneCargoCuentaCorriente(supabase, r.orden_cobro_id!);
+      if (!cancelado) setOrdenCobroConCargo(yaTiene === true);
+    })();
+    return () => {
+      cancelado = true;
+    };
+  }, [r?.orden_cobro_id, r?.forma_pago, supabase]);
 
   // Garantías y retrabajos (sección 21): reparaciones anteriores del MISMO
   // equipo (mismo IMEI), para poder clasificar este ingreso. Se busca recién
@@ -447,7 +489,7 @@ export default function FichaReparacion() {
   // sin depender de que el formulario de edición siga abierto.
   const totalGuardado = r ? r.importe_total ?? (r.presupuesto_mano_obra || 0) + (r.presupuesto_repuestos || 0) : 0;
   const bloqueadoPorCredito =
-    !!r && r.forma_pago === 'Cuenta corriente' && !r.orden_cobro_id && totalGuardado > creditoDisponible + 0.009;
+    !!r && r.forma_pago === 'Cuenta corriente' && !ordenCobroConCargo && totalGuardado > creditoDisponible + 0.009;
 
   // Checklist de control de calidad aplicable a esta reparación (sección
   // 17): unión de checklist_tecnico de los servicios realizados (Fase 4,
@@ -690,13 +732,22 @@ export default function FichaReparacion() {
     if (!r || !notaTexto.trim() || guardando) return;
     setGuardando(true);
     const actor = getActor();
-    await supabase.from('reparaciones_eventos').insert({
-      reparacion_id: r.id,
-      tipo: 'nota_interna',
-      texto: notaTexto.trim(),
-      actor_nombre: actor?.nombre ?? null,
-      actor_tipo: actor?.tipo ?? null,
-    });
+    if (
+      await falla(
+        supabase.from('reparaciones_eventos').insert({
+          reparacion_id: r.id,
+          tipo: 'nota_interna',
+          texto: notaTexto.trim(),
+          actor_nombre: actor?.nombre ?? null,
+          actor_tipo: actor?.tipo ?? null,
+        }),
+        t,
+        'guardar nota interna'
+      )
+    ) {
+      setGuardando(false);
+      return;
+    }
     setNotaTexto('');
     setGuardando(false);
     cargar();
@@ -735,15 +786,25 @@ export default function FichaReparacion() {
   // Un repuesto con sucursal_id null es stock viejo (cargado antes de la
   // función multisucursal, o desde el catálogo de precios de un proveedor) —
   // se muestra en cualquier sucursal, igual que en Stock de repuestos, para
-  // no esconder stock real. Pero uno YA asignado a otra sucursal no debería
-  // aparecer acá: antes se podía consumir repuestos de otro local sin darse
-  // cuenta, porque este selector no filtraba por sucursal en absoluto.
-  const repuestosFiltrados = repuestosStock.filter(
-    (rp) =>
-      rp.cantidad_stock > 0 &&
-      rp.nombre.toLowerCase().includes(buscarRepuesto.trim().toLowerCase()) &&
-      (rp.sucursal_id == null || rp.sucursal_id === sucursalActual.id)
-  );
+  // no esconder stock real. Uno YA asignado a otra sucursal no debería
+  // aparecer: se consume stock del local de ESTA reparación.
+  // Se filtra por la sucursal de la ORDEN, no por la que está elegida en el
+  // menú de arriba: con "Todas las sucursales" ese menú no tiene sucursal y
+  // el buscador solo mostraba los repuestos sin sucursal, así que un repuesto
+  // con stock en la sucursal de la orden figuraba "sin resultados". Una orden
+  // sin sucursal (negocio de un solo local, o anterior a multisucursal) no filtra.
+  const sucursalDeLaOrden = r?.sucursal_id ?? null;
+  // Búsqueda por palabras (no por frase exacta) sobre nombre + calidad:
+  // "modulo g60s premium" encuentra "Modulo Motorola g60s" de calidad Premium.
+  const palabrasBusqueda = palabrasDeBusqueda(buscarRepuesto);
+  const coincideBusqueda = (rp: RepuestoStock) => repuestoCoincide(rp, palabrasBusqueda);
+  const enSucursalDeLaOrden = (rp: RepuestoStock) => repuestoEnSucursal(rp, sucursalDeLaOrden);
+  const repuestosFiltrados = repuestosDisponibles(repuestosStock, buscarRepuesto, sucursalDeLaOrden);
+  // Para explicar un "sin resultados": hay repuestos con ese nombre pero sin
+  // stock o de otra sucursal.
+  const coincidenciasSinStockODeOtraSucursal = buscarRepuesto
+    ? repuestosStock.filter((rp) => coincideBusqueda(rp) && !(rp.cantidad_stock > 0 && enSucursalDeLaOrden(rp))).length
+    : 0;
 
   // Consumir un repuesto pasa por la función repuesto_consumir (RPC) en vez
   // de leer/escribir cantidad_stock desde acá: esa función bloquea la fila
@@ -759,47 +820,31 @@ export default function FichaReparacion() {
     if (cantidad <= 0) return;
     setGuardandoRepuesto(true);
     const actor = getActor();
-    const intentar = async (forzar: boolean) =>
-      supabase.rpc('repuesto_consumir', {
-        p_repuesto_id: repuestoElegido.id,
-        p_reparacion_id: r.id,
-        p_cantidad: cantidad,
-        p_actor_nombre: actor?.nombre ?? null,
-        p_forzar: forzar,
-      });
-
-    let { error: rpcError } = await intentar(false);
-    if (rpcError) {
-      const stockActual = extraerStockInsuficiente(rpcError.message);
-      if (
-        stockActual == null ||
-        !confirm(
-          `${t('Solo quedan')} ${stockActual} ${t('de')} "${repuestoElegido.nombre}" ${t('en stock. ¿Usar')} ${cantidad} ${t('igual? El stock va a quedar en negativo.')}`
-        )
-      ) {
-        setGuardandoRepuesto(false);
-        return;
-      }
-      ({ error: rpcError } = await intentar(true));
-      if (rpcError) {
-        setError(t('No pudimos guardar el repuesto:') + ' ' + rpcError.message);
-        setGuardandoRepuesto(false);
-        return;
-      }
-    }
-
-    await registrarAuditoria(supabase, {
-      accion: `usó ${cantidad} de "${repuestoElegido.nombre}" en la reparación ${r.numero_orden || ''}`,
-      entidad: 'reparacion',
-      entidadId: r.id,
+    const resultado = await consumirRepuesto(supabase, {
+      repuestoId: repuestoElegido.id,
+      nombre: repuestoElegido.nombre,
+      reparacionId: r.id,
+      numeroOrden: r.numero_orden,
+      cantidad,
+      actorNombre: actor?.nombre ?? null,
+      confirmarNegativo: (stockActual) =>
+        confirm(`${t('Solo quedan')} ${stockActual} ${t('de')} "${repuestoElegido.nombre}" ${t('en stock. ¿Usar')} ${cantidad} ${t('igual? El stock va a quedar en negativo.')}`),
     });
+    if (!resultado.ok) {
+      if (resultado.error) setError(t('No pudimos guardar el repuesto:') + ' ' + resultado.error);
+      setGuardandoRepuesto(false);
+      return;
+    }
+    // Con un repuesto cargado la reparación deja de tener "costo pendiente" y el costo de su boleta se recalcula.
+    const errorCosto = await alCambiarRepuestos(supabase, r.id);
+    if (errorCosto) setError(t('El repuesto se usó, pero no pudimos actualizar el costo:') + ' ' + errorCosto);
     setRepuestoElegido(null);
     setBuscarRepuesto('');
     setCantidadRepuesto('1');
     setGuardandoRepuesto(false);
     cargar();
     (async () => {
-      const { data } = await supabase.from('repuestos').select('id, nombre, cantidad_stock, costo_unitario, precio_venta, sucursal_id').order('nombre');
+      const data = await obtenerTodasLasFilas<any>(supabase, 'repuestos', 'id, nombre, cantidad_stock, costo_unitario, precio_venta, sucursal_id, calidad', [{ columna: 'nombre' }]);
       setRepuestosStock((data as RepuestoStock[]) ?? []);
     })();
   };
@@ -821,11 +866,21 @@ export default function FichaReparacion() {
       entidad: 'reparacion',
       entidadId: id,
     });
+    const errorCostoQuitar = await alCambiarRepuestos(supabase, id);
+    if (errorCostoQuitar) setError(t('El repuesto se quitó, pero no pudimos actualizar el costo:') + ' ' + errorCostoQuitar);
     cargar();
     (async () => {
-      const { data } = await supabase.from('repuestos').select('id, nombre, cantidad_stock, costo_unitario, precio_venta, sucursal_id').order('nombre');
+      const data = await obtenerTodasLasFilas<any>(supabase, 'repuestos', 'id, nombre, cantidad_stock, costo_unitario, precio_venta, sucursal_id, calidad', [{ columna: 'nombre' }]);
       setRepuestosStock((data as RepuestoStock[]) ?? []);
     })();
+  };
+
+  // Cambiar la respuesta a "¿se usó repuesto?" desde la ficha (por ejemplo, confirmar que no usó, o dejar el costo pendiente).
+  const responderRepuesto = async (decision: DecisionRepuesto) => {
+    if (!r || !puedeGestionar) return;
+    const mensaje = await registrarDecisionRepuesto(supabase, r, decision, getActor()?.nombre ?? null);
+    if (mensaje) setError(t('No pudimos guardar la respuesta:') + ' ' + mensaje);
+    cargar();
   };
 
   const enviarWhatsApp = async (tipo: 'recibido' | 'presupuesto' | 'repuesto' | 'listo') => {
@@ -835,7 +890,7 @@ export default function FichaReparacion() {
     const nombre = nombreCliente || 'estimado/a';
     const modelo = r.modelo || 'equipo';
     let mensaje = '';
-    if (tipo === 'recibido') mensaje = mensajeSeguimientoServicio(nombre, modelo, url);
+    if (tipo === 'recibido') mensaje = mensajeSeguimientoServicio(nombre, modelo, url, r.codigo_seguimiento);
     if (tipo === 'presupuesto') {
       const monto = `$${formatearMonto((r.presupuesto_mano_obra || 0) + (r.presupuesto_repuestos || 0))}`;
       mensaje = mensajePresupuesto(nombre, modelo, monto, url);
@@ -868,16 +923,25 @@ export default function FichaReparacion() {
     if (!confirm(aprobar ? t('¿Registrar que el cliente aprobó este presupuesto?') : t('¿Registrar que el cliente rechazó este presupuesto?'))) return;
     setGuardando(true);
     const total = (r.presupuesto_mano_obra || 0) + (r.presupuesto_repuestos || 0);
-    await supabase
-      .from('reparaciones')
-      .update({
-        presupuesto_estado: aprobar ? 'aprobado' : 'rechazado',
-        presupuesto_medio: 'manual',
-        presupuesto_respondido_at: new Date().toISOString(),
-        presupuesto_importe_aceptado: total,
-        presupuesto_texto_aceptado: r.diagnostico,
-      })
-      .eq('id', r.id);
+    if (
+      await falla(
+        supabase
+          .from('reparaciones')
+          .update({
+            presupuesto_estado: aprobar ? 'aprobado' : 'rechazado',
+            presupuesto_medio: 'manual',
+            presupuesto_respondido_at: new Date().toISOString(),
+            presupuesto_importe_aceptado: total,
+            presupuesto_texto_aceptado: r.diagnostico,
+          })
+          .eq('id', r.id),
+        t,
+        'registrar respuesta del presupuesto'
+      )
+    ) {
+      setGuardando(false);
+      return;
+    }
     await registrarAuditoria(supabase, {
       accion: `registró que el cliente ${aprobar ? 'aprobó' : 'rechazó'} el presupuesto de la reparación ${r.numero_orden || ''} (registrado manualmente)`,
       entidad: 'reparacion',
@@ -923,7 +987,16 @@ export default function FichaReparacion() {
 
     // Cuenta corriente/financiamiento solo aplica la primera vez que se
     // genera la orden (ver comentario de esOrdenNueva en ordenesServicio.ts).
-    const esCtaCteNueva = r.forma_pago === 'Cuenta corriente' && !!r.cliente_id && !r.orden_cobro_id;
+    let cargoYaGenerado = false;
+    if (r.forma_pago === 'Cuenta corriente' && r.cliente_id && r.orden_cobro_id) {
+      const yaTiene = await ordenYaTieneCargoCuentaCorriente(supabase, r.orden_cobro_id);
+      if (yaTiene === null) {
+        setError(t('No pudimos verificar la cuenta corriente de esta orden. Probá de nuevo.'));
+        return;
+      }
+      cargoYaGenerado = yaTiene;
+    }
+    const esCtaCteNueva = r.forma_pago === 'Cuenta corriente' && !!r.cliente_id && !cargoYaGenerado;
     if (esCtaCteNueva) {
       if (!ctaCteDisponible) {
         setError(t('Este cliente no tiene cuenta corriente habilitada — se puede activar desde su ficha.'));
@@ -979,36 +1052,77 @@ export default function FichaReparacion() {
       return;
     }
     if (r.imei) {
-      const { data: existente } = await supabase.from('dispositivos').select('id').eq('imei', r.imei).maybeSingle();
+      // El equipo de origen (si lo hay) es el mismo que vuelve: no cuenta como duplicado.
+      const origenId = await dispositivoOrigenDe(supabase, r.id);
+      const { data: existente } = await supabase
+        .from('dispositivos')
+        .select('id')
+        .eq('imei', r.imei)
+        .neq('id', origenId ?? '00000000-0000-0000-0000-000000000000')
+        .limit(1)
+        .maybeSingle();
       if (existente && !confirm(`${t('Ya hay un dispositivo en Stock con el IMEI')} ${r.imei}. ${t('¿Agregarlo igual?')}`)) return;
     }
     if (!confirm(t('¿Pasar este equipo al Stock como dispositivo disponible para vender?'))) return;
     setGuardando(true);
     setAvisoAgregarStock(false);
     const modeloNormalizado = r.modelo ? normalizarNombreModelo(r.modelo) : r.modelo;
-    await supabase.from('dispositivos').insert({
+    // Si la reparación salió de un equipo del Stock/Standby, vuelve ese mismo equipo (no se crea un duplicado).
+    // Si el equipo vino de Plan Canje, entra al Stock con lo que se le reconoció al cliente como costo.
+    const costoCanje = await costoDeCanjeDeOrigen(supabase, r.id);
+    const bateria = await bateriaDeReparacion(supabase, r.id);
+    const reutilizado = await reubicarEquipoDeServicio(supabase, r.id, 'stock');
+    if (reutilizado.error) {
+      setError(reutilizado.error);
+      setGuardando(false);
+      return;
+    }
+    if (
+      !reutilizado.usado &&
+      (await falla(
+        supabase.from('dispositivos').insert({
       modelo: modeloNormalizado,
       capacidad_gb: r.capacidad_gb,
       color: r.color,
       imei: r.imei,
       estado: 'usado',
+      ...(costoCanje ? { costo: costoCanje } : {}),
+      ...(bateria != null ? { salud_bateria: bateria } : {}),
       en_stock: true,
       agregado_por_nombre: actor?.nombre ?? null,
       agregado_por_foto_url: actor?.fotoUrl ?? null,
       // Hereda la sucursal de esta misma reparación, no la que esté
       // eligiendo ahora quien aprieta el botón.
       ...(r.sucursal_id ? { sucursal_id: r.sucursal_id } : {}),
-    });
-    await asegurarModelo(supabase, modeloNormalizado);
-    await supabase
-      .from('reparaciones')
-      .update({
-        estado: 'entregado',
-        estado_actualizado_at: new Date().toISOString(),
-        agregado_a_stock: true,
-        fecha_reparado: r.fecha_reparado ?? new Date().toISOString(),
-      })
-      .eq('id', r.id);
+        }),
+        t,
+        'agregar equipo al stock'
+      ))
+    ) {
+      setGuardando(false);
+      return;
+    }
+    if (!reutilizado.usado) await asegurarModelo(supabase, modeloNormalizado);
+    if (
+      await falla(
+        supabase
+          .from('reparaciones')
+          .update({
+            estado: 'entregado',
+            estado_actualizado_at: new Date().toISOString(),
+            agregado_a_stock: true,
+            fecha_reparado: r.fecha_reparado ?? new Date().toISOString(),
+          })
+          .eq('id', r.id),
+        t,
+        'marcar reparación como agregada al stock'
+      )
+    ) {
+      setGuardando(false);
+      cargar();
+      return;
+    }
+    await marcarCanjeDeOrigenAgregado(supabase, r.id);
     await registrarAuditoria(supabase, {
       accion: `agregó al Stock un equipo propio reparado en Servicio Técnico (${r.numero_orden || ''}, ${r.modelo || 'sin modelo'}${r.imei ? `, IMEI ${r.imei}` : ''})`,
       entidad: 'reparacion',
@@ -1018,24 +1132,67 @@ export default function FichaReparacion() {
     cargar();
   };
 
+  // Standby (standby_supabase.sql): equipo propio que no se va a arreglar por ahora.
+  const [conStandby, setConStandby] = useState(false);
+  useEffect(() => {
+    soportaMigracion(supabase, 'standby').then(setConStandby);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const mandarAStandbyFicha = async () => {
+    if (!r || !puedeAgregarStock) return;
+    const quien = getActor();
+    if (!quien) {
+      setError(t(MENSAJE_ACTOR_REQUERIDO));
+      return;
+    }
+    const motivo = prompt(`${t('¿Qué le pasa a')} ${r.modelo || t('este equipo')}? ${t('Queda en Standby y sale de Servicio Técnico.')}`, r.diagnostico ?? r.falla_declarada ?? '');
+    if (motivo === null) return;
+    setGuardando(true);
+    const resultado = await mandarReparacionAStandby(supabase, r, { motivo, actor: quien });
+    setGuardando(false);
+    if (resultado.error) {
+      setError(resultado.error);
+      return;
+    }
+    cargar();
+  };
+
   const marcarEntregadoClienteFicha = async () => {
     if (!r || !puedeGestionar) return;
     if (!confirm(t('¿Marcar este equipo como entregado al cliente?'))) return;
     setGuardando(true);
-    await supabase
-      .from('reparaciones')
-      .update({
-        estado: 'entregado',
-        fecha_entrega: new Date().toISOString(),
-        estado_actualizado_at: new Date().toISOString(),
-        fecha_reparado: r.fecha_reparado ?? new Date().toISOString(),
-      })
-      .eq('id', r.id);
+    if (
+      await falla(
+        supabase
+          .from('reparaciones')
+          .update({
+            estado: 'entregado',
+            fecha_entrega: new Date().toISOString(),
+            estado_actualizado_at: new Date().toISOString(),
+            fecha_reparado: r.fecha_reparado ?? new Date().toISOString(),
+          })
+          .eq('id', r.id),
+        t,
+        'marcar como entregado'
+      )
+    ) {
+      setGuardando(false);
+      return;
+    }
     // Se entregó sin pasar por "Generar orden de cobro" (ej. reparación
     // gratis) — la orden vinculada queda en $0, pero se marca entregada
     // para que no quede colgada como "pendiente" para siempre.
     if (r.orden_cobro_id) {
-      await supabase.from('ordenes').update({ estado: 'entregado' }).eq('id', r.orden_cobro_id);
+      // Si la orden tiene importe y todavía nadie la cobró (sin vendedor), NO se
+      // marca entregada acá: quedaría como venta "Sin asignar" sin haberse cobrado.
+      // Se cobra desde Órdenes, donde el vendedor es obligatorio.
+      const { data: ordenCobro, error: ordenCobroError } = await supabase.from('ordenes').select('vendedor_id, total').eq('id', r.orden_cobro_id).maybeSingle();
+      // Si no se pudo verificar, tampoco se marca (mejor dejarla pendiente que entregada sin cobrar).
+      const sinCobrar = !!ordenCobroError || (!!ordenCobro && (ordenCobro.total || 0) > 0 && !ordenCobro.vendedor_id);
+      if (!sinCobrar) {
+        await falla(supabase.from('ordenes').update({ estado: 'entregado' }).eq('id', r.orden_cobro_id), t, 'marcar la orden de cobro como entregada');
+      }
     }
     await registrarAuditoria(supabase, {
       accion: `marcó como entregado al cliente un equipo reparado en Servicio Técnico (${r.numero_orden || ''}, ${r.modelo || 'sin modelo'}${r.imei ? `, IMEI ${r.imei}` : ''})`,
@@ -1043,6 +1200,33 @@ export default function FichaReparacion() {
       entidadId: r.id,
     });
     setGuardando(false);
+    cargar();
+  };
+
+  const copiarCodigoSeguimiento = async () => {
+    if (!r?.codigo_seguimiento) return;
+    try {
+      await navigator.clipboard.writeText(r.codigo_seguimiento);
+      setCodigoCopiado(true);
+      setTimeout(() => setCodigoCopiado(false), 2000);
+    } catch {
+      setError(t('No pudimos copiar el código — copialo manualmente:') + ' ' + r.codigo_seguimiento);
+    }
+  };
+
+  // Texto opcional que ve el cliente en la app (ej. "Estamos colocando la pantalla nueva."). Vacío = sin nota.
+  const guardarNotaCliente = async () => {
+    if (!r || !puedeGestionar || guardandoNotaCliente) return;
+    setGuardandoNotaCliente(true);
+    const { error: errorNota } = await supabase
+      .from('reparaciones')
+      .update({ nota_cliente: notaCliente.trim() === '' ? null : notaCliente.trim() })
+      .eq('id', r.id);
+    setGuardandoNotaCliente(false);
+    if (errorNota) {
+      setError(t('No pudimos guardar la nota para el cliente:') + ' ' + errorNota.message);
+      return;
+    }
     cargar();
   };
 
@@ -1113,7 +1297,16 @@ export default function FichaReparacion() {
   const guardarClasificacionIngreso = async (tipo: string, relacionadaId: string | null) => {
     if (!r || !puedeGestionar) return;
     setGuardandoClasificacion(true);
-    await supabase.from('reparaciones').update({ tipo_ingreso: tipo, reparacion_relacionada_id: relacionadaId }).eq('id', r.id);
+    if (
+      await falla(
+        supabase.from('reparaciones').update({ tipo_ingreso: tipo, reparacion_relacionada_id: relacionadaId }).eq('id', r.id),
+        t,
+        'guardar clasificación de ingreso'
+      )
+    ) {
+      setGuardandoClasificacion(false);
+      return;
+    }
     const relacionada = reparacionesRelacionadas.find((rr) => rr.id === relacionadaId);
     await registrarAuditoria(supabase, {
       accion: `clasificó la reparación ${r.numero_orden || ''} como "${TIPOS_INGRESO.find((ti) => ti.id === tipo)?.label ?? tipo}"${
@@ -1157,7 +1350,7 @@ export default function FichaReparacion() {
         <div className="min-w-0 mr-auto">
           <p className="text-lg font-medium leading-tight truncate">
             {r.numero_orden} · {r.modelo}
-            {r.capacidad_gb ? ` · ${r.capacidad_gb}GB` : ''}
+            {r.capacidad_gb ? ` · ${formatearGB(r.capacidad_gb)}` : ''}
           </p>
           <p className="text-xs text-muted dark:text-dark-text-secondary flex items-center gap-1.5 flex-wrap">
             <span className="flex items-center gap-1">
@@ -1165,6 +1358,11 @@ export default function FichaReparacion() {
               {nombreCliente || t('Equipo propio del local')}
             </span>
             <span>· {t('Ingresó')} {hace(r.fecha_ingreso_servicio)}</span>
+            {r.recibido_por_nombre && (
+              <span>
+                · {t('Recibió:')} {r.recibido_por_nombre}
+              </span>
+            )}
             {demorado && <span className="text-bad font-medium">· {t('Demorada')}</span>}
           </p>
         </div>
@@ -1323,7 +1521,7 @@ export default function FichaReparacion() {
                           f.capacidad_gb === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                         }`}
                       >
-                        {gb}GB
+                        {formatearGB(gb)}
                       </button>
                     ))}
                   </div>
@@ -1380,13 +1578,19 @@ export default function FichaReparacion() {
                       ? `${t(TIPOS_DISPOSITIVO.find((o) => o.id === r.tipo_dispositivo)?.label ?? '')} · `
                       : ''}
                     {r.modelo}
-                    {r.capacidad_gb ? ` · ${r.capacidad_gb}GB` : ''}
+                    {r.capacidad_gb ? ` · ${formatearGB(r.capacidad_gb)}` : ''}
                     {r.color ? ` · ${r.color}` : ''}
                   </p>
                   {r.imei && (
                     <p>
                       <span className="text-muted dark:text-dark-text-secondary">{t('IMEI:')} </span>
                       <span className="font-mono font-bold">{r.imei}</span>
+                    </p>
+                  )}
+                  {r.salud_bateria != null && (
+                    <p>
+                      <span className="text-muted dark:text-dark-text-secondary">{t('Batería:')} </span>
+                      {r.salud_bateria}%
                     </p>
                   )}
                   <MostrarBloqueo
@@ -1743,19 +1947,11 @@ export default function FichaReparacion() {
                     <Campo label={t('Importe total ($)')} valor={f.importe_total} onChange={(v) => setFm((p) => ({ ...p, importe_total: v }))} numerico />
                     <div>
                       <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Forma de pago')}</label>
-                      <div className="flex gap-2 flex-wrap">
-                        {[...FORMAS_PAGO, ...(r.cliente_id && ctaCteDisponible ? ['Cuenta corriente'] : [])].map((fp) => (
-                          <button
-                            key={fp}
-                            onClick={() => setFm((p) => ({ ...p, forma_pago: fp }))}
-                            className={`flex-1 rounded-lg py-2 text-xs font-medium ${
-                              f.forma_pago === fp ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
-                            }`}
-                          >
-                            {t(fp)}
-                          </button>
-                        ))}
-                      </div>
+                      <SelectorFormaPago
+                        value={f.forma_pago || ''}
+                        onChange={(etiqueta) => setFm((p) => ({ ...p, forma_pago: etiqueta }))}
+                        permitirCuentaCorriente={!!r.cliente_id && ctaCteDisponible}
+                      />
                       {r.cliente_id && !ctaCteDisponible && (
                         <p className="text-[10px] text-muted dark:text-dark-text-secondary mt-1">
                           {t('Este cliente no tiene cuenta corriente habilitada — se puede activar desde su ficha.')}
@@ -1840,7 +2036,7 @@ export default function FichaReparacion() {
                     {r.forma_pago && (
                       <p>
                         <span className="text-muted dark:text-dark-text-secondary">{t('Forma de pago:')} </span>
-                        {t(r.forma_pago)}
+                        {r.forma_pago.split(' + ').map((fp) => t(fp)).join(' + ')}
                       </p>
                     )}
                     {r.garantia_dias != null && (
@@ -1860,6 +2056,39 @@ export default function FichaReparacion() {
               </Seccion>
 
               <Seccion titulo={t('Repuestos usados (del stock)')}>
+                {r.repuesto_decision !== undefined && (
+                  <div
+                    className={`rounded-lg px-3 py-2 mb-2 text-xs flex flex-col gap-1.5 ${
+                      r.repuesto_decision === 'pendiente' || (r.repuesto_decision == null && repuestosUsados.length === 0)
+                        ? 'bg-warn/10 text-warn'
+                        : 'bg-canvas dark:bg-dark-bg text-muted dark:text-dark-text-secondary'
+                    }`}
+                  >
+                    <p className="font-medium">
+                      {repuestosUsados.length > 0
+                        ? t('Con repuesto del stock.')
+                        : r.repuesto_decision === 'pendiente'
+                        ? t('Costo pendiente: se usó un repuesto que todavía no se cargó. No cuenta como ganancia hasta que lo cargues.')
+                        : r.repuesto_decision === 'sin_repuesto'
+                        ? t('No usó repuesto: es mano de obra, cuenta entera como ganancia.')
+                        : t('Todavía no se respondió si se usó repuesto.')}
+                    </p>
+                    {puedeGestionar && repuestosUsados.length === 0 && (
+                      <div className="flex gap-3">
+                        {r.repuesto_decision !== 'pendiente' && (
+                          <button onClick={() => responderRepuesto('pendiente')} className="underline">
+                            {t('Marcar: usó repuesto, pendiente de cargar')}
+                          </button>
+                        )}
+                        {r.repuesto_decision !== 'sin_repuesto' && (
+                          <button onClick={() => responderRepuesto('sin_repuesto')} className="underline">
+                            {t('Marcar: no usó repuesto')}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
                 <p className="text-xs text-muted dark:text-dark-text-secondary -mt-1 mb-2">
                   {t('Distinto de la nota de arriba: acá se descuenta stock real y queda el costo de verdad, para calcular la ganancia de esta reparación.')}
                 </p>
@@ -1916,7 +2145,10 @@ export default function FichaReparacion() {
                   <div className="flex flex-col gap-2">
                     {repuestoElegido ? (
                       <div className="rounded-lg border border-accent/40 dark:border-dark-accent/40 bg-accent-soft dark:bg-dark-accent-soft px-3 py-2 flex items-center justify-between gap-2">
-                        <span className="text-sm truncate">{repuestoElegido.nombre}</span>
+                        <span className="text-sm truncate">
+                          {repuestoElegido.nombre}
+                          {repuestoElegido.calidad ? ` · ${t(repuestoElegido.calidad)}` : ''}
+                        </span>
                         <button onClick={() => setRepuestoElegido(null)} className="text-xs text-accent dark:text-dark-accent underline shrink-0">
                           {t('Cambiar')}
                         </button>
@@ -1934,6 +2166,8 @@ export default function FichaReparacion() {
                             {repuestosFiltrados.length === 0 && (
                               <p className="text-xs text-muted dark:text-dark-text-secondary px-1">
                                 {t('Sin resultados con stock disponible.')}{' '}
+                                {coincidenciasSinStockODeOtraSucursal > 0 &&
+                                  `${coincidenciasSinStockODeOtraSucursal} ${t('con ese nombre no tienen stock o son de otra sucursal.')} `}
                                 <Link href="/servicio-tecnico/stock" className="underline">
                                   {t('Cargar en Stock de repuestos')}
                                 </Link>
@@ -1945,7 +2179,10 @@ export default function FichaReparacion() {
                                 onClick={() => setRepuestoElegido(rp)}
                                 className="rounded-lg border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-3 py-2 text-left text-xs flex items-center justify-between gap-2"
                               >
-                                <span>{rp.nombre}</span>
+                                <span>
+                                  {rp.nombre}
+                                  {rp.calidad && <span className="text-muted dark:text-dark-text-secondary"> · {t(rp.calidad)}</span>}
+                                </span>
                                 <span className="text-muted dark:text-dark-text-secondary shrink-0">
                                   {t('Stock:')} {rp.cantidad_stock}
                                   {rp.precio_venta != null && ` · $${rp.precio_venta.toLocaleString('es-AR')}`}
@@ -2061,6 +2298,52 @@ export default function FichaReparacion() {
             (editando ? (
               <p className="text-xs text-muted dark:text-dark-text-secondary text-center py-6">{t('Guardá o cancelá la edición para usar esta sección.')}</p>
             ) : (
+              <>
+              {r.codigo_seguimiento && (
+                <Seccion titulo={t('Seguimiento para el cliente')}>
+                  <p className="text-xs text-muted dark:text-dark-text-secondary -mt-1 mb-2">
+                    {t('Con este código el cliente sigue su equipo desde la app (y por el QR de la etiqueta).')}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2 mb-3">
+                    <span className="font-mono text-xl font-semibold tracking-widest">{r.codigo_seguimiento}</span>
+                    <button
+                      onClick={copiarCodigoSeguimiento}
+                      className="rounded-lg border border-border dark:border-dark-border px-3 py-1.5 text-xs font-medium"
+                    >
+                      {codigoCopiado ? t('¡Copiado!') : t('Copiar código')}
+                    </button>
+                    {r.cliente_id && r.clientes?.telefono && (
+                      <button
+                        disabled={guardando}
+                        onClick={() => enviarWhatsApp('recibido')}
+                        className="rounded-lg border border-good/30 text-good px-3 py-1.5 text-xs font-medium disabled:opacity-40"
+                      >
+                        {t('Enviar seguimiento por WhatsApp')}
+                      </button>
+                    )}
+                  </div>
+                  <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Nota para el cliente (opcional)')}</label>
+                  <textarea
+                    value={notaCliente}
+                    onChange={(e) => setNotaCliente(e.target.value)}
+                    disabled={!puedeGestionar}
+                    maxLength={300}
+                    placeholder={t('Ej: Estamos colocando la pantalla nueva.')}
+                    rows={2}
+                    className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                  />
+                  <div className="flex items-center gap-2 mt-2">
+                    <button
+                      disabled={!puedeGestionar || guardandoNotaCliente || notaCliente.trim() === (r.nota_cliente ?? '').trim()}
+                      onClick={guardarNotaCliente}
+                      className="rounded-lg bg-accent dark:bg-dark-accent text-white px-4 py-2 text-xs font-medium disabled:opacity-40"
+                    >
+                      {guardandoNotaCliente ? t('Guardando...') : t('Guardar nota')}
+                    </button>
+                    <span className="text-[11px] text-muted dark:text-dark-text-secondary">{t('La ve el cliente: no pongas datos internos.')}</span>
+                  </div>
+                </Seccion>
+              )}
               <Seccion titulo={t('Comunicación')}>
                 {r.cliente_id && r.clientes?.telefono ? (
                   <>
@@ -2107,6 +2390,7 @@ export default function FichaReparacion() {
                   )}
                 </div>
               </Seccion>
+              </>
             ))}
 
           {tab === 'historial' &&
@@ -2308,9 +2592,18 @@ export default function FichaReparacion() {
                   )
                 )
               )}
+              {!r.cliente_id && !r.agregado_a_stock && conStandby && puedeAgregarStock && r.estado !== 'entregado' && (
+                <button
+                  disabled={guardando}
+                  onClick={mandarAStandbyFicha}
+                  className="rounded-xl border border-border dark:border-dark-border py-2.5 text-center text-xs font-medium disabled:opacity-40"
+                >
+                  {t('Mandar a Standby')}
+                </button>
+              )}
               {!r.cliente_id && r.agregado_a_stock && (
                 <p className="flex items-center justify-center gap-1 text-xs text-good text-center">
-                  <IconoChico nombre="check" /> {t('Ya se agregó al Stock')}
+                  <IconoChico nombre="check" /> {t('Ya se agregó al Stock o a Standby')}
                 </p>
               )}
 

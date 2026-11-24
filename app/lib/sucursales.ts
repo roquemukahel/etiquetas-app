@@ -15,11 +15,27 @@ export type Sucursal = {
   archivada: boolean;
 };
 
-export async function obtenerSucursales(supabase: SupabaseClient, incluirArchivadas = false): Promise<Sucursal[]> {
+// Casi todas las pantallas piden la lista de sucursales al abrir (y el menú lateral también): se comparte el mismo pedido
+// durante unos segundos en vez de repetirlo. Cualquier cambio (crear, renombrar, activar, archivar) la descarta.
+const VIGENCIA_MS = 30_000;
+const cache = new Map<boolean, { cuando: number; pedido: Promise<Sucursal[]> }>();
+
+export function invalidarSucursales() {
+  cache.clear();
+}
+
+export function obtenerSucursales(supabase: SupabaseClient, incluirArchivadas = false): Promise<Sucursal[]> {
+  const guardado = cache.get(incluirArchivadas);
+  if (guardado && Date.now() - guardado.cuando < VIGENCIA_MS) return guardado.pedido;
   let query = supabase.from('sucursales').select('id, nombre, activa, archivada').order('created_at', { ascending: true });
   if (!incluirArchivadas) query = query.eq('archivada', false);
-  const { data } = await query;
-  return (data as Sucursal[]) ?? [];
+  const pedido = Promise.resolve(query).then(({ data, error }) => {
+    // Si falló no se guarda: el próximo intento vuelve a preguntar.
+    if (error) cache.delete(incluirArchivadas);
+    return (data as Sucursal[]) ?? [];
+  });
+  cache.set(incluirArchivadas, { cuando: Date.now(), pedido });
+  return pedido;
 }
 
 // Duplicados: solo entre las ACTIVAS (no archivadas) del mismo negocio — el
@@ -36,6 +52,7 @@ export async function crearSucursal(supabase: SupabaseClient, nombre: string): P
   if (await nombreSucursalDuplicado(supabase, limpio)) return { error: `Ya existe una sucursal activa llamada "${limpio}".` };
   const { data, error } = await supabase.from('sucursales').insert({ nombre: limpio }).select('id').single();
   if (error) return { error: error.message };
+  invalidarSucursales();
   return { id: (data as { id: string }).id };
 }
 
@@ -45,12 +62,14 @@ export async function renombrarSucursal(supabase: SupabaseClient, id: string, no
   if (await nombreSucursalDuplicado(supabase, limpio, id)) return { error: `Ya existe una sucursal activa llamada "${limpio}".` };
   const { error } = await supabase.from('sucursales').update({ nombre: limpio }).eq('id', id);
   if (error) return { error: error.message };
+  invalidarSucursales();
   return { ok: true };
 }
 
 export async function activarSucursal(supabase: SupabaseClient, id: string, activa: boolean): Promise<{ ok: true } | { error: string }> {
   const { error } = await supabase.from('sucursales').update({ activa }).eq('id', id);
   if (error) return { error: error.message };
+  invalidarSucursales();
   return { ok: true };
 }
 
@@ -72,6 +91,7 @@ export async function archivarSucursal(supabase: SupabaseClient, id: string): Pr
   // ya la usa conserva absolutamente todo.
   const { error } = await supabase.from('sucursales').update({ archivada: true, activa: false }).eq('id', id);
   if (error) return { error: error.message };
+  invalidarSucursales();
   return { ok: true };
 }
 
@@ -81,5 +101,6 @@ export async function restaurarSucursal(supabase: SupabaseClient, id: string, no
   }
   const { error } = await supabase.from('sucursales').update({ archivada: false, activa: true }).eq('id', id);
   if (error) return { error: error.message };
+  invalidarSucursales();
   return { ok: true };
 }

@@ -26,12 +26,12 @@ export const CATALOGO_MODELOS: Record<string, string[]> = {
     'iPhone 11 Pro',
     'iPhone 11 Pro Max',
     'iPhone SE (2020)',
-    'iPhone 12',
     'iPhone 12 mini',
+    'iPhone 12',
     'iPhone 12 Pro',
     'iPhone 12 Pro Max',
-    'iPhone 13',
     'iPhone 13 mini',
+    'iPhone 13',
     'iPhone 13 Pro',
     'iPhone 13 Pro Max',
     'iPhone SE (2022)',
@@ -43,15 +43,15 @@ export const CATALOGO_MODELOS: Record<string, string[]> = {
     'iPhone 15 Plus',
     'iPhone 15 Pro',
     'iPhone 15 Pro Max',
+    'iPhone 16e',
     'iPhone 16',
     'iPhone 16 Plus',
     'iPhone 16 Pro',
     'iPhone 16 Pro Max',
-    'iPhone 16e',
+    'iPhone 17e',
     'iPhone 17',
     'iPhone 17 Pro',
     'iPhone 17 Pro Max',
-    'iPhone 17e',
     'iPhone Air',
     'iPhone 18',
     'iPhone 18 Pro',
@@ -126,9 +126,11 @@ export const CATALOGO_MODELOS: Record<string, string[]> = {
     'Galaxy A26',
     'Galaxy A36',
     'Galaxy A56',
+    'Galaxy A57',
     'Galaxy S26',
     'Galaxy S26+',
     'Galaxy S26 Ultra',
+    'Galaxy Z Flip 8',
   ],
   xiaomi: [
     'Redmi 9',
@@ -144,6 +146,7 @@ export const CATALOGO_MODELOS: Record<string, string[]> = {
     'Redmi 13C',
     'Redmi 14C',
     'Redmi 15C',
+    'Redmi 17',
     'Redmi A1',
     'Redmi A2',
     'Redmi A3',
@@ -164,6 +167,7 @@ export const CATALOGO_MODELOS: Record<string, string[]> = {
     'Redmi Note 13 Pro',
     'Redmi Note 14',
     'Redmi Note 14 Pro',
+    'Redmi Note 17 Pro Max',
     'Poco X3',
     'Poco X3 Pro',
     'Poco X4 Pro',
@@ -224,16 +228,29 @@ export function normalizarNombreModelo(nombre: string) {
 // MARCAS_DISPONIBLES — alcanza con que cada lista interna esté bien
 // ordenada, no hace falta que iPhone/Samsung/Xiaomi queden intercalados
 // entre sí por fecha real.
+// La clave es el nombre sin espacios ni mayúsculas (y sin "Apple" delante): así "iPhone 16e", "iPhone 16 e",
+// "iPhone 16E", "iphone16e" y "Apple iPhone 16e" son el MISMO modelo a la hora de ordenar. Antes se comparaba
+// con los espacios puestos, y una carpeta escrita a mano un poco distinta ("iPhone 16 e") no se reconocía y
+// caía al final de la lista.
+function claveDeOrden(nombre: string): string {
+  return nombre.toLowerCase().replace(/\s+/g, '').replace(/^apple/, '');
+}
+
 const ORDEN_MODELOS: Map<string, number> = (() => {
   const mapa = new Map<string, number>();
   let i = 0;
   for (const marca of ['iphone', 'samsung', 'xiaomi', 'motorola']) {
     for (const nombre of CATALOGO_MODELOS[marca]) {
-      mapa.set(normalizarNombreModelo(nombre), i++);
+      mapa.set(claveDeOrden(nombre), i++);
     }
   }
   return mapa;
 })();
+
+// Posición del modelo en el orden de salida, o undefined si no es un modelo del catálogo.
+export function rangoDeModelo(nombre: string | null | undefined): number | undefined {
+  return nombre ? ORDEN_MODELOS.get(claveDeOrden(nombre)) : undefined;
+}
 
 // Compara dos nombres de carpeta por orden cronológico de salida en vez de
 // alfabético — así "iPhone 7" no queda al final de la lista solo porque
@@ -241,8 +258,8 @@ const ORDEN_MODELOS: Map<string, number> = (() => {
 // que no están en el catálogo (marcas sin catálogo, o carpetas escritas a
 // mano) van al final, ordenados entre sí alfabéticamente.
 export function compararModelosPorSalida(a: string, b: string): number {
-  const ra = ORDEN_MODELOS.get(normalizarNombreModelo(a));
-  const rb = ORDEN_MODELOS.get(normalizarNombreModelo(b));
+  const ra = rangoDeModelo(a);
+  const rb = rangoDeModelo(b);
   if (ra != null && rb != null) return ra - rb;
   if (ra != null) return -1;
   if (rb != null) return 1;

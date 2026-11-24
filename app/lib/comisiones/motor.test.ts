@@ -6,6 +6,7 @@ import {
   participacionesValidas,
   reversionProporcional,
   redondear,
+  type ContextoCategorias,
   type Regla,
   type Venta,
 } from './motor';
@@ -208,5 +209,90 @@ describe('motor de comisiones', () => {
     const res = calcularComisionVenta(venta, reglas, 2);
     const suma = res.detalle.reduce((a, d) => a + d.comision, 0);
     expect(redondear(suma, 2)).toBe(res.comision);
+  });
+});
+
+// ---------- Reglas por categoría (pedido de un cliente: menos comisión en templados y cables, más en iluminación) ----------
+describe('reglas por categoría', () => {
+  // Accesorios > Cables, Accesorios > Templados; Iluminación es de primer nivel.
+  const padres: Record<string, string | null> = { acc: null, cables: 'acc', templados: 'acc', ilum: null, elec: null };
+  const ctx: ContextoCategorias = { padreDe: (id) => padres[id] ?? null };
+  const venta = (lineas: Venta['lineas']): Venta => ({ tipo_venta: 'minorista', lineas });
+  const l = (id: string, categoria_id: string | null, precio: number, extra: Partial<Venta['lineas'][number]> = {}) =>
+    linea({ id, tipo_item: 'producto', categoria_id, precio_unitario: precio, ...extra });
+
+  it('una regla de categoría aplica a los productos de esa categoría', () => {
+    const reglas: Regla[] = [
+      { id: 'g', tipo_calculo: 'porcentaje_venta', valor: 2, alcance: 'minorista' },
+      { id: 'i', tipo_calculo: 'porcentaje_venta', valor: 10, alcance: 'categoria', categoria_id: 'ilum' },
+    ];
+    const res = calcularComisionVenta(venta([l('a', 'ilum', 1000), l('b', 'elec', 1000)]), reglas, DEC, ctx);
+    expect(res.detalle.map((d) => d.comision)).toEqual([100, 20]); // iluminación 10%, el resto la regla general 2%
+  });
+
+  it('una regla de la categoría de arriba alcanza a sus subcategorías', () => {
+    const reglas: Regla[] = [{ id: 'acc', tipo_calculo: 'porcentaje_venta', valor: 5, alcance: 'categoria', categoria_id: 'acc' }];
+    const res = calcularComisionVenta(venta([l('a', 'cables', 1000), l('b', 'acc', 1000), l('c', 'ilum', 1000)]), reglas, DEC, ctx);
+    expect(res.detalle.map((d) => d.comision)).toEqual([50, 50, 0]);
+  });
+
+  it('la subcategoría gana sobre su categoría', () => {
+    const reglas: Regla[] = [
+      { id: 'acc', tipo_calculo: 'porcentaje_venta', valor: 5, alcance: 'categoria', categoria_id: 'acc' },
+      { id: 'cab', tipo_calculo: 'porcentaje_venta', valor: 1, alcance: 'categoria', categoria_id: 'cables' },
+    ];
+    const res = calcularComisionVenta(venta([l('a', 'cables', 1000), l('b', 'templados', 1000)]), reglas, DEC, ctx);
+    expect(res.detalle.map((d) => [d.regla_id, d.comision])).toEqual([['cab', 10], ['acc', 50]]);
+  });
+
+  it('una regla con marca gana sobre la misma categoría sin marca, y solo aplica a esa marca', () => {
+    const reglas: Regla[] = [
+      { id: 'cab', tipo_calculo: 'porcentaje_venta', valor: 1, alcance: 'categoria', categoria_id: 'cables' },
+      { id: 'cabx', tipo_calculo: 'porcentaje_venta', valor: 4, alcance: 'categoria', categoria_id: 'cables', marca: 'Baseus' },
+    ];
+    const res = calcularComisionVenta(venta([l('a', 'cables', 1000, { marca: ' baseus ' }), l('b', 'cables', 1000, { marca: 'Otra' }), l('c', 'cables', 1000)]), reglas, DEC, ctx);
+    expect(res.detalle.map((d) => d.regla_id)).toEqual(['cabx', 'cab', 'cab']);
+  });
+
+  it('prioridad: producto puntual > categoría > tipo de ítem > regla general', () => {
+    const reglas: Regla[] = [
+      { id: 'todas', tipo_calculo: 'porcentaje_venta', valor: 1, alcance: 'todas' },
+      { id: 'min', tipo_calculo: 'porcentaje_venta', valor: 2, alcance: 'minorista' },
+      { id: 'tipo', tipo_calculo: 'porcentaje_venta', valor: 3, alcance: 'tipo_item', tipo_item: 'producto' },
+      { id: 'cat', tipo_calculo: 'porcentaje_venta', valor: 4, alcance: 'categoria', categoria_id: 'ilum' },
+      { id: 'prod', tipo_calculo: 'porcentaje_venta', valor: 5, alcance: 'producto', producto_id: 'P1' },
+    ];
+    const v = venta([l('a', 'ilum', 100, { producto_id: 'P1' }), l('b', 'ilum', 100), l('c', 'elec', 100), l('d', null, 100)]);
+    const res = calcularComisionVenta(v, reglas, DEC, ctx);
+    expect(res.detalle.map((d) => d.regla_id)).toEqual(['prod', 'cat', 'tipo', 'tipo']);
+  });
+
+  it('una categoría gana sobre "financiado" y sobre minorista/mayorista', () => {
+    const v: Venta = { tipo_venta: 'mayorista', es_financiado: true, lineas: [l('a', 'ilum', 100)] };
+    const reglas: Regla[] = [
+      { id: 'fin', tipo_calculo: 'porcentaje_venta', valor: 1, alcance: 'financiado' },
+      { id: 'may', tipo_calculo: 'porcentaje_venta', valor: 1, alcance: 'mayorista' },
+      { id: 'cat', tipo_calculo: 'porcentaje_venta', valor: 9, alcance: 'categoria', categoria_id: 'ilum' },
+    ];
+    expect(calcularComisionVenta(v, reglas, DEC, ctx).detalle[0].regla_id).toBe('cat');
+  });
+
+  it('una línea sin categoría no cae en reglas de categoría', () => {
+    const reglas: Regla[] = [{ id: 'cat', tipo_calculo: 'porcentaje_venta', valor: 9, alcance: 'categoria', categoria_id: 'ilum' }];
+    expect(calcularComisionVenta(venta([l('a', null, 1000)]), reglas, DEC, ctx).comision).toBe(0);
+  });
+
+  it('una regla de categoría sin categoría elegida (se borró) no aplica a nada', () => {
+    const reglas: Regla[] = [{ id: 'cat', tipo_calculo: 'porcentaje_venta', valor: 9, alcance: 'categoria', categoria_id: null }];
+    expect(calcularComisionVenta(venta([l('a', 'ilum', 1000)]), reglas, DEC, ctx).comision).toBe(0);
+  });
+
+  it('con "% sobre la ganancia" y fijo por unidad en una categoría', () => {
+    const reglas: Regla[] = [
+      { id: 'g', tipo_calculo: 'porcentaje_ganancia', valor: 50, alcance: 'categoria', categoria_id: 'ilum' },
+      { id: 'u', tipo_calculo: 'fijo_por_unidad', valor: 30, alcance: 'categoria', categoria_id: 'elec' },
+    ];
+    const res = calcularComisionVenta(venta([l('a', 'ilum', 1000, { costo_unitario: 600 }), l('b', 'elec', 1000, { cantidad: 3 })]), reglas, DEC, ctx);
+    expect(res.detalle.map((d) => d.comision)).toEqual([200, 90]);
   });
 });

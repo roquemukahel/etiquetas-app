@@ -16,8 +16,15 @@ import { useT } from '../../lib/idioma';
 import { useSucursalActual } from '../../lib/sucursal';
 import { obtenerSucursales, type Sucursal } from '../../lib/sucursales';
 import { obtenerAreasEgresos, type AreaEgreso } from '../../lib/egresos';
+import { falla } from '../../lib/escritura';
+import CompraContado from './CompraContado';
+import { obtenerCategorias, type Categoria } from '../../lib/categorias';
+import { etiquetaCategoria } from '../../lib/subcategorias';
+import { soportaRubrosCompra } from '../../lib/rubrosCompra';
+import { obtenerTodasLasFilas } from '../../lib/db';
+import { OPCIONES_ALMACENAMIENTO, formatearGB } from '../../lib/almacenamiento';
 
-const STORAGE_OPTIONS = [64, 128, 256, 512];
+const STORAGE_OPTIONS = OPCIONES_ALMACENAMIENTO;
 
 type Proveedor = { id: string; nombre: string; telefono: string | null; detalles: string | null };
 type CompraManual = {
@@ -31,6 +38,10 @@ type CompraManual = {
   created_at: string;
   sucursal_id: string | null;
   area_id: string | null;
+  // Solo vienen si el negocio corrió compra_contado_rubros_supabase.sql.
+  categoria_id?: string | null;
+  compra_grupo_id?: string | null;
+  tiene_factura?: boolean | null;
 };
 type DispositivoComprado = {
   id: string;
@@ -71,6 +82,8 @@ type FilaCompra = {
   idManual: string | null;
   sucursalId: string | null;
   areaId: string | null;
+  categoriaId: string | null;
+  tieneFactura: boolean;
 };
 
 export default function DetalleProveedor() {
@@ -79,7 +92,10 @@ export default function DetalleProveedor() {
   const supabase = crearClienteNavegador();
   const actor = useActor();
   const t = useT();
-  const puedeVer = tienePermiso(actor, 'ver_proveedores');
+  const puedeVerTodo = tienePermiso(actor, 'ver_proveedores');
+  // Solo registrar pagos: ve únicamente el formulario de pago (sin saldo, compras, precios ni movimientos).
+  const soloPagos = !puedeVerTodo && tienePermiso(actor, 'registrar_pagos_proveedores');
+  const puedeVer = puedeVerTodo || soloPagos;
   const puedeEliminar = tienePermiso(actor, 'eliminar');
   const sucursalActual = useSucursalActual();
 
@@ -96,10 +112,18 @@ export default function DetalleProveedor() {
   // su celular una factura que llegó a otro local).
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
   const [areas, setAreas] = useState<AreaEgreso[]>([]);
+  // Rubros (categorías del Stock) para clasificar las compras; vacíos y sin
+  // soporte hasta que el negocio corra compra_contado_rubros_supabase.sql.
+  const [categorias, setCategorias] = useState<Categoria[]>([]);
+  const [soportaRubros, setSoportaRubros] = useState(false);
+  const [contadoAbierto, setContadoAbierto] = useState(false);
+  const [categoriaCompra, setCategoriaCompra] = useState('');
+  const [facturaVista, setFacturaVista] = useState<string | null>(null);
   useEffect(() => {
     (async () => {
       setSucursales(await obtenerSucursales(supabase, false));
       setAreas(await obtenerAreasEgresos(supabase, false));
+      setCategorias(await obtenerCategorias(supabase, false));
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -134,18 +158,35 @@ export default function DetalleProveedor() {
   const [guardandoCompra, setGuardandoCompra] = useState(false);
 
   const cargar = async () => {
+    if (soloPagos) {
+      const { data: prov, error: errorProv } = await supabase.from('proveedores').select('id, nombre, telefono, detalles').eq('id', id).maybeSingle();
+      if (errorProv) setError(t('No pudimos cargar el proveedor:') + ' ' + errorProv.message);
+      setProveedor((prov as Proveedor) ?? null);
+      setLoading(false);
+      return;
+    }
+    const conRubros = await soportaRubrosCompra(supabase);
+    setSoportaRubros(conRubros);
     const [{ data: prov }, { data: comprasData }, { data: dispData }, { data: movData, error: movError }] = await Promise.all([
       supabase.from('proveedores').select('id, nombre, telefono, detalles').eq('id', id).maybeSingle(),
-      supabase
-        .from('compras_proveedor')
-        .select('id, modelo, capacidad_gb, color, cantidad, precio_unitario, detalles, created_at, sucursal_id, area_id')
-        .eq('proveedor_id', id)
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('dispositivos')
-        .select('id, modelo, capacidad_gb, color, costo, created_at, sucursal_id')
-        .eq('proveedor_id', id)
-        .order('created_at', { ascending: false }),
+      // Paginados: el total comprado/saldo del proveedor se calcula con TODAS estas
+      // filas — un proveedor con más de 1000 equipos las cortaba y el saldo
+      // quedaba mal sin ningún aviso.
+      obtenerTodasLasFilas<CompraManual>(
+        supabase,
+        'compras_proveedor',
+        'id, modelo, capacidad_gb, color, cantidad, precio_unitario, detalles, created_at, sucursal_id, area_id' +
+          (conRubros ? ', categoria_id, compra_grupo_id, tiene_factura' : ''),
+        [{ columna: 'created_at', ascending: false }],
+        (q) => q.eq('proveedor_id', id)
+      ).then((data) => ({ data })),
+      obtenerTodasLasFilas<DispositivoComprado>(
+        supabase,
+        'dispositivos',
+        'id, modelo, capacidad_gb, color, costo, created_at, sucursal_id',
+        [{ columna: 'created_at', ascending: false }],
+        (q) => q.eq('proveedor_id', id)
+      ).then((data) => ({ data })),
       supabase
         .from('proveedor_movimientos')
         .select('id, tipo, concepto, monto, medio, observacion, fecha, sucursal_id, area_id')
@@ -177,6 +218,15 @@ export default function DetalleProveedor() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, puedeVer]);
 
+  // En modo "solo pagos" el formulario de pago está siempre abierto.
+  useEffect(() => {
+    if (soloPagos) {
+      setAccionCta('pago');
+      setSucursalCta(sucursalActual.id ?? '');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [soloPagos]);
+
   const filas: FilaCompra[] = useMemo(() => {
     const deManual: FilaCompra[] = compras.map((c) => ({
       key: `m-${c.id}`,
@@ -191,6 +241,8 @@ export default function DetalleProveedor() {
       idManual: c.id,
       sucursalId: c.sucursal_id,
       areaId: c.area_id,
+      categoriaId: c.categoria_id ?? null,
+      tieneFactura: !!c.tiene_factura,
     }));
     const deStock: FilaCompra[] = dispositivos.map((d) => ({
       key: `s-${d.id}`,
@@ -205,6 +257,8 @@ export default function DetalleProveedor() {
       idManual: null,
       sucursalId: d.sucursal_id,
       areaId: null,
+      categoriaId: null,
+      tieneFactura: false,
     }));
     return [...deManual, ...deStock].sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
   }, [compras, dispositivos]);
@@ -267,7 +321,7 @@ export default function DetalleProveedor() {
 
   const anularMovimiento = async (movId: string) => {
     if (!confirm(t('¿Anular este movimiento? Deja de contar para el saldo.'))) return;
-    await supabase.from('proveedor_movimientos').update({ anulado: true }).eq('id', movId);
+    if (await falla(supabase.from('proveedor_movimientos').update({ anulado: true }).eq('id', movId), t, 'anular movimiento de proveedor')) return;
     cargar();
   };
 
@@ -285,10 +339,19 @@ export default function DetalleProveedor() {
       return;
     }
     setGuardandoPerfil(true);
-    await supabase
-      .from('proveedores')
-      .update({ nombre: nombreEdit.trim(), telefono: telefonoEdit.trim() || null, detalles: detallesEdit.trim() || null })
-      .eq('id', proveedor.id);
+    if (
+      await falla(
+        supabase
+          .from('proveedores')
+          .update({ nombre: nombreEdit.trim(), telefono: telefonoEdit.trim() || null, detalles: detallesEdit.trim() || null })
+          .eq('id', proveedor.id),
+        t,
+        'guardar proveedor'
+      )
+    ) {
+      setGuardandoPerfil(false);
+      return;
+    }
     setGuardandoPerfil(false);
     setEditandoPerfil(false);
     cargar();
@@ -302,7 +365,7 @@ export default function DetalleProveedor() {
       )
     )
       return;
-    await supabase.from('proveedores').delete().eq('id', proveedor.id);
+    if (await falla(supabase.from('proveedores').delete().eq('id', proveedor.id), t, 'eliminar proveedor')) return;
     await registrarAuditoria(supabase, {
       accion: `eliminó un proveedor (${proveedor.nombre})`,
       entidad: 'proveedor',
@@ -321,6 +384,7 @@ export default function DetalleProveedor() {
     setDetallesCompra('');
     setSucursalCompra(sucursalActual.id ?? '');
     setAreaCompra('');
+    setCategoriaCompra('');
   };
 
   const abrirNuevaCompra = () => {
@@ -339,6 +403,7 @@ export default function DetalleProveedor() {
     setDetallesCompra(c.detalles ?? '');
     setSucursalCompra(c.sucursal_id ?? '');
     setAreaCompra(c.area_id ?? '');
+    setCategoriaCompra(c.categoria_id ?? '');
     setCompraEditandoId(c.id);
     setAgregandoCompra(true);
     setError(null);
@@ -352,9 +417,15 @@ export default function DetalleProveedor() {
 
   const guardarCompra = async () => {
     if (!proveedor || !modelo.trim()) return;
+    // El rubro es obligatorio en cada compra (para los reportes de inversión por rubro).
+    if (soportaRubros && !categoriaCompra) {
+      setError(t('Elegí el rubro de la compra.'));
+      return;
+    }
     setGuardandoCompra(true);
     setError(null);
     const datos = {
+      ...(soportaRubros ? { categoria_id: categoriaCompra } : {}),
       modelo: normalizarNombreModelo(modelo.trim()),
       capacidad_gb: capacidad,
       color: color.trim() || null,
@@ -381,7 +452,7 @@ export default function DetalleProveedor() {
     if (!puedeEliminar) return;
     if (!confirm(t('¿Eliminar esta compra?'))) return;
     const compra = compras.find((c) => c.id === compraId);
-    await supabase.from('compras_proveedor').delete().eq('id', compraId);
+    if (await falla(supabase.from('compras_proveedor').delete().eq('id', compraId), t, 'eliminar compra a proveedor')) return;
     await registrarAuditoria(supabase, {
       accion: `eliminó una compra a proveedor${compra?.modelo ? ` (${compra.modelo})` : ''}`,
       entidad: 'compra_proveedor',
@@ -417,6 +488,88 @@ export default function DetalleProveedor() {
         <Link href="/proveedores" className="text-sm text-accent dark:text-dark-accent underline">
           {t('Volver a Proveedores')}
         </Link>
+      </main>
+    );
+  }
+
+  if (soloPagos) {
+    return (
+      <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
+        <header className="flex items-center gap-3">
+          <Link href="/proveedores" className="text-2xl leading-none">
+            &larr;
+          </Link>
+          <span className="text-lg font-medium mr-auto">{proveedor.nombre}</span>
+        </header>
+        {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
+        <div className="rounded-2xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-4 flex flex-col gap-2">
+          <p className="text-sm font-medium">{t('Registrar un pago a este proveedor')}</p>
+          <input
+            value={montoCta}
+            onChange={(e) => setMontoCta(sanitizarDecimal(e.target.value))}
+            inputMode="decimal"
+            placeholder={t('Monto que le pagás')}
+            className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+          />
+          <select
+            value={medioCta}
+            onChange={(e) => setMedioCta(e.target.value)}
+            className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+          >
+            <option value="efectivo">{t('Efectivo')}</option>
+            <option value="transferencia">{t('Transferencia')}</option>
+            <option value="débito">{t('Débito')}</option>
+            <option value="crédito">{t('Crédito')}</option>
+            <option value="usdt">USDT</option>
+            <option value="cheque">{t('Cheque')}</option>
+          </select>
+          {(sucursales.length > 1 || areas.length > 0) && (
+            <div className="flex gap-2">
+              {sucursales.length > 1 && (
+                <select
+                  value={sucursalCta}
+                  onChange={(e) => setSucursalCta(e.target.value)}
+                  className="flex-1 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                >
+                  <option value="">🏬 {t('Sin sucursal')}</option>
+                  {sucursales.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      🏬 {s.nombre}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {areas.length > 0 && (
+                <select
+                  value={areaCta}
+                  onChange={(e) => setAreaCta(e.target.value)}
+                  className="flex-1 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                >
+                  <option value="">{t('Sin área')}</option>
+                  {areas.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.nombre}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          )}
+          <input
+            value={obsCta}
+            onChange={(e) => setObsCta(e.target.value)}
+            placeholder={t('Observación (opcional)')}
+            className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+          />
+          <button
+            disabled={guardandoCta}
+            onClick={registrarCta}
+            className="rounded-lg bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-2 text-sm font-medium text-white disabled:opacity-40"
+          >
+            {guardandoCta ? t('Guardando...') : t('Registrar pago')}
+          </button>
+          <p className="text-[11px] text-muted dark:text-dark-text-secondary">{t('Al guardar se genera el comprobante del pago para imprimir o mandar.')}</p>
+        </div>
       </main>
     );
   }
@@ -488,11 +641,13 @@ export default function DetalleProveedor() {
 
       <div className="rounded-2xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-4 flex flex-col gap-3">
         <div>
-          <p className="text-[11px] uppercase tracking-wide text-muted dark:text-dark-text-secondary">{t('Le debés a este proveedor')}</p>
+          <p className="text-[11px] uppercase tracking-wide text-muted dark:text-dark-text-secondary">
+            {saldo < 0 ? t('Saldo a favor con este proveedor') : saldo === 0 ? t('Saldo con este proveedor') : t('Le debés a este proveedor')}
+          </p>
           <p className={`text-2xl font-display font-semibold ${saldo > 0 ? 'text-bad' : saldo < 0 ? 'text-good' : ''}`}>
             ${formatearMonto(Math.abs(saldo))}
           </p>
-          {saldo < 0 && <p className="text-[11px] text-good">{t('Tenés saldo a favor con él')}</p>}
+          {saldo < 0 && <p className="text-[11px] text-good">{t('El proveedor te debe esta plata (pagaste de más o falta cargar una compra)')}</p>}
           {saldo === 0 && <p className="text-[11px] text-muted dark:text-dark-text-secondary">{t('Estás al día')}</p>}
         </div>
         <div className="flex gap-2">
@@ -644,6 +799,24 @@ export default function DetalleProveedor() {
         </div>
       </div>
 
+      {contadoAbierto && soportaRubros && (
+        <CompraContado
+          supabase={supabase}
+          proveedorId={proveedor.id}
+          sucursales={sucursales}
+          areas={areas}
+          categorias={categorias}
+          sucursalInicial={sucursalActual.id ?? ''}
+          actorNombre={actor?.nombre ?? null}
+          actorFoto={actor?.fotoUrl ?? null}
+          onCerrar={() => setContadoAbierto(false)}
+          onGuardado={() => {
+            setContadoAbierto(false);
+            cargar();
+          }}
+        />
+      )}
+
       {agregandoCompra ? (
         <div className="rounded-xl border border-border dark:border-dark-border bg-white dark:bg-dark-surface shadow-card p-3 flex flex-col gap-2">
           <p className="text-xs font-medium text-muted dark:text-dark-text-secondary">
@@ -664,11 +837,25 @@ export default function DetalleProveedor() {
                   capacidad === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                 }`}
               >
-                {gb}GB
+                {formatearGB(gb)}
               </button>
             ))}
           </div>
           <SelectorColorAuto label={t('Color')} modelo={modelo} value={color} onChange={setColor} />
+          {soportaRubros && (
+            <select
+              value={categoriaCompra}
+              onChange={(e) => setCategoriaCompra(e.target.value)}
+              className="w-full bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+            >
+              <option value="">{t('Elegí el rubro')} *</option>
+              {categorias.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {etiquetaCategoria(c.id, categorias)}
+                </option>
+              ))}
+            </select>
+          )}
           <div className="flex gap-2">
             <div className="flex-1">
               <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Cantidad')}</label>
@@ -745,12 +932,29 @@ export default function DetalleProveedor() {
           </div>
         </div>
       ) : (
-        <button
-          onClick={abrirNuevaCompra}
-          className="w-full rounded-2xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium"
-        >
-          + {t('Cargar compra')}
-        </button>
+        <div className="flex gap-2">
+          {soportaRubros && (
+            <button
+              onClick={() => setContadoAbierto((v) => !v)}
+              className="flex-1 rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-3 text-center text-sm font-medium text-white"
+            >
+              🛒 {t('Compra de contado')}
+            </button>
+          )}
+          <button
+            onClick={abrirNuevaCompra}
+            className="flex-1 rounded-2xl border border-border dark:border-dark-border py-3 text-center text-sm font-medium"
+          >
+            + {t('Cargar compra')}
+          </button>
+        </div>
+      )}
+
+      {facturaVista && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={() => setFacturaVista(null)}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={facturaVista} alt={t('Factura')} className="max-h-full max-w-full rounded-lg bg-white" />
+        </div>
       )}
 
       <div className="flex flex-col gap-2">
@@ -773,7 +977,7 @@ export default function DetalleProveedor() {
                 )}
                 <span className="truncate">
                   {f.modelo || t('Sin modelo')}
-                  {f.capacidad_gb ? ` · ${f.capacidad_gb}GB` : ''}
+                  {f.capacidad_gb ? ` · ${formatearGB(f.capacidad_gb)}` : ''}
                   {f.color ? ` · ${f.color}` : ''}
                   {f.cantidad > 1 ? ` · x${f.cantidad}` : ''}
                 </span>
@@ -783,12 +987,26 @@ export default function DetalleProveedor() {
                 {f.origen === 'stock' ? t('cargado al Stock') : t('compra cargada a mano')}
                 {f.sucursalId && sucursales.length > 1 ? ` · 🏬 ${sucursales.find((s) => s.id === f.sucursalId)?.nombre ?? ''}` : ''}
                 {f.areaId && areas.length > 0 ? ` · ${areas.find((a) => a.id === f.areaId)?.nombre ?? ''}` : ''}
+                {f.categoriaId ? ` · ${categorias.find((c) => c.id === f.categoriaId)?.nombre ?? t('Rubro')}` : ''}
               </p>
               {f.detalles && <p className="text-xs text-muted dark:text-dark-text-secondary">{f.detalles}</p>}
             </div>
             <div className="flex items-center gap-2 shrink-0">
               {f.precioUnitario != null && (
                 <p className="text-sm font-medium">${formatearMonto(f.precioUnitario * f.cantidad)}</p>
+              )}
+              {f.tieneFactura && f.idManual && (
+                <button
+                  onClick={async () => {
+                    const { data, error: errorFactura } = await supabase.from('compras_proveedor').select('factura_url').eq('id', f.idManual!).maybeSingle();
+                    const url = errorFactura ? null : (data as { factura_url: string | null } | null)?.factura_url;
+                    if (url) setFacturaVista(url);
+                    else setError(t('No pudimos abrir la foto de la factura.'));
+                  }}
+                  className="text-xs text-accent dark:text-dark-accent underline"
+                >
+                  📎 {t('Factura')}
+                </button>
               )}
               {f.origen === 'manual' && f.idManual && (
                 <button

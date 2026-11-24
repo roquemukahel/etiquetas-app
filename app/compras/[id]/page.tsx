@@ -9,13 +9,24 @@ import { registrarAuditoria } from '../../lib/auditoria';
 import { getActor, useActor, MENSAJE_ACTOR_REQUERIDO } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import { sanitizarDecimal } from '../../lib/numeros';
+import { extraerBateriaDeDetalles, parsearBateria, soloPorcentajeBateria } from '../../lib/bateria';
 import { limpiarImei } from '../../lib/imei';
 import SelectorColorAuto from '../../SelectorColorAuto';
 import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
 import { useT } from '../../lib/idioma';
 import { useSucursalActual } from '../../lib/sucursal';
+import AvisoCanje from '../../AvisoCanje';
+import AvisoStandby from '../../AvisoStandby';
+import { useCoincidenciasStandby } from '../../lib/useCoincidenciasStandby';
+import { useCoincidenciasCanje } from '../../lib/useCoincidenciasCanje';
+import { hayCanjeConEseImei } from '../../lib/canje';
+import { campoBateriaServicio } from '../../lib/bateriaServicio';
+import { falla } from '../../lib/escritura';
+import { soportaMigracion } from '../../lib/migraciones';
+import { camposRecibidoPor, registrarRecepcionEnHistorial } from '../../lib/recibidoPor';
+import { OPCIONES_ALMACENAMIENTO, formatearGB } from '../../lib/almacenamiento';
 
-const STORAGE_OPTIONS = [64, 128, 256, 512];
+const STORAGE_OPTIONS = OPCIONES_ALMACENAMIENTO;
 
 type Compra = {
   id: string;
@@ -25,6 +36,8 @@ type Compra = {
   color: string | null;
   condicion: string | null;
   imei: string | null;
+  // Opcional en el tipo: la columna existe recién después de correr compras_bateria_supabase.sql.
+  salud_bateria?: number | null;
   detalles: string | null;
   precio: number | null;
   estado: string;
@@ -54,8 +67,13 @@ export default function DetalleCompra() {
   const [editCondicion, setEditCondicion] = useState('usado');
   const [editImei, setEditImei] = useState('');
   const [editDetalles, setEditDetalles] = useState('');
+  const [editBateria, setEditBateria] = useState('');
   const [editPrecio, setEditPrecio] = useState('');
   const [guardandoEdicion, setGuardandoEdicion] = useState(false);
+
+  // Si este equipo ya está esperando en Plan Canje, se avisa antes de pasarlo al Stock (duplicado).
+  const coincidenciasCanje = useCoincidenciasCanje(supabase, compra?.imei ?? '', compra?.modelo ?? '');
+  const coincidenciasStandby = useCoincidenciasStandby(supabase, compra?.imei ?? '', compra?.modelo ?? '');
 
   const nombreCliente = (c: Compra) => (c.clientes ? `${c.clientes.nombre} ${c.clientes.apellido || ''}`.trim() : t('sin cliente'));
 
@@ -71,15 +89,27 @@ export default function DetalleCompra() {
     })();
   }, [id]);
 
-  const agregarAlStock = async () => {
+  // Standby (standby_supabase.sql): el botón "Mandar a Standby" solo aparece si el negocio ya lo tiene activado.
+  const [conStandby, setConStandby] = useState(false);
+  useEffect(() => {
+    soportaMigracion(supabase, 'standby').then(setConStandby);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Con `standby` el equipo no entra al Stock vendible sino a Standby (con ese motivo): para el que llegó con detalles
+  // y todavía no se sabe qué hacer con él.
+  const agregarAlStock = async (standby?: { motivo: string }) => {
     if (!compra || procesando || !puedeAgregarStock) return;
     if (!getActor()) {
       setError(t(MENSAJE_ACTOR_REQUERIDO));
       return;
     }
-    if (!confirm(t('¿Agregar este dispositivo al Stock para venderlo?'))) return;
-    if (compra.imei) {
-      const { data: existente } = await supabase.from('dispositivos').select('id').eq('imei', compra.imei).maybeSingle();
+    if (!standby && !confirm(t('¿Agregar este dispositivo al Stock para venderlo?'))) return;
+    if (hayCanjeConEseImei(coincidenciasCanje.porImei, compra.imei ?? '') && !confirm(t('Este dispositivo está en Plan Canje. Si lo cargás acá queda duplicado en el Stock. ¿Cargarlo igual?'))) return;
+    const enStandbyConEseImei = hayCanjeConEseImei(coincidenciasStandby.porImei, compra.imei ?? '');
+    if (enStandbyConEseImei && !confirm(t('Este dispositivo está en Standby. Si lo cargás acá queda duplicado en el Stock. ¿Cargarlo igual?'))) return;
+    if (compra.imei && !enStandbyConEseImei) {
+      const { data: existente } = await supabase.from('dispositivos').select('id').eq('imei', compra.imei).limit(1).maybeSingle();
       if (existente && !confirm(`${t('Ya hay un dispositivo en Stock con el IMEI')} ${compra.imei}. ${t('¿Agregarlo igual?')}`)) return;
     }
     setProcesando(true);
@@ -92,7 +122,7 @@ export default function DetalleCompra() {
     // reservarla — la segunda no llega a duplicar el dispositivo.
     const { data: actualizada, error: estadoErr } = await supabase
       .from('compras')
-      .update({ estado: 'en_stock' })
+      .update({ estado: standby ? 'standby' : 'en_stock' })
       .eq('id', id)
       .eq('estado', 'pendiente')
       .select('id');
@@ -109,14 +139,25 @@ export default function DetalleCompra() {
 
     const actor = getActor();
     const modeloNormalizado = compra.modelo ? normalizarNombreModelo(compra.modelo) : compra.modelo;
+    // La batería de la compra pasa al equipo; en compras viejas (escrita en los detalles) se rescata de ahí.
+    const bateriaDeLaCompra = compra.salud_bateria ?? extraerBateriaDeDetalles(compra.detalles);
     const { error: insertError } = await supabase.from('dispositivos').insert({
       modelo: modeloNormalizado,
       capacidad_gb: compra.capacidad_gb,
       color: compra.color,
       imei: compra.imei,
       estado: compra.condicion || 'usado',
+      ...(bateriaDeLaCompra != null ? { salud_bateria: bateriaDeLaCompra } : {}),
       detalles: compra.detalles,
-      en_stock: true,
+      ...(standby
+        ? {
+            en_stock: false,
+            en_espera: true,
+            en_espera_desde: new Date().toISOString(),
+            espera_origen: 'compra',
+            espera_motivo: standby.motivo.trim() || null,
+          }
+        : { en_stock: true }),
       agregado_por_nombre: actor?.nombre ?? null,
       agregado_por_foto_url: actor?.fotoUrl ?? null,
       ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
@@ -129,12 +170,19 @@ export default function DetalleCompra() {
     }
     await asegurarModelo(supabase, modeloNormalizado);
     await registrarAuditoria(supabase, {
-      accion: `agregó al Stock un dispositivo comprado (${compra.modelo || 'sin modelo'}${compra.imei ? `, IMEI ${compra.imei}` : ''}) de ${nombreCliente(compra)}`,
+      accion: `${standby ? 'mandó a Standby' : 'agregó al Stock'} un dispositivo comprado (${compra.modelo || 'sin modelo'}${compra.imei ? `, IMEI ${compra.imei}` : ''}) de ${nombreCliente(compra)}`,
       entidad: 'compra',
       entidadId: compra.id,
     });
-    setCompra({ ...compra, estado: 'en_stock' });
+    setCompra({ ...compra, estado: standby ? 'standby' : 'en_stock' });
     setProcesando(false);
+  };
+
+  const mandarAStandby = () => {
+    if (!compra || procesando || !puedeAgregarStock) return;
+    const motivo = prompt(`${t('¿Qué le pasa a')} ${compra.modelo || t('este equipo')}? ${t('Queda en Standby, fuera del Stock para vender.')}`, compra.detalles ?? '');
+    if (motivo === null) return;
+    return agregarAlStock({ motivo });
   };
 
   const derivarAServicioTecnico = async () => {
@@ -155,7 +203,10 @@ export default function DetalleCompra() {
         capacidad_gb: compra.capacidad_gb,
         imei: compra.imei,
         falla_declarada: compra.detalles,
+        // La batería de la compra viaja con el equipo por Servicio Técnico (y vuelve al Stock con él).
+        ...(await campoBateriaServicio(supabase, compra.salud_bateria ?? extraerBateriaDeDetalles(compra.detalles))),
         estado: 'recibido',
+        ...(await camposRecibidoPor(supabase)),
         ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
       })
       .select('id, numero_orden')
@@ -165,7 +216,8 @@ export default function DetalleCompra() {
       setProcesando(false);
       return;
     }
-    await supabase.from('compras').update({ estado: 'servicio_tecnico' }).eq('id', id);
+    await registrarRecepcionEnHistorial(supabase, nueva?.id ? [nueva.id] : []);
+    await falla(supabase.from('compras').update({ estado: 'servicio_tecnico' }).eq('id', id), t, 'marcar la compra como derivada a Servicio Técnico');
     await registrarAuditoria(supabase, {
       accion: `derivó a Servicio Técnico un dispositivo comprado (${nueva?.numero_orden || ''}, ${compra.modelo || 'sin modelo'}${compra.imei ? `, IMEI ${compra.imei}` : ''}) de ${nombreCliente(compra)}`,
       entidad: 'reparacion',
@@ -204,6 +256,7 @@ export default function DetalleCompra() {
     setEditColor(compra.color || '');
     setEditCondicion(compra.condicion || 'usado');
     setEditImei(compra.imei || '');
+    setEditBateria(compra.salud_bateria != null ? String(compra.salud_bateria) : '');
     setEditDetalles(compra.detalles || '');
     setEditPrecio(compra.precio != null ? String(compra.precio) : '');
     setError(null);
@@ -230,6 +283,7 @@ export default function DetalleCompra() {
     const nuevoModelo = editModelo.trim() ? normalizarNombreModelo(editModelo.trim()) : null;
     const nuevoColor = editColor.trim() || null;
     const nuevoImei = limpiarImei(editImei);
+    const nuevaBateria = parsearBateria(editBateria);
     const nuevosDetalles = editDetalles.trim() || null;
     const nuevoPrecio = editPrecio ? Number(editPrecio) : null;
 
@@ -239,6 +293,7 @@ export default function DetalleCompra() {
     if ((compra.color || null) !== nuevoColor) cambios.color = { antes: compra.color, despues: nuevoColor };
     if ((compra.condicion || 'usado') !== editCondicion) cambios.condicion = { antes: compra.condicion, despues: editCondicion };
     if (compra.imei !== nuevoImei) cambios.imei = { antes: compra.imei, despues: nuevoImei };
+    if ((compra.salud_bateria ?? null) !== nuevaBateria) cambios.salud_bateria = { antes: compra.salud_bateria ?? null, despues: nuevaBateria };
     if (compra.detalles !== nuevosDetalles) cambios.detalles = { antes: compra.detalles, despues: nuevosDetalles };
     if (compra.precio !== nuevoPrecio) cambios.precio = { antes: compra.precio, despues: nuevoPrecio };
 
@@ -256,6 +311,8 @@ export default function DetalleCompra() {
         color: nuevoColor,
         condicion: editCondicion,
         imei: nuevoImei,
+        // Solo si cambió: editar otra cosa no depende de que la columna ya exista.
+        ...(cambios.salud_bateria ? { salud_bateria: nuevaBateria } : {}),
         detalles: nuevosDetalles,
         precio: nuevoPrecio,
       })
@@ -283,6 +340,7 @@ export default function DetalleCompra() {
       color: nuevoColor,
       condicion: editCondicion,
       imei: nuevoImei,
+      salud_bateria: nuevaBateria,
       detalles: nuevosDetalles,
       precio: nuevoPrecio,
     });
@@ -341,7 +399,7 @@ export default function DetalleCompra() {
                   editCapacidad === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
                 }`}
               >
-                {gb} GB
+                {formatearGB(gb, true)}
               </button>
             ))}
           </div>
@@ -356,6 +414,17 @@ export default function DetalleCompra() {
             value={editImei}
             onChange={(e) => setEditImei(e.target.value)}
             className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm font-mono"
+          />
+        </div>
+
+        <div>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Salud de batería (%)')}</label>
+          <input
+            value={editBateria}
+            onChange={(e) => setEditBateria(soloPorcentajeBateria(e.target.value))}
+            inputMode="numeric"
+            placeholder="87"
+            className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
           />
         </div>
 
@@ -418,7 +487,7 @@ export default function DetalleCompra() {
         <p>
           <span className="text-muted dark:text-dark-text-secondary">{t('Dispositivo:')} </span>
           {compra.modelo}
-          {compra.capacidad_gb ? ` · ${compra.capacidad_gb}GB` : ''}
+          {compra.capacidad_gb ? ` · ${formatearGB(compra.capacidad_gb)}` : ''}
           {compra.color ? ` · ${compra.color}` : ''}
           {compra.condicion === 'sellado' && (
             <span className="ml-1.5 inline-block text-[10px] font-bold text-black bg-gradient-to-b from-amber-300 to-amber-500 border border-black/40 rounded-full px-2 py-0.5 align-middle">
@@ -430,6 +499,12 @@ export default function DetalleCompra() {
           <p>
             <span className="text-muted dark:text-dark-text-secondary">{t('IMEI:')} </span>
             <span className="font-bold font-mono">{compra.imei}</span>
+          </p>
+        )}
+        {compra.salud_bateria != null && (
+          <p>
+            <span className="text-muted dark:text-dark-text-secondary">{t('Batería:')} </span>
+            {compra.salud_bateria}%
           </p>
         )}
         {compra.detalles && (
@@ -445,16 +520,49 @@ export default function DetalleCompra() {
         )}
       </div>
 
+      {compra.estado === 'pendiente' && (
+        <AvisoCanje
+          supabase={supabase}
+          porImei={coincidenciasCanje.porImei}
+          porModelo={coincidenciasCanje.porModelo}
+          sucursalId={sucursalActual.id}
+          onAgregado={() => {
+            router.push('/stock');
+            router.refresh();
+          }}
+        />
+      )}
+      {compra.estado === 'pendiente' && (
+        <AvisoStandby
+          supabase={supabase}
+          porImei={coincidenciasStandby.porImei}
+          porModelo={coincidenciasStandby.porModelo}
+          onAgregado={() => {
+            router.push('/stock');
+            router.refresh();
+          }}
+        />
+      )}
+
       {compra.estado === 'pendiente' ? (
         <div className="flex flex-col gap-2">
           <p className="text-xs text-muted dark:text-dark-text-secondary font-medium">{t('¿Qué hacemos con este dispositivo?')}</p>
           {puedeAgregarStock && (
             <button
               disabled={procesando}
-              onClick={agregarAlStock}
+              onClick={() => agregarAlStock()}
               className="w-full rounded-2xl bg-accent dark:bg-dark-accent hover:bg-accent-hover dark:hover:bg-dark-accent-hover transition-colors py-4 text-center text-base font-medium text-white disabled:opacity-40"
             >
               {t('Agregar al Stock')}
+            </button>
+          )}
+          {conStandby && puedeAgregarStock && (
+            <button
+              disabled={procesando}
+              onClick={mandarAStandby}
+              className="w-full rounded-2xl border border-border dark:border-dark-border py-4 text-center text-base font-medium disabled:opacity-40"
+            >
+              {t('Mandar a Standby')}
             </button>
           )}
           {puedeRecibirServicioTecnico && (
@@ -478,7 +586,11 @@ export default function DetalleCompra() {
         </div>
       ) : (
         <p className="text-sm text-good bg-good/10 rounded-lg px-3 py-2">
-          {compra.estado === 'en_stock' ? `✓ ${t('Ya está en el Stock, listo para vender.')}` : `✓ ${t('Derivado a Servicio Técnico.')}`}
+          {compra.estado === 'en_stock'
+            ? `✓ ${t('Ya está en el Stock, listo para vender.')}`
+            : compra.estado === 'standby'
+              ? `✓ ${t('Está en Standby, fuera del Stock para vender.')}`
+              : `✓ ${t('Derivado a Servicio Técnico.')}`}
         </p>
       )}
 

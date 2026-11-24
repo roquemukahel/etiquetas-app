@@ -9,6 +9,7 @@ import EstadoBadge from '../EstadoBadge';
 import { ICONOS } from '../Iconos';
 import { Boton, BotonLink } from '../Boton';
 import { useT } from '../lib/idioma';
+import { formatearGB } from '../lib/almacenamiento';
 
 // Ícono chico reutilizado inline en esta tarjeta (etiqueta, cliente/local,
 // ubicación) — mismo patrón de EstadoBadge para reescalar los SVG de 24px.
@@ -20,7 +21,7 @@ function IconoChico({ nombre }: { nombre: string }) {
   );
 }
 
-export type Tecnico = { id: string; nombre: string; foto_url: string | null };
+export type Tecnico = { id: string; nombre: string; foto_url: string | null; sucursal_id?: string | null };
 
 export type Reparacion = {
   id: string;
@@ -50,6 +51,8 @@ export type Reparacion = {
   importe_total: number | null;
   orden_cobro_id: string | null;
   agregado_a_stock: boolean;
+  // Solo existe con servicio_costo_repuesto_supabase.sql.
+  repuesto_decision?: 'del_stock' | 'pendiente' | 'sin_repuesto' | null;
   clientes: { nombre: string; apellido: string | null; telefono: string | null } | null;
   sucursal_id?: string | null;
 };
@@ -96,6 +99,7 @@ export default function TarjetaReparacion({
   onArchivar,
   onEliminar,
   onAgregarAlStock,
+  onMandarAStandby,
   onEntregadoCliente,
   imagenesCarpetas,
   puedeAgregarStock,
@@ -113,6 +117,8 @@ export default function TarjetaReparacion({
   onArchivar: (r: Reparacion) => void;
   onEliminar: (r: Reparacion) => void;
   onAgregarAlStock: (r: Reparacion) => void;
+  // Solo si el negocio tiene Standby y la persona puede agregar al Stock.
+  onMandarAStandby?: (r: Reparacion) => void;
   onEntregadoCliente: (r: Reparacion) => void;
   imagenesCarpetas: Map<string, string>;
   puedeAgregarStock: boolean;
@@ -136,7 +142,7 @@ export default function TarjetaReparacion({
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium truncate">
             {r.numero_orden} · {r.modelo}
-            {r.capacidad_gb ? ` · ${r.capacidad_gb}GB` : ''}
+            {r.capacidad_gb ? ` · ${formatearGB(r.capacidad_gb)}` : ''}
             {r.color ? ` · ${r.color}` : ''}
           </p>
           <p className="text-xs text-muted dark:text-dark-text-secondary truncate">
@@ -200,6 +206,11 @@ export default function TarjetaReparacion({
 
       <div className="flex items-center gap-2 flex-wrap text-xs">
         <EstadoBadge estado={r.estado} />
+        {r.repuesto_decision === 'pendiente' && (
+          <span className="rounded-full px-2 py-0.5 bg-warn/15 text-warn font-medium" title={t('No se cargó el repuesto usado: no cuenta como ganancia hasta que se cargue.')}>
+            {t('Costo pendiente')}
+          </span>
+        )}
         {r.prioridad !== 'normal' && (
           <span className={`font-medium ${PRIORIDADES.find((p) => p.id === r.prioridad)?.color}`}>
             {t(PRIORIDADES.find((p) => p.id === r.prioridad)?.label ?? '')}
@@ -266,8 +277,14 @@ export default function TarjetaReparacion({
       {r.estado === 'entregado' && (r.cliente_id || r.agregado_a_stock) && (
         <span className="inline-flex items-center justify-center gap-1 rounded-lg bg-muted/10 h-9 text-xs font-medium text-muted dark:text-dark-text-secondary">
           <IconoChico nombre="check" />
-          {r.cliente_id ? t('Entregado al cliente') : t('Ya está en Stock')}
+          {r.cliente_id ? t('Entregado al cliente') : t('Ya está en Stock o en Standby')}
         </span>
+      )}
+
+      {onMandarAStandby && !r.cliente_id && !r.agregado_a_stock && r.estado !== 'entregado' && (
+        <Boton variante="secundario" tamano="sm" anchoCompleto disabled={guardando === r.id} cargando={guardando === r.id} onClick={() => onMandarAStandby(r)}>
+          {t('Mandar a Standby')}
+        </Boton>
       )}
 
       <div className="flex gap-2">

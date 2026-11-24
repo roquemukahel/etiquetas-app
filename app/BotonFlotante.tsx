@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { crearClienteNavegador } from './lib/supabase/client';
 import { ICONOS } from './Iconos';
+import { useT } from './lib/idioma';
 
 // Mismo criterio de exclusión que el selector de "quién trabaja": no tiene
 // sentido un botón de acciones rápidas en pantallas públicas, de login, o de
@@ -31,6 +32,7 @@ const ACCIONES = [
 ];
 
 export default function BotonFlotante() {
+  const t = useT();
   const pathname = usePathname();
   const supabase = crearClienteNavegador();
   const [sesion, setSesion] = useState<'cargando' | 'si' | 'no'>('cargando');
@@ -69,7 +71,7 @@ export default function BotonFlotante() {
                 className="animate-fade-in-up flex items-center gap-2.5 rounded-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-elevated pl-4 pr-1.5 py-1.5 text-sm font-medium hover:bg-canvas dark:hover:bg-dark-bg transition-colors"
                 style={{ animationDelay: `${i * 30}ms` }}
               >
-                {a.label}
+                {t(a.label)}
                 <span className="h-8 w-8 rounded-full bg-accent-soft dark:bg-dark-accent-soft text-accent dark:text-dark-accent flex items-center justify-center shrink-0 [&_svg]:h-4 [&_svg]:w-4">
                   {ICONOS[a.icono]}
                 </span>
@@ -85,7 +87,7 @@ export default function BotonFlotante() {
             className={`relative h-14 w-14 rounded-full bg-gradient-to-br from-accent to-accent-hover dark:from-dark-accent dark:to-dark-accent-hover text-white flex items-center justify-center text-2xl font-light leading-none shadow-[0_10px_28px_-4px_rgba(53,92,222,0.55)] dark:shadow-[0_10px_28px_-4px_rgba(108,140,255,0.45)] hover:scale-105 active:scale-95 transition-transform duration-200 ${
               abierto ? 'rotate-45' : ''
             }`}
-            aria-label={abierto ? 'Cerrar acciones rápidas' : 'Acciones rápidas'}
+            aria-label={abierto ? t('Cerrar acciones rápidas') : t('Acciones rápidas')}
           >
             +
           </button>

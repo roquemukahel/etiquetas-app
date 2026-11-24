@@ -5,6 +5,7 @@ import { SCRIPT_TEMA_INICIAL } from './lib/theme';
 import SelectorDeActor from './SelectorDeActor';
 import BotonFlotante from './BotonFlotante';
 import AppShell from './AppShell';
+import AvisoDatosIncompletos from './AvisoDatosIncompletos';
 import RegistrarServiceWorker from './RegistrarServiceWorker';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' });
@@ -42,6 +43,7 @@ export default function RootLayout({
         <SelectorDeActor />
         <AppShell>{children}</AppShell>
         <BotonFlotante />
+        <AvisoDatosIncompletos />
       </body>
     </html>
   );

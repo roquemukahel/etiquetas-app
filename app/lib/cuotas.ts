@@ -45,3 +45,35 @@ export function interesDe(interesCuotas: Record<string, number> | null | undefin
   if (!interesCuotas || cuotas <= 0) return 0;
   return Number(interesCuotas[String(cuotas)]) || 0;
 }
+
+// Lo mínimo de una orden que hace falta para entender con qué plan se guardó.
+export type OrdenParaCuotas = {
+  cuotas: number | null;
+  total: number | null;
+  anticipo: number | null;
+  monto_canje: number | null;
+  impuesto_porcentaje: number | null;
+  orden_items: { cantidad: number; precio_unitario: number }[];
+};
+
+// Interés (%) con el que se guardó una orden en cuotas, despejado de su total.
+// Null si la orden no tiene plan de cuotas o no hay precio base para calcularlo.
+export function interesGuardadoDeOrden(orden: OrdenParaCuotas | null): number | null {
+  if (!orden || !orden.cuotas || orden.cuotas <= 0) return null;
+  const subtotalOriginal = orden.orden_items.reduce((acc, i) => acc + i.cantidad * i.precio_unitario, 0);
+  if (subtotalOriginal <= 0) return null;
+  const conImpuesto = (orden.total ?? 0) + (orden.anticipo || 0) + (orden.monto_canje || 0);
+  const sinImpuesto = conImpuesto / (1 + (orden.impuesto_porcentaje || 0) / 100);
+  return Math.max(0, Math.round((sinImpuesto / subtotalOriginal - 1) * 10000) / 100);
+}
+
+// La columna cuotas arranca en 1 (default de la base) para toda orden que no
+// pasó por Nueva Orden — recepción de Servicio Técnico, por ejemplo — aunque
+// nunca se haya elegido un plan. Una orden en "1 cuota" SIN recargo guardado
+// es en la práctica de contado, y así se muestra al editarla.
+export function cuotasEfectivasDeOrden(orden: OrdenParaCuotas | null): number {
+  if (!orden) return 0;
+  const cuotas = orden.cuotas ?? 0;
+  if (cuotas === 1 && (interesGuardadoDeOrden(orden) ?? 0) <= 0) return 0;
+  return cuotas;
+}

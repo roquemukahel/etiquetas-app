@@ -7,9 +7,11 @@ import { crearClienteNavegador } from '../lib/supabase/client';
 import { asegurarModelo, normalizarNombreModelo } from '../lib/modelos';
 import { limpiarImei } from '../lib/imei';
 import { getActor, MENSAJE_ACTOR_REQUERIDO } from '../lib/actor';
+import { tienePermiso } from '../lib/permisos';
 import SelectorColorAuto from '../SelectorColorAuto';
 import { useT } from '../lib/idioma';
 import { useSucursalActual } from '../lib/sucursal';
+import { OPCIONES_ALMACENAMIENTO, formatearGB } from '../lib/almacenamiento';
 
 type ExtractedData = {
   modelo: string | null;
@@ -19,7 +21,7 @@ type ExtractedData = {
   version_ios: string | null;
 };
 
-const STORAGE_OPTIONS = [64, 128, 256, 512];
+const STORAGE_OPTIONS = OPCIONES_ALMACENAMIENTO;
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -196,12 +198,16 @@ export default function NuevaEtiqueta() {
       }
       const imeiLimpio = limpiarImei(datos.imei);
       if (imeiLimpio) {
-        const { data: existente } = await supabase.from('dispositivos').select('id').eq('imei', imeiLimpio).maybeSingle();
+        const { data: existente } = await supabase.from('dispositivos').select('id').eq('imei', imeiLimpio).limit(1).maybeSingle();
         if (existente && !confirm(`${t('Ya hay un dispositivo en Stock con el IMEI')} ${imeiLimpio}. ${t('¿Agregarlo igual?')}`)) return;
+      }
+      if (!tienePermiso(actor, 'agregar_stock')) {
+        setError(t('No tenés permiso para agregar dispositivos al stock.'));
+        return;
       }
       setGuardandoStock(true);
       const modeloNormalizado = datos.modelo ? normalizarNombreModelo(datos.modelo.trim()) : datos.modelo;
-      await supabase.from('dispositivos').insert({
+      const { error: altaError } = await supabase.from('dispositivos').insert({
         modelo: modeloNormalizado,
         capacidad_gb: datos.capacidad_gb,
         imei: imeiLimpio,
@@ -216,6 +222,11 @@ export default function NuevaEtiqueta() {
         agregado_por_foto_url: actor?.fotoUrl ?? null,
         ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
       });
+      if (altaError) {
+        setError(t('No pudimos agregar al stock:') + ' ' + altaError.message);
+        setGuardandoStock(false);
+        return;
+      }
       await asegurarModelo(supabase, modeloNormalizado);
       setGuardandoStock(false);
     }
@@ -512,7 +523,7 @@ export default function NuevaEtiqueta() {
                 almacenamiento === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
               }`}
             >
-              {gb} GB
+              {formatearGB(gb, true)}
             </button>
           ))}
         </div>

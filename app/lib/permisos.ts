@@ -3,6 +3,8 @@ import { Actor } from './actor';
 export type Permiso =
   | 'vender'
   | 'eliminar'
+  // Eliminar un dispositivo del Stock a mano (sin venderlo): permiso propio, separado de 'eliminar' (que junta órdenes, clientes, canjes y compras).
+  | 'eliminar_dispositivos'
   | 'agregar_stock'
   | 'ver_estadisticas'
   | 'recibir_servicio_tecnico'
@@ -47,7 +49,11 @@ export type Permiso =
   // propia. Ver y gestionar quedan juntos a propósito (a diferencia de
   // financiación, acá no hay un caso de uso de "vendedor autorizado que
   // registra egresos en el día a día" — es info sensible de caja).
-  | 'gestionar_egresos';
+  | 'gestionar_egresos'
+  // Cargar gastos (solo ve los que cargó él/ella) y registrar pagos a proveedores sin ver saldos ni compras:
+  // permisos propios, para una persona de confianza que NO es administradora ni tiene acceso completo.
+  | 'cargar_egresos'
+  | 'registrar_pagos_proveedores';
 
 // Sin actor elegido todavía, o un actor sin datos de permisos (guardado
 // antes de que existiera esto): no restringimos — mantiene el
@@ -66,6 +72,9 @@ export type Permiso =
 export function tienePermiso(actor: Actor | null, permiso: Permiso): boolean {
   if (!actor || !actor.permisos) return true;
   if (actor.permisos.esAdministrador ?? true) return true;
+  // Costos, ganancias y márgenes: permiso propio, apagado por defecto. NO lo da el acceso completo (el
+  // administrador siempre los ve); y un actor sin ese dato guardado cuenta como "no".
+  if (permiso === 'ver_costos') return actor.permisos.puedeVerCostos ?? false;
   // Auditoría y gestionar a otros usuarios quedan reservados al
   // administrador — "acceso completo" ya no alcanza para esto (antes de
   // este cambio no existía la distinción, así que un vendedor con acceso
@@ -78,6 +87,9 @@ export function tienePermiso(actor: Actor | null, permiso: Permiso): boolean {
       return actor.permisos.puedeVender ?? true;
     case 'eliminar':
       return actor.permisos.puedeEliminar ?? true;
+    case 'eliminar_dispositivos':
+      // Sin dato propio (negocio que no corrió el SQL, o un actor guardado antes) vale lo mismo que el 'eliminar' de siempre.
+      return actor.permisos.puedeEliminarDispositivos ?? actor.permisos.puedeEliminar ?? true;
     case 'agregar_stock':
       return actor.permisos.puedeAgregarStock ?? true;
     case 'ver_estadisticas':
@@ -92,6 +104,10 @@ export function tienePermiso(actor: Actor | null, permiso: Permiso): boolean {
       return true;
     case 'gestionar_financiacion':
       return actor.permisos.puedeGestionarFinanciacion ?? true;
+    case 'cargar_egresos':
+      return actor.permisos.puedeCargarEgresos ?? false;
+    case 'registrar_pagos_proveedores':
+      return actor.permisos.puedeRegistrarPagosProveedores ?? false;
     // 'gestionar_comisiones' y 'ajustar_financiacion' NO están acá a
     // propósito: gestionar_comisiones cae en default → solo administrador o
     // acceso completo; ajustar_financiacion ya se resolvió (a false) arriba,

@@ -9,11 +9,20 @@ import { obtenerTodasLasFilas } from '../../lib/db';
 import { sanitizarDecimal } from '../../lib/numeros';
 import { limpiarImei } from '../../lib/imei';
 import { telefonoIncompleto } from '../../lib/telefono';
+import { extraerBateriaDeDetalles, parsearBateria, soloPorcentajeBateria } from '../../lib/bateria';
 import SelectorColorAuto from '../../SelectorColorAuto';
 import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
 import { useT } from '../../lib/idioma';
+import { useSucursalActual } from '../../lib/sucursal';
+import { origenDeCliente } from '../../lib/clientesDuplicados';
+import AvisoCanje from '../../AvisoCanje';
+import AvisoStandby from '../../AvisoStandby';
+import { useCoincidenciasStandby } from '../../lib/useCoincidenciasStandby';
+import { useCoincidenciasCanje } from '../../lib/useCoincidenciasCanje';
+import { compararModelosPorSalida } from '../../lib/catalogosMarcas';
+import { OPCIONES_ALMACENAMIENTO, formatearGB } from '../../lib/almacenamiento';
 
-const STORAGE_OPTIONS = [64, 128, 256, 512];
+const STORAGE_OPTIONS = OPCIONES_ALMACENAMIENTO;
 
 type Cliente = {
   id: string;
@@ -26,6 +35,7 @@ export default function NuevaCompra() {
   const router = useRouter();
   const supabase = crearClienteNavegador();
   const t = useT();
+  const sucursalActual = useSucursalActual();
 
   const [step, setStep] = useState<'cliente' | 'dispositivo'>('cliente');
 
@@ -46,6 +56,7 @@ export default function NuevaCompra() {
   const [color, setColor] = useState('');
   const [condicion, setCondicion] = useState('usado');
   const [imei, setImei] = useState('');
+  const [bateria, setBateria] = useState('');
   const [detalles, setDetalles] = useState('');
   const [precio, setPrecio] = useState('');
 
@@ -58,7 +69,7 @@ export default function NuevaCompra() {
     })();
     (async () => {
       const { data } = await supabase.from('modelos_stock').select('nombre').order('nombre');
-      setCarpetas((data ?? []).map((m) => m.nombre));
+      setCarpetas((data ?? []).map((m) => m.nombre).sort(compararModelosPorSalida));
     })();
   }, []);
 
@@ -81,6 +92,9 @@ export default function NuevaCompra() {
   };
 
   const puedeConfirmar = modelo.trim().length > 0;
+  // Si el equipo que se compra ya está esperando en Plan Canje, se avisa y se ofrece el atajo para pasarlo al Stock.
+  const coincidenciasCanje = useCoincidenciasCanje(supabase, imei, modelo);
+  const coincidenciasStandby = useCoincidenciasStandby(supabase, imei, modelo);
 
   const handleConfirmar = async () => {
     if (!puedeConfirmar) return;
@@ -90,9 +104,11 @@ export default function NuevaCompra() {
     try {
       let clienteId = clienteElegido?.id;
       if (modoCliente === 'nuevo') {
+        const origenCliente = await origenDeCliente(supabase, sucursalActual.id);
         const { data, error: cErr } = await supabase
           .from('clientes')
           .insert({
+            ...origenCliente,
             nombre: nuevoNombre.trim(),
             apellido: nuevoApellido.trim() || null,
             telefono: nuevoTelefono.trim() || null,
@@ -107,6 +123,8 @@ export default function NuevaCompra() {
       }
 
       const modeloNormalizado = normalizarNombreModelo(modelo.trim());
+      // El porcentaje del campo manda; si se dejó vacío y está escrito en los detalles ("batería al 70%"), se rescata de ahí.
+      const bateriaFinal = parsearBateria(bateria) ?? extraerBateriaDeDetalles(detalles);
       const { data: compra, error: compraErr } = await supabase
         .from('compras')
         .insert({
@@ -116,6 +134,8 @@ export default function NuevaCompra() {
           color: color.trim() || null,
           condicion,
           imei: limpiarImei(imei),
+          // Solo se manda si hay dato: así una compra sin batería se guarda igual aunque falte correr compras_bateria_supabase.sql.
+          ...(bateriaFinal != null ? { salud_bateria: bateriaFinal } : {}),
           detalles: detalles.trim() || null,
           precio: precio ? Number(precio) : null,
         })
@@ -250,7 +270,7 @@ export default function NuevaCompra() {
                   capacidad === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
                 }`}
               >
-                {gb} GB
+                {formatearGB(gb, true)}
               </button>
             ))}
           </div>
@@ -260,13 +280,44 @@ export default function NuevaCompra() {
         <SelectorEstadoDispositivo value={condicion} onChange={setCondicion} />
 
         <Campo label={t('IMEI')} valor={imei} onChange={setImei} placeholder={t('IMEI')} />
+        <AvisoCanje
+          supabase={supabase}
+          porImei={coincidenciasCanje.porImei}
+          porModelo={coincidenciasCanje.porModelo}
+          sucursalId={sucursalActual.id}
+          onAgregado={() => {
+            router.push('/stock');
+            router.refresh();
+          }}
+        />
+        <AvisoStandby
+          supabase={supabase}
+          porImei={coincidenciasStandby.porImei}
+          porModelo={coincidenciasStandby.porModelo}
+          onAgregado={() => {
+            router.push('/stock');
+            router.refresh();
+          }}
+        />
+
+        <div>
+          <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Salud de batería (%)')}</label>
+          <input
+            value={bateria}
+            onChange={(e) => setBateria(soloPorcentajeBateria(e.target.value))}
+            inputMode="numeric"
+            placeholder="87"
+            className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+          />
+          <p className="text-xs text-muted dark:text-dark-text-secondary mt-1">{t('Opcional. Si lo dejás vacío, buscamos el porcentaje en los detalles.')}</p>
+        </div>
 
         <div>
           <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">{t('Detalles (opcional)')}</label>
           <textarea
             value={detalles}
             onChange={(e) => setDetalles(e.target.value)}
-            placeholder={t('¿Presenta algún detalle? Ej. pantalla con manchas, batería al 70%...')}
+            placeholder={t('¿Presenta algún detalle? Ej. pantalla con manchas, rayones en la tapa...')}
             rows={3}
             className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
           />

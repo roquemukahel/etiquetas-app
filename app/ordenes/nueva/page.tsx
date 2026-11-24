@@ -6,13 +6,14 @@ import { useRouter } from 'next/navigation';
 import { crearClienteNavegador } from '../../lib/supabase/client';
 import { useT } from '../../lib/idioma';
 import { asegurarModelo, normalizarNombreModelo } from '../../lib/modelos';
-import { TODOS_LOS_MODELOS_CATALOGO } from '../../lib/catalogosMarcas';
+import { TODOS_LOS_MODELOS_CATALOGO, compararModelosPorSalida } from '../../lib/catalogosMarcas';
+import { camposRecibidoPor, registrarRecepcionEnHistorial } from '../../lib/recibidoPor';
 import { obtenerTodasLasFilas } from '../../lib/db';
 import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../../lib/carpetas';
 import { obtenerDispositivosSenados } from '../../lib/planAhorro';
 import { telefonoIncompleto } from '../../lib/telefono';
 import { simboloMoneda } from '../../lib/monedas';
-import { getActor, useActor } from '../../lib/actor';
+import { getActor, useActor, MENSAJE_ACTOR_REQUERIDO } from '../../lib/actor';
 import { tienePermiso } from '../../lib/permisos';
 import {
   MEDIOS_PAGO,
@@ -23,9 +24,14 @@ import {
 } from '../../lib/cuentaCorriente';
 import { planesActivos, interesDe, valorCuota, etiquetaCuotas } from '../../lib/cuotas';
 import { crearPlanFinanciacion } from '../../lib/financiacion/servicio';
+import { buscarClientesDuplicados, textoDuplicados, origenDeCliente } from '../../lib/clientesDuplicados';
+import EtiquetaFinanciacion from '../../EtiquetaFinanciacion';
+import { soportaMigracion } from '../../lib/migraciones';
+import { resolverMaxCuotas, maximoDeCarrito, excedeGuia, mensajeAvisoGuia, aplicarModoPrecio, precioSegunModo, type MaxCuotas } from '../../lib/financiacionGuia';
 import { generarCronograma, sumarMesConClamp, aFechaISO } from '../../lib/financiacion/motor';
 import { decimalesMoneda } from '../../lib/monedas';
 import { generarComisionesAccion } from '../../comisiones/acciones';
+import { traducirConDetalle } from '../../lib/i18n/traducir';
 import CampoFecha from '../../CampoFecha';
 import { ITEMS_CHECKLIST_INGRESO, CAMPOS_DEPENDEN_MODULO, generarTextoCondicionIngreso, type TipoBloqueo, type TipoDispositivo } from '../../lib/reparaciones';
 import CapturarBloqueo from '../../CapturarBloqueo';
@@ -35,12 +41,15 @@ import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
 import { limpiarImei } from '../../lib/imei';
 import { comprimirImagen } from '../../lib/comprimirImagen';
 import { formatearMonto } from '../../lib/numeros';
+import { redondearMonto, lineasConPrecioAnormal } from '../../lib/montos';
 import { cajaDeVenta } from '../../lib/caja/motor';
 import { registrarAuditoria } from '../../lib/auditoria';
 import MiniaturaDispositivo from '../../MiniaturaDispositivo';
 import CheckTri from '../../CheckTri';
 import TextoCondicionGenerado from '../../TextoCondicionGenerado';
 import { useSucursalActual } from '../../lib/sucursal';
+import { falla, registrarFallo } from '../../lib/escritura';
+import { OPCIONES_ALMACENAMIENTO, formatearGB } from '../../lib/almacenamiento';
 
 type Dispositivo = {
   id: string;
@@ -51,6 +60,10 @@ type Dispositivo = {
   costo: number | null;
   imei: string | null;
   salud_bateria: number | null;
+  // Solo vienen si el negocio corrió financiacion_guia_cartera_supabase.sql.
+  precio_lista?: number | null;
+  financiacion_max_cuotas?: number | null;
+  categoria_id?: string | null;
 };
 
 type Cliente = {
@@ -75,6 +88,9 @@ type Producto = {
   sku?: string | null;
   codigo_barras?: string | null;
   sucursal_id?: string | null;
+  precio_lista?: number | null;
+  financiacion_max_cuotas?: number | null;
+  categoria_id?: string | null;
 };
 type Trabajo = { id: string; nombre: string; precio: number | null; imagen_url: string | null };
 
@@ -100,6 +116,13 @@ type ItemCarrito = {
   productoId?: string | null; // producto de catálogo (para comisiones por producto)
   costo?: number | null; // snapshot del costo al vender (para comisión sobre ganancia)
   tipo: 'dispositivo' | 'producto' | 'trabajo';
+  // Dos precios: el exclusivo (contado, transferencia, débito) y el de lista (financiación).
+  // precioUnitario arranca en el que corresponde según cómo se paga y se cambia solo al
+  // activar/desactivar la financiación (salvo que el vendedor lo haya tocado a mano).
+  precioExclusivo?: number | null;
+  precioLista?: number | null;
+  // Hasta cuántas cuotas se puede financiar este ítem (null = sin guía; 0 = sin financiación).
+  maxCuotas?: MaxCuotas;
 };
 
 // Un equipo candidato a derivarse a Servicio Técnico al confirmar la boleta.
@@ -126,7 +149,7 @@ type Derivacion = {
   fotos: string[];
 };
 
-const STORAGE_OPTIONS = [64, 128, 256, 512];
+const STORAGE_OPTIONS = OPCIONES_ALMACENAMIENTO;
 
 function idTemporal() {
   return Math.random().toString(36).slice(2);
@@ -201,7 +224,7 @@ function DerivacionCard({
   onElegirFoto: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onQuitarFoto: (idx: number) => void;
 }) {
-  const resumen = `${der.modelo}${der.capacidad ? ` · ${der.capacidad}GB` : ''}${der.color ? ` · ${der.color}` : ''}${
+  const resumen = `${der.modelo}${der.capacidad ? ` · ${formatearGB(der.capacidad)}` : ''}${der.color ? ` · ${der.color}` : ''}${
     der.imei.trim() ? ` · IMEI ${der.imei.trim()}` : ''
   }`;
   return (
@@ -261,7 +284,7 @@ function DerivacionCard({
                       der.capacidad === gb ? 'bg-amber-400 text-amber-950' : 'border border-border dark:border-dark-border'
                     }`}
                   >
-                    {gb}GB
+                    {formatearGB(gb)}
                   </button>
                 ))}
               </div>
@@ -467,6 +490,13 @@ export default function NuevaOrden() {
   // sentido si una parte de la venta queda en cuenta corriente: en vez de un
   // solo cargo grande, genera un cargo por cuota, cada uno con su vencimiento.
   const [financiarActivo, setFinanciarActivo] = useState(false);
+  // Guía de financiación por producto/categoría: si se ponen más cuotas que las permitidas
+  // se avisa y se pide un motivo para seguir (no bloquea la venta).
+  const [guiaCategorias, setGuiaCategorias] = useState<Map<string, number | null>>(new Map());
+  const [motivoFueraGuia, setMotivoFueraGuia] = useState('');
+  // Cuotas vencidas del cliente elegido (de todas las sucursales), para tenerlas a la vista
+  // antes de darle un crédito nuevo.
+  const [vencidasCliente, setVencidasCliente] = useState<{ cuotas: number; monto: number } | null>(null);
   const [financiarCuotas, setFinanciarCuotas] = useState('3');
   const [financiarPrimeraFecha, setFinanciarPrimeraFecha] = useState('');
   // Recargo propio de ESTA financiación (a diferencia de "Impuesto %", que es
@@ -567,14 +597,23 @@ export default function NuevaOrden() {
       // en stock, los que quedaban afuera de esa primera página eran
       // directamente invisibles acá (no se podían vender). obtenerTodasLasFilas
       // pagina hasta traer todo.
+      const conGuia = await soportaMigracion(supabase, 'guiaFinanciacionDispositivos');
       const data = await obtenerTodasLasFilas<Dispositivo>(
         supabase,
         'dispositivos',
-        'id, modelo, capacidad_gb, color, precio, costo, imei, salud_bateria',
+        'id, modelo, capacidad_gb, color, precio, costo, imei, salud_bateria' + (conGuia ? ', precio_lista, financiacion_max_cuotas, categoria_id' : ''),
         [],
         (q) => q.eq('en_stock', true)
       );
       setDispositivosStock(data);
+      // Desde Standby > Vender (?dispositivoId=...) el equipo ya viene cargado en el carrito.
+      const dispositivoPreseleccionado = new URLSearchParams(window.location.search).get('dispositivoId');
+      const elegido = dispositivoPreseleccionado ? data.find((x) => x.id === dispositivoPreseleccionado) : null;
+      if (elegido) agregarDispositivoDelStock(elegido);
+      if (conGuia) {
+        const { data: cats, error: errorCats } = await supabase.from('stock_categorias').select('id, financiacion_max_cuotas').limit(1000);
+        if (!errorCats) setGuiaCategorias(new Map(((cats as { id: string; financiacion_max_cuotas: number | null }[]) ?? []).map((c) => [c.id, c.financiacion_max_cuotas])));
+      }
     })();
     (async () => {
       setDispositivosSenados(await obtenerDispositivosSenados(supabase));
@@ -584,10 +623,11 @@ export default function NuevaOrden() {
       // select() sin paginar se corta en 1000 filas sin avisar. Con un
       // catálogo de accesorios grande, los productos que quedaban afuera
       // de esa primera página no aparecían para vender.
+      const conGuia = await soportaMigracion(supabase, 'guiaFinanciacion');
       const data = await obtenerTodasLasFilas<Producto>(
         supabase,
         'productos',
-        'id, nombre, precio, costo, imagen_url, marca, sku, codigo_barras, sucursal_id'
+        'id, nombre, precio, costo, imagen_url, marca, sku, codigo_barras, sucursal_id' + (conGuia ? ', precio_lista, financiacion_max_cuotas, categoria_id' : '')
       );
       setProductos(data);
     })();
@@ -601,7 +641,7 @@ export default function NuevaOrden() {
     })();
     (async () => {
       const { data } = await supabase.from('modelos_stock').select('nombre').order('nombre');
-      setCarpetasStock((data ?? []).map((m) => m.nombre));
+      setCarpetasStock((data ?? []).map((m) => m.nombre).sort(compararModelosPorSalida));
     })();
     (async () => setImagenesCarpetas(await obtenerImagenesCarpetas(supabase)))();
   }, []);
@@ -624,7 +664,8 @@ export default function NuevaOrden() {
     return dispositivosStock
       .filter((d) => !idsEnCarrito.has(d.id))
       .filter((d) => !dispositivosSenados.has(d.id))
-      .filter((d) => !q || [d.modelo, d.imei].filter(Boolean).some((c) => c!.toLowerCase().includes(q)));
+      .filter((d) => !q || [d.modelo, d.imei].filter(Boolean).some((c) => c!.toLowerCase().includes(q)))
+      .sort((a, b) => compararModelosPorSalida(a.modelo ?? '', b.modelo ?? '') || (a.capacidad_gb ?? 0) - (b.capacidad_gb ?? 0));
   }, [dispositivosStock, buscarDispositivo, idsEnCarrito, dispositivosSenados]);
 
   // Mismo criterio que dispositivosFiltrados: buscador en vivo, sin
@@ -641,8 +682,10 @@ export default function NuevaOrden() {
       );
   }, [productos, buscarProducto, sucursalActual.id]);
 
+  // Todos los totales se redondean a centavos: sumar productos con impuesto o recargo en coma flotante dejaba totales con un centavo
+  // de más o decimales largos.
   const subtotal = useMemo(
-    () => carrito.reduce((acc, i) => acc + i.cantidad * i.precioUnitario, 0),
+    () => redondearMonto(carrito.reduce((acc, i) => acc + i.cantidad * i.precioUnitario, 0)),
     [carrito]
   );
   const moneda = useMemo(() => simboloMoneda(monedaOrden), [monedaOrden]);
@@ -682,14 +725,14 @@ export default function NuevaOrden() {
   // canje. planes = los planes activos que configuró el negocio.
   const planes = useMemo(() => planesActivos(interesCuotas), [interesCuotas]);
   const interesPlan = interesDe(interesCuotas, cuotasElegidas);
-  const subtotalFinanciado = subtotal * (1 + interesPlan / 100);
+  const subtotalFinanciado = redondearMonto(subtotal * (1 + interesPlan / 100));
 
   const totalSinRecargoFinanciacion = useMemo(() => {
     const conImpuesto = subtotalFinanciado * (1 + (Number(impuesto) || 0) / 100);
     // Sin Math.max(0, ...) a propósito: si el anticipo es mayor al precio
     // (ej. seña de una compra anterior más grande que lo que se lleva hoy),
     // el total puede quedar negativo — representa saldo a favor del cliente.
-    return conImpuesto - (Number(anticipo) || 0) - montoCanjeTotal;
+    return redondearMonto(conImpuesto - (Number(anticipo) || 0) - montoCanjeTotal);
   }, [subtotalFinanciado, impuesto, anticipo, montoCanjeTotal]);
 
   // Cuánto de esta venta queda como deuda en la cuenta corriente, SIN el
@@ -706,9 +749,9 @@ export default function NuevaOrden() {
   // El recargo de "Financiar en cuotas propias" pega SOLO sobre lo que
   // efectivamente queda financiado (montoCuentaCorrienteBase), nunca sobre
   // la parte ya cobrada de contado (anticipo) ni sobre el canje.
-  const recargoFinanciacionMonto = financiarActivo ? montoCuentaCorrienteBase * ((Number(recargoFinanciacion) || 0) / 100) : 0;
-  const montoCuentaCorriente = montoCuentaCorrienteBase + recargoFinanciacionMonto;
-  const total = totalSinRecargoFinanciacion + recargoFinanciacionMonto;
+  const recargoFinanciacionMonto = financiarActivo ? redondearMonto(montoCuentaCorrienteBase * ((Number(recargoFinanciacion) || 0) / 100)) : 0;
+  const montoCuentaCorriente = redondearMonto(montoCuentaCorrienteBase + recargoFinanciacionMonto);
+  const total = redondearMonto(totalSinRecargoFinanciacion + recargoFinanciacionMonto);
 
   // Monto informativo en la segunda moneda: se recalcula solo mientras
   // el usuario no lo haya tocado a mano (si lo edita, respetamos su
@@ -825,16 +868,23 @@ export default function NuevaOrden() {
     setStep('carrito');
   };
 
+  // Guía de financiación de un equipo/producto: el propio, y si no tiene, el de su categoría.
+  const guiaDe = (propio: number | null | undefined, categoriaId: string | null | undefined): MaxCuotas =>
+    resolverMaxCuotas(propio, categoriaId ? guiaCategorias.get(categoriaId) : null);
+
   const agregarDispositivoDelStock = (d: Dispositivo) => {
     setCarrito((c) => [
       ...c,
       {
         tempId: idTemporal(),
-        descripcion: `${d.modelo || 'Dispositivo'}${d.capacidad_gb ? ` ${d.capacidad_gb}GB` : ''}${
+        precioExclusivo: d.precio ?? 0,
+        precioLista: d.precio_lista ?? null,
+        maxCuotas: guiaDe(d.financiacion_max_cuotas, d.categoria_id),
+        descripcion: `${d.modelo || 'Dispositivo'}${d.capacidad_gb ? ` ${formatearGB(d.capacidad_gb)}` : ''}${
           d.color ? ` ${d.color}` : ''
         }${d.imei ? ` · IMEI ${d.imei}` : ''}${d.salud_bateria != null ? ` · Batería ${d.salud_bateria}%` : ''}`,
         cantidad: 1,
-        precioUnitario: d.precio ?? 0,
+        precioUnitario: precioSegunModo(d.precio ?? 0, d.precio_lista, financiarActivo),
         dispositivoId: d.id,
         costo: d.costo ?? null,
         tipo: 'dispositivo',
@@ -846,9 +896,17 @@ export default function NuevaOrden() {
 
   const agregarDispositivoNuevo = async () => {
     if (!nuevoModelo.trim()) return;
+    const actorDispositivo = getActor();
+    if (!tienePermiso(actorDispositivo, 'agregar_stock')) {
+      setError(t('No tenés permiso para agregar dispositivos al stock.'));
+      return;
+    }
+    if (!actorDispositivo) {
+      setError(t(MENSAJE_ACTOR_REQUERIDO));
+      return;
+    }
     setCargandoDispositivo(true);
     setError(null);
-    const actorDispositivo = getActor();
     const modeloNormalizado = normalizarNombreModelo(nuevoModelo.trim());
     const { data, error: dErr } = await supabase
       .from('dispositivos')
@@ -885,7 +943,18 @@ export default function NuevaOrden() {
   const agregarProductoDelCatalogo = (p: Producto) => {
     setCarrito((c) => [
       ...c,
-      { tempId: idTemporal(), descripcion: p.nombre, cantidad: 1, precioUnitario: p.precio ?? 0, productoId: p.id, costo: p.costo ?? null, tipo: 'producto' },
+      {
+        tempId: idTemporal(),
+        descripcion: p.nombre,
+        cantidad: 1,
+        precioUnitario: precioSegunModo(p.precio ?? 0, p.precio_lista, financiarActivo),
+        precioExclusivo: p.precio ?? 0,
+        precioLista: p.precio_lista ?? null,
+        maxCuotas: guiaDe(p.financiacion_max_cuotas, p.categoria_id),
+        productoId: p.id,
+        costo: p.costo ?? null,
+        tipo: 'producto',
+      },
     ]);
     setPanelAbierto(null);
   };
@@ -1053,6 +1122,42 @@ export default function NuevaOrden() {
   // se podía confirmar igual y la boleta salía con un ítem en $0.
   const hayItemSinPrecio = carrito.some((i) => i.precioUnitario <= 0);
 
+  // Al activar/desactivar la financiación los ítems pasan solos al precio de lista / exclusivo.
+  useEffect(() => {
+    setCarrito((c) => aplicarModoPrecio(c, financiarActivo));
+  }, [financiarActivo]);
+
+  // Límite de cuotas del crédito: el del producto con el límite más bajo.
+  const maxCuotasCarrito = useMemo(() => maximoDeCarrito(carrito.map((i) => i.maxCuotas)), [carrito]);
+  const variosConGuia = carrito.filter((i) => i.maxCuotas != null).length > 1;
+  const fueraDeGuia = financiarActivo && excedeGuia(financiarCuotasNum, maxCuotasCarrito);
+  const faltaMotivoFueraGuia = fueraDeGuia && motivoFueraGuia.trim().length === 0;
+
+  useEffect(() => {
+    if (!clienteElegido?.id) {
+      setVencidasCliente(null);
+      return;
+    }
+    let vigente = true;
+    (async () => {
+      const { data, error } = await supabase
+        .from('financiacion_cuotas')
+        .select('importe_original, importe_pagado, financiacion_planes!inner(cliente_id)')
+        .eq('financiacion_planes.cliente_id', clienteElegido.id)
+        .eq('estado', 'pendiente')
+        .lt('fecha_vencimiento', aFechaISO(new Date()))
+        .limit(2000);
+      if (!vigente) return;
+      if (error) return setVencidasCliente(null);
+      const filas = (data as { importe_original: number; importe_pagado: number }[]) ?? [];
+      setVencidasCliente({ cuotas: filas.length, monto: filas.reduce((a, f) => a + Math.max(0, f.importe_original - f.importe_pagado), 0) });
+    })();
+    return () => {
+      vigente = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clienteElegido?.id]);
+
   const puedeConfirmar =
     carrito.length > 0 &&
     !hayItemSinPrecio &&
@@ -1061,7 +1166,8 @@ export default function NuevaOrden() {
     asignacionOk &&
     !excedeLimite &&
     (montoCuentaCorriente <= 0 || ctaCteDisponible) &&
-    (montoCuentaCorriente <= 0 || !financiarActivo || (financiarCronogramaValido && !!previewFinanciacion));
+    (montoCuentaCorriente <= 0 || !financiarActivo || (financiarCronogramaValido && !!previewFinanciacion)) &&
+    !faltaMotivoFueraGuia;
 
   // Etiqueta legible del cobro para guardar en la orden (forma_pago) y
   // mostrar en listados/boleta, sin perder el detalle real que vive en la
@@ -1234,6 +1340,18 @@ export default function NuevaOrden() {
 
   const handleConfirmar = async () => {
     if (!puedeConfirmar) return;
+    // Un precio varias veces mayor al de lista casi siempre es un error de carga (un cero de más): se avisa antes de guardar.
+    const preciosAnormales = lineasConPrecioAnormal(carrito);
+    if (
+      preciosAnormales.length > 0 &&
+      !confirm(
+        `${t('Revisá estos precios, son muy altos comparados con el precio de lista:')}\n\n${preciosAnormales
+          .map((a) => `• ${a.descripcion}: ${moneda}${formatearMonto(a.precio)} (${t('lista')} ${moneda}${formatearMonto(a.referencia)}, ${Math.round(a.veces)}×)`)
+          .join('\n')}\n\n${t('¿Confirmar la orden igual?')}`
+      )
+    ) {
+      return;
+    }
     setGuardando(true);
     setError(null);
 
@@ -1273,7 +1391,7 @@ export default function NuevaOrden() {
         if (garantiaDias) {
           const vencimiento = new Date();
           vencimiento.setDate(vencimiento.getDate() + garantiaDias);
-          actualizacionReserva.garantia_vencimiento = vencimiento.toISOString().slice(0, 10);
+          actualizacionReserva.garantia_vencimiento = aFechaISO(vencimiento);
         }
         const { data: reservados, error: reservaErr } = await supabase
           .from('dispositivos')
@@ -1302,9 +1420,20 @@ export default function NuevaOrden() {
       let clienteId = clienteElegido?.id;
       if (modoCliente === 'nuevo') {
         const actorCliente = getActor();
+        // Aviso (no bloquea) si ya hay un cliente con ese DNI o teléfono. Si se
+        // cancela, el catch de abajo devuelve los equipos reservados al stock.
+        const duplicados = await buscarClientesDuplicados(supabase, { dni: nuevoDni, telefono: nuevoTelefono });
+        if (duplicados.length > 0 && !confirm(`${t('Ya hay un cliente con el mismo DNI o teléfono:')}
+${textoDuplicados(duplicados)}
+
+${t('¿Cargarlo igual?')}`)) {
+          throw new Error(t('Cancelado: ya existe un cliente con ese DNI o teléfono. Elegilo de la lista de clientes.'));
+        }
+        const origenCliente = await origenDeCliente(supabase, sucursalActual.id);
         const { data, error: cErr } = await supabase
           .from('clientes')
           .insert({
+            ...origenCliente,
             nombre: nuevoNombre.trim(),
             apellido: nuevoApellido.trim() || null,
             telefono: nuevoTelefono.trim() || null,
@@ -1389,7 +1518,7 @@ export default function NuevaOrden() {
           producto_id: i.productoId || null,
           descripcion: i.descripcion,
           cantidad: i.cantidad,
-          precio_unitario: i.precioUnitario,
+          precio_unitario: redondearMonto(i.precioUnitario),
           costo: i.costo ?? null,
           tipo: i.tipo,
         }))
@@ -1470,10 +1599,41 @@ export default function NuevaOrden() {
             entregaInicial: 0,
             cantidadCuotas: financiarCuotasNum,
             primeraFecha: financiarPrimeraFecha,
-            observaciones: 'Financiación generada al confirmar la orden.',
+            observaciones: fueraDeGuia
+              ? `Financiación generada al confirmar la orden. FUERA DE LA GUÍA (máx. ${maxCuotasCarrito}): ${motivoFueraGuia.trim()}`
+              : 'Financiación generada al confirmar la orden.',
             sucursalId: sucursalActual.id,
           });
           if ('error' in resultadoPlan) throw new Error(t('No pudimos crear el plan de financiación:') + ' ' + t(resultadoPlan.error));
+          // La sucursal que da el primer crédito queda como "sucursal de origen" del cliente
+          // si todavía no tenía una (se completa sola; la cartera de clientes sigue siendo única).
+          if (sucursalActual.id && (await soportaMigracion(supabase, 'clienteSucursalOrigen'))) {
+            const { error: origenErr } = await supabase.from('clientes').update({ sucursal_origen_id: sucursalActual.id }).eq('id', clienteId).is('sucursal_origen_id', null);
+            if (origenErr) registrarFallo(origenErr, 'completar la sucursal de origen del cliente');
+          }
+          // Crédito fuera de la guía: queda el registro (fecha, vendedor, producto, cuotas y
+          // motivo) en el listado de "Créditos fuera de la guía". La venta ya está hecha: si
+          // este registro fallara, el motivo igual quedó en las observaciones del plan.
+          if (fueraDeGuia && (await soportaMigracion(supabase, 'creditosFueraGuia'))) {
+            const actorGuia = getActor();
+            await falla(
+              supabase.from('creditos_fuera_guia').insert({
+                orden_id: orden.id,
+                plan_id: resultadoPlan.planId,
+                cliente_id: clienteId,
+                vendedor_id: vendedorId || null,
+                vendedor_nombre: vendedores.find((v) => v.id === vendedorId)?.nombre ?? null,
+                productos: carrito.map((i) => i.descripcion).join(' · ').slice(0, 500),
+                cuotas: financiarCuotasNum,
+                maximo: maxCuotasCarrito ?? 0,
+                motivo: motivoFueraGuia.trim(),
+                registrado_por_nombre: actorGuia?.nombre ?? null,
+                ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
+              }),
+              t,
+              'registrar el crédito fuera de la guía'
+            );
+          }
         } else {
           const { error: movErr } = await supabase.from('cta_cte_movimientos').insert({
             cliente_id: clienteId,
@@ -1520,6 +1680,7 @@ export default function NuevaOrden() {
             patron_desbloqueo: der.tipoBloqueo === 'patron' ? der.patronDesbloqueo || null : null,
             falla_declarada: der.motivo.trim() || null,
             estado: 'recibido',
+            ...(await camposRecibidoPor(supabase)),
             prioridad: der.prioritario ? 'urgente' : 'normal',
             enciende: ci.enciende ?? null,
             modulo_ok: ci.modulo_ok ?? null,
@@ -1583,11 +1744,14 @@ export default function NuevaOrden() {
             'Esta venta no genera comisión',
             'La venta todavía no está cobrada',
             'La comisión de esta venta ya estaba generada',
+            'La comisión se genera a medida que se cobran las cuotas',
+            'La venta está cancelada',
           ];
+          // Los mensajes salen del servidor en español: se traducen acá (los que traen un detalle al final, como "…: <error>", por su inicio).
           if (rc.error) {
-            alert(`⚠️ ${t('No se pudo generar la comisión:')} ` + rc.error);
+            alert(`⚠️ ${t('No se pudo generar la comisión:')} ` + traducirConDetalle(rc.error, t));
           } else if (rc.generadas === 0 && rc.motivo && !motivosSilenciosos.includes(rc.motivo)) {
-            alert(`⚠️ ${t('Esta venta no generó comisión:')} ` + rc.motivo + '.');
+            alert(`⚠️ ${t('Esta venta no generó comisión:')} ` + t(rc.motivo) + '.');
           }
         } catch {}
       }
@@ -1776,7 +1940,7 @@ export default function NuevaOrden() {
                       <MiniaturaDispositivo src={imagenPorNombreExacto(d.modelo, imagenesCarpetas)} size={32} />
                       <span className="min-w-0">
                         <span className="block truncate">
-                          {d.modelo} {d.capacidad_gb ? `· ${d.capacidad_gb}GB` : ''} {d.color ? `· ${d.color}` : ''}
+                          {d.modelo} {d.capacidad_gb ? `· ${formatearGB(d.capacidad_gb)}` : ''} {d.color ? `· ${d.color}` : ''}
                         </span>
                         {d.imei && (
                           <span className="block text-xs font-bold font-mono text-ink dark:text-dark-text truncate">
@@ -1785,9 +1949,13 @@ export default function NuevaOrden() {
                         )}
                       </span>
                       </span>
-                      {d.precio != null && (
-                        <span className="font-medium shrink-0">{moneda}{d.precio.toLocaleString('es-AR')}</span>
-                      )}
+                      <span className="text-right shrink-0">
+                        {d.precio != null && <span className="block font-medium">{moneda}{d.precio.toLocaleString('es-AR')}</span>}
+                        {d.precio_lista != null && (
+                          <span className="block text-[11px] text-muted dark:text-dark-text-secondary">{t('Lista')} {moneda}{d.precio_lista.toLocaleString('es-AR')}</span>
+                        )}
+                        <EtiquetaFinanciacion max={guiaDe(d.financiacion_max_cuotas, d.categoria_id)} />
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -1815,7 +1983,7 @@ export default function NuevaOrden() {
                         nuevaCapacidad === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                       }`}
                     >
-                      {gb}GB
+                      {formatearGB(gb)}
                     </button>
                   ))}
                 </div>
@@ -1906,6 +2074,10 @@ export default function NuevaOrden() {
                     </span>
                     <span className="text-xs font-medium leading-tight line-clamp-2">{p.nombre}</span>
                     {p.precio != null && <span className="text-xs font-semibold">{moneda}{p.precio.toLocaleString('es-AR')}</span>}
+                    {p.precio_lista != null && (
+                      <span className="text-[10px] text-muted dark:text-dark-text-secondary">{t('Lista')} {moneda}{p.precio_lista.toLocaleString('es-AR')}</span>
+                    )}
+                    <EtiquetaFinanciacion max={guiaDe(p.financiacion_max_cuotas, p.categoria_id)} />
                   </button>
                 ))}
                 </div>
@@ -2463,9 +2635,15 @@ export default function NuevaOrden() {
             </div>
             {saldoCliente > 0 && (
               <div className="flex justify-between">
-                <span className="text-muted dark:text-dark-text-secondary">{t('Saldo anterior')}</span>
+                <span className="text-muted dark:text-dark-text-secondary">{t('Deuda anterior del cliente (todas las sucursales)')}</span>
                 <span>{moneda}{formatearMonto(saldoCliente)}</span>
               </div>
+            )}
+            {vencidasCliente && vencidasCliente.cuotas > 0 && (
+              <p className="text-bad font-medium">
+                ⚠ {t('Tiene')} {vencidasCliente.cuotas} {vencidasCliente.cuotas === 1 ? t('cuota vencida') : t('cuotas vencidas')} ({moneda}
+                {formatearMonto(vencidasCliente.monto)})
+              </p>
             )}
             {clienteElegido?.limite_credito != null && (
               <div className="flex justify-between">
@@ -2507,9 +2685,36 @@ export default function NuevaOrden() {
             )}
             {financiarActivo && (
               <>
+                {maxCuotasCarrito != null && (
+                  <div
+                    className={`rounded-lg px-2.5 py-2 text-xs flex flex-col gap-1.5 ${
+                      fueraDeGuia ? 'border border-warn/50 bg-warn/10' : 'bg-accent-soft dark:bg-dark-accent-soft'
+                    }`}
+                  >
+                    <p className={fueraDeGuia ? 'font-medium' : ''}>
+                      {fueraDeGuia ? '⚠ ' : '💳 '}
+                      {mensajeAvisoGuia(maxCuotasCarrito, variosConGuia, t)}
+                    </p>
+                    {fueraDeGuia && (
+                      <>
+                        <p className="text-[11px] text-muted dark:text-dark-text-secondary">
+                          {t('Podés seguir, pero escribí el motivo: queda registrado en "Créditos fuera de la guía".')}
+                        </p>
+                        <input
+                          value={motivoFueraGuia}
+                          onChange={(e) => setMotivoFueraGuia(e.target.value)}
+                          placeholder={t('Motivo para financiar fuera de la guía (obligatorio)')}
+                          className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-3 py-2 text-sm"
+                        />
+                      </>
+                    )}
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-[10px] text-muted dark:text-dark-text-secondary block mb-1">{t('Cantidad de cuotas')}</label>
+                    <label className="text-[10px] text-muted dark:text-dark-text-secondary block mb-1">
+                      {t('Cantidad de cuotas')} <EtiquetaFinanciacion max={maxCuotasCarrito} className="ml-1" />
+                    </label>
                     <input
                       value={financiarCuotas}
                       inputMode="numeric"
@@ -2687,7 +2892,7 @@ export default function NuevaOrden() {
                   <p className="font-medium flex items-center gap-1.5 flex-wrap">
                     {canjesCarrito.length > 1 ? `${idx + 1}. ` : ''}
                     {c.modelo}
-                    {c.capacidad_gb ? ` · ${c.capacidad_gb}GB` : ''}
+                    {c.capacidad_gb ? ` · ${formatearGB(c.capacidad_gb)}` : ''}
                     {c.color ? ` · ${c.color}` : ''}
                     {c.condicion === 'sellado' && (
                       <span className="text-[10px] font-bold text-black bg-gradient-to-b from-amber-300 to-amber-500 border border-black/40 rounded-full px-2 py-0.5">
@@ -2734,7 +2939,7 @@ export default function NuevaOrden() {
                     canjeCapacidad === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'border border-border dark:border-dark-border'
                   }`}
                 >
-                  {gb}GB
+                  {formatearGB(gb)}
                 </button>
               ))}
             </div>

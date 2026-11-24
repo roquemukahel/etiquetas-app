@@ -14,8 +14,17 @@ import { sanitizarDecimal } from '../../lib/numeros';
 import { limpiarImei } from '../../lib/imei';
 import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
 import { useT } from '../../lib/idioma';
+import SelectorFinanciacion from '../../SelectorFinanciacion';
+import { mandarAStandby, campoOrigenServicio } from '../../lib/standby';
+import { campoBateriaServicio } from '../../lib/bateriaServicio';
+import { FotosDispositivo } from '../../FotosDispositivo';
+import { camposRecibidoPor, registrarRecepcionEnHistorial } from '../../lib/recibidoPor';
+import { guiaDeFormulario, guiaAFormulario } from '../../lib/financiacionGuia';
+import { compararModelosPorSalida } from '../../lib/catalogosMarcas';
+import { OPCIONES_ALMACENAMIENTO, formatearGB } from '../../lib/almacenamiento';
+import { formatearFechaYHoraCorta } from '../../lib/fechas';
 
-const STORAGE_OPTIONS = [64, 128, 256, 512];
+const STORAGE_OPTIONS = OPCIONES_ALMACENAMIENTO;
 
 type Dispositivo = {
   id: string;
@@ -33,8 +42,15 @@ type Dispositivo = {
   en_stock: boolean;
   garantia_vencimiento: string | null;
   agregado_por_nombre: string | null;
+  created_at?: string | null;
   mostrar_en_stock_publico: boolean;
   sucursal_id?: string | null;
+  // Solo vienen si el negocio corrió standby_supabase.sql (select('*') las trae).
+  en_espera?: boolean | null;
+  espera_motivo?: string | null;
+  // Solo vienen si el negocio corrió financiacion_guia_cartera_supabase.sql.
+  precio_lista?: number | null;
+  financiacion_max_cuotas?: number | null;
 };
 
 export default function DetalleDispositivo() {
@@ -43,7 +59,8 @@ export default function DetalleDispositivo() {
   const supabase = crearClienteNavegador();
   const actor = useActor();
   const t = useT();
-  const puedeEliminar = tienePermiso(actor, 'eliminar');
+  const puedeEliminar = tienePermiso(actor, 'eliminar_dispositivos'); // eliminar este dispositivo del Stock: permiso propio
+  const puedeAgregarStock = tienePermiso(actor, 'agregar_stock');
   const puedeRecibirServicioTecnico = tienePermiso(actor, 'recibir_servicio_tecnico');
   // Costo, proveedor y margen son datos sensibles del dueño — mismo permiso
   // que ya usa la pantalla de Stock para la tarjeta de capital. Esto es
@@ -52,6 +69,8 @@ export default function DetalleDispositivo() {
   // porque el pedido original pide reforzarlo también del lado del
   // servidor, algo que queda fuera del alcance de este rediseño visual.
   const puedeVerComercial = tienePermiso(actor, 'ver_estadisticas');
+  // El costo es información sensible: solo con el permiso "ver costos y márgenes".
+  const puedeVerCostos = tienePermiso(actor, 'ver_costos');
 
   const [d, setD] = useState<Dispositivo | null>(null);
   const [original, setOriginal] = useState<Dispositivo | null>(null);
@@ -76,13 +95,16 @@ export default function DetalleDispositivo() {
     })();
     (async () => {
       const { data } = await supabase.from('modelos_stock').select('nombre').order('nombre');
-      setCarpetas((data ?? []).map((m) => m.nombre));
+      setCarpetas((data ?? []).map((m) => m.nombre).sort(compararModelosPorSalida));
     })();
     (async () => {
       const { data } = await supabase.from('proveedores').select('nombre').order('nombre');
       setProveedores((data ?? []).map((p) => p.nombre));
     })();
   }, [id]);
+
+  // La guía de financiación y el precio de lista solo se ofrecen si las columnas existen.
+  const conGuia = !!d && 'financiacion_max_cuotas' in d;
 
   const campo = (k: keyof Dispositivo, valor: any) => setD((prev) => (prev ? { ...prev, [k]: valor } : prev));
 
@@ -108,6 +130,21 @@ export default function DetalleDispositivo() {
     }
   };
 
+  // Lo saca del Stock vendible y lo deja en Standby (equipo con detalles o en espera).
+  const mandarAStandbyFicha = async () => {
+    if (!d || !puedeAgregarStock) return;
+    const motivo = prompt(`${t('¿Qué le pasa a')} ${d.modelo || t('este equipo')}? ${t('Queda en Standby, fuera del Stock para vender.')}`, d.detalles ?? '');
+    if (motivo === null) return;
+    setGuardando(true);
+    const resultado = await mandarAStandby(supabase, d, { origen: 'stock', motivo });
+    setGuardando(false);
+    if (resultado.error) {
+      setError(t(resultado.error));
+      return;
+    }
+    router.push('/standby');
+  };
+
   const handleGuardar = async () => {
     if (!d || !original) return;
     setGuardando(true);
@@ -127,6 +164,7 @@ export default function DetalleDispositivo() {
         salud_bateria: d.salud_bateria,
         color: d.color?.trim() || null,
         precio: d.precio,
+        ...(conGuia ? { precio_lista: d.precio_lista ?? null, financiacion_max_cuotas: d.financiacion_max_cuotas ?? null } : {}),
         costo: d.costo,
         proveedor: d.proveedor?.trim() || null,
         proveedor_id: proveedorId,
@@ -145,6 +183,8 @@ export default function DetalleDispositivo() {
         // estaba abierta, guardar acá no debe revertir esa venta.
         ...(d.en_stock !== original.en_stock ? { en_stock: d.en_stock } : {}),
         ...(volvioAStock ? { en_stock_desde: new Date().toISOString(), alerta_stock_enviada: false } : {}),
+        // Si estaba en Standby y se lo vuelve a poner disponible, deja de estar en espera (no puede ser las dos cosas).
+        ...(volvioAStock && original.en_espera ? { en_espera: false } : {}),
       })
       .eq('id', id);
 
@@ -194,6 +234,9 @@ export default function DetalleDispositivo() {
         imei: d.imei,
         falla_declarada: derivarDetalles.trim() || null,
         estado: 'recibido',
+        ...(await campoBateriaServicio(supabase, d.salud_bateria)),
+        ...(await camposRecibidoPor(supabase)),
+        ...(await campoOrigenServicio(supabase, d.id)),
         ...(d.sucursal_id ? { sucursal_id: d.sucursal_id } : {}),
       })
       .select('id, numero_orden')
@@ -210,6 +253,7 @@ export default function DetalleDispositivo() {
     if (updateError) {
       setError(`${t('Se creó la reparación pero no pudimos sacar el dispositivo de Stock:')} ` + updateError.message);
     }
+    await registrarRecepcionEnHistorial(supabase, [nueva.id]);
     await registrarAuditoria(supabase, {
       accion: `derivó de Stock a Servicio Técnico un dispositivo (${nueva.numero_orden || ''}, ${d.modelo || 'sin modelo'}${d.imei ? `, IMEI ${d.imei}` : ''})`,
       entidad: 'reparacion',
@@ -273,7 +317,7 @@ export default function DetalleDispositivo() {
               d.en_stock ? 'bg-good/15 text-good' : 'bg-black/5 dark:bg-white/10 text-muted dark:text-dark-text-secondary'
             }`}
           >
-            {d.en_stock ? t('Disponible') : t('Fuera de stock')}
+            {d.en_stock ? t('Disponible') : d.en_espera ? t('En Standby') : t('Fuera de stock')}
           </span>
           <button type="button" onClick={() => campo('en_stock', !d.en_stock)} className="text-xs text-accent dark:text-dark-accent underline whitespace-nowrap">
             {t('Cambiar estado')}
@@ -283,15 +327,23 @@ export default function DetalleDispositivo() {
 
       {error && <p className="text-sm text-bad bg-bad/10 rounded-lg px-3 py-2">{error}</p>}
 
-      {(d.garantia_vencimiento || d.agregado_por_nombre) && (
+      {(d.garantia_vencimiento || d.agregado_por_nombre || d.created_at) && (
         <div className="flex flex-col gap-0.5">
           {d.garantia_vencimiento && (
             <p className="text-xs text-muted dark:text-dark-text-secondary">
               🛡️ {t('Garantía hasta el')} {new Date(d.garantia_vencimiento + 'T00:00:00').toLocaleDateString('es-AR')}
             </p>
           )}
-          {d.agregado_por_nombre && (
-            <p className="text-xs text-muted dark:text-dark-text-secondary">{t('Agregado por')} {d.agregado_por_nombre}</p>
+          {d.agregado_por_nombre ? (
+            <p className="text-xs text-muted dark:text-dark-text-secondary">
+              {t('Agregado por')} {d.agregado_por_nombre}
+              {d.created_at ? ` · ${formatearFechaYHoraCorta(d.created_at)}` : ''}
+            </p>
+          ) : (
+            <p className="text-xs text-warn">
+              ⚠️ {t('No quedó registrado quién agregó este dispositivo.')}
+              {d.created_at ? ` ${t('Se cargó el')} ${formatearFechaYHoraCorta(d.created_at)}.` : ''}
+            </p>
           )}
         </div>
       )}
@@ -323,7 +375,7 @@ export default function DetalleDispositivo() {
                     d.capacidad_gb === gb ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-ink dark:text-dark-text'
                   }`}
                 >
-                  {gb} GB
+                  {formatearGB(gb, true)}
                 </button>
               ))}
             </div>
@@ -351,18 +403,40 @@ export default function DetalleDispositivo() {
           <SelectorEstadoDispositivo value={d.estado ?? 'usado'} onChange={(v) => campo('estado', v)} />
         </Seccion>
 
+        <Seccion titulo={t('Fotos reales')}>
+          <FotosDispositivo dispositivoId={d.id} modelo={d.modelo} puedeEditar={puedeAgregarStock} />
+        </Seccion>
+
         <Seccion titulo={t('Información comercial')}>
           {puedeVerComercial ? (
             <>
               <div className="grid grid-cols-2 gap-3">
                 <Campo label={t('Precio')} valor={d.precio?.toString() ?? ''} onChange={(v) => campo('precio', v ? Number(v) : null)} numerico />
-                <Campo
-                  label={t('Costo (opcional)')}
-                  valor={d.costo?.toString() ?? ''}
-                  onChange={(v) => campo('costo', v ? Number(v) : null)}
-                  numerico
-                />
+                {puedeVerCostos && (
+                  <Campo
+                    label={t('Costo (opcional)')}
+                    valor={d.costo?.toString() ?? ''}
+                    onChange={(v) => campo('costo', v ? Number(v) : null)}
+                    numerico
+                  />
+                )}
               </div>
+              {conGuia && (
+                <>
+                  <Campo
+                    label={t('Precio de lista (financiación)')}
+                    valor={d.precio_lista?.toString() ?? ''}
+                    onChange={(v) => campo('precio_lista', v ? Number(v) : null)}
+                    numerico
+                  />
+                  <SelectorFinanciacion
+                    label={t('Financiación')}
+                    value={guiaAFormulario(d.financiacion_max_cuotas)}
+                    onChange={(v) => campo('financiacion_max_cuotas', guiaDeFormulario(v))}
+                    heredado={null}
+                  />
+                </>
+              )}
               <Campo label={t('Proveedor (opcional)')} valor={d.proveedor ?? ''} onChange={(v) => campo('proveedor', v)} listaId="proveedores-stock-id" />
               <datalist id="proveedores-stock-id">
                 {proveedores.map((p) => (
@@ -401,6 +475,17 @@ export default function DetalleDispositivo() {
             />
             <span className="text-sm">{t('Mostrar en el stock público (si está activado en Configuración)')}</span>
           </label>
+
+          {d.en_stock && d.en_espera !== undefined && puedeAgregarStock && (
+            <div className="pt-1 border-t border-border dark:border-dark-border">
+              <button
+                onClick={mandarAStandbyFicha}
+                className="mt-3 w-full rounded-xl border border-border dark:border-dark-border py-2.5 text-center text-sm font-medium"
+              >
+                {t('Mandar a Standby')}
+              </button>
+            </div>
+          )}
 
           {d.en_stock && puedeRecibirServicioTecnico && (
             <div className="pt-1 border-t border-border dark:border-dark-border">

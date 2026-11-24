@@ -9,6 +9,7 @@ import { compararModelosPorSalida } from '../../lib/catalogosMarcas';
 import MiniaturaDispositivo from '../../MiniaturaDispositivo';
 import { useT } from '../../lib/idioma';
 import SelectorIdiomaFlotante from '../../SelectorIdiomaFlotante';
+import { formatearGB } from '../../lib/almacenamiento';
 
 type ModeloDisponible = {
   modelo: string | null;
@@ -114,7 +115,7 @@ export default function StockPublico() {
                       <MiniaturaDispositivo src={imagenColorDeModelo(v.modelo, v.color)} />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium">
-                          {v.capacidad_gb ? `${v.capacidad_gb}GB` : ''}
+                          {v.capacidad_gb ? `${formatearGB(v.capacidad_gb)}` : ''}
                           {v.color ? ` · ${v.color}` : ''}
                         </p>
                         {v.estado === 'sellado' && (

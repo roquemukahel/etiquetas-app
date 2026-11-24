@@ -10,12 +10,15 @@ import { ESLOGAN } from '../../../lib/eslogan';
 import { armarLinkWhatsApp } from '../../../lib/whatsapp';
 import { codigoLlamada } from '../../../lib/paises';
 import EtiquetaSeccion from '../../../EtiquetaSeccion';
-import { medioLabel } from '../../../lib/cuentaCorriente';
+import { medioLabel, resumenDeCobro, type ResumenDeCobro } from '../../../lib/cuentaCorriente';
+import ResumenSaldoCobro from '../../../ResumenSaldoCobro';
+import { obtenerTodasLasFilas } from '../../../lib/db';
 import { useT, useIdioma } from '../../../lib/idioma';
 import { localeDe } from '../../../lib/i18n/traducir';
 import { formatearFechaHora } from '../../../lib/fechas';
 import { TIPOS_BLOQUEO, type TipoBloqueo } from '../../../lib/reparaciones';
 import PatronDesbloqueo from '../../../PatronDesbloqueo';
+import { formatearGB } from '../../../lib/almacenamiento';
 
 type Item = {
   descripcion: string;
@@ -154,13 +157,15 @@ export default function Boleta() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [qr, setQr] = useState<string | null>(null);
+  const [numerosST, setNumerosST] = useState<string[]>([]);
   // Reclamo real de un cliente: la boleta de un cobro de cuota/cuenta
   // corriente no mostraba a qué cuota se aplicó ni cuánto quedaba debiendo
   // después de ese pago — solo el monto cobrado, igual que cualquier venta.
   const [cobroFinanciamiento, setCobroFinanciamiento] = useState<{
     cuotaNumero: number | null;
     cuotaSaldoRestante: number | null;
-    saldoCuentaCorriente: number | null;
+    // Lo que debía antes de este pago, lo que pagó y lo que le queda (null si no se encontró el pago en la cuenta).
+    resumen: ResumenDeCobro | null;
   } | null>(null);
 
   useEffect(() => {
@@ -177,6 +182,7 @@ export default function Boleta() {
         { data: pagosData },
         { data: ctaCteData },
         { data: planAhorroData },
+        { data: repsCobroData },
         {
           data: { user },
         },
@@ -226,9 +232,13 @@ export default function Boleta() {
         // guarda el link (orden_id) — de ahí se saca el historial de cuotas
         // que se muestra más abajo (ver fetch después de este Promise.all).
         supabase.from('planes_ahorro').select('id').eq('orden_id', id).maybeSingle(),
+        // Número(s) ST de la(s) reparación(es) que esta boleta cobra — para
+        // identificar la orden de Servicio Técnico junto al número de orden.
+        supabase.from('reparaciones').select('numero_orden').eq('orden_cobro_id', id).order('created_at'),
         supabase.auth.getUser(),
       ]);
       if (ordenError) setError(ordenError.message);
+      setNumerosST(((repsCobroData as { numero_orden: string | null }[]) ?? []).map((r) => r.numero_orden).filter((n): n is string => !!n));
       setOrden(ordenData as any);
       setCanjes((canjesData as any) ?? []);
       setBloqueos(
@@ -281,11 +291,29 @@ export default function Boleta() {
           const o = ordenData as Orden | null;
           const soloFinanciamiento = !!o && o.orden_items.length > 0 && o.orden_items.every((i) => i.tipo === 'financiamiento');
           if (!soloFinanciamiento || !o?.cliente_id) return;
-          const [{ data: movCobro }, { data: saldosData }] = await Promise.all([
-            supabase.from('cta_cte_movimientos').select('cuota_id').eq('orden_id', id).eq('tipo', 'abono').eq('anulado', false).maybeSingle(),
-            supabase.rpc('saldos_cuenta_corriente'),
+          // .limit(1) y no .maybeSingle(): un cobro repartido en varias cuotas
+          // deja varios abonos con la misma orden y maybeSingle() falla con
+          // más de una fila (se perdía la cuota). El saldo se calcula solo con
+          // los movimientos de ESTE cliente — antes se pedía el saldo de todos
+          // los clientes del negocio (saldos_cuenta_corriente) para usar una fila.
+          const [{ data: movsCobro }, movsCliente] = await Promise.all([
+            supabase
+              .from('cta_cte_movimientos')
+              .select('cuota_id')
+              .eq('orden_id', id)
+              .eq('tipo', 'abono')
+              .eq('anulado', false)
+              .order('fecha', { ascending: false })
+              .limit(1),
+            obtenerTodasLasFilas<{ tipo: string; monto: number; fecha: string; orden_id: string | null }>(
+              supabase,
+              'cta_cte_movimientos',
+              'tipo, monto, fecha, orden_id',
+              [],
+              (q) => q.eq('cliente_id', o.cliente_id).eq('anulado', false)
+            ),
           ]);
-          const cuotaId = (movCobro as { cuota_id: string | null } | null)?.cuota_id ?? null;
+          const cuotaId = (movsCobro as { cuota_id: string | null }[] | null)?.[0]?.cuota_id ?? null;
           let cuotaNumero: number | null = null;
           let cuotaSaldoRestante: number | null = null;
           if (cuotaId) {
@@ -299,11 +327,14 @@ export default function Boleta() {
               cuotaSaldoRestante = Math.max(0, cuota.importe_original - cuota.importe_pagado);
             }
           }
-          const fila = ((saldosData ?? []) as { cliente_id: string; saldo: number }[]).find((s) => s.cliente_id === o.cliente_id);
+          // El saldo es el de ESE día (hasta este cobro), no el de hoy: reimprimir una boleta vieja no cambia sus números.
+          const abonosDeEstaOrden = movsCliente.filter((m) => m.orden_id === id && m.tipo === 'abono');
+          const pagado = abonosDeEstaOrden.reduce((suma, m) => suma + (m.monto || 0), 0);
+          const momentoDelCobro = Math.max(...abonosDeEstaOrden.map((m) => Date.parse(m.fecha)));
           setCobroFinanciamiento({
             cuotaNumero,
             cuotaSaldoRestante,
-            saldoCuentaCorriente: fila ? Number(fila.saldo) || 0 : 0,
+            resumen: abonosDeEstaOrden.length > 0 && Number.isFinite(momentoDelCobro) ? resumenDeCobro(movsCliente, new Date(momentoDelCobro).toISOString(), pagado) : null,
           });
         })(),
       ]);
@@ -438,6 +469,7 @@ export default function Boleta() {
           <div className="flex items-start gap-3">
             <div className="text-right text-sm text-muted leading-relaxed mt-1">
               <p className="font-medium text-ink">{t('Orden #')}{orden.numero_orden || orden.id.slice(0, 8)}</p>
+              {numerosST.length > 0 && <p className="font-medium text-ink">{t('Servicio técnico')} {numerosST.join(', ')}</p>}
               <p>{formatearFecha(orden.created_at, locale)}</p>
               {orden.fecha_entrega && <p>{t('Entregado:')} {formatearFecha(orden.fecha_entrega, locale)}</p>}
               <span
@@ -506,7 +538,7 @@ export default function Boleta() {
                 </p>
                 <p className="font-medium">
                   {c.modelo}
-                  {c.capacidad_gb ? ` · ${c.capacidad_gb}GB` : ''}
+                  {c.capacidad_gb ? ` · ${formatearGB(c.capacidad_gb)}` : ''}
                   {c.color ? ` · ${c.color}` : ''}
                 </p>
                 {c.imei && (
@@ -588,23 +620,6 @@ export default function Boleta() {
           </tbody>
         </table>
 
-        {cobroFinanciamiento && (
-          <div className="rounded-lg bg-canvas px-3 py-2 text-sm flex flex-col gap-0.5">
-            {cobroFinanciamiento.cuotaNumero != null && (
-              <div className="flex justify-between">
-                <span className="text-muted">
-                  {t('Cuota')} {cobroFinanciamiento.cuotaNumero} — {t('saldo restante')}
-                </span>
-                <span className="font-medium">{fmt(cobroFinanciamiento.cuotaSaldoRestante ?? 0)}</span>
-              </div>
-            )}
-            <div className="flex justify-between">
-              <span className="text-muted">{t('Saldo de cuenta corriente')}</span>
-              <span className="font-medium">{fmt(cobroFinanciamiento.saldoCuentaCorriente ?? 0)}</span>
-            </div>
-          </div>
-        )}
-
         <div className="self-end w-full max-w-[280px] flex flex-col gap-2 text-sm">
           {orden.anticipo != null && orden.anticipo > 0 && (
             <div className="flex justify-between text-muted">
@@ -637,6 +652,16 @@ export default function Boleta() {
               {fmt(Math.abs(totalNum))}
             </span>
           </div>
+          {cobroFinanciamiento?.resumen && (
+            <ResumenSaldoCobro
+              deudaAnterior={cobroFinanciamiento.resumen.deudaAnterior}
+              pagado={cobroFinanciamiento.resumen.pagado}
+              saldoRestante={cobroFinanciamiento.resumen.saldoRestante}
+              etiquetaPago={t('Este pago')}
+              cuota={cobroFinanciamiento.cuotaNumero != null ? { numero: cobroFinanciamiento.cuotaNumero, saldoRestante: cobroFinanciamiento.cuotaSaldoRestante ?? 0 } : null}
+              fmt={fmt}
+            />
+          )}
           {orden.cuotas != null && orden.cuotas > 1 && (
             <div className="flex justify-between text-muted">
               <span>{t('Financiado en')} {orden.cuotas} {t('cuotas')}</span>

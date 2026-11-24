@@ -7,15 +7,16 @@ import { obtenerImagenesCarpetas, imagenPorNombreExacto } from '../lib/carpetas'
 import { imagenColorDeModelo } from '../lib/coloresModelo';
 import { hexColorDe } from '../lib/coloresIphone';
 import { registrarAuditoria } from '../lib/auditoria';
-import { getActor, useActor } from '../lib/actor';
+import { getActor, useActor, MENSAJE_ACTOR_REQUERIDO } from '../lib/actor';
 import { tienePermiso } from '../lib/permisos';
 import { leerArchivoDatos, valorDe, descargarCSV, descargarDatos, insertarEnTandas } from '../lib/csv';
-import { obtenerTodasLasFilas } from '../lib/db';
+import { obtenerTodasLasFilas, porLotes } from '../lib/db';
 import { obtenerDispositivosSenados } from '../lib/planAhorro';
 import { asegurarModelo, normalizarNombreModelo } from '../lib/modelos';
 import { compararModelosPorSalida } from '../lib/catalogosMarcas';
 import { sanitizarDecimal, formatearMonto } from '../lib/numeros';
 import { obtenerCategorias, type Categoria } from '../lib/categorias';
+import { etiquetaCategoria } from '../lib/subcategorias';
 import { obtenerSucursales, type Sucursal } from '../lib/sucursales';
 import { obtenerProductosMaestro, crearProductoMaestro, type ProductoMaestro } from '../lib/productosMaestro';
 import { useSucursalActual } from '../lib/sucursal';
@@ -24,6 +25,19 @@ import { useT } from '../lib/idioma';
 import MiniaturaDispositivo from '../MiniaturaDispositivo';
 import { QoviState } from '../QoviState';
 import { ICONOS } from '../Iconos';
+import { falla } from '../lib/escritura';
+import EtiquetaFinanciacion from '../EtiquetaFinanciacion';
+import SelectorFinanciacion from '../SelectorFinanciacion';
+import { soportaMigracion } from '../lib/migraciones';
+import { campoBateriaServicio } from '../lib/bateriaServicio';
+import { agregarCanjeAlStock, canjesPendientes, type CanjeParaStock } from '../lib/canje';
+import { contarFotosPorDispositivo } from '../lib/fotosDispositivo';
+import { resumenPorColor } from '../lib/resumenColores';
+import { mandarAStandby, campoOrigenServicio, equiposEnStandby } from '../lib/standby';
+import { limpiarImei } from '../lib/imei';
+import { camposRecibidoPor, registrarRecepcionEnHistorial } from '../lib/recibidoPor';
+import { resolverMaxCuotas, guiaDeFormulario, guiaAFormulario, type MaxCuotas } from '../lib/financiacionGuia';
+import { extraerCapacidadGB, formatearGB } from '../lib/almacenamiento';
 
 function IconoChico({ nombre, className = '' }: { nombre: string; className?: string }) {
   return (
@@ -47,8 +61,8 @@ function extraerBateria(texto: string): number | null {
   return m ? Number(m[1]) : null;
 }
 function extraerCapacidad(texto: string): number | null {
-  const m = texto.match(/(\d+)\s?gb/i);
-  return m ? Number(m[1]) : null;
+  // Entiende "256GB" y también "1TB" / "2 TB" (se guardan en GB: 1024 / 2048).
+  return extraerCapacidadGB(texto);
 }
 
 type Dispositivo = {
@@ -134,12 +148,28 @@ export default function Stock() {
   const t = useT();
   const sucursalActual = useSucursalActual();
   const puedeEliminar = tienePermiso(actor, 'eliminar');
+  // Eliminar un dispositivo del Stock a mano (sin venderlo) es un permiso aparte, que cada local reparte en Configuración.
+  const puedeEliminarDisp = tienePermiso(actor, 'eliminar_dispositivos');
   const puedeAgregarStock = tienePermiso(actor, 'agregar_stock');
   const puedeRecibirServicioTecnico = tienePermiso(actor, 'recibir_servicio_tecnico');
   // El capital muestra costos y ganancias (info sensible del dueño): se
   // protege con el mismo permiso que las Estadísticas.
   const puedeVerCapital = tienePermiso(actor, 'ver_estadisticas');
+  // Costos y ganancia: permiso propio (apagado por defecto). Sin él no se ve el costo de nada en esta pantalla.
+  const puedeVerCostos = tienePermiso(actor, 'ver_costos');
   const [tab, setTab] = useState<'celulares' | 'accesorios'>('celulares');
+  // Standby (standby_supabase.sql): sin la migración, la pantalla se comporta como siempre.
+  const [conStandby, setConStandby] = useState(false);
+  useEffect(() => {
+    soportaMigracion(supabase, 'standby').then(setConStandby);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // Cuántas fotos reales tiene cada equipo (dispositivo_fotos_supabase.sql): se muestra como 📷 N en la lista.
+  const [fotosPorEquipo, setFotosPorEquipo] = useState<Map<string, number>>(new Map());
+  useEffect(() => {
+    contarFotosPorDispositivo(supabase).then(setFotosPorEquipo).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [dispositivos, setDispositivos] = useState<Dispositivo[]>([]);
   // Equipos con un plan de ahorro/seña ACTIVO apuntándolos — señar no toca
@@ -157,6 +187,8 @@ export default function Stock() {
   const [cargandoVendidos, setCargandoVendidos] = useState(false);
   const [totalVendidos, setTotalVendidos] = useState(0);
   const [totalDispositivos, setTotalDispositivos] = useState(0);
+  // Cuántos equipos esperan en Standby: no entran en el capital de arriba (no son stock para vender), se avisa para que no parezca que faltan.
+  const [totalStandby, setTotalStandby] = useState(0);
   const [carpetas, setCarpetas] = useState<string[]>([]);
   const [imagenesCarpetas, setImagenesCarpetas] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
@@ -178,6 +210,14 @@ export default function Stock() {
   const [nombreProducto, setNombreProducto] = useState('');
   const [precioProducto, setPrecioProducto] = useState('');
   const [costoProducto, setCostoProducto] = useState('');
+  // Precio de lista y guía de cuotas al dar de alta: solo si corrió financiacion_guia_cartera_supabase.sql.
+  const [conGuiaAlta, setConGuiaAlta] = useState(false);
+  const [listaProducto, setListaProducto] = useState('');
+  const [guiaProducto, setGuiaProducto] = useState('');
+  useEffect(() => {
+    soportaMigracion(supabase, 'guiaFinanciacionMaestro').then(setConGuiaAlta);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // Categorías de stock (app/lib/categorias.ts): si el negocio no corrió
   // todavía la migración correspondiente, esta consulta simplemente vuelve
   // vacía (la tabla no existe) y el selector no se muestra — agregar un
@@ -254,6 +294,33 @@ export default function Stock() {
     omitidosDuplicado: number;
   } | null>(null);
   const inputImportRef = useRef<HTMLInputElement>(null);
+  // Equipos del archivo cuyo IMEI coincide con un canje que sigue esperando en Plan Canje: importarlos
+  // los duplicaría en el Stock.
+  const [canjesEnImport, setCanjesEnImport] = useState<CanjeParaStock[]>([]);
+  const [resolviendoCanjes, setResolviendoCanjes] = useState(false);
+  useEffect(() => {
+    if (!planImport) {
+      setCanjesEnImport([]);
+      return;
+    }
+    const imeis = new Set(planImport.filas.map((f) => limpiarImei(f.imei as string | null)).filter(Boolean) as string[]);
+    if (imeis.size === 0) {
+      setCanjesEnImport([]);
+      return;
+    }
+    let vivo = true;
+    canjesPendientes(supabase)
+      .then((pendientes) => {
+        if (vivo) setCanjesEnImport(pendientes.filter((c) => imeis.has(limpiarImei(c.imei) ?? '')));
+      })
+      .catch(() => {
+        // Sin Plan Canje legible, la importación sigue sin el aviso.
+      });
+    return () => {
+      vivo = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [planImport]);
   const [categoriaImportId, setCategoriaImportId] = useState('');
 
   const [menuAbierto, setMenuAbierto] = useState<'agregar' | 'mas' | null>(null);
@@ -315,17 +382,17 @@ export default function Stock() {
   // — distinta de "eliminar carpeta" del menú, que borra solo el catálogo
   // vacío y por eso está bloqueada si hay dispositivos adentro.
   const eliminarCarpeta = async (modelo: string, items: Dispositivo[]) => {
-    if (items.length === 0 || !puedeEliminar) return;
+    if (items.length === 0 || !puedeEliminarDisp) return;
     setCarpetaMenuAbierta(null);
     if (
       !confirm(
-        `¿Eliminar los ${items.length} dispositivo${items.length === 1 ? '' : 's'} de "${modelo}"? No se puede deshacer.`
+        `${t('¿Eliminar los')} ${items.length} ${items.length === 1 ? t('dispositivo') : t('dispositivos')} ${t('de')} "${modelo}"? ${t('No se puede deshacer.')}`
       )
     )
       return;
 
     setEliminandoCarpeta(modelo);
-    const { error } = await supabase.from('dispositivos').delete().in('id', items.map((d) => d.id));
+    const { error } = await porLotes(items.map((d) => d.id), (lote) => supabase.from('dispositivos').delete().in('id', lote));
     if (!error) {
       await registrarAuditoria(supabase, {
         accion: `eliminó toda la carpeta "${modelo}" de Stock (${items.length} dispositivo${items.length === 1 ? '' : 's'})`,
@@ -384,19 +451,24 @@ export default function Stock() {
   // memoria o no.
   const cargarDispositivos = async (opts?: { incluirVendidos?: boolean }) => {
     const incluirVendidos = opts?.incluirVendidos ?? vendidosCargados;
-    const [enStock, vendidos, { count: countVendidos }, { count: countTotal }, senados] = await Promise.all([
+    // Los equipos en Standby tienen en_stock = false pero no están vendidos: se sacan de "Vendidos" y de los conteos.
+    const hayStandby = await soportaMigracion(supabase, 'standby');
+    const sinStandby = <T extends { or: (filtros: string) => T }>(q: T): T => (hayStandby ? q.or('en_espera.is.null,en_espera.eq.false') : q);
+    const [enStock, vendidos, { count: countVendidos }, { count: countTotal }, senados, { count: countStandby }] = await Promise.all([
       obtenerTodasLasFilas<Dispositivo>(supabase, 'dispositivos', COLUMNAS_DISPOSITIVO, ORDEN_DISPOSITIVO, (q) =>
         q.eq('en_stock', true)
       ),
       incluirVendidos
         ? obtenerTodasLasFilas<Dispositivo>(supabase, 'dispositivos', COLUMNAS_DISPOSITIVO, ORDEN_DISPOSITIVO, (q) =>
-            q.eq('en_stock', false)
+            sinStandby(q.eq('en_stock', false))
           )
         : Promise.resolve([]),
-      supabase.from('dispositivos').select('id', { count: 'exact', head: true }).eq('en_stock', false),
-      supabase.from('dispositivos').select('id', { count: 'exact', head: true }),
+      sinStandby(supabase.from('dispositivos').select('id', { count: 'exact', head: true }).eq('en_stock', false)),
+      sinStandby(supabase.from('dispositivos').select('id', { count: 'exact', head: true })),
       obtenerDispositivosSenados(supabase),
+      hayStandby ? supabase.from('dispositivos').select('id', { count: 'exact', head: true }).eq('en_espera', true) : Promise.resolve({ count: 0 }),
     ]);
+    setTotalStandby(countStandby ?? 0);
     setDispositivos([...enStock, ...vendidos]);
     setDispositivosSenados(senados);
     setVendidosCargados(incluirVendidos);
@@ -474,7 +546,7 @@ export default function Stock() {
       const todos = await obtenerTodasLasFilas<Dispositivo>(supabase, 'dispositivos', COLUMNAS_DISPOSITIVO, ORDEN_DISPOSITIVO);
       await descargarDatos(
         'stock-celulares-qovento',
-        ['modelo', 'capacidad_gb', 'color', 'imei', 'numero_serie', 'salud_bateria', 'precio', 'costo', 'proveedor', 'estado', 'en_stock', 'created_at'],
+        ['modelo', 'capacidad_gb', 'color', 'imei', 'numero_serie', 'salud_bateria', 'precio', ...(puedeVerCostos ? ['costo', 'proveedor'] : []), 'estado', 'en_stock', 'created_at'],
         todos,
         formato
       );
@@ -498,6 +570,8 @@ export default function Stock() {
     try {
       const filas = await leerArchivoDatos(archivo);
       const imeisExistentes = new Set(dispositivos.map((d) => d.imei).filter(Boolean));
+      // Los equipos que esperan en Standby no están en esta lista: sus IMEI también cuentan como ya cargados.
+      for (const e of await equiposEnStandby(supabase).catch(() => [])) if (e.imei) imeisExistentes.add(e.imei);
       let omitidosSinModelo = 0;
       let omitidosDuplicado = 0;
 
@@ -583,6 +657,23 @@ export default function Stock() {
 
   const confirmarImportacion = async () => {
     if (!planImport || !puedeAgregarStock) return;
+    // Todo dispositivo tiene que quedar con quién lo agregó: sin alguien elegido en "Cambiar" no se importa.
+    const actorImport = getActor();
+    if (!actorImport) {
+      alert(t(MENSAJE_ACTOR_REQUERIDO));
+      return;
+    }
+    if (
+      canjesEnImport.length > 0 &&
+      !confirm(
+        `${canjesEnImport.length} ${
+          canjesEnImport.length === 1
+            ? t('equipo del archivo está en Plan Canje. Si lo importás queda duplicado en el Stock. ¿Importar igual?')
+            : t('equipos del archivo están en Plan Canje. Si los importás quedan duplicados en el Stock. ¿Importar igual?')
+        }`
+      )
+    )
+      return;
     setImportando(true);
     setProgresoImport(null);
 
@@ -607,6 +698,8 @@ export default function Stock() {
       return {
         ...f,
         ...(categoriaImportId ? { categoria_id: categoriaImportId } : {}),
+        agregado_por_nombre: actorImport.nombre ?? null,
+        agregado_por_foto_url: actorImport.fotoUrl ?? null,
         ...(sucursalActual.id ? { sucursal_id: sucursalActual.id } : {}),
         ...(nombreProveedor ? { proveedor_id: proveedorIdPorNombre.get(nombreProveedor) ?? null } : {}),
       };
@@ -629,6 +722,45 @@ export default function Stock() {
     cargarDispositivos();
   };
 
+  // Saca del plan de importación las filas cuyo IMEI está en la lista.
+  const sacarDelPlanImport = (imeis: Set<string>) => {
+    setPlanImport((prev) => (prev ? { ...prev, filas: prev.filas.filter((f) => !imeis.has(limpiarImei(f.imei as string | null) ?? '')) } : prev));
+  };
+
+  const omitirCanjesDelImport = () => {
+    sacarDelPlanImport(new Set(canjesEnImport.map((c) => limpiarImei(c.imei) ?? '')));
+  };
+
+  // Atajo: en vez de importarlos de cero, los pasa al Stock desde Plan Canje y los saca del archivo.
+  const pasarCanjesDelImportAlStock = async () => {
+    const actor = getActor();
+    if (!actor) {
+      setResultadoImport(t(MENSAJE_ACTOR_REQUERIDO));
+      return;
+    }
+    setResolviendoCanjes(true);
+    const hechos = new Set<string>();
+    let falloMensaje: string | null = null;
+    for (const c of canjesEnImport) {
+      const r = await agregarCanjeAlStock(supabase, c, { sucursalId: sucursalActual.id, actor });
+      if (r.ok || r.yaAgregado) hechos.add(limpiarImei(c.imei) ?? '');
+      if (!r.ok && !r.yaAgregado) falloMensaje = r.mensaje;
+    }
+    sacarDelPlanImport(hechos);
+    setCanjesEnImport((prev) => prev.filter((c) => !hechos.has(limpiarImei(c.imei) ?? '')));
+    setResultadoImport(
+      falloMensaje
+        ? `${t('No pudimos agregar al stock:')} ${falloMensaje}`
+        : `${hechos.size} ${
+            hechos.size === 1
+              ? t('equipo pasó al Stock desde Plan Canje y se sacó de la importación.')
+              : t('equipos pasaron al Stock desde Plan Canje y se sacaron de la importación.')
+          }`
+    );
+    setResolviendoCanjes(false);
+    cargarDispositivos();
+  };
+
   const cancelarImportacion = () => {
     setPlanImport(null);
     setResultadoImport(null);
@@ -648,10 +780,11 @@ export default function Stock() {
     setSeleccionados(new Set());
     setMoviendoCarpeta(false);
     setCarpetaDestino('');
+    setFinanciandoBloque(false);
   };
 
   const eliminarSeleccionados = async () => {
-    if (!puedeEliminar) return;
+    if (!puedeEliminarDisp) return;
     const ids = Array.from(seleccionados);
     if (ids.length === 0) return;
     if (
@@ -664,7 +797,7 @@ export default function Stock() {
     setEliminandoSeleccion(true);
     const aEliminar = dispositivos.filter((d) => seleccionados.has(d.id));
 
-    const { error } = await supabase.from('dispositivos').delete().in('id', ids);
+    const { error } = await porLotes(ids, (lote) => supabase.from('dispositivos').delete().in('id', lote));
     if (!error) {
       // Un solo insert con N filas (no N awaits en fila): con selecciones
       // grandes, auditar uno por uno bloqueaba la UI mucho más que el
@@ -698,6 +831,72 @@ export default function Stock() {
   // (no corren a la vez, alcanza con un solo flag para deshabilitar botones).
   const [procesandoSeleccion, setProcesandoSeleccion] = useState(false);
   const [moviendoCarpeta, setMoviendoCarpeta] = useState(false);
+
+  // Guía de financiación y precio de lista (financiacion_guia_cartera_supabase.sql). Se carga
+  // aparte, con columnas livianas, para no tocar los listados principales de esta pantalla.
+  const [conGuia, setConGuia] = useState(false);
+  const [guiaPorId, setGuiaPorId] = useState<Map<string, { max: MaxCuotas; propio: number | null; lista: number | null }>>(new Map());
+  const [valorLista, setValorLista] = useState('');
+  const [valorGuia, setValorGuia] = useState('');
+  const [financiandoBloque, setFinanciandoBloque] = useState(false);
+  const [guiaBloque, setGuiaBloque] = useState('6');
+  const [aplicandoGuiaBloque, setAplicandoGuiaBloque] = useState(false);
+
+  const cargarGuias = async () => {
+    const soporta = await soportaMigracion(supabase, 'guiaFinanciacionDispositivos');
+    setConGuia(soporta);
+    if (!soporta) return;
+    const [disp, prod, cats] = await Promise.all([
+      obtenerTodasLasFilas<{ id: string; categoria_id: string | null; financiacion_max_cuotas: number | null; precio_lista: number | null }>(
+        supabase,
+        'dispositivos',
+        'id, categoria_id, financiacion_max_cuotas, precio_lista',
+        [],
+        (q) => q.eq('en_stock', true)
+      ),
+      obtenerTodasLasFilas<{ id: string; categoria_id: string | null; financiacion_max_cuotas: number | null; precio_lista: number | null }>(
+        supabase,
+        'productos',
+        'id, categoria_id, financiacion_max_cuotas, precio_lista'
+      ),
+      supabase.from('stock_categorias').select('id, financiacion_max_cuotas').limit(1000),
+    ]);
+    const guiaCat = new Map(((cats.data as { id: string; financiacion_max_cuotas: number | null }[]) ?? []).map((c) => [c.id, c.financiacion_max_cuotas]));
+    const mapa = new Map<string, { max: MaxCuotas; propio: number | null; lista: number | null }>();
+    for (const f of [...disp, ...prod]) {
+      mapa.set(f.id, {
+        max: resolverMaxCuotas(f.financiacion_max_cuotas, f.categoria_id ? guiaCat.get(f.categoria_id) : null),
+        propio: f.financiacion_max_cuotas,
+        lista: f.precio_lista,
+      });
+    }
+    setGuiaPorId(mapa);
+  };
+  useEffect(() => {
+    cargarGuias();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const aplicarGuiaBloque = async () => {
+    const ids = Array.from(seleccionados);
+    if (ids.length === 0) return;
+    const guia = guiaDeFormulario(guiaBloque);
+    setAplicandoGuiaBloque(true);
+    const { error } = await porLotes(ids, (lote) => supabase.from('dispositivos').update({ financiacion_max_cuotas: guia }).in('id', lote));
+    if (error) {
+      alert(`${t('No se pudo guardar el cambio. No se modificó nada.')}\n${error.message}`);
+      setAplicandoGuiaBloque(false);
+      return;
+    }
+    await registrarAuditoria(supabase, {
+      accion: `cambió la guía de financiación de ${ids.length} equipos (${guia == null ? 'según la categoría' : guia === 0 ? 'sin financiación' : `hasta ${guia} cuotas`})`,
+      entidad: 'dispositivo',
+      valorNuevo: { financiacion_max_cuotas: guia },
+    });
+    await cargarGuias();
+    setFinanciandoBloque(false);
+    setAplicandoGuiaBloque(false);
+  };
   const [carpetaDestino, setCarpetaDestino] = useState('');
 
   const marcarStockSeleccionados = async (enStock: boolean) => {
@@ -705,10 +904,8 @@ export default function Stock() {
     const ids = Array.from(seleccionados);
     if (ids.length === 0) return;
     setProcesandoSeleccion(true);
-    const { error } = await supabase
-      .from('dispositivos')
-      .update({ en_stock: enStock, ...(enStock ? { en_stock_desde: new Date().toISOString(), alerta_stock_enviada: false } : {}) })
-      .in('id', ids);
+    const cambiosStock = { en_stock: enStock, ...(enStock ? { en_stock_desde: new Date().toISOString(), alerta_stock_enviada: false } : {}) };
+    const { error } = await porLotes(ids, (lote) => supabase.from('dispositivos').update(cambiosStock).in('id', lote));
     if (!error) {
       await registrarAuditoria(supabase, {
         accion: `marcó ${ids.length} dispositivo${ids.length === 1 ? '' : 's'} como ${enStock ? 'en stock' : 'fuera de stock'} (selección múltiple)`,
@@ -728,7 +925,7 @@ export default function Stock() {
     const ids = Array.from(seleccionados);
     if (!destino || ids.length === 0) return;
     setProcesandoSeleccion(true);
-    const { error } = await supabase.from('dispositivos').update({ modelo: destino }).in('id', ids);
+    const { error } = await porLotes(ids, (lote) => supabase.from('dispositivos').update({ modelo: destino }).in('id', lote));
     if (!error) {
       await asegurarModelo(supabase, destino);
       await registrarAuditoria(supabase, {
@@ -749,7 +946,7 @@ export default function Stock() {
     const elegidos = dispositivos.filter((d) => seleccionados.has(d.id));
     descargarCSV(
       'stock-seleccion-qovento.csv',
-      ['modelo', 'capacidad_gb', 'color', 'imei', 'numero_serie', 'salud_bateria', 'precio', 'costo', 'proveedor', 'estado', 'en_stock', 'created_at'],
+      ['modelo', 'capacidad_gb', 'color', 'imei', 'numero_serie', 'salud_bateria', 'precio', ...(puedeVerCostos ? ['costo', 'proveedor'] : []), 'estado', 'en_stock', 'created_at'],
       elegidos
     );
   };
@@ -784,6 +981,22 @@ export default function Stock() {
     setProcesandoAccion(null);
   };
 
+  const mandarDispositivoAStandby = async (d: Dispositivo) => {
+    if (!puedeAgregarStock) return;
+    setAccionAbiertaId(null);
+    const motivo = prompt(`${t('¿Qué le pasa a')} ${d.modelo || t('este equipo')}? ${t('Queda en Standby, fuera del Stock para vender.')}`, d.detalles ?? '');
+    if (motivo === null) return;
+    setProcesandoAccion(d.id);
+    const r = await mandarAStandby(supabase, d, { origen: 'stock', motivo });
+    setProcesandoAccion(null);
+    if (r.error) {
+      alert(`${t('No se pudo guardar el cambio. No se modificó nada.')}
+${t(r.error)}`);
+      return;
+    }
+    cargarDispositivos();
+  };
+
   const derivarDispositivoAServicio = async (d: Dispositivo) => {
     if (!puedeRecibirServicioTecnico) return;
     setAccionAbiertaId(null);
@@ -802,6 +1015,9 @@ export default function Stock() {
         color: d.color,
         imei: d.imei,
         estado: 'recibido',
+        ...(await campoBateriaServicio(supabase, d.salud_bateria)),
+        ...(await camposRecibidoPor(supabase)),
+        ...(await campoOrigenServicio(supabase, d.id)),
         // Hereda la sucursal del propio dispositivo que se deriva, no la
         // que esté eligiendo ahora quien aprieta el botón.
         ...(d.sucursal_id ? { sucursal_id: d.sucursal_id } : {}),
@@ -820,6 +1036,7 @@ export default function Stock() {
     if (updateError) {
       alert(`${t('Se creó la reparación pero no pudimos sacar el dispositivo de Stock:')} ` + updateError.message);
     }
+    await registrarRecepcionEnHistorial(supabase, [nueva.id]);
     await registrarAuditoria(supabase, {
       accion: `derivó de Stock a Servicio Técnico un dispositivo (${nueva.numero_orden || ''}, ${d.modelo || 'sin modelo'}${d.imei ? `, IMEI ${d.imei}` : ''})`,
       entidad: 'reparacion',
@@ -830,7 +1047,7 @@ export default function Stock() {
   };
 
   const eliminarDispositivo = async (d: Dispositivo) => {
-    if (!puedeEliminar) return;
+    if (!puedeEliminarDisp) return;
     setAccionAbiertaId(null);
     if (!confirm(`${t('¿Eliminar')} ${d.modelo || t('este dispositivo')} ${t('del historial? No se puede deshacer.')}`)) return;
     setProcesandoAccion(d.id);
@@ -850,7 +1067,7 @@ export default function Stock() {
     cargarDispositivos();
     (async () => {
       const { data } = await supabase.from('modelos_stock').select('nombre').order('nombre');
-      setCarpetas((data ?? []).map((m) => m.nombre));
+      setCarpetas((data ?? []).map((m) => m.nombre).sort(compararModelosPorSalida));
     })();
     (async () => setImagenesCarpetas(await obtenerImagenesCarpetas(supabase)))();
     (async () => {
@@ -926,7 +1143,7 @@ export default function Stock() {
   // Un dispositivo en stock cuenta como "dato incompleto" si le falta algo
   // relevante para venderlo bien: precio, costo, color o capacidad. Se usa
   // en la vista rápida y en el indicador financiero de más arriba.
-  const dispositivoIncompleto = (d: Dispositivo) => d.precio == null || d.costo == null || !d.color || !d.capacidad_gb;
+  const dispositivoIncompleto = (d: Dispositivo) => d.precio == null || (puedeVerCostos && d.costo == null) || !d.color || !d.capacidad_gb;
 
   const cumpleFiltroRapido = (d: Dispositivo) => {
     switch (filtroRapido) {
@@ -1200,6 +1417,7 @@ export default function Stock() {
     const cantidadNueva = esSerializado ? 1 : Math.max(0, Math.floor(Number(cantidadInicialProducto) || 0));
 
     let insertError: { message: string } | null = null;
+    let idProductoGuardado: string | null = existente?.id ?? null;
     if (existente) {
       // La cantidad se suma con el mismo RPC atómico que usa el resto de la
       // app (producto_mover_stock, con "select ... for update") en vez de
@@ -1231,7 +1449,7 @@ export default function Stock() {
         insertError = precioError;
       }
     } else {
-      const { error } = await supabase.from('productos').insert({
+      const { data: creado, error } = await supabase.from('productos').insert({
           nombre: nombreLimpio,
           precio: precioProducto ? Number(precioProducto) : null,
           costo: costoProducto ? Number(costoProducto) : null,
@@ -1251,18 +1469,49 @@ export default function Stock() {
                 notas: notasProducto.trim() || null,
               }
             : {}),
-        });
+        }).select('id').single();
       insertError = error;
+      idProductoGuardado = creado?.id ?? null;
+      // Las unidades con las que nace el producto quedan registradas como el
+      // primer movimiento de su historial (de dónde salió el stock inicial).
+      // Si esto falla no se corta el alta: el producto ya se creó bien.
+      if (!error && creado && !esSerializado && cantidadNueva > 0) {
+        const actorAlta = getActor();
+        await supabase.from('producto_movimientos').insert({
+          producto_id: creado.id,
+          tipo: 'entrada',
+          cantidad: cantidadNueva,
+          cantidad_resultante: cantidadNueva,
+          motivo: 'Alta del producto',
+          usuario: actorAlta?.nombre ?? null,
+        });
+      }
     }
     if (insertError) {
       setErrorProducto(`${t('No pudimos guardar:')} ` + insertError.message);
       setGuardandoProducto(false);
       return;
     }
+    // Precio de lista y guía: solo se tocan si se completaron, para no pisar lo ya definido del producto.
+    if (conGuiaAlta && (listaProducto || guiaProducto !== '')) {
+      const cambios: { precio_lista?: number; financiacion_max_cuotas?: number | null } = {};
+      if (listaProducto) cambios.precio_lista = Number(listaProducto);
+      if (guiaProducto !== '') cambios.financiacion_max_cuotas = guiaDeFormulario(guiaProducto);
+      const falloGuia =
+        (productoMaestroId && (await falla(supabase.from('productos_maestro').update(cambios).eq('id', productoMaestroId), t, 'guardar precio de lista y financiación'))) ||
+        (idProductoGuardado && (await falla(supabase.from('productos').update(cambios).eq('id', idProductoGuardado), t, 'guardar precio de lista y financiación')));
+      if (falloGuia) {
+        setGuardandoProducto(false);
+        cargarProductos();
+        return;
+      }
+    }
     if (!maestroExistente) setProductosMaestroDisponibles(await obtenerProductosMaestro(supabase, false).catch(() => productosMaestroDisponibles));
     setNombreProducto('');
     setPrecioProducto('');
     setCostoProducto('');
+    setListaProducto('');
+    setGuiaProducto('');
     setMarcaProducto('');
     setNumeroSerieProducto('');
     setCantidadInicialProducto('1');
@@ -1282,7 +1531,7 @@ export default function Stock() {
     if (!puedeEliminar) return;
     if (!confirm(t('¿Eliminar este producto?'))) return;
     const producto = productos.find((p) => p.id === id);
-    await supabase.from('productos').delete().eq('id', id);
+    if (await falla(supabase.from('productos').delete().eq('id', id), t, 'eliminar producto')) return;
     await registrarAuditoria(supabase, {
       accion: `eliminó un accesorio del Stock (${producto?.nombre || 'sin nombre'})`,
       entidad: 'producto',
@@ -1299,6 +1548,8 @@ export default function Stock() {
       setValorCantidad(String(p.cantidad));
       setValorCosto(p.costo != null ? String(p.costo) : '');
       setValorPrecio(p.precio != null ? String(p.precio) : '');
+      setValorLista(guiaPorId.get(p.id)?.lista != null ? String(guiaPorId.get(p.id)!.lista) : '');
+      setValorGuia(guiaAFormulario(guiaPorId.get(p.id)?.propio));
     }
   };
 
@@ -1308,7 +1559,10 @@ export default function Stock() {
     const precioNuevo = valorPrecio ? Number(valorPrecio) : null;
     const cambioCantidad = nueva - p.cantidad;
     const cambianOtros = costoNuevo !== (p.costo ?? null) || precioNuevo !== (p.precio ?? null);
-    if (cambioCantidad === 0 && !cambianOtros) {
+    const listaNueva = valorLista ? Number(valorLista) : null;
+    const guiaNueva = guiaDeFormulario(valorGuia);
+    const cambiaGuia = conGuia && (listaNueva !== (guiaPorId.get(p.id)?.lista ?? null) || guiaNueva !== (guiaPorId.get(p.id)?.propio ?? null));
+    if (cambioCantidad === 0 && !cambianOtros && !cambiaGuia) {
       setEditandoCantidad(null);
       return;
     }
@@ -1335,18 +1589,32 @@ export default function Stock() {
           setErrorProducto(`${t('No pudimos actualizar la cantidad:')} ` + movError.message);
           return;
         }
-        await supabase.from('productos').update({ cantidad: nueva }).eq('id', p.id);
+        if (await falla(supabase.from('productos').update({ cantidad: nueva }).eq('id', p.id), t, 'actualizar cantidad')) return;
       }
     }
     if (cambianOtros) {
-      await supabase.from('productos').update({ costo: costoNuevo, precio: precioNuevo }).eq('id', p.id);
+      if (await falla(supabase.from('productos').update({ costo: costoNuevo, precio: precioNuevo }).eq('id', p.id), t, 'actualizar costo y precio')) {
+        cargarProductos();
+        return;
+      }
       // El precio/costo "Final" que muestra la pestaña Productos sale del
       // catálogo maestro, no de esta fila puntual — sin este paso, editar el
       // precio acá (lo normal del día a día) dejaba ese catálogo desactualizado
       // para siempre desde la primera vez que se creó el producto.
       if (p.producto_maestro_id) {
-        await supabase.from('productos_maestro').update({ costo: costoNuevo, precio: precioNuevo }).eq('id', p.producto_maestro_id);
+        await falla(supabase.from('productos_maestro').update({ costo: costoNuevo, precio: precioNuevo }).eq('id', p.producto_maestro_id), t, 'actualizar el catálogo de productos');
       }
+    }
+    if (cambiaGuia) {
+      const campos = { precio_lista: listaNueva, financiacion_max_cuotas: guiaNueva };
+      if (
+        (await falla(supabase.from('productos').update(campos).eq('id', p.id), t, 'guardar precio de lista y financiación')) ||
+        (p.producto_maestro_id && (await falla(supabase.from('productos_maestro').update(campos).eq('id', p.producto_maestro_id), t, 'guardar precio de lista y financiación')))
+      ) {
+        cargarProductos();
+        return;
+      }
+      await cargarGuias();
     }
     await registrarAuditoria(supabase, {
       accion: `editó el accesorio "${p.nombre}"`,
@@ -1366,7 +1634,7 @@ export default function Stock() {
     reader.onload = async () => {
       const dataUrl = reader.result as string;
       setProductos((ps) => ps.map((x) => (x.id === p.id ? { ...x, imagen_url: dataUrl } : x)));
-      await supabase.from('productos').update({ imagen_url: dataUrl }).eq('id', p.id);
+      if (await falla(supabase.from('productos').update({ imagen_url: dataUrl }).eq('id', p.id), t, 'guardar imagen')) cargarProductos();
     };
     reader.readAsDataURL(file);
   };
@@ -1390,6 +1658,12 @@ export default function Stock() {
 
         {tab === 'celulares' && (
           <div className="flex items-center gap-1.5 shrink-0">
+            <Link
+              href="/configuracion/stock-publico"
+              className="rounded-lg border border-border dark:border-dark-border hover:bg-canvas dark:hover:bg-dark-bg transition-colors px-3 py-2 text-xs font-medium leading-none"
+            >
+              {t('Compartir stock')}
+            </Link>
             {puedeAgregarStock && (
               <div className="relative">
                 <button
@@ -1491,14 +1765,6 @@ export default function Stock() {
                   >
                     {t('Administrar carpetas')}
                   </Link>
-                  <div className="my-1 border-t border-border dark:border-dark-border" />
-                  <Link
-                    href="/configuracion/stock-publico"
-                    onClick={() => setMenuAbierto(null)}
-                    className="px-3.5 py-2.5 text-sm hover:bg-canvas dark:hover:bg-dark-bg"
-                  >
-                    {t('Compartir stock (enlace público)')}
-                  </Link>
                 </div>
               )}
             </div>
@@ -1516,25 +1782,29 @@ export default function Stock() {
             {t('Capital en stock')}
           </p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
-            <IndicadorCapital
-              etiqueta={t('Invertido (a costo)')}
-              valor={capital.costo}
-              cobertura={capital.costoCobertura}
-              total={capital.totalItems}
-            />
+            {puedeVerCostos && (
+              <IndicadorCapital
+                etiqueta={t('Invertido (a costo)')}
+                valor={capital.costo}
+                cobertura={capital.costoCobertura}
+                total={capital.totalItems}
+              />
+            )}
             <IndicadorCapital
               etiqueta={t('Valor de venta')}
               valor={capital.venta}
               cobertura={capital.ventaCobertura}
               total={capital.totalItems}
             />
-            <IndicadorCapital
-              etiqueta={t('Ganancia potencial')}
-              valor={capital.ganancia}
-              cobertura={capital.gananciaCobertura}
-              total={capital.totalItems}
-              tono="text-good"
-            />
+            {puedeVerCostos && (
+              <IndicadorCapital
+                etiqueta={t('Ganancia potencial')}
+                valor={capital.ganancia}
+                cobertura={capital.gananciaCobertura}
+                total={capital.totalItems}
+                tono="text-good"
+              />
+            )}
             <button
               type="button"
               onClick={() => {
@@ -1561,6 +1831,15 @@ export default function Stock() {
           <p className="text-[11px] text-muted dark:text-dark-text-secondary mt-2.5 text-center">
             {capital.unidadesCel} {capital.unidadesCel === 1 ? t('dispositivo en stock') : t('dispositivos en stock')} · {capital.unidadesAcc}{' '}
             {capital.unidadesAcc === 1 ? t('producto') : t('productos')}. {t('Cada indicador cuenta solo los ítems con ese dato cargado.')}
+            {totalStandby > 0 && (
+              <>
+                {' '}
+                <Link href="/standby" className="underline">
+                  {totalStandby} {totalStandby === 1 ? t('equipo en Standby') : t('equipos en Standby')}
+                </Link>{' '}
+                {t('(no está incluido en este capital)')}
+              </>
+            )}
           </p>
         </div>
       )}
@@ -1631,7 +1910,7 @@ export default function Stock() {
             </div>
 
             <div className="flex items-center gap-2 text-xs overflow-x-auto">
-              {VISTAS_RAPIDAS.map((v) => (
+              {VISTAS_RAPIDAS.filter((v) => puedeVerCostos || v.id !== 'sin_costo').map((v) => (
                 <button
                   key={v.id}
                   onClick={() => setFiltroRapido(v.id)}
@@ -1683,6 +1962,43 @@ export default function Stock() {
                   </li>
                 )}
               </ul>
+              {canjesEnImport.length > 0 && (
+                <div role="alert" className="flex flex-col gap-2 rounded-lg bg-warn/10 border border-warn/40 px-3 py-2.5">
+                  <p className="text-xs font-semibold text-ink dark:text-dark-text">
+                    ⚠ {canjesEnImport.length}{' '}
+                    {canjesEnImport.length === 1 ? t('equipo del archivo se encuentra en Plan Canje') : t('equipos del archivo se encuentran en Plan Canje')}
+                  </p>
+                  <ul className="text-xs text-muted dark:text-dark-text-secondary flex flex-col gap-0.5">
+                    {canjesEnImport.slice(0, 8).map((c) => (
+                      <li key={c.id}>
+                        {c.modelo || t('Sin modelo')} · IMEI {c.imei}
+                      </li>
+                    ))}
+                    {canjesEnImport.length > 8 && <li>+ {canjesEnImport.length - 8} {t('más en Plan Canje')}</li>}
+                  </ul>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={pasarCanjesDelImportAlStock}
+                      disabled={resolviendoCanjes || importando}
+                      className="rounded-full bg-accent dark:bg-dark-accent px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+                    >
+                      {resolviendoCanjes ? t('Agregando...') : t('Agregar desde Plan Canje')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={omitirCanjesDelImport}
+                      disabled={resolviendoCanjes || importando}
+                      className="rounded-full border border-border dark:border-dark-border px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+                    >
+                      {t('No importar estos')}
+                    </button>
+                    <Link href="/canje" className="self-center text-xs text-accent dark:text-dark-accent underline">
+                      {t('Ver Plan Canje')}
+                    </Link>
+                  </div>
+                </div>
+              )}
               {categoriasStock.filter((c) => c.perfil_default === 'dispositivo').length > 1 && (
                 <div>
                   <label className="text-xs text-muted dark:text-dark-text-secondary block mb-1">
@@ -1697,7 +2013,7 @@ export default function Stock() {
                       .filter((c) => c.perfil_default === 'dispositivo')
                       .map((c) => (
                         <option key={c.id} value={c.id}>
-                          {c.nombre}
+                          {etiquetaCategoria(c.id, categoriasStock)}
                         </option>
                       ))}
                   </select>
@@ -1760,6 +2076,15 @@ export default function Stock() {
                     >
                       {t('Marcar fuera de stock')}
                     </button>
+                    {conGuia && (
+                      <button
+                        onClick={() => setFinanciandoBloque((v) => !v)}
+                        disabled={seleccionados.size === 0}
+                        className="rounded-lg bg-white dark:bg-dark-surface border border-border dark:border-dark-border text-xs font-medium px-3 py-1.5 disabled:opacity-40"
+                      >
+                        💳 {t('Financiación')}
+                      </button>
+                    )}
                     <button
                       onClick={() => setMoviendoCarpeta((v) => !v)}
                       disabled={seleccionados.size === 0}
@@ -1777,6 +2102,21 @@ export default function Stock() {
                   {t('Exportar seleccionados')}
                 </button>
               </div>
+
+              {financiandoBloque && conGuia && (
+                <div className="flex items-end gap-2">
+                  <div className="flex-1">
+                    <SelectorFinanciacion value={guiaBloque} onChange={setGuiaBloque} />
+                  </div>
+                  <button
+                    onClick={aplicarGuiaBloque}
+                    disabled={aplicandoGuiaBloque || seleccionados.size === 0}
+                    className="rounded-lg bg-accent dark:bg-dark-accent text-white text-xs font-medium px-3 py-2 disabled:opacity-40"
+                  >
+                    {aplicandoGuiaBloque ? t('Aplicando...') : t('Aplicar')}
+                  </button>
+                </div>
+              )}
 
               {moviendoCarpeta && (
                 <div className="flex items-center gap-2">
@@ -1803,7 +2143,7 @@ export default function Stock() {
                 </div>
               )}
 
-              {puedeEliminar && (
+              {puedeEliminarDisp && (
                 <div className="pt-1.5 border-t border-accent/20 dark:border-dark-accent/20 flex justify-end">
                   <button
                     onClick={eliminarSeleccionados}
@@ -1816,7 +2156,7 @@ export default function Stock() {
               )}
             </div>
           ) : (
-            (puedeEliminar || puedeAgregarStock) && (
+            (puedeEliminarDisp || puedeAgregarStock) && (
               <button
                 onClick={() => setModoSeleccion(true)}
                 className="self-start text-xs text-accent dark:text-dark-accent underline"
@@ -1892,16 +2232,20 @@ export default function Stock() {
                   >
                     {items.length > 0 && <span className="shrink-0">{expandido ? '▾' : '▸'}</span>}
                     <MiniaturaDispositivo src={imagenPorNombreExacto(modelo, imagenesCarpetas)} size={48} />
-                    <span className="truncate">
-                      {modelo} · {items.length}
-                    </span>
-                    {enStock > 0 && enStock < 3 && (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-bad bg-bad/10 rounded-full px-2 py-0.5 shrink-0">
-                        <IconoChico nombre="alerta" /> {t('Quedan')} {enStock} — {t('reponer')}
+                    {/* En el celular el nombre completo del modelo va primero y el aviso "Quedan N — reponer" debajo (antes compartían
+                        la misma línea y el nombre se cortaba: "iPhone 1…"); en pantallas grandes siguen en una línea. */}
+                    <span className="min-w-0 flex flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2.5">
+                      <span className="break-words sm:truncate sm:max-w-full">
+                        {modelo} · {items.length}
                       </span>
-                    )}
+                      {enStock > 0 && enStock < 3 && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-bad bg-bad/10 rounded-full px-2 py-0.5 shrink-0">
+                          <IconoChico nombre="alerta" /> {t('Quedan')} {enStock} — {t('reponer')}
+                        </span>
+                      )}
+                    </span>
                   </button>
-                  {(puedeAgregarStock || puedeEliminar) && modelo !== 'Sin modelo' && (
+                  {(puedeAgregarStock || puedeEliminar || puedeEliminarDisp) && modelo !== 'Sin modelo' && (
                     <div className="relative shrink-0">
                       <button
                         onClick={() => setCarpetaMenuAbierta(carpetaMenuAbierta === modelo ? null : modelo)}
@@ -1930,7 +2274,7 @@ export default function Stock() {
                               {t('Renombrar / administrar')}
                             </Link>
                           )}
-                          {puedeEliminar &&
+                          {(items.length === 0 ? puedeEliminar : puedeEliminarDisp) &&
                             (items.length === 0 ? (
                               <button
                                 onClick={() => eliminarCarpetaVacia(modelo)}
@@ -1958,6 +2302,27 @@ export default function Stock() {
                     </div>
                   )}
                 </div>
+                {items.length >= 2 && (
+                  // Cuántas unidades hay de cada color de este modelo, a la vista aunque la carpeta esté cerrada.
+                  <div className="flex flex-wrap gap-1.5" aria-label={t('Unidades por color')}>
+                    {resumenPorColor(items).map((c) => {
+                      const hex = hexColorDe(c.color);
+                      return (
+                        <span
+                          key={c.color ?? 'sin-color'}
+                          className="inline-flex items-center gap-1.5 rounded-full border border-border dark:border-dark-border bg-white dark:bg-dark-surface px-2.5 py-1 text-xs"
+                        >
+                          <span
+                            className={`h-2.5 w-2.5 rounded-full shrink-0 ${hex ? 'border border-black/15 dark:border-white/20' : 'bg-border dark:bg-dark-border'}`}
+                            style={hex ? { backgroundColor: hex } : undefined}
+                          />
+                          <span className="text-muted dark:text-dark-text-secondary">{c.color ?? t('Sin color')}</span>
+                          <span className="font-semibold tabular-nums">{c.cantidad}</span>
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
                 {items.length === 0 && (
                   <p className="text-xs text-muted dark:text-dark-text-secondary italic">{t('Carpeta vacía, todavía sin dispositivos.')}</p>
                 )}
@@ -2009,12 +2374,17 @@ export default function Stock() {
                           <div className="min-w-0">
                             <p className="text-sm font-medium flex items-center gap-1.5 flex-wrap">
                               <span>
-                                {d.capacidad_gb ? `${d.capacidad_gb} GB` : t('Capacidad s/d')}
+                                {d.capacidad_gb ? `${formatearGB(d.capacidad_gb, true)}` : t('Capacidad s/d')}
                                 {d.color ? ` · ${d.color}` : ` · ${t('Sin color')}`}
                               </span>
                               <span className="text-xs text-muted dark:text-dark-text-secondary font-mono">
                                 {d.imei || t('sin IMEI')}
                               </span>
+                              {(fotosPorEquipo.get(d.id) ?? 0) > 0 && (
+                                <span className="text-[11px] text-muted dark:text-dark-text-secondary" title={t('Tiene fotos reales')}>
+                                  📷 {fotosPorEquipo.get(d.id)}
+                                </span>
+                              )}
                               {d.salud_bateria != null && (
                                 <span className={d.salud_bateria < 80 ? 'inline-flex items-center gap-1 text-[10px] font-semibold text-warn bg-warn/10 rounded-full px-2 py-0.5' : 'text-xs text-muted dark:text-dark-text-secondary'}>
                                   {d.salud_bateria < 80 ? (
@@ -2038,7 +2408,7 @@ export default function Stock() {
                               )}
                             </p>
                             {(d.detalles || d.agregado_por_nombre) && (
-                              <p className="text-xs text-muted dark:text-dark-text-secondary truncate">
+                              <p className="text-xs text-muted dark:text-dark-text-secondary break-words sm:truncate">
                                 {d.detalles && (
                                   <span className="inline-flex items-center gap-1 text-warn">
                                     <IconoChico nombre="documento" /> {d.detalles}
@@ -2055,6 +2425,12 @@ export default function Stock() {
                                 <span className="text-muted dark:text-dark-text-secondary font-normal">{t('Sin precio')}</span>
                               )}
                             </p>
+                            {conGuia && guiaPorId.get(d.id)?.lista != null && (
+                              <p className="text-[11px] text-muted dark:text-dark-text-secondary">
+                                {t('Lista')} ${guiaPorId.get(d.id)!.lista!.toLocaleString('es-AR')}
+                              </p>
+                            )}
+                            {conGuia && <EtiquetaFinanciacion max={guiaPorId.get(d.id)?.max} className="mt-0.5" />}
                             {vista === 'vendidos' && (
                               <p className="text-xs text-muted dark:text-dark-text-secondary">{t('vendido')}</p>
                             )}
@@ -2103,6 +2479,14 @@ export default function Stock() {
                                     {d.en_stock ? t('Marcar fuera de stock') : t('Volver a stock')}
                                   </button>
                                 )}
+                                {d.en_stock && conStandby && puedeAgregarStock && (
+                                  <button
+                                    onClick={() => mandarDispositivoAStandby(d)}
+                                    className="px-3.5 py-2.5 text-sm text-left hover:bg-canvas dark:hover:bg-dark-bg"
+                                  >
+                                    {t('Mandar a Standby')}
+                                  </button>
+                                )}
                                 {d.en_stock && puedeRecibirServicioTecnico && (
                                   <button
                                     onClick={() => derivarDispositivoAServicio(d)}
@@ -2111,7 +2495,7 @@ export default function Stock() {
                                     {t('Derivar a Servicio Técnico')}
                                   </button>
                                 )}
-                                {puedeEliminar && (
+                                {puedeEliminarDisp && (
                                   <button
                                     onClick={() => eliminarDispositivo(d)}
                                     className="px-3.5 py-2.5 text-sm text-left text-bad hover:bg-bad/5 border-t border-border dark:border-dark-border mt-1"
@@ -2171,6 +2555,7 @@ export default function Stock() {
                 ))}
               </datalist>
               <div className="flex gap-2">
+                {puedeVerCostos && (
                 <input
                   value={costoProducto}
                   onChange={(e) => setCostoProducto(sanitizarDecimal(e.target.value))}
@@ -2178,6 +2563,7 @@ export default function Stock() {
                   inputMode="decimal"
                   className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
                 />
+                )}
                 <input
                   value={precioProducto}
                   onChange={(e) => setPrecioProducto(sanitizarDecimal(e.target.value))}
@@ -2186,6 +2572,18 @@ export default function Stock() {
                   className="flex-1 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
                 />
               </div>
+              {conGuiaAlta && (
+                <>
+                  <input
+                    value={listaProducto}
+                    onChange={(e) => setListaProducto(sanitizarDecimal(e.target.value))}
+                    placeholder={t('Precio de lista (financiación)')}
+                    inputMode="decimal"
+                    className="w-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl px-4 py-3 text-sm"
+                  />
+                  <SelectorFinanciacion label={t('Financiación')} value={guiaProducto} onChange={setGuiaProducto} heredado={null} />
+                </>
+              )}
               {categoriasStock.length > 0 && (
                 <>
                   <select
@@ -2200,7 +2598,7 @@ export default function Stock() {
                   >
                     {categoriasStock.map((c) => (
                       <option key={c.id} value={c.id}>
-                        {c.nombre}
+                        {etiquetaCategoria(c.id, categoriasStock)}
                       </option>
                     ))}
                   </select>
@@ -2361,7 +2759,7 @@ export default function Stock() {
                       filtroCategoriaProducto === c.id ? 'bg-accent dark:bg-dark-accent text-white' : 'bg-canvas dark:bg-dark-bg text-muted dark:text-dark-text-secondary'
                     }`}
                   >
-                    {c.nombre} ({conteoPorCategoria.get(c.id) || 0})
+                    {etiquetaCategoria(c.id, categoriasStock)} ({conteoPorCategoria.get(c.id) || 0})
                   </button>
                 ))}
               {(conteoPorCategoria.get('__sin_categoria__') || 0) > 0 && (
@@ -2438,6 +2836,7 @@ export default function Stock() {
                 </label>
 
                 <p className="text-sm font-medium leading-tight">{p.nombre}</p>
+                {conGuia && <EtiquetaFinanciacion max={guiaPorId.get(p.id)?.max} />}
                 {(p.marca || p.numero_serie) && (
                   <p className="text-[10px] text-muted dark:text-dark-text-secondary leading-tight -mt-1">
                     {[p.marca, p.numero_serie].filter(Boolean).join(' · ')}
@@ -2445,7 +2844,12 @@ export default function Stock() {
                 )}
                 <div className="leading-tight min-h-[2.2em]">
                   {p.precio != null && <p className="text-sm font-medium">${p.precio.toLocaleString('es-AR')}</p>}
-                  {p.costo != null && (
+                  {conGuia && guiaPorId.get(p.id)?.lista != null && (
+                    <p className="text-[11px] text-muted dark:text-dark-text-secondary">
+                      {t('Lista')} ${guiaPorId.get(p.id)!.lista!.toLocaleString('es-AR')}
+                    </p>
+                  )}
+                  {puedeVerCostos && p.costo != null && (
                     <p className="text-[11px] text-muted dark:text-dark-text-secondary">{t('costo')} ${p.costo.toLocaleString('es-AR')}</p>
                   )}
                 </div>
@@ -2453,6 +2857,7 @@ export default function Stock() {
                 {editandoCantidad === p.id ? (
                   <div className="flex flex-col items-center gap-2 w-full pt-1 border-t border-border dark:border-dark-border mt-1">
                     <div className="flex flex-wrap items-center justify-center gap-1.5">
+                      {puedeVerCostos && (
                       <label className="flex items-center gap-1 text-xs text-muted dark:text-dark-text-secondary">
                         {t('Costo')}
                         <input
@@ -2463,6 +2868,7 @@ export default function Stock() {
                           className="w-16 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-2 py-1 text-sm"
                         />
                       </label>
+                      )}
                       <label className="flex items-center gap-1 text-xs text-muted dark:text-dark-text-secondary">
                         {t('Precio')}
                         <input
@@ -2484,6 +2890,20 @@ export default function Stock() {
                         />
                       </label>
                     </div>
+                    {conGuia && (
+                      <div className="w-full flex flex-col gap-1.5">
+                        <label className="flex items-center gap-1 text-xs text-muted dark:text-dark-text-secondary">
+                          {t('Precio de lista')}
+                          <input
+                            value={valorLista}
+                            onChange={(e) => setValorLista(sanitizarDecimal(e.target.value))}
+                            inputMode="decimal"
+                            className="w-20 bg-canvas dark:bg-dark-bg border border-border dark:border-dark-border rounded-lg px-2 py-1 text-sm"
+                          />
+                        </label>
+                        <SelectorFinanciacion value={valorGuia} onChange={setValorGuia} heredado={null} />
+                      </div>
+                    )}
                     <button onClick={() => guardarCantidad(p)} className="text-xs text-accent dark:text-dark-accent underline">
                       {t('Guardar')}
                     </button>

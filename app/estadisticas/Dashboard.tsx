@@ -23,15 +23,19 @@ import {
   serieEvolucion,
   MetricaSerie,
   ESTADOS_COBRADOS,
+  idsOrdenesDeCobranza,
+  cobranzasDeCartera,
   resumenFinanciacionDe,
   resumenComisionesDe,
   egresosPeriodoDe,
+  retirosPorPersona,
   rankingProductosDe,
   rankingCategoriasDe,
   pagadoPorProveedorDe,
   evolucionMediosPagoDe,
   esLineaDeTaller,
   bloqueVentasPorArea,
+  esAreaTaller,
   PlanFinR,
   CuotaFinR,
   PagoFinR,
@@ -41,6 +45,7 @@ import {
   FilaRankingProducto,
   ItemAreaR,
 } from './datos';
+import { desgloseDeVentas, gananciaCobradaEnPeriodo } from './ventasPorForma';
 import { StatCard, SeccionCard, EmptyState, SegmentedChips, AnalyticsTabs, formatMoneda } from './ui';
 import { LineAreaChart } from './charts';
 import { QCard } from '../QCard';
@@ -49,7 +54,15 @@ import CampoFecha from '../CampoFecha';
 import { useT, useIdioma, type Idioma } from '../lib/idioma';
 import { useSucursalActual } from '../lib/sucursal';
 import { obtenerSucursales, type Sucursal } from '../lib/sucursales';
-import { obtenerAreasEgresos, type AreaEgreso } from '../lib/egresos';
+import { obtenerAreasEgresos, obtenerCategoriasEgresos, type AreaEgreso } from '../lib/egresos';
+import { soportaMigracion } from '../lib/migraciones';
+import RubrosInversion from './RubrosInversion';
+import CarteraFinanciacion from './CarteraFinanciacion';
+import RankingDetalle from './RankingDetalle';
+import PanelGananciaPorFuente from './PanelGananciaPorFuente';
+import { gananciaPorFuente, gananciaPorFuenteMensual } from './gananciaPorFuente';
+import { etiquetaCategoria, ubicarCategoria } from '../lib/subcategorias';
+import { localeActual } from '../lib/formatoLocal';
 
 type VistaRanking = 'barras' | 'torta';
 // Rankings separados por métrica, no un puntaje opaco de "producto/categoría
@@ -74,7 +87,7 @@ function filasADatos(filas: FilaRankingProducto[], metrica: MetricaProducto): Da
     .sort((a, b) => b.valor - a.valor)
     .slice(0, 10);
 }
-type Tab = 'resumen' | 'ventas' | 'caja' | 'cobrar' | 'stock' | 'servicio' | 'clientes' | 'equipo' | 'proveedores';
+type Tab = 'resumen' | 'ventas' | 'caja' | 'cobrar' | 'stock' | 'servicio' | 'clientes' | 'equipo' | 'proveedores' | 'rubros' | 'cartera';
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'resumen', label: 'Resumen' },
@@ -86,6 +99,8 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'clientes', label: 'Clientes' },
   { key: 'equipo', label: 'Equipo' },
   { key: 'proveedores', label: 'Compras y proveedores' },
+  { key: 'rubros', label: 'Inversión por rubro' },
+  { key: 'cartera', label: 'Cartera de financiación' },
 ];
 
 const PERIODOS: { key: Periodo; label: string }[] = [
@@ -117,18 +132,18 @@ function aFechaInput(d: Date): string {
 // navegar, si es "la semana del 11 al 17" o cuál específicamente).
 function etiquetaTramo(periodo: Periodo, rango: { inicio: Date; fin: Date }): string {
   if (periodo === 'hoy') {
-    return rango.inicio.toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' });
+    return rango.inicio.toLocaleDateString(localeActual(), { day: 'numeric', month: 'long', year: 'numeric' });
   }
   if (periodo === 'semana') {
     const finSemana = new Date(rango.inicio);
     finSemana.setDate(finSemana.getDate() + 6);
     const mismoMes = rango.inicio.getMonth() === finSemana.getMonth();
-    const desde = rango.inicio.toLocaleDateString('es-AR', mismoMes ? { day: 'numeric' } : { day: 'numeric', month: 'short' });
-    const hasta = finSemana.toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' });
+    const desde = rango.inicio.toLocaleDateString(localeActual(), mismoMes ? { day: 'numeric' } : { day: 'numeric', month: 'short' });
+    const hasta = finSemana.toLocaleDateString(localeActual(), { day: 'numeric', month: 'short', year: 'numeric' });
     return `${desde} al ${hasta}`;
   }
   if (periodo === 'mes') {
-    return rango.inicio.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' });
+    return rango.inicio.toLocaleDateString(localeActual(), { month: 'long', year: 'numeric' });
   }
   return String(rango.inicio.getFullYear());
 }
@@ -144,8 +159,11 @@ type IngresoServicio = { cliente_id: string | null; fecha_ingreso_servicio: stri
 type DispositivoCompra = { proveedor_id: string | null; costo: number | null; created_at: string; sucursal_id: string | null };
 type CompraManual = { proveedor_id: string; cantidad: number; precio_unitario: number | null; created_at: string };
 type StockR = { modelo: string | null; precio: number | null; costo: number | null; en_stock_desde: string | null; categoria_id: string | null; sucursal_id: string | null };
-type RegistroDispositivo = { agregado_por_nombre: string | null; agregado_por_foto_url: string | null; created_at: string; sucursal_id: string | null };
-type CategoriaStockR = { id: string; nombre: string };
+// OJO: sin la foto de quien lo cargó. agregado_por_foto_url es la foto en base64 repetida en CADA equipo: traerla de todas las
+// altas de 20 meses eran 7+ pedidos de 9-12 segundos cada uno (y en negocios grandes llegaba al timeout de la base). La foto de
+// cada persona se resuelve aparte, una sola vez por nombre (ver fotosRegistro).
+type RegistroDispositivo = { agregado_por_nombre: string | null; created_at: string; sucursal_id: string | null };
+type CategoriaStockR = { id: string; nombre: string; padre_id?: string | null };
 type MovProveedorR = { proveedor_id: string; tipo: string; monto: number; fecha: string };
 
 const KEY_OCULTAR = 'qovento:analitica-ocultar-montos';
@@ -185,6 +203,8 @@ export default function Estadisticas() {
   const [vistaProveedoresPagado, setVistaProveedoresPagado] = useState<VistaRanking>('barras');
   const [metricaProductos, setMetricaProductos] = useState<MetricaProducto>('unidades');
   const [metricaCategorias, setMetricaCategorias] = useState<MetricaProducto>('unidades');
+  // Ranking completo de productos (ventana con todas las filas, ordenable y exportable); `categoria` es la de arranque.
+  const [rankingCompleto, setRankingCompleto] = useState<{ categoria: string | null } | null>(null);
 
   const [nombreNegocio, setNombreNegocio] = useState('');
   const [vendedores, setVendedores] = useState<Persona[]>([]);
@@ -201,6 +221,10 @@ export default function Estadisticas() {
   const [creditoRaw, setCreditoRaw] = useState<CreditoR[]>([]);
   const [porCobrar, setPorCobrar] = useState(0);
   const [vencidoTotal, setVencidoTotal] = useState(0);
+  // Vencido separado: cuotas de financiación vs cuenta corriente / fiado (mora_fifo_supabase.sql). hayMoraSql=false si el SQL no se corrió.
+  const [vencidoCuotasTotal, setVencidoCuotasTotal] = useState(0);
+  const [vencidoFiadoTotal, setVencidoFiadoTotal] = useState(0);
+  const [hayMoraSql, setHayMoraSql] = useState(false);
   const [deudores, setDeudores] = useState(0);
   const [reparacionesRaw, setReparacionesRaw] = useState<Reparacion[]>([]);
   const [ingresosServicioRaw, setIngresosServicioRaw] = useState<IngresoServicio[]>([]);
@@ -210,6 +234,8 @@ export default function Estadisticas() {
   const [stockRaw, setStockRaw] = useState<StockR[]>([]);
   // Altas de stock (quién cargó cada equipo), para el ranking por período.
   const [registrosDispositivosRaw, setRegistrosDispositivosRaw] = useState<RegistroDispositivo[]>([]);
+  // Foto de quien cargó equipos, por nombre (para el ranking de altas de stock), que se completa en segundo plano.
+  const [fotosRegistro, setFotosRegistro] = useState<Map<string, string>>(new Map());
   const [categoriasStock, setCategoriasStock] = useState<CategoriaStockR[]>([]);
   // Cuentas por pagar (proveedor_movimientos + saldos_proveedores) — si el
   // negocio no corrió esa migración, quedan vacíos y esas tarjetas puntuales
@@ -227,6 +253,13 @@ export default function Estadisticas() {
   // migración. Mismo criterio de agregación (sin separar por moneda) que ya
   // usan ventas/ingresado/ganancia en este mismo dashboard.
   const [egresosRaw, setEgresosRaw] = useState<EgresoR[]>([]);
+  // Retiros y sueldo de los dueños (categorías con esa función, egresos_duenos_supabase.sql): no son gasto
+  // operativo — se restan aparte para llegar a "Lo que queda en el negocio".
+  const [retirosDuenosRaw, setRetirosDuenosRaw] = useState<EgresoR[]>([]);
+  // Ingresos de capital (aportes, préstamos recibidos): plata que entra sin ser una venta (ingresos_capital_supabase.sql).
+  const [ingresosCapitalRaw, setIngresosCapitalRaw] = useState<EgresoR[]>([]);
+  const [sueldoDuenosRaw, setSueldoDuenosRaw] = useState<EgresoR[]>([]);
+  const [hayCategoriasDuenos, setHayCategoriasDuenos] = useState(false);
   const [moneda, setMoneda] = useState('$');
   const [loading, setLoading] = useState(true);
   const [actualizado, setActualizado] = useState<Date | null>(null);
@@ -279,12 +312,15 @@ export default function Estadisticas() {
   // stock/compras/altas). Clientes, proveedores, comisiones y cuentas por
   // pagar quedan compartidos, sin filtrar (esas tablas todavía no tienen
   // columna de sucursal).
+  // Órdenes de "Cobro de financiamiento": son cobranza de ventas ya contadas, no
+  // ventas nuevas (ver idsOrdenesDeCobranza en datos.ts).
+  const idsOrdenesCobranza = useMemo(() => idsOrdenesDeCobranza(ordenItems), [ordenItems]);
   const ordenes = useMemo(
     () =>
       (sucursalId ? ordenesRaw.filter((o) => o.sucursal_id === sucursalId) : ordenesRaw).filter(
-        (o) => !idsOrdenesAjusteContable.has(o.id)
+        (o) => !idsOrdenesAjusteContable.has(o.id) && !idsOrdenesCobranza.has(o.id)
       ),
-    [ordenesRaw, sucursalId, idsOrdenesAjusteContable]
+    [ordenesRaw, sucursalId, idsOrdenesAjusteContable, idsOrdenesCobranza]
   );
   const pagos = useMemo(() => (sucursalId ? pagosRaw.filter((p) => p.sucursal_id === sucursalId) : pagosRaw), [pagosRaw, sucursalId]);
   const credito = useMemo(() => (sucursalId ? creditoRaw.filter((c) => c.sucursal_id === sucursalId) : creditoRaw), [creditoRaw, sucursalId]);
@@ -348,7 +384,7 @@ export default function Estadisticas() {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) {
-        setErrorCarga('No pudimos confirmar tu sesión. Volvé a entrar (en este dominio) para ver la analítica.');
+        setErrorCarga(t('No pudimos confirmar tu sesión. Volvé a entrar (en este dominio) para ver la analítica.'));
         setLoading(false);
         return;
       }
@@ -363,6 +399,10 @@ export default function Estadisticas() {
       // meses reales contra apenas unos días de datos. Ampliar hasta acá
       // cubre lo que necesitan los 4 períodos (hoy/semana/mes/año) con una
       // sola traída, igual que antes.
+      // Subcategorías de stock (subcategorias_supabase.sql): si todavía no se corrió, se pide sin esa columna.
+      const conSubcategorias = await soportaMigracion(supabase, 'subcategorias');
+      // Costo pendiente de las reparaciones (servicio_costo_repuesto_supabase.sql): si todavía no se corrió, se pide sin esa columna.
+      const conCostoPendiente = await soportaMigracion(supabase, 'costoPendienteItems');
       const ahoraParaVentana = new Date();
       const desde = new Date(ahoraParaVentana.getFullYear() - 1, 0, 1, 0, 0, 0, 0);
 
@@ -401,7 +441,7 @@ export default function Estadisticas() {
           // migración (o no activó el módulo), Supabase devuelve error y
           // "data: null" en vez de tirar excepción; los "?? []" de abajo
           // dejan la sección vacía en vez de romper toda la pantalla.
-          supabase.from('stock_categorias').select('id, nombre'),
+          supabase.from('stock_categorias').select(conSubcategorias ? 'id, nombre, padre_id' : 'id, nombre'),
           supabase.rpc('saldos_proveedores'),
         ]),
         obtenerTodasLasFilas<OrdenR>(
@@ -414,7 +454,7 @@ export default function Estadisticas() {
         obtenerTodasLasFilas<ItemPeriodoR>(
           supabase,
           'orden_items',
-          'orden_id, cantidad, precio_unitario, costo, created_at, dispositivo_id, producto_id, descripcion, tipo',
+          'orden_id, cantidad, precio_unitario, costo, created_at, dispositivo_id, producto_id, descripcion, tipo' + (conCostoPendiente ? ', costo_pendiente' : ''),
           [],
           (q) => q.gte('created_at', desde.toISOString())
         ),
@@ -427,10 +467,10 @@ export default function Estadisticas() {
         obtenerTodasLasFilas<CompraManual>(supabase, 'compras_proveedor', 'proveedor_id, cantidad, precio_unitario, created_at', [], (q) =>
           q.gte('created_at', desde.toISOString())
         ),
-        obtenerTodasLasFilas<PagoR>(supabase, 'pagos', 'medio, monto, fecha, sucursal_id', [], (q) =>
+        obtenerTodasLasFilas<PagoR>(supabase, 'pagos', 'medio, monto, fecha, sucursal_id, orden_id, registrado_por_nombre', [], (q) =>
           q.eq('anulado', false).gte('fecha', desde.toISOString())
         ),
-        obtenerTodasLasFilas<CreditoR>(supabase, 'cta_cte_movimientos', 'concepto, tipo, monto, fecha, sucursal_id', [], (q) =>
+        obtenerTodasLasFilas<CreditoR>(supabase, 'cta_cte_movimientos', 'concepto, tipo, monto, fecha, sucursal_id, orden_id', [], (q) =>
           q.eq('anulado', false).gte('fecha', desde.toISOString())
         ),
         obtenerTodasLasFilas<MovProveedorR>(supabase, 'proveedor_movimientos', 'proveedor_id, tipo, monto, fecha', [], (q) =>
@@ -446,8 +486,8 @@ export default function Estadisticas() {
         obtenerTodasLasFilas<CuotaFinR>(supabase, 'financiacion_cuotas', 'importe_original, importe_pagado, estado, fecha_vencimiento', [], (q) =>
           q.neq('estado', 'anulada')
         ),
-        obtenerTodasLasFilas<PlanFinR>(supabase, 'financiacion_planes', 'importe_financiado, estado, created_at'),
-        obtenerTodasLasFilas<PagoFinR>(supabase, 'financiacion_pagos', 'monto_aplicado, tipo, created_at', [], (q) =>
+        obtenerTodasLasFilas<PlanFinR>(supabase, 'financiacion_planes', 'importe_financiado, estado, created_at, orden_id'),
+        obtenerTodasLasFilas<PagoFinR>(supabase, 'financiacion_pagos', 'monto_aplicado, tipo, created_at, financiacion_cuotas ( financiacion_planes ( orden_id ) )', [], (q) =>
           q.eq('tipo', 'pago').gte('created_at', desde.toISOString())
         ),
         obtenerTodasLasFilas<ComisionMovR>(supabase, 'comision_movimientos', 'comision, estado, fecha_hecho, created_at', [], (q) =>
@@ -464,8 +504,8 @@ export default function Estadisticas() {
         // dejando vuelto — sin que el negocio haya perdido plata de verdad.
         // El detalle completo (incluidos los retiros) se sigue viendo entero
         // en /egresos, esto solo lo excluye del cálculo de resultado acá.
-        obtenerTodasLasFilas<EgresoR>(supabase, 'egresos', 'importe, fecha, sucursal_id, area_id', [], (q) =>
-          q.eq('anulado', false).neq('tipo', 'retiro').gte('fecha', desde.toISOString().slice(0, 10))
+        obtenerTodasLasFilas<EgresoR>(supabase, 'egresos', 'importe, fecha, sucursal_id, area_id, categoria_id', [], (q) =>
+          q.eq('anulado', false).neq('tipo', 'retiro').gte('fecha', aFechaInput(desde))
         ),
         obtenerTodasLasFilas<DispositivoCompra>(supabase, 'dispositivos', 'proveedor_id, costo, created_at, sucursal_id', [], (q) =>
           q.not('proveedor_id', 'is', null).gte('created_at', desde.toISOString())
@@ -474,7 +514,7 @@ export default function Estadisticas() {
         obtenerTodasLasFilas<StockR>(supabase, 'dispositivos', 'modelo, precio, costo, en_stock_desde, categoria_id, sucursal_id', [], (q) => q.eq('en_stock', true)),
         // Todas las altas de stock (no solo lo que sigue en stock hoy), para
         // poder rankear quién cargó más equipos en el período.
-        obtenerTodasLasFilas<RegistroDispositivo>(supabase, 'dispositivos', 'agregado_por_nombre, agregado_por_foto_url, created_at, sucursal_id', [], (q) =>
+        obtenerTodasLasFilas<RegistroDispositivo>(supabase, 'dispositivos', 'agregado_por_nombre, created_at, sucursal_id', [], (q) =>
           q.gte('created_at', desde.toISOString())
         ),
       ]);
@@ -494,14 +534,36 @@ export default function Estadisticas() {
       setComprasManuales((comprasManual as CompraManual[]) ?? []);
       setStockRaw(stockData);
       setRegistrosDispositivosRaw(registrosData);
+      // Fotos de quienes cargaron equipos: las de vendedores/técnicos ya están cargadas; solo para el resto (dueños, etc.)
+      // se pide UNA foto por nombre, en segundo plano, sin frenar la pantalla.
+      {
+        const conFoto = new Set([...(vend ?? []), ...(tec ?? [])].filter((p) => p.foto_url).map((p) => p.nombre));
+        const faltantes = Array.from(new Set(registrosData.map((r) => r.agregado_por_nombre).filter((n): n is string => !!n && !conFoto.has(n)))).slice(0, 12);
+        Promise.all(
+          faltantes.map(async (nombre) => {
+            const { data, error } = await supabase
+              .from('dispositivos')
+              .select('agregado_por_foto_url')
+              .eq('agregado_por_nombre', nombre)
+              .not('agregado_por_foto_url', 'is', null)
+              .limit(1);
+            if (error) return null;
+            const foto = (data as { agregado_por_foto_url: string | null }[] | null)?.[0]?.agregado_por_foto_url;
+            return foto ? ([nombre, foto] as const) : null;
+          })
+        ).then((pares) => setFotosRegistro(new Map(pares.filter((p): p is readonly [string, string] => p !== null))));
+      }
       setPagosRaw((pagosData as PagoR[]) ?? []);
       setCreditoRaw((creditoData as CreditoR[]) ?? []);
-      const saldos = (saldosData as { saldo: number; vencido: number }[]) ?? [];
+      const saldos = (saldosData as { saldo: number; vencido: number; vencido_cuotas?: number | string | null; vencido_fiado?: number | string | null }[]) ?? [];
       setPorCobrar(saldos.reduce((acc, s) => acc + Math.max(0, Number(s.saldo) || 0), 0));
       setVencidoTotal(saldos.reduce((acc, s) => acc + Math.max(0, Number(s.vencido) || 0), 0));
+      setHayMoraSql(saldos.some((s) => s.vencido_cuotas !== undefined));
+      setVencidoCuotasTotal(saldos.reduce((acc, s) => acc + Math.max(0, Number(s.vencido_cuotas) || 0), 0));
+      setVencidoFiadoTotal(saldos.reduce((acc, s) => acc + Math.max(0, Number(s.vencido_fiado) || 0), 0));
       setDeudores(saldos.filter((s) => (Number(s.saldo) || 0) > 0).length);
 
-      setCategoriasStock((categoriasData as CategoriaStockR[]) ?? []);
+      setCategoriasStock((categoriasData as unknown as CategoriaStockR[]) ?? []);
       setMovsProveedor((movsProveedorData as MovProveedorR[]) ?? []);
       const saldosProv = (saldosProveedorData as { proveedor_id: string; saldo: number }[]) ?? [];
       setSaldoProveedoresTotal(saldosProveedorData ? saldosProv.reduce((acc, s) => acc + Math.max(0, Number(s.saldo) || 0), 0) : null);
@@ -509,7 +571,40 @@ export default function Estadisticas() {
       setPlanesFinanciacion((planesFinData as PlanFinR[]) ?? []);
       setPagosFinanciacion((pagosFinData as PagoFinR[]) ?? []);
       setComisionMovs((comisionData as ComisionMovR[]) ?? []);
-      setEgresosRaw((egresosData as EgresoR[]) ?? []);
+      // Categorías de dueños: sus egresos salen del gasto operativo y se muestran aparte.
+      let operativos = (egresosData as EgresoR[]) ?? [];
+      let retirosDuenos: EgresoR[] = [];
+      let sueldoDuenos: EgresoR[] = [];
+      let categoriasDuenos = false;
+      if (puedeVerEgresos) {
+        const catsDuenos = (await obtenerCategoriasEgresos(supabase)).filter((c) => c.rol === 'retiro_duenos' || c.rol === 'sueldo_duenos');
+        if (catsDuenos.length > 0) {
+          categoriasDuenos = true;
+          const lote = catsDuenos.map((c) => c.id);
+          const deDuenos = await obtenerTodasLasFilas<EgresoR>(
+            supabase,
+            'egresos',
+            'importe, fecha, sucursal_id, area_id, categoria_id, registrado_por_nombre',
+            [],
+            (q) => q.eq('anulado', false).in('categoria_id', lote).gte('fecha', aFechaInput(desde))
+          );
+          const idRetiro = catsDuenos.find((c) => c.rol === 'retiro_duenos')?.id;
+          const idSueldo = catsDuenos.find((c) => c.rol === 'sueldo_duenos')?.id;
+          retirosDuenos = deDuenos.filter((e) => e.categoria_id === idRetiro);
+          sueldoDuenos = deDuenos.filter((e) => e.categoria_id === idSueldo);
+          const idsDuenos = new Set(lote);
+          operativos = operativos.filter((e) => !(e.categoria_id && idsDuenos.has(e.categoria_id)));
+        }
+      }
+      let ingresosCapital: EgresoR[] = [];
+      if (puedeVerEgresos && (await soportaMigracion(supabase, 'ingresosCapital'))) {
+        ingresosCapital = await obtenerTodasLasFilas<EgresoR>(supabase, 'ingresos', 'importe, fecha, sucursal_id', [], (q) => q.eq('anulado', false).gte('fecha', aFechaInput(desde)));
+      }
+      setIngresosCapitalRaw(ingresosCapital);
+      setEgresosRaw(operativos);
+      setRetirosDuenosRaw(retirosDuenos);
+      setSueldoDuenosRaw(sueldoDuenos);
+      setHayCategoriasDuenos(categoriasDuenos);
 
       // Nombres SOLO de los clientes que aparecen en órdenes/servicio (no los
       // miles). Un pedido acotado por ids en vez de traer toda la tabla.
@@ -582,7 +677,7 @@ export default function Estadisticas() {
       setActualizado(new Date());
       } catch (e) {
         console.error('Analítica: no se pudieron cargar los datos', e);
-        setErrorCarga(e instanceof Error ? e.message : 'No se pudieron cargar los datos.');
+        setErrorCarga(e instanceof Error ? e.message : t('No se pudieron cargar los datos.'));
       } finally {
         setLoading(false);
       }
@@ -635,17 +730,70 @@ export default function Estadisticas() {
     () => bloqueVentas(ordenes, itemsPorOrden, pagos, credito, rango.inicioPrev, rango.finPrev),
     [ordenes, itemsPorOrden, pagos, credito, rango]
   );
+  // Ventas y ganancia según cómo se cobran (contado / tarjeta / financiado en cuotas / cuenta corriente) y ganancia realmente cobrada
+  // en el período — ver ventasPorForma.ts.
+  const desgloseActual = useMemo(
+    () => desgloseDeVentas(ordenes, itemsPorOrden, planesFinanciacion, credito, pagos, rango.inicio, rango.fin),
+    [ordenes, itemsPorOrden, planesFinanciacion, credito, pagos, rango]
+  );
+  const gananciaCobrada = useMemo(
+    () =>
+      gananciaCobradaEnPeriodo(
+        ordenes,
+        itemsPorOrden,
+        pagos,
+        pagosFinanciacion.map((p) => ({ orden_id: p.financiacion_cuotas?.financiacion_planes?.orden_id ?? null, monto_aplicado: p.monto_aplicado, created_at: p.created_at })),
+        rango.inicio,
+        rango.fin
+      ),
+    [ordenes, itemsPorOrden, pagos, pagosFinanciacion, rango]
+  );
+
+  // Ganancia por fuente (productos / créditos propios / fiado / servicio técnico) y su serie de 12 meses — ver gananciaPorFuente.ts.
+  const pagosDeCuotasFuente = useMemo(
+    () => pagosFinanciacion.map((p) => ({ orden_id: p.financiacion_cuotas?.financiacion_planes?.orden_id ?? null, monto_aplicado: p.monto_aplicado, created_at: p.created_at })),
+    [pagosFinanciacion]
+  );
+  const fuentesSerie = useMemo(
+    () => gananciaPorFuenteMensual(ordenes, itemsPorOrden, planesFinanciacion, credito, pagos, pagosDeCuotasFuente, rango.fin),
+    [ordenes, itemsPorOrden, planesFinanciacion, credito, pagos, pagosDeCuotasFuente, rango.fin]
+  );
 
   const serie = useMemo(
-    () => serieEvolucion(ordenes, itemsPorOrden, pagos, credito, rango, metricaChart),
-    [ordenes, itemsPorOrden, pagos, credito, rango, metricaChart]
+    () => serieEvolucion(ordenes, itemsPorOrden, pagos, credito, rango, metricaChart, localeActual()),
+    [ordenes, itemsPorOrden, pagos, credito, rango, metricaChart, idioma]
   );
   // Serie fija de "dinero ingresado" (para la pestaña Caja, sin depender del
   // selector de métrica del Resumen).
   const serieIngresado = useMemo(
-    () => serieEvolucion(ordenes, itemsPorOrden, pagos, credito, rango, 'ingresado'),
-    [ordenes, itemsPorOrden, pagos, credito, rango]
+    () => serieEvolucion(ordenes, itemsPorOrden, pagos, credito, rango, 'ingresado', localeActual()),
+    [ordenes, itemsPorOrden, pagos, credito, rango, idioma]
   );
+
+  // Cobranzas de cartera (cuotas y saldos de cuenta corriente cobrados): entran a
+  // "Dinero ingresado" pero NO son ventas del período.
+  const cobranzaActual = useMemo(
+    () => cobranzasDeCartera(pagos, idsOrdenesCobranza, rango.inicio, rango.fin),
+    [pagos, idsOrdenesCobranza, rango]
+  );
+  const cobranzaPrev = useMemo(
+    () => cobranzasDeCartera(pagos, idsOrdenesCobranza, rango.inicioPrev, rango.finPrev),
+    [pagos, idsOrdenesCobranza, rango]
+  );
+  const fuentesActual = useMemo(
+    () => gananciaPorFuente(ordenes, itemsPorOrden, planesFinanciacion, credito, pagos, pagosDeCuotasFuente, cobranzaActual.total, rango.inicio, rango.fin, !!sucursalId),
+    [ordenes, itemsPorOrden, planesFinanciacion, credito, pagos, pagosDeCuotasFuente, cobranzaActual, rango, sucursalId]
+  );
+  // Taller del período: cuántas reparaciones tienen el costo de repuestos cargado (las pendientes no cuentan como ganancia).
+  const tallerPeriodo = useMemo(() => bloqueVentasPorArea(ordenes, itemsPorOrden, rango.inicio, rango.fin, true), [ordenes, itemsPorOrden, rango]);
+  // Quién registró cada cobro (nombre → foto, cruzando con vendedores y técnicos).
+  const rankingCobrosEmpleado: Dato[] = useMemo(() => {
+    const fotoPorNombre = new Map<string, string | null>();
+    for (const p of [...vendedores, ...tecnicos]) fotoPorNombre.set(p.nombre, p.foto_url ?? null);
+    return cobranzaActual.porEmpleado
+      .filter((e) => e.monto > 0)
+      .map((e) => ({ nombre: e.nombre ?? 'Sin identificar', fotoUrl: e.nombre ? fotoPorNombre.get(e.nombre) ?? null : null, valor: e.monto }));
+  }, [cobranzaActual, vendedores, tecnicos]);
 
   const ticket = actualB.operaciones > 0 ? actualB.ventas / actualB.operaciones : 0;
   const ticketPrev = prevB.operaciones > 0 ? prevB.ventas / prevB.operaciones : 0;
@@ -791,13 +939,19 @@ export default function Estadisticas() {
   // producto en dos filas por una diferencia de redacción.
   const itemsVendidosPeriodo: ItemProductoR[] = useMemo(() => {
     const idsOrdenesPeriodo = new Set(ordenesPeriodo.map((o) => o.id));
-    const nombreCategoria = (categoriaId: string | null) => (categoriaId ? categoriasStock.find((c) => c.id === categoriaId)?.nombre ?? 'Categoría eliminada' : 'Sin categoría');
+    // La categoría que se muestra es la de primer nivel; si el producto está en una subcategoría, ésta va aparte (Categoría → Subcategoría → Producto).
+    const ubicar = (categoriaId: string | null): { categoriaNombre: string; subcategoriaNombre: string | null } => {
+      if (!categoriaId) return { categoriaNombre: 'Sin categoría', subcategoriaNombre: null };
+      const u = ubicarCategoria(categoriaId, categoriasStock);
+      if (!u.categoria) return { categoriaNombre: 'Categoría eliminada', subcategoriaNombre: null };
+      return { categoriaNombre: u.categoria.nombre, subcategoriaNombre: u.subcategoria?.nombre ?? null };
+    };
     const out: ItemProductoR[] = [];
     for (const it of ordenItems) {
       if (!idsOrdenesPeriodo.has(it.orden_id) || (it.tipo !== 'dispositivo' && it.tipo !== 'producto')) continue;
       let clave: string;
       let nombre: string;
-      let categoriaNombre: string;
+      let ubicacion: { categoriaNombre: string; subcategoriaNombre: string | null };
       if (it.dispositivo_id) {
         const info = dispositivosInfo.get(it.dispositivo_id);
         // Si no tiene modelo cargado, se agrupa por su PROPIO id (no por el
@@ -806,7 +960,7 @@ export default function Estadisticas() {
         // como si fueran el mismo producto.
         clave = info?.modelo ? `disp:${info.modelo}` : `disp-sin-modelo:${it.dispositivo_id}`;
         nombre = info?.modelo || 'Sin modelo';
-        categoriaNombre = nombreCategoria(info?.categoria_id ?? null);
+        ubicacion = ubicar(info?.categoria_id ?? null);
       } else if (it.producto_id) {
         const info = productosInfo.get(it.producto_id);
         if (info?.excluir_de_estadisticas) continue; // ej. "CREDITO ANTIGUO": ajuste, no venta.
@@ -815,21 +969,30 @@ export default function Estadisticas() {
         // salía dos veces en el ranking. Con maestro_id, se agrupan en una sola fila.
         clave = info?.producto_maestro_id ? `prod-maestro:${info.producto_maestro_id}` : `prod:${it.producto_id}`;
         nombre = info?.nombre || it.descripcion;
-        categoriaNombre = nombreCategoria(info?.categoria_id ?? null);
+        ubicacion = ubicar(info?.categoria_id ?? null);
       } else {
         // Ítem manual sin catálogo (ej. "Funda" cargada a mano en Nueva
         // Orden): no hay id estable, se agrupa por su propio texto — es lo
         // más fiel que se puede hacer sin inventar una identidad que no existe.
         clave = `manual:${it.descripcion.trim().toLowerCase()}`;
         nombre = it.descripcion;
-        categoriaNombre = 'Sin categoría';
+        ubicacion = { categoriaNombre: 'Sin categoría', subcategoriaNombre: null };
       }
-      out.push({ clave, nombre, categoriaNombre, cantidad: it.cantidad, precio_unitario: it.precio_unitario ?? 0, costo: it.costo });
+      out.push({ clave, nombre, categoriaNombre: ubicacion.categoriaNombre, subcategoriaNombre: ubicacion.subcategoriaNombre, cantidad: it.cantidad, precio_unitario: it.precio_unitario ?? 0, costo: it.costo });
     }
     return out;
   }, [ordenItems, ordenesPeriodo, dispositivosInfo, productosInfo, categoriasStock]);
 
-  const rankingProductos = useMemo(() => rankingProductosDe(itemsVendidosPeriodo), [itemsVendidosPeriodo]);
+  // Filtro por categoría del ranking de productos (el ranking de barras muestra el top 10 de esa categoría).
+  const [filtroCategoriaProductos, setFiltroCategoriaProductos] = useState('');
+  const categoriasConVentas = useMemo(() => Array.from(new Set(itemsVendidosPeriodo.map((i) => i.categoriaNombre))).sort((a, b) => a.localeCompare(b, 'es')), [itemsVendidosPeriodo]);
+  useEffect(() => {
+    if (filtroCategoriaProductos && !categoriasConVentas.includes(filtroCategoriaProductos)) setFiltroCategoriaProductos('');
+  }, [categoriasConVentas, filtroCategoriaProductos]);
+  const rankingProductos = useMemo(
+    () => rankingProductosDe(filtroCategoriaProductos ? itemsVendidosPeriodo.filter((i) => i.categoriaNombre === filtroCategoriaProductos) : itemsVendidosPeriodo),
+    [itemsVendidosPeriodo, filtroCategoriaProductos]
+  );
   const rankingCategoriasVenta = useMemo(() => rankingCategoriasDe(itemsVendidosPeriodo), [itemsVendidosPeriodo]);
 
   const clientesQueCompraron = useMemo(() => new Set(ordenesPeriodo.map((o) => o.cliente_id).filter(Boolean)).size, [ordenesPeriodo]);
@@ -880,18 +1043,17 @@ export default function Estadisticas() {
 
   // Quién registró más equipos en el stock durante el período elegido.
   const rankingRegistroStock: Dato[] = useMemo(() => {
-    const mapa = new Map<string, { valor: number; fotoUrl: string | null }>();
+    const fotoPorNombre = new Map<string, string | null>();
+    for (const p of [...vendedores, ...tecnicos]) if (p.foto_url) fotoPorNombre.set(p.nombre, p.foto_url);
+    const mapa = new Map<string, number>();
     for (const d of registrosDispositivos.filter((d) => new Date(d.created_at) >= inicio && new Date(d.created_at) <= fin)) {
       const nombre = d.agregado_por_nombre || 'Sin registrar';
-      const e = mapa.get(nombre) ?? { valor: 0, fotoUrl: null };
-      e.valor += 1;
-      if (!e.fotoUrl && d.agregado_por_foto_url) e.fotoUrl = d.agregado_por_foto_url;
-      mapa.set(nombre, e);
+      mapa.set(nombre, (mapa.get(nombre) ?? 0) + 1);
     }
     return Array.from(mapa.entries())
-      .map(([nombre, e]) => ({ nombre, valor: e.valor, fotoUrl: e.fotoUrl }))
+      .map(([nombre, valor]) => ({ nombre, valor, fotoUrl: fotoPorNombre.get(nombre) ?? fotosRegistro.get(nombre) ?? null }))
       .sort((a, b) => b.valor - a.valor);
-  }, [registrosDispositivos, inicio, fin]);
+  }, [registrosDispositivos, inicio, fin, vendedores, tecnicos, fotosRegistro]);
 
   // Stock por categoría (reutiliza stock_categorias, mismas categorías que
   // Configuración → Categorías de stock — no se inventa una agrupación nueva).
@@ -903,7 +1065,7 @@ export default function Estadisticas() {
     }
     return Array.from(mapa.entries())
       .map(([id, valor]) => ({
-        nombre: id === '__sin_categoria__' ? 'Sin categoría' : categoriasStock.find((c) => c.id === id)?.nombre ?? 'Categoría eliminada',
+        nombre: id === '__sin_categoria__' ? 'Sin categoría' : etiquetaCategoria(id, categoriasStock) || 'Categoría eliminada',
         valor,
       }))
       .sort((a, b) => b.valor - a.valor);
@@ -934,6 +1096,22 @@ export default function Estadisticas() {
   const hayEgresos = egresos.length > 0;
   const resultadoOperativoEstimado = actualB.ganancia - egresosPeriodo;
 
+  // Ingresos de capital del período (y de la sucursal elegida): no son ventas ni ganancia, se muestran aparte.
+  const ingresosCapital = useMemo(() => ingresosCapitalRaw.filter((e) => !sucursalId || e.sucursal_id === sucursalId), [ingresosCapitalRaw, sucursalId]);
+  const ingresosCapitalPeriodo = useMemo(() => egresosPeriodoDe(ingresosCapital, inicio, rango.fin), [ingresosCapital, inicio, rango.fin]);
+
+  // Retiros y sueldo de los dueños del período (y de la sucursal elegida). "Lo que queda en el negocio" =
+  // resultado operativo − sueldo de dueños − retiros de dueños.
+  const retirosDuenos = useMemo(() => retirosDuenosRaw.filter((e) => !sucursalId || e.sucursal_id === sucursalId), [retirosDuenosRaw, sucursalId]);
+  const sueldoDuenos = useMemo(() => sueldoDuenosRaw.filter((e) => !sucursalId || e.sucursal_id === sucursalId), [sueldoDuenosRaw, sucursalId]);
+  const retirosDuenosPeriodo = useMemo(() => egresosPeriodoDe(retirosDuenos, inicio, rango.fin), [retirosDuenos, inicio, rango.fin]);
+  const sueldoDuenosPeriodo = useMemo(() => egresosPeriodoDe(sueldoDuenos, inicio, rango.fin), [sueldoDuenos, inicio, rango.fin]);
+  const retirosPorDueno = useMemo(
+    () => retirosPorPersona(retirosDuenos, inicio, rango.fin),
+    [retirosDuenos, inicio, rango.fin]
+  );
+  const quedaEnElNegocio = resultadoOperativoEstimado - sueldoDuenosPeriodo - retirosDuenosPeriodo;
+
   // ---------- Rentabilidad por sucursal y área (pedido explícito de un
   // cliente: "cortado por área, no solo para todo el negocio combinado") ----------
   // Local/Taller de la VENTA sale de esLineaDeTaller() (el tipo de línea de
@@ -945,7 +1123,8 @@ export default function Estadisticas() {
   // egresos sin área) se muestran aparte, sin atribuir a ninguno de los dos
   // lados, para no inventar una asignación que nadie cargó.
   const areaLocalId = useMemo(() => areas.find((a) => a.nombre.trim().toLowerCase() === 'local')?.id ?? null, [areas]);
-  const areaTallerId = useMemo(() => areas.find((a) => a.nombre.trim().toLowerCase() === 'taller')?.id ?? null, [areas]);
+  // El taller también se reconoce como "Servicio técnico" o "Reparaciones" (sin tildes, sin importar mayúsculas).
+  const areaTallerId = useMemo(() => areas.find((a) => esAreaTaller(a.nombre))?.id ?? null, [areas]);
 
   type FilaRentabilidad = {
     sucursalNombre: string | null; // null = "todo el negocio" (sin multisucursal) o "sin sucursal" (ver esSinAsignar)
@@ -988,7 +1167,9 @@ export default function Estadisticas() {
         : [{ nombre: null, esSinAsignar: false, match: () => true }];
     const egresosPorArea = (idArea: string | null, egs: EgresoR[]) => egresosPeriodoDe(egs.filter((e) => e.area_id === idArea), rango.inicio, rango.fin);
     return grupos.map((g) => {
-      const ordenesDeGrupo = ordenesRaw.filter((o) => g.match(o.sucursal_id ?? null) && !idsOrdenesAjusteContable.has(o.id));
+      // Sin las órdenes de cobranza (cobro de una cuota o de cuenta corriente): no son ventas, la venta ya se contó el día que se hizo.
+      // Antes entraban como "Ventas Local" y la fila mostraba más de lo vendido.
+      const ordenesDeGrupo = ordenesRaw.filter((o) => g.match(o.sucursal_id ?? null) && !idsOrdenesAjusteContable.has(o.id) && !idsOrdenesCobranza.has(o.id));
       const egresosDeGrupo = egresosRaw.filter((e) => g.match(e.sucursal_id ?? null));
       const local = bloqueVentasPorArea(ordenesDeGrupo, itemsPorOrden, rango.inicio, rango.fin, false);
       const taller = bloqueVentasPorArea(ordenesDeGrupo, itemsPorOrden, rango.inicio, rango.fin, true);
@@ -1005,7 +1186,7 @@ export default function Estadisticas() {
     // La fila residual "Sin sucursal" solo se muestra si de verdad tiene algo
     // — para un negocio con todo bien etiquetado, no tiene sentido sumar una
     // fila en cero.
-  }, [sucursales, ordenesRaw, egresosRaw, itemsPorOrden, rango, areaLocalId, areaTallerId, idsOrdenesAjusteContable]);
+  }, [sucursales, ordenesRaw, egresosRaw, itemsPorOrden, rango, areaLocalId, areaTallerId, idsOrdenesAjusteContable, idsOrdenesCobranza]);
   // Ojo: esta tabla siempre muestra TODAS las sucursales (a propósito, ver
   // comentario de filasRentabilidad más arriba), así que si hay algo para
   // mostrar no puede salir de actualB/hayEgresos (que sí respetan el filtro
@@ -1033,9 +1214,14 @@ export default function Estadisticas() {
   // misma palabra, así que se resuelve a mano para no pisar esa traducción
   // compartida.
   const ETIQUETA_TAB_EQUIPO: Record<Idioma, string> = { es: 'Equipo', pt: 'Equipe', en: 'Team' };
+  // "Inversión por rubro" muestra costos de compra y márgenes: solo con permiso.
   const TABS_T = useMemo(
-    () => TABS.map((tb) => ({ ...tb, label: tb.key === 'equipo' ? ETIQUETA_TAB_EQUIPO[idioma] : t(tb.label) })),
-    [t, idioma]
+    () =>
+      TABS.filter((tb) => (tb.key !== 'rubros' && tb.key !== 'cartera') || puedeVerCostos).map((tb) => ({
+        ...tb,
+        label: tb.key === 'equipo' ? ETIQUETA_TAB_EQUIPO[idioma] : t(tb.label),
+      })),
+    [t, idioma, puedeVerCostos]
   );
   const METRICAS_PRODUCTO_BASE_T = useMemo(() => METRICAS_PRODUCTO_BASE.map((o) => ({ ...o, label: t(o.label) })), [t]);
   const METRICAS_PRODUCTO_COSTO_T = useMemo(() => METRICAS_PRODUCTO_COSTO.map((o) => ({ ...o, label: t(o.label) })), [t]);
@@ -1060,7 +1246,7 @@ export default function Estadisticas() {
   }
 
   const m = (n: number) => formatMoneda(n, moneda);
-  const hora = actualizado ? actualizado.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) : '';
+  const hora = actualizado ? actualizado.toLocaleTimeString(localeActual(), { hour: '2-digit', minute: '2-digit' }) : '';
 
   const metricasChart: { key: MetricaSerie; label: string }[] = [
     { key: 'ventas', label: t('Ventas') },
@@ -1146,9 +1332,9 @@ export default function Estadisticas() {
           <>
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
               <StatCard etiqueta={t('Ventas netas')} valor={m(actualB.ventas)} tooltip={t('Todo lo que facturaste en el período, incluido lo vendido a cuenta corriente/fiado — no es plata en mano. Para ver lo que realmente cobraste, mirá "Dinero ingresado".')} variacion={varSi(actualB.ventas, prevB.ventas)} moneda={moneda} sensible oculto={ocultarMontos} />
-              <StatCard etiqueta={t('Operaciones')} valor={actualB.operaciones.toLocaleString('es-AR')} tooltip={t('Cantidad de ventas cobradas en el período.')} variacion={varSi(actualB.operaciones, prevB.operaciones)} />
+              <StatCard etiqueta={t('Operaciones')} valor={actualB.operaciones.toLocaleString(localeActual())} tooltip={t('Cantidad de ventas cobradas en el período.')} variacion={varSi(actualB.operaciones, prevB.operaciones)} />
               <StatCard etiqueta={t('Ticket promedio')} valor={m(ticket)} tooltip={t('Promedio facturado por operación (ventas ÷ operaciones).')} variacion={varSi(ticket, ticketPrev)} moneda={moneda} sensible oculto={ocultarMontos} />
-              <StatCard etiqueta={t('Unidades vendidas')} valor={actualB.unidades.toLocaleString('es-AR')} tooltip={t('Dispositivos y productos vendidos en el período.')} variacion={varSi(actualB.unidades, prevB.unidades)} />
+              <StatCard etiqueta={t('Unidades vendidas')} valor={actualB.unidades.toLocaleString(localeActual())} tooltip={t('Dispositivos y productos vendidos en el período.')} variacion={varSi(actualB.unidades, prevB.unidades)} />
               {puedeVerCostos && (
                 <StatCard
                   etiqueta={t('Ganancia bruta')}
@@ -1167,13 +1353,27 @@ export default function Estadisticas() {
                   )}
                 </StatCard>
               )}
-              <StatCard etiqueta={t('Vendido al contado')} valor={m(contado)} tooltip={t('Ventas del período que NO se financiaron en cuenta corriente.')} moneda={moneda} tono="text-good" sensible oculto={ocultarMontos} />
-              <StatCard etiqueta={t('Vendido a crédito')} valor={m(actualB.credito)} tooltip={t('Ventas que quedaron fiadas (cuenta corriente) en el período.')} moneda={moneda} tono={actualB.credito > 0 ? 'text-warn' : undefined} sensible oculto={ocultarMontos}>
-                {!ocultarMontos && actualB.ventas > 0 && <span className="text-[11px] text-muted dark:text-dark-text-secondary">{Math.round(pctFiado * 100)}% {t('de las ventas')}</span>}
+              {puedeVerCostos && (
+                <>
+                  <StatCard etiqueta={t('Ganancia al contado')} valor={m(desgloseActual.ganancia.contado)} tooltip={t('Ganancia bruta de las ventas cobradas en el momento (efectivo, transferencia o tarjeta).')} moneda={moneda} tono="text-good" sensible oculto={ocultarMontos} />
+                  <StatCard etiqueta={t('Ganancia de ventas financiadas')} valor={m(desgloseActual.ganancia.financiado)} tooltip={t('Ganancia generada por las ventas financiadas en cuotas del período. Todavía no se cobró: entra a medida que se pagan las cuotas.')} moneda={moneda} tono={desgloseActual.ganancia.financiado > 0 ? 'text-warn' : undefined} sensible oculto={ocultarMontos} />
+                  {desgloseActual.ganancia.cuentaCorriente > 0.009 && (
+                    <StatCard etiqueta={t('Ganancia de ventas fiadas')} valor={m(desgloseActual.ganancia.cuentaCorriente)} tooltip={t('Ganancia generada por las ventas a cuenta corriente del período. Todavía no se cobró.')} moneda={moneda} tono="text-warn" sensible oculto={ocultarMontos} />
+                  )}
+                  <StatCard etiqueta={t('Ganancia cobrada en el período')} valor={m(gananciaCobrada)} tooltip={t('La parte de la ganancia que corresponde a la plata que de verdad entró en el período, de ventas de cualquier fecha (cada cuota cobrada aporta su parte). No incluye lo cobrado de ventas fiadas sin cuotas.')} moneda={moneda} tono="text-good" sensible oculto={ocultarMontos} />
+                </>
+              )}
+              <StatCard etiqueta={t('Vendido al contado')} valor={m(desgloseActual.ventas.contado)} tooltip={t('Ventas del período cobradas en el momento en efectivo, transferencia u otros medios. No incluye tarjeta, cuotas ni cuenta corriente.')} moneda={moneda} tono="text-good" sensible oculto={ocultarMontos} />
+              <StatCard etiqueta={t('Vendido con tarjeta')} valor={m(desgloseActual.ventas.tarjeta)} tooltip={t('Ventas del período pagadas con tarjeta de débito o crédito.')} moneda={moneda} sensible oculto={ocultarMontos} />
+              <StatCard etiqueta={t('Vendido financiado en cuotas')} valor={m(desgloseActual.ventas.financiado)} tooltip={t('Ventas del período financiadas con cronograma propio de cuotas. Es plata que entra de a poco, a medida que se cobran las cuotas.')} moneda={moneda} tono={desgloseActual.ventas.financiado > 0 ? 'text-warn' : undefined} sensible oculto={ocultarMontos}>
+                {!ocultarMontos && actualB.ventas > 0 && <span className="text-[11px] text-muted dark:text-dark-text-secondary">{Math.round((desgloseActual.ventas.financiado / actualB.ventas) * 100)}% {t('de las ventas')}</span>}
+              </StatCard>
+              <StatCard etiqueta={t('Vendido a cuenta corriente')} valor={m(desgloseActual.ventas.cuentaCorriente)} tooltip={t('Ventas que quedaron fiadas en cuenta corriente, sin cuotas propias.')} moneda={moneda} tono={desgloseActual.ventas.cuentaCorriente > 0 ? 'text-warn' : undefined} sensible oculto={ocultarMontos}>
+                {!ocultarMontos && actualB.ventas > 0 && <span className="text-[11px] text-muted dark:text-dark-text-secondary">{Math.round((desgloseActual.ventas.cuentaCorriente / actualB.ventas) * 100)}% {t('de las ventas')}</span>}
               </StatCard>
               <StatCard
                 etiqueta={t('Ventas a consumidor final')}
-                valor={ventasConsumidorFinal.operaciones.toLocaleString('es-AR')}
+                valor={ventasConsumidorFinal.operaciones.toLocaleString(localeActual())}
                 tooltip={t('Ventas del período sin cliente cargado (opción "Consumidor final" en Nueva Orden). Ya están sumadas en Ventas netas y Operaciones — esto es solo el desglose.')}
               >
                 {!ocultarMontos && ventasConsumidorFinal.monto > 0 && (
@@ -1198,6 +1398,15 @@ export default function Estadisticas() {
                 />
               </QCard>
             )}
+            <PanelGananciaPorFuente
+              datos={fuentesActual}
+              serie={fuentesSerie}
+              moneda={moneda}
+              puedeVerCostos={puedeVerCostos}
+              ocultarMontos={ocultarMontos}
+              etiquetaPeriodo={etiquetaTramoActual}
+              etiquetaSucursal={sucursalId ? sucursales.find((s) => s.id === sucursalId)?.nombre ?? t('Sucursal') : t('Todas las sucursales')}
+            />
             <SeccionCard titulo={t('Evolución de ventas')} subtitulo={comparar ? `${t('Línea llena:')} ${etiquetaTramoActual}. ${t('Punteada:')} ${etiquetaTramoAnterior}.` : undefined} accion={<SegmentedChips size="sm" valor={metricaChart} opciones={metricasChart} onChange={setMetricaChart} />}>
               {ocultarMontos ? graficoOculto : <LineAreaChart puntos={serie} moneda={moneda} compararActivo={comparar} />}
             </SeccionCard>
@@ -1213,12 +1422,29 @@ export default function Estadisticas() {
               titulo={t('Ranking de productos')}
               subtitulo={t('Por modelo o por producto de catálogo. Si borrás un modelo/producto de Stock después de haberlo vendido, sus ventas viejas pueden aparecer separadas en vez de agrupadas — no borres del historial algo que ya vendiste si querés conservar este ranking preciso.')}
               accion={
-                <SegmentedChips
-                  size="sm"
-                  valor={metricaProductos}
-                  opciones={puedeVerCostos ? [...METRICAS_PRODUCTO_BASE_T, ...METRICAS_PRODUCTO_COSTO_T] : METRICAS_PRODUCTO_BASE_T}
-                  onChange={setMetricaProductos}
-                />
+                <div className="flex flex-wrap items-center gap-2 justify-end">
+                  {categoriasConVentas.length > 1 && (
+                    <select
+                      value={filtroCategoriaProductos}
+                      onChange={(e) => setFiltroCategoriaProductos(e.target.value)}
+                      aria-label={t('Filtrar por categoría')}
+                      className="bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-lg px-2 py-1 text-xs"
+                    >
+                      <option value="">{t('Todas las categorías')}</option>
+                      {categoriasConVentas.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  <SegmentedChips
+                    size="sm"
+                    valor={metricaProductos}
+                    opciones={puedeVerCostos ? [...METRICAS_PRODUCTO_BASE_T, ...METRICAS_PRODUCTO_COSTO_T] : METRICAS_PRODUCTO_BASE_T}
+                    onChange={setMetricaProductos}
+                  />
+                </div>
               }
             >
               {rankingProductos.length === 0 ? (
@@ -1230,6 +1456,14 @@ export default function Estadisticas() {
                   sufijo={metricaProductos === 'unidades' ? t(' unid.') : metricaProductos === 'margen' ? '%' : undefined}
                   oculto={ocultarMontos}
                 />
+              )}
+              {rankingProductos.length > 0 && (
+                <button
+                  onClick={() => setRankingCompleto({ categoria: filtroCategoriaProductos || null })}
+                  className="mt-3 rounded-lg border border-border dark:border-dark-border px-3 py-1.5 text-xs font-medium"
+                >
+                  {t('Ver ranking completo')} ({rankingProductos.length}) ›
+                </button>
               )}
             </SeccionCard>
             <SeccionCard
@@ -1252,9 +1486,26 @@ export default function Estadisticas() {
                   moneda={metricaCategorias === 'facturacion' || metricaCategorias === 'ganancia' ? moneda : undefined}
                   sufijo={metricaCategorias === 'unidades' ? t(' unid.') : metricaCategorias === 'margen' ? '%' : undefined}
                   oculto={ocultarMontos}
+                  onSeleccionar={(nombre) => setRankingCompleto({ categoria: nombre })}
                 />
               )}
+              {rankingCategoriasVenta.length > 0 && (
+                <p className="mt-3 text-xs text-muted dark:text-dark-text-secondary">{t('Tocá una categoría para ver todos sus productos (y subcategorías).')}</p>
+              )}
             </SeccionCard>
+            {rankingCompleto && (
+              <RankingDetalle
+                items={itemsVendidosPeriodo}
+                moneda={moneda}
+                puedeVerCostos={puedeVerCostos}
+                ocultarMontos={ocultarMontos}
+                nombreNegocio={nombreNegocio}
+                etiquetaPeriodo={etiquetaTramoActual}
+                etiquetaSucursal={sucursalId ? sucursales.find((s) => s.id === sucursalId)?.nombre ?? t('Sucursal') : t('Todas las sucursales')}
+                categoriaInicial={rankingCompleto.categoria}
+                onClose={() => setRankingCompleto(null)}
+              />
+            )}
           </>
         );
       }
@@ -1264,7 +1515,8 @@ export default function Estadisticas() {
           <>
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
               <StatCard etiqueta={t('Dinero ingresado')} valor={m(actualB.ingresado)} tooltip={t('La plata que realmente entró a la caja en el período (incluye cobros de ventas anteriores fiadas).')} variacion={varSi(actualB.ingresado, prevB.ingresado)} moneda={moneda} tono="text-good" sensible oculto={ocultarMontos} />
-              <StatCard etiqueta={t('Medios de pago')} valor={cajaPorMedio.length.toLocaleString('es-AR')} tooltip={t('Cantidad de formas de pago distintas usadas en el período.')} />
+              <StatCard etiqueta={t('Cobranzas de cartera')} valor={m(cobranzaActual.total)} tooltip={t('Cuotas y saldos de cuenta corriente cobrados en el período. Es plata que entró (ya está en Dinero ingresado) pero NO son ventas nuevas: esas ventas se contaron el día que se hicieron.')} variacion={varSi(cobranzaActual.total, cobranzaPrev.total)} moneda={moneda} tono="text-good" sensible oculto={ocultarMontos} />
+              <StatCard etiqueta={t('Medios de pago')} valor={cajaPorMedio.length.toLocaleString(localeActual())} tooltip={t('Cantidad de formas de pago distintas usadas en el período.')} />
               <StatCard etiqueta={t('Vendido a crédito')} valor={m(actualB.credito)} tooltip={t('Lo que se sumó a cuentas corrientes en el período (todavía no entró a la caja).')} moneda={moneda} tono={actualB.credito > 0 ? 'text-warn' : undefined} sensible oculto={ocultarMontos} />
             </div>
             <SeccionCard titulo={t('Evolución del dinero ingresado')} subtitulo={comparar ? `${t('Línea llena:')} ${etiquetaTramoActual}. ${t('Punteada:')} ${etiquetaTramoAnterior}.` : undefined}>
@@ -1277,6 +1529,13 @@ export default function Estadisticas() {
                 <RankingBarras datos={cajaPorMedio} moneda={moneda} oculto={ocultarMontos} />
               ) : (
                 <RankingTorta datos={cajaPorMedio} moneda={moneda} oculto={ocultarMontos} />
+              )}
+            </SeccionCard>
+            <SeccionCard titulo={t('Cobros por empleado')} subtitulo={t('Quién registró cada cuota o saldo cobrado en el período.')}>
+              {rankingCobrosEmpleado.length === 0 ? (
+                <EmptyState titulo={t('Sin cobranzas en el período')} texto={t('Cuando se cobre una cuota o un saldo de cuenta corriente, vas a ver acá quién lo cobró.')} />
+              ) : (
+                <RankingBarras datos={rankingCobrosEmpleado} moneda={moneda} oculto={ocultarMontos} />
               )}
             </SeccionCard>
             <SeccionCard titulo={t('Evolución por medio de pago')} subtitulo={`${t('Últimos')} ${HORIZONTE_MEDIOS_PAGO} ${t('meses, sin importar el período elegido arriba.')}`}>
@@ -1302,7 +1561,7 @@ export default function Estadisticas() {
                       {evolucionMedios.map((f) => (
                         <tr key={f.mes} className="border-t border-border dark:border-dark-border">
                           <td className="py-1.5 pr-3 whitespace-nowrap capitalize">
-                            {new Date(f.mes + '-01T00:00:00').toLocaleDateString('es-AR', { month: 'short', year: '2-digit' })}
+                            {new Date(f.mes + '-01T00:00:00').toLocaleDateString(localeActual(), { month: 'short', year: '2-digit' })}
                           </td>
                           {mediosEnEvolucion.map((medio) => (
                             <td key={medio} className="py-1.5 px-2 text-right tabular-nums">
@@ -1325,7 +1584,14 @@ export default function Estadisticas() {
           <>
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
               <StatCard etiqueta={t('Saldo por cobrar')} valor={m(porCobrar)} tooltip={t('Lo que hoy te deben tus clientes en total (deuda actual, no del período). Tocá para ver el detalle.')} tono={vencidoTotal > 0 ? 'text-warn' : undefined} sensible oculto={ocultarMontos} onClick={() => router.push('/cuentas-por-cobrar')} />
-              <StatCard etiqueta={t('Vencido')} valor={m(vencidoTotal)} tooltip={t('De lo que te deben, cuánto ya pasó su fecha de vencimiento. Tocá para ver el detalle.')} tono={vencidoTotal > 0 ? 'text-bad' : undefined} sensible oculto={ocultarMontos} onClick={() => router.push('/cuentas-por-cobrar')} />
+              {hayMoraSql ? (
+                <>
+                  <StatCard etiqueta={t('Vencido en cuotas de financiación')} valor={m(vencidoCuotasTotal)} tooltip={t('De lo que te deben en cuotas de financiación propia, cuánto ya venció y sigue sin pagar (los pagos se aplican primero a lo más viejo).')} tono={vencidoCuotasTotal > 0 ? 'text-bad' : undefined} sensible oculto={ocultarMontos} onClick={() => router.push('/cuentas-por-cobrar')} />
+                  <StatCard etiqueta={t('Vencido en cuenta corriente / fiado')} valor={m(vencidoFiadoTotal)} tooltip={t('De lo que te deben por ventas fiadas (cuenta corriente sin cuotas), cuánto ya venció y sigue sin pagar. Una venta fiada sin fecha de vencimiento no cuenta como vencida.')} tono={vencidoFiadoTotal > 0 ? 'text-bad' : undefined} sensible oculto={ocultarMontos} onClick={() => router.push('/cuentas-por-cobrar')} />
+                </>
+              ) : (
+                <StatCard etiqueta={t('Vencido')} valor={m(vencidoTotal)} tooltip={t('De lo que te deben, cuánto ya pasó su fecha de vencimiento. Tocá para ver el detalle.')} tono={vencidoTotal > 0 ? 'text-bad' : undefined} sensible oculto={ocultarMontos} onClick={() => router.push('/cuentas-por-cobrar')} />
+              )}
               <StatCard etiqueta={t('Fiado en el período')} valor={m(actualB.credito)} tooltip={t('Cuánto sumaste a cuentas corrientes en el período elegido.')} variacion={varSi(actualB.credito, prevB.credito)} positivoEsBueno={false} moneda={moneda} sensible oculto={ocultarMontos} />
             </div>
             <SeccionCard titulo={t('Cuentas por cobrar')}>
@@ -1352,12 +1618,14 @@ export default function Estadisticas() {
                   <StatCard etiqueta={t('Nuevos créditos')} valor={m(resumenFinanciacion.nuevosCreditosPeriodo)} tooltip={t('Planes de financiación creados en el período elegido.')} moneda={moneda} sensible oculto={ocultarMontos} />
                   <StatCard etiqueta={t('Cobrado en cuotas')} valor={m(resumenFinanciacion.cobradoPeriodo)} tooltip={t('Pagos de cuotas recibidos en el período (por fecha real de pago, no de vencimiento).')} moneda={moneda} tono="text-good" sensible oculto={ocultarMontos} />
                   <StatCard etiqueta={t('Saldo en cuotas')} valor={m(resumenFinanciacion.saldoPendiente)} tooltip={t('Lo que falta cobrar de cuotas pendientes (a hoy).')} moneda={moneda} sensible oculto={ocultarMontos} />
-                  <StatCard etiqueta={t('Vencido en cuotas')} valor={m(resumenFinanciacion.vencido)} tooltip={t('De las cuotas pendientes, cuánto ya pasó su vencimiento.')} tono={resumenFinanciacion.vencido > 0 ? 'text-bad' : undefined} moneda={moneda} sensible oculto={ocultarMontos}>
+                  <StatCard etiqueta={t('Vencido en cuotas')} valor={m(hayMoraSql ? vencidoCuotasTotal : resumenFinanciacion.vencido)} tooltip={t('De las cuotas pendientes, cuánto ya pasó su vencimiento.')} tono={(hayMoraSql ? vencidoCuotasTotal : resumenFinanciacion.vencido) > 0 ? 'text-bad' : undefined} moneda={moneda} sensible oculto={ocultarMontos}>
                     {!ocultarMontos && resumenFinanciacion.saldoPendiente > 0 && (
-                      <span className="text-[11px] text-muted dark:text-dark-text-secondary">{Math.round(resumenFinanciacion.pctMorosidad)}% {t('de morosidad')}</span>
+                      <span className="text-[11px] text-muted dark:text-dark-text-secondary">
+                        {Math.round(hayMoraSql ? (vencidoCuotasTotal / resumenFinanciacion.saldoPendiente) * 100 : resumenFinanciacion.pctMorosidad)}% {t('de morosidad')}
+                      </span>
                     )}
                   </StatCard>
-                  <StatCard etiqueta={t('Próximas a vencer')} valor={resumenFinanciacion.proximasAVencer.toLocaleString('es-AR')} tooltip={t('Cuotas pendientes que vencen dentro de los próximos 7 días.')} tono={resumenFinanciacion.proximasAVencer > 0 ? 'text-warn' : undefined} />
+                  <StatCard etiqueta={t('Próximas a vencer')} valor={resumenFinanciacion.proximasAVencer.toLocaleString(localeActual())} tooltip={t('Cuotas pendientes que vencen dentro de los próximos 7 días.')} tono={resumenFinanciacion.proximasAVencer > 0 ? 'text-warn' : undefined} />
                 </div>
               </SeccionCard>
             )}
@@ -1368,11 +1636,11 @@ export default function Estadisticas() {
         return (
           <>
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-              <StatCard etiqueta={t('Equipos en stock')} valor={stockResumen.unidades.toLocaleString('es-AR')} tooltip={t('Dispositivos disponibles para vender ahora mismo. Tocá para ver el detalle.')} onClick={() => router.push('/stock')} />
+              <StatCard etiqueta={t('Equipos en stock')} valor={stockResumen.unidades.toLocaleString(localeActual())} tooltip={t('Dispositivos disponibles para vender ahora mismo. Tocá para ver el detalle.')} onClick={() => router.push('/stock')} />
               <StatCard etiqueta={t('Capital en stock')} valor={m(stockResumen.capitalPrecio)} tooltip={t('Suma de los precios de venta de todo el stock actual.')} moneda={moneda} sensible oculto={ocultarMontos} />
               {puedeVerCostos && <StatCard etiqueta={t('Capital a costo')} valor={m(stockResumen.capitalCosto)} tooltip={t('Lo que te costó el stock que tenés (a precio de compra).')} moneda={moneda} sensible oculto={ocultarMontos} />}
-              <StatCard etiqueta={t('Parados +30 días')} valor={stockResumen.quietos.toLocaleString('es-AR')} tooltip={t('Equipos que llevan más de 30 días sin venderse.')} tono={stockResumen.quietos > 0 ? 'text-warn' : undefined} />
-              <StatCard etiqueta={t('Sin precio')} valor={stockResumen.sinPrecio.toLocaleString('es-AR')} tooltip={t('Equipos cargados sin precio de venta (no se pueden vender así).')} tono={stockResumen.sinPrecio > 0 ? 'text-warn' : undefined} />
+              <StatCard etiqueta={t('Parados +30 días')} valor={stockResumen.quietos.toLocaleString(localeActual())} tooltip={t('Equipos que llevan más de 30 días sin venderse.')} tono={stockResumen.quietos > 0 ? 'text-warn' : undefined} />
+              <StatCard etiqueta={t('Sin precio')} valor={stockResumen.sinPrecio.toLocaleString(localeActual())} tooltip={t('Equipos cargados sin precio de venta (no se pueden vender así).')} tono={stockResumen.sinPrecio > 0 ? 'text-warn' : undefined} />
             </div>
             <SeccionCard titulo={t('Stock por modelo')} subtitulo={t('Foto del inventario de hoy (no depende del período).')}>
               {stockPorModelo.length === 0 ? <EmptyState titulo={t('Sin equipos en stock')} /> : <RankingBarras datos={stockPorModelo} sufijo={t(' equipo(s)')} />}
@@ -1402,9 +1670,32 @@ export default function Estadisticas() {
         return (
           <>
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-              <StatCard etiqueta={t('Equipos ingresados')} valor={servicioIngresados.toLocaleString('es-AR')} tooltip={t('Equipos que entraron a Servicio Técnico en el período.')} />
-              <StatCard etiqueta={t('Equipos reparados')} valor={servicioReparados.toLocaleString('es-AR')} tooltip={t('Reparaciones terminadas en el período.')} tono="text-good" />
-              <StatCard etiqueta={t('Técnicos activos')} valor={rankingTecnicos.length.toLocaleString('es-AR')} tooltip={t('Técnicos con al menos un arreglo terminado en el período.')} />
+              <StatCard etiqueta={t('Equipos ingresados')} valor={servicioIngresados.toLocaleString(localeActual())} tooltip={t('Equipos que entraron a Servicio Técnico en el período.')} />
+              <StatCard etiqueta={t('Equipos reparados')} valor={servicioReparados.toLocaleString(localeActual())} tooltip={t('Reparaciones terminadas en el período.')} tono="text-good" />
+              <StatCard etiqueta={t('Técnicos activos')} valor={rankingTecnicos.length.toLocaleString(localeActual())} tooltip={t('Técnicos con al menos un arreglo terminado en el período.')} />
+              <StatCard etiqueta={t('Facturación de servicio técnico')} valor={m(fuentesActual.servicio.facturado)} tooltip={t('Lo facturado en el período por reparaciones cobradas (mano de obra y repuestos). Es la misma cifra de "Servicio técnico" en Ganancia por fuente.')} moneda={moneda} tono="text-good" sensible oculto={ocultarMontos} />
+              {puedeVerCostos && (
+                <StatCard etiqueta={t('Ganancia de servicio técnico')} valor={m(fuentesActual.servicio.ganancia)} tooltip={t('Facturación de las reparaciones cobradas menos el costo cargado de los repuestos. Las reparaciones con costo pendiente (no se cargó el repuesto) no cuentan como ganancia.')} moneda={moneda} tono="text-good" sensible oculto={ocultarMontos}>
+                  {!ocultarMontos && tallerPeriodo.ventasConCosto > 0 && (
+                    <span className="text-[11px] text-muted dark:text-dark-text-secondary">
+                      {t('Margen')} {Math.round((fuentesActual.servicio.ganancia / tallerPeriodo.ventasConCosto) * 100)}%
+                    </span>
+                  )}
+                  {!ocultarMontos && tallerPeriodo.lineas > 0 && (
+                    <span className={`block text-[11px] ${tallerPeriodo.lineasConCosto < tallerPeriodo.lineas ? 'text-warn' : 'text-muted dark:text-dark-text-secondary'}`}>
+                      {Math.round((tallerPeriodo.lineasConCosto / tallerPeriodo.lineas) * 100)}% {t('de las reparaciones con costo cargado')} ({tallerPeriodo.lineasConCosto}/{tallerPeriodo.lineas})
+                      {tallerPeriodo.lineasConCosto < tallerPeriodo.lineas && (
+                        <>
+                          {' · '}
+                          <Link href="/servicio-tecnico?sinCosto=1" className="underline">
+                            {t('Ver reparaciones sin costo')}
+                          </Link>
+                        </>
+                      )}
+                    </span>
+                  )}
+                </StatCard>
+              )}
             </div>
             <div className="grid md:grid-cols-2 gap-4">
               <SeccionCard titulo={t('Ranking de técnicos')} accion={<VistaToggle vista={vistaTecnicos} onVista={setVistaTecnicos} />}>
@@ -1429,9 +1720,9 @@ export default function Estadisticas() {
         return (
           <>
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-              <StatCard etiqueta={t('Clientes que compraron')} valor={clientesQueCompraron.toLocaleString('es-AR')} tooltip={t('Clientes distintos con al menos una compra en el período.')} />
-              <StatCard etiqueta={t('Ventas sin cliente')} valor={opsSinCliente.toLocaleString('es-AR')} tooltip={t('Operaciones del período que no quedaron asociadas a un cliente.')} tono={opsSinCliente > 0 ? 'text-warn' : undefined} />
-              <StatCard etiqueta={t('Clientes que deben')} valor={deudores.toLocaleString('es-AR')} tooltip={t('Clientes con saldo pendiente en su cuenta corriente (a hoy).')} tono={deudores > 0 ? 'text-warn' : undefined} />
+              <StatCard etiqueta={t('Clientes que compraron')} valor={clientesQueCompraron.toLocaleString(localeActual())} tooltip={t('Clientes distintos con al menos una compra en el período.')} />
+              <StatCard etiqueta={t('Ventas sin cliente')} valor={opsSinCliente.toLocaleString(localeActual())} tooltip={t('Operaciones del período que no quedaron asociadas a un cliente.')} tono={opsSinCliente > 0 ? 'text-warn' : undefined} />
+              <StatCard etiqueta={t('Clientes que deben')} valor={deudores.toLocaleString(localeActual())} tooltip={t('Clientes con saldo pendiente en su cuenta corriente (a hoy).')} tono={deudores > 0 ? 'text-warn' : undefined} />
             </div>
             <div className="grid md:grid-cols-2 gap-4">
               <SeccionCard titulo={t('Mejores compradores')} accion={<VistaToggle vista={vistaCompradores} onVista={setVistaCompradores} />}>
@@ -1467,7 +1758,7 @@ export default function Estadisticas() {
                   {tablaVendedores.map((v, i) => (
                     <div key={i} className="grid grid-cols-[1fr_auto_auto] gap-3 py-2 items-center text-sm">
                       <span className="truncate">{v.nombre}</span>
-                      <span className="text-right w-20 tabular-nums">{v.ops.toLocaleString('es-AR')}</span>
+                      <span className="text-right w-20 tabular-nums">{v.ops.toLocaleString(localeActual())}</span>
                       <span className="text-right w-28 tabular-nums font-medium">{ocultarMontos ? '••••' : m(v.ventas)}</span>
                     </div>
                   ))}
@@ -1487,13 +1778,43 @@ export default function Estadisticas() {
           </>
         );
 
+      case 'cartera':
+        return puedeVerCostos ? (
+          <CarteraFinanciacion
+            supabase={supabase}
+            rango={{ inicio: rango.inicio, fin: rango.fin }}
+            sucursalId={sucursalId}
+            categorias={categoriasStock}
+            ordenes={ordenes}
+            itemsPorOrden={itemsPorOrden as Map<string, ItemR[]>}
+            moneda={moneda}
+            ocultarMontos={ocultarMontos}
+          />
+        ) : null;
+
+      case 'rubros':
+        return puedeVerCostos ? (
+          <RubrosInversion
+            supabase={supabase}
+            rango={{ inicio: rango.inicio, fin: rango.fin }}
+            sucursalId={sucursalId}
+            sucursales={sucursales}
+            categorias={categoriasStock}
+            proveedores={proveedores}
+            itemsVendidos={itemsVendidosPeriodo}
+            taller={bloqueVentasPorArea(ordenes, itemsPorOrden, rango.inicio, rango.fin, true)}
+            moneda={moneda}
+            ocultarMontos={ocultarMontos}
+          />
+        ) : null;
+
       case 'proveedores':
         return (
           <>
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
               <StatCard etiqueta={t('Comprado en el período')} valor={m(comprasPeriodo.total)} tooltip={t('Total gastado en compras a proveedores (dispositivos + compras manuales) en el período. Esto es lo COMPRADO, no necesariamente lo pagado.')} moneda={moneda} sensible oculto={ocultarMontos} />
-              <StatCard etiqueta={t('Unidades compradas')} valor={comprasPeriodo.cantidad.toLocaleString('es-AR')} tooltip={t('Cantidad de equipos/ítems comprados a proveedores en el período.')} />
-              <StatCard etiqueta={t('Proveedores activos')} valor={rankingProveedores.length.toLocaleString('es-AR')} tooltip={t('Proveedores a los que les compraste en el período.')} />
+              <StatCard etiqueta={t('Unidades compradas')} valor={comprasPeriodo.cantidad.toLocaleString(localeActual())} tooltip={t('Cantidad de equipos/ítems comprados a proveedores en el período.')} />
+              <StatCard etiqueta={t('Proveedores activos')} valor={rankingProveedores.length.toLocaleString(localeActual())} tooltip={t('Proveedores a los que les compraste en el período.')} />
               {saldoProveedoresTotal != null && (
                 <>
                   <StatCard etiqueta={t('Pagado a proveedores')} valor={m(pagadoProveedoresPeriodo)} tooltip={t('Plata que efectivamente les pagaste a proveedores en el período (cuentas por pagar).')} moneda={moneda} tono="text-good" sensible oculto={ocultarMontos} />
@@ -1559,6 +1880,7 @@ export default function Estadisticas() {
           </button>
           <button
             onClick={exportarResumenCSV({
+              t,
               b: actualB,
               ticket,
               porCobrar,
@@ -1583,6 +1905,7 @@ export default function Estadisticas() {
           </button>
           <button
             onClick={exportarResumenPDF({
+              t,
               b: actualB,
               ticket,
               porCobrar,
@@ -1708,6 +2031,18 @@ export default function Estadisticas() {
                 onClick={() => router.push('/egresos')}
               />
             )}
+            {puedeVerEgresos && ingresosCapitalPeriodo > 0 && (
+              <StatCard
+                etiqueta={t('Ingresos de capital')}
+                valor={m(ingresosCapitalPeriodo)}
+                tooltip={t('Aportes de capital y préstamos recibidos en el período. No son ventas ni ganancia: es plata que entró al negocio desde afuera.')}
+                moneda={moneda}
+                tono="text-good"
+                sensible
+                oculto={ocultarMontos}
+                onClick={() => router.push('/ingresos')}
+              />
+            )}
             {puedeVerCostos && puedeVerEgresos && hayEgresos && (
               <StatCard
                 etiqueta={t('Resultado operativo estimado')}
@@ -1719,12 +2054,60 @@ export default function Estadisticas() {
                 oculto={ocultarMontos}
               />
             )}
+            {puedeVerCostos && puedeVerEgresos && hayCategoriasDuenos && (
+              <>
+                <StatCard
+                  etiqueta={t('Retiros de dueños')}
+                  valor={m(retirosDuenosPeriodo)}
+                  tooltip={t('Lo que retiraron los dueños en el período (categoría con la función "Retiros de dueños"), separado por persona. No es gasto operativo: no entra en el resultado operativo.')}
+                  moneda={moneda}
+                  tono="text-bad"
+                  sensible
+                  oculto={ocultarMontos}
+                >
+                  {!ocultarMontos && retirosPorDueno.length > 0 && (
+                    <span className="flex flex-col text-[11px] text-muted dark:text-dark-text-secondary">
+                      {retirosPorDueno.map((r) => (
+                        <span key={r.nombre}>
+                          {r.nombre}: {m(r.total)}
+                        </span>
+                      ))}
+                    </span>
+                  )}
+                </StatCard>
+                <StatCard
+                  etiqueta={t('Lo que queda en el negocio')}
+                  valor={m(quedaEnElNegocio)}
+                  tooltip={t('Resultado operativo estimado menos el sueldo de los dueños y menos los retiros de los dueños.')}
+                  moneda={moneda}
+                  tono={quedaEnElNegocio >= 0 ? 'text-good' : 'text-bad'}
+                  sensible
+                  oculto={ocultarMontos}
+                >
+                  {!ocultarMontos && (
+                    <span className="text-[11px] text-muted dark:text-dark-text-secondary">
+                      {t('Resultado operativo')} {m(resultadoOperativoEstimado)} − {t('Sueldo dueños')} {m(sueldoDuenosPeriodo)} − {t('Retiros')} {m(retirosDuenosPeriodo)}
+                    </span>
+                  )}
+                </StatCard>
+              </>
+            )}
             <StatCard
               etiqueta={t('Dinero ingresado')}
               valor={m(actualB.ingresado)}
               tooltip={t('La plata que realmente entró a la caja en el período (puede incluir cobros de ventas anteriores fiadas).')}
               variacion={comparar ? variacion(actualB.ingresado, prevB.ingresado) : undefined}
               moneda={moneda}
+              sensible
+              oculto={ocultarMontos}
+            />
+            <StatCard
+              etiqueta={t('Cobranzas de cartera')}
+              valor={m(cobranzaActual.total)}
+              tooltip={t('Cuotas y saldos de cuenta corriente cobrados en el período. Es plata que entró (ya está en Dinero ingresado) pero NO son ventas nuevas: esas ventas se contaron el día que se hicieron.')}
+              variacion={comparar ? variacion(cobranzaActual.total, cobranzaPrev.total) : undefined}
+              moneda={moneda}
+              tono="text-good"
               sensible
               oculto={ocultarMontos}
             />
@@ -1738,12 +2121,18 @@ export default function Estadisticas() {
               onClick={() => router.push('/cuentas-por-cobrar')}
             >
               {vencidoTotal > 0 && (
-                <span className="text-[11px] text-bad font-medium">{ocultarMontos ? '' : `${m(vencidoTotal)} ${t('vencidos')}`}</span>
+                <span className="text-[11px] text-bad font-medium">
+                  {ocultarMontos
+                    ? ''
+                    : hayMoraSql
+                      ? `${m(vencidoTotal)} ${t('vencidos')} (${m(vencidoCuotasTotal)} ${t('en cuotas')} · ${m(vencidoFiadoTotal)} ${t('fiado')})`
+                      : `${m(vencidoTotal)} ${t('vencidos')}`}
+                </span>
               )}
             </StatCard>
             <StatCard
               etiqueta={t('Operaciones')}
-              valor={actualB.operaciones.toLocaleString('es-AR')}
+              valor={actualB.operaciones.toLocaleString(localeActual())}
               tooltip={t('Cantidad de ventas cobradas en el período.')}
               variacion={comparar ? variacion(actualB.operaciones, prevB.operaciones) : undefined}
             />
@@ -1797,16 +2186,42 @@ export default function Estadisticas() {
                               {f.sucursalNombre ?? (f.esSinAsignar ? t('Sin sucursal') : t('Todo el negocio'))}
                             </td>
                             <td className="py-2 px-3 text-right tabular-nums">{m(f.local.ventas)}</td>
-                            <td className={`py-2 px-3 text-right tabular-nums font-medium ${resultadoLocal >= 0 ? 'text-good' : 'text-bad'}`}>{m(resultadoLocal)}</td>
+                            <td className={`py-2 px-3 text-right tabular-nums font-medium ${resultadoLocal >= 0 ? 'text-good' : 'text-bad'}`}>
+                              {m(resultadoLocal)}
+                              {f.egresosLocal > 0 && <span className="block text-[10px] font-normal text-muted dark:text-dark-text-secondary">{t('egresos')} −{m(f.egresosLocal)}</span>}
+                            </td>
                             <td className="py-2 px-3 text-right tabular-nums">{m(f.taller.ventas)}</td>
-                            <td className={`py-2 px-3 text-right tabular-nums font-medium ${resultadoTaller >= 0 ? 'text-good' : 'text-bad'}`}>{m(resultadoTaller)}</td>
-                            <td className={`py-2 pl-3 text-right tabular-nums font-semibold ${resultadoTotal >= 0 ? 'text-good' : 'text-bad'}`}>{m(resultadoTotal)}</td>
+                            <td className={`py-2 px-3 text-right tabular-nums font-medium ${resultadoTaller >= 0 ? 'text-good' : 'text-bad'}`}>
+                              {m(resultadoTaller)}
+                              {f.egresosTaller > 0 && <span className="block text-[10px] font-normal text-muted dark:text-dark-text-secondary">{t('egresos')} −{m(f.egresosTaller)}</span>}
+                            </td>
+                            <td className={`py-2 pl-3 text-right tabular-nums font-semibold ${resultadoTotal >= 0 ? 'text-good' : 'text-bad'}`}>
+                              {m(resultadoTotal)}
+                              {f.egresosSinAsignar > 0 && <span className="block text-[10px] font-normal text-muted dark:text-dark-text-secondary">{t('sin área')} −{m(f.egresosSinAsignar)}</span>}
+                            </td>
                           </tr>
                         );
                       })}
+                      {filasRentabilidad.length > 1 && (
+                        <tr className="border-t-2 border-border dark:border-dark-border font-semibold">
+                          <td className="py-2 pr-3 whitespace-nowrap">{t('Total')}</td>
+                          <td className="py-2 px-3 text-right tabular-nums">{m(filasRentabilidad.reduce((a, f) => a + f.local.ventas, 0))}</td>
+                          <td className="py-2 px-3 text-right tabular-nums">{m(filasRentabilidad.reduce((a, f) => a + (f.local.ganancia - f.egresosLocal), 0))}</td>
+                          <td className="py-2 px-3 text-right tabular-nums">{m(filasRentabilidad.reduce((a, f) => a + f.taller.ventas, 0))}</td>
+                          <td className="py-2 px-3 text-right tabular-nums">{m(filasRentabilidad.reduce((a, f) => a + (f.taller.ganancia - f.egresosTaller), 0))}</td>
+                          <td className="py-2 pl-3 text-right tabular-nums">
+                            {m(filasRentabilidad.reduce((a, f) => a + (f.local.ganancia - f.egresosLocal) + (f.taller.ganancia - f.egresosTaller) - f.egresosSinAsignar, 0))}
+                          </td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
+              )}
+              {(areaLocalId != null || areaTallerId != null) && filasRentabilidad.some((f) => f.egresosSinAsignar > 0) && (
+                <p className="text-[11px] text-warn">
+                  ⚠️ {m(filasRentabilidad.reduce((a, f) => a + f.egresosSinAsignar, 0))} {t('de egresos no tienen el área Local ni Taller: se restan solo del resultado total, no del de cada área. Asignales un área en Egresos para que se descuenten del lado que corresponde (por ejemplo, el sueldo de los técnicos en Taller).')}
+                </p>
               )}
               {areaLocalId == null && areaTallerId == null && (
                 <p className="text-[11px] text-muted dark:text-dark-text-secondary">
@@ -1893,6 +2308,7 @@ function celdaCSV(v: string): string {
 // sola fuente de verdad, para que los dos formatos de exportación (y la
 // pantalla) nunca puedan mostrar números distintos entre sí.
 type ParametrosExport = {
+  t: (texto: string) => string;
   b: { ventas: number; ganancia: number; ingresado: number; credito: number; operaciones: number };
   ticket: number;
   porCobrar: number;
@@ -1958,13 +2374,13 @@ function exportarResumenCSV(p: ParametrosExport) {
   return () => {
     const ahora = new Date();
     const filas: [string, string][] = [
-      ['Negocio', p.nombreNegocio || 'Sin nombre'],
-      ['Generado el', ahora.toLocaleString('es-AR')],
-      ['Zona horaria', Intl.DateTimeFormat().resolvedOptions().timeZone],
-      ['Moneda', p.moneda],
-      ...construirFilasExport(p),
+      [p.t('Negocio'), p.nombreNegocio || p.t('Sin nombre')],
+      [p.t('Generado el'), ahora.toLocaleString(localeActual())],
+      [p.t('Zona horaria'), Intl.DateTimeFormat().resolvedOptions().timeZone],
+      [p.t('Moneda'), p.moneda],
+      ...construirFilasExport(p).map(([k, v]): [string, string] => [p.t(k), k === 'Período' ? p.t(v) : v]),
     ];
-    const csv = `Métrica,Valor (${p.moneda})\n` + filas.map(([k, v]) => `${celdaCSV(k)},${celdaCSV(v)}`).join('\n');
+    const csv = `${p.t('Métrica')},${p.t('Valor')} (${p.moneda})\n` + filas.map(([k, v]) => `${celdaCSV(k)},${celdaCSV(v)}`).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -1990,19 +2406,19 @@ function exportarResumenPDF(p: ParametrosExport) {
     doc.text(p.nombreNegocio || 'Qovento', 14, y);
     y += 8;
     doc.setFontSize(11);
-    doc.text('Analítica del negocio', 14, y);
+    doc.text(p.t('Analítica del negocio'), 14, y);
     y += 6;
     doc.setFontSize(9);
     doc.text(
-      `Generado: ${ahora.toLocaleString('es-AR')} (${Intl.DateTimeFormat().resolvedOptions().timeZone})   ·   Moneda: ${p.moneda}`,
+      `${p.t('Generado')}: ${ahora.toLocaleString(localeActual())} (${Intl.DateTimeFormat().resolvedOptions().timeZone})   ·   ${p.t('Moneda')}: ${p.moneda}`,
       14,
       y
     );
     y += 10;
 
     doc.setFontSize(10);
-    doc.text('Métrica', 14, y);
-    doc.text('Valor', 196, y, { align: 'right' });
+    doc.text(p.t('Métrica'), 14, y);
+    doc.text(p.t('Valor'), 196, y, { align: 'right' });
     y += 2;
     doc.line(14, y, 196, y);
     y += 6;
@@ -2019,8 +2435,8 @@ function exportarResumenPDF(p: ParametrosExport) {
       const texto =
         clave === 'Período' || Number.isNaN(numero)
           ? valor
-          : `${numero < 0 ? '-' : ''}${p.moneda}${Math.abs(numero).toLocaleString('es-AR')}`;
-      doc.text(clave, 14, y);
+          : `${numero < 0 ? '-' : ''}${p.moneda}${Math.abs(numero).toLocaleString(localeActual())}`;
+      doc.text(p.t(clave), 14, y);
       doc.text(texto, 196, y, { align: 'right' });
       y += 6;
     }

@@ -8,6 +8,8 @@ import { ICONOS } from '../../Iconos';
 import { useT } from '../../lib/idioma';
 
 type Negocio = { id: string; stock_publico_activo: boolean; token_stock_publico: string };
+// Enlace aparte para otra app (stock en JSON). Sus columnas vienen de stock_publico_json_supabase.sql.
+type EnlaceJson = { stock_json_activo: boolean; token_stock_json: string };
 
 export default function StockPublicoConfig() {
   const supabase = crearClienteNavegador();
@@ -17,6 +19,11 @@ export default function StockPublicoConfig() {
   const [guardando, setGuardando] = useState(false);
   const [copiado, setCopiado] = useState(false);
   const [errorCarga, setErrorCarga] = useState<string | null>(null);
+  // null = todavía cargando; false = el negocio no corrió stock_publico_json_supabase.sql.
+  const [jsonDisponible, setJsonDisponible] = useState<boolean | null>(null);
+  const [enlaceJson, setEnlaceJson] = useState<EnlaceJson | null>(null);
+  const [guardandoJson, setGuardandoJson] = useState(false);
+  const [copiadoJson, setCopiadoJson] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -35,8 +42,53 @@ export default function StockPublicoConfig() {
       if (error) setErrorCarga(error.message);
       setNegocio((perfil as any)?.negocios ?? null);
       setLoading(false);
+      // El enlace para otra app se lee aparte: si falta su migración, esta pantalla sigue funcionando igual que antes.
+      const { data: perfilJson, error: errorJson } = await supabase
+        .from('perfiles')
+        .select('negocios ( stock_json_activo, token_stock_json )')
+        .eq('id', user.id)
+        .single();
+      const datosJson = (perfilJson as any)?.negocios as EnlaceJson | null | undefined;
+      if (errorJson || !datosJson) setJsonDisponible(false);
+      else {
+        setEnlaceJson(datosJson);
+        setJsonDisponible(true);
+      }
     })();
   }, []);
+
+  const toggleJson = async () => {
+    if (!negocio || !enlaceJson) return;
+    const nuevoValor = !enlaceJson.stock_json_activo;
+    setGuardandoJson(true);
+    const { error } = await supabase.from('negocios').update({ stock_json_activo: nuevoValor }).eq('id', negocio.id);
+    setGuardandoJson(false);
+    if (error) {
+      alert(t('No pudimos guardar:') + ' ' + error.message);
+      return;
+    }
+    setEnlaceJson({ ...enlaceJson, stock_json_activo: nuevoValor });
+    await registrarAuditoria(supabase, {
+      accion: nuevoValor ? 'activó el enlace de stock en JSON para otra app' : 'desactivó el enlace de stock en JSON para otra app',
+      entidad: 'negocio',
+    });
+  };
+
+  // Un enlace nuevo deja sin servicio al anterior: sirve si el enlace se compartió con quien no debía.
+  const regenerarJson = async () => {
+    if (!negocio || !enlaceJson) return;
+    if (!confirm(t('¿Generar un enlace nuevo? El anterior deja de funcionar y la otra app tiene que usar el nuevo.'))) return;
+    const nuevoToken = crypto.randomUUID();
+    setGuardandoJson(true);
+    const { error } = await supabase.from('negocios').update({ token_stock_json: nuevoToken }).eq('id', negocio.id);
+    setGuardandoJson(false);
+    if (error) {
+      alert(t('No pudimos guardar:') + ' ' + error.message);
+      return;
+    }
+    setEnlaceJson({ ...enlaceJson, token_stock_json: nuevoToken });
+    await registrarAuditoria(supabase, { accion: 'generó un enlace nuevo de stock en JSON para otra app', entidad: 'negocio' });
+  };
 
   const toggleActivo = async () => {
     if (!negocio) return;
@@ -82,6 +134,7 @@ export default function StockPublicoConfig() {
   }
 
   const link = `${typeof window !== 'undefined' ? window.location.origin : ''}/stock-publico/${negocio.token_stock_publico}`;
+  const linkJson = enlaceJson ? `${typeof window !== 'undefined' ? window.location.origin : ''}/stock-publico/${enlaceJson.token_stock_json}/json` : '';
 
   return (
     <main className="flex min-h-screen flex-col px-6 py-6 gap-4">
@@ -129,6 +182,56 @@ export default function StockPublicoConfig() {
               </span>
             </button>
           </div>
+        )}
+      </div>
+
+      <div className="rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-card p-4 flex flex-col gap-3">
+        <p className="text-sm font-medium">{t('Enlace para otra app (datos en JSON)')}</p>
+        <p className="text-xs text-muted dark:text-dark-text-secondary">
+          {t('Un enlace aparte para que otra aplicación lea tu stock en vivo. Trae modelo, capacidad, color, estado, batería, cantidad y precio; no trae costos, IMEI ni datos de clientes. No se lo des a tus clientes: ese es el enlace de arriba.')}
+        </p>
+        {jsonDisponible === false ? (
+          <p className="text-xs text-bad bg-bad/10 rounded-lg px-3 py-2">
+            {t('Para usar este enlace falta correr la migración SQL (stock_publico_json_supabase.sql).')}
+          </p>
+        ) : enlaceJson ? (
+          <>
+            <label className="flex items-center justify-between gap-3 cursor-pointer">
+              <span className="text-sm font-medium">{t('Enlace activo')}</span>
+              <input type="checkbox" checked={enlaceJson.stock_json_activo} disabled={guardandoJson} onChange={toggleJson} className="h-5 w-9 accent-ink" />
+            </label>
+            {enlaceJson.stock_json_activo && (
+              <div className="flex flex-col gap-2">
+                <p className="text-xs text-muted dark:text-dark-text-secondary break-all bg-canvas dark:bg-dark-bg rounded-lg px-3 py-2 font-mono">{linkJson}</p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => {
+                      navigator.clipboard?.writeText(linkJson);
+                      setCopiadoJson(true);
+                      setTimeout(() => setCopiadoJson(false), 2000);
+                    }}
+                    className="rounded-lg border border-border dark:border-dark-border px-3 py-2 text-xs font-medium"
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      <span aria-hidden="true" className="[&_svg]:h-3.5 [&_svg]:w-3.5 inline-flex shrink-0">
+                        {ICONOS[copiadoJson ? 'check' : 'enlace']}
+                      </span>
+                      {copiadoJson ? t('Link copiado') : t('Copiar link')}
+                    </span>
+                  </button>
+                  <button
+                    onClick={regenerarJson}
+                    disabled={guardandoJson}
+                    className="rounded-lg border border-bad/30 text-bad px-3 py-2 text-xs font-medium disabled:opacity-50"
+                  >
+                    {t('Generar enlace nuevo')}
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <p className="text-xs text-muted dark:text-dark-text-secondary">{t('Cargando...')}</p>
         )}
       </div>
 

@@ -10,6 +10,7 @@ import { useT, useIdioma } from '../../lib/idioma';
 import { localeDe } from '../../lib/i18n/traducir';
 import { formatearFechaHora } from '../../lib/fechas';
 import SelectorIdiomaFlotante from '../../SelectorIdiomaFlotante';
+import { formatearGB } from '../../lib/almacenamiento';
 
 type Item = {
   descripcion: string;
@@ -191,7 +192,7 @@ export default function BoletaPublica() {
                 </p>
                 <p className="font-medium">
                   {c.modelo}
-                  {c.capacidad_gb ? ` · ${c.capacidad_gb}GB` : ''}
+                  {c.capacidad_gb ? ` · ${formatearGB(c.capacidad_gb)}` : ''}
                   {c.color ? ` · ${c.color}` : ''}
                 </p>
                 {c.imei && (

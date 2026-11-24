@@ -1,4 +1,5 @@
 import { SupabaseClient } from '@supabase/supabase-js';
+import { enLotes } from './db';
 
 // Mapa nombre de carpeta -> imagen, para mostrar la miniatura del modelo en
 // Stock, Órdenes, Plan Canje, Servicio Técnico y Compras sin repetir la
@@ -38,4 +39,22 @@ export function imagenParaDescripcion(descripcion: string | null | undefined, ma
     }
   }
   return mejor?.url ?? null;
+}
+
+// Igual que obtenerImagenesCarpetas pero solo de los modelos pedidos. Las imágenes de las carpetas
+// viajan como data URL (pesan), así que las pantallas que muestran pocos modelos (ej. Plan Canje)
+// no deberían bajarse la de las 200 carpetas del catálogo.
+export async function obtenerImagenesDeCarpetas(supabase: SupabaseClient, nombres: (string | null | undefined)[]): Promise<Map<string, string>> {
+  const mapa = new Map<string, string>();
+  const unicos = Array.from(new Set(nombres.filter((n): n is string => !!n)));
+  await Promise.all(
+    enLotes(unicos).map(async (lote) => {
+      const { data, error } = await supabase.from('modelos_stock').select('nombre, imagen_url').in('nombre', lote);
+      if (error) return; // sin miniatura: la pantalla sigue funcionando
+      for (const c of (data as { nombre: string; imagen_url: string | null }[]) ?? []) {
+        if (c.imagen_url) mapa.set(c.nombre, c.imagen_url);
+      }
+    })
+  );
+  return mapa;
 }

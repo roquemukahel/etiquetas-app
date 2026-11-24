@@ -7,6 +7,7 @@ import { registrarAuditoria } from '../../lib/auditoria';
 import { compararModelosPorSalida } from '../../lib/catalogosMarcas';
 import { normalizarNombreModelo } from '../../lib/modelos';
 import { useT } from '../../lib/idioma';
+import { falla } from '../../lib/escritura';
 
 type Carpeta = { id: string; nombre: string; imagen_url: string | null };
 
@@ -69,7 +70,11 @@ export default function Carpetas() {
       setGuardando(false);
       return;
     }
-    await supabase.from('dispositivos').update({ modelo: nuevoNombre }).eq('modelo', c.nombre);
+    if (await falla(supabase.from('dispositivos').update({ modelo: nuevoNombre }).eq('modelo', c.nombre), t, 'mover los equipos a la carpeta renombrada')) {
+      setGuardando(false);
+      cargar();
+      return;
+    }
     setEditandoId(null);
     setGuardando(false);
     cargar();
@@ -78,7 +83,7 @@ export default function Carpetas() {
   const eliminar = async (id: string) => {
     if (!confirm(t('¿Eliminar esta carpeta? Los dispositivos que tenga no se borran, solo dejan de tener carpeta asignada explícitamente.'))) return;
     const carpeta = carpetas.find((c) => c.id === id);
-    await supabase.from('modelos_stock').delete().eq('id', id);
+    if (await falla(supabase.from('modelos_stock').delete().eq('id', id), t, 'eliminar carpeta')) return;
     await registrarAuditoria(supabase, {
       accion: `eliminó una carpeta de Stock (${carpeta?.nombre || 'sin nombre'})`,
       entidad: 'carpeta',
@@ -95,7 +100,7 @@ export default function Carpetas() {
     reader.onload = async () => {
       const dataUrl = reader.result as string;
       setCarpetas((cs) => cs.map((x) => (x.id === c.id ? { ...x, imagen_url: dataUrl } : x)));
-      await supabase.from('modelos_stock').update({ imagen_url: dataUrl }).eq('id', c.id);
+      if (await falla(supabase.from('modelos_stock').update({ imagen_url: dataUrl }).eq('id', c.id), t, 'guardar imagen')) cargar();
     };
     reader.readAsDataURL(file);
   };

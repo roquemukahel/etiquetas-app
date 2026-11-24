@@ -10,6 +10,7 @@ import { registrarAuditoria } from '../../lib/auditoria';
 import ServicioTecnicoTabs from '../../ServicioTecnicoTabs';
 import { ICONOS } from '../../Iconos';
 import { useT } from '../../lib/idioma';
+import { obtenerTodasLasFilas } from '../../lib/db';
 
 type Proveedor = { id: string; nombre: string; telefono: string | null };
 type Repuesto = { id: string; nombre: string };
@@ -45,8 +46,8 @@ export default function Repuestos() {
   const cargar = async () => {
     const [{ data: prov }, { data: rep }, { data: pre }] = await Promise.all([
       supabase.from('proveedores_repuestos').select('id, nombre, telefono').order('nombre'),
-      supabase.from('repuestos').select('id, nombre').order('nombre'),
-      supabase.from('repuestos_precios').select('id, repuesto_id, proveedor_id, precio, disponible, actualizado_at'),
+      obtenerTodasLasFilas<Repuesto>(supabase, 'repuestos', 'id, nombre', [{ columna: 'nombre' }]).then((data) => ({ data })),
+      obtenerTodasLasFilas<Precio>(supabase, 'repuestos_precios', 'id, repuesto_id, proveedor_id, precio, disponible, actualizado_at').then((data) => ({ data })),
     ]);
     setProveedores((prov as Proveedor[]) ?? []);
     setRepuestos((rep as Repuesto[]) ?? []);
@@ -110,6 +111,18 @@ export default function Repuestos() {
       .filter((c) => !q || c.nombre.toLowerCase().includes(q))
       .sort((a, b) => a.nombre.localeCompare(b.nombre));
   }, [precios, repuestos, busquedaComparar]);
+
+  // Los precios que cobra cada proveedor de repuestos son costos de compra: solo con el permiso "ver costos y márgenes".
+  if (!tienePermiso(actor, 'ver_costos')) {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
+        <p className="text-sm text-muted dark:text-dark-text-secondary">{t('No tenés permiso para ver los precios de los proveedores de repuestos.')}</p>
+        <Link href="/servicio-tecnico" className="text-sm text-accent dark:text-dark-accent underline">
+          {t('Volver')}
+        </Link>
+      </main>
+    );
+  }
 
   if (loading) {
     return (

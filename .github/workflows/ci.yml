@@ -1,0 +1,26 @@
+# Red de seguridad: cada push a main y cada pull request corre el chequeo de
+# tipos y TODAS las pruebas (incluidas las guardas de arquitectura de
+# app/lib/arquitectura.test.ts). Si algo falla, GitHub lo marca en rojo.
+name: Verificación
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      # npm install (no ci): el package-lock se generó en Windows y npm ci es estricto con
+      # las dependencias opcionales de otras plataformas; npm install respeta el lock igual.
+      - run: npm install --no-audit --no-fund
+      - name: Chequeo de tipos
+        run: npx tsc --noEmit
+      - name: Pruebas
+        run: npm test
