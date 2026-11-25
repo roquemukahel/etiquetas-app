@@ -44,15 +44,28 @@ export async function contarConsultasDesde(supabase: SupabaseClient, negocioId: 
   return count ?? 0;
 }
 
+// websearch_to_tsquery exige que TODAS las palabras significativas de la
+// pregunta coincidan (AND) — pero "hago" (pregunta) y "hacer" (artículo) no
+// comparten raíz en el stemmer en español, así que una pregunta tan directa
+// como "¿Cómo hago una venta?" no encontraba el artículo aunque "venta" sí
+// matcheaba. Se arma la consulta a mano con OR entre palabras: alcanza con
+// que matchee una palabra significativa, no todas.
+function construirConsultaBusqueda(consulta: string): string {
+  const palabras = consulta
+    .split(/[^\p{L}\p{N}]+/u)
+    .map((p) => p.trim())
+    .filter((p) => p.length >= 2);
+  return palabras.join(' | ');
+}
+
 export async function buscarArticulos(supabase: SupabaseClient, consulta: string, moduloActual: ModuloQovi): Promise<ArticuloQovi[]> {
-  // websearch_to_tsquery tolera lenguaje natural (acentos, mayúsculas, signos)
-  // mejor que plainto_tsquery para una pregunta tipeada como la escribiría
-  // cualquiera, no una búsqueda de palabras sueltas.
+  const consultaTs = construirConsultaBusqueda(consulta);
+  if (!consultaTs) return [];
   const { data, error } = await supabase
     .from('qovi_articulos')
     .select('id, titulo, slug, modulo, contenido, roles_autorizados, acciones_navegacion, ruta_relacionada')
     .eq('estado', 'publicado')
-    .textSearch('busqueda', consulta, { type: 'websearch', config: 'spanish' })
+    .textSearch('busqueda', consultaTs, { config: 'spanish' })
     .limit(10);
   if (error || !data) return [];
   return data as ArticuloQovi[];
