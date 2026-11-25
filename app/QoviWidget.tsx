@@ -182,7 +182,7 @@ export default function QoviWidget() {
         onClick={() => setAbierto((v) => !v)}
         aria-label={abierto ? t('Cerrar Qovi') : t('Abrir Qovi, el asistente de Qovento')}
         aria-expanded={abierto}
-        className={`no-print fixed bottom-5 right-5 z-40 h-14 w-14 rounded-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-elevated flex items-center justify-center transition-transform duration-500 motion-reduce:transition-none hover:scale-105 ${
+        className={`no-print fixed bottom-5 left-5 z-40 h-14 w-14 rounded-full bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-elevated flex items-center justify-center transition-transform duration-500 motion-reduce:transition-none hover:scale-105 ${
           entrada ? 'scale-100 opacity-100' : 'scale-50 opacity-0'
         }`}
       >
@@ -195,7 +195,7 @@ export default function QoviWidget() {
           role="dialog"
           aria-modal="true"
           aria-label={t('Qovi, asistente inteligente de Qovento')}
-          className="no-print fixed inset-0 sm:inset-auto sm:bottom-5 sm:right-5 z-50 flex flex-col w-full sm:w-[420px] sm:max-w-[calc(100vw-2.5rem)] h-full sm:h-[min(640px,calc(100vh-2.5rem))] sm:rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-elevated overflow-hidden"
+          className="no-print fixed inset-0 sm:inset-auto sm:bottom-5 sm:left-5 z-50 flex flex-col w-full sm:w-[420px] sm:max-w-[calc(100vw-2.5rem)] h-full sm:h-[min(640px,calc(100vh-2.5rem))] sm:rounded-2xl bg-white dark:bg-dark-surface border border-border dark:border-dark-border shadow-elevated overflow-hidden"
         >
           <header className="flex items-center gap-2.5 px-4 py-3 border-b border-border dark:border-dark-border shrink-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
