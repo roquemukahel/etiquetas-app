@@ -21,9 +21,11 @@ import SelectorEstadoDispositivo from '../../SelectorEstadoDispositivo';
 import SelectorFinanciacion from '../../SelectorFinanciacion';
 import AvisoCanje from '../../AvisoCanje';
 import AvisoStandby from '../../AvisoStandby';
+import AvisoCompra from '../../AvisoCompra';
 import AvisoServicioTecnico from '../../AvisoServicioTecnico';
 import { reparacionesAbiertasConImei, propias, textoDeOrdenes, equipoDeOrigen, reutilizarEquipoDeOrigen, cerrarReparacionesAlPasarAlStock } from '../../lib/servicioEnStock';
 import { useCoincidenciasStandby } from '../../lib/useCoincidenciasStandby';
+import { useCoincidenciasCompra } from '../../lib/useCoincidenciasCompra';
 import { SelectorFotosNuevas } from '../../FotosDispositivo';
 import { guardarFotos, type FotoPreparada } from '../../lib/fotosDispositivo';
 import { useCoincidenciasCanje } from '../../lib/useCoincidenciasCanje';
@@ -152,6 +154,8 @@ export default function NuevoDispositivo() {
   const coincidenciasCanje = useCoincidenciasCanje(supabase, imei, modelo);
   // Igual con Standby: si ya está esperando ahí, se avisa para pasarlo al Stock desde ahí.
   const coincidenciasStandby = useCoincidenciasStandby(supabase, imei, modelo);
+  // Igual con Compras: si ya está comprado y pendiente de ingresar, se avisa para hacerlo desde ahí.
+  const coincidenciasCompra = useCoincidenciasCompra(supabase, imei, modelo);
 
   const handleGuardar = async () => {
     if (!puedeGuardar) return;
@@ -188,6 +192,7 @@ export default function NuevoDispositivo() {
     }
     if (hayCanjeConEseImei(coincidenciasCanje.porImei, imei) && !confirm(t('Este dispositivo está en Plan Canje. Si lo cargás acá queda duplicado en el Stock. ¿Cargarlo igual?'))) return;
     if (enStandbyConEseImei && !confirm(t('Este dispositivo está en Standby. Si lo cargás acá queda duplicado en el Stock. ¿Cargarlo igual?'))) return;
+    if (hayCanjeConEseImei(coincidenciasCompra.porImei, imei) && !confirm(t('Este dispositivo está en Compras, pendiente de ingresar. Si lo cargás acá queda duplicado en el Stock. ¿Cargarlo igual?'))) return;
     setGuardando(true);
     setError(null);
 
@@ -373,6 +378,7 @@ export default function NuevoDispositivo() {
             router.refresh();
           }}
         />
+        <AvisoCompra porImei={coincidenciasCompra.porImei} porModelo={coincidenciasCompra.porModelo} />
         <Campo label={t('Salud de batería (%)')} valor={bateria} onChange={setBateria} numerico />
         <SelectorColorAuto label={t('Color')} modelo={modelo} value={color} onChange={setColor} />
         <Campo label={t('Precio')} valor={precio} onChange={setPrecio} numerico />
